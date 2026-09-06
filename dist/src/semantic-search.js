@@ -12,7 +12,7 @@ import { readSnapshotBytes } from './snapshot-read.js';
 import { chunkSemanticNote } from './semantic-chunks.js';
 import { isMarkdownModerationHidden } from './moderation-policy.js';
 import { createDerivedCacheOwner, derivedCacheBudget, estimateCacheBytes } from './cache-budget.js';
-const MODEL_ID = 'Xenova/multilingual-e5-small';
+import { SEMANTIC_MODEL_ID as MODEL_ID, SEMANTIC_MODEL_OPTIONS, SEMANTIC_EMBEDDING_PROFILE } from './semantic-profile.js';
 const EMBEDDING_DIMENSIONS = 384;
 const INDEX_DIR = '.mcpvault/semantic-index';
 const MANIFEST_FILE = 'manifest.snapshot.gz';
@@ -54,8 +54,11 @@ async function acquireSharedEmbedder() {
         if (!entry.loading) {
             entry.loading = (async () => {
                 const module = await import('@huggingface/transformers');
+                // Local directory overrides ignore revision in Transformers.js. Only
+                // pinned Hub artifacts (or their revision-specific disk cache) qualify.
+                module.env.allowLocalModels = false;
                 const pipeline = module.pipeline;
-                return pipeline('feature-extraction', MODEL_ID, { dtype: 'q8' });
+                return pipeline('feature-extraction', MODEL_ID, SEMANTIC_MODEL_OPTIONS);
             })().then(embedder => {
                 entry.embedder = embedder;
                 return embedder;
@@ -274,6 +277,7 @@ export class SemanticSearchService {
     pendingSnapshotPending = false;
     idleTimer;
     unloadTimer;
+    activeSearches = 0;
     syncPromise;
     scanPromise;
     dbPromise;
@@ -378,6 +382,17 @@ export class SemanticSearchService {
         derivedCacheBudget.clearOwner(this.vectorCacheOwner);
     }
     async search(params) {
+        this.activeSearches++;
+        try {
+            return await this.searchCurrent(params);
+        }
+        finally {
+            this.activeSearches--;
+            if (this.db || this.embedder)
+                this.scheduleResourceRelease();
+        }
+    }
+    async searchCurrent(params) {
         const limit = normalizeSearchLimit(params.limit);
         const maxChars = normalizeSearchMaxChars(params.maxChars);
         if (!params.query?.trim())
@@ -454,8 +469,12 @@ export class SemanticSearchService {
                 if (!names.has(name))
                     continue;
                 const table = await this.getTable(name);
-                const rows = await table.vectorSearch(vector).distanceType('cosine').limit(limit * 2).toArray();
+                if (!(await table.schema()).fields.some((field) => field.name === 'embeddingProfile'))
+                    continue;
+                const rows = await table.vectorSearch(vector).where(`embeddingProfile = '${SEMANTIC_EMBEDDING_PROFILE}'`).distanceType('cosine').limit(limit * 2).toArray();
                 for (const row of rows) {
+                    if (row.embeddingProfile !== SEMANTIC_EMBEDDING_PROFILE)
+                        continue;
                     const path = normalizePath(row.path);
                     if (!this.pathIsVisible(path, params))
                         continue;
@@ -552,6 +571,7 @@ export class SemanticSearchService {
             if (typeof item.hash !== 'string' || !/^[a-f0-9]{64}$/.test(item.hash))
                 continue;
             result[path] = { hash: item.hash, scope: scopeForPath(path),
+                ...(typeof item.embeddingProfile === 'string' && /^[a-f0-9]{64}$/.test(item.embeddingProfile) && { embeddingProfile: item.embeddingProfile }),
                 ...(typeof item.size === 'number' && Number.isFinite(item.size) && item.size >= 0 && { size: item.size }),
                 ...(typeof item.mtimeMs === 'number' && Number.isFinite(item.mtimeMs) && { mtimeMs: item.mtimeMs }) };
         }
@@ -675,7 +695,7 @@ export class SemanticSearchService {
                     if (!info)
                         return { normalized };
                     const entry = this.manifest[normalized];
-                    if (entry && entry.size === info.size && entry.mtimeMs === info.mtimeMs)
+                    if (entry && entry.embeddingProfile === SEMANTIC_EMBEDDING_PROFILE && entry.size === info.size && entry.mtimeMs === info.mtimeMs)
                         return { normalized, info, entry };
                     const content = await this.vaultIo.readUtf8(fullPath, 'background').catch(error => {
                         if (isMissingVaultPath(error))
@@ -689,13 +709,13 @@ export class SemanticSearchService {
                     if (!observation.info || !observation.hash)
                         continue;
                     const { normalized, info, entry, hash } = observation;
-                    if ((!entry || entry.hash !== hash) && (this.pending.size < MAX_PENDING_CHANGES || this.pending.has(normalized))) {
+                    if ((!entry || entry.hash !== hash || entry.embeddingProfile !== SEMANTIC_EMBEDDING_PROFILE) && (this.pending.size < MAX_PENDING_CHANGES || this.pending.has(normalized))) {
                         // Preserve an in-flight retry's backoff. Re-scanning the catalog must
                         // not turn one failing note into a hot loop by resetting its attempt.
                         if (!this.pending.has(normalized))
                             this.pending.set(normalized, { kind: 'upsert' });
                     }
-                    else if (entry && entry.hash === hash) {
+                    else if (entry && entry.hash === hash && entry.embeddingProfile === SEMANTIC_EMBEDDING_PROFILE) {
                         // Timestamp-only changes do not require a new embedding. Persist the
                         // refreshed metadata so future scans stay stat-only.
                         this.manifest[normalized] = { ...entry, size: info.size, mtimeMs: info.mtimeMs };
@@ -821,6 +841,7 @@ export class SemanticSearchService {
         }
     }
     async getDb() {
+        this.scheduleResourceRelease();
         if (this.db)
             return this.db;
         if (!this.dbPromise) {
@@ -961,14 +982,22 @@ export class SemanticSearchService {
             this.embedderLease = await acquireSharedEmbedder();
             this.embedder = this.embedderLease.embedder;
         }
+        this.scheduleResourceRelease();
+        return this.embedder;
+    }
+    scheduleResourceRelease() {
         if (this.unloadTimer)
             clearTimeout(this.unloadTimer);
         this.unloadTimer = setTimeout(() => {
+            if (this.activeSearches || this.syncPromise || this.scanPromise || this.dbPromise || this.tableOpening.size) {
+                this.scheduleResourceRelease();
+                return;
+            }
             this.embedder = undefined;
             this.embedderLease?.release();
             this.embedderLease = undefined;
             try {
-                this.db?.close?.();
+                void Promise.resolve(this.db?.close?.()).catch(() => undefined);
             }
             catch {
                 // Releasing the disposable cache is best-effort.
@@ -982,7 +1011,6 @@ export class SemanticSearchService {
             this.unloadTimer = undefined;
         }, IDLE_DELAY_MS * 4);
         this.unloadTimer.unref?.();
-        return this.embedder;
     }
     async embed(text, prefix) {
         const embedder = await this.getEmbedder();
@@ -1073,29 +1101,67 @@ export class SemanticSearchService {
         const chunks = chunkSemanticNote(path, content);
         const title = path.split('/').pop()?.replace(/\.md$/i, '') || path;
         const wiki = isWikiPath(path, content);
+        const reusable = await this.reusableVectors(path, scope);
+        const fingerprints = chunks.map(chunk => hashContent(`passage: ${chunk.text}`));
+        const vectors = fingerprints.map(fingerprint => reusable.get(fingerprint));
+        const missing = chunks.map((_, index) => index).filter(index => !vectors[index]);
+        for (let start = 0; start < missing.length; start += EMBED_BATCH_SIZE) {
+            const batch = missing.slice(start, start + EMBED_BATCH_SIZE);
+            const generated = await this.embedMany(batch.map(index => chunks[index].text), 'passage');
+            for (let index = 0; index < batch.length; index++)
+                vectors[batch[index]] = generated[index];
+        }
         const rows = [];
-        for (let start = 0; start < chunks.length; start += EMBED_BATCH_SIZE) {
-            const batch = chunks.slice(start, start + EMBED_BATCH_SIZE);
-            const vectors = await this.embedMany(batch.map(chunk => chunk.text), 'passage');
-            for (let index = 0; index < batch.length; index += 1) {
-                const chunk = batch[index];
-                rows.push({
-                    id: chunk.id,
-                    vector: vectors[index],
-                    path,
-                    hash: contentHash,
-                    title,
-                    line: chunk.line,
-                    wiki,
-                    updatedAt: new Date().toISOString(),
-                });
-            }
+        for (let index = 0; index < chunks.length; index++) {
+            const chunk = chunks[index];
+            rows.push({
+                id: chunk.id,
+                vector: vectors[index],
+                path,
+                hash: contentHash,
+                title,
+                line: chunk.line,
+                wiki,
+                updatedAt: new Date().toISOString(),
+                chunkHash: fingerprints[index],
+                embeddingProfile: SEMANTIC_EMBEDDING_PROFILE,
+            });
         }
         // Embedding can take longer than a source edit. Do not associate old vectors
         // with a newer stat fingerprint which would suppress future reconciliation.
         if (hashContent(await this.vaultIo.readUtf8(fullPath, 'background')) !== contentHash)
             throw new VaultReadUnavailableError();
         return { path, scope, contentHash, size: info.size, mtimeMs: info.mtimeMs, rows };
+    }
+    async reusableVectors(path, scope) {
+        const reusable = new Map();
+        try {
+            const name = tableName(scope);
+            if (!(await this.getTableNames()).has(name))
+                return reusable;
+            const table = await this.getTable(name);
+            const fields = (await table.schema()).fields.map((field) => field.name);
+            if (!fields.includes('chunkHash') || !fields.includes('embeddingProfile'))
+                return reusable;
+            const rows = await table.query()
+                .where(`path = '${path.replace(/'/g, "''")}' AND embeddingProfile = '${SEMANTIC_EMBEDDING_PROFILE}'`)
+                .select(['path', 'chunkHash', 'embeddingProfile', 'vector']).limit(65).toArray();
+            // A damaged table must not cause an unbounded scan or bless partial state.
+            if (rows.length > 64)
+                return reusable;
+            for (const row of rows) {
+                if (row.path !== path || row.embeddingProfile !== SEMANTIC_EMBEDDING_PROFILE || typeof row.chunkHash !== 'string' || !/^[a-f0-9]{64}$/.test(row.chunkHash))
+                    continue;
+                const values = row.vector;
+                if (!values || values.length !== EMBEDDING_DIMENSIONS)
+                    continue;
+                const vector = Array.from(values);
+                if (vector.every(value => typeof value === 'number' && Number.isFinite(value)))
+                    reusable.set(row.chunkHash, vector);
+            }
+        }
+        catch { /* Disposable reuse lookup failure falls back to normal embedding. */ }
+        return reusable;
     }
     async applyIndexBatch(prepared, deleted) {
         const effectiveDeleted = deleted.filter(path => this.manifest[path] !== undefined);
@@ -1129,6 +1195,12 @@ export class SemanticSearchService {
         }
         for (const [name, group] of groups) {
             let table = names.has(name) ? await this.getTable(name) : undefined;
+            if (table && group.rows.length > 0) {
+                const fields = (await table.schema()).fields.map((field) => field.name);
+                const missing = ['chunkHash', 'embeddingProfile'].filter(field => !fields.includes(field));
+                if (missing.length)
+                    await table.addColumns(missing.map(name => ({ name, valueSql: 'CAST(NULL AS STRING)' })));
+            }
             if (table && group.paths.size > 0) {
                 const predicate = [...group.paths]
                     .map(path => `path = '${path.replace(/'/g, "''")}'`)
@@ -1155,6 +1227,7 @@ export class SemanticSearchService {
             this.manifest[item.path] = {
                 hash: item.contentHash,
                 scope: item.scope,
+                embeddingProfile: SEMANTIC_EMBEDDING_PROFILE,
                 size: item.size,
                 mtimeMs: item.mtimeMs,
             };

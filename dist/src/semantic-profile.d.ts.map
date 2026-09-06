@@ -1,0 +1,1 @@
+{"version":3,"file":"semantic-profile.d.ts","sourceRoot":"","sources":["../../src/semantic-profile.ts"],"names":[],"mappings":"AAKA,eAAO,MAAM,iBAAiB,iCAAiC,CAAC;AAChE,eAAO,MAAM,sBAAsB;aACjC,QAAQ,EAAE,0CAA0C;aACpD,KAAK,EAAE,IAAI;aAAE,MAAM,EAAE,KAAK;CAClB,CAAC;AAqBX,eAAO,MAAM,0BAA0B,QAItB,CAAC"}

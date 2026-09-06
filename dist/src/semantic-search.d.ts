@@ -61,6 +61,7 @@ export declare class SemanticSearchService {
     private pendingSnapshotPending;
     private idleTimer;
     private unloadTimer;
+    private activeSearches;
     private syncPromise;
     private scanPromise;
     private dbPromise;
@@ -81,6 +82,7 @@ export declare class SemanticSearchService {
     private clearQueryCache;
     private clearVectorCache;
     search(params: SemanticSearchParams): Promise<SemanticSearchOutcome>;
+    private searchCurrent;
     private hydrateRows;
     private changedQueryOutcome;
     status(): SemanticIndexStatus;
@@ -108,10 +110,12 @@ export declare class SemanticSearchService {
     private releaseIndexLease;
     private getTableNames;
     private getEmbedder;
+    private scheduleResourceRelease;
     private embed;
     private embedQuery;
     private embedMany;
     private prepareIndex;
+    private reusableVectors;
     private applyIndexBatch;
     private pathIsVisible;
     private pathCanBeIndexed;

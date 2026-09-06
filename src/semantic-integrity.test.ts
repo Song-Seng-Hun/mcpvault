@@ -10,6 +10,7 @@ import { VaultFileCatalog } from './vault-catalog.js';
 import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
 import { createServer } from './createServer.js';
 import { endpointIdForTool } from './endpoint-registry.js';
+import { SEMANTIC_EMBEDDING_PROFILE } from './semantic-profile.js';
 
 const faults = vi.hoisted(() => ({ readFile: new Map<string, string>(), readdir: new Map<string, string>(), stat: new Map<string, string>() }));
 vi.mock('node:fs/promises', async importOriginal => {
@@ -29,22 +30,23 @@ let rows: any[];
 const raw = '# Note\n\nsemanticfixture';
 const hash = (value: string) => createHash('sha256').update(value).digest('hex');
 const vector = Array.from({ length: 384 }, (_, i) => i === 0 ? 1 : 0);
+const schema = async () => ({ fields: [{ name: 'embeddingProfile' }, { name: 'chunkHash' }] });
 const params = { query: 'fixture', queryVector: vector, maxChars: 512 };
 beforeEach(async () => {
   vault = await mkdtemp(join(tmpdir(), 'mcpvault-semantic-integrity-'));
   await mkdir(join(vault, 'Area'));
   await writeFile(join(vault, 'Area/Note.md'), raw);
-  rows = [{ id: 'Area/Note.md#0', path: 'Area/Note.md', title: 'Note', hash: hash(raw), line: 1, wiki: false, vector }];
+  rows = [{ id: 'Area/Note.md#0', path: 'Area/Note.md', title: 'Note', hash: hash(raw), line: 1, wiki: false, vector, embeddingProfile: SEMANTIC_EMBEDDING_PROFILE }];
   service = new SemanticSearchService(vault, new PathFilter());
   await (service as any).manifestReady;
   await (service as any).pendingReady;
   const info = await stat(join(vault, 'Area/Note.md'));
-  (service as any).manifest = { 'Area/Note.md': { hash: hash(raw), scope: 'global', size: info.size, mtimeMs: info.mtimeMs } };
+  (service as any).manifest = { 'Area/Note.md': { hash: hash(raw), scope: 'global', size: info.size, mtimeMs: info.mtimeMs, embeddingProfile: SEMANTIC_EMBEDDING_PROFILE } };
   // Isolate only native/model operations. Scans, cache, hydration and batch
   // reconciliation still execute the real service against real Markdown.
   vi.spyOn(service as any, 'acquireIndexLease').mockResolvedValue(false);
   vi.spyOn(service as any, 'getTableNames').mockResolvedValue(new Set(['chunks_global']));
-  vi.spyOn(service as any, 'getTable').mockResolvedValue({ vectorSearch: () => ({ distanceType() { return this; }, limit() { return this; }, toArray: async () => rows }) });
+  vi.spyOn(service as any, 'getTable').mockResolvedValue({ schema, vectorSearch: () => ({ where() { return this; }, distanceType() { return this; }, limit() { return this; }, toArray: async () => rows }) });
   vi.spyOn(service as any, 'embedMany').mockImplementation(async (texts: any) => texts.map(() => vector));
 });
 afterEach(async () => {
@@ -128,7 +130,7 @@ test('public MCP semantic search locators open the intended physical line', asyn
   const legacyRows = [{ ...rows[0], id: 'Area/Note.md#2', hash: hash(content), line: 2 }];
   vi.spyOn(SemanticSearchService.prototype as any, 'acquireIndexLease').mockResolvedValue(false);
   vi.spyOn(SemanticSearchService.prototype as any, 'getTableNames').mockResolvedValue(new Set(['chunks_global']));
-  vi.spyOn(SemanticSearchService.prototype as any, 'getTable').mockResolvedValue({ vectorSearch: () => ({ distanceType() { return this; }, limit() { return this; }, toArray: async () => legacyRows }) });
+  vi.spyOn(SemanticSearchService.prototype as any, 'getTable').mockResolvedValue({ schema, vectorSearch: () => ({ where() { return this; }, distanceType() { return this; }, limit() { return this; }, toArray: async () => legacyRows }) });
   vi.spyOn(SemanticSearchService.prototype as any, 'embedQuery').mockResolvedValue(vector);
   const server = createServer(vault, { version: 'locator-integrity' });
   const client = new Client({ name: 'locator-integrity', version: '1' });
@@ -164,7 +166,7 @@ test('backend errors never expose paths or unbounded driver text', async () => {
 });
 
 test('a generation change during a query cannot bless the old result as current', async () => {
-  vi.mocked((service as any).getTable).mockResolvedValue({ vectorSearch: () => ({ distanceType() { return this; }, limit() { return this; }, toArray: async () => { service.notifyChange('Area/Note.md', 'upsert'); return rows; } }) });
+  vi.mocked((service as any).getTable).mockResolvedValue({ schema, vectorSearch: () => ({ where() { return this; }, distanceType() { return this; }, limit() { return this; }, toArray: async () => { service.notifyChange('Area/Note.md', 'upsert'); return rows; } }) });
   const result = await service.search(params);
   expect(result).toMatchObject({ available: false, results: [] });
   expect((service as any).queryCache.size).toBe(0);
@@ -240,10 +242,10 @@ test('a delivered event invalidates cached misses without starting an embedding 
   try {
     vi.spyOn(isolated as any, 'acquireIndexLease').mockResolvedValue(false);
     vi.spyOn(isolated as any, 'getTableNames').mockResolvedValue(new Set(['chunks_global']));
-    const table = { vectorSearch: () => ({ distanceType() { return this; }, limit() { return this; }, toArray: async () => rows }) };
+    const table = { schema, vectorSearch: () => ({ where() { return this; }, distanceType() { return this; }, limit() { return this; }, toArray: async () => rows }) };
     vi.spyOn(isolated as any, 'getTable').mockResolvedValue(table);
     expect((await isolated.search(params)).results).toEqual([]);
-    rows = [{ id: 'Area/Note.md#0', path: 'Area/Note.md', hash: hash(raw), title: 'Note', line: 1, wiki: false, vector }];
+    rows = [{ id: 'Area/Note.md#0', path: 'Area/Note.md', hash: hash(raw), title: 'Note', line: 1, wiki: false, vector, embeddingProfile: SEMANTIC_EMBEDDING_PROFILE }];
     (catalog as any).onFilesystemEvent('Area/Note.md');
     const result = await isolated.search(params);
     expect(result.results[0]?.p).toBe('Area/Note.md');
@@ -314,6 +316,7 @@ test('a failed vector write preserves manifest and retries the batch idempotentl
   let storedRows = [...rows];
   let failAdd = true;
   const table = {
+    schema,
     delete: async () => { storedRows = []; },
     add: async (values: any[]) => { if (failAdd) throw new Error('native write failure'); storedRows.push(...values); },
   };

@@ -2767,7 +2767,37 @@ Its path/hash/size/mtime manifest is stored as an atomic gzip snapshot; the
 lexical n-gram index is stored as an atomic compressed binary snapshot; LanceDB stores the
 vectors in its own binary tables, so no client-side index or snapshot setup is
 needed.
-The queue and per-note chunk count are bounded so a burst
+Changed notes reuse unchanged chunks from the same path and scope table. The
+reuse lookup selects at most 65 rows (64 chunks plus an overflow sentinel),
+checks exact passage fingerprints and the embedding profile, and computes only
+misses in batches of eight. Row IDs, physical lines, source revision and other
+metadata are always rebuilt from current Markdown, with a final source-hash
+check after inference/reuse. There is no cross-note/scope vector reuse or new
+client cache. Corrupt/oversized lookup results and lookup errors fall back to
+normal embedding; failed table writes remain retryable without advancing the
+manifest.
+
+Model-free reuse also starts the resource idle timer: DB/table references are
+released after inactivity, while active searches and indexing batches defer
+release. This does not require loading an embedding model just to start cleanup.
+
+The model is pinned to
+[`761b726`](https://huggingface.co/Xenova/multilingual-e5-small/commit/761b726dd34fb83930e26aab4e9ac3899aa1fa78)
+with CPU q8 execution, mean pooling and normalization. Runtime versions and
+input settings participate in the fingerprint; unknown runtime identity disables
+cross-process reuse. Unversioned local model overrides are disabled for this
+pipeline. The first use may need a new revision-specific server-side model
+download, even if an older `main` cache exists; ordinary lexical search remains
+independent. Missing fingerprint columns are added to existing LanceDB tables
+automatically. Legacy/different-profile vectors are excluded from semantic
+queries and rebuilt gradually by the idle worker, including stat-unchanged
+notes. No manual cache deletion or client configuration is needed. A deployment
+must not mix old and new server versions writing the same semantic cache.
+
+Temporary real-LanceDB tests with inference substituted verify zero embedding
+inputs for a Properties-only edit, and one instead of 64 for a one-paragraph
+edit in a 64-chunk note. These are work-count results, not a measured runtime,
+RAM or GPU speedup. The queue and per-note chunk count are bounded so a burst
 of edits or one very large note cannot monopolize the process. The default
 model is `Xenova/multilingual-e5-small`, which uses E5's `query:`/`passage:`
 prefixes and 384-dimensional normalized vectors. Search results use a short
