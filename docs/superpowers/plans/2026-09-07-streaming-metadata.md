@@ -41,7 +41,7 @@ under a distinct coordinator key, and parse it in FileSystemService.
   `npm test -- --maxWorkers=1` sequentially; repair evidenced regressions.
   Update README and follow-up research to state full I/O but header-only
   retention. Run `git diff --check`.
-- [ ] Stage explicit source/tests/dist/docs,
+- [x] Stage explicit source/tests/dist/docs,
   commit, push origin main only, verify live remote SHA and record evidence.
 
 ## Evidence so far
@@ -84,3 +84,12 @@ RSS includes startup and fixture writing; ArrayBuffer measurements also include
 temporary asynchronous file-writing allocations and collection timing. Every
 body byte is still read and hashed. Huge/unclosed headers retain their text
 subject to the caller's cap. Existing server processes have not been reloaded.
+
+## Delivery
+
+Implementation `37584aa0c843de586649d47a8e96c1d0561a9a13` was pushed to
+`https://github.com/Song-Seng-Hun/mcpvault.git` main. Live `git ls-remote`
+matched local HEAD. Only pre-existing untracked `.agents/` and `.mcpvault/`
+remained; neither was staged. No upstream PR, release or package publishing.
+The broader Goal remains active; metadata index rebuild retention is a separate
+remaining candidate, recorded with its required race tests in the follow-up.
