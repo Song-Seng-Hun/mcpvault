@@ -30,7 +30,7 @@ inside readEntry and keep all existing index freshness/error/snapshot machinery.
 - [x] Run new/race/index/streaming tests sequentially with maxWorkers=1. Build,
   request read-only independent review, then run full `npm test -- --maxWorkers=1`.
   Fix evidenced issues without weakening error/freshness assertions.
-- [ ] Update README and resource follow-up: metadata rebuild retention is now
+- [x] Update README and resource follow-up: metadata rebuild retention is now
   projected; graph/full-body consumers and giant headers remain distinct.
   Run `git diff --check`, explicitly stage source/tests/dist/docs, commit and
   push only origin main, verify live SHA, record results. No runtime restart.
@@ -57,3 +57,12 @@ inside readEntry and keep all existing index freshness/error/snapshot machinery.
 - No new whole-index RSS benchmark is claimed. Prior streaming-reader memory
   measurements remain fixture-specific; this increment proves reuse and bounds
   of parser input, not a process-wide heap ceiling or fewer disk bytes.
+
+## Delivery
+
+Implementation `12e87196885578f101cfa1eb5aca0c2cf563778b` was pushed to
+`https://github.com/Song-Seng-Hun/mcpvault.git` main. Live remote SHA matched
+local HEAD. Only unrelated untracked `.agents/` and `.mcpvault/` remained.
+No upstream contribution, release, package publish, server restart or live Vault
+write. The broader Goal remains active; this verifies one resource-reduction
+increment, not an exhaustive claim that no organization improvements remain.
