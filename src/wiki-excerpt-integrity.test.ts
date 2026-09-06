@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
-import { mkdtemp, writeFile, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createHash } from 'node:crypto';
@@ -212,6 +212,112 @@ test('compact freshness and recovery stay pinned to one captured revision across
   const { value } = await call({ view: 'summary', maxChars: 512 });
   expect(changed).toBe(true);
   expect(value).toMatchObject({ summaryFresh: true, summaryStale: false, revision: digest(raw) });
+  const recovery = await call(value.nextAction.arguments, value.nextAction.endpointId);
+  expect(recovery.result.isError).toBe(true);
+  expect(recovery.value.error).toBe('revision_conflict');
+});
+
+test.each(['wiki.summary_candidates', 'wiki.resurface'])('%s inspect action rejects a source changed after the candidate was returned', async endpointId => {
+  const raw = '---\nllm_wiki_type: knowledge\nnote_kind: atomic\n---\n# Intro\nORIGINAL-CANDIDATE';
+  await writeFile(join(vault, path), raw);
+  const { result, value } = await call({ maxChars: 512 }, endpointId);
+  expect(result.isError).not.toBe(true);
+  const action = value.items[0].nextAction;
+  expect(action.arguments.expectedRevision).toBe(digest(raw));
+  const current = await call(action.arguments, action.endpointId);
+  expect(current.result.isError).not.toBe(true);
+  expect(current.value.revision).toBe(digest(raw));
+  await writeFile(join(vault, path), raw.replace('ORIGINAL-CANDIDATE', 'CHANGED-CANDIDATE'));
+  const changed = await call(action.arguments, action.endpointId);
+  expect(changed.result.isError).toBe(true);
+  expect(changed.value.error).toBe('revision_conflict');
+  expect(changed.text).not.toContain('CHANGED-CANDIDATE');
+});
+
+test('notes.read expectedRevision cannot be bypassed by a matching knownRevision cache hint', async () => {
+  const raw = frontmatter + 'CURRENT';
+  await writeFile(join(vault, path), raw);
+  const { result, value, text } = await call({ expectedRevision: digest('old'), knownRevision: digest(raw) }, 'notes.read');
+  expect(result.isError).toBe(true);
+  expect(value.error).toBe('revision_conflict');
+  expect(value.notModified).toBeUndefined();
+  expect(text).not.toContain('CURRENT');
+});
+
+test('notes.read validates an expectedRevision even when knownRevision matches', async () => {
+  const raw = frontmatter + 'CURRENT';
+  await writeFile(join(vault, path), raw);
+  const { result, text } = await call({ expectedRevision: 'not-a-revision', knownRevision: digest(raw) }, 'notes.read');
+  expect(result.isError).toBe(true);
+  expect(text).toMatch(/expectedRevision|SHA-256/);
+  expect(text).not.toContain('CURRENT');
+});
+
+test('notes.read preserves matching cache hints after checking the expected source revision', async () => {
+  const raw = frontmatter + 'CURRENT';
+  await writeFile(join(vault, path), raw);
+  const { result, value } = await call({ expectedRevision: digest(raw), knownRevision: digest(raw) }, 'notes.read');
+  expect(result.isError).not.toBe(true);
+  expect(value).toMatchObject({ notModified: true, revision: digest(raw) });
+});
+
+test('notes.read checks current moderation before expectedRevision or a knownRevision hint', async () => {
+  const raw = '---\nmoderation_status: hidden\n---\nPRIVATE-CONTENT';
+  await writeFile(join(vault, path), raw);
+  const { result, text } = await call({ expectedRevision: digest('old'), knownRevision: digest(raw) }, 'notes.read');
+  expect(result.isError).toBe(true);
+  expect(text).not.toContain('PRIVATE-CONTENT');
+  expect(text).not.toContain(digest(raw));
+  expect(text).not.toContain('revision_conflict');
+});
+
+test('notes.read without a guard still checks moderation before returning notModified', async () => {
+  const raw = '---\nmoderation_status: hidden\n---\nPRIVATE-CONTENT';
+  await writeFile(join(vault, path), raw);
+  const { result, text } = await call({ knownRevision: digest(raw) }, 'notes.read');
+  expect(result.isError).toBe(true);
+  expect(text).not.toContain(digest(raw));
+  expect(text).not.toContain('PRIVATE-CONTENT');
+});
+
+test('notes.read changed cache hint returns the guarded current snapshot', async () => {
+  const raw = frontmatter + 'CURRENT';
+  await writeFile(join(vault, path), raw);
+  const { result, value } = await call({ expectedRevision: digest(raw).toUpperCase(), knownRevision: digest('old') }, 'notes.read');
+  expect(result.isError).not.toBe(true);
+  expect(value).toMatchObject({ revision: digest(raw), content: 'CURRENT' });
+});
+
+test('notes.read conflict from a large read budget offers a valid outline recovery', async () => {
+  await writeFile(join(vault, path), frontmatter + 'CURRENT');
+  const { value } = await call({ expectedRevision: digest('old'), maxChars: 20000 }, 'notes.read');
+  expect(value.error).toBe('revision_conflict');
+  expect(value.nextAction.arguments.maxChars).toBeLessThanOrEqual(12000);
+  const recovery = await call(value.nextAction.arguments, value.nextAction.endpointId);
+  expect(recovery.result.isError).not.toBe(true);
+});
+
+test('notes.read long-path cache responses fit the budget without truncating the identity', async () => {
+  const folders = Array.from({ length: 7 }, (_, i) => String(i) + 'x'.repeat(75));
+  await mkdir(join(vault, ...folders), { recursive: true });
+  const target = [...folders, 'Note.md'].join('/');
+  const raw = frontmatter + 'CURRENT';
+  await writeFile(join(vault, target), raw);
+  const { result, value } = await call({ path: target, knownRevision: digest(raw), maxChars: 512 }, 'notes.read');
+  expect(result.isError).toBe(true);
+  expect(value.error).toBe('response_budget_too_small');
+  const retry = await call({ path: target, knownRevision: digest(raw), ...value.retryArguments }, 'notes.read');
+  expect(retry.result.isError).not.toBe(true);
+  expect(retry.value).toMatchObject({ notModified: true, path: target, revision: digest(raw) });
+});
+
+test('notes.read truncated body keeps its revision on the outline continuation', async () => {
+  const raw = frontmatter + '# Intro\n' + 'CURRENT '.repeat(2000);
+  await writeFile(join(vault, path), raw);
+  const { value } = await call({ maxChars: 512 }, 'notes.read');
+  expect(value.truncated).toBe(true);
+  expect(value.nextAction.arguments.expectedRevision).toBe(digest(raw));
+  await writeFile(join(vault, path), raw.replace('Intro', 'Changed'));
   const recovery = await call(value.nextAction.arguments, value.nextAction.endpointId);
   expect(recovery.result.isError).toBe(true);
   expect(recovery.value.error).toBe('revision_conflict');

@@ -14615,18 +14615,20 @@ export class LlmWikiService {
             const hasProgressiveFields = Boolean(summary || note.frontmatter.key_points || note.frontmatter.open_questions || note.frontmatter.summary_layer !== undefined || note.frontmatter.summary_highlights);
             const summaryFresh = typeof note.frontmatter.summary_of_content_sha256 === 'string'
                 && note.frontmatter.summary_of_content_sha256 === hash(note.content);
-            const paragraphs = note.content.split(/\n\s*\n/).map(block => block.trim()).filter(block => block && !block.startsWith('#') && !block.startsWith('```'));
             if (summary && note.content.length < 2000 && summaryFresh)
                 continue;
+            const paragraph = summaryFresh && summary ? undefined : projectNoteParagraphs(note.originalContent).next().value;
             total += 1;
             candidates.push({
                 path: this.access.toPublicPath(note.path),
                 title: boundedText(note.frontmatter.title || note.path.split('/').at(-1), 160),
                 reason: !hasProgressiveFields ? 'missing_summary' : !summaryFresh ? 'stale_summary' : 'long_without_compact_projection',
                 contentChars: note.content.length,
-                summaryCandidate: boundedText((summaryFresh ? summary : '') || paragraphs[0] || note.content, 500),
+                summaryCandidate: boundedText((summaryFresh ? summary : '') || paragraph?.text || '', 500),
+                contentSource: summaryFresh && summary ? 'stored_summary' : paragraph ? 'body_excerpt' : 'none',
+                ...(paragraph && { excerptRange: { startLine: paragraph.startLine, endLine: paragraph.endLine } }),
                 revision: note.revision,
-                nextAction: { endpointId: 'notes.read', arguments: { path: this.access.toPublicPath(note.path), maxChars: 3000 } },
+                nextAction: { endpointId: 'notes.read', arguments: { path: this.access.toPublicPath(note.path), expectedRevision: note.revision, maxChars: 3000 } },
                 ...(hasProgressiveFields && { summaryFresh }),
             });
             candidates.sort(compare);
@@ -14822,7 +14824,7 @@ export class LlmWikiService {
                 path: this.access.toPublicPath(note.path),
                 title: boundedText(note.frontmatter.title || note.path.split('/').at(-1), 160),
                 revision: note.revision,
-                nextAction: { endpointId: 'notes.read', arguments: { path: this.access.toPublicPath(note.path), maxChars: 3000 } },
+                nextAction: { endpointId: 'notes.read', arguments: { path: this.access.toPublicPath(note.path), expectedRevision: note.revision, maxChars: 3000 } },
                 noteKind: kind || 'knowledge',
                 ...(lifecycle && { lifecycle }),
                 reasons,
@@ -14851,8 +14853,11 @@ export class LlmWikiService {
                 continue;
             const summary = typeof note.frontmatter.summary === 'string' ? note.frontmatter.summary.trim() : '';
             const summaryFresh = Boolean(summary && note.frontmatter.summary_of_content_sha256 === hash(note.content));
-            const excerpt = boundedText(note.content.split(/\n\s*\n/).find(paragraph => paragraph.trim() && !paragraph.trim().startsWith('#')) || note.content, 300);
-            items.push({ ...item, ...(summary && { summaryFresh }), ...(summaryFresh ? { summary: boundedText(summary, 500) } : { excerpt }) });
+            const paragraph = summaryFresh ? undefined : projectNoteParagraphs(note.originalContent).next().value;
+            items.push({ ...item, ...(summary && { summaryFresh }),
+                contentSource: summaryFresh ? 'stored_summary' : paragraph ? 'body_excerpt' : 'none',
+                ...(paragraph && { excerptRange: { startLine: paragraph.startLine, endLine: paragraph.endLine } }),
+                ...(summaryFresh ? { summary: boundedText(summary, 500) } : { excerpt: boundedText(paragraph?.text || '', 300) }) });
         }
         const current = await this.currentMaintenanceCandidates(items, principal);
         return boundedMaintenanceReport(current, total - (candidates.length - current.length), boundedChars, 'wiki.resurface', {

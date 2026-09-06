@@ -298,8 +298,17 @@ rotation of durable notes for Zettelkasten-style rediscovery; it is derived,
 read-only, and does not create a recommendation queue. Read selected notes and
 check their current revision before relying on either view.
 `wiki.resurface` verifies selected summary fingerprints; a stale or absent
-summary yields a short current-body excerpt instead. `wiki.retention_queue`
-preserves legal-hold/preserve-until precedence and exposes only visible
+summary yields a short current-body excerpt instead. `wiki.summary_candidates` and
+`wiki.resurface` identify context as `contentSource: stored_summary|body_excerpt|none`.
+Fallback uses the first visible paragraph, excluding matching fenced blocks and
+ATX/Setext headings, never the whole raw body. Body excerpts carry physical
+`excerptRange` lines from the captured source revision. No eligible paragraph
+means empty context, not a synthetic summary. Candidate compaction may omit the
+context but keeps an exact `notes.read` action with `expectedRevision`; a source
+changed after discovery must be deliberately reread rather than silently mixed
+with the old candidate. These are advisory, bounded response projections, not
+claims of bounded source-file I/O or full Markdown rendering.
+Separately, `wiki.retention_queue` preserves legal-hold/preserve-until precedence and exposes only visible
 replacement targets with revisions. Both filter hidden candidates before totals,
 revalidate selected revisions, and bound the whole response. Follow the exact
 `nextAction` read when prose is cut. If `retry.reuseOriginalArguments` is true,
@@ -803,7 +812,14 @@ not shortened executable paths. Repeating a Wiki projection after such an error
 reads a fresh snapshot; it does not promise retention of the original snapshot.
 
 Direct note/Properties/outline/line reads reject moderation-hidden source
-snapshots regardless of folder. Public batch reads always retain current
+snapshots regardless of folder before returning revision/cache facts. `notes.read` checks optional
+SHA-256 `expectedRevision` against that same captured snapshot before considering
+`knownRevision`: a mismatch returns `revision_conflict`, not current content or
+`notModified`. `knownRevision` alone permits changed content and suppresses only
+an unchanged body; it does not skip the current read or visibility check.
+Truncated note bodies retain a revision-pinned outline action. Budget retries
+preserve exact identity and the revision guard instead of shortening paths.
+Public batch reads always retain current
 Properties internally until moderation is checked, then omit them if requested;
 `knownRevisions` suppresses unchanged response bodies only after that check.
 Cached metadata is not sufficient to authorize a batch snapshot. The maximum

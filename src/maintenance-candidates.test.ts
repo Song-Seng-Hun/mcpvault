@@ -76,6 +76,48 @@ test('summary candidates derive a replacement from the current body, not the sta
   expect(JSON.stringify(result)).not.toContain('Obsolete unsafe guidance');
 });
 
+test.each(['summary', 'resurface'])('%s candidate context shares heading/fence-aware paragraphs with normal reads', async kind => {
+  const raw = await seed('Context.md', `summary: OLD\nsummary_of_content_sha256: ${'0'.repeat(64)}`,
+    '~~~md\nEXAMPLE\n~~~\nTitle\n===\nREAL-PROSE');
+  const result: any = kind === 'summary' ? await report('summary') : await service.resurfaceKnowledge(undefined, 10, 6000);
+  const item = result.items[0];
+  expect(item.summaryCandidate ?? item.excerpt).toBe('REAL-PROSE');
+  expect(item.contentSource).toBe('body_excerpt');
+  const line = raw.split('\n').indexOf('REAL-PROSE') + 1;
+  expect(item.excerptRange).toEqual({ startLine: line, endLine: line });
+  expect(item.nextAction.arguments.expectedRevision).toBe(item.revision);
+  expect(item.revision).toBe(createHash('sha256').update(raw).digest('hex'));
+});
+
+test.each(['summary', 'resurface'])('%s candidate does not replace missing prose with the raw code-only body', async kind => {
+  await seed('Example.md', '', '# Only a title\n~~~md\nDO-NOT-SUMMARIZE-EXAMPLE\n~~~');
+  const result: any = kind === 'summary' ? await report('summary') : await service.resurfaceKnowledge(undefined, 10, 6000);
+  expect(result.items).toHaveLength(1);
+  expect(result.items[0].summaryCandidate ?? result.items[0].excerpt).toBe('');
+  expect(result.items[0].contentSource).toBe('none');
+  expect(result.items[0].excerptRange).toBeUndefined();
+  expect(JSON.stringify(result)).not.toContain('DO-NOT-SUMMARIZE-EXAMPLE');
+});
+
+test.each(['summary', 'resurface'])('%s compact inspect action retains the selected source revision', async kind => {
+  await seed('Long.md', `title: ${'Title '.repeat(200)}`, 'Useful prose '.repeat(300));
+  const result: any = kind === 'summary' ? await report('summary', 512) : await service.resurfaceKnowledge(undefined, 10, 512);
+  expect(JSON.stringify(result).length).toBeLessThanOrEqual(512);
+  expect(result.items[0].candidateTruncated).toBe(true);
+  expect(result.items[0].nextAction).toMatchObject({ endpointId: 'notes.read', arguments: { path: 'Long.md', expectedRevision: result.items[0].revision } });
+});
+
+test.each(['summary', 'resurface'])('%s uses a verified stored summary without claiming it came from a body range', async kind => {
+  const body = '# Current\n' + 'Body '.repeat(500);
+  const basis = createHash('sha256').update(body).digest('hex');
+  await seed('Fresh.md', `summary: Authored compact overview\nsummary_of_content_sha256: ${basis}`, body);
+  const result: any = kind === 'summary' ? await report('summary') : await service.resurfaceKnowledge(undefined, 10, 6000);
+  expect(result.items[0].summaryCandidate ?? result.items[0].summary).toBe('Authored compact overview');
+  expect(result.items[0].contentSource).toBe('stored_summary');
+  expect(result.items[0].excerptRange).toBeUndefined();
+  expect(result.items[0].summaryFresh).toBe(true);
+});
+
 test.each(reports)('%s candidates include envelope overhead at exact budget boundaries', async kind => {
   await seed('Boundary.md', '', 'Paragraph '.repeat(20));
   const full: any = await report(kind, 16000);

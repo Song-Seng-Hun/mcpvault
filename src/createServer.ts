@@ -469,7 +469,8 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
             type: "object",
             properties: {
               path: { type: "string", description: "Path to the note relative to vault root" },
-              knownRevision: { type: "string", description: "Optional revision previously returned by read_note. If unchanged, returns notModified without the note body." },
+              knownRevision: { type: "string", description: "Optional response-cache hint. After reading the current snapshot and checking visibility, unchanged notes return notModified without a body. This saves response tokens, not source reads; it does not reject changed notes." },
+              expectedRevision: { type: "string", pattern: "^[a-fA-F0-9]{64}$", description: "Optional SHA-256 snapshot guard. A different current revision returns revision_conflict without a body, even when knownRevision matches. Preserve this value when following a candidate or retry action." },
               maxChars: { type: "integer", minimum: 512, maximum: 20000, default: 12000, description: "Hard response budget. Oversized note bodies return a bounded prefix, revision, total length, and an outline next action." },
               prettyPrint: { type: "boolean", description: "Format JSON response with indentation (default: false)", default: false }
             },
@@ -2244,16 +2245,16 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         }
 
         case "read_note": {
-          if (typeof trimmedArgs.knownRevision === 'string' && trimmedArgs.knownRevision.trim()) {
-            const unchanged = await metadataIndex.matchesRevision(trimmedArgs.path, trimmedArgs.knownRevision.trim());
-            if (unchanged) {
-              return {
-                content: [{ type: "text", text: JSON.stringify({ notModified: true, path: trimmedArgs.path, revision: trimmedArgs.knownRevision.trim() }) }]
-              };
-            }
-          }
           const note = await fileSystem.readNote(trimmedArgs.path);
           assertReadableNote(note.frontmatter);
+          const maxChars = noteReadMaxChars(trimmedArgs.maxChars);
+          const conflict = noteContinuationConflict(trimmedArgs.path, note.revision, { ...trimmedArgs, maxChars });
+          if (conflict) return conflict;
+          if (typeof trimmedArgs.knownRevision === 'string' && trimmedArgs.knownRevision.trim().toLowerCase() === note.revision) {
+            const text = JSON.stringify({ notModified: true, path: trimmedArgs.path, revision: note.revision });
+            if (text.length > maxChars) return noteReadBudgetError(text.length + 64, note.revision);
+            return { content: [{ type: 'text', text }] };
+          }
           return boundedNoteReadResult(trimmedArgs.path, note, trimmedArgs.maxChars, trimmedArgs.prettyPrint);
         }
 
@@ -3099,23 +3100,26 @@ function jsonResult(value: unknown, prettyPrint?: boolean) {
   return { content: [{ type: 'text' as const, text: JSON.stringify(value, null, prettyPrint ? 2 : undefined) }] };
 }
 
+function noteReadMaxChars(requestedMaxChars: unknown): number {
+  const parsed = requestedMaxChars === undefined ? 12000 : Number(requestedMaxChars);
+  if (!Number.isInteger(parsed) || parsed < 512 || parsed > 20000) throw new Error('maxChars must be an integer between 512 and 20000');
+  return parsed;
+}
+
 function boundedNoteReadResult(
   path: string,
   note: { frontmatter: Record<string, unknown>; content: string; revision: string },
   requestedMaxChars: unknown,
   prettyPrint?: boolean,
 ) {
-  const parsed = requestedMaxChars === undefined ? 12000 : Number(requestedMaxChars);
-  if (!Number.isInteger(parsed) || parsed < 512 || parsed > 20000) throw new Error('maxChars must be an integer between 512 and 20000');
-  const maxChars = parsed;
+  const maxChars = noteReadMaxChars(requestedMaxChars);
   const full = { path, fm: note.frontmatter, content: note.content, revision: note.revision };
   const fullText = JSON.stringify(full, null, prettyPrint ? 2 : undefined);
   if (fullText.length <= maxChars) return { content: [{ type: 'text' as const, text: fullText }] };
 
   const nextAction = {
     endpointId: endpointIdForTool('get_note_outline'),
-    arguments: { path },
-    reason: 'Inspect headings, then use the line-range endpoint for only the required section.',
+    arguments: { path, expectedRevision: note.revision },
   };
   let base: Record<string, unknown> = {
     path,
@@ -3131,7 +3135,7 @@ function boundedNoteReadResult(
     base = { path, frontmatterOmitted: true, content: '', revision: note.revision, totalContentChars: note.content.length, returnedContentChars: 0, truncated: true, nextAction };
   }
   if (JSON.stringify(base).length > maxChars) {
-    base = { path: path.slice(0, 160), content: '', revision: note.revision, totalContentChars: note.content.length, returnedContentChars: 0, truncated: true, nextEndpointId: endpointIdForTool('get_note_outline') };
+    return noteReadBudgetError(JSON.stringify(base).length + 64, note.revision);
   }
 
   let low = 0;
@@ -3275,7 +3279,7 @@ function noteContinuationConflict(path: string, revision: string, args: Record<s
   const text = JSON.stringify({
     error: 'revision_conflict', restartRequired: true,
     message: 'Source changed. Discard previous pages and restart from this fresh outline.',
-    nextAction: { endpointId: endpointIdForTool('get_note_outline'), arguments: { path, maxChars } },
+    nextAction: { endpointId: endpointIdForTool('get_note_outline'), arguments: { path, maxChars: Math.min(12000, maxChars) } },
   });
   // Preserve the conflict (and the caller's old guard) when its restart path
   // cannot fit; retrying with a larger budget must not silently read new text.
