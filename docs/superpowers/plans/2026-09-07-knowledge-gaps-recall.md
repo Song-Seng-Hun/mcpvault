@@ -25,7 +25,7 @@ own private state overlay, limited candidates and final selected-input guards.
   private overlay, current revisions, unavailable behavior and progressive prompts.
 - [x] Review the diff; run `npm run build`, `npm test -- --maxWorkers=1`, and
   `git diff --check`. Include generated `dist/` changes.
-- [ ] Publish to fork main
+- [x] Publish to fork main
   and verify local HEAD against live remote main; no upstream contribution.
 
 ## Evidence and review
@@ -46,6 +46,8 @@ own private state overlay, limited candidates and final selected-input guards.
 - Whole-suite verification passed: 182 files, 2830 passed, 1 skipped, 325.62s,
   exit 0 (`npm test -- --maxWorkers=1`). `git diff --check` passed. Source and
   generated dist are ready for fork-only publication.
+- Implementation `fff3abd251f31116d810c2ea44747d47064d46e6` was pushed to
+  `Song-Seng-Hun/mcpvault` main; HEAD, origin/main and live remote main matched.
 
 ## Remaining audit (not claimed fixed here)
 
