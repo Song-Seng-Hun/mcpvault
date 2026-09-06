@@ -161,9 +161,11 @@ export function createDerivedCacheOwner(prefix) {
 }
 export function estimateCacheBytes(value) {
     try {
-        return Buffer.byteLength(JSON.stringify(value) || '', 'utf8');
+        const serialized = JSON.stringify(value);
+        // Unknown size must reject admission, including after caller overhead.
+        return typeof serialized === 'string' ? Buffer.byteLength(serialized, 'utf8') : Infinity;
     }
     catch {
-        return 0;
+        return Infinity;
     }
 }

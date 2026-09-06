@@ -2906,6 +2906,14 @@ over-budget state and round an unsafe intermediate total. This does not make the
 soft estimated-byte budget an exact process-RSS ceiling or recover a payload if
 its supplied disposer itself fails.
 
+The generic JSON cache estimator returns an internal nonfinite sentinel when
+serialization fails (for example, cyclic YAML Properties) or produces no JSON
+string. Fixed overhead does not turn that unknown size into an admissible charge:
+the shared budget disposes the cache copy while callers can still return their
+computed result. Repairing the data allows caching again. Ordinary JSON values
+keep the same UTF-8 serialized-byte estimate. This does not bound serialization
+CPU/temporary memory or make JSON size an exact retained-heap measurement.
+
 Model-free reuse also starts the resource idle timer: DB/table references are
 released after inactivity, while active searches and indexing batches defer
 release. This does not require loading an embedding model just to start cleanup.
