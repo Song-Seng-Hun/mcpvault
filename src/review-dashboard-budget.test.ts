@@ -25,7 +25,7 @@ test.each([false, true])('tiny dashboard keeps a review target and read action (
     const result = await wiki.reviewDashboard(undefined, 10, 512, { prettyPrint });
     expect(JSON.stringify(result, null, prettyPrint ? 2 : undefined).length).toBeLessThanOrEqual(512);
     expect(result.selected).toEqual({ section: 'due', path: 'A.md', revision: 'b'.repeat(64) });
-    expect(result.nextAction).toMatchObject({ endpointId: 'notes.read', arguments: { path: 'A.md' } });
+    expect(result.nextAction).toMatchObject({ endpointId: 'notes.read', arguments: { path: 'A.md', expectedRevision: 'b'.repeat(64) } });
     expect(result.detailsOmitted).toBe(true);
   });
 });
@@ -38,6 +38,7 @@ test('compacted collections report omitted rows instead of retaining false compl
     expect(result.sections.due.items.length).toBeLessThan(10);
     expect(result.sections.due.truncated).toBe(true);
     expect(result.sections.due.items[0]).toMatchObject({ path: 'T0.md', revision: 'b'.repeat(64), overdue: true });
+    expect(result.sections.due.items[0].readAction).toMatchObject({ endpointId: 'notes.read', arguments: { path: 'T0.md', expectedRevision: 'b'.repeat(64) } });
   });
 });
 

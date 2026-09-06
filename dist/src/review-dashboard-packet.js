@@ -12,7 +12,7 @@ export function packReviewDashboard(result, maxChars, prettyPrint = false) {
             'overdue', 'scheduled', 'missingNextAction', 'waitingAgeDays', 'followUpNeeded', 'followUpReason',
             'epistemicStatus'].filter(key => row[key] !== undefined).map(key => [key, row[key]])),
         detailsOmitted: true,
-        ...(typeof row.path === 'string' && { readAction: { endpointId: 'notes.read', arguments: { path: row.path, maxChars: 8000 } } }),
+        ...(typeof row.path === 'string' && { readAction: { endpointId: 'notes.read', arguments: { path: row.path, expectedRevision: row.revision, maxChars: 8000 } } }),
     });
     const trim = (collection, count, concise) => {
         const items = collection.items.slice(0, count).map(row => concise ? compactRow(row) : row);
@@ -69,7 +69,7 @@ export function packReviewDashboard(result, maxChars, prettyPrint = false) {
     const row = collection.items[0];
     if (row && typeof row.path === 'string') {
         const value = { selected: { section, path: row.path, ...(row.revision && { revision: row.revision }) },
-            nextAction: { endpointId: 'notes.read', arguments: { path: row.path, maxChars: 8000 } },
+            nextAction: { endpointId: 'notes.read', arguments: { path: row.path, expectedRevision: row.revision, maxChars: 8000 } },
             truncated: true, detailsOmitted: true };
         if (fits(value))
             return value;

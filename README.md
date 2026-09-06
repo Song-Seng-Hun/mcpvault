@@ -743,7 +743,12 @@ or reactivation through triage, review, or general `publish_knowledge` is
 rejected. `get_wiki_review_dashboard` combines Inbox,
 active work on any note kind, due work, waiting/someday items, open
 questions/hypotheses/assumptions, due knowledge, and MOC/graph/focus/
-connectivity health into one bounded Reflect pass. MOC question coverage is
+connectivity health into one bounded Reflect pass. Its compact `readAction` and
+tiny `nextAction` pin `notes.read` to the selected source's `expectedRevision`.
+On conflict, query the dashboard again and reassess; do not drop the guard.
+This protects one source read, not a transaction across the entire dashboard.
+An oversized exact locator triggers a same-review retry, never a skipped target
+or weakened guard. MOC question coverage is
 explicit: put an answer `[[wikilink]]` on the question list item or within the
 next three lines; a linked note is discoverable context, not proof of an
 answer. Evergreen quality hints flag generic titles, missing compact

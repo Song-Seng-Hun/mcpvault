@@ -605,8 +605,11 @@ knowledge review, and graph/focus/connectivity health. Final JSON indentation
 counts toward `maxChars`. Reduced collections recompute `truncated`; compact
 rows/graph signals mark `detailsOmitted`. Missing graph details are not evidence
 of health. Tiny responses carry one `selected` source and `nextAction`, or a
-category retrieval action when no internal preview row fits. Read the source
-and compare any returned revision before changing it. Priority is due,
+category retrieval action when no internal preview row fits. Compact row
+`readAction` and selected-source `nextAction` carry `expectedRevision` into
+`notes.read`. A conflict requires a new dashboard query and reassessment, not
+removing the guard. This protects that source read, not an atomic snapshot of
+the whole dashboard. Compare the current revision before changing it. Priority is due,
 dependency-blocked, waiting, missing action, Inbox, knowledge, epistemic,
 someday, scheduled, readiness; it selects from bounded samples, not a global
 urgency ordering. Counts overlap across sections. Same-review retry overrides

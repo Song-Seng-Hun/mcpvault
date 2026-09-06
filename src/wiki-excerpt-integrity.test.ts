@@ -402,3 +402,31 @@ test.each(['hidden', 'deleted'])('saved action recovery does not bypass a now %s
   expect(rejected.text).not.toContain('HIDDEN-WORK-CONTEXT');
   expect(rejected.text).not.toContain('Verify the evidence');
 });
+
+test.each([512, 6000])('Reflect MCP recovery pins its selected source at budget %i', async maxChars => {
+  const raw = '---\nnote_kind: task\nnext_action: Verify evidence\ndue_at: 2000-01-01\ntitle: "' + 'Large title '.repeat(1800) + '"\n---\n# Work\nCURRENT';
+  await writeFile(join(vault, path), raw);
+  const { value } = await call({ maxChars, prettyPrint: true }, 'wiki.review_dashboard');
+  const action = maxChars === 512 ? value.nextAction : value.sections.due.items[0].readAction;
+  expect(action).toMatchObject({ endpointId: 'notes.read', arguments: { path, expectedRevision: digest(raw) } });
+  expect((await call(action.arguments, action.endpointId)).result.isError).not.toBe(true);
+  expect(await readFile(join(vault, path), 'utf8')).toBe(raw);
+  await writeFile(join(vault, path), raw + '\nCHANGED-REVIEW-CONTEXT');
+  const changed = await call(action.arguments, action.endpointId);
+  expect(changed.result.isError).toBe(true);
+  expect(changed.value.error).toBe('revision_conflict');
+  expect(changed.text).not.toContain('CHANGED-REVIEW-CONTEXT');
+});
+
+test.each(['hidden', 'deleted'])('Reflect recovery rejects a subsequently %s source', async state => {
+  const raw = '---\nnote_kind: task\nnext_action: Verify evidence\ndue_at: 2000-01-01\n---\n# PRIVATE-REVIEW-CONTEXT';
+  await writeFile(join(vault, path), raw);
+  const { value } = await call({ maxChars: 512 }, 'wiki.review_dashboard');
+  const action = value.nextAction;
+  expect(action.arguments.expectedRevision).toBe(digest(raw));
+  if (state === 'hidden') await writeFile(join(vault, path), raw.replace('note_kind: task', 'note_kind: task\nmoderation_status: hidden'));
+  else await rm(join(vault, path));
+  const rejected = await call(action.arguments, action.endpointId);
+  expect(rejected.result.isError).toBe(true);
+  expect(rejected.text).not.toContain('PRIVATE-REVIEW-CONTEXT');
+});
