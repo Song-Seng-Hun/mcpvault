@@ -26,7 +26,7 @@ unchanged number-shaped public API and heap/owner/LRU structures.
   semantic/search tests maxWorkers1, build, independent review, README policy.
 - [x] Run full npm test -- --maxWorkers=1; whitespace check. Record findings,
   results and a bounded bookkeeping experiment.
-- [ ] Commit explicit source/tests/
+- [x] Commit explicit source/tests/
   docs/dist; push only origin main and verify matching tracking/local HEAD.
 
 ## Evidence
@@ -50,6 +50,9 @@ unchanged number-shaped public API and heap/owner/LRU structures.
   6.9573ms, exact7.7101ms. Metadata only, no cache payload or traffic allocation;
   this correctness fix has measured local overhead, not a speedup claim. Baseline
   loaded from HEAD:dist/src/cache-budget.js before implementation was committed.
+- Implementation4de89dd pushed to user fork Song-Seng-Hun/mcpvault main.
+  HEAD and origin/main matched after successful push. Unrelated .agents/ and
+  .mcpvault/ remain untracked; no live server restart or upstream contribution.
 
 ## Follow-up audit
 
