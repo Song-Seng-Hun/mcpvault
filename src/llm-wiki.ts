@@ -13862,6 +13862,9 @@ export class LlmWikiService {
     const fits = (value: unknown) => JSON.stringify(value, null, prettyPrint ? 2 : undefined).length <= boundedChars;
     const canAccess = (path: string) => this.access.canAccessPhysicalPath(path, principal);
     const capturedRevisions = new Map<string, string>();
+    // Request-local projections only: never retain bodies or arbitrary YAML.
+    // Null records an absent target; it also needs validation before returning.
+    const referenceStates = new Map<string, QueryNote | null>();
     const capture = (path: string, revision: string | undefined) => {
       if (!revision || (capturedRevisions.has(path) && capturedRevisions.get(path) !== revision)) {
         throw new Error('A promotion source changed or became unavailable; retry the candidate query.');
@@ -13880,19 +13883,31 @@ export class LlmWikiService {
           if (!referencePaths.includes(path)) referencePaths.push(path);
         } catch { /* Invalid or private references are not public promotion context. */ }
       }
-      let notes;
+      const canUseReference = (path: string) => canAccess(path) && this.access.canAccessPhysicalPath(path)
+        && this.access.canReferenceFrom(containerPath, path);
       try {
-        notes = (await this.fileSystem.readNoteMetadata(referencePaths,
-          path => canAccess(path) && this.access.canAccessPhysicalPath(path) && this.access.canReferenceFrom(containerPath, path),
-          { fresh: true, strict: true, maxBytes: MAX_NOTE_CONTENT_BYTES }))
-          .filter(note => !isModerationHidden(note.frontmatter));
+        for (const path of referencePaths) {
+          if (referenceStates.has(path) || !canUseReference(path)) continue;
+          const [note] = await this.fileSystem.readNoteMetadata([path], canUseReference,
+            { fresh: true, strict: true, maxBytes: MAX_NOTE_CONTENT_BYTES });
+          if (!canUseReference(path)) throw new Error('changed');
+          if (!note) { referenceStates.set(path, null); continue; }
+          capture(note.path, note.revision);
+          referenceStates.set(path, { path: note.path, ...(note.revision && { revision: note.revision }),
+            frontmatter: {
+              llm_wiki_type: String(note.frontmatter.llm_wiki_type || '').toLowerCase() === 'knowledge' ? 'knowledge' : '',
+              moderation_status: isModerationHidden(note.frontmatter) ? 'hidden' : '',
+            } });
+        }
       } catch {
         // Unreadable evidence is not absent evidence. Never suggest a new
         // lesson merely because its existing knowledge could not be loaded.
         throw new Error('A promotion source changed or became unavailable; retry the candidate query.');
       }
-      for (const note of notes) capture(note.path, note.revision);
-      return notes;
+      return referencePaths.flatMap(path => {
+        const note = referenceStates.get(path);
+        return note && canUseReference(path) && !isModerationHidden(note.frontmatter) ? [note] : [];
+      });
     };
     const candidates: Array<Record<string, any> & { score: number; excerpt: string }> = [];
     const legacyStatuses = new Set(['open', 'resolved', 'rejected', 'superseded']);
@@ -14127,6 +14142,19 @@ export class LlmWikiService {
         if (!canAccess(path) || !this.access.canAccessPhysicalPath(path)
           || await this.fileSystem.readNoteRevision(path, 8 * 1024 * 1024) !== revision
           || !canAccess(path) || !this.access.canAccessPhysicalPath(path)) throw new Error('changed');
+      }));
+      if (checked.some(result => result.status === 'rejected')) throw new Error('A promotion source changed or became unavailable; retry the candidate query.');
+    }
+    // A formerly missing target appearing is drift too: otherwise one request
+    // could propose both a new lesson and a review of that existing lesson.
+    const absentReferences = [...referenceStates].filter(([, state]) => state === null).map(([path]) => path);
+    for (let offset = 0; offset < absentReferences.length; offset += 8) {
+      const checked = await Promise.allSettled(absentReferences.slice(offset, offset + 8).map(async path => {
+        const allowed = (target: string) => canAccess(target) && this.access.canAccessPhysicalPath(target);
+        if (!allowed(path)) throw new Error('changed');
+        const notes = await this.fileSystem.readNoteMetadata([path], allowed,
+          { fresh: true, strict: true, maxBytes: MAX_NOTE_CONTENT_BYTES });
+        if (notes.length || !allowed(path)) throw new Error('changed');
       }));
       if (checked.some(result => result.status === 'rejected')) throw new Error('A promotion source changed or became unavailable; retry the candidate query.');
     }

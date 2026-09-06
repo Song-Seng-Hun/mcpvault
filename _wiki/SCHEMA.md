@@ -971,6 +971,12 @@ other cases propose publication with filtered references. Initial selected-sourc
 and reference hydration uses complete reads capped at 8 MiB per file. Storage
 failures and oversized files return a path-free retry error, never a claim that
 existing linked knowledge is absent. Genuinely missing references remain omitted.
+Selected candidates share request-local minimal reference projections. Hidden
+targets retain revision checks and missing targets retain an absence check;
+unhide/creation drift rejects the report rather than mixing publication and
+existing-knowledge review plans. Absence checks are strict, capped, and drained
+in batches of eight. No cached bodies, arbitrary YAML or cross-request state are
+introduced; each candidate still checks scope/reference permission.
 This cap is not a whole-inventory or process-memory bound. Current known source
 and reference revisions are checked before all response branches; drift requires
 a fresh query. Post/task metadata IDs must normalize to the exact canonical

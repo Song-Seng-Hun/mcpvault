@@ -3836,6 +3836,13 @@ second source of truth:
   unreadable or oversized references fail instead of masquerading as absent
   knowledge and triggering a new publication plan. Final revision verification
   is deduplicated in drained batches of eight with the same per-file read cap.
+  Initial reference hydration is also shared across selected candidates within
+  that request only. The retained projection contains identity, revision,
+  knowledge classification and visibility, not bodies or arbitrary Properties.
+  Hidden-reference revisions and missing-reference absence are checked before
+  returning: a newly visible/existing reference requires a retry, not mixed
+  publish/review suggestions. Missing checks use strict bounded reads in drained
+  batches of eight. No reference state is retained for the next request.
   This does not bound the metadata inventory pipeline or whole-process memory.
   Ranking remains an authored-metadata hint,
   not verified evidence quality or an atomic multi-file snapshot. Post/task IDs
