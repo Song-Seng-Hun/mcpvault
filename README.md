@@ -3871,6 +3871,12 @@ adds bounded navigation signals instead of a second database.
   Projection reads return a compact `temporal` card; catalog `validity` with an
   optional `validAt` instant filters current, future, expired, invalid, or
   unspecified knowledge; expired validity enters the bounded review queue.
+  Organization dates must be scalar ISO text with a real Gregorian calendar
+  day. Impossible days and date arrays are rejected, not silently rolled into
+  the next month or converted to strings. Raw malformed/null validity metadata
+  is `invalid`, not unspecified/current. Valid timezone offsets are preserved.
+  Repair the source explicitly; reads do not rewrite dates. Catalog entries,
+  totals and facets exclude moderation-hidden notes, including summary views.
 - `get_wiki_claim_matrix` projects authored claims against immutable evidence
   and source-work groupings under one hard character budget. It separately
   ranks attention signals so repair priority does not rewrite the author's

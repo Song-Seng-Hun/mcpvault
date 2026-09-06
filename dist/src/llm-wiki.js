@@ -2427,6 +2427,9 @@ export class LlmWikiService {
         const validAt = options.validAt ? normalizeIsoDate(options.validAt, 'validAt') : new Date().toISOString();
         const validAtMs = Date.parse(validAt);
         for await (const note of iterateNotes(this.fileSystem, {}, canAccess)) {
+            // Apply moderation before entries, totals and facets, including summaries.
+            if (isModerationHidden(note.frontmatter))
+                continue;
             // The public schema is a reserved onboarding document. Older/manual
             // vaults may contain it as plain Markdown without the frontmatter that
             // initialize_llm_wiki adds, so recognize it by its canonical path too.

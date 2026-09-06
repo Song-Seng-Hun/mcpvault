@@ -771,13 +771,7 @@ export function normalizeKnowledgeDisposition(input, existing = {}) {
     };
 }
 export function normalizeReviewAt(value) {
-    const date = optionalText(value, 'reviewAt', 40);
-    if (!date)
-        return undefined;
-    if (!/^\d{4}-\d{2}-\d{2}(?:T[^\s]+)?$/.test(date) || Number.isNaN(Date.parse(date))) {
-        throw new Error('reviewAt must be an ISO date or date-time');
-    }
-    return date;
+    return normalizeIsoDate(value, 'reviewAt');
 }
 export function normalizeReviewIntervalDays(value, fallback) {
     if (value === undefined || value === null || String(value).trim() === '')
@@ -797,11 +791,29 @@ export function normalizeNavOrder(value, fallback) {
         throw new Error('navOrder must be an integer from 0 to 1000000');
     return order;
 }
+/** Date.parse normalizes impossible calendar days. Validate the authored
+ * calendar first, without converting an offset timestamp to another day. */
+function isIsoDateText(value) {
+    if (typeof value !== 'string')
+        return false;
+    const text = value.trim();
+    if (text.length > 40)
+        return false;
+    const match = /^(\d{4})-(\d{2})-(\d{2})(?:T[^\s]+)?$/.exec(text);
+    if (!match)
+        return false;
+    const year = Number(match[1]), month = Number(match[2]), day = Number(match[3]);
+    const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+    const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1];
+    return days !== undefined && day >= 1 && day <= days && Number.isFinite(Date.parse(text));
+}
 export function normalizeIsoDate(value, field) {
+    if (value !== undefined && value !== null && typeof value !== 'string')
+        throw new Error(`${field} must be an ISO date or date-time`);
     const date = optionalText(value, field, 40);
     if (!date)
         return undefined;
-    if (!/^\d{4}-\d{2}-\d{2}(?:T[^\s]+)?$/.test(date) || Number.isNaN(Date.parse(date)))
+    if (!isIsoDateText(date))
         throw new Error(`${field} must be an ISO date or date-time`);
     return date;
 }
@@ -822,13 +834,12 @@ export function temporalValidity(frontmatter, asOfMs = Date.now()) {
         ...(observedAt && { observedAt }),
         ...(temporalScope && { temporalScope }),
     };
+    if (['valid_from', 'valid_until', 'observed_at'].some(field => frontmatter[field] !== undefined && !isIsoDateText(frontmatter[field]))) {
+        return { state: 'invalid', ...card, reason: 'invalid_temporal_date' };
+    }
     const parse = (value) => value === undefined ? undefined : Date.parse(value);
     const fromMs = parse(validFrom);
     const untilMs = parse(validUntil);
-    const observedMs = parse(observedAt);
-    if ((validFrom && !Number.isFinite(fromMs)) || (validUntil && !Number.isFinite(untilMs)) || (observedAt && !Number.isFinite(observedMs))) {
-        return { state: 'invalid', ...card, reason: 'invalid_temporal_date' };
-    }
     if (fromMs !== undefined && untilMs !== undefined && untilMs <= fromMs) {
         return { state: 'invalid', ...card, reason: 'invalid_validity_range' };
     }
@@ -1327,16 +1338,6 @@ export function organizationLintIssues(path, frontmatter, content, nowMs = Date.
     if (frontmatter.triage_disposition !== undefined && !clarifyDispositionSet.has(String(frontmatter.triage_disposition).trim().toLowerCase())) {
         issues.push({ code: 'invalid_triage_disposition', detail: `triage_disposition must be one of: ${CLARIFY_DISPOSITIONS.join(', ')}` });
     }
-    for (const [field, label] of [['clarified_at', 'clarifiedAt']]) {
-        if (frontmatter[field] !== undefined) {
-            try {
-                normalizeIsoDate(frontmatter[field], label);
-            }
-            catch (error) {
-                issues.push({ code: `invalid_${field}`, detail: error instanceof Error ? error.message : `${field} must be an ISO date or date-time` });
-            }
-        }
-    }
     for (const [field, label, maxItems] of [['moc_questions', 'mocQuestions', 12]]) {
         if (frontmatter[field] !== undefined) {
             try {
@@ -1556,7 +1557,7 @@ export function organizationLintIssues(path, frontmatter, content, nowMs = Date.
         issues.push({ code: 'invalid_last_review_trigger', detail: 'last_review_trigger must be text of 120 Unicode characters or fewer.' });
     }
     for (const [field, value] of [['due_at', frontmatter.due_at], ['scheduled_at', frontmatter.scheduled_at], ['defer_until', frontmatter.defer_until], ['started_at', frontmatter.started_at], ['blocked_since', frontmatter.blocked_since], ['waiting_since', frontmatter.waiting_since], ['completed_at', frontmatter.completed_at], ['last_reviewed_at', frontmatter.last_reviewed_at], ['review_snoozed_until', frontmatter.review_snoozed_until], ['valid_from', frontmatter.valid_from], ['valid_until', frontmatter.valid_until], ['observed_at', frontmatter.observed_at]]) {
-        if (value !== undefined && (!/^(?:\d{4}-\d{2}-\d{2})(?:T[^\s]+)?$/.test(String(value).trim()) || Number.isNaN(Date.parse(String(value).trim())))) {
+        if (value !== undefined && !isIsoDateText(value)) {
             issues.push({ code: `invalid_${field}`, detail: `${field} should be an ISO date or date-time.` });
         }
     }
@@ -1573,7 +1574,7 @@ export function organizationLintIssues(path, frontmatter, content, nowMs = Date.
     if (type === 'knowledge' && temporal.state === 'expired' && !['archived', 'superseded'].includes(lifecycle || '')) {
         issues.push({ code: 'knowledge_validity_expired', detail: `The knowledge validity ended at ${temporal.validUntil}; review it before reuse. File modification and review dates do not extend claim validity.` });
     }
-    if (frontmatter.last_recalled_at !== undefined && (!/^\d{4}-\d{2}-\d{2}(?:T[^\s]+)?$/.test(String(frontmatter.last_recalled_at).trim()) || Number.isNaN(Date.parse(String(frontmatter.last_recalled_at).trim())))) {
+    if (frontmatter.last_recalled_at !== undefined && !isIsoDateText(frontmatter.last_recalled_at)) {
         issues.push({ code: 'invalid_last_recalled_at', detail: 'last_recalled_at should be an ISO date or date-time.' });
     }
     if (frontmatter.recall_prompt !== undefined && (typeof frontmatter.recall_prompt !== 'string' || !frontmatter.recall_prompt.trim() || Array.from(String(frontmatter.recall_prompt)).length > 1000)) {
@@ -1591,10 +1592,10 @@ export function organizationLintIssues(path, frontmatter, content, nowMs = Date.
     if (frontmatter.retention_event !== undefined && !retentionEventSet.has(String(frontmatter.retention_event).trim().toLowerCase())) {
         issues.push({ code: 'invalid_retention_event', detail: `retention_event must be one of: ${RETENTION_EVENTS.join(', ')}` });
     }
-    if (frontmatter.retention_at !== undefined && (!/^\d{4}-\d{2}-\d{2}(?:T[^\s]+)?$/.test(String(frontmatter.retention_at).trim()) || Number.isNaN(Date.parse(String(frontmatter.retention_at).trim())))) {
+    if (frontmatter.retention_at !== undefined && !isIsoDateText(frontmatter.retention_at)) {
         issues.push({ code: 'invalid_retention_at', detail: 'retention_at should be an ISO date or date-time.' });
     }
-    if (frontmatter.preserve_until !== undefined && (!/^\d{4}-\d{2}-\d{2}(?:T[^\s]+)?$/.test(String(frontmatter.preserve_until).trim()) || Number.isNaN(Date.parse(String(frontmatter.preserve_until).trim())))) {
+    if (frontmatter.preserve_until !== undefined && !isIsoDateText(frontmatter.preserve_until)) {
         issues.push({ code: 'invalid_preserve_until', detail: 'preserve_until should be an ISO date or date-time.' });
     }
     if (frontmatter.legal_hold !== undefined) {
@@ -1747,7 +1748,7 @@ export function organizationLintIssues(path, frontmatter, content, nowMs = Date.
             issues.push({ code: `invalid_${field}`, detail: `${field} must be text of ${maximum} Unicode characters or fewer.` });
         }
     }
-    if (frontmatter.clarified_at !== undefined && (!/^\d{4}-\d{2}-\d{2}(?:T[^\s]+)?$/.test(String(frontmatter.clarified_at).trim()) || Number.isNaN(Date.parse(String(frontmatter.clarified_at).trim())))) {
+    if (frontmatter.clarified_at !== undefined && !isIsoDateText(frontmatter.clarified_at)) {
         issues.push({ code: 'invalid_clarified_at', detail: 'clarified_at should be an ISO date or date-time.' });
     }
     if (frontmatter.moc_questions !== undefined && (!Array.isArray(frontmatter.moc_questions) || frontmatter.moc_questions.some((item) => typeof item !== 'string' || !item.trim() || Array.from(item).length > 500))) {
@@ -1761,8 +1762,8 @@ export function organizationLintIssues(path, frontmatter, content, nowMs = Date.
         issues.push({ code: 'knowledge_lifecycle_missing', detail: 'Knowledge notes should declare lifecycle: inbox, active, review, evergreen, superseded, or archived.' });
     const reviewAt = frontmatter.review_at;
     if (reviewAt !== undefined) {
-        const reviewText = String(reviewAt).trim();
-        if (!/^\d{4}-\d{2}-\d{2}(?:T[^\s]+)?$/.test(reviewText) || Number.isNaN(Date.parse(reviewText))) {
+        const reviewText = typeof reviewAt === 'string' ? reviewAt.trim() : '';
+        if (!isIsoDateText(reviewAt)) {
             issues.push({ code: 'invalid_review_at', detail: 'review_at should be an ISO date or date-time.' });
         }
         else if (Date.parse(reviewText) <= nowMs && lifecycle !== 'archived' && lifecycle !== 'superseded') {

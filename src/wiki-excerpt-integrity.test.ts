@@ -430,3 +430,24 @@ test.each(['hidden', 'deleted'])('Reflect recovery rejects a subsequently %s sou
   expect(rejected.result.isError).toBe(true);
   expect(rejected.text).not.toContain('PRIVATE-REVIEW-CONTEXT');
 });
+
+test.each(['valid_until: "2024-02-30"', 'valid_from: ["2024-01-01"]', 'observed_at: null'])('MCP marks malformed temporal metadata invalid without rewriting it: %s', async property => {
+    const raw = `---\nllm_wiki_type: knowledge\nnote_kind: atomic\nlifecycle: active\n${property}\n---\n# Claim\nCurrent evidence.`;
+    await writeFile(join(vault, path), raw);
+    await writeFile(join(vault, 'Hidden.md'), '---\nllm_wiki_type: knowledge\nnote_kind: atomic\nvalid_until: "2024-02-30"\nmoderation_status: hidden\n---\n# HIDDEN-TEMPORAL');
+    const projection = await call({ maxChars: 6000 }, 'wiki.read_projection');
+    expect(projection.result.isError).not.toBe(true);
+    expect(projection.value.temporal).toMatchObject({ state: 'invalid', reason: 'invalid_temporal_date' });
+    for (const validity of ['invalid', 'current']) {
+      const catalog = await call({ validity, validAt: '2024-03-01', maxChars: 8000 }, 'wiki.catalog');
+      expect(catalog.result.isError).not.toBe(true);
+      expect(catalog.value.entries.map((item: any) => item.path)).toEqual(validity === 'invalid' ? [path] : []);
+      expect(catalog.text).not.toContain('Hidden.md');
+      expect(catalog.text).not.toContain('HIDDEN-TEMPORAL');
+    }
+    const summary = await call({ validity: 'invalid', validAt: '2024-03-01', summaryOnly: true, includeFacets: true, maxChars: 8000 }, 'wiki.catalog');
+    expect(summary.result.isError).not.toBe(true);
+    expect(summary.value.total).toBe(1);
+    expect(summary.value.facets.validity.invalid).toBe(1);
+    expect(await readFile(join(vault, path), 'utf8')).toBe(raw);
+});

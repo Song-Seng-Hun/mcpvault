@@ -641,6 +641,15 @@ trigger age-based follow-up. Flow's `missingTimestamps` lists missing usable
 evidence (including invalid/future values). Inspect the current source before
 repairing it; never fabricate when work entered a lane.
 
+Organization date Properties use scalar ISO text (at most 40 characters) and
+real Gregorian calendar days; arrays, impossible leap days and month overflow
+are invalid. Offset timestamps retain their authored local date and offset.
+`valid_from`, `valid_until`, and `observed_at` with malformed or null source
+values yield `temporal.state: invalid`, never unspecified/current. Omitted
+Properties remain unspecified; optional normalization treats null/blank as no
+date where the endpoint input contract permits it. Lint reports invalid source dates for explicit revision-safe repair,
+without rewriting them. Catalog rows, totals and facets exclude hidden notes.
+
 `read_wiki_projection` accepts `view: progressive` for one bounded context
 packet containing the compact summary, selected highlights, claims, and open
 questions. It also reports `summaryFresh`/`summaryStale`; never treat a stale
