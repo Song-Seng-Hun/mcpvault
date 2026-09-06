@@ -654,14 +654,19 @@ export class FileSystemService {
         return fullPath;
     }
     async readNote(path, maxBytes) {
-        return this.readNoteData(path, content => ({ ...this.frontmatterHandler.parse(content), revision: this.revision(content) }), maxBytes);
+        return this.withNoteRead(path, async (fullPath) => {
+            const content = maxBytes === undefined
+                ? await this.vaultIo.readUtf8(fullPath)
+                : await this.vaultIo.readUtf8Bounded(fullPath, maxBytes);
+            return { ...this.frontmatterHandler.parse(content), revision: this.revision(content) };
+        });
     }
     /** Hash current decoded UTF-8 without parsing. Callers still enforce scope;
      * a revision is not an access grant or a fresh moderation classification. */
     async readNoteRevision(path, maxBytes) {
-        return this.readNoteData(path, content => this.revision(content), maxBytes);
+        return this.withNoteRead(path, fullPath => this.vaultIo.readUtf8Revision(fullPath, maxBytes));
     }
-    async readNoteData(path, project, maxBytes) {
+    async withNoteRead(path, read) {
         path = this.normalizePath(path);
         const fullPath = this.resolvePath(path);
         if (!this.pathFilter.isAllowed(path)) {
@@ -673,10 +678,7 @@ export class FileSystemService {
             throw new Error(`Cannot read directory as file: ${path}. Use list_directory tool instead.`);
         }
         try {
-            const content = maxBytes === undefined
-                ? await this.vaultIo.readUtf8(fullPath)
-                : await this.vaultIo.readUtf8Bounded(fullPath, maxBytes);
-            return project(content);
+            return await read(fullPath);
         }
         catch (error) {
             if (error instanceof Error && 'code' in error) {

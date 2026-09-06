@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { readBoundedSource, SourceReadLimitError } from './bounded-source-read.js';
+import { hashUtf8Source } from './streaming-revision.js';
 
 export type VaultIoPriority = 'foreground' | 'background';
 const BACKGROUND_MAX_WAIT_MS = 500;
@@ -20,6 +21,7 @@ export interface VaultIoCoordinatorOptions {
   initialConcurrency?: number;
   reader?: (path: string) => Promise<string>;
   boundedReader?: (path: string, maxBytes: number) => Promise<string>;
+  revisionReader?: (path: string, maxBytes?: number) => Promise<string>;
 }
 
 /**
@@ -30,6 +32,7 @@ export interface VaultIoCoordinatorOptions {
 export class VaultIoCoordinator {
   private readonly reader: (path: string) => Promise<string>;
   private readonly boundedReader: (path: string, maxBytes: number) => Promise<string>;
+  private readonly revisionReader: (path: string, maxBytes?: number) => Promise<string>;
   private readonly minConcurrency: number;
   private readonly maxConcurrency: number;
   private targetConcurrency: number;
@@ -41,6 +44,7 @@ export class VaultIoCoordinator {
   constructor(options: VaultIoCoordinatorOptions = {}) {
     this.reader = options.reader || (path => readFile(path, 'utf8'));
     this.boundedReader = options.boundedReader || readBoundedSource;
+    this.revisionReader = options.revisionReader || hashUtf8Source;
     this.minConcurrency = Math.max(1, Math.floor(options.minConcurrency || 2));
     this.maxConcurrency = Math.max(this.minConcurrency, Math.floor(options.maxConcurrency || 32));
     this.targetConcurrency = Math.min(
@@ -55,6 +59,15 @@ export class VaultIoCoordinator {
 
   readUtf8Bounded(path: string, maxBytes: number, priority: VaultIoPriority = 'foreground'): Promise<string> {
     return this.schedule(JSON.stringify(['bounded', maxBytes, path]), () => this.boundedReader(path, maxBytes), priority);
+  }
+
+  readUtf8Revision(path: string, maxBytes?: number, priority: VaultIoPriority = 'foreground'): Promise<string> {
+    // Validate before keying: JSON serializes NaN/Infinity as null, which would
+    // otherwise share an unbounded in-flight read and bypass the reader's check.
+    if (maxBytes !== undefined && (!Number.isSafeInteger(maxBytes) || maxBytes < 1 || maxBytes > 0x7fffffff)) {
+      return Promise.reject(new TypeError('Invalid source byte limit'));
+    }
+    return this.schedule(JSON.stringify(['revision', maxBytes ?? null, path]), () => this.revisionReader(path, maxBytes), priority);
   }
 
   private schedule(path: string, run: () => Promise<string>, priority: VaultIoPriority): Promise<string> {

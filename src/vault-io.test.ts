@@ -3,6 +3,40 @@ import { VaultIoCoordinator } from './vault-io.js';
 import { SourceReadLimitError } from './bounded-source-read.js';
 
 describe('VaultIoCoordinator', () => {
+  test('invalid revision limits cannot coalesce with an unbounded in-flight digest', async () => {
+    const io = new VaultIoCoordinator({ revisionReader: async () => 'digest' });
+    const valid = io.readUtf8Revision('same');
+    for (const limit of [Infinity, NaN, -Infinity, 0, -1, 1.5, 0x80000000]) {
+      await expect(io.readUtf8Revision('same', limit)).rejects.toThrow('Invalid source byte limit');
+    }
+    await expect(valid).resolves.toBe('digest');
+  });
+  test('digests share the IO scheduler, coalesce identical caps, and never alias body reads', async () => {
+    let active = 0, peak = 0; const calls: string[] = [];
+    const reader = async (key: string) => {
+      calls.push(key); peak = Math.max(peak, ++active);
+      await new Promise(resolve => setTimeout(resolve, 2)); active--; return key;
+    };
+    const io = new VaultIoCoordinator({ minConcurrency: 1, maxConcurrency: 1,
+      reader: path => reader(`body:${path}`), revisionReader: (path, cap) => reader(`${cap}:${path}`),
+    });
+    const a = io.readUtf8Revision('same', 10), b = io.readUtf8Revision('same', 10);
+    expect(a).toBe(b);
+    expect(await Promise.all([a, b, io.readUtf8Revision('same', 20), io.readUtf8Revision('same'), io.readUtf8('same')]))
+      .toEqual(['10:same', '10:same', '20:same', 'undefined:same', 'body:same']);
+    expect(peak).toBe(1); expect(calls).toHaveLength(4);
+    expect(io.status()).toMatchObject({ active: 0, queued: 0 });
+  });
+  test('digest failures release admission and expected caps do not penalize IO', async () => {
+    let fail = true;
+    const io = new VaultIoCoordinator({ revisionReader: async () => {
+      if (fail) { fail = false; throw new SourceReadLimitError(); } return 'retry';
+    } });
+    const before = io.status().targetConcurrency;
+    await expect(io.readUtf8Revision('same', 10)).rejects.toBeInstanceOf(SourceReadLimitError);
+    expect(io.status().targetConcurrency).toBe(before);
+    await expect(io.readUtf8Revision('same', 10)).resolves.toBe('retry');
+  });
   test('expected query size limits do not throttle unrelated IO as storage failures', async () => {
     const io = new VaultIoCoordinator({ boundedReader: async () => { throw new SourceReadLimitError(); } });
     const before = io.status().targetConcurrency;

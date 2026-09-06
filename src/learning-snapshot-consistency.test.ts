@@ -67,7 +67,7 @@ test.each([false, true])('revalidation reads selected sources once and ignores u
   const paths = Array.from({ length: 12 }, (_, i) => `Entry-${i}.md`);
   await fs.writeNote({ path: 'MOC.md', content: '# Map\n' + paths.map(path => `[[${path}]]`).join('\n'), frontmatter: { note_kind: 'moc', llm_wiki_type: 'knowledge' } });
   for (const path of [...paths, 'External.md', 'Unrelated.md']) await fs.writeNote({ path, content: '# Entry\n', frontmatter: { note_kind: 'atomic', llm_wiki_type: 'knowledge', ...(paths.includes(path) && { depends_on: ['[[External.md]]'] }) } });
-  const query = fs.queryNotes.bind(fs), read = io.readUtf8.bind(io);
+  const query = fs.queryNotes.bind(fs), read = io.readUtf8Revision.bind(io);
   const parse = vi.spyOn(handler, 'parse');
   let captured = false, active = 0, peak = 0;
   const reads: string[] = [];
@@ -78,7 +78,7 @@ test.each([false, true])('revalidation reads selected sources once and ignores u
     parse.mockClear();
     return result;
   });
-  vi.spyOn(io, 'readUtf8').mockImplementation(async path => {
+  vi.spyOn(io, 'readUtf8Revision').mockImplementation(async path => {
     if (!captured) return read(path);
     reads.push(basename(path)); active += 1; peak = Math.max(peak, active);
     try { return await read(path); } finally { active -= 1; }
@@ -101,7 +101,7 @@ test.each(['A.md', 'MOC.md'])('learning refuses access revoked during final raw 
   const wiki = new LlmWikiService(fs, access, new ReferenceService(fs, access));
   await fs.writeNote({ path: 'MOC.md', content: '[[A.md]]', frontmatter: { note_kind: 'moc' } });
   await fs.writeNote({ path: 'A.md', content: '# A' });
-  const query = fs.queryNotes.bind(fs), rawRead = io.readUtf8.bind(io);
+  const query = fs.queryNotes.bind(fs), rawRead = io.readUtf8Revision.bind(io);
   const canAccess = access.canAccessPhysicalPath.bind(access);
   let captured = false, revoked = false;
   vi.spyOn(fs, 'queryNotes').mockImplementation(async (...args) => {
@@ -111,7 +111,7 @@ test.each(['A.md', 'MOC.md'])('learning refuses access revoked during final raw 
   });
   vi.spyOn(access, 'canAccessPhysicalPath').mockImplementation((path, principal) =>
     !(revoked && path === target) && canAccess(path, principal));
-  vi.spyOn(io, 'readUtf8').mockImplementation(async (...args) => {
+  vi.spyOn(io, 'readUtf8Revision').mockImplementation(async (...args) => {
     const result = await rawRead(...args);
     if (captured && basename(args[0]) === target) revoked = true;
     return result;

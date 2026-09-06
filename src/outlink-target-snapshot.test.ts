@@ -167,7 +167,7 @@ test('a cached target that grows oversized is rejected without an unrestricted b
   const { vault, fs, io } = await fixture();
   await truncate(join(vault, 'Target.md'), MAX_NOTE_CONTENT_BYTES + 1);
   const unrestricted = vi.spyOn(io, 'readUtf8');
-  const bounded = vi.spyOn(io, 'readUtf8Bounded');
+  const bounded = vi.spyOn(io, 'readUtf8Revision');
   await expect(fs.getOutlinks('Root.md')).rejects.toThrow(/Graph.*changed/);
   expect(unrestricted.mock.calls.some(([path]) => path === join(vault, 'Target.md'))).toBe(false);
   expect(bounded.mock.calls).toContainEqual([join(vault, 'Target.md'), MAX_NOTE_CONTENT_BYTES]);

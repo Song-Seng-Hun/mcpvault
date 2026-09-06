@@ -21,6 +21,7 @@ test('revision-only reads preserve decoded UTF-8 identity without parsing or ret
   expect(typeof fs.readNoteRevision).toBe('function');
   const parse = vi.spyOn(handler, 'parse');
   const rawRead = vi.spyOn(io, 'readUtf8');
+  const revisionRead = vi.spyOn(io, 'readUtf8Revision');
   const cases = [
     Buffer.from(''),
     Buffer.from('\uFEFF---\r\ntitle: 한국어 🧭\r\n---\r\n본문\r\n'),
@@ -32,11 +33,12 @@ test('revision-only reads preserve decoded UTF-8 identity without parsing or ret
     const decoded = await readFile(join(vault, 'Note.md'), 'utf8');
     const expected = createHash('sha256').update(decoded).digest('hex');
     const parsed = await fs.readNote('Note.md');
-    parse.mockClear(); rawRead.mockClear();
+    parse.mockClear(); rawRead.mockClear(); revisionRead.mockClear();
     expect(await fs.readNoteRevision('Note.md')).toBe(expected);
     expect(expected).toBe(parsed.revision);
     expect(parse).not.toHaveBeenCalled();
-    expect(rawRead).toHaveBeenCalledTimes(1);
+    expect(rawRead).not.toHaveBeenCalled();
+    expect(revisionRead).toHaveBeenCalledTimes(1);
   }
   await writeFile(join(vault, 'Note.md'), 'old');
   const stamp = await stat(join(vault, 'Note.md'));

@@ -704,16 +704,21 @@ export class FileSystemService {
   }
 
   async readNote(path: string, maxBytes?: number): Promise<ParsedNote> {
-    return this.readNoteData(path, content => ({ ...this.frontmatterHandler.parse(content), revision: this.revision(content) }), maxBytes);
+    return this.withNoteRead(path, async fullPath => {
+      const content = maxBytes === undefined
+        ? await this.vaultIo.readUtf8(fullPath)
+        : await this.vaultIo.readUtf8Bounded(fullPath, maxBytes);
+      return { ...this.frontmatterHandler.parse(content), revision: this.revision(content) };
+    });
   }
 
   /** Hash current decoded UTF-8 without parsing. Callers still enforce scope;
    * a revision is not an access grant or a fresh moderation classification. */
   async readNoteRevision(path: string, maxBytes?: number): Promise<string> {
-    return this.readNoteData(path, content => this.revision(content), maxBytes);
+    return this.withNoteRead(path, fullPath => this.vaultIo.readUtf8Revision(fullPath, maxBytes));
   }
 
-  private async readNoteData<T>(path: string, project: (content: string) => T, maxBytes?: number): Promise<T> {
+  private async withNoteRead<T>(path: string, read: (fullPath: string) => Promise<T>): Promise<T> {
     path = this.normalizePath(path);
     const fullPath = this.resolvePath(path);
 
@@ -728,10 +733,7 @@ export class FileSystemService {
     }
 
     try {
-      const content = maxBytes === undefined
-        ? await this.vaultIo.readUtf8(fullPath)
-        : await this.vaultIo.readUtf8Bounded(fullPath, maxBytes);
-      return project(content);
+      return await read(fullPath);
     } catch (error) {
       if (error instanceof Error && 'code' in error) {
         if (error.code === 'ENOENT') {

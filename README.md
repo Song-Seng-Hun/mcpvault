@@ -3131,6 +3131,21 @@ working-set pressure and foreground responsiveness. These options participate
 in the embedding profile, so existing vectors are gradually rebuilt through the
 same bounded idle worker after upgrade, without deleting the cache manually.
 
+Revision-only reads use one reusable input buffer of at most 64 KiB, incremental
+UTF-8 decoding and SHA256, through the same server I/O scheduler. The hash is
+unchanged even for malformed UTF-8; it is not a new raw-byte revision format.
+Different operations/byte ceilings never share an in-flight result and finished
+digests are not cached. A provided ceiling rejects oversized/growing input;
+unbounded guards remain available for oversized-note recovery. Scope, path,
+moderation and expected-revision checks still apply at their service boundaries.
+Only hash input retention is improved: full note/metadata projections still read
+their content, and hashing still performs O(file bytes) I/O and CPU work.
+For a sequential disposable 32 MiB comparison after building, run
+`node scripts/benchmark-revision-memory.mjs`. It reports identical digests,
+per-process maxRSS and sampled heap/buffer peaks, not a machine-wide memory cap
+or a universal speedup. No client installation or server configuration changes
+are required.
+
 The model is pinned to
 [`761b726`](https://huggingface.co/Xenova/multilingual-e5-small/commit/761b726dd34fb83930e26aab4e9ac3899aa1fa78)
 with CPU q8 execution, mean pooling and normalization. Runtime versions and

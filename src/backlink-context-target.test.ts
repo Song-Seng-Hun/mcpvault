@@ -103,7 +103,7 @@ test('oversized context targets fail through bounded I/O', async () => {
   const { vault, fs, io } = await fixture();
   await truncate(join(vault, 'Neighbor.md'), MAX_NOTE_CONTENT_BYTES + 1);
   const unrestricted = vi.spyOn(io, 'readUtf8');
-  const bounded = vi.spyOn(io, 'readUtf8Bounded');
+  const bounded = vi.spyOn(io, 'readUtf8Revision');
   await expect(fs.getBacklinks('Root.md')).rejects.toThrow(/Graph.*changed/);
   expect(unrestricted.mock.calls.some(([path]) => path === join(vault, 'Neighbor.md'))).toBe(false);
   expect(bounded.mock.calls).toContainEqual([join(vault, 'Neighbor.md'), MAX_NOTE_CONTENT_BYTES]);

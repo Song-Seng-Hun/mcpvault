@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { readBoundedSource, SourceReadLimitError } from './bounded-source-read.js';
+import { hashUtf8Source } from './streaming-revision.js';
 const BACKGROUND_MAX_WAIT_MS = 500;
 /**
  * Deduplicates concurrent note reads and applies adaptive backpressure to
@@ -9,6 +10,7 @@ const BACKGROUND_MAX_WAIT_MS = 500;
 export class VaultIoCoordinator {
     reader;
     boundedReader;
+    revisionReader;
     minConcurrency;
     maxConcurrency;
     targetConcurrency;
@@ -19,6 +21,7 @@ export class VaultIoCoordinator {
     constructor(options = {}) {
         this.reader = options.reader || (path => readFile(path, 'utf8'));
         this.boundedReader = options.boundedReader || readBoundedSource;
+        this.revisionReader = options.revisionReader || hashUtf8Source;
         this.minConcurrency = Math.max(1, Math.floor(options.minConcurrency || 2));
         this.maxConcurrency = Math.max(this.minConcurrency, Math.floor(options.maxConcurrency || 32));
         this.targetConcurrency = Math.min(this.maxConcurrency, Math.max(this.minConcurrency, Math.floor(options.initialConcurrency || 8)));
@@ -28,6 +31,14 @@ export class VaultIoCoordinator {
     }
     readUtf8Bounded(path, maxBytes, priority = 'foreground') {
         return this.schedule(JSON.stringify(['bounded', maxBytes, path]), () => this.boundedReader(path, maxBytes), priority);
+    }
+    readUtf8Revision(path, maxBytes, priority = 'foreground') {
+        // Validate before keying: JSON serializes NaN/Infinity as null, which would
+        // otherwise share an unbounded in-flight read and bypass the reader's check.
+        if (maxBytes !== undefined && (!Number.isSafeInteger(maxBytes) || maxBytes < 1 || maxBytes > 0x7fffffff)) {
+            return Promise.reject(new TypeError('Invalid source byte limit'));
+        }
+        return this.schedule(JSON.stringify(['revision', maxBytes ?? null, path]), () => this.revisionReader(path, maxBytes), priority);
     }
     schedule(path, run, priority) {
         const existing = this.inFlight.get(path);

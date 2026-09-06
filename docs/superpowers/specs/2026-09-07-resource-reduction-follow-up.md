@@ -27,10 +27,16 @@ Admission bypasses potentially stale indexes and has an 8 MiB per-note limit.
 Those correctness checks can add I/O relative to the old cached route; the
 operation-count test is not a whole-endpoint speed or memory benchmark.
 
-`FileSystemService.readNoteRevision` still obtains the full decoded UTF-8 string
+At this inspection baseline, `FileSystemService.readNoteRevision` obtained the full decoded UTF-8 string
 through `readNoteData`. Metadata projection also reads/parses a complete note
 before discarding its body. Removing a service-level body read therefore does
 not mean all underlying body bytes are skipped or hashing is streaming.
+
+Follow-up implementation: `2026-09-07-streaming-revision-design.md` replaces that
+hash-only full-string path with streaming decoded-UTF8 hashing under the existing
+coordinator. Metadata projection is unchanged. Its separate plan records tests,
+benchmark limitations and publication; do not confuse it with the earlier
+review-route operation-count improvement.
 
 ## Ranked follow-up with acceptance gates
 
@@ -45,6 +51,13 @@ not mean all underlying body bytes are skipped or hashing is streaming.
    disposable workload to distinguish parsed bodies, metadata/frontmatter,
    vector arrays and native DB/model memory. Prefer bounded streaming/projection
    or fewer copies to adding more caches. Keep revision and deletion tests.
+   Follow-up source evidence: `FrontmatterHandler.parse` passes a string to
+   gray-matter; the installed `lib/to-file.js` constructs `orig` through
+   `utils.toBuffer`, whose string branch calls `Buffer.from(input)`. The handler
+   returns its own original string, not `parsed.orig`. This is a concrete extra
+   full-input allocation to investigate for metadata/no-frontmatter paths, not
+   yet an implemented optimization. Do not claim a parser cache leak: explicit
+   options currently prevent gray-matter from populating its content cache.
 3. **Only then offload proven synchronous CPU hotspots.** A small reusable pool
    with a bounded admission queue can isolate parsing/graph computations, but
    serial I/O and already-native inference do not automatically benefit. Compare

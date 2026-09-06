@@ -467,8 +467,10 @@ test('raw backlinks hash each source once per validation phase rather than once 
   await seed('Old.md');
   const raw = await seed('Reader.md', '', Array.from({ length: 100 }, () => '[[Old]]').join('\n'));
   const hashes = vi.spyOn(fs as any, 'revision');
+  const finalHashes = vi.spyOn(fs, 'readNoteRevision');
   const result = await fs.getBacklinks('Old.md', 4, () => true, 0, { includeSourceRevision: true });
   expect(result).toMatchObject({ total: 100, truncated: true });
   expect(result.backlinks.every(link => link.sourceRevision === digest(raw))).toBe(true);
-  expect(hashes.mock.calls.filter(([content]) => content === raw)).toHaveLength(2); // pre-count and final page validation
+  expect(hashes.mock.calls.filter(([content]) => content === raw)).toHaveLength(1); // pre-count metadata
+  expect(finalHashes.mock.calls.filter(([path]) => path === 'Reader.md')).toHaveLength(1); // streamed final page validation
 });
