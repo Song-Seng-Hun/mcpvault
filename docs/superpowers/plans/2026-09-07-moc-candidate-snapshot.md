@@ -26,7 +26,7 @@ whole-Vault query pass.
   Include graph sampling partialness; trim full envelope without losing bounds.
 - [x] Update README/_wiki schema/tool guidance. Focused tests, build, independent
   review, full `npm test -- --maxWorkers=1`, diff check.
-- [ ] Commit explicit source/tests/docs/dist, push origin main, verify hashes.
+- [x] Commit explicit source/tests/docs/dist, push origin main, verify hashes.
 
 ## Evidence
 
@@ -57,3 +57,5 @@ whole-Vault query pass.
   runtime restart, new service, or extra client installation. This removes the
   duplicate candidate metadata scan; no RAM/latency improvement percentage is
   claimed without a workload benchmark.
+- Implementation485a720 pushed to Song-Seng-Hun/mcpvault main; HEAD and
+  origin/main match. Only unrelated .agents/ and .mcpvault/ remain untracked.
