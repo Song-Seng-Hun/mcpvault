@@ -35,7 +35,7 @@
   Confirm counts and item order remain intact at exact and intermediate budgets.
 - [x] Focused tests and npm run build; independent review; full
   `npm test -- --maxWorkers=1`; `git -c core.safecrlf=false diff --check`.
-- [ ] Explicit source/tests/docs/dist commit; push origin main; verify hashes.
+- [x] Explicit source/tests/docs/dist commit; push origin main; verify hashes.
 
 ## Evidence
 
@@ -57,3 +57,5 @@
   195 passed in 12.91s, including32 new tests. Delta review found no introduced
   actionable defects; reviewer closed. Fresh full suite: 2,666 passed / 1 skipped
   across173 files, 307.71s, exit0, one worker.
+- Implementation b542e12 pushed to Song-Seng-Hun/mcpvault main; local HEAD and
+  origin/main matched. Unrelated .agents/ and .mcpvault/ preserved.
