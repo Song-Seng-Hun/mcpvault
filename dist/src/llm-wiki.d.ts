@@ -4006,14 +4006,38 @@ export declare class LlmWikiService {
         };
         generatedAt: string;
     }>;
-    promotionCandidates(principal?: ScopePrincipal, limit?: number, maxChars?: number): Promise<{
+    promotionCandidates(principal?: ScopePrincipal, limit?: number, maxChars?: number, prettyPrint?: boolean): Promise<{
         items: Record<string, unknown>[];
         total: number;
         truncated: boolean;
     } | {
+        identityState: {};
+        suggestedPath: unknown;
         total: number;
+        revision?: unknown;
         nextAction?: unknown;
         truncated: boolean;
+    } | {
+        identityState?: never;
+        suggestedPath?: never;
+        total: number;
+        revision?: unknown;
+        nextAction?: unknown;
+        truncated: boolean;
+    } | {
+        total: number;
+        truncated: boolean;
+        detailsOmitted: boolean;
+        message: string;
+        nextAction: {
+            endpointId: string;
+            reuseOriginalArguments: boolean;
+            overrides: {
+                maxChars: number;
+                limit: number;
+                prettyPrint: boolean;
+            };
+        };
     }>;
     private currentMaintenanceCandidates;
     private maintenanceReplacement;

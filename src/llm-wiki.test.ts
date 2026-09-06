@@ -1096,9 +1096,15 @@ test.each([180, 300, 420])('legacy discussion promotion bounds a long path and t
   const result: any = await service.promotionCandidates(undefined, 1, 512);
   expect(JSON.stringify(result).length).toBeLessThanOrEqual(512);
   expect(result).toMatchObject({ total: 1, truncated: true });
-  if (length < 420) {
+  if (length < 300) {
     expect(result.nextAction).toMatchObject({ endpointId: 'notes.read', arguments: { path, maxChars: 7000 } });
-  } else expect(result).not.toHaveProperty('nextAction');
+    expect(result.revision).toMatch(/^[a-f0-9]{64}$/);
+  } else {
+    expect(result.nextAction).toEqual({ endpointId: 'wiki.promotion_candidates', reuseOriginalArguments: true,
+      overrides: { maxChars: 16000, limit: 1, prettyPrint: false } });
+    const retry: any = await service.promotionCandidates(undefined, 1, 16000);
+    expect(retry.items[0].path).toBe(path);
+  }
 });
 
 test.each(['community_discussion', 'completed_task'])('promotion excludes stale %s metadata after hydration', async sourceType => {

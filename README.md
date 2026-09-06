@@ -3835,7 +3835,17 @@ second source of truth:
   verification is deduplicated in drained batches of eight with an 8 MiB read cap
   per file; this cap does not describe the older metadata inventory/hydration
   pipeline or whole-process memory. Ranking remains an authored-metadata hint,
-  not verified evidence quality or an atomic multi-file snapshot.
+  not verified evidence quality or an atomic multi-file snapshot. Post/task IDs
+  are checked against the actual canonical source path before managed-record
+  reads are suggested. Missing, malformed or mismatched IDs produce
+  `identityState: unverified_metadata_id` and an exact-source `notes.read` action;
+  suggested Wiki filenames come from the source file, not the untrusted ID.
+  No metadata is repaired automatically. Final JSON formatting counts toward
+  `maxChars`. Small reports retain revision plus inspection, or an explicit
+  same-query retry preserving original arguments. Merge `nextAction.overrides`
+  when `reuseOriginalArguments` is true; no target is skipped for being long.
+  A target unrepresentable at the compact ceiling fails explicitly, not in an
+  identical retry loop. This remains a ranked candidate preview, not pagination.
 - `wiki.summary_candidates` and `wiki.unused_knowledge` exclude hidden notes
   before candidate totals and recheck selected revisions before returning them.
   Their entire JSON response fits `maxChars`; a small budget preserves a

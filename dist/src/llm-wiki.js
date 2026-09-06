@@ -14100,9 +14100,10 @@ export class LlmWikiService {
             generatedAt: now(),
         };
     }
-    async promotionCandidates(principal, limit = 10, maxChars = 6000) {
+    async promotionCandidates(principal, limit = 10, maxChars = 6000, prettyPrint = false) {
         const boundedLimit = Math.min(Math.max(Number(limit) || 10, 1), 30);
         const boundedChars = Math.min(Math.max(Number(maxChars) || 6000, 512), 16000);
+        const fits = (value) => JSON.stringify(value, null, prettyPrint ? 2 : undefined).length <= boundedChars;
         const canAccess = (path) => this.access.canAccessPhysicalPath(path, principal);
         const capturedRevisions = new Map();
         const capture = (path, revision) => {
@@ -14263,6 +14264,39 @@ export class LlmWikiService {
                 continue;
             }
             if (candidate.sourceType === 'community_discussion' || candidate.sourceType === 'completed_task') {
+                const isPost = candidate.sourceType === 'community_discussion';
+                const rawId = source.frontmatter[isPost ? 'post_id' : 'task_id'];
+                let id;
+                if (typeof rawId === 'string') {
+                    try {
+                        id = normalizeScopeId(rawId, 'promotion source ID');
+                    }
+                    catch { /* Fall back to the captured file, never another record. */ }
+                }
+                const canonicalPath = id ? `Community/${isPost ? 'Posts' : 'Tasks'}/${id}.md` : undefined;
+                const verifiedId = canonicalPath === normalizePath(physicalPath) ? id : undefined;
+                let stem;
+                try {
+                    stem = normalizeScopeId(posix.basename(physicalPath, '.md'), 'promotion target stem');
+                    if (/^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(stem))
+                        throw new Error('reserved filename');
+                }
+                catch {
+                    stem = `promotion-${hash(physicalPath).slice(0, 16)}`;
+                }
+                const suggestedPath = `Knowledge/${isPost ? 'Community' : 'Task Lessons'}/${stem}.md`;
+                const { slug: _slug, taskId: _taskId, ...withoutId } = candidate;
+                candidate = { ...withoutId, suggestedPath,
+                    ...(verifiedId ? { [isPost ? 'slug' : 'taskId']: verifiedId } : { identityState: 'unverified_metadata_id' }),
+                    promotionPlan: { ...candidate.promotionPlan,
+                        inspect: verifiedId
+                            ? isPost
+                                ? { endpointId: endpointIdForTool('read_blog_post'), arguments: { slug: verifiedId, includeComments: true, commentLimit: 20, maxChars: 7000 } }
+                                : { endpointId: endpointIdForTool('read_agent_task'), arguments: { taskId: verifiedId, includeContent: true, referenceLimit: 12, referenceMaxChars: 5000 } }
+                            : { endpointId: endpointIdForTool('read_note'), arguments: { path: candidate.path, maxChars: 7000 } },
+                        then: candidate.promotionPlan.then.map((action) => [endpointIdForTool('preflight_wiki_publish'), endpointIdForTool('publish_knowledge')].includes(action.endpointId)
+                            ? { ...action, arguments: { ...action.arguments, path: suggestedPath } } : action),
+                    } };
                 const rawReferences = manifestStringList(source.frontmatter.references, 20);
                 const rawKnowledge = candidate.sourceType === 'completed_task' ? manifestStringList(source.frontmatter.knowledge_notes, 20) : [];
                 const visibleReferences = await visiblePromotionReferences(physicalPath, [...rawReferences, ...rawKnowledge]);
@@ -14344,13 +14378,15 @@ export class LlmWikiService {
                 ...(item.slug && { slug: item.slug }),
                 ...(item.taskId && { taskId: item.taskId }),
                 ...(item.discussionId && { discussionId: item.discussionId, status: item.status }),
+                ...(item.identityState && { identityState: item.identityState }),
+                suggestedPath: item.suggestedPath,
                 title: item.title,
                 reasons: Array.isArray(item.reasons) ? item.reasons.slice(0, 4) : [],
                 nextAction: item.promotionPlan?.inspect,
                 then: Array.isArray(item.promotionPlan?.then) ? item.promotionPlan.then.slice(0, 3).map((action) => ({ endpointId: action.endpointId })) : [],
                 candidateTruncated: true,
             };
-            if (JSON.stringify([...items, bounded]).length + 2 > boundedChars)
+            if (!fits({ items: [...items, bounded], total, truncated: total > items.length + 1 }))
                 break;
             items.push(bounded);
         }
@@ -14369,22 +14405,26 @@ export class LlmWikiService {
                 throw new Error('A promotion source changed or became unavailable; retry the candidate query.');
         }
         const result = { items, total, truncated: total > items.length };
-        if (JSON.stringify(result).length <= boundedChars && (items.length > 0 || !firstCompact))
+        if (fits(result) && (items.length > 0 || !firstCompact))
             return result;
         const compact = { items: firstCompact ? [firstCompact] : [], total, truncated: true };
-        if (JSON.stringify(compact).length <= boundedChars)
+        if (fits(compact))
             return compact;
-        const fallback = { total, ...(firstCompact && { path: firstCompact.path, revision: firstCompact.revision, nextAction: firstCompact.nextAction }), truncated: true };
-        if (JSON.stringify(fallback).length <= boundedChars)
+        const identityDetails = firstCompact?.identityState ? { identityState: firstCompact.identityState, suggestedPath: firstCompact.suggestedPath } : {};
+        const fallback = { total, ...identityDetails, ...(firstCompact && { path: firstCompact.path, revision: firstCompact.revision, nextAction: firstCompact.nextAction }), truncated: true };
+        if (fits(fallback))
             return fallback;
         // Avoid duplicating a long path when only the executable continuation fits.
-        const continuation = { total, ...(firstCompact && { revision: firstCompact.revision, nextAction: firstCompact.nextAction }), truncated: true };
-        if (JSON.stringify(continuation).length <= boundedChars)
+        const continuation = { total, ...identityDetails, ...(firstCompact && { revision: firstCompact.revision, nextAction: firstCompact.nextAction }), truncated: true };
+        if (fits(continuation))
             return continuation;
-        const actionOnly = { total, ...(firstCompact && { nextAction: firstCompact.nextAction }), truncated: true };
-        if (JSON.stringify(actionOnly).length <= boundedChars)
-            return actionOnly;
-        return { total, truncated: true };
+        if (boundedChars < 16000 || prettyPrint) {
+            return { total, truncated: true, detailsOmitted: true,
+                message: 'Retry the same candidate query. No candidates skipped.',
+                nextAction: { endpointId: 'wiki.promotion_candidates', reuseOriginalArguments: true,
+                    overrides: { maxChars: 16000, limit: 1, prettyPrint: false } } };
+        }
+        throw new Error('Promotion target exceeds the response ceiling; no candidates skipped. Inspect the source directly.');
     }
     async currentMaintenanceCandidates(candidates, principal) {
         const canAccess = (path) => this.access.canAccessPhysicalPath(path, principal);

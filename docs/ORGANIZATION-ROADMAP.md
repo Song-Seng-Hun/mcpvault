@@ -18,8 +18,14 @@ tools; new behaviors belong in the endpoint catalog.
   notes. Task review targets must still be visible knowledge. Final source and
   reference revision checks reject drift in drained batches of eight. This is
   optimistic consistency, not atomic promotion, verified ranking or a complete
-  metadata I/O budget. Promotion response compaction and malformed identifiers
-  remain independent audits.
+  metadata I/O budget. The later action/budget repair below closes the reproduced
+  response-compaction and malformed-identifier cases.
+- Promotion plans now verify post/task IDs against the actual canonical source
+  path, fall back to exact-file inspection for unverified IDs, and derive safe
+  Wiki target stems from the file rather than the metadata ID. Final pretty
+  budgets preserve source revision and inspection or an explicit same-query
+  recovery. Long targets no longer become actionless totals. This does not
+  repair source metadata, resolve publication collisions, or paginate all work.
 - Learning-path compaction now budgets final pretty JSON, retains an exact
   authored prefix and heading/block anchors, or returns an explicit same-query
   recovery instead of silently removing every target. Cycle/coverage warnings

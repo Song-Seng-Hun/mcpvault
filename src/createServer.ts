@@ -1685,7 +1685,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         }
 
         case "get_wiki_promotion_candidates": {
-          return jsonResult(await llmWiki.promotionCandidates(principal, trimmedArgs.limit, trimmedArgs.maxChars), trimmedArgs.prettyPrint);
+          return jsonResult(await llmWiki.promotionCandidates(principal, trimmedArgs.limit, trimmedArgs.maxChars, trimmedArgs.prettyPrint), trimmedArgs.prettyPrint);
         }
 
         case "get_wiki_synthesis_candidates": {

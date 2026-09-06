@@ -1562,7 +1562,7 @@ export function createServer(vaultPath, options = {}) {
                         }), trimmedArgs.prettyPrint);
                     }
                     case "get_wiki_promotion_candidates": {
-                        return jsonResult(await llmWiki.promotionCandidates(principal, trimmedArgs.limit, trimmedArgs.maxChars), trimmedArgs.prettyPrint);
+                        return jsonResult(await llmWiki.promotionCandidates(principal, trimmedArgs.limit, trimmedArgs.maxChars, trimmedArgs.prettyPrint), trimmedArgs.prettyPrint);
                     }
                     case "get_wiki_synthesis_candidates": {
                         return jsonResult(await llmWiki.synthesisCandidates(principal, trimmedArgs.limit, trimmedArgs.maxChars, { focusPath: trimmedArgs.focusPath }), trimmedArgs.prettyPrint);

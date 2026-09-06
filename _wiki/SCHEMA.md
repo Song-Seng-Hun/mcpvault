@@ -969,7 +969,14 @@ access. Missing, moderated, invalid and service references are excluded before
 plans are returned. Task review routes require surviving visible knowledge notes;
 other cases propose publication with filtered references. Current known source
 and reference revisions are checked before all response branches; drift requires
-a fresh query. This does not authorize copying private bodies or certify source
+a fresh query. Post/task metadata IDs must normalize to the exact canonical
+source file before managed-record inspection is offered. Otherwise the plan
+marks `unverified_metadata_id` and reads that original file by path; target
+filenames derive from the source path. This does not mutate or repair metadata.
+Final pretty JSON is budgeted too. Compact reports preserve revision plus an
+inspection action, or a same-query retry using original arguments and explicit
+overrides; unrepresentable ceiling targets fail rather than disappear.
+This does not authorize copying private bodies or certify source
 truth, and it does not create an atomic snapshot across files.
 8. Start a new session with `orient_wiki` and execute its bounded `primaryAction`; it reads the public welcome note when present and otherwise uses the public onboarding-policy fallback without a startup write.
 9. Write claims as Obsidian Markdown; resolvable body wikilinks are automatically added to `references`. Use `read_references` to follow them without loading unrelated context.
