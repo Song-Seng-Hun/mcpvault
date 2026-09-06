@@ -33,7 +33,7 @@ metadata cache -> safe draft -> coherent trimming -> bounded snapshot recheck.
   legacy rebalance integration tests. Update README/_wiki schema/tool guidance.
 - [x] Build dist; independent integrity review; full npm test -- --maxWorkers=1;
   git diff --check. Record exact results and any failures/fixes.
-- [ ] Explicit-file commit and push only origin main, verify HEAD/origin/main.
+- [x] Explicit-file commit and push only origin main, verify HEAD/origin/main.
   Preserve unrelated .agents/ and .mcpvault/. No actual Vault or server actions.
 
 ## Review-driven additions and evidence
@@ -68,3 +68,7 @@ metadata cache -> safe draft -> coherent trimming -> bounded snapshot recheck.
 - Final full recheck:177 files passed;2739 passed,1 skipped (2740),313.88s,
   exit0. Started2026-09-07 04:06:44 local. This demonstrates a passing retry,
   not a proven fix for the earlier intermittent timeout.
+- Published implementation d6e0b44af60afcf5b74665abaa3f01aba7011de9 to the user
+  fork main. HEAD, origin/main and live ls-remote refs/heads/main matched.
+  Generated dist was included; unrelated .agents/ and .mcpvault/ were retained.
+  Final diff checks passed. No upstream contribution or live Vault mutation.
