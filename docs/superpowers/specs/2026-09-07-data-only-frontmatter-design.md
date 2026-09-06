@@ -18,6 +18,9 @@ BOM, `---` but not `----`). No opener returns the same BOM-stripped body and raw
 original string without gray-matter. Inspect the library's language token using
 its non-executing language helper; only empty/yaml/yml/json names may continue.
 Unknown/executable labels fall back to the entire untouched original as text.
+This includes empty unsupported headers, which the old parser sometimes stripped
+without consulting an engine; that deliberate data-only admission change is
+tested separately from the YAML/JSON differential compatibility oracle.
 Do not import metadata from code blocks or a non-leading delimiter.
 
 For a closing `\n---`, pass only through those three closing dashes to gray-matter;
@@ -35,7 +38,7 @@ its label first. No new dependencies, global library mutations or MCP tools.
 - Benign global marker tests show JavaScript/js case aliases cannot execute
   through parse/extract/update and a real disposable FileSystemService read.
 - Golden differential tests against the former YAML/JSON parser compare all
-  four returned fields for valid, invalid, empty, BOM/CRLF, unknown label,
+  four returned fields for valid, invalid, empty, BOM/CRLF, safe labels,
   delimiter suffix, no closing delimiter and fenced examples. Never feed
   executable samples into the golden oracle.
 - Buffer-allocation probes show a large body is not passed to Buffer.from for

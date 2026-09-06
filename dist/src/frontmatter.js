@@ -11,8 +11,15 @@ const yamlEngine = {
     parse: (str) => parse(str),
     stringify: (data) => stringify(data),
 };
+const jsonEngine = { parse: JSON.parse, stringify: (data) => JSON.stringify(data, null, 2) };
+const blockedCodeEngine = {
+    parse: () => { throw new Error('Executable frontmatter engines are disabled'); },
+    stringify: () => { throw new Error('Executable frontmatter engines are disabled'); },
+};
 function withYamlEngine(options = {}) {
-    return { ...options, engines: { yaml: yamlEngine } };
+    // gray-matter merges defaults, so replacing YAML alone leaves its eval-based
+    // JavaScript engine enabled. Keep this block as defense behind label admission.
+    return { ...options, engines: { yaml: yamlEngine, json: jsonEngine, javascript: blockedCodeEngine, js: blockedCodeEngine } };
 }
 /**
  * Parse a frontmatter value that may be a JSON string (LLM clients sometimes
@@ -42,23 +49,40 @@ export function parseFrontmatter(value) {
 }
 export class FrontmatterHandler {
     parse(content) {
+        const fallback = { frontmatter: {}, content, originalContent: content, matter: '' };
         try {
-            const parsed = matter(content, withYamlEngine());
+            const normalized = content.charCodeAt(0) === 0xfeff ? content.slice(1) : content;
+            if (!normalized.startsWith('---') || normalized[3] === '-') {
+                return { ...fallback, content: normalized, matter: content === '' ? undefined : '' };
+            }
+            // This helper only inspects the delimiter's language token; it does not
+            // parse/evaluate the document. Reject all non-data engines before matter().
+            const language = matter.language(normalized).name.toLowerCase();
+            if (!['', 'yaml', 'yml', 'json'].includes(language))
+                return fallback;
+            // gray-matter's toFile creates an orig Buffer from its entire input even
+            // though we keep our own original string. Project just a closed header;
+            // preserve its legacy delimiter/suffix and unclosed-header behavior.
+            const closing = normalized.indexOf('\n---', 3);
+            const parsed = matter(closing < 0 ? normalized : normalized.slice(0, closing + 4), withYamlEngine());
+            let body = parsed.content;
+            if (closing >= 0) {
+                body = normalized.slice(closing + 4);
+                if (body[0] === '\r')
+                    body = body.slice(1);
+                if (body[0] === '\n')
+                    body = body.slice(1);
+            }
             return {
                 frontmatter: parsed.data,
-                content: parsed.content,
+                content: body,
                 originalContent: content,
                 matter: parsed.matter
             };
         }
         catch (error) {
             // If parsing fails, treat as content without frontmatter
-            return {
-                frontmatter: {},
-                content: content,
-                originalContent: content,
-                matter: ''
-            };
+            return fallback;
         }
     }
     stringify(frontmatterData, content) {

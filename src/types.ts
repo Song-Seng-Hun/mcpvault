@@ -2,7 +2,8 @@ export interface ParsedNoteContent {
   frontmatter: Record<string, any>;
   content: string;
   originalContent: string;
-  matter?: string;
+  /** Empty-input parsing may explicitly return undefined, as well as omission. */
+  matter?: string | undefined;
 }
 
 export interface ParsedNote extends ParsedNoteContent {

@@ -9,6 +9,15 @@ updated_at: 2026-09-01T18:30:44.285Z
 
 This vault uses ordinary Markdown, YAML frontmatter, Obsidian links, and Git as one coherent knowledge system.
 
+Frontmatter is data, never executable code. Author ordinary leading `---` YAML
+Properties. Explicit YAML/YML and JSON data headers retain compatibility; code
+or unsupported language labels (including empty unsupported headers) remain
+untouched body text with no interpreted Properties. The parser does not evaluate
+JavaScript frontmatter or treat fenced examples as Properties. Malformed data
+keeps the existing raw-text fallback. A closed header is parsed without copying
+its whole body into the frontmatter library; huge/unclosed headers still depend
+on the caller's read budget. Original Markdown still defines the revision.
+
 ## Layers
 
 - `_sources/`: immutable source snapshots created only by `ingest_source`.

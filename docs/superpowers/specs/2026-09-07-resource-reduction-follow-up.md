@@ -55,8 +55,12 @@ review-route operation-count improvement.
    gray-matter; the installed `lib/to-file.js` constructs `orig` through
    `utils.toBuffer`, whose string branch calls `Buffer.from(input)`. The handler
    returns its own original string, not `parsed.orig`. This is a concrete extra
-   full-input allocation to investigate for metadata/no-frontmatter paths, not
-   yet an implemented optimization. Do not claim a parser cache leak: explicit
+   full-input allocation identified at the inspection baseline. The subsequent
+   `2026-09-07-data-only-frontmatter-design.md` increment removes that body copy
+   for plain/closed-header inputs and blocks a separately confirmed executable
+   default engine. Metadata reads still obtain the original decoded text; this
+   does not make metadata I/O header-only. Its plan records isolated measurements
+   and verification. Do not claim a parser cache leak: explicit
    options currently prevent gray-matter from populating its content cache.
 3. **Only then offload proven synchronous CPU hotspots.** A small reusable pool
    with a bounded admission queue can isolate parsing/graph computations, but
