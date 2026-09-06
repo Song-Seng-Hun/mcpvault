@@ -2785,6 +2785,16 @@ transient Windows rename contention without deleting the prior target. Failed
 writes preserve the old snapshot and leave successful in-memory/vector indexing
 available; a later restart reconciles from Markdown. This is optional restart
 acceleration, not a new source of truth or a power-loss durability guarantee.
+Compressed snapshot reads also stream stored chunks into gzip decoding instead
+of assembling a complete compressed input buffer first. Stored and decoded byte
+ceilings remain separate, including actual file growth after stat and expansion
+across concatenated gzip members. Corrupt checksums/truncated trailers reject
+the whole read; failures stop the pipeline and close the input handle. Callers
+still receive a complete decoded Buffer, so decoded collection/final assembly
+and subsequent JSON parsing remain O(N). This removes compressed-input copying,
+not all snapshot memory use. Raw binary snapshot reads keep their existing
+byte-limited behavior and all cache consumers still validate their own schema
+and source generation before reuse.
 Changed notes reuse unchanged chunks from the same path and scope table. The
 reuse lookup selects at most 65 rows (64 chunks plus an overflow sentinel),
 checks exact passage fingerprints and the embedding profile, and computes only
