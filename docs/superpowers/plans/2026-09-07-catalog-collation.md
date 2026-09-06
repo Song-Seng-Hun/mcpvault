@@ -29,7 +29,7 @@ native sort and existing generation/close checks remain authoritative.
   Add stale-census no-constructor assertion to existing real mutation test.
 - [x] Run final full npm test -- --maxWorkers=1 and whitespace check; record
   exact evidence.
-- [ ] Commit explicit source/tests/docs/dist; push only origin main
+- [x] Commit explicit source/tests/docs/dist; push only origin main
   and verify tracking/local HEAD match. Preserve unrelated .agents/.mcpvault.
 
 ## Evidence
@@ -48,3 +48,6 @@ native sort and existing generation/close checks remain authoritative.
   2,462 passed, one skipped, 165 files, 313.21s, successful process exit.
 - Local alternating microbenchmark and accounting experiment are documented in
   the spec with input generation, environment, measurement boundaries and caveats.
+- Implementation `59ea6e4` pushed successfully to user fork
+  `Song-Seng-Hun/mcpvault` main. HEAD and origin/main matched afterward; unrelated
+  `.agents/` and `.mcpvault/` remained untracked. No live restart/upstream action.
