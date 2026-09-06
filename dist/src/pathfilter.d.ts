@@ -1,10 +1,10 @@
 import type { PathFilterConfig } from "./types.js";
 export declare class PathFilter {
     private static readonly RESTRICTED_SEGMENTS;
-    private ignoredPatterns;
-    private allowedExtensions;
+    private readonly ignoredMatchers;
+    private readonly allowedExtensions;
     constructor(config?: Partial<PathFilterConfig>);
-    private simpleGlobMatch;
+    private compileGlob;
     /**
      * Canonicalize a path for restricted-directory matching. On Windows the
      * filesystem strips trailing dots and spaces from each path segment, so

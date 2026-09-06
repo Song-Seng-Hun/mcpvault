@@ -15,11 +15,11 @@ export class PathFilter {
     'thumbs.db',
   ]);
 
-  private ignoredPatterns: string[];
-  private allowedExtensions: string[];
+  private readonly ignoredMatchers: RegExp[];
+  private readonly allowedExtensions: string[];
 
   constructor(config?: Partial<PathFilterConfig>) {
-    this.ignoredPatterns = [
+    const ignoredPatterns = [
       '.obsidian',
       '.obsidian/**',
       '.git',
@@ -32,6 +32,9 @@ export class PathFilter {
       'Thumbs.db',
       ...config?.ignoredPatterns || []
     ];
+    // Rules are immutable per instance. Compile policy once, never cache a
+    // path's allow/deny decision or share mutable regex state across policies.
+    this.ignoredMatchers = ignoredPatterns.map(pattern => this.compileGlob(pattern));
 
     this.allowedExtensions = [
       '.md',
@@ -40,10 +43,10 @@ export class PathFilter {
       '.base',    // Obsidian Bases (YAML)
       '.canvas',  // Obsidian Canvas (JSON)
       ...config?.allowedExtensions || []
-    ];
+    ].map(extension => extension.toLowerCase());
   }
 
-  private simpleGlobMatch(pattern: string, path: string): boolean {
+  private compileGlob(pattern: string): RegExp {
     // Normalize pattern path separators (Windows compatibility)
     const normalizedPattern = pattern.replace(/\\/g, '/');
 
@@ -59,8 +62,7 @@ export class PathFilter {
 
     // Case-insensitive: on case-insensitive filesystems (macOS, Windows) the OS
     // resolves ".Git" to ".git", so the deny-list must match regardless of case.
-    const regex = new RegExp(regexPattern, 'i');
-    return regex.test(path);
+    return new RegExp(regexPattern, 'i');
   }
 
   /**
@@ -96,8 +98,9 @@ export class PathFilter {
 
     // For files, check extension if allowedExtensions is configured
     if (this.allowedExtensions.length > 0 && this.isFile(this.canonicalizeForMatch(normalizedPath))) {
+      const lowerPath = normalizedPath.toLowerCase();
       const hasAllowedExtension = this.allowedExtensions.some(ext =>
-        normalizedPath.toLowerCase().endsWith(ext.toLowerCase())
+        lowerPath.endsWith(ext)
       );
       if (!hasAllowedExtension) {
         return false;
@@ -158,10 +161,10 @@ export class PathFilter {
     }
 
     // Check if path matches any ignored pattern
-    for (const pattern of this.ignoredPatterns) {
+    for (const matcher of this.ignoredMatchers) {
       if (
-        this.simpleGlobMatch(pattern, normalizedPath) ||
-        this.simpleGlobMatch(pattern, canonicalPath)
+        matcher.test(normalizedPath) ||
+        matcher.test(canonicalPath)
       ) {
         return true;
       }

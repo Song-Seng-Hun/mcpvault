@@ -2828,6 +2828,18 @@ function-argument limits for large subtrees. Virtual-directory tests preserve al
 create no large disk corpus. Returned inventories and ancestor subtree caches
 still consume space proportional to the corpus/depth; no RSS speedup is claimed.
 
+Path filtering compiles default/custom glob rules once per filter instance and
+normalizes its copied extension policy once. Each path is still checked against
+the current instance's platform-syntax, hidden/restricted-name, normalized and
+canonical-path rules; allow/deny results are not cached. Compiled regexes use only
+case-insensitive matching, without mutable global/sticky iteration state. A
+constructor-count test with two custom rules reduces regex construction from
+9,600 during 400 listing/access checks to 12 at construction and zero during
+those checks. This removes repeated policy preparation, not the actual security
+checks, corpus-dependent memory use or all synchronous event-loop work.
+Configuration entries must be strings; malformed entries can now fail during
+filter construction rather than during a later path check.
+
 Model-free reuse also starts the resource idle timer: DB/table references are
 released after inactivity, while active searches and indexing batches defer
 release. This does not require loading an embedding model just to start cleanup.

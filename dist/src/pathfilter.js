@@ -12,10 +12,10 @@ export class PathFilter {
         '.ds_store',
         'thumbs.db',
     ]);
-    ignoredPatterns;
+    ignoredMatchers;
     allowedExtensions;
     constructor(config) {
-        this.ignoredPatterns = [
+        const ignoredPatterns = [
             '.obsidian',
             '.obsidian/**',
             '.git',
@@ -28,6 +28,9 @@ export class PathFilter {
             'Thumbs.db',
             ...config?.ignoredPatterns || []
         ];
+        // Rules are immutable per instance. Compile policy once, never cache a
+        // path's allow/deny decision or share mutable regex state across policies.
+        this.ignoredMatchers = ignoredPatterns.map(pattern => this.compileGlob(pattern));
         this.allowedExtensions = [
             '.md',
             '.markdown',
@@ -35,9 +38,9 @@ export class PathFilter {
             '.base', // Obsidian Bases (YAML)
             '.canvas', // Obsidian Canvas (JSON)
             ...config?.allowedExtensions || []
-        ];
+        ].map(extension => extension.toLowerCase());
     }
-    simpleGlobMatch(pattern, path) {
+    compileGlob(pattern) {
         // Normalize pattern path separators (Windows compatibility)
         const normalizedPattern = pattern.replace(/\\/g, '/');
         // Convert glob pattern to regex, escaping special regex chars first
@@ -50,8 +53,7 @@ export class PathFilter {
         regexPattern = '^' + regexPattern + '$';
         // Case-insensitive: on case-insensitive filesystems (macOS, Windows) the OS
         // resolves ".Git" to ".git", so the deny-list must match regardless of case.
-        const regex = new RegExp(regexPattern, 'i');
-        return regex.test(path);
+        return new RegExp(regexPattern, 'i');
     }
     /**
      * Canonicalize a path for restricted-directory matching. On Windows the
@@ -81,7 +83,8 @@ export class PathFilter {
         }
         // For files, check extension if allowedExtensions is configured
         if (this.allowedExtensions.length > 0 && this.isFile(this.canonicalizeForMatch(normalizedPath))) {
-            const hasAllowedExtension = this.allowedExtensions.some(ext => normalizedPath.toLowerCase().endsWith(ext.toLowerCase()));
+            const lowerPath = normalizedPath.toLowerCase();
+            const hasAllowedExtension = this.allowedExtensions.some(ext => lowerPath.endsWith(ext));
             if (!hasAllowedExtension) {
                 return false;
             }
@@ -133,9 +136,9 @@ export class PathFilter {
             }
         }
         // Check if path matches any ignored pattern
-        for (const pattern of this.ignoredPatterns) {
-            if (this.simpleGlobMatch(pattern, normalizedPath) ||
-                this.simpleGlobMatch(pattern, canonicalPath)) {
+        for (const matcher of this.ignoredMatchers) {
+            if (matcher.test(normalizedPath) ||
+                matcher.test(canonicalPath)) {
                 return true;
             }
         }

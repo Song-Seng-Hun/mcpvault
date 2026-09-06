@@ -15,6 +15,11 @@ or sticky flags/state. Normalize copied extension strings once and lowercase the
 candidate once for the extension loop. Do not cache path decisions, share mutable
 configuration across instances, weaken guards or add client configuration.
 
+The configuration contract is string[] for both fields. Invalid non-string
+entries may now fail at construction rather than later matching/short circuit;
+valid-input decisions must remain equivalent. Readonly/private fields are the
+TypeScript contract, not runtime freezing against deliberate internal tampering.
+
 Alternatives: cooperative yielding/worker threads reduce blocking but still do
 the same repeated regex construction; path-result caching adds invalidation and
 confidentiality concerns. Remove the duplicate computation first. Rules consume
