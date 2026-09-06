@@ -29,7 +29,7 @@ gray-matter; preserve the existing result/fallback shape. Same YAML dependency.
 - [x] Document data-only labels, fallback and actual copy limits; record benign
   reproduction/security implications accurately. Run build, isolated memory
   comparison if useful, independent review, full suite and diff check.
-- [ ] Commit explicit source/dist/tests/docs and push only fork main; verify live
+- [x] Commit explicit source/dist/tests/docs and push only fork main; verify live
   remote SHA. Preserve .agents/.mcpvault and leave the overall Goal active.
 
 ## Verification evidence
@@ -69,3 +69,11 @@ and fixture construction. No whole-server memory ceiling, GPU improvement,
 steady-state endpoint speedup or repaired desktop-lag claim follows from this.
 Already-running servers must load the new build separately; deployed protection
 has not been verified and no runtime restart is implied by publication.
+
+## Delivery
+
+Implementation commit `cc8c98e539af1e010afa2c75052847d1bba88bd4` was pushed to
+`https://github.com/Song-Seng-Hun/mcpvault.git` main. A subsequent live
+`git ls-remote --heads origin main` matched local HEAD exactly. Only unrelated
+untracked `.agents/` and `.mcpvault/` remained; neither was staged. This completes
+this increment, not the overall active organization/resource-reduction Goal.
