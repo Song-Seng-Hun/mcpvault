@@ -2320,6 +2320,17 @@ This is best-effort guarded recovery, not OS-wide atomicity or cross-process
 compare-and-swap: external changes can still race the final check/write gap.
 Git remains the durable audit and recovery layer.
 
+Change-set source reads are limited to 8 MiB per note in preflight, batch and
+individual revision rechecks, and rollback ownership checks. This is a UTF-8
+byte limit, not a character count; exactly 8 MiB is accepted. Oversized source
+notes are rejected even when a proposed patch would shrink them. Split or
+repair those notes deliberately outside this operation before a fresh dry-run.
+Growth after preflight fails safely; rollback never overwrites an oversized
+external replacement it cannot validate. Mutation rechecks use fresh bounded
+reads rather than joining an earlier in-flight read. The ten-note limit bounds
+source count, not total JavaScript heap use: parsed Properties, planned content
+and rollback originals still require additional memory.
+
 Each resolved document may appear only once in the change list, even if one
 entry says `Note.md` and another says `./Note.md` or `dir/../Note.md`. Duplicate
 targets are rejected before previews or writes; combine their intended patches

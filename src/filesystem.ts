@@ -23,7 +23,7 @@ import { extractInlineTags } from './markdown-tags.js';
 import { isModerationHidden } from './moderation-policy.js';
 import { projectNoteOutline, projectNoteLineWindow } from './note-projections.js';
 import { isMissingVaultPath, QuerySnapshotChangedError, VaultReadUnavailableError } from './vault-read-errors.js';
-import { SourceReadLimitError } from './bounded-source-read.js';
+import { readBoundedSource, SourceReadLimitError } from './bounded-source-read.js';
 import { packQueryPage, type PackedQueryPage } from './query-page.js';
 
 /** Hard per-note write limit so stdio callers cannot exhaust the vault disk. */
@@ -1253,7 +1253,7 @@ export class FileSystemService {
     return this.withMutationLocks(normalized.map(change => change.path), async () => {
       const plans: Array<{ path: string; original: string; content: string; item: NoteChangeSetResultItem }> = [];
       for (const change of normalized) {
-        const note = await this.readNote(change.path);
+        const note = await this.readNote(change.path, MAX_NOTE_CONTENT_BYTES);
         if (note.revision !== change.expectedRevision) throw new Error(`Revision conflict for ${change.path}: expected ${change.expectedRevision}, current ${note.revision}. Read every note again and rebuild the change set.`);
         let content = note.originalContent;
         let focusOffset = 0;
@@ -1330,7 +1330,7 @@ export class FileSystemService {
         // Recheck all inputs immediately before the first write. This catches
         // external Obsidian/editor changes that do not participate in our lock.
         for (const plan of plans) {
-          const current = await readFile(this.resolvePath(plan.path), 'utf8');
+          const current = await readBoundedSource(this.resolvePath(plan.path), MAX_NOTE_CONTENT_BYTES);
           if (this.revision(current) !== plan.item.previousRevision) throw new Error(`Revision conflict for ${plan.path}: it changed after preflight; no change-set files were written`);
         }
         const attempted: typeof plans = [];
@@ -1340,7 +1340,9 @@ export class FileSystemService {
             let current: string;
             try {
               fullPath = this.resolveWritablePath(plan.path);
-              current = await readFile(fullPath, 'utf8');
+              // Mutation rechecks must be fresh, not coalesced with an earlier
+              // in-flight read. Bound source bytes even after external edits.
+              current = await readBoundedSource(fullPath, MAX_NOTE_CONTENT_BYTES);
             } catch {
               this.notifyNoteChanged(plan.path, 'upsert');
               throw new Error(`Cannot safely recheck ${plan.path} before its individual write; inspect its current state`);
@@ -1357,7 +1359,7 @@ export class FileSystemService {
           for (const plan of attempted.reverse()) {
             try {
               const fullPath = this.resolveWritablePath(plan.path);
-              const current = await readFile(fullPath, 'utf8');
+              const current = await readBoundedSource(fullPath, MAX_NOTE_CONTENT_BYTES);
               // Preserve edits from writers outside our instance-local lock.
               // This is a conservative ownership check, not filesystem CAS.
               if (current === plan.original) continue;

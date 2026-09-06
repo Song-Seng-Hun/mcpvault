@@ -1133,6 +1133,15 @@ After an error, re-read targets and use Git/history to reconcile before a new
 dry-run; a partial failed write may need manual recovery. The final check/write
 gap remains: this is not cross-process CAS or a filesystem-atomic transaction.
 
+All change-set source reads (preflight, batch/individual revision rechecks and
+rollback) have an 8 MiB UTF-8 byte cap per note. No partial source is parsed or
+used to authorize a write/restoration. Exactly-at-limit notes remain supported;
+oversized originals require deliberate splitting/repair before a new dry-run,
+even if the proposed change would reduce their size. Rechecks and rollback use
+fresh reads, not shared in-flight snapshots. An unreadable/oversized rollback
+target is preserved and reported as incomplete recovery. These limits do not
+claim a process-wide heap cap or atomicity against external writers.
+
 Heading and block targets are preserved by graph reads, so
 `[[folder/Source#Heading]]` and `[[folder/Source#^block-id]]` can take an agent
 directly to the intended passage without rereading the entire source note.
