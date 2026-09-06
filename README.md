@@ -2612,7 +2612,15 @@ before returning; a changed generation is retried rather than published as a
 stable answer. After three unsuccessful stabilization rounds, retry the query
 when writes settle. No partial successful graph page is returned on that error.
 Explicit full resets reread source text even when size/mtime are unchanged;
-ordinary periodic reconciliation may still use the metadata shortcut.
+ordinary periodic reconciliation reuses a parsed body only when size, mtime
+and ctime all match. This detects missed edits from sync tools that preserve
+size/mtime but change ctime, including new incoming links, aliases, tags and
+moderation state. Unchanged notes incur stat checks, not repeated body reads.
+Reconciliation runs on a subsequent query after the interval (60 seconds with
+the graph's own watcher, 5 seconds without it, including a catalog-backed
+graph); it is not an autonomous timer or immediate whole-vault freshness.
+Filesystems that preserve/coarsen all three values and missed inventory changes
+still require separate handling; stat equality is not content verification.
 
 Metadata refreshes use the same observed-change rule for work/review queries:
 full and dirty results are staged, newer invalidations trigger another read,

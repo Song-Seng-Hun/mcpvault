@@ -292,6 +292,12 @@ authors receive final access/revision checks (deduplicated, at most eight
 concurrent reads). Stale sources invalidate their graph entry and return a
 path-free retry error; revision response fields remain opt-in. This does not
 detect every new/missing edge outside the query or provide an atomic census.
+Periodic graph reconciliation also compares ctime alongside size/mtime before
+reusing parsed bodies. Missed edits preserving size/mtime are reparsed when
+ctime changes, refreshing links, aliases, tags and moderation. This is a
+query-triggered fallback, not a content proof when all stat values match or
+a guarantee that the file inventory is current. Existing source-revision
+validation and caller visibility checks remain independent requirements.
 Selected candidates and replacement targets are revision-checked. Reference
 resolution also checks the target revision, including its indexed aliases.
 Reference

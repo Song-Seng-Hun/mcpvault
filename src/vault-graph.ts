@@ -31,6 +31,7 @@ interface GraphEntry {
   revision: string;
   size: number;
   mtimeMs: number;
+  ctimeMs: number;
   links: OutlinkMatch[];
   tags: string[];
   identityTerms: string[];
@@ -591,7 +592,12 @@ export class VaultGraphIndex {
       const fullPath = join(this.vaultPath, normalized);
       const info = await stat(fullPath);
       if (!info.isFile()) return undefined;
-      if (existing && existing.size === info.size && existing.mtimeMs === info.mtimeMs) return existing;
+      // Sync tools can preserve size and mtime while replacing the contents.
+      // ctime lets periodic reconciliation detect those missed watcher edits
+      // without reading every unchanged body. This remains a stat heuristic,
+      // not a content proof on filesystems that preserve all three values.
+      if (existing && existing.size === info.size && existing.mtimeMs === info.mtimeMs
+        && existing.ctimeMs === info.ctimeMs) return existing;
       const raw = await this.vaultIo.readUtf8Bounded(fullPath, GRAPH_SOURCE_MAX_BYTES);
       const parsed = this.frontmatter.parse(raw);
       const tags: string[] = [];
@@ -689,7 +695,7 @@ export class VaultGraphIndex {
           }
         }
       }
-      return { path: normalized, moderationHidden: isModerationHidden(parsed.frontmatter), revision: createHash('sha256').update(raw).digest('hex'), size: info.size, mtimeMs: info.mtimeMs, links, tags, identityTerms };
+      return { path: normalized, moderationHidden: isModerationHidden(parsed.frontmatter), revision: createHash('sha256').update(raw).digest('hex'), size: info.size, mtimeMs: info.mtimeMs, ctimeMs: info.ctimeMs, links, tags, identityTerms };
     } catch (error) {
       if (isMissingVaultPath(error)) return undefined;
       if (error instanceof SourceReadLimitError) throw new Error('Graph source exceeds the 8 MiB read limit; split oversized notes before retrying. No partial graph view was returned.');

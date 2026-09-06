@@ -681,6 +681,15 @@ do not prove a current, bounded, actionable response through its public adapter.
   covers detected source drift, not unobserved new edges or all resolver target
   identity/moderation changes; standalone unresolved/orphan census remains open.
 
+- Periodic graph reconciliation now compares ctime as well as size/mtime before
+  parsed-entry reuse. Real-file tests reproduce missed same-size/mtime edits
+  and verify new incoming edges, tags, orphan membership, aliases and hidden
+  moderation refresh, with unchanged bodies still unread. Standalone and
+  catalog-backed graphs cover both missing watchers and dropped change events.
+  Stat equality remains heuristic: all-stat-preserved edits, missed directory
+  inventory changes and unobserved cross-file races remain open, not a proven
+  atomic graph census.
+
 Record new concrete gaps here when registered schema, dispatcher, service,
 persistent representation, guide, invalidation, or bounded failure evidence
 disagrees; remove a gap only after checking that complete workflow.
