@@ -2447,10 +2447,38 @@ export class FileSystemService {
     if (!this.pathFilter.isAllowed(target) || !canAccessPath(target)) throw new Error(`Access denied: ${target}`);
     const targetNote = await this.readNote(target);
     if (isModerationHidden(targetNote.frontmatter)) throw new Error(`Access denied: ${target}`);
-    return this.withGraphRead(graph => graph.getBacklinks(target, limit, canAccessPath, offset, async sourcePath => {
-      const current = await this.readNoteMetadata([sourcePath], canAccessPath, { fresh: true, strict: true });
-      return current.length > 0 && !isModerationHidden(current[0]!.frontmatter);
-    }, options.includeSourceRevision, options.includeSnapshot));
+    return this.withGraphRead(graph => graph.withStableRead(canAccessPath, async () => {
+      const result = await graph.getBacklinks(target, limit, canAccessPath, offset, async (sourcePath, revision) => {
+        try {
+          const current = await this.readNoteMetadata([sourcePath], canAccessPath, { fresh: true, strict: true });
+          if (!current.length || isModerationHidden(current[0]!.frontmatter)) return false;
+          if (current[0]!.revision !== revision) throw new Error('stale author');
+          return true;
+        } catch {
+          graph.invalidate(sourcePath);
+          throw new Error('Graph source changed or became unavailable; retry the query to refresh its snapshot.');
+        }
+      }, true, options.includeSnapshot);
+      await this.assertGraphReadRevision(graph, target, result.targetRevision, canAccessPath, targetNote.revision);
+      const sources = [...new Map(result.backlinks.map(link => [link.path, link.sourceRevision])).entries()];
+      for (let offset = 0; offset < sources.length; offset += 8) {
+        await Promise.all(sources.slice(offset, offset + 8).map(([path, revision]) => this.assertGraphReadRevision(graph, path, revision, canAccessPath)));
+      }
+      if (options.includeSourceRevision) return result;
+      const { targetRevision: _targetRevision, ...publicResult } = result;
+      return { ...publicResult, backlinks: result.backlinks.map(({ sourceRevision: _sourceRevision, ...link }) => link) };
+    }));
+  }
+
+  private async assertGraphReadRevision(graph: VaultGraphIndex, path: string, revision: string | undefined, canAccessPath: (path: string) => boolean, capturedRevision?: string): Promise<void> {
+    try {
+      if (!revision || (capturedRevision !== undefined && revision !== capturedRevision)
+        || !this.pathFilter.isAllowed(path) || !canAccessPath(path)
+        || await this.readNoteRevision(path) !== revision || !canAccessPath(path)) throw new Error('stale graph source');
+    } catch {
+      graph.invalidate(path);
+      throw new Error('Graph source changed or became unavailable; retry the query to refresh its snapshot.');
+    }
   }
 
   private async withGraphRead<T>(read: (graph: VaultGraphIndex) => Promise<T>): Promise<T> {
@@ -2465,7 +2493,13 @@ export class FileSystemService {
     if (!this.pathFilter.isAllowed(source) || !canAccessPath(source)) throw new Error(`Access denied: ${source}`);
     const note = await this.readNote(source);
     if (isModerationHidden(note.frontmatter)) throw new Error(`Access denied: ${source}`);
-    return this.withGraphRead(graph => graph.getOutlinks(source, limit, canAccessPath, offset, options.includeSourceRevision, options.includeSnapshot));
+    return this.withGraphRead(graph => graph.withStableRead(canAccessPath, async () => {
+      const result = await graph.getOutlinks(source, limit, canAccessPath, offset, true, options.includeSnapshot);
+      await this.assertGraphReadRevision(graph, source, result.sourceRevision, canAccessPath, note.revision);
+      if (options.includeSourceRevision) return result;
+      const { sourceRevision: _sourceRevision, ...publicResult } = result;
+      return publicResult;
+    }));
   }
 
   async findUnresolvedLinks(limit: number = 100, canAccessPath: (path: string) => boolean = () => true, offset = 0, options: { includeSnapshot?: boolean } = {}): Promise<UnresolvedLinksResult> {

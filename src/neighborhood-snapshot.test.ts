@@ -39,7 +39,7 @@ test.each(['outlinks', 'backlinks'] as const)('neighborhood rejects a changed %s
     await write(mode === 'outlinks' ? 'Root.md' : 'Back.md', '# Links removed');
     return value as any;
   });
-  await expect(wiki.neighborhood(undefined, 'Root.md', 10, 16000)).rejects.toThrow(/changed or became unavailable/i);
+  await expect(wiki.neighborhood(undefined, 'Root.md', 10, 16000)).rejects.toThrow(/changed (?:or became unavailable|or visibility changed)/i);
 });
 
 test('neighborhood rejects a peer hidden after enrichment reads return their captured bodies', async () => {
@@ -95,7 +95,9 @@ test('neighborhood supports 40 neighbors with bounded final validation and no un
   });
   const result = await wiki.neighborhood(undefined, 'Root.md', 40, 16000);
   expect(result.totalCandidates).toBe(41); // 40 outgoing peers plus Back.md.
-  expect(new Set(checked).size).toBe(41); // root and top 40 selected peers.
+  // The graph adapter also validates the known incoming author before counts,
+  // even though its lower rank excludes it from the final 40-neighbor view.
+  expect(new Set(checked).size).toBe(42); // root, top 40 peers, and Back.md.
   expect(checked).not.toContain('Unrelated.md');
   expect(peak).toBeLessThanOrEqual(4);
   expect(JSON.stringify(result, null, 2).length).toBeLessThanOrEqual(16000);

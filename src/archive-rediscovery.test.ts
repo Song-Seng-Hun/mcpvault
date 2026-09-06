@@ -50,9 +50,12 @@ test('archive can use a later fresh author when the first repeated author is sta
   await seed('Old.md');
   await seed('AReader.md', '', Array(10).fill('Obsolete [[Old]]').join('\n'));
   const valid = await seed('BReader.md', '', 'Current [[Old]] context');
-  await fs.getBacklinks('Old.md');
-  vi.spyOn(graph as any, 'ensure').mockResolvedValue(undefined);
-  await seed('AReader.md', '', 'No longer refers to it.');
+  const read = fs.getBacklinks.bind(fs);
+  vi.spyOn(fs, 'getBacklinks').mockImplementation(async (...args) => {
+    const result = await read(...args);
+    await seed('AReader.md', '', 'No longer refers to it.');
+    return result;
+  });
   const result: any = await service.resurfaceArchivedKnowledge(undefined, 8, 12000);
   expect(result.items).toHaveLength(1);
   expect(result.items[0].referringNotes).toEqual([expect.objectContaining({ path: 'BReader.md', revision: digest(valid) })]);
@@ -81,9 +84,12 @@ test('exhausting stale reference samples is incomplete, not proof that no useful
   await seed('Old.md');
   await seed('AReader.md', '', Array(80).fill('Obsolete [[Old]]').join('\n'));
   await seed('BReader.md', '', 'Later current [[Old]]');
-  await fs.getBacklinks('Old.md');
-  vi.spyOn(graph as any, 'ensure').mockResolvedValue(undefined);
-  await seed('AReader.md', '', 'No longer refers to it.');
+  const read = fs.getBacklinks.bind(fs);
+  vi.spyOn(fs, 'getBacklinks').mockImplementation(async (...args) => {
+    const result = await read(...args);
+    await seed('AReader.md', '', 'No longer refers to it.');
+    return result;
+  });
   const result: any = await service.resurfaceArchivedKnowledge(undefined, 8, 12000);
   expect(result).toMatchObject({ items: [], truncated: true, referenceScanTruncated: true,
     referencesNextAction: { endpointId: 'mcp.get_backlinks', arguments: { path: 'Old.md', offset: 64 } } });
@@ -214,12 +220,12 @@ test.each([false, true])('backlinks opt-in pins context to the parsed source rev
 test('archive never relabels obsolete indexed context with a new source revision', async () => {
   setup(true);
   await seed('Old.md');
-  const old = await seed('Reader.md', '', 'Obsolete [[Old]]');
+  await seed('Reader.md', '', 'Obsolete [[Old]]');
   await fs.getBacklinks('Old.md');
-  vi.spyOn(graph as any, 'ensure').mockResolvedValue(undefined);
+  const freeze = vi.spyOn(graph as any, 'ensure').mockResolvedValue(undefined);
   await seed('Reader.md', '', 'Corrected, no longer references the archive.');
-  const links = await fs.getBacklinks('Old.md', 4, () => true, 0, { includeSourceRevision: true });
-  expect(links.backlinks[0]?.sourceRevision).toBe(digest(old));
+  await expect(fs.getBacklinks('Old.md', 4, () => true, 0, { includeSourceRevision: true })).rejects.toThrow(/Graph source changed/);
+  freeze.mockRestore();
   expect(await service.resurfaceArchivedKnowledge()).toMatchObject({ items: [] });
 });
 
@@ -347,13 +353,13 @@ test('archive final check removes a source changed during replacement hydration'
 
 test('archive rejects an indexed edge resolved against an obsolete target alias', async () => {
   setup(true);
-  const old = await seed('Old.md', 'lifecycle: archived\naliases: [FormerName]');
+  await seed('Old.md', 'lifecycle: archived\naliases: [FormerName]');
   await seed('Reader.md', '', '[[FormerName]]');
   await fs.getBacklinks('Old.md');
-  vi.spyOn(graph as any, 'ensure').mockResolvedValue(undefined);
+  const freeze = vi.spyOn(graph as any, 'ensure').mockResolvedValue(undefined);
   await seed('Old.md', 'lifecycle: archived\naliases: [NewName]');
-  const result = await fs.getBacklinks('Old.md', 4, () => true, 0, { includeSourceRevision: true });
-  expect(result).toMatchObject({ targetRevision: digest(old) });
+  await expect(fs.getBacklinks('Old.md', 4, () => true, 0, { includeSourceRevision: true })).rejects.toThrow(/Graph source changed/);
+  freeze.mockRestore();
   expect(await service.resurfaceArchivedKnowledge()).toMatchObject({ items: [] });
 });
 
@@ -457,12 +463,12 @@ test('indexed reverse lookup is rebuilt after a graph generation change', async 
   expect((await fs.getBacklinks('Other.md', 4, canAccess)).total).toBe(1);
 });
 
-test('raw backlinks hash each source once rather than once per occurrence', async () => {
+test('raw backlinks hash each source once per validation phase rather than once per occurrence', async () => {
   await seed('Old.md');
   const raw = await seed('Reader.md', '', Array.from({ length: 100 }, () => '[[Old]]').join('\n'));
   const hashes = vi.spyOn(fs as any, 'revision');
   const result = await fs.getBacklinks('Old.md', 4, () => true, 0, { includeSourceRevision: true });
   expect(result).toMatchObject({ total: 100, truncated: true });
   expect(result.backlinks.every(link => link.sourceRevision === digest(raw))).toBe(true);
-  expect(hashes.mock.calls.filter(([content]) => content === raw)).toHaveLength(1);
+  expect(hashes.mock.calls.filter(([content]) => content === raw)).toHaveLength(2); // pre-count and final page validation
 });

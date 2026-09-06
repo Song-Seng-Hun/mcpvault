@@ -31,7 +31,9 @@ export declare class VaultGraphIndex {
     invalidate(path?: string, kind?: VaultCatalogChangeKind): void;
     invalidateMany(changes: readonly VaultCatalogChange[]): void;
     close(): void;
-    getBacklinks(path: string, limit: number, canAccessPath: (path: string) => boolean, offset?: number, canIncludeSource?: (path: string) => Promise<boolean>, includeSourceRevision?: boolean, includeSnapshot?: boolean): Promise<BacklinksResult>;
+    /** Keep caller-side asynchronous source validation inside the same view. */
+    withStableRead<T>(canAccessPath: (path: string) => boolean, read: () => Promise<T>): Promise<T>;
+    getBacklinks(path: string, limit: number, canAccessPath: (path: string) => boolean, offset?: number, canIncludeSource?: (path: string, revision: string) => Promise<boolean>, includeSourceRevision?: boolean, includeSnapshot?: boolean): Promise<BacklinksResult>;
     getOutlinks(path: string, limit: number, canAccessPath: (path: string) => boolean, offset?: number, includeSourceRevision?: boolean, includeSnapshot?: boolean): Promise<{
         source: string;
         sourceRevision?: string;

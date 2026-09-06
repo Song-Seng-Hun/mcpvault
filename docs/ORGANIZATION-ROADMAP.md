@@ -674,6 +674,13 @@ do not prove a current, bounded, actionable response through its public adapter.
   drift with or without fingerprint output. Filesystem content/moderation
   freshness and missed watcher events still require independent inspection.
 
+- Queried outlink sources/backlink targets and known matching backlink authors
+  now have fresh revision checks in the shared filesystem adapter. Stale graph
+  entries fail without returning old lines/counts and invalidate themselves for
+  the next query. Returned author pages are rechecked after derivation. This
+  covers detected source drift, not unobserved new edges or all resolver target
+  identity/moderation changes; standalone unresolved/orphan census remains open.
+
 Record new concrete gaps here when registered schema, dispatcher, service,
 persistent representation, guide, invalidation, or bounded failure evidence
 disagrees; remove a gap only after checking that complete workflow.

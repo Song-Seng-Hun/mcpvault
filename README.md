@@ -1150,6 +1150,13 @@ predicate, current visible path membership, and graph generation. Membership
 is re-evaluated even for reused predicates. The view holds at most 16,384 resolved edges;
 larger/dense graphs fall back to the complete scan rather than incomplete counts.
 Matching authors still receive live scope and moderation checks.
+Backlink/outlink reads also compare the parsed graph's source hashes with
+current files, whether revision fields were requested or not. Matching backlink
+authors are checked before counts/pagination; the queried root and returned
+authors are checked again before return. A detected stale source is invalidated
+and the query fails with a retry instruction, so the next call can refresh it
+even without a watcher event. Returned authors are deduplicated and rechecked
+eight at a time. This is not a census of new or omitted graph edges.
 Concurrent edits can shift windows; restart without `afterPath` if its note was
 removed or hidden. The **whole JSON** respects `maxChars`, including continuation
 actions. If an exact path cannot fit, `retry.reuseOriginalArguments` asks you to

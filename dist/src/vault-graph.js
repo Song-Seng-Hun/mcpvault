@@ -214,6 +214,17 @@ export class VaultGraphIndex {
         this.entries.clear();
         this.allPaths.clear();
     }
+    /** Keep caller-side asynchronous source validation inside the same view. */
+    async withStableRead(canAccessPath, read) {
+        await this.ensure();
+        const generation = this.changeGeneration;
+        const visible = this.visibilityContext(canAccessPath);
+        const result = await read();
+        if (this.changeGeneration !== generation || this.visibilityContext(canAccessPath) !== visible) {
+            throw new Error('Graph changed or visibility changed during validation; retry the query. No stable graph view was returned.');
+        }
+        return result;
+    }
     async getBacklinks(path, limit, canAccessPath, offset = 0, canIncludeSource, includeSourceRevision = false, includeSnapshot = false) {
         await this.ensure();
         const startGeneration = this.changeGeneration;
@@ -247,7 +258,7 @@ export class VaultGraphIndex {
             // filesystem supplies a fresh, path-guarded moderation check so a
             // stale graph entry cannot disclose a newly hidden author's links.
             if (!checkedSources.has(entry.path)) {
-                checkedSources.set(entry.path, canAccessPath(entry.path) && (!canIncludeSource || await canIncludeSource(entry.path)));
+                checkedSources.set(entry.path, canAccessPath(entry.path) && (!canIncludeSource || await canIncludeSource(entry.path, entry.revision)));
             }
             if (!checkedSources.get(entry.path))
                 continue;

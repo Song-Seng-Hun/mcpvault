@@ -186,6 +186,7 @@ export declare class FileSystemService {
         includeSourceRevision?: boolean;
         includeSnapshot?: boolean;
     }): Promise<BacklinksResult>;
+    private assertGraphReadRevision;
     private withGraphRead;
     getOutlinks(path: string, limit?: number, canAccessPath?: (path: string) => boolean, offset?: number, options?: {
         includeSourceRevision?: boolean;

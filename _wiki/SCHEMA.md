@@ -285,6 +285,13 @@ Backlink probes may reuse a predicate-local, generation-bound reverse view only
 while its freshly evaluated visible path membership is unchanged, capped
 at 16,384 resolved edges. Overflow uses the complete scan. Access and moderation
 checks on matching authors still run before counting or pagination.
+Filesystem backlink/outlink reads validate graph source revisions internally
+even when `includeSourceRevision` is false. Matching backlink author hashes
+are compared before counting/pagination, then the queried root and returned
+authors receive final access/revision checks (deduplicated, at most eight
+concurrent reads). Stale sources invalidate their graph entry and return a
+path-free retry error; revision response fields remain opt-in. This does not
+detect every new/missing edge outside the query or provide an atomic census.
 Selected candidates and replacement targets are revision-checked. Reference
 resolution also checks the target revision, including its indexed aliases.
 Reference
@@ -892,7 +899,8 @@ admitted, masked result set, independent of page size/offset/format. Generated
 continuations carry `expectedSnapshot`; a changed view rejects continuation
 without returning rows. Restart at offset 0 without that field. Fingerprints do
 not include unrelated private rows or depend on graph source insertion order.
-They do not freeze historical files or detect unobserved filesystem changes;
+They do not freeze historical files or exhaustively detect filesystem changes
+outside the checked source snapshots;
 legacy manually unguarded offsets remain advisory. Re-read source revisions
 before editing. Follow continuations by emitted row count. If no exact
 row fits, `nextAction.reuseOriginalArguments` means merge its `overrides` into

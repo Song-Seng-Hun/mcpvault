@@ -974,7 +974,7 @@ export function createServer(vaultPath, options = {}) {
         },
         {
             name: "get_outlinks",
-            description: "List one bounded page of a visible, non-hidden note's Obsidian/relative Markdown links. Excludes known invisible-only targets before counts; readable attachments and genuine missing links remain. Context may mask unavailable references; inspect the source before editing. Matching fences, closed inline backticks and escaped openers are ignored; top-level indented code is outside the scanner. sourceRevision identifies the parsed source." + NAVIGATION_READ_GUIDANCE,
+            description: "List one bounded page of a visible, non-hidden note's Obsidian/relative Markdown links. Excludes known invisible-only targets before counts; readable attachments and genuine missing links remain. Context may mask unavailable references; inspect the source before editing. Matching fences, closed inline backticks and escaped openers are ignored; top-level indented code is outside the scanner. sourceRevision identifies the parsed source. Source drift invalidates its graph entry and rejects the read; retry to refresh. Final validation also guards visibility changes." + NAVIGATION_READ_GUIDANCE,
             inputSchema: {
                 type: "object",
                 properties: {
@@ -990,7 +990,7 @@ export function createServer(vaultPath, options = {}) {
         },
         {
             name: "get_backlinks",
-            description: "Find one bounded page of incoming Obsidian/relative Markdown links to a visible, non-hidden note. Source visibility is checked before counts and pagination. Context may mask unavailable neighboring references; inspect the source before editing. Matching fences, closed inline backticks and escaped openers are ignored; top-level indented code is outside the scanner. sourceRevision on each row and targetRevision identify parsed graph entries." + NAVIGATION_READ_GUIDANCE,
+            description: "Find one bounded page of incoming Obsidian/relative Markdown links to a visible, non-hidden note. Source visibility and hashes are checked before counts and pagination; root and page authors are checked again before return. Detected source drift invalidates its graph entry and rejects the read; retry to refresh. Context may mask unavailable neighboring references; inspect the source before editing. Matching fences, closed inline backticks and escaped openers are ignored; top-level indented code is outside the scanner. sourceRevision on each row and targetRevision identify parsed graph entries." + NAVIGATION_READ_GUIDANCE,
             inputSchema: {
                 type: "object",
                 properties: {
