@@ -16,7 +16,7 @@ export function packProjectPacket(rows: Array<Record<string, any>>, metadata: Re
   const compact = (row: Record<string, any>) => ({
     path: row.path, revision: row.revision, planningNeedsAttention: row.planningNeedsAttention,
     planning: row.planning, execution: { ready: row.execution?.ready }, detailsOmitted: true,
-    readAction: { endpointId: 'notes.read', arguments: { path: row.path, maxChars: 8000 } },
+    readAction: { endpointId: 'notes.read', arguments: { path: row.path, expectedRevision: row.revision, maxChars: 8000 } },
   });
   const selected = rows.slice(offset, offset + limit);
   const indent = options.prettyPrint ? 2 : undefined;

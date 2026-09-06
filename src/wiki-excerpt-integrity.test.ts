@@ -349,3 +349,27 @@ test('compact quality MCP action rejects a source changed after assessment', asy
   expect(changed.value.error).toBe('revision_conflict');
   expect(changed.text).not.toContain('Changed after assessment.');
 });
+
+test('project MCP preview cannot turn malformed Properties into readiness and pins its detail read', async () => {
+  const raw = '---\nllm_wiki_type: knowledge\nnote_kind: project\nproject_purpose: {}\ndesired_outcome: true\nnext_actions: [" "]\nproject_support: [null]\ntask_status: invented\n---\n## Brainstorm\n## Outcome';
+  await writeFile(join(vault, path), raw);
+  const { result, value } = await call({ maxChars: 12000 }, 'wiki.project_packet');
+  expect(result.isError).not.toBe(true);
+  const row = value.items[0];
+  expect(row.planning.ready).toBe(false);
+  expect(row.execution.ready).toBe(false);
+  expect(row.missing).toEqual(expect.arrayContaining(['purpose', 'desired_outcome', 'next_action', 'project_support', 'task_status']));
+  expect(row.readAction.arguments.expectedRevision).toBe(digest(raw));
+  await writeFile(join(vault, path), raw.replace('invented', 'open'));
+  const changed = await call(row.readAction.arguments, row.readAction.endpointId);
+  expect(changed.result.isError).toBe(true);
+  expect(changed.value.error).toBe('revision_conflict');
+});
+
+test('project MCP compact detail action also pins the selected source revision', async () => {
+  const raw = '---\nllm_wiki_type: knowledge\nnote_kind: project\nproject_support:\n  - "' + 'SUPPORT '.repeat(2000) + '"\n---\n# Project';
+  await writeFile(join(vault, path), raw);
+  const { value } = await call({ maxChars: 1600 }, 'wiki.project_packet');
+  expect(value.items[0].detailsOmitted).toBe(true);
+  expect(value.items[0].readAction.arguments.expectedRevision).toBe(digest(raw));
+});

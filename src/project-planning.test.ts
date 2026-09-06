@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, test } from 'vitest';
 import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { stringify } from 'yaml';
 import { FileSystemService } from './filesystem.js';
 import { ScopeAccessPolicy } from './scope-access.js';
 import { ReferenceService } from './references.js';
@@ -40,4 +41,32 @@ test('pre-existing list previews explicitly disclose omitted source details', as
   expect(row.detailsOmitted).toBe(true);
   expect(row.readAction).toMatchObject({ endpointId: 'notes.read', arguments: { path: 'Project.md' } });
   expect(row.nextAction).toBe('Execute a concrete experiment');
+  expect(row.readAction.arguments.expectedRevision).toBe(row.revision);
+});
+
+async function project(fields: Record<string, unknown>) {
+  await writeFile(join(vault, 'Project.md'), '---\n' + stringify({ llm_wiki_type: 'knowledge', note_kind: 'project', ...fields }) + '---\n## Brainstorm\n## Outcome');
+  return (await wiki.projectPacket()).items[0]!;
+}
+
+test.each([{}, [], 42, true, '   '].map(value => [value]))('project planning does not manufacture content from malformed Properties: %j', async value => {
+  const row = await project({ project_purpose: value, desired_outcome: value, next_action: value, waiting_for: value, next_actions: [value], project_support: [value] });
+  expect(row.planning).toMatchObject({ purpose: false, desiredOutcome: false, projectSupport: false, ready: false });
+  expect(row.missing).toEqual(expect.arrayContaining(['purpose', 'desired_outcome', 'next_action', 'project_support']));
+  for (const field of ['purpose', 'desiredOutcome', 'nextAction', 'nextActions', 'waitingFor', 'projectSupport']) expect(row[field]).toBeUndefined();
+});
+
+test('project preview filters blank entries before applying its eight-item limit', async () => {
+  const row = await project({ project_purpose: '  Purpose  ', desired_outcome: '  Outcome  ', next_action: '   ', waiting_for: '   ', next_actions: [...Array(9).fill(''), '  Execute the experiment  '], project_support: ['', null, '  [[Evidence]]  '] });
+  expect(row).toMatchObject({ purpose: 'Purpose', desiredOutcome: 'Outcome', nextActions: ['Execute the experiment'], projectSupport: ['[[Evidence]]'] });
+  expect(row.waitingFor).toBeUndefined();
+  expect(row.missing ?? []).not.toContain('next_action');
+  expect(row.execution.ready).toBe(true);
+  expect(row.readAction.arguments.expectedRevision).toBe(row.revision);
+});
+
+test.each([{}, ['open'], 'invented', '   '].map(value => [value]))('project does not mark malformed workflow state executable: %j', async task_status => {
+  const row = await project({ task_status, project_purpose: 'Purpose', desired_outcome: 'Outcome', next_action: 'Execute the experiment', project_support: ['[[Evidence]]'] });
+  expect(row.execution.ready).toBe(false);
+  expect(row.missing).toContain('task_status');
 });

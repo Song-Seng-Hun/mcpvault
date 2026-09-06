@@ -456,6 +456,12 @@ links or paths to planning material. Keep project support separate from the
 executable `next_action` list; `get_wiki_project_packet` gives a bounded
 Natural Planning review of purpose, outcome, brainstorm, support, and next
 action completeness. These are advisory projections, not a second database.
+Project text Properties must be nonempty strings, not truthy objects or coerced
+scalars. Preview arrays filter empty/malformed entries before truncation; the
+exact snapshot-guarded `readAction` recovers omitted source details. Explicitly
+invalid `task_status` adds a `task_status` planning finding and
+`execution.invalidWorkflowState: true`, with `execution.ready: false`. Absence
+still defaults to open in the project view. No authored Properties are rewritten.
 Work dependency projections use a single captured metadata inventory per
 request. `wiki.next_actions` ranks all eligible visible action candidates,
 retaining only the top requested rows rather than cutting off candidate input.
@@ -888,7 +894,13 @@ If an exact target cannot fit at maximum budget, `unavailable` is
 Returned nested fields are detached from the privately cached accumulator.
 
 `wiki.quality_check` is a separate single-note **authoring structure** rubric,
-not factual verification. Its path must be Vault-relative or an authorized
+not factual verification. Work/MOC text and list checks require nonempty string content;
+array length or generic string coercion is not authorship. `execution_state`
+requires a valid declared task status, and `epistemic_status` uses the existing
+kind-specific vocabulary. Malformed declarations produce failed rubric checks.
+Terminal experiment checks use that validated state, not a coerced raw value.
+Uncertainty and literature interpretation labels must also be scalar strings.
+The target must be a relative path or authorized
 `scope://` URI; absolute and traversal aliases are rejected before reading.
 `assessment: authoring_structure` and `advisory: true`
 remain present in compact results. `compact_projection` checks nonempty string

@@ -28,7 +28,7 @@ test('oversized details become an explicit summary with exact source identity, n
   const page = packProjectPacket([row], metadata, 12, 1600);
   expect(page.items[0]).toMatchObject({ path: row.path, revision: row.revision, detailsOmitted: true });
   expect(page.items[0].projectSupport).toBeUndefined();
-  expect(page.items[0].readAction).toMatchObject({ endpointId: 'notes.read', arguments: { path: row.path, maxChars: 8000 } });
+  expect(page.items[0].readAction).toMatchObject({ endpointId: 'notes.read', arguments: { path: row.path, expectedRevision: row.revision, maxChars: 8000 } });
 });
 test('changed off-page project rejects a continuation and generated time does not', () => {
   const first = packProjectPacket(rows, metadata, 1, 3000);

@@ -243,3 +243,65 @@ test('quality recognizes a requested ancestor containing a descriptive subsectio
   const result: any = await service.qualityCheck(undefined, 'Experiment.md');
   expect(result.checks).toContainEqual(expect.objectContaining({ id: 'reproducible_protocol', passed: true }));
 });
+
+test.each([{}, [], 42, true, '   '].map(value => [value]))('quality does not coerce malformed work Properties into useful content: %j', async value => {
+  await seed('Task.md', { note_kind: 'task', desired_outcome: value, next_action: value, waiting_for: value, next_actions: [value] });
+  const result: any = await service.qualityCheck(undefined, 'Task.md');
+  for (const id of ['desired_outcome', 'next_action_or_waiting']) expect(result.checks).toContainEqual(expect.objectContaining({ id, passed: false }));
+});
+
+test.each([{}, ['open'], 'invented', '  '].map(value => [value]))('quality requires a declared valid execution state: %j', async task_status => {
+  await seed('Task.md', { note_kind: 'task', task_status });
+  const result: any = await service.qualityCheck(undefined, 'Task.md');
+  expect(result.checks).toContainEqual(expect.objectContaining({ id: 'execution_state', passed: false }));
+});
+
+test.each([{}, [], 42, true, '   '].map(value => [value]))('quality does not mistake malformed MOC purpose/questions for authored navigation: %j', async value => {
+  await seed('Map.md', { note_kind: 'moc', moc_purpose: value, moc_questions: [value] });
+  const result: any = await service.qualityCheck(undefined, 'Map.md');
+  for (const id of ['moc_purpose', 'moc_questions_or_links']) expect(result.checks).toContainEqual(expect.objectContaining({ id, passed: false }));
+});
+
+test.each(['question', 'hypothesis', 'experiment', 'assumption'])('quality rejects an invented %s epistemic state', async note_kind => {
+  await seed('Knowledge.md', { note_kind, epistemic_status: 'not-a-state' });
+  const result: any = await service.qualityCheck(undefined, 'Knowledge.md');
+  expect(result.checks).toContainEqual(expect.objectContaining({ id: 'epistemic_status', passed: false }));
+});
+
+test('quality retains real work declarations among malformed or empty list entries', async () => {
+  await seed('Task.md', { note_kind: 'task', task_status: ' Next_Action ', desired_outcome: '  Verified outcome  ', next_actions: [null, '', {}, '  Execute the experiment  '] });
+  const result: any = await service.qualityCheck(undefined, 'Task.md');
+  for (const id of ['desired_outcome', 'next_action_or_waiting', 'execution_state']) expect(result.checks).toContainEqual(expect.objectContaining({ id, passed: true }));
+});
+
+test.each([['question', ' Answered '], ['hypothesis', ' Supported '], ['experiment', ' Completed '], ['assumption', ' Verified ']])('quality accepts a normalized valid %s epistemic state', async (note_kind, epistemic_status) => {
+  await seed('Knowledge.md', { note_kind, epistemic_status });
+  const result: any = await service.qualityCheck(undefined, 'Knowledge.md');
+  expect(result.checks).toContainEqual(expect.objectContaining({ id: 'epistemic_status', passed: true }));
+});
+
+test('quality retains meaningful MOC questions among malformed entries', async () => {
+  await seed('Map.md', { note_kind: 'moc', moc_purpose: '  Guide readers  ', moc_questions: [null, {}, '', '  Where does this model fail?  '] });
+  const result: any = await service.qualityCheck(undefined, 'Map.md');
+  for (const id of ['moc_purpose', 'moc_questions_or_links']) expect(result.checks).toContainEqual(expect.objectContaining({ id, passed: true }));
+});
+
+test.each(['completed', 'failed', 'reproduced'])('an array containing %s is not a valid terminal experiment state', async state => {
+  await seed('Experiment.md', { note_kind: 'experiment', epistemic_status: [state] });
+  const result: any = await service.qualityCheck(undefined, 'Experiment.md');
+  expect(result.checks).toContainEqual(expect.objectContaining({ id: 'epistemic_status', passed: false }));
+  expect(result.checks.map((check: any) => check.id)).not.toContain('observations_or_result');
+  expect(result.checks.map((check: any) => check.id)).not.toContain('reproduction');
+});
+
+test('array-wrapped uncertainty is not an explicit scalar uncertainty declaration', async () => {
+  await seed('Concept.md', { note_kind: 'atomic', knowledge_status: ['draft'] });
+  const result: any = await service.qualityCheck(undefined, 'Concept.md');
+  expect(result.checks).toContainEqual(expect.objectContaining({ id: 'evidence_or_explicit_uncertainty', passed: false }));
+});
+
+test('array-wrapped interpretation is not a declared literature interpretation state', async () => {
+  await seed('Literature.md', { note_kind: 'literature', interpretation_status: ['interpreted'] });
+  const result: any = await service.qualityCheck(undefined, 'Literature.md');
+  expect(result.checks).toContainEqual(expect.objectContaining({ id: 'interpretation', passed: false }));
+});

@@ -20,6 +20,7 @@ import { CollectionHealthProjection } from './collection-health.js';
 import { isManagedCommunityPath, isModerationHidden } from './moderation-policy.js';
 import { projectNoteOutline, projectNoteParagraphs, projectNoteHeadingSummary, projectNoteHeadingPresence, projectNoteBlockPresence, projectNoteBlockLines, selectNoteHeading, hasUnclosedNoteFence, noteSectionHasContent } from './note-projections.js';
 import { parseWikiLink } from './wikilink/resolveWikiLink.js';
+import { normalizeEpistemicStatus } from './organization.js';
 import { buildMocNavigation, navigationOrder } from './moc-navigation.js';
 import { buildNoteReferenceIndex, normalizeNoteReferenceTerm, noteReferenceDocument, resolveNoteReference } from './note-reference.js';
 import { buildJsonCanvasProjection, canvasFileNodeId, readJsonCanvasMetadata, validateJsonCanvasDocument } from './json-canvas.js';
@@ -54,6 +55,9 @@ function boundedText(value, maxChars) {
     if (text.length <= maxChars)
         return text;
     return `${text.slice(0, Math.max(0, maxChars - 1)).trimEnd()}…`;
+}
+function hasAuthoredText(value) {
+    return typeof value === 'string' && Boolean(value.trim());
 }
 /** Budget the complete report, preserving an executable read when prose is cut. */
 function boundedMaintenanceReport(candidates, total, maxChars, endpointId, extra, retryArguments = extra, retryMaxChars = 16000) {
@@ -6903,22 +6907,24 @@ export class LlmWikiService {
             if (!sections)
                 throw new Error('Project section snapshot unavailable; retry the request.');
             const lifecycle = String(note.frontmatter.lifecycle || '').toLowerCase();
-            const nextActions = Array.isArray(note.frontmatter.next_actions) ? note.frontmatter.next_actions.filter((item) => typeof item === 'string').slice(0, 8) : [];
-            const nextAction = typeof note.frontmatter.next_action === 'string' ? note.frontmatter.next_action : undefined;
-            const waitingFor = typeof note.frontmatter.waiting_for === 'string' ? note.frontmatter.waiting_for : undefined;
-            const support = Array.isArray(note.frontmatter.project_support) ? note.frontmatter.project_support.filter((item) => typeof item === 'string').slice(0, 8) : [];
+            const purpose = hasAuthoredText(note.frontmatter.project_purpose) ? note.frontmatter.project_purpose.trim() : undefined;
+            const desiredOutcome = hasAuthoredText(note.frontmatter.desired_outcome) ? note.frontmatter.desired_outcome.trim() : undefined;
+            const nextActions = Array.isArray(note.frontmatter.next_actions) ? note.frontmatter.next_actions.filter(hasAuthoredText).map((item) => item.trim()).slice(0, 8) : [];
+            const nextAction = hasAuthoredText(note.frontmatter.next_action) ? note.frontmatter.next_action.trim() : undefined;
+            const waitingFor = hasAuthoredText(note.frontmatter.waiting_for) ? note.frontmatter.waiting_for.trim() : undefined;
+            const support = Array.isArray(note.frontmatter.project_support) ? note.frontmatter.project_support.filter(hasAuthoredText).map((item) => item.trim()).slice(0, 8) : [];
             const completionCriteria = Array.isArray(note.frontmatter.completion_criteria)
-                ? note.frontmatter.completion_criteria.filter((item) => typeof item === 'string' && Boolean(item.trim())).slice(0, 8)
+                ? note.frontmatter.completion_criteria.filter(hasAuthoredText).map((item) => item.trim()).slice(0, 8)
                 : [];
             const missing = [];
-            if (!note.frontmatter.project_purpose)
+            if (!purpose)
                 missing.push('purpose');
-            if (!note.frontmatter.desired_outcome)
+            if (!desiredOutcome)
                 missing.push('desired_outcome');
             if (!nextAction && nextActions.length === 0 && !waitingFor)
                 missing.push('next_action');
             const hasOutcomeCriteria = completionCriteria.length > 0 || sections.outcome;
-            if (note.frontmatter.desired_outcome && !hasOutcomeCriteria)
+            if (desiredOutcome && !hasOutcomeCriteria)
                 missing.push('outcome_criteria');
             if (nextAction && !concreteNextAction(nextAction))
                 missing.push('next_action_detail');
@@ -6930,21 +6936,27 @@ export class LlmWikiService {
             const dependencyKey = normalizePath(note.path).toLowerCase();
             const plannedStage = dependencySnapshot.plan.stageByPath.get(dependencyKey);
             const taskStatus = String(note.frontmatter.task_status || 'open').trim().toLowerCase() || 'open';
+            const validTaskStatus = note.frontmatter.task_status === undefined
+                || (hasAuthoredText(note.frontmatter.task_status) && TASK_STATUSES.includes(taskStatus));
+            if (!validTaskStatus)
+                missing.push('task_status');
             const workflowClosed = ['completed', 'cancelled', 'someday'].includes(taskStatus);
             if (!dependencyState.executable && !workflowClosed)
                 dependencyBlocked += 1;
             const score = (!dependencyState.executable && !workflowClosed ? 60 : 0) + (missing.includes('next_action') ? 100 : 0) + (missing.includes('next_action_detail') ? 35 : 0) + (missing.includes('desired_outcome') ? 20 : 0) + (missing.includes('outcome_criteria') ? 15 : 0) + (missing.includes('purpose') ? 10 : 0) + (missing.includes('project_support') ? 5 : 0);
-            const detailsOmitted = ['next_actions', 'project_support', 'completion_criteria'].some(key => Array.isArray(note.frontmatter[key]) && note.frontmatter[key].length > 8)
-                || ['project_purpose', 'desired_outcome', 'next_action', 'waiting_for'].some(key => note.frontmatter[key] !== undefined && (typeof note.frontmatter[key] !== 'string' || note.frontmatter[key].length > 500));
+            const detailsOmitted = ['next_actions', 'project_support', 'completion_criteria'].some(key => note.frontmatter[key] !== undefined && (!Array.isArray(note.frontmatter[key])
+                || note.frontmatter[key].length > 8 || note.frontmatter[key].some((item) => !hasAuthoredText(item))))
+                || ['project_purpose', 'desired_outcome', 'next_action', 'waiting_for'].some(key => note.frontmatter[key] !== undefined && (!hasAuthoredText(note.frontmatter[key]) || note.frontmatter[key].length > 500))
+                || !validTaskStatus;
             candidates.push({
                 path: this.access.toPublicPath(note.path),
-                ...(detailsOmitted && { detailsOmitted: true, readAction: { endpointId: 'notes.read', arguments: { path: this.access.toPublicPath(note.path), maxChars: 8000 } } }),
+                ...(detailsOmitted && { detailsOmitted: true, readAction: { endpointId: 'notes.read', arguments: { path: this.access.toPublicPath(note.path), expectedRevision: note.revision, maxChars: 8000 } } }),
                 title: note.frontmatter.title || note.path.split('/').at(-1),
                 ...(note.revision && { revision: note.revision }),
                 lifecycle,
-                ...(note.frontmatter.task_status && { taskStatus: note.frontmatter.task_status }),
-                ...(note.frontmatter.project_purpose && { purpose: boundedText(note.frontmatter.project_purpose, 500) }),
-                ...(note.frontmatter.desired_outcome && { desiredOutcome: boundedText(note.frontmatter.desired_outcome, 500) }),
+                ...(hasAuthoredText(note.frontmatter.task_status) && { taskStatus }),
+                ...(purpose && { purpose: boundedText(purpose, 500) }),
+                ...(desiredOutcome && { desiredOutcome: boundedText(desiredOutcome, 500) }),
                 ...(nextAction && { nextAction: boundedText(nextAction, 500) }),
                 ...(nextActions.length > 0 && { nextActions }),
                 ...(waitingFor && { waitingFor: boundedText(waitingFor, 500) }),
@@ -6952,9 +6964,10 @@ export class LlmWikiService {
                 ...(completionCriteria.length > 0 && { completionCriteria }),
                 ...(missing.length > 0 && { missing }),
                 planningNeedsAttention: missing.length > 0,
-                planning: { purpose: Boolean(note.frontmatter.project_purpose), desiredOutcome: Boolean(note.frontmatter.desired_outcome), outcomeCriteria: hasOutcomeCriteria, completionCriteria: completionCriteria.length > 0, brainstormSection: sections.brainstorm, projectSupport: support.length > 0 || sections.support, nextActionConcrete: !nextAction || concreteNextAction(nextAction), ready: missing.length === 0 },
+                planning: { purpose: Boolean(purpose), desiredOutcome: Boolean(desiredOutcome), outcomeCriteria: hasOutcomeCriteria, completionCriteria: completionCriteria.length > 0, brainstormSection: sections.brainstorm, projectSupport: support.length > 0 || sections.support, nextActionConcrete: !nextAction || concreteNextAction(nextAction), ready: missing.length === 0 },
                 execution: {
-                    ready: !workflowClosed && !waitingFor && !['waiting', 'blocked'].includes(taskStatus) && dependencyState.executable,
+                    ready: validTaskStatus && !workflowClosed && !waitingFor && !['waiting', 'blocked'].includes(taskStatus) && dependencyState.executable,
+                    ...(!validTaskStatus && { invalidWorkflowState: true }),
                     workflowState: taskStatus,
                     ...(plannedStage !== undefined && { plannedStage }),
                     directDependents: dependencySnapshot.plan.dependents.get(dependencyKey)?.size || 0,
@@ -12277,7 +12290,7 @@ export class LlmWikiService {
         // navigation too. Reuse the graph contract without resolving other notes.
         const links = extractObsidianLinkOccurrences(note.originalContent).length
             + collectPlainFrontmatterReferences(fm).filter(reference => isNavigationalFrontmatterReference(reference) && reference.value.trim()).length;
-        const hasText = (value) => typeof value === 'string' && Boolean(value.trim());
+        const hasText = hasAuthoredText;
         const hasEvidenceDeclaration = (Array.isArray(fm.evidence_paths) && fm.evidence_paths.some(hasText))
             || (Array.isArray(fm.evidence) && fm.evidence.some((entry) => entry && typeof entry === 'object' && hasText(entry.path)));
         const checks = [];
@@ -12295,31 +12308,39 @@ export class LlmWikiService {
                         : 'Read the current body and review/regenerate its projection through wiki.projection_update; never repair only the fingerprint.' });
             }
         }
+        const uncertainty = fm.knowledge_status || fm.status;
         if (['knowledge', 'atomic', 'decision'].includes(kind))
-            add('evidence_or_explicit_uncertainty', hasEvidenceDeclaration || ['draft', 'disputed'].includes(String(fm.knowledge_status || fm.status || '').trim().toLowerCase()), 'Declare evidence or explicit uncertainty. This checks authored declarations only, not source existence, integrity, or support for the claim.');
+            add('evidence_or_explicit_uncertainty', hasEvidenceDeclaration || (hasText(uncertainty) && ['draft', 'disputed'].includes(uncertainty.trim().toLowerCase())), 'Declare evidence or explicit uncertainty. This checks authored declarations only, not source existence, integrity, or support for the claim.');
         if (['atomic', 'knowledge', 'decision', 'moc'].includes(kind))
             add('navigation', links > 0, 'Declare an Obsidian link or navigational Property to a concept, MOC, decision, or source; target existence is not verified here.');
         if (kind === 'literature')
-            add('interpretation', ['interpreted', 'synthesized'].includes(String(fm.interpretation_status || '').trim().toLowerCase()), 'Interpret the source and explicitly record interpreted or synthesized; a link alone is not interpretation.');
+            add('interpretation', hasText(fm.interpretation_status) && ['interpreted', 'synthesized'].includes(fm.interpretation_status.trim().toLowerCase()), 'Interpret the source and explicitly record interpreted or synthesized; a link alone is not interpretation.');
         const actionable = isActionableKnowledge(fm);
         if (actionable) {
-            add('desired_outcome', Boolean(String(fm.desired_outcome || '').trim()), 'State an observable outcome so the actionable work has a clear stopping condition.');
-            add('next_action_or_waiting', Boolean(String(fm.next_action || '').trim() || String(fm.waiting_for || '').trim() || (Array.isArray(fm.next_actions) && fm.next_actions.length > 0)), 'Keep one concrete next action or an explicit waiting dependency.');
-            add('execution_state', Boolean(String(fm.task_status || '').trim()), 'Record operational task state separately from knowledge lifecycle.');
+            add('desired_outcome', hasText(fm.desired_outcome), 'State an observable outcome so the actionable work has a clear stopping condition.');
+            add('next_action_or_waiting', hasText(fm.next_action) || hasText(fm.waiting_for) || (Array.isArray(fm.next_actions) && fm.next_actions.some(hasText)), 'Keep one concrete next action or an explicit waiting dependency.');
+            add('execution_state', hasText(fm.task_status) && TASK_STATUSES.includes(fm.task_status.trim().toLowerCase()), 'Declare a valid task_status separately from knowledge lifecycle; malformed or invented states do not count.');
         }
         if (kind === 'moc') {
-            add('moc_purpose', Boolean(String(fm.moc_purpose || '').trim()), 'State what this map is for and where its boundary lies.');
-            add('moc_questions_or_links', Boolean((Array.isArray(fm.moc_questions) && fm.moc_questions.length > 0) || links > 0), 'Give the map questions or linked entrypoints that make coverage discoverable.');
+            add('moc_purpose', hasText(fm.moc_purpose), 'State what this map is for and where its boundary lies.');
+            add('moc_questions_or_links', (Array.isArray(fm.moc_questions) && fm.moc_questions.some(hasText)) || links > 0, 'Give the map questions or linked entrypoints that make coverage discoverable.');
         }
-        if (['question', 'hypothesis', 'experiment', 'assumption'].includes(kind))
-            add('epistemic_status', Boolean(String(fm.epistemic_status || '').trim()), 'State the current epistemic status and update it when evidence changes.');
+        let epistemicStatus;
+        if (['question', 'hypothesis', 'experiment', 'assumption'].includes(kind)) {
+            try {
+                if (hasText(fm.epistemic_status))
+                    epistemicStatus = normalizeEpistemicStatus(fm.epistemic_status, kind);
+            }
+            catch { /* Invalid authored states are failed rubric checks, not endpoint failures. */ }
+            add('epistemic_status', Boolean(epistemicStatus), 'Declare an epistemic_status allowed for this note kind and update it when evidence changes.');
+        }
         if (kind === 'experiment') {
             add('tested_proposition', Array.isArray(fm.tests) && fm.tests.some((value) => typeof value === 'string' && value.trim()), 'Link the exact question, hypothesis, or assumption through the tests relation.');
             add('reproducible_protocol', noteSectionHasContent(note.originalContent, ['protocol', 'method', 'procedure', '프로토콜', '방법', '절차']), 'Explain a concrete protocol or method outside fenced examples so another agent knows what to repeat.');
-            const terminal = ['completed', 'failed', 'inconclusive', 'reproduced'].includes(String(fm.epistemic_status || '').trim().toLowerCase());
+            const terminal = ['completed', 'failed', 'inconclusive', 'reproduced'].includes(epistemicStatus || '');
             if (terminal)
                 add('observations_or_result', noteSectionHasContent(note.originalContent, ['observations', 'observation', 'result', 'results', '관찰', '결과']), 'Preserve the observed result before treating the run as terminal.');
-            if (['failed', 'reproduced'].includes(String(fm.epistemic_status || '').trim().toLowerCase()))
+            if (['failed', 'reproduced'].includes(epistemicStatus || ''))
                 add('reproduction', noteSectionHasContent(note.originalContent, ['reproduction', 'reproduce', '재현', '재현 방법']), 'Record a bounded reproduction recipe for failed or reproduced runs.');
         }
         const knowledgeRole = String(fm.knowledge_role || '').trim().toLowerCase();

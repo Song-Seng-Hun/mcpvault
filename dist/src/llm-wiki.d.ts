@@ -5,6 +5,7 @@ import type { ReferenceService } from './references.js';
 import type { SemanticSearchService } from './semantic-search.js';
 import { type AnswerPacketIntent, type CatalogOrder, type TemporalValidityState, type WikiProjectionView } from './organization.js';
 import { type ProjectPacketOptions } from './project-packet.js';
+import { type NoteKind } from './organization.js';
 export { SOURCE_TRUST_LEVELS } from './organization.js';
 export interface WikiCatalogOptions {
     summaryOnly?: boolean;
@@ -1959,14 +1960,14 @@ export declare class LlmWikiService {
     }>;
     noteTemplate(noteKind?: string, maxChars?: number): {
         templateId: string;
-        noteKind: import("./organization.js").NoteKind;
+        noteKind: NoteKind;
         purpose: string;
         properties: Record<string, unknown>;
         markdown: string;
         usage: string;
     } | {
         templateId: string;
-        noteKind: import("./organization.js").NoteKind;
+        noteKind: NoteKind;
         purpose: string;
         properties: Record<string, unknown>;
         usage: string;

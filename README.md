@@ -772,6 +772,14 @@ Keep support material separate from the executable `next_action` list; use
 `get_wiki_project_packet` for a bounded Natural Planning review of purpose,
 outcome, brainstorm, support, next-action completeness, and the same derived
 dependency readiness used by the action and flow views.
+Project purpose/outcome/action/waiting fields require nonempty strings. List
+previews discard malformed and blank entries before the eight-item limit, so
+placeholders cannot hide a later real action. Omitted or malformed details
+retain an exact revision-guarded `readAction`; they are not silently repaired.
+An explicitly invalid `task_status` is a planning problem and makes that
+project's `execution.ready` false. An absent project state still defaults to
+`open`. Planning structure and dependency eligibility remain separate advisory
+signals; neither is a command to perform the authored task.
 Work, flow, review and project projections capture one request-local metadata
 inventory instead of stitching independently refreshed 500-row pages together.
 `wiki.next_actions` evaluates the entire eligible visible action cohort before
@@ -1133,7 +1141,15 @@ are removed. An exact target too large even at maximum budget returns
 `get_wiki_quality_check` applies a small role-specific checklist
 to one current visible note. Its `assessment: authoring_structure` score counts
 authored structure only, not factual truth, source integrity, or verified
-interpretation. Projection presence and fingerprint freshness are separate
+interpretation. Work/MOC purposes, outcomes, actions, waiting declarations and questions
+must contain authored nonempty strings; objects, numbers, booleans and empty
+list entries do not qualify. Execution state must be a valid `task_status`,
+and epistemic state must be allowed for the note's own kind. Missing or invalid
+states fail the corresponding rubric check rather than aborting the report.
+Only a successfully validated experiment state triggers terminal result or
+reproduction checks. Array-wrapped uncertainty/interpretation labels are not
+scalar declarations, even if JavaScript could stringify them into valid words.
+Projection presence and fingerprint freshness remain separate
 checks; `unverified`/`stale` projections require reading the current body and
 reviewing or regenerating the projection, never repairing only its hash.
 Literature needs an explicit `interpreted` or `synthesized` status; linking a
