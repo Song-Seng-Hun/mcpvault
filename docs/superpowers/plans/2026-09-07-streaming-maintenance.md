@@ -34,7 +34,7 @@
   revision barriers, bounded output and unchanged raw files.
 - [x] Run focused tests, build, independent review and full
   `npm test -- --maxWorkers=1`; `git -c core.safecrlf=false diff --check`.
-- [ ] Document measured body-group reduction and limits, commit explicit files
+- [x] Document measured body-group reduction and limits, commit explicit files
   including dist and push Song-Seng-Hun/mcpvault main only; verify remote HEAD.
 
 ## Evidence and resource boundary
@@ -56,6 +56,8 @@
   undefined-source/count handling. Delta review found no remaining actionable
   defects; reviewer closed. Full one-worker suite passed: 2,525 passed, one
   skipped, 170 files, 317.25 seconds, exit zero. Whitespace check passed.
+- Design 9437d05 and implementation 9871025 were pushed to the user fork main;
+  local HEAD and origin/main matched. Unrelated .agents/.mcpvault remain untracked.
 
 ## Subsequent inspection candidates (not implemented or verified here)
 
