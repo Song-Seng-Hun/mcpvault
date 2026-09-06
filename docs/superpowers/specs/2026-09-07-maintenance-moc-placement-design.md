@@ -27,6 +27,10 @@ extra reads. Instead fix only the advisory maintenance predicate and route:
   the next operation, requiring explicit visible map selection and a complete
   additional set. Guidance must say to inspect a map before choosing it and
   must not imply omitted additionalMocPaths preserves existing membership.
+- Response-envelope overhead must not collapse an otherwise useful ranked list
+  to one compact identity. Drop tail items until the full response fits, keeping
+  counts and relative order. Only fall back when even one complete item cannot
+  fit. Size accounting includes item commas and false-to-true truncation.
 - Keep date/inbox/review precedence, current-revision checks, hidden filtering,
   response budgets, and five fixed tools. No automatic note edits.
 
@@ -37,5 +41,7 @@ missing and malformed scalar fields, legacy fallback, retired notes, mocs-only
 notes and hidden/private candidates. Real MCP tests check bounded budgets and
 exact inspection. Exercise membership preflight with an explicit map and
 confirm it produces current-revision changes without modifying source bytes.
+Multi-note response tests cover 2500/4000/7000/12000 characters and retain at
+least two complete ranked items when they fit rather than collapsing the list.
 Run focused tests, build, independent review, full suite with one worker and
 diff check before committing generated dist and pushing only the user fork.

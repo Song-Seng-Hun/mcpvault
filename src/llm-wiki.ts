@@ -10442,9 +10442,9 @@ export class LlmWikiService {
         },
       };
       const missingAction = reasons.some(reason => ['project_without_next_action', 'work_without_next_action'].includes(reason));
-      const inspect = missingAction
+      const inspect = missingAction || reasons.includes('no_primary_moc')
         ? { endpointId: endpointIdForTool('read_wiki_projection'), arguments: { path, view: 'full', maxChars: 5000 } }
-        : reasons.includes('empty_moc') || reasons.includes('no_primary_moc')
+        : reasons.includes('empty_moc')
           ? { endpointId: endpointIdForTool('get_wiki_moc_candidates'), arguments: { maxChars: 5000, limit: 8 } }
           : { endpointId: endpointIdForTool('get_wiki_answer_packet'), arguments: { path, intent: reasons.includes('inbox_capture') ? 'capture' : 'review', maxChars: 5000 } };
       if (reasons.includes('inbox_capture')) return {
@@ -10465,7 +10465,11 @@ export class LlmWikiService {
       };
       if (reasons.includes('no_primary_moc')) return {
         inspect,
-        then: { endpointId: endpointIdForTool('get_wiki_moc_membership_preview'), arguments: { notePath: path }, requiredArguments: ['primaryMocPath and optional complete additionalMocPaths'] },
+        then: {
+          endpointId: endpointIdForTool('get_wiki_moc_membership_preview'), arguments: { notePath: path },
+          requiredArguments: ['primaryMocPath and optional complete additionalMocPaths'],
+          instruction: 'Inspect this note and the chosen visible MOC before assigning membership. Supply the complete additionalMocPaths set to retain; omission means none. Dry-run the returned change set and confirm its fingerprint before applying.',
+        },
       };
       if (reasons.includes('empty_moc')) return {
         inspect: { endpointId: endpointIdForTool('read_wiki_projection'), arguments: { path, view: 'full', maxChars: 5000 } },
@@ -10522,7 +10526,10 @@ export class LlmWikiService {
           reasons.push('review_due'); score += 10 + Math.min(10, Math.floor((nowMs - reviewAt) / (24 * 60 * 60 * 1000)));
         }
         if (frontmatter.last_reviewed_at === undefined && old) { reasons.push('never_reviewed'); score += 4; }
-        if (!frontmatter.primary_moc && !frontmatter.moc && !['moc', 'archived', 'superseded'].includes(lifecycle)) { reasons.push('no_primary_moc'); score += 3; }
+        // Map hierarchy uses optional moc_parent, not ordinary membership.
+        // Authored text signals placement intent, not a resolved/valid target.
+        if (kind !== 'moc' && !hasAuthoredText(frontmatter.primary_moc) && !hasAuthoredText(frontmatter.moc)
+          && !['archived', 'superseded'].includes(lifecycle)) { reasons.push('no_primary_moc'); score += 3; }
         if (String(frontmatter.knowledge_status || '').toLowerCase() === 'disputed') { reasons.push('disputed_knowledge'); score += 9; }
         if (String(frontmatter.knowledge_polarity || '').toLowerCase() === 'negative') { reasons.push('negative_knowledge'); score += 3; }
       }
@@ -10594,7 +10601,15 @@ export class LlmWikiService {
       truncated: candidates.length - hiddenCandidates > selected.length,
       generatedAt: now(),
     };
-    if (JSON.stringify(result).length <= boundedChars && (selected.length > 0 || !firstEnriched)) return result;
+    // Selection bounds the item array; the response envelope also needs space.
+    // Retain a ranked prefix before falling back to a single compact identity.
+    let resultChars = JSON.stringify(result).length;
+    while (resultChars > boundedChars && selected.length > 1) {
+      resultChars -= JSON.stringify(selected.pop()).length + 1; // item and comma
+      if (!result.truncated) resultChars -= 1; // false -> true
+      result.truncated = true;
+    }
+    if (resultChars <= boundedChars && (selected.length > 0 || !firstEnriched)) return result;
     const first = (selected[0] || firstEnriched) as Record<string, any> | undefined;
     const compact = {
       olderThanDays: ageDays,

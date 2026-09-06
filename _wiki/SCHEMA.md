@@ -724,6 +724,13 @@ unchanged. For MOCs, record `moc_purpose`, `moc_scope`, `moc_questions`, and
 optional `moc_parent` alongside ordinary `[[wikilinks]]` or relative Markdown
 links; nested MOCs are followed to bounded depth by graph health; use
 `get_wiki_moc_candidates` for bounded suggestions, not automatic map creation.
+Root MOCs need no parent or `primary_moc`; nested MOCs use `moc_parent` through
+`wiki.hierarchy_change`, not `wiki.moc_membership`. Maintenance placement debt
+applies to non-retired ordinary knowledge without nonempty scalar `primary_moc`
+or legacy `moc`. The `mocs` list alone does not select a preferred entry point.
+Text presence is navigation intent, not proof of a resolvable or valid target.
+Inspect the member note and chosen map before membership preflight; provide the
+complete `additionalMocPaths` set to retain because omission means none.
 For an overloaded authored map, `wiki.moc_rebalance` returns a non-mutating,
 revision-stamped proposal. It honors authored headings and source-line order
 before exact structural signals and exposes leftovers and cross-branch

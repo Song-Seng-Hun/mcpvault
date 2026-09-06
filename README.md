@@ -1057,7 +1057,18 @@ then accepts `nextAction`, `nextActions` or `waitingFor` as appropriate.
 MOC link presence uses the Obsidian graph parser: fenced/inline/escaped code
 examples do not count, while wikilinks and relative Markdown note links do.
 Unresolved links still express navigation intent; lint resolution checks their
-targets separately. `get_wiki_authority_map` provides a library-style
+targets separately. Maps themselves do not incur missing-primary-MOC debt:
+their optional nesting uses `moc_parent`, not ordinary note membership.
+Other non-retired knowledge needs nonempty scalar `primary_moc` or legacy `moc`;
+arrays, objects and blank text do not establish a preferred entry point, and
+`mocs` alone is only additional membership. Presence does not prove resolution.
+Placement repair first opens the exact note; inspect the chosen visible map
+before `wiki.moc_membership`, supplying the complete `additionalMocPaths` set
+to retain (omission means none). Preview its revision-checked change set before
+applying. No map or membership is assigned automatically.
+Maintenance response budgets include the envelope and retain the highest-ranked
+complete prefix when fewer items fit, rather than collapsing a usable list.
+`get_wiki_authority_map` provides a library-style
 preferred-term/alias/stable-ID view and makes terminology collisions visible
 without renaming notes.
 
