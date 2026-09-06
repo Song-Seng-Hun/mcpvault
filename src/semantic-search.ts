@@ -1,9 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { join, resolve } from 'node:path';
-import { mkdir, open, readdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises';
+import { mkdir, open, readdir, readFile, stat, unlink } from 'node:fs/promises';
 import type { FileHandle } from 'node:fs/promises';
-import { gzip } from 'node:zlib';
-import { promisify } from 'node:util';
 import type { PathFilter } from './pathfilter.js';
 import type { ScopePrincipal } from './scope-auth.js';
 import { ScopeAccessPolicy } from './scope-access.js';
@@ -14,6 +12,7 @@ import { generateObsidianUri } from './uri.js';
 import { VaultIoCoordinator } from './vault-io.js';
 import { isMissingVaultPath, VaultReadUnavailableError } from './vault-read-errors.js';
 import { readSnapshotBytes } from './snapshot-read.js';
+import { writeGzipSnapshot } from './snapshot-write.js';
 import { chunkSemanticNote } from './semantic-chunks.js';
 import { isMarkdownModerationHidden } from './moderation-policy.js';
 import { createDerivedCacheOwner, derivedCacheBudget, estimateCacheBytes } from './cache-budget.js';
@@ -39,7 +38,6 @@ const SEMANTIC_VECTOR_CACHE_MAX_ENTRIES = 32;
 const TABLE_CACHE_MAX_ENTRIES = 32;
 const FALLBACK_SCAN_BATCH_SIZE = 8;
 const PENDING_SNAPSHOT_DEBOUNCE_MS = 1_000;
-const gzipAsync = promisify(gzip);
 const MANIFEST_MAX_BYTES = 64 * 1024 * 1024;
 const SNAPSHOT_COMPRESSED_MAX_BYTES = 32 * 1024 * 1024;
 const PENDING_MAX_BYTES = 8 * 1024 * 1024;
@@ -649,11 +647,26 @@ export class SemanticSearchService {
   }
 
   private async saveManifest(): Promise<void> {
-    await mkdir(this.indexPath, { recursive: true });
-    const compressed = await gzipAsync(Buffer.from(JSON.stringify(this.manifest), 'utf8'));
-    const temporaryPath = `${this.manifestPath}.${process.pid}.tmp`;
-    await writeFile(temporaryPath, compressed);
-    await rename(temporaryPath, this.manifestPath);
+    // Capture the inventory before IO: entries are replaced, never mutated by
+    // reconciliation. Streaming must not mix generations from later changes.
+    const entries = Object.entries(this.manifest);
+    function* chunks() {
+      yield '{';
+      for (let i = 0; i < entries.length; i++) {
+        const [path, entry] = entries[i]!;
+        yield `${i ? ',' : ''}${JSON.stringify(path)}:${JSON.stringify(entry)}`;
+      }
+      yield '}';
+    }
+    try {
+      await mkdir(this.indexPath, { recursive: true });
+      await writeGzipSnapshot(this.manifestPath, chunks(), { maxBytes: SNAPSHOT_COMPRESSED_MAX_BYTES, maxDecodedBytes: MANIFEST_MAX_BYTES });
+    } catch {
+      // Optional restart acceleration must not turn a completed vector write
+      // into reembedding/backoff when disk IO or snapshot size limits reject it.
+      // Keep the current in-memory manifest; startup reconciliation repairs an
+      // older on-disk generation from Markdown and existing vector rows.
+    }
   }
 
   private async loadPendingSnapshot(): Promise<void> {
@@ -690,12 +703,15 @@ export class SemanticSearchService {
     if (this.pendingSnapshotWrite || !this.pendingSnapshotPending) return;
     this.pendingSnapshotPending = false;
     const entries = [...this.pending.entries()].slice(0, MAX_PENDING_CHANGES).map(([path, change]) => ({ path, ...change }));
+    function* chunks() {
+      yield '[';
+      for (let i = 0; i < entries.length; i++) yield `${i ? ',' : ''}${JSON.stringify(entries[i])}`;
+      yield ']';
+    }
     this.pendingSnapshotWrite = (async () => {
       await mkdir(this.indexPath, { recursive: true });
       const path = join(this.indexPath, PENDING_FILE);
-      const temporaryPath = `${path}.${process.pid}.tmp`;
-      await writeFile(temporaryPath, await gzipAsync(Buffer.from(JSON.stringify(entries), 'utf8')));
-      await rename(temporaryPath, path);
+      await writeGzipSnapshot(path, chunks(), { maxBytes: PENDING_MAX_BYTES, maxDecodedBytes: PENDING_MAX_BYTES });
     })().catch(() => {
       // The queue is disposable; a later catalog scan can reconstruct it.
     });

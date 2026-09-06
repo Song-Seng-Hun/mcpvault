@@ -20,6 +20,10 @@ snapshot error, not source values or host paths. Concurrent invocations use
 distinct temporary files: readers may see either complete generation, never an
 interleaved or partially compressed file. Caller serialization/coalescing retains
 generation order; do not promise crash durability/fsync beyond prior behavior.
+Windows rename contention receives at most three short retries (10/30/100ms),
+never deletion of the prior target. Manifest persistence failure is optional:
+do not requeue a successful vector write just because its restart cache could
+not be published. Keep the current in-memory manifest and rebuild after restart.
 
 Tests use real temp files/gzip and source services. Verify Unicode round trips,
 empty snapshots, exact/overflow decoded and compressed limits, failed iterators,

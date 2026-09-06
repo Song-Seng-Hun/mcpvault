@@ -2767,6 +2767,17 @@ Its path/hash/size/mtime manifest is stored as an atomic gzip snapshot; the
 lexical n-gram index is stored as an atomic compressed binary snapshot; LanceDB stores the
 vectors in its own binary tables, so no client-side index or snapshot setup is
 needed.
+Semantic manifests and pending queues stream individual JSON records through
+gzip rather than materializing whole JSON, UTF-8 and compressed buffers at once.
+They retain a captured O(N) inventory of entry references/copies so asynchronous
+writes do not mix generations; this is not a constant-memory index or a measured
+RSS reduction. Writer byte limits match the existing reader limits. Each write
+owns an exclusively opened unique temporary file and replaces the prior snapshot
+only after compression and close complete. Short bounded retries accommodate
+transient Windows rename contention without deleting the prior target. Failed
+writes preserve the old snapshot and leave successful in-memory/vector indexing
+available; a later restart reconciles from Markdown. This is optional restart
+acceleration, not a new source of truth or a power-loss durability guarantee.
 Changed notes reuse unchanged chunks from the same path and scope table. The
 reuse lookup selects at most 65 rows (64 chunks plus an overflow sentinel),
 checks exact passage fingerprints and the embedding profile, and computes only

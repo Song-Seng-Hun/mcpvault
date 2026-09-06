@@ -232,3 +232,16 @@ test('a slow semantic query holds resources until completion, then releases afte
   await vi.advanceTimersByTimeAsync(60_001);
   expect((service as any).db).toBeUndefined();
 });
+
+test('failed manifest publication does not requeue a successful native vector write', async () => {
+  await index('# Old');
+  await mkdir((service as any).manifestPath);
+  const raw = '# New'; await seed(raw);
+  service.notifyChange(path, 'upsert');
+  await expect((service as any).drain(1)).resolves.toBeUndefined();
+  expect((service as any).manifest[path].hash).toBe(hash(raw));
+  expect((service as any).pending.size).toBe(0);
+  expect((service as any).lastError).toBeUndefined();
+  const stored = await (await (service as any).getTable('chunks_global')).query().toArray();
+  expect(stored.every((row: any) => row.hash === hash(raw))).toBe(true);
+});
