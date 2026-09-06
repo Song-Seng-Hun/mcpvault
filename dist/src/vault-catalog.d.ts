@@ -43,6 +43,7 @@ export declare class VaultFileCatalog {
     private readonly statInFlight;
     private readonly statCache;
     constructor(vaultPath: string, pathFilter: PathFilter);
+    private assertOpen;
     subscribe(listener: VaultCatalogListener): () => void;
     /** Subscribe to coalesced watcher changes so read models invalidate once per batch. */
     subscribeBatch(listener: VaultCatalogBatchListener): () => void;

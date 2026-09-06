@@ -2840,6 +2840,16 @@ checks, corpus-dependent memory use or all synchronous event-loop work.
 Configuration entries must be strings; malformed entries can now fail during
 filter construction rather than during a later path check.
 
+Catalog close is terminal and idempotent: subsequent inventory/stat requests
+reject with a path-free closed error rather than returning an empty inventory or
+starting another watcher. Late notifications, invalidations and subscriptions do
+not retain new state. Already-running directory/stat reads may finish, but closed
+checks discard their results before repopulating caches or returning inventory;
+active refresh ownership remains until its promise settles. This does not cancel
+native filesystem IO or bound a hung filesystem operation. Read barriers keep
+their existing quiet-close behavior, without scheduling a new refresh after a
+late failure. A new owner must create a new catalog rather than reuse a closed one.
+
 Model-free reuse also starts the resource idle timer: DB/table references are
 released after inactivity, while active searches and indexing batches defer
 release. This does not require loading an embedding model just to start cleanup.

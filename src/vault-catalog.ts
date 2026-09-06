@@ -84,7 +84,12 @@ export class VaultFileCatalog {
     this.vaultPath = resolve(vaultPath);
   }
 
+  private assertOpen(): void {
+    if (this.closed) throw new Error('Vault catalog is closed.');
+  }
+
   subscribe(listener: VaultCatalogListener): () => void {
+    if (this.closed) return () => undefined;
     this.listeners.add(listener);
     this.startWatcher();
     return () => this.listeners.delete(listener);
@@ -92,6 +97,7 @@ export class VaultFileCatalog {
 
   /** Subscribe to coalesced watcher changes so read models invalidate once per batch. */
   subscribeBatch(listener: VaultCatalogBatchListener): () => void {
+    if (this.closed) return () => undefined;
     this.batchListeners.add(listener);
     this.startWatcher();
     return () => this.batchListeners.delete(listener);
@@ -108,6 +114,7 @@ export class VaultFileCatalog {
 
   /** Invalidate several direct mutations with one generation/cache update. */
   invalidateMany(changes?: readonly VaultCatalogChange[]): void {
+    if (this.closed) return;
     this.changeGeneration += 1;
     this.paths = undefined;
     this.needsRefresh = true;
@@ -127,22 +134,28 @@ export class VaultFileCatalog {
 
   async listNotePaths(): Promise<string[]> {
     const inventory = await this.listInventory();
+    this.assertOpen();
     return [...inventory.notes];
   }
 
   /** Return the current immutable-by-convention note-path snapshot for read models. */
   async notePathsSnapshot(): Promise<readonly string[]> {
-    return (await this.listInventory()).notes;
+    const inventory = await this.listInventory();
+    this.assertOpen();
+    return inventory.notes;
   }
 
   async listAllPaths(): Promise<string[]> {
     const inventory = await this.listInventory();
+    this.assertOpen();
     return [...inventory.all];
   }
 
   /** Return the current immutable-by-convention all-path snapshot for read models. */
   async allPathsSnapshot(): Promise<readonly string[]> {
-    return (await this.listInventory()).all;
+    const inventory = await this.listInventory();
+    this.assertOpen();
+    return inventory.all;
   }
 
   /** Drain received notifications before an index decides it is clean.
@@ -159,6 +172,7 @@ export class VaultFileCatalog {
       if (!this.pendingFullRefresh && this.pendingChanges.size === 0) return;
       const flush = this.flushPendingChanges();
       this.flushPromise = flush.catch(() => {
+        if (this.closed) return;
         // Keep the serialization chain usable and reconcile after a failed
         // batch. The reading caller still receives the original rejection.
         this.invalidate();
@@ -175,11 +189,13 @@ export class VaultFileCatalog {
 
   /** Share concurrent file stat calls between read models without retaining file metadata. */
   async statPaths(paths: readonly string[]): Promise<ReadonlyMap<string, VaultCatalogFileStat>> {
+    this.assertOpen();
     const unique = [...new Set(paths.map(normalizePath).filter(path => path && this.pathFilter.isAllowed(path)))];
     const result = new Map<string, VaultCatalogFileStat>();
     for (let start = 0; start < unique.length; start += WATCH_EVENT_STAT_BATCH_SIZE) {
       const batch = unique.slice(start, start + WATCH_EVENT_STAT_BATCH_SIZE);
       const stats = await Promise.all(batch.map(path => this.statPath(path)));
+      this.assertOpen();
       for (let index = 0; index < batch.length; index += 1) {
         const info = stats[index];
         if (info) result.set(batch[index]!, info);
@@ -189,9 +205,11 @@ export class VaultFileCatalog {
   }
 
   private async listInventory(): Promise<{ notes: string[]; all: string[] }> {
+    this.assertOpen();
     this.startWatcher();
     for (let attempt = 0; attempt < 3; attempt++) {
       await this.flushPendingEvents();
+      this.assertOpen();
       const interval = this.watcher ? WATCH_RECONCILE_INTERVAL_MS : NO_WATCHER_RECONCILE_INTERVAL_MS;
       const reconcile = this.forceReconcile || !this.allPaths || Date.now() - this.lastReconciledAt >= interval;
       if (!this.needsRefresh && this.paths && this.allPaths && !reconcile) {
@@ -212,6 +230,7 @@ export class VaultFileCatalog {
         throw error;
       }
       await this.flushPendingEvents();
+      this.assertOpen();
       if (!this.forceReconcile && !this.needsRefresh && this.paths && this.allPaths
         && Date.now() - this.lastReconciledAt < interval) {
         return { notes: this.paths, all: this.allPaths };
@@ -224,7 +243,9 @@ export class VaultFileCatalog {
   }
 
   close(): void {
+    if (this.closed) return;
     this.closed = true;
+    this.changeGeneration += 1;
     if (this.pendingTimer) clearTimeout(this.pendingTimer);
     this.pendingTimer = undefined;
     this.pendingChanges.clear();
@@ -235,7 +256,8 @@ export class VaultFileCatalog {
     this.batchListeners.clear();
     this.paths = undefined;
     this.allPaths = undefined;
-    this.refreshPromise = undefined;
+    // Keep ownership until the active refresh's finally releases it. Native IO
+    // may still finish, but closed guards discard its result before publication.
     this.directoryCache.clear();
     this.dirtyDirectories.clear();
     this.statInFlight.clear();
@@ -244,6 +266,7 @@ export class VaultFileCatalog {
   }
 
   private statPath(path: string): Promise<VaultCatalogFileStat | undefined> {
+    this.assertOpen();
     const normalized = normalizePath(path);
     const cached = this.statCache.get(normalized);
     if (cached && cached.generation === this.changeGeneration && cached.expiresAt > Date.now()) {
@@ -258,6 +281,7 @@ export class VaultFileCatalog {
     const computation = stat(join(this.vaultPath, normalized))
       .then(info => info.isFile() ? { size: info.size, mtimeMs: info.mtimeMs } : undefined)
       .then(value => {
+        this.assertOpen();
         if (generation === this.changeGeneration) {
           this.statCache.set(normalized, { value, generation, expiresAt: Date.now() + STAT_CACHE_TTL_MS });
           while (this.statCache.size > STAT_CACHE_MAX_ENTRIES) this.statCache.delete(this.statCache.keys().next().value!);
@@ -265,6 +289,7 @@ export class VaultFileCatalog {
         return value;
       })
       .catch(error => {
+        this.assertOpen();
         if (isMissingVaultPath(error)) return undefined;
         throw new VaultReadUnavailableError();
       });
@@ -277,7 +302,7 @@ export class VaultFileCatalog {
   }
 
   private startWatcher(): void {
-    if (this.watcherStarted) return;
+    if (this.closed || this.watcherStarted) return;
     this.watcherStarted = true;
     try {
       this.watcher = watch(this.vaultPath, { recursive: true }, (_event, filename) => {
@@ -298,6 +323,7 @@ export class VaultFileCatalog {
   }
 
   private onFilesystemEvent(filename: string | undefined): void {
+    if (this.closed) return;
     if (!filename) {
       this.invalidate();
       this.queueFullRefreshEvent();
@@ -346,6 +372,9 @@ export class VaultFileCatalog {
       return;
     }
     for (let start = 0; start < paths.length; start += WATCH_EVENT_STAT_BATCH_SIZE) {
+      // Notification callbacks may synchronously close the catalog after the
+      // previous batch. Do not start a subsequent native stat batch in that case.
+      if (this.closed) return;
       const batch = paths.slice(start, start + WATCH_EVENT_STAT_BATCH_SIZE);
       let states: VaultCatalogChange[];
       try {
@@ -397,8 +426,10 @@ export class VaultFileCatalog {
   }
 
   private async refresh(reconcile = false): Promise<void> {
+    this.assertOpen();
     const generation = this.changeGeneration;
     const inventory = await this.findPaths(this.vaultPath, reconcile);
+    this.assertOpen();
     inventory.notes.sort((a, b) => a.localeCompare(b));
     inventory.all.sort((a, b) => a.localeCompare(b));
     if (generation === this.changeGeneration) {
@@ -414,11 +445,13 @@ export class VaultFileCatalog {
   }
 
   private async findPaths(directory: string, reconcile = false, budget = DIRECTORY_SCAN_BATCH_SIZE): Promise<{ notes: string[]; all: string[] }> {
+    this.assertOpen();
     // An unchanged ancestor's stat says nothing about nested membership.
     // Periodic reconciliation must bypass both subtree and entry caches.
     if (this.watcher && !reconcile) {
       try {
         const info = await stat(directory);
+        this.assertOpen();
         const cached = this.directoryCache.get(directory);
         if (!this.dirtyDirectories.has(directory)
           && cached
@@ -432,6 +465,7 @@ export class VaultFileCatalog {
           return { notes: cached.notes, all: cached.all };
         }
       } catch (error) {
+        this.assertOpen();
         if (directory !== this.vaultPath && isMissingVaultPath(error)) return { notes: [], all: [] };
         throw new VaultReadUnavailableError();
       }
@@ -439,6 +473,7 @@ export class VaultFileCatalog {
     const notes: string[] = [];
     const all: string[] = [];
     const entries = await this.readDirectoryEntries(directory, reconcile);
+    this.assertOpen();
     const directories: Array<{ fullPath: string; relativePath: string }> = [];
     for (const entry of entries) {
       const fullPath = join(directory, entry.name);
@@ -463,6 +498,7 @@ export class VaultFileCatalog {
       )));
       const failed = nested.find(result => result.status === 'rejected');
       if (failed?.status === 'rejected') throw failed.reason;
+      this.assertOpen();
       for (const result of nested) {
         if (result.status !== 'fulfilled') continue;
         for (const path of result.value.notes) notes.push(path);
@@ -485,13 +521,16 @@ export class VaultFileCatalog {
   }
 
   private async readDirectoryEntries(directory: string, reconcile = false): Promise<Array<{ name: string; directory: boolean; file: boolean }>> {
+    this.assertOpen();
     // Keep full reconciliation when recursive watching is unavailable. The
     // cache is safe only when watcher events can mark changed ancestors.
     if (!this.watcher) {
       try {
         const entries = await readdir(directory, { withFileTypes: true });
+        this.assertOpen();
         return entries.map(entry => ({ name: entry.name, directory: entry.isDirectory(), file: entry.isFile() }));
       } catch (error) {
+        this.assertOpen();
         if (directory !== this.vaultPath && isMissingVaultPath(error)) return [];
         throw new VaultReadUnavailableError();
       }
@@ -501,9 +540,11 @@ export class VaultFileCatalog {
     try {
       info = await stat(directory);
     } catch (error) {
+      this.assertOpen();
       if (directory !== this.vaultPath && isMissingVaultPath(error)) return [];
       throw new VaultReadUnavailableError();
     }
+    this.assertOpen();
     const cached = this.directoryCache.get(directory);
     if (!reconcile && !this.dirtyDirectories.has(directory) && cached && cached.mtimeMs === info.mtimeMs && cached.size === info.size) {
       this.directoryCache.delete(directory);
@@ -514,8 +555,10 @@ export class VaultFileCatalog {
     let entries: Array<{ name: string; directory: boolean; file: boolean }>;
     try {
       const listed = await readdir(directory, { withFileTypes: true });
+      this.assertOpen();
       entries = listed.map(entry => ({ name: entry.name, directory: entry.isDirectory(), file: entry.isFile() }));
     } catch (error) {
+      this.assertOpen();
       if (directory !== this.vaultPath && isMissingVaultPath(error)) return [];
       throw new VaultReadUnavailableError();
     }
