@@ -9949,16 +9949,14 @@ export class LlmWikiService {
             const key = JSON.stringify([scopeRoot.toLowerCase(), basisKind, basis.toLocaleLowerCase()]);
             const group = groups.get(key) || { title: `MOC: ${basisTitle}`, basis, basisKind, scopeRoot, entryTotal: 0, entries: [] };
             group.entryTotal += 1;
-            if (group.entries.length < 12) {
-                const ordered = navigationOrder(note.frontmatter.nav_order);
-                const navOrder = ordered === Number.MAX_SAFE_INTEGER ? undefined : ordered;
-                group.entries.push({
-                    path: this.access.toPublicPath(note.path),
-                    title: boundedText(note.frontmatter.title || note.path.split('/').at(-1)?.replace(/\.md$/i, '') || note.path, 160),
-                    revision: note.revision,
-                    ...(navOrder !== undefined && { navOrder }),
-                });
-            }
+            const ordered = navigationOrder(note.frontmatter.nav_order);
+            const navOrder = ordered === Number.MAX_SAFE_INTEGER ? undefined : ordered;
+            group.entries.push({
+                path: this.access.toPublicPath(note.path),
+                title: boundedText(note.frontmatter.title || note.path.split('/').at(-1)?.replace(/\.md$/i, '') || note.path, 160),
+                revision: note.revision,
+                ...(navOrder !== undefined && { navOrder }),
+            });
             groups.set(key, group);
         }
         const candidateGroups = [...groups.values()]
@@ -9969,6 +9967,7 @@ export class LlmWikiService {
         const displayText = (value) => value.replace(/[\r\n]+/g, ' ').replace(/[\\`*_\[\]<>]/g, '\\$&');
         for (const group of candidateGroups) {
             group.entries.sort((left, right) => navigationOrder(left.navOrder) - navigationOrder(right.navOrder) || left.title.localeCompare(right.title) || left.path.localeCompare(right.path));
+            group.entries.splice(12); // Apply the cap after authored priority, within the bounded graph sample.
             const suggestedQuestions = [`What is the durable idea shared by these notes?`, `Which note should be the next link or source of truth?`];
             const stem = group.title.replace(/^MOC:\s*/i, '').replace(/[<>:"/\\|?*\u0000-\u001f]/g, '-').replace(/\s+/g, ' ').trim().slice(0, 100) || 'Knowledge';
             const physicalTarget = joinRoot(group.scopeRoot, `Knowledge/MOCs/${stem}.md`);
@@ -9983,7 +9982,7 @@ export class LlmWikiService {
                 if (!this.access.canReferenceFrom(physicalTarget, this.access.resolveExternalPath(entry.path, principal)))
                     throw refreshError();
             }
-            const links = group.entries.slice(0, 8).map(entry => {
+            const links = group.entries.map(entry => {
                 const physicalSource = this.access.resolveExternalPath(entry.path, principal);
                 try {
                     canonicalRelationWikiLink(physicalSource); // Validate wikilink-safe document syntax.
@@ -10006,6 +10005,7 @@ export class LlmWikiService {
                 basis: { kind: group.basisKind, value: group.basis },
                 notePaths: group.entries.map(entry => entry.path),
                 orderedEntries: group.entries,
+                entryTotal: group.entryTotal,
                 entriesTruncated: group.entryTotal > group.entries.length,
                 draftMarkdown,
                 creationPlan: targetExists

@@ -206,6 +206,57 @@ test('a capped group is explicitly partial even when all proposed groups fit', a
   });
 });
 
+test('authored priority selects membership before the cap and ignores sample arrival order', async () => {
+  await fixture(async (wiki, fs, _access, seed) => {
+    const items = [];
+    for (let i = 0; i < 14; i += 1) {
+      const path = `Note${String(i).padStart(2, '0')}.md`;
+      await seed(path, { nav_order: i === 13 ? 0 : 10, title: `Title${String(13 - i).padStart(2, '0')}` });
+      items.push({ path, revision: await fs.readNoteRevision(path) });
+    }
+    // Isolate selection from unrelated graph dashboard pruning; source metadata
+    // and both revision checks still read the actual fixture files.
+    const graph = vi.spyOn(wiki, 'graphHealth');
+    graph.mockResolvedValue({ mocCoverage: { uncoveredKnowledge: { items, total: 14, truncated: false } } } as any);
+    const first = (await wiki.mocCandidates(undefined, 10, 16000)).candidates[0]!;
+    expect(first.orderedEntries).toHaveLength(12);
+    expect(first.notePaths).toEqual(Array.from({ length: 12 }, (_, i) => `Note${String(13 - i).padStart(2, '0')}.md`));
+    graph.mockResolvedValue({ mocCoverage: { uncoveredKnowledge: { items: [...items].reverse(), total: 14, truncated: false } } } as any);
+    const reversed = (await wiki.mocCandidates(undefined, 10, 16000)).candidates[0]!;
+    expect(reversed.notePaths).toEqual(first.notePaths);
+  });
+});
+
+test.each([9, 12, 14])('all MOC projections retain the same bounded membership from %i entries', async count => {
+  await fixture(async (wiki, fs, _access, seed) => {
+    const items = [];
+    for (let i = 0; i < count; i += 1) {
+      const path = `Knowledge/Note${String(i).padStart(2, '0')}.md`;
+      await seed(path, { nav_order: i });
+      items.push({ path, revision: await fs.readNoteRevision(path) });
+    }
+    vi.spyOn(wiki, 'graphHealth').mockResolvedValue({ mocCoverage: { uncoveredKnowledge: { items, total: count, truncated: false } } } as any);
+    const result = await wiki.mocCandidates(undefined, 10, 16000);
+    const candidate = result.candidates[0]!;
+    const targets = extractObsidianLinkOccurrences(String(candidate.draftMarkdown)).map(link => link.target);
+    expect(targets).toEqual(candidate.notePaths);
+    expect(candidate.orderedEntries.map((entry: any) => entry.path)).toEqual(targets);
+    expect(candidate.creationPlan.arguments.content).toBe(candidate.draftMarkdown);
+    expect(candidate.entryTotal).toBe(count);
+    expect(candidate.entriesTruncated).toBe(count > 12);
+    expect(result.truncated).toBe(count > 12);
+    expect(targets).toHaveLength(Math.min(count, 12));
+    for (const maxChars of [512, 1200, 4000]) {
+      const bounded = await wiki.mocCandidates(undefined, 10, maxChars);
+      expect(JSON.stringify(bounded).length).toBeLessThanOrEqual(maxChars);
+      if (!bounded.candidates.length) expect(bounded.truncated).toBe(true);
+      for (const item of bounded.candidates) {
+        expect(extractObsidianLinkOccurrences(String(item.draftMarkdown)).map(link => link.target)).toEqual(item.notePaths);
+      }
+    }
+  });
+});
+
 test('MCP candidate discovery preserves the fixed surface, budgets and source bytes', async () => {
   await fixture(async (_wiki, _fs, _access, seed, root) => {
     const raw = await seed('Note.md');

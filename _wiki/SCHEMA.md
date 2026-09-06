@@ -732,6 +732,11 @@ Draft links use Obsidian syntax, never MCP scope URIs; encoded filename `#` is
 not a heading anchor. Collision hints disclose visible targets only, and new
 maps retain `expectedRevision: missing`. Truncated samples do not prove that no
 other knowledge needs organization.
+Within the admitted graph sample, sort by authored `nav_order`, then title/path
+before selecting up to12 members. Candidate `notePaths`, `orderedEntries`, draft
+links and creation content share that membership/order. `entryTotal` is the
+sample-local group count, not a Vault-wide inventory. `entriesTruncated` reports
+its member cap; the complete response still obeys `maxChars`.
 Root MOCs need no parent or `primary_moc`; nested MOCs use `moc_parent` through
 `wiki.hierarchy_change`, not `wiki.moc_membership`. Maintenance placement debt
 applies to non-retired ordinary knowledge without nonempty scalar `primary_moc`

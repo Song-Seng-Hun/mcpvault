@@ -1525,6 +1525,12 @@ special filenames), not MCP scope URIs or untrusted title aliases. Destination
 collision state describes visible notes only: `expectedRevision: missing` is
 mandatory and may still reject a collision during creation. Partial graph or
 group samples and full-response budget trimming are explicitly truncated.
+Within that admitted graph sample, authored `nav_order` (then title/path)
+determines membership before the 12-entry cap. `notePaths`, `orderedEntries`,
+draft links and the creation content retain exactly the same members and order.
+`entryTotal` counts the group's admitted sample, not all notes in the Vault;
+`entriesTruncated` identifies its 12-entry reduction. A full draft may fit fewer
+groups in `maxChars`; omitted groups remain explicitly truncated.
 
 MOC coverage measures visible **non-MOC knowledge** reached through authored
 map links. Root and nested maps remain in the full graph and knowledge-usage
