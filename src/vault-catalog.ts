@@ -413,7 +413,7 @@ export class VaultFileCatalog {
     }
   }
 
-  private async findPaths(directory: string, reconcile = false): Promise<{ notes: string[]; all: string[] }> {
+  private async findPaths(directory: string, reconcile = false, budget = DIRECTORY_SCAN_BATCH_SIZE): Promise<{ notes: string[]; all: string[] }> {
     // An unchanged ancestor's stat says nothing about nested membership.
     // Periodic reconciliation must bypass both subtree and entry caches.
     if (this.watcher && !reconcile) {
@@ -452,17 +452,21 @@ export class VaultFileCatalog {
         if (isNote(relativePath) && this.pathFilter.isAllowed(relativePath)) notes.push(relativePath);
       }
     }
-    for (let start = 0; start < directories.length; start += DIRECTORY_SCAN_BATCH_SIZE) {
-      const batch = directories.slice(start, start + DIRECTORY_SCAN_BATCH_SIZE);
+    for (let start = 0; start < directories.length; start += budget) {
+      const batch = directories.slice(start, start + budget);
       // Failed scans must drain siblings before refreshPromise is released;
       // otherwise a retry races late writes into the shared directory cache.
-      const nested = await Promise.allSettled(batch.map(item => this.findPaths(item.fullPath, reconcile)));
+      // Partition one tree-wide budget instead of granting eight new slots at
+      // every depth. A branch owns its slots until its whole subtree settles.
+      const nested = await Promise.allSettled(batch.map((item, index) => this.findPaths(
+        item.fullPath, reconcile, Math.floor(budget / batch.length) + (index < budget % batch.length ? 1 : 0),
+      )));
       const failed = nested.find(result => result.status === 'rejected');
       if (failed?.status === 'rejected') throw failed.reason;
       for (const result of nested) {
         if (result.status !== 'fulfilled') continue;
-        notes.push(...result.value.notes);
-        all.push(...result.value.all);
+        for (const path of result.value.notes) notes.push(path);
+        for (const path of result.value.all) all.push(path);
       }
     }
     const cached = this.directoryCache.get(directory);

@@ -2815,6 +2815,19 @@ manifest or reset retries: drain checks current existence, reads the latest
 Markdown and validates the final source hash before applying vectors. Unqueued
 changed sources are still read and discovered normally.
 
+Shared catalog traversal and semantic fallback discovery partition a budget of
+eight directory reads across the entire recursive tree, rather than opening
+eight more at every level. Single-child branches retain the budget; sibling
+branches divide it until their subtrees finish. Static partitioning can leave
+slots unused behind a slow sibling, and this is a per-traversal—not process-wide—
+limit. Failed batches wait for already-started siblings before allowing scan
+ownership to end. Child inventories merge one path at a time, avoiding JavaScript
+function-argument limits for large subtrees. Virtual-directory tests preserve all
+64 notes while reducing peak unfinished reads from 64 to eight in an 8x8 tree;
+150,000-file child inventories merge without argument-spread errors. These tests
+create no large disk corpus. Returned inventories and ancestor subtree caches
+still consume space proportional to the corpus/depth; no RSS speedup is claimed.
+
 Model-free reuse also starts the resource idle timer: DB/table references are
 released after inactivity, while active searches and indexing batches defer
 release. This does not require loading an embedding model just to start cleanup.

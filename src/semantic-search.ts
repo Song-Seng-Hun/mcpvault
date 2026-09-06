@@ -825,7 +825,7 @@ export class SemanticSearchService {
     }
   }
 
-  private async findMarkdownFiles(dir: string): Promise<string[]> {
+  private async findMarkdownFiles(dir: string, budget = FALLBACK_SCAN_BATCH_SIZE): Promise<string[]> {
     const output: string[] = [];
     let entries;
     try {
@@ -841,10 +841,18 @@ export class SemanticSearchService {
       if (entry.isDirectory()) directories.push(full);
       else if (entry.isFile() && entry.name.toLowerCase().endsWith('.md')) output.push(full.slice(this.vaultPath.length + 1));
     }
-    for (let start = 0; start < directories.length; start += FALLBACK_SCAN_BATCH_SIZE) {
-      const batch = directories.slice(start, start + FALLBACK_SCAN_BATCH_SIZE);
-      const nested = await Promise.all(batch.map(directory => this.findMarkdownFiles(directory)));
-      for (const paths of nested) output.push(...paths);
+    for (let start = 0; start < directories.length; start += budget) {
+      const batch = directories.slice(start, start + budget);
+      // Bound the whole tree, not each sibling group. Keep scan ownership until
+      // already-started siblings settle even when one storage read fails.
+      const nested = await Promise.allSettled(batch.map((directory, index) => this.findMarkdownFiles(
+        directory, Math.floor(budget / batch.length) + (index < budget % batch.length ? 1 : 0),
+      )));
+      const failed = nested.find(result => result.status === 'rejected');
+      if (failed?.status === 'rejected') throw failed.reason;
+      for (const result of nested) {
+        if (result.status === 'fulfilled') for (const path of result.value) output.push(path);
+      }
     }
     return output;
   }
