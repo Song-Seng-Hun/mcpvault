@@ -314,6 +314,12 @@ target invalidates itself and returns a path-free retry error. Newly gained
 aliases, attachment bodies and edits after validation remain outside this
 optimistic check. Public `sourceRevision` and authored unresolved rows retain
 their previous meaning; no target bodies are added to MCP responses.
+Filesystem backlinks apply the same bounded target validation to references on
+matching physical lines and in their headings, including clipped references and
+off-page rows. Shared targets are hashed once per query; unrelated author
+sections do not trigger target body reads. This prevents stale neighboring-link
+redaction after a known target's hide/unhide or alias change. It does not extend
+the check to every note that could newly gain an alias, or make the view atomic.
 Selected candidates and replacement targets are revision-checked. Reference
 resolution also checks the target revision, including its indexed aliases.
 Reference

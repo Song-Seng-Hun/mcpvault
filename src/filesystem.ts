@@ -2460,7 +2460,7 @@ export class FileSystemService {
           graph.invalidate(sourcePath);
           throw new Error('Graph source changed or became unavailable; retry the query to refresh its snapshot.');
         }
-      }, true, options.includeSnapshot);
+      }, true, options.includeSnapshot, targets => this.assertGraphTargetRevisions(graph, targets, canAccessPath));
       await this.assertGraphReadRevision(graph, target, result.targetRevision, canAccessPath, targetNote.revision);
       const sources = [...new Map(result.backlinks.map(link => [link.path, link.sourceRevision])).entries()];
       for (let offset = 0; offset < sources.length; offset += 8) {
@@ -2490,23 +2490,26 @@ export class FileSystemService {
     finally { graph.close(); }
   }
 
+  private async assertGraphTargetRevisions(graph: VaultGraphIndex, targets: ReadonlyMap<string, string>, canAccessPath: (path: string) => boolean): Promise<void> {
+    const entries = [...targets];
+    for (let offset = 0; offset < entries.length; offset += 8) {
+      // Drain failures before a temporary graph can be released. Off-page
+      // dependencies also affect the complete navigation fingerprint.
+      const checked = await Promise.allSettled(entries.slice(offset, offset + 8)
+        .map(([path, revision]) => this.assertGraphReadRevision(graph, path, revision, canAccessPath, undefined, MAX_NOTE_CONTENT_BYTES)));
+      const failed = checked.find(result => result.status === 'rejected');
+      if (failed?.status === 'rejected') throw failed.reason;
+    }
+  }
+
   async getOutlinks(path: string, limit: number = 100, canAccessPath: (path: string) => boolean = () => true, offset = 0, options: { includeSourceRevision?: boolean; includeSnapshot?: boolean } = {}): Promise<OutlinksResult> {
     const source = this.normalizePath(path);
     if (!this.pathFilter.isAllowed(source) || !canAccessPath(source)) throw new Error(`Access denied: ${source}`);
     const note = await this.readNote(source);
     if (isModerationHidden(note.frontmatter)) throw new Error(`Access denied: ${source}`);
     return this.withGraphRead(graph => graph.withStableRead(canAccessPath, async () => {
-      const result = await graph.getOutlinks(source, limit, canAccessPath, offset, true, options.includeSnapshot, async targets => {
-        const entries = [...targets];
-        for (let offset = 0; offset < entries.length; offset += 8) {
-          // Drain failures before the graph (including temporary indexes) can
-          // be released. Counts and projection depend on off-page targets too.
-          const checked = await Promise.allSettled(entries.slice(offset, offset + 8)
-            .map(([path, revision]) => this.assertGraphReadRevision(graph, path, revision, canAccessPath, undefined, MAX_NOTE_CONTENT_BYTES)));
-          const failed = checked.find(result => result.status === 'rejected');
-          if (failed?.status === 'rejected') throw failed.reason;
-        }
-      });
+      const result = await graph.getOutlinks(source, limit, canAccessPath, offset, true, options.includeSnapshot,
+        targets => this.assertGraphTargetRevisions(graph, targets, canAccessPath));
       await this.assertGraphReadRevision(graph, source, result.sourceRevision, canAccessPath, note.revision);
       if (options.includeSourceRevision) return result;
       const { sourceRevision: _sourceRevision, ...publicResult } = result;

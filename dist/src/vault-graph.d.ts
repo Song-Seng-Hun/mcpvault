@@ -33,7 +33,7 @@ export declare class VaultGraphIndex {
     close(): void;
     /** Keep caller-side asynchronous source validation inside the same view. */
     withStableRead<T>(canAccessPath: (path: string) => boolean, read: () => Promise<T>): Promise<T>;
-    getBacklinks(path: string, limit: number, canAccessPath: (path: string) => boolean, offset?: number, canIncludeSource?: (path: string, revision: string) => Promise<boolean>, includeSourceRevision?: boolean, includeSnapshot?: boolean): Promise<BacklinksResult>;
+    getBacklinks(path: string, limit: number, canAccessPath: (path: string) => boolean, offset?: number, canIncludeSource?: (path: string, revision: string) => Promise<boolean>, includeSourceRevision?: boolean, includeSnapshot?: boolean, validateTargets?: (targets: ReadonlyMap<string, string>) => Promise<void>): Promise<BacklinksResult>;
     getOutlinks(path: string, limit: number, canAccessPath: (path: string) => boolean, offset?: number, includeSourceRevision?: boolean, includeSnapshot?: boolean, validateTargets?: (targets: ReadonlyMap<string, string>) => Promise<void>): Promise<{
         source: string;
         sourceRevision?: string;
@@ -42,6 +42,7 @@ export declare class VaultGraphIndex {
         total: number;
         truncated: boolean;
     }>;
+    private targetValidationResolver;
     findUnresolvedLinks(limit: number, canAccessPath: (path: string) => boolean, offset?: number, includeSnapshot?: boolean): Promise<UnresolvedLinksResult>;
     findOrphanNotes(limit: number, canAccessPath: (path: string) => boolean, offset?: number, includeSnapshot?: boolean): Promise<OrphanNotesResult>;
     listAllTags(canAccessPath: (path: string) => boolean): Promise<Array<{

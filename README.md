@@ -2581,6 +2581,17 @@ background indexing.
 
 ### `get_backlinks`
 
+Backlink context and heading references participate in freshness validation:
+known authorized targets on matching physical lines (even clipped references)
+and in headings are checked before returning a page. This includes off-page
+rows that contribute to navigation fingerprints. Shared targets are hashed once
+per query, in drained batches of eight with an 8 MiB complete-read cap per target.
+Scope-denied bodies and references in unrelated author sections are not read.
+A changed/unavailable target causes a path-free retry error; retry the query
+to refresh its redaction and alias view. No target bodies are added to responses.
+This is optimistic validation, not an atomic vault snapshot or discovery of all
+new aliases; normal graph reconciliation remains necessary.
+
 Find incoming Obsidian internal links for a note without returning the full source
 notes. Embeds, aliases, heading/block fragments, and path-qualified links are
 reported with their source path, 1-indexed line number, and compact context.

@@ -12,6 +12,12 @@ tools; new behaviors belong in the endpoint catalog.
 
 ## Verified mechanisms in the current batch
 
+- Backlink context/heading projection now validates its known authorized target
+  revisions, including clipped same-line references and off-page fingerprint
+  rows. Hide/unhide and alias-fallback drift reject stale views without reading
+  denied target bodies or unrelated author sections. Target reads are deduplicated,
+  capped at 8 MiB each and drained in batches of eight. Existing root/author and
+  visibility guards remain. This is not a full resolver census or atomic snapshot.
 - Graph navigation now preserves exact locators and public scope URIs under a
   total JSON budget, includes parsed source revisions for backlinks/outlinks,
   and retries oversized entries without skipping or clipping identities.

@@ -253,7 +253,7 @@ export class VaultGraphIndex {
     return result;
   }
 
-  async getBacklinks(path: string, limit: number, canAccessPath: (path: string) => boolean, offset = 0, canIncludeSource?: (path: string, revision: string) => Promise<boolean>, includeSourceRevision = false, includeSnapshot = false): Promise<BacklinksResult> {
+  async getBacklinks(path: string, limit: number, canAccessPath: (path: string) => boolean, offset = 0, canIncludeSource?: (path: string, revision: string) => Promise<boolean>, includeSourceRevision = false, includeSnapshot = false, validateTargets?: (targets: ReadonlyMap<string, string>) => Promise<void>): Promise<BacklinksResult> {
     await this.ensure();
     const startGeneration = this.changeGeneration;
     const target = normalizePath(path);
@@ -269,7 +269,10 @@ export class VaultGraphIndex {
     if (!canAccessPath(targetEntry.path) || targetEntry.moderationHidden) throw new Error(`Access denied: ${target}`);
     const snapshot = includeSnapshot ? new NavigationViewFingerprint(['backlinks', targetEntry.path, targetEntry.revision]) : undefined;
     const visible = this.visibilityContext(canAccessPath);
-    const project = this.linkProjector(visible.resolver, buildResolver([...this.allPaths], this.entries));
+    const allResolver = buildResolver([...this.allPaths], this.entries);
+    const project = this.linkProjector(visible.resolver, allResolver);
+    const validationResolver = validateTargets ? this.targetValidationResolver(visible, canAccessPath) : visible.resolver;
+    const contexts = new Map<GraphEntry, { lines: Set<number>; headings: Set<string> }>();
     const backlinks: BacklinkMatch[] = [];
     const sourceEntries = new Map<string, GraphEntry>();
     let total = 0;
@@ -287,6 +290,12 @@ export class VaultGraphIndex {
         }
         if (!checkedSources.get(entry.path)) continue;
         sourceEntries.set(entry.path, entry);
+        if (validateTargets) {
+          let context = contexts.get(entry);
+          if (!context) { context = { lines: new Set(), headings: new Set() }; contexts.set(entry, context); }
+          context.lines.add(link.line);
+          if (link.heading) context.headings.add(link.heading);
+        }
         total += 1;
         const backlink: BacklinkMatch = {
           path: entry.path,
@@ -303,6 +312,25 @@ export class VaultGraphIndex {
         };
         snapshot?.add(entry.path, entry.revision, project(entry, backlink));
         addTopMatch(backlinks, backlink, offset + limit, compare);
+    }
+    if (validateTargets) {
+      const targets = new Map<string, string>();
+      for (const [entry, context] of contexts) {
+        const collect = (link: { target: string; link: string }) => {
+          if (/^scope:\/\/(?:model|agent|user)\//i.test(link.target.trim())) return;
+          for (const resolver of new Set([allResolver, visible.resolver, validationResolver])) {
+            for (const path of resolveTargets(link.target, resolver, entry.path, link.link)) {
+              const candidate = this.entries.get(path);
+              if (candidate && path !== entry.path && path !== targetEntry!.path && canAccessPath(path)) targets.set(path, candidate.revision);
+            }
+          }
+        };
+        // Match the projector's physical-line dependencies, including clipped
+        // references. Do not hash links in unrelated sections of the author.
+        for (const link of entry.links) if (context.lines.has(link.line)) collect(link);
+        for (const heading of context.headings) for (const link of extractObsidianLinkOccurrences(heading)) collect(link);
+      }
+      await validateTargets(targets);
     }
     if (this.changeGeneration !== startGeneration || this.visibilityContext(canAccessPath) !== visible) {
       throw new Error('Graph changed or visibility changed during navigation; retry the query. No stable navigation view was returned.');
@@ -323,16 +351,7 @@ export class VaultGraphIndex {
     const visible = this.visibilityContext(canAccessPath);
     const allResolver = buildResolver([...this.allPaths], this.entries);
     const project = this.linkProjector(visible.resolver, allResolver);
-    let validationResolver = visible.resolver;
-    if (validateTargets) {
-      const hiddenPaths: string[] = [];
-      for (const candidate of this.entries.values()) {
-        if (candidate.moderationHidden && this.allPaths.has(candidate.path) && canAccessPath(candidate.path)) hiddenPaths.push(candidate.path);
-      }
-      // Exclude other scopes' shadowing names, but include authorized cached
-      // hidden aliases so an unhide can be discovered before the next census.
-      if (hiddenPaths.length) validationResolver = buildResolver([...visible.paths, ...hiddenPaths], this.entries);
-    }
+    const validationResolver = validateTargets ? this.targetValidationResolver(visible, canAccessPath) : visible.resolver;
     const targetRevisions = new Map<string, string>();
     const outlinks = entry.links.filter(link => {
       if (/^scope:\/\/(?:model|agent|user)\//i.test(link.target.trim())) return false;
@@ -363,6 +382,16 @@ export class VaultGraphIndex {
       total: outlinks.length,
       truncated: outlinks.length > offset + limit,
     };
+  }
+
+  private targetValidationResolver(visible: VisibilityContext, canAccessPath: (path: string) => boolean): Resolver {
+    const hiddenPaths: string[] = [];
+    for (const candidate of this.entries.values()) {
+      if (candidate.moderationHidden && this.allPaths.has(candidate.path) && canAccessPath(candidate.path)) hiddenPaths.push(candidate.path);
+    }
+    // Exclude other scopes' shadowing names, but include authorized cached
+    // hidden aliases so an unhide can be discovered before the next census.
+    return hiddenPaths.length ? buildResolver([...visible.paths, ...hiddenPaths], this.entries) : visible.resolver;
   }
 
   async findUnresolvedLinks(limit: number, canAccessPath: (path: string) => boolean, offset = 0, includeSnapshot = false): Promise<UnresolvedLinksResult> {

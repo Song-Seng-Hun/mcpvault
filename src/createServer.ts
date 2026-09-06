@@ -1032,7 +1032,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         },
         {
           name: "get_backlinks",
-          description: "Find one bounded page of incoming Obsidian/relative Markdown links to a visible, non-hidden note. Source visibility and hashes are checked before counts and pagination; root and page authors are checked again before return. Detected source drift invalidates its graph entry and rejects the read; retry to refresh. Context may mask unavailable neighboring references; inspect the source before editing. Matching fences, closed inline backticks and escaped openers are ignored; top-level indented code is outside the scanner. sourceRevision on each row and targetRevision identify parsed graph entries." + NAVIGATION_READ_GUIDANCE,
+          description: "Find one bounded page of incoming Obsidian/relative Markdown links to a visible, non-hidden note. Source visibility and hashes are checked before counts and pagination; root and page authors are checked again before return. Known authorized context/heading targets are validated too, including off-page rows, with an 8 MiB read limit per target. Detected drift invalidates its graph entry and rejects the read; retry to refresh. Context may mask unavailable neighboring references; inspect the source before editing. Matching fences, closed inline backticks and escaped openers are ignored; top-level indented code is outside the scanner. sourceRevision on each row and targetRevision identify parsed graph entries. This is not an atomic resolver census." + NAVIGATION_READ_GUIDANCE,
           inputSchema: {
             type: "object",
             properties: {
