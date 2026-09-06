@@ -123,6 +123,22 @@ export function projectNoteHeadingPresence(raw, requested) {
     return found;
 }
 /** Exact terminal block anchors, not ID prefixes, mentions or code examples. */
+export function projectNoteBlockPresence(raw, requested) {
+    const wanted = new Set([...requested].map(id => id.trim().toLowerCase()));
+    const found = new Set();
+    if (!wanted.size)
+        return found;
+    for (const { text } of visibleNoteLines(raw)) {
+        const anchor = /(?:^|\s)\^([A-Za-z0-9_-]+)\s*$/.exec(text);
+        const id = anchor?.[1]?.toLowerCase();
+        if (id && wanted.has(id))
+            found.add(id);
+        if (found.size === wanted.size)
+            break;
+    }
+    return found;
+}
+/** Exact terminal block anchors, not ID prefixes, mentions or code examples. */
 export function projectNoteBlockLines(raw, blockId) {
     const result = [];
     for (const { text, line } of visibleNoteLines(raw)) {

@@ -171,10 +171,18 @@ resolution and source-to-target scope predicate as learning paths; visibility
 to the reader alone does not authorize a cross-scope knowledge relationship.
 `navigationComplete` survives full and compact learning projections. False
 means the scanned route is partial or contains unresolved/ambiguous/inaccessible
-body links. Neither authored nor recommended checkpoints may certify that
+body links or unresolved heading/block locators on selected entries. Neither
+authored nor recommended checkpoints may certify that
 subset. Ordinary continuity notes without learningProgress remain available
 for recording the repair task. Context-pack MOC entries obey the same exact
 file resolution and source-to-target scope constraints as learning paths.
+Locator checks group all selected occurrences by target, including repeated
+links to one entry; each target uses one bounded 8 MiB validation read. Retain
+only requested heading/block matches, not cached source bodies. The existing
+case-normalized ATX-heading and terminal-block projection excludes Properties
+and matching fences; duplicate-heading disambiguation and section-granular
+checkpoints are not implied. An unresolved locator returns its MOC/line/target
+diagnostic and makes navigationComplete false without silently removing the note.
 Before returning a learning route or preparing its checkpoint, revalidate the
 captured revisions and moderation state of selected entries and resolved
 prerequisites. Nested MOCs must match their captured revision before traversal.

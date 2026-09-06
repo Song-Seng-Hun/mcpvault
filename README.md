@@ -1801,13 +1801,24 @@ checkpoint after checking the changed prerequisites. Older checkpoints without
 this source snapshot remain readable but require that same recapture step
 (`drift.sourceSnapshotMissing`); ordinary work notes need no migration.
 `navigationComplete` separately reports whether the requested-depth authored
-route was fully scanned without unresolved, ambiguous or inaccessible entries;
+route was fully scanned without unresolved, ambiguous or inaccessible entries
+or unresolved heading/block locators on selected entries;
 it remains visible even in compact learning responses. Both authored and
 recommended checkpoints reject incomplete routes rather than marking only
 the reachable subset complete. Repair the links using `wiki.learning_path`,
 or omit `learningProgress` and save an ordinary work note recording the blocker.
 Authored dependency-cycle reading remains possible when navigation itself is
 complete; reading progress is not proof that the dependencies are correct.
+Selected locator targets are checked once per distinct document with an 8 MiB
+source-read cap, including later links to the same deduplicated entry. Matching
+backtick/tilde fences and Properties do not supply headings or block anchors.
+Diagnostics retain the source MOC, authored line and target rather than silently
+skipping a broken lesson. Validation reuses the existing case-normalized ATX
+heading and exact terminal block-anchor projections; it does not claim support
+for every Obsidian/plugin heading variant or disambiguate duplicate headings.
+Progress remains note-granular, not a separate checkpoint for every section.
+Whole-note links incur no new locator-body read, and missing targets do not
+authorize reading a hidden scope. Repair the source link/anchor and rebuild.
 
 MOC `context_pack` reading order uses the same Markdown/wikilink resolver as
 learning paths, including source-relative links and exact extensions. It does

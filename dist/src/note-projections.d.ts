@@ -18,6 +18,8 @@ export declare function projectNoteParagraphs(raw: string): Generator<{
 /** Retain only requested normalized names, not a complete outline. */
 export declare function projectNoteHeadingPresence(raw: string, requested: ReadonlySet<string>): Set<string>;
 /** Exact terminal block anchors, not ID prefixes, mentions or code examples. */
+export declare function projectNoteBlockPresence(raw: string, requested: ReadonlySet<string>): Set<string>;
+/** Exact terminal block anchors, not ID prefixes, mentions or code examples. */
 export declare function projectNoteBlockLines(raw: string, blockId: string): number[];
 /** Prefer an exact heading; a partial match is useful only when unambiguous. */
 export declare function selectNoteHeading(headings: NoteHeading[], requested: string): NoteHeading;

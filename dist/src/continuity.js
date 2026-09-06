@@ -254,7 +254,7 @@ export class ContinuityService {
             throw new Error('The learning path scan is truncated or incomplete; simplify the MOC or checkpoint a smaller nested map before saving progress');
         }
         if (projection.navigationComplete === false) {
-            throw new Error('The authored MOC route contains unresolved, ambiguous, or inaccessible entries; inspect wiki.learning_path and repair the links, or save ordinary work state without learningProgress');
+            throw new Error('The authored MOC route contains unresolved, ambiguous, inaccessible entries, or missing heading/block locators; inspect wiki.learning_path and repair the links, or save ordinary work state without learningProgress');
         }
         const byPath = new Map(authoredEntries.map(item => [item.path, item]));
         const entries = order === 'authored'

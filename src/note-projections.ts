@@ -108,6 +108,20 @@ export function projectNoteHeadingPresence(raw: string, requested: ReadonlySet<s
 }
 
 /** Exact terminal block anchors, not ID prefixes, mentions or code examples. */
+export function projectNoteBlockPresence(raw: string, requested: ReadonlySet<string>): Set<string> {
+  const wanted = new Set([...requested].map(id => id.trim().toLowerCase()));
+  const found = new Set<string>();
+  if (!wanted.size) return found;
+  for (const { text } of visibleNoteLines(raw)) {
+    const anchor = /(?:^|\s)\^([A-Za-z0-9_-]+)\s*$/.exec(text);
+    const id = anchor?.[1]?.toLowerCase();
+    if (id && wanted.has(id)) found.add(id);
+    if (found.size === wanted.size) break;
+  }
+  return found;
+}
+
+/** Exact terminal block anchors, not ID prefixes, mentions or code examples. */
 export function projectNoteBlockLines(raw: string, blockId: string): number[] {
   const result: number[] = [];
   for (const { text, line } of visibleNoteLines(raw)) {

@@ -18,7 +18,7 @@ import { classifyDependencyResidual } from './dependency-graph.js';
 import { boundedTopK, createBoundedTopK } from './search-limits.js';
 import { CollectionHealthProjection } from './collection-health.js';
 import { isManagedCommunityPath, isModerationHidden } from './moderation-policy.js';
-import { projectNoteOutline, projectNoteParagraphs, projectNoteHeadingSummary, projectNoteHeadingPresence, projectNoteBlockLines, selectNoteHeading, hasUnclosedNoteFence } from './note-projections.js';
+import { projectNoteOutline, projectNoteParagraphs, projectNoteHeadingSummary, projectNoteHeadingPresence, projectNoteBlockPresence, projectNoteBlockLines, selectNoteHeading, hasUnclosedNoteFence } from './note-projections.js';
 import { parseWikiLink } from './wikilink/resolveWikiLink.js';
 import { buildMocNavigation, navigationOrder } from './moc-navigation.js';
 import { buildNoteReferenceIndex, normalizeNoteReferenceTerm, noteReferenceDocument, resolveNoteReference } from './note-reference.js';
@@ -11401,6 +11401,7 @@ export class LlmWikiService {
                 canReference: (source, target) => this.access.canReferenceFrom(source, target),
             });
         };
+        const locatorRequests = new Map();
         const entries = [];
         const entryByKey = new Map();
         const navigationIssues = [];
@@ -11479,6 +11480,13 @@ export class LlmWikiService {
                     entryByKey.set(targetKey, createdEntry);
                     entry = createdEntry;
                 }
+                if (link.targetHeading || link.targetBlockId) {
+                    const requests = locatorRequests.get(targetPath) || [];
+                    requests.push({ moc: mocPath, line: link.line,
+                        ...(link.targetHeading && { heading: link.targetHeading }),
+                        ...(link.targetBlockId && { blockId: link.targetBlockId }) });
+                    locatorRequests.set(targetPath, requests);
+                }
                 if (targetKind === 'moc' && depth < boundedDepth && cycleAt === -1) {
                     const resolvedEntry = entryByKey.get(targetKey);
                     const nested = await readCapturedSource(targetPath, resolvedEntry.revision);
@@ -11487,7 +11495,32 @@ export class LlmWikiService {
             }
         };
         await visitMoc(path, rootNote, 0, [rootKey]);
-        const navigationComplete = !truncated && !navigationIssues.some(issue => issue.type === 'unresolved_or_inaccessible_body_link' || issue.type === 'ambiguous_body_link');
+        // Validate every selected authored locator, including later occurrences of
+        // a deduplicated document. Retain only requested matches, never source bodies.
+        for (const [target, requests] of locatorRequests) {
+            let source;
+            try {
+                if (!canAccess(target))
+                    throw new Error('unavailable');
+                source = await this.fileSystem.readNote(target, MAX_NOTE_CONTENT_BYTES);
+                if (source.revision !== capturedRevisions.get(target) || isModerationHidden(source.frontmatter) || !canAccess(target))
+                    throw new Error('changed');
+            }
+            catch {
+                throw new Error('A learning-path locator source changed, exceeded 8 MiB, or became unavailable; re-read the MOC and retry.');
+            }
+            const headings = projectNoteHeadingPresence(source.originalContent, new Set(requests.flatMap(item => item.heading ? [item.heading] : [])));
+            const blocks = projectNoteBlockPresence(source.originalContent, new Set(requests.flatMap(item => item.blockId ? [item.blockId] : [])));
+            for (const request of requests) {
+                if ((!request.heading || headings.has(request.heading.trim().toLowerCase()))
+                    && (!request.blockId || blocks.has(request.blockId.trim().toLowerCase())))
+                    continue;
+                navigationIssues.push({ type: 'unresolved_body_locator', moc: this.access.toPublicPath(request.moc), target: this.access.toPublicPath(target), line: request.line,
+                    ...(request.heading && { targetHeading: boundedText(request.heading, 160) }),
+                    ...(request.blockId && { targetBlockId: boundedText(request.blockId, 160) }) });
+            }
+        }
+        const navigationComplete = !truncated && !navigationIssues.some(issue => issue.type === 'unresolved_or_inaccessible_body_link' || issue.type === 'ambiguous_body_link' || issue.type === 'unresolved_body_locator');
         const authoredIndex = new Map(entries.map((entry, index) => [normalizePath(entry.internalPath).toLowerCase(), index]));
         const edges = [];
         const orderIssues = [];
