@@ -38,7 +38,7 @@ filesystem read boundary. No cache, new runtime worker, or MCP surface change.
   Record maxRSS/observed heap/buffer peaks and elapsed time, not universal gains.
 - [x] Document constraints/results in README and the resource follow-up, review,
   `npm run build`, full `npm test -- --maxWorkers=1`, `git diff --check`.
-- [ ] Stage explicit source/tests/docs/dist, commit and push only fork main;
+- [x] Stage explicit source/tests/docs/dist, commit and push only fork main;
   verify live remote SHA, preserve unrelated .agents/.mcpvault, keep Goal active.
 
 ## Evidence
@@ -97,3 +97,14 @@ Total memory is not capped at 64 KiB; the reusable input buffer is. Simultaneous
 body and digest requests are separate operations, so a mixed workload can do
 more I/O than the former shared whole-body read. Scope/revision safety, existing
 read backpressure and no persistent content cache take precedence over that reuse.
+
+## Publication receipt
+
+Implementation `5e298ef1f87b5196f39d878e9263f663617df94b` was pushed to
+`https://github.com/Song-Seng-Hun/mcpvault.git` main. Local HEAD and live remote
+`refs/heads/main` matched. No upstream PR/package/release, live Vault edit,
+running server restart, client configuration change or unrelated process
+termination. Only owned temporary fixtures were removed by their test/benchmark
+cleanup. Existing `.agents/` and `.mcpvault/` remain untracked and untouched.
+Goal remains active: metadata/parser duplicate allocation is a concrete next
+investigation candidate in the resource follow-up, not a claimed delivered fix.
