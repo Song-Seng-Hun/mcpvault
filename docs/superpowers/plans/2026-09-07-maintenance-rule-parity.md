@@ -28,7 +28,7 @@
   exclusions, exact output bounds and no source edits; run relevant old tests.
 - [x] Update README/tool guidance, build, independent review, full one-worker
   npm test, git diff --check.
-- [ ] Commit explicit source/tests/docs/dist and push
+- [x] Commit explicit source/tests/docs/dist and push
   Song-Seng-Hun/mcpvault main; verify HEAD equals origin/main.
 
 ## Evidence
@@ -55,3 +55,6 @@
   actionable issue and reviewer was closed. Final fresh full one-worker suite:
   2,596 passed, one skipped, 171 files, 330.12 seconds, exit zero. Build and
   whitespace checks passed.
+- Design a73f0df and implementation c45c80c were pushed to the user fork main;
+  verified local HEAD equals origin/main. No upstream contribution or live
+  Vault changes. Unrelated .agents/.mcpvault remain untracked.
