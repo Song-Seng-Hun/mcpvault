@@ -143,3 +143,76 @@ test.each(['summary', 'progressive'])('blank metadata does not impersonate usefu
   expect(value.content).toBe('REAL-PROSE');
   expect(value.contentSource).toBe('body_excerpt');
 });
+
+test.each(['summary', 'key_points', 'progressive', 'full'])('compact %s retains stale projection flags instead of presenting unqualified content', async view => {
+  const raw = '---\nsummary: ' + 'OLD-SUMMARY '.repeat(100) + '\nkey_points:\n  - ' + 'OLD-POINT '.repeat(100)
+    + '\nsummary_of_content_sha256: ' + '0'.repeat(64) + '\n---\n# Current\n' + 'CURRENT-BODY '.repeat(100);
+  await writeFile(join(vault, path), raw);
+  const { result, value } = await call({ view, maxChars: 512 });
+  expect(result.isError).not.toBe(true);
+  expect(value.truncated).toBe(true);
+  expect(value.summaryFresh).toBe(false);
+  expect(value.summaryStale).toBe(true);
+  expect(value.revision).toBe(digest(raw));
+  expect(value.nextAction.arguments.expectedRevision).toBe(digest(raw));
+});
+
+test.each([false, true])('a fresh stored projection retains verified digest-match flags after compaction (pretty=%s)', async prettyPrint => {
+  const body = '# Current\nCURRENT-BODY';
+  const raw = '---\nsummary: ' + 'AUTHORED-SUMMARY '.repeat(100) + '\nsummary_of_content_sha256: ' + digest(body) + '\n---\n' + body;
+  await writeFile(join(vault, path), raw);
+  const { value } = await call({ view: 'summary', maxChars: 512, prettyPrint });
+  expect(value.summaryFresh).toBe(true);
+  expect(value.summaryStale).toBe(false);
+});
+
+test('missing summary fingerprint remains stale after compaction rather than becoming unknown', async () => {
+  await writeFile(join(vault, path), '---\nsummary: ' + 'NO-BASIS '.repeat(200) + '\n---\nBody');
+  const { value } = await call({ view: 'summary', maxChars: 512 });
+  expect(value.summaryFresh).toBe(false);
+  expect(value.summaryStale).toBe(true);
+});
+
+test('a body excerpt keeps its identity as current source even if stored blank metadata is stale', async () => {
+  await writeFile(join(vault, path), '---\nsummary: " "\nsummary_of_content_sha256: ' + '0'.repeat(64) + '\n---\n' + 'CURRENT-PROSE '.repeat(200));
+  const { result, value } = await call({ view: 'summary', maxChars: 512 });
+  expect(result.isError).not.toBe(true);
+  expect(value.contentSource).toBe('body_excerpt');
+  expect(value.summaryFresh).toBe(false);
+  expect(value.summaryStale).toBe(true);
+  expect(value.excerptRange).toEqual({ startLine: 5, endLine: 5 });
+});
+
+test('ordinary source without projection metadata does not acquire freshness claims in compact output', async () => {
+  await writeFile(join(vault, path), 'CURRENT-PROSE '.repeat(200));
+  const { value } = await call({ view: 'summary', maxChars: 512 });
+  expect(value.contentSource).toBe('body_excerpt');
+  expect(value.summaryFresh).toBeUndefined();
+  expect(value.summaryStale).toBeUndefined();
+});
+
+test('compact freshness is computed from the captured body rather than caller-authored flags', async () => {
+  const raw = '---\nsummary: ' + 'OLD '.repeat(300) + '\nsummaryFresh: true\nsummaryStale: false\nsummary_of_content_sha256: ' + '0'.repeat(64) + '\n---\nCurrent';
+  await writeFile(join(vault, path), raw);
+  const { value } = await call({ view: 'summary', maxChars: 512 });
+  expect(value).toMatchObject({ summaryFresh: false, summaryStale: true, revision: digest(raw) });
+});
+
+test('compact freshness and recovery stay pinned to one captured revision across a concurrent edit', async () => {
+  const body = 'ORIGINAL-BODY';
+  const raw = '---\nsummary: ' + 'AUTHORED '.repeat(300) + '\nsummary_of_content_sha256: ' + digest(body) + '\n---\n' + body;
+  await writeFile(join(vault, path), raw);
+  const original = FileSystemService.prototype.readNote;
+  let changed = false;
+  vi.spyOn(FileSystemService.prototype, 'readNote').mockImplementation(async function(this: FileSystemService, target: string) {
+    const note = await original.call(this, target);
+    if (!changed && target === path) { changed = true; await writeFile(join(vault, path), raw.replace('ORIGINAL-BODY', 'CONCURRENT-BODY')); }
+    return note;
+  });
+  const { value } = await call({ view: 'summary', maxChars: 512 });
+  expect(changed).toBe(true);
+  expect(value).toMatchObject({ summaryFresh: true, summaryStale: false, revision: digest(raw) });
+  const recovery = await call(value.nextAction.arguments, value.nextAction.endpointId);
+  expect(recovery.result.isError).toBe(true);
+  expect(recovery.value.error).toBe('revision_conflict');
+});

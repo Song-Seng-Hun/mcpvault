@@ -342,6 +342,13 @@ That envelope may include headings, blanks or examples between selected
 paragraphs: a guarded continuation returns source context, not an identical
 generated summary. Replace the clipped preview rather than append it. Character
 limits still apply, and an excerpt does not certify complete coverage of a note.
+`summaryFresh` and `summaryStale` survive even the compact projection response.
+They describe the stored progressive metadata's match to the captured body
+digest, not whether a claim is true. Missing basis fingerprints remain stale;
+notes without progressive metadata do not acquire an invented freshness flag.
+A current `body_excerpt` can coexist with stale stored metadata. When a stored
+projection is stale, inspect revision-checked source context before relying on
+it; never refresh its fingerprint without actually reviewing its contents.
 Filing or review changes never refresh that fingerprint. When
 several stored projection fields are stale, refresh them together: replacing
 only key points cannot certify an inherited old summary. For failed paths, use `knowledge_polarity: negative` with a

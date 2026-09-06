@@ -789,6 +789,14 @@ returns an outline when neither exists); replace the preview, do not append
 overlapping text. Body-excerpt identity and range survive response compaction,
 including for headingless notes. Excerpt recovery returns original source
 context rather than recomputing a summary from a different revision.
+When present, boolean `summaryFresh` and `summaryStale` are mandatory in compact
+projection envelopes, including false values. They are computed from the same
+captured body and stored summary fingerprint, not trusted Properties with those
+field names. They concern stored progressive metadata, not the validity of a
+claim or staleness of a current body excerpt. An absent basis remains stale;
+absence of progressive metadata does not invent a freshness claim. Content is
+shortened before dropping these facts; if the mandatory envelope cannot fit,
+return the existing same-request budget error instead of stripping the warning.
 Never publish truncated extraction content. Extra metadata/context can be omitted
 in this compact view. Oversized identifiers produce a same-request budget retry,
 not shortened executable paths. Repeating a Wiki projection after such an error

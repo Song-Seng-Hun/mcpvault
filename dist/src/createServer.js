@@ -2937,6 +2937,10 @@ function boundedWikiProjectionResult(value, args) {
             targetPath: value.targetPath, targetExists: value.targetExists,
             targetUsable: value.targetUsable, collision: value.collision,
         }),
+        // Digest-match facts about stored projections are interpretation-critical,
+        // not optional display metadata. Preserve false as well as true.
+        ...(typeof value.summaryFresh === 'boolean' && { summaryFresh: value.summaryFresh }),
+        ...(typeof value.summaryStale === 'boolean' && { summaryStale: value.summaryStale }),
         content: '', truncated: true,
         nextAction: {
             endpointId: endpointIdForTool(range ? 'read_note_lines' : 'get_note_outline'),
