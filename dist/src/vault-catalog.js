@@ -3,6 +3,7 @@ import { join, relative, resolve } from 'node:path';
 import { readdir, stat } from 'node:fs/promises';
 import { isMissingVaultPath, VaultReadUnavailableError } from './vault-read-errors.js';
 import { createDerivedCacheOwner, derivedCacheBudget, estimateCacheBytes } from './cache-budget.js';
+import { forEachInventoryItem } from './inventory-work.js';
 const WATCH_RECONCILE_INTERVAL_MS = 60_000;
 const NO_WATCHER_RECONCILE_INTERVAL_MS = 5_000;
 const WATCH_EVENT_BATCH_DELAY_MS = 50;
@@ -463,7 +464,7 @@ export class VaultFileCatalog {
         const entries = await this.readDirectoryEntries(directory, reconcile);
         this.assertOpen();
         const directories = [];
-        for (const entry of entries) {
+        await forEachInventoryItem(entries, entry => {
             const fullPath = join(directory, entry.name);
             const relativePath = normalizePath(relative(this.vaultPath, fullPath));
             if (entry.directory) {
@@ -476,7 +477,8 @@ export class VaultFileCatalog {
                 if (isNote(relativePath) && this.pathFilter.isAllowed(relativePath))
                     notes.push(relativePath);
             }
-        }
+        }, () => this.assertOpen());
+        this.assertOpen();
         for (let start = 0; start < directories.length; start += budget) {
             const batch = directories.slice(start, start + budget);
             // Failed scans must drain siblings before refreshPromise is released;
@@ -491,12 +493,11 @@ export class VaultFileCatalog {
             for (const result of nested) {
                 if (result.status !== 'fulfilled')
                     continue;
-                for (const path of result.value.notes)
-                    notes.push(path);
-                for (const path of result.value.all)
-                    all.push(path);
+                await forEachInventoryItem(result.value.notes, path => { notes.push(path); }, () => this.assertOpen());
+                await forEachInventoryItem(result.value.all, path => { all.push(path); }, () => this.assertOpen());
             }
         }
+        this.assertOpen();
         const cached = this.directoryCache.get(directory);
         if (this.watcher && cached) {
             cached.notes = notes;

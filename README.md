@@ -2850,6 +2850,17 @@ native filesystem IO or bound a hung filesystem operation. Read barriers keep
 their existing quiet-close behavior, without scheduling a new refresh after a
 late failure. A new owner must create a new catalog rather than reuse a closed one.
 
+Large catalog entry-filtering and child-inventory merges process at most 256
+items before yielding through `setImmediate`, without allocating chunk copies or
+introducing client workers. Each yield rechecks owner liveness. A delivered
+invalidation during processing still forces bounded reconciliation before any
+inventory is returned; closing aborts unfinished processing and publication.
+Real 600-note tests let a pending immediate run after 256 checks, stop at that
+checkpoint on close, and include a note added/invalidated during the yielded walk
+in the final stable result. This is a per-loop item budget, not a millisecond or
+process-wide deadline: callbacks, initial entry normalization and final native
+sorts remain synchronous. Total computation and corpus-sized inventories remain.
+
 Model-free reuse also starts the resource idle timer: DB/table references are
 released after inactivity, while active searches and indexing batches defer
 release. This does not require loading an embedding model just to start cleanup.
