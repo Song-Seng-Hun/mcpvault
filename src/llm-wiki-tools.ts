@@ -254,7 +254,7 @@ export function getLlmWikiTools(): Tool[] {
     },
     {
       name: 'get_wiki_knowledge_gaps',
-      description: 'Return a bounded active-recall and research queue for open questions, proposed or inconclusive hypotheses, active assumptions, disputed claims, and negative knowledge. It only projects metadata and never decides truth or rewrites notes.',
+      description: 'Return a bounded active-recall and research queue for visible open questions, hypotheses, assumptions, disputed claims, and negative knowledge. Malformed snooze/recall dates produce invalid_<property> repair reasons, never fabricated elapsed time. A missing recall history may be due; invalid history requires repair. It only projects metadata and never decides truth or rewrites notes.',
       inputSchema: { type: 'object', properties: {
         limit: { type: 'integer', minimum: 1, maximum: 100, default: 20 },
         maxChars: { type: 'integer', minimum: 512, maximum: 16000, default: 7000 },
@@ -434,7 +434,7 @@ export function getLlmWikiTools(): Tool[] {
     },
     {
       name: 'get_wiki_recall_queue',
-      description: 'Return a bounded reader-specific queue of due active-recall prompts. Attempt each prompt before opening the body; agent sessions use private continuity state, and this queue never changes evidence truth or shared knowledge. When contrastWith is present, compare those explicitly related notes before accepting the recalled statement.',
+      description: 'Return a bounded reader-specific queue of due active-recall prompts and invalid-history repairs. For invalid_last_recalled_at, follow dateRepairAction to the owning record before revision-safe date repair; ageDays and nextRecallAt are unknown, not invented. For normal recall, attempt each prompt before opening the body. Agent sessions use private continuity state; this queue never changes evidence truth or shared knowledge. When contrastWith is present, compare those explicitly related notes before accepting the recalled statement.',
       inputSchema: { type: 'object', properties: { limit: { type: 'integer', minimum: 1, maximum: 30, default: 10 }, maxChars: { type: 'integer', minimum: 512, maximum: 12000, default: 6000 }, accessToken, prettyPrint } },
     },
     {
@@ -444,7 +444,7 @@ export function getLlmWikiTools(): Tool[] {
     },
     {
       name: 'get_wiki_review_packet',
-      description: 'Return a smaller action-oriented knowledge-review packet. It coalesces all findings for one path into one bounded slot and covers due evidence, Inbox, recall, blocked work, MOC sequence/hierarchy, focus hierarchy, epistemic consistency, source-to-knowledge flow, graph connectivity, typed relations, and vocabulary hygiene. It returns one revision-safe issue-specific inspect/repair plan and never mutates notes, auto-reorders a MOC, or replaces Git history.',
+      description: 'Return a smaller action-oriented knowledge-review packet. It coalesces all findings for one path into one bounded slot and covers due evidence, Inbox, recall, blocked work, MOC sequence/hierarchy, focus hierarchy, epistemic consistency, source-to-knowledge flow, graph connectivity, typed relations, and vocabulary hygiene. Only valid scalar/calendar snoozes defer action routing. It returns one revision-safe issue-specific inspect/repair plan and never mutates notes, auto-reorders a MOC, or replaces Git history.',
       inputSchema: { type: 'object', properties: { limit: { type: 'integer', minimum: 1, maximum: 30, default: 8 }, maxChars: { type: 'integer', minimum: 512, maximum: 16000, default: 7000 }, accessToken, prettyPrint } },
     },
     {
@@ -538,7 +538,7 @@ export function getLlmWikiTools(): Tool[] {
     },
     {
       name: 'get_wiki_impact_report',
-      description: 'Find knowledge notes affected by missing or altered evidence, overdue review, direct typed upstream changes, or bounded transitive invalidation through explicit typed relations. Only visible on_upstream_change notes receive cascades. This cycle-safe report never rewrites or deletes notes.',
+      description: 'Find knowledge notes affected by missing or altered evidence, overdue review, direct typed upstream changes, or bounded transitive invalidation through explicit typed relations. Invalid authored review dates are repair reasons, not overdue evidence. Only visible on_upstream_change notes receive cascades. This cycle-safe report never rewrites or deletes notes.',
       inputSchema: { type: 'object', properties: {
         limit: { type: 'integer', minimum: 1, maximum: 50, default: 20 }, maxChars: { type: 'integer', minimum: 512, maximum: 16000, default: 6000 }, maxCascadeDepth: { type: 'integer', minimum: 1, maximum: 6, default: 3, description: 'Maximum typed-relation cascade depth; no files are changed' }, accessToken, prettyPrint,
       } },
@@ -810,12 +810,12 @@ export function getLlmWikiTools(): Tool[] {
     },
     {
       name: 'get_wiki_unused_knowledge',
-      description: 'Suggest review actions for visible knowledge notes not updated recently, using incoming links and reference counts as advisory signals, not proof of disuse. Skips snoozed/retired notes, rechecks current revisions, and budgets the whole report with a bounded notes.read action. It never archives or deletes automatically.',
+      description: 'Suggest review actions for visible knowledge notes not updated recently, using incoming links and reference counts as advisory signals, not proof of disuse. Requires a valid authored modified date, or creation date only when modified date is absent; invalid dates never become an age. Skips validly snoozed/retired notes, rechecks candidate revisions, and budgets the whole report with a bounded notes.read action. It never archives or deletes automatically.',
       inputSchema: { type: 'object', properties: { olderThanDays: { type: 'integer', minimum: 1, maximum: 3650, default: 180 }, limit: { type: 'integer', minimum: 1, maximum: 50, default: 20 }, maxChars: { type: 'integer', minimum: 512, maximum: 16000, default: 7000 }, accessToken, prettyPrint } },
     },
     {
       name: 'get_wiki_retention_queue',
-      description: 'Return a current, visibility-filtered preservation queue with revisions and bounded notes.read actions. Legal hold and preserve-until override disposition advice. Replacement links resolve only to readable targets and carry their revisions. maxChars covers the complete report, including retry guidance. Inspect before changing anything; this read never archives or deletes.',
+      description: 'Return a current, visibility-filtered preservation queue with revisions and bounded notes.read actions. Legal hold and preserve-until override disposition advice. Malformed retention/preservation dates require preserve_and_review_metadata, never inferred expiry. Replacement links resolve only to readable targets and carry their revisions. maxChars covers the complete report, including retry guidance. Inspect before changing anything; this read never archives or deletes.',
       inputSchema: { type: 'object', properties: { limit: { type: 'integer', minimum: 1, maximum: 50, default: 20 }, maxChars: { type: 'integer', minimum: 512, maximum: 16000, default: 7000 }, accessToken, prettyPrint } },
     },
     {

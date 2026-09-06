@@ -1010,6 +1010,16 @@ excluded from queue rows and totals; reading the queue never rewrites dates.
 Metadata-only review admission checks the current Markdown even when file
 watching is delayed. Hidden or deleted notes do not contribute to cascade
 counts; body-derived evidence still rejects a changed source revision.
+The knowledge-gap, review-packet, impact, unused-knowledge and retention readers
+also reject malformed calendar dates rather than coercing arrays or impossible
+days. Invalid recall history requires repair, not a guessed elapsed interval;
+invalid modification dates cannot establish an unused age. Bad preservation or
+retention dates retain `preserve_and_review_metadata` advice, never inferred
+expiry. These views do not edit the underlying Markdown.
+The dedicated recall queue follows the same distinction: unknown ages are
+omitted, while invalid history routes through `dateRepairAction` to the owning
+record. A private recall repair never uses the shared note's revision or
+fabricates a successful recall attempt.
 The maintenance endpoint
 `get_wiki_maintenance_debt` adds a derived 5S ledger for Inbox, stale
 projections, aging reviews, missing MOCs, unfinished literature, incomplete

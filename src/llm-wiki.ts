@@ -2954,23 +2954,29 @@ export class LlmWikiService {
     const canAccess = (path: string) => this.access.canAccessPhysicalPath(path, principal);
     const candidates: Array<Record<string, unknown>> = [];
     let total = 0;
+    const nowMs = Date.now();
     for await (const note of iterateNotes(this.fileSystem, {}, canAccess)) {
-      if (note.frontmatter.llm_wiki_type !== 'knowledge') continue;
-      const snoozedUntil = Date.parse(String(note.frontmatter.review_snoozed_until || ''));
-      if (Number.isFinite(snoozedUntil) && snoozedUntil > Date.now()) continue;
+      if (note.frontmatter.llm_wiki_type !== 'knowledge' || isModerationHidden(note.frontmatter)) continue;
+      const snoozedUntil = organizationDateTimestamp(note.frontmatter.review_snoozed_until);
+      if (Number.isFinite(snoozedUntil) && snoozedUntil > nowMs) continue;
       const noteKind = String(note.frontmatter.note_kind || '').trim().toLowerCase();
       const epistemicStatus = String(note.frontmatter.epistemic_status || '').trim().toLowerCase();
       const knowledgeStatus = String(note.frontmatter.knowledge_status || '').trim().toLowerCase();
       const polarity = String(note.frontmatter.knowledge_polarity || '').trim().toLowerCase();
       const reasons: string[] = [];
+      if (note.frontmatter.review_snoozed_until !== undefined && !Number.isFinite(snoozedUntil)) reasons.push('invalid_review_snoozed_until');
       const recallPrompt = typeof note.frontmatter.recall_prompt === 'string' ? note.frontmatter.recall_prompt.trim() : '';
       const recallIntervalDays = Number(note.frontmatter.recall_interval_days);
       const privateRecall = recallPrompt ? await this.readPrivateRecall(principal, note.path) : undefined;
       const recallState = principal?.agentId ? privateRecall : note.frontmatter;
-      const lastRecalledAt = typeof recallState?.last_recalled_at === 'string' ? recallState.last_recalled_at : undefined;
+      const lastRecalledTime = organizationDateTimestamp(recallState?.last_recalled_at);
+      const lastRecalledAt = Number.isFinite(lastRecalledTime) ? String(recallState!.last_recalled_at).trim() : undefined;
       const recallStreak = Number(recallState?.recall_streak);
       const recallSuccessCount = Number(recallState?.recall_success_count);
-      const recallDue = Boolean(recallPrompt && Number.isInteger(recallIntervalDays) && recallIntervalDays > 0 && (!lastRecalledAt || Number.isNaN(Date.parse(lastRecalledAt)) || Date.parse(lastRecalledAt) + recallIntervalDays * 24 * 60 * 60 * 1000 <= Date.now()));
+      const invalidRecallDate = Boolean(recallPrompt && recallState?.last_recalled_at !== undefined && !Number.isFinite(lastRecalledTime));
+      if (invalidRecallDate) reasons.push('invalid_last_recalled_at');
+      const recallDue = Boolean(recallPrompt && Number.isInteger(recallIntervalDays) && recallIntervalDays > 0
+        && (recallState?.last_recalled_at === undefined || (Number.isFinite(lastRecalledTime) && lastRecalledTime + recallIntervalDays * 24 * 60 * 60 * 1000 <= nowMs)));
       if (['question', 'hypothesis', 'experiment', 'assumption'].includes(noteKind)) {
         if (!epistemicStatus) reasons.push('epistemic_status_missing');
         else if (noteKind === 'question' && ['open', 'blocked'].includes(epistemicStatus)) reasons.push(`question_${epistemicStatus}`);
@@ -3004,6 +3010,9 @@ export class LlmWikiService {
         evidencePresent: Array.isArray(note.frontmatter.evidence_paths) && note.frontmatter.evidence_paths.length > 0,
         suggestedAction: recallDue ? 'Attempt the recall_prompt without opening the note first, then record the result with wiki.record_recall.' : noteKind === 'question' ? 'Find or request a grounded answer, then link it with answers_questions.' : noteKind === 'hypothesis' ? 'Create or inspect a linked experiment, test against evidence, and mark supported, refuted, or inconclusive.' : noteKind === 'experiment' ? epistemicStatus === 'planned' ? 'Run the documented protocol and record environment plus observations.' : epistemicStatus === 'running' ? 'Finish the run and record a result, or mark it inconclusive with the limiting condition.' : epistemicStatus === 'failed' ? 'Preserve reproduction details and distill reusable negative knowledge when the failure generalizes.' : 'Refine the protocol or tested proposition, then run a separately linked reproduction.' : noteKind === 'assumption' ? 'Verify the premise and mark it verified, invalidated, or replaced.' : 'Preserve the failure or dispute, inspect evidence, and record a reusable lesson.',
       };
+      if (reasons.some(reason => reason.startsWith('invalid_'))) {
+        item.suggestedAction = 'Repair the invalid date metadata from actual evidence and a current revision before rescheduling; do not invent elapsed time or recall history.';
+      }
       const position = candidates.findIndex(candidate => priority > Number(candidate.priority || 0) || (priority === Number(candidate.priority || 0) && String(item.path).localeCompare(String(candidate.path)) < 0));
       if (position === -1) {
         if (candidates.length < boundedLimit) candidates.push(item);
@@ -4054,14 +4063,16 @@ export class LlmWikiService {
     let total = 0;
 
     for await (const note of iterateNotes(this.fileSystem, {}, canAccess)) {
-      if (note.frontmatter.llm_wiki_type !== 'knowledge' || typeof note.frontmatter.recall_prompt !== 'string' || !note.frontmatter.recall_prompt.trim()) continue;
+      if (note.frontmatter.llm_wiki_type !== 'knowledge' || isModerationHidden(note.frontmatter) || typeof note.frontmatter.recall_prompt !== 'string' || !note.frontmatter.recall_prompt.trim()) continue;
       const privateState = await this.readPrivateRecall(principal, note.path);
       const quality = String(privateState?.recall_quality || note.frontmatter.recall_quality || 'unseen').toLowerCase();
       const repairStatus = String(privateState?.recall_repair_status || note.frontmatter.recall_repair_status || (quality === 'failed' || quality === 'partial' ? 'needed' : 'none')).toLowerCase();
-      const lastRecalledAt = String(privateState?.last_recalled_at || note.frontmatter.last_recalled_at || '').trim();
+      const lastRecalledValue = privateState?.last_recalled_at !== undefined ? privateState.last_recalled_at : note.frontmatter.last_recalled_at;
+      const lastMs = organizationDateTimestamp(lastRecalledValue);
+      const invalidRecallDate = lastRecalledValue !== undefined && !Number.isFinite(lastMs);
+      const lastRecalledAt = Number.isFinite(lastMs) ? String(lastRecalledValue).trim() : undefined;
       const intervalValue = privateState?.recall_interval_days ?? note.frontmatter.recall_interval_days;
       const intervalDays = Number(intervalValue);
-      const lastMs = Date.parse(lastRecalledAt);
       const nextMs = Number.isFinite(lastMs) && Number.isFinite(intervalDays) && intervalDays > 0
         ? lastMs + intervalDays * 24 * 60 * 60 * 1000
         : 0;
@@ -4070,8 +4081,13 @@ export class LlmWikiService {
       if (nextMs > current && repairStatus === 'none') continue;
 
       total += 1;
-      const ageDays = Number.isFinite(lastMs) ? Math.max(0, Math.floor((current - lastMs) / (24 * 60 * 60 * 1000))) : 9999;
-      const priority = (repairStatus === 'needed' ? 500 : repairStatus === 'in_progress' ? 450 : quality === 'failed' ? 400 : quality === 'partial' ? 300 : quality === 'unseen' ? 200 : 100) + Math.min(ageDays, 365);
+      const ageDays = Number.isFinite(lastMs) ? Math.max(0, Math.floor((current - lastMs) / (24 * 60 * 60 * 1000))) : undefined;
+      // First recall may receive a scheduling boost, but unknown history is
+      // never presented as thousands of elapsed days.
+      const priority = (invalidRecallDate ? 600 : repairStatus === 'needed' ? 500 : repairStatus === 'in_progress' ? 450 : quality === 'failed' ? 400 : quality === 'partial' ? 300 : quality === 'unseen' ? 200 : 100)
+        + (lastRecalledValue === undefined ? 365 : Math.min(ageDays ?? 0, 365));
+      const dateRepairPath = privateState?.last_recalled_at !== undefined
+        ? this.privateRecallPath(principal, note.path) || note.path : note.path;
       const contrastWith: Array<{ relation: string; target: string }> = [];
       for (const relation of ['contradicts', 'same_as', 'version_of', 'refines'] as const) {
         const values = Array.isArray(note.frontmatter[relation]) ? note.frontmatter[relation] : [];
@@ -4107,12 +4123,15 @@ export class LlmWikiService {
         ...(lastRecalledAt && { lastRecalledAt }),
         ...(Number.isFinite(intervalDays) && intervalDays > 0 && { recallIntervalDays: intervalDays }),
         ...(nextMs > 0 && { nextRecallAt: new Date(nextMs).toISOString() }),
-        ageDays,
+        ...(ageDays !== undefined && { ageDays }),
         // Keep the original reason contract stable; repairStatus and
         // suggestedAction carry the richer repair signal for new clients.
-        reason: quality === 'failed' ? 'previous_recall_failed' : quality === 'partial' ? 'previous_recall_partial' : !lastRecalledAt ? 'never_recalled' : 'recall_due',
+        reason: invalidRecallDate ? 'invalid_last_recalled_at' : quality === 'failed' ? 'previous_recall_failed' : quality === 'partial' ? 'previous_recall_partial' : !lastRecalledAt ? 'never_recalled' : 'recall_due',
+        ...(invalidRecallDate && { dateRepairAction: { endpointId: 'notes.read', arguments: { path: this.access.toPublicPath(dateRepairPath), maxChars: 3000 } } }),
         recallPrompt: boundedText(note.frontmatter.recall_prompt, 500),
-        suggestedAction: repairStatus === 'needed' || repairStatus === 'in_progress'
+        suggestedAction: invalidRecallDate
+          ? 'Follow dateRepairAction and repair the invalid date from evidence and the returned revision; do not invent elapsed time or record a recall attempt that did not happen.'
+          : repairStatus === 'needed' || repairStatus === 'in_progress'
           ? 'Inspect the confusion, create or update the linked repair note, then record another recall with repairStatus=resolved only after the repair is verified.'
           : 'Attempt recallPrompt before opening the note body, then record the result.',
         ...(contrastWith.length > 0 && { contrastWith }),
@@ -4150,7 +4169,7 @@ export class LlmWikiService {
       items.push(item);
     }
     return {
-      purpose: 'A private-reader, bounded active-recall queue. Attempt recallPrompt before reading the note body; this queue is not an evidence or truth score.',
+      purpose: 'A private-reader, bounded active-recall queue. Repair invalid history through dateRepairAction first; for normal recall, attempt recallPrompt before reading the note body. This queue is not an evidence or truth score.',
       total,
       items,
       diversity: { groups: groups.size, strategy: 'priority_with_neighborhood_interleaving' },
@@ -5286,7 +5305,7 @@ export class LlmWikiService {
         const item = raw as Record<string, unknown>;
         const path = typeof item.path === 'string' ? item.path : typeof item.mocPath === 'string' ? item.mocPath : undefined;
         if (!path) continue;
-        const details = Object.fromEntries(['title', 'question', 'recallPrompt', 'repairStatus', 'repairPath', 'state', 'target', 'relation', 'field', 'sourceHorizon', 'targetHorizon', 'line']
+        const details = Object.fromEntries(['title', 'question', 'recallPrompt', 'repairStatus', 'repairPath', 'dateRepairAction', 'state', 'target', 'relation', 'field', 'sourceHorizon', 'targetHorizon', 'line']
           .filter(key => item[key] !== undefined)
           .map(key => [key, item[key]]));
         const existing = priorityByPath.get(path);
@@ -5358,7 +5377,8 @@ export class LlmWikiService {
     add(graph.evergreenQuality?.items?.filter((item: any) => item?.state === 'needs_attention'), 'evergreen_quality_hint', 'wiki.graph_health', 5);
     add(graph.unresolvedLinks?.items, 'broken_link', 'wiki.graph_health', 6);
     add(graph.orphanNotes?.items, 'orphan_note', 'wiki.graph_health', 7);
-    add(recall.items, 'active_recall_due', 'wiki.recall_queue', 2);
+    add(recall.items.filter(item => item.reason !== 'invalid_last_recalled_at'), 'active_recall_due', 'wiki.recall_queue', 2);
+    add(recall.items.filter(item => item.reason === 'invalid_last_recalled_at'), 'invalid_last_recalled_at', 'wiki.recall_queue', 0);
     add(vocabulary.tagVariants.map((item: any) => ({ path: item.paths?.[0], title: `#${item.key}` })), 'tag_variant', 'wiki.vocabulary_health', 8);
     add(vocabulary.unresolvedSubjectTerms.map((item: any) => ({ path: item.paths?.[0], title: item.term })), 'subject_term_needs_authority', 'wiki.vocabulary_health', 8);
     add(vocabulary.termCollisions.map((item: any) => ({ path: item.paths?.[0], title: item.term })), 'authority_term_collision', 'wiki.vocabulary_health', 8);
@@ -5397,7 +5417,7 @@ export class LlmWikiService {
       const physicalPath = physicalPathByPublicPath.get(priority.path);
       const metadata = physicalPath ? metadataByPath.get(normalizePath(physicalPath).toLocaleLowerCase('en-US')) : undefined;
       if (!metadata) continue;
-      const snoozedUntil = Date.parse(String(metadata.frontmatter.review_snoozed_until || ''));
+      const snoozedUntil = organizationDateTimestamp(metadata.frontmatter.review_snoozed_until);
       if (Number.isFinite(snoozedUntil) && snoozedUntil > nowMs) {
         snoozedPriorities += 1;
         nextSnoozedReviewAtMs = nextSnoozedReviewAtMs === undefined ? snoozedUntil : Math.min(nextSnoozedReviewAtMs, snoozedUntil);
@@ -5431,7 +5451,17 @@ export class LlmWikiService {
             : [reason];
           let inspect: Record<string, unknown>;
           let mutation: Record<string, unknown>;
-          if (reason === 'oldest_inbox_capture') {
+          if (reason === 'invalid_last_recalled_at') {
+            const repairAction = selectedPriority.dateRepairAction as { endpointId: string; arguments: { path: string; maxChars: number } };
+            const repairPath = this.access.resolveExternalPath(repairAction.arguments.path, principal);
+            if (!this.access.canAccessPhysicalPath(repairPath, principal)) throw new Error('Recall date source is unavailable');
+            const repairNote = await this.fileSystem.readNote(repairPath, MAX_NOTE_CONTENT_BYTES);
+            if (isModerationHidden(repairNote.frontmatter)) throw new Error('Recall date source is unavailable');
+            inspect = { ...repairAction, arguments: { ...repairAction.arguments, expectedRevision: repairNote.revision } };
+            mutation = { endpointId: endpointIdForTool('patch_note'), arguments: { path: repairAction.arguments.path, expectedRevision: repairNote.revision, dryRun: true },
+              requiredArguments: ['oldString and newString, or patches'],
+              instruction: 'Repair only the invalid recall date in this inspected record from actual evidence. Preserve recall history; do not create a successful recall or invent a timestamp to clear this issue.' };
+          } else if (reason === 'oldest_inbox_capture') {
             inspect = { endpointId: endpointIdForTool('get_wiki_answer_packet'), arguments: { path: selectedPriority.path, intent: 'capture', maxChars: 5000 } };
             mutation = { endpointId: endpointIdForTool('clarify_wiki_note'), arguments: { path: selectedPriority.path, expectedRevision: selectedNote.revision }, requiredArguments: ['disposition'] };
           } else if (reason === 'knowledge_needs_review') {
@@ -8088,8 +8118,10 @@ export class LlmWikiService {
         sourceState.set(sourcePath, { ok: intact, ...(reason && { reason }) });
         if (!intact) { reasons.push(reason!); affectedSources.push(sourcePath); }
       }
-      const reviewAt = typeof note.frontmatter.review_at === 'string' ? note.frontmatter.review_at : undefined;
-      if (reviewAt && !Number.isNaN(Date.parse(reviewAt)) && Date.parse(reviewAt) <= nowMs) reasons.push('review_due');
+      const reviewTime = organizationDateTimestamp(note.frontmatter.review_at);
+      const reviewAt = Number.isFinite(reviewTime) ? String(note.frontmatter.review_at).trim() : undefined;
+      if (note.frontmatter.review_at !== undefined && !Number.isFinite(reviewTime)) reasons.push('invalid_review_at');
+      if (Number.isFinite(reviewTime) && reviewTime <= nowMs) reasons.push('review_due');
       if (hasProgressiveProjection(note.frontmatter)
         && (typeof note.frontmatter.summary_of_content_sha256 !== 'string' || note.frontmatter.summary_of_content_sha256 !== hash(note.content || ''))) reasons.push('summary_stale');
       const declaredPolicy = String(note.frontmatter.review_policy || 'manual').toLowerCase();
@@ -14363,10 +14395,10 @@ export class LlmWikiService {
     const compare = (left: Record<string, any>, right: Record<string, any>) => String(left.updatedAt).localeCompare(String(right.updatedAt)) || String(left.path).localeCompare(String(right.path));
     const eligibleDate = (fm: Record<string, any>): number | undefined => {
       if (fm.llm_wiki_type !== 'knowledge' || isModerationHidden(fm)) return undefined;
-      const snoozedUntil = Date.parse(String(fm.review_snoozed_until || ''));
+      const snoozedUntil = organizationDateTimestamp(fm.review_snoozed_until);
       if (Number.isFinite(snoozedUntil) && snoozedUntil > Date.now()) return undefined;
       if (['archived', 'superseded'].includes(String(fm.lifecycle || '').toLowerCase())) return undefined;
-      const updated = Date.parse(String(fm.updated_at || fm.created_at || ''));
+      const updated = organizationDateTimestamp(fm.updated_at === undefined ? fm.created_at : fm.updated_at);
       return Number.isFinite(updated) && updated <= cutoff ? updated : undefined;
     };
     for await (const metadata of iterateNotes(this.fileSystem, {}, canAccess)) {
@@ -14435,23 +14467,28 @@ export class LlmWikiService {
       const [note] = await this.fileSystem.readNoteMetadata([metadata.path], canAccess, { fresh: true, strict: true });
       if (!note || note.frontmatter.llm_wiki_type !== 'knowledge' || isModerationHidden(note.frontmatter)) continue;
       const policy = typeof note.frontmatter.retention_policy === 'string' ? note.frontmatter.retention_policy.trim().toLowerCase() : '';
-      const retentionAt = Date.parse(String(note.frontmatter.retention_at || ''));
-      const preserveUntil = Date.parse(String(note.frontmatter.preserve_until || ''));
+      const retentionAt = organizationDateTimestamp(note.frontmatter.retention_at);
+      const preserveUntil = organizationDateTimestamp(note.frontmatter.preserve_until);
+      const invalidDates = [
+        ...(note.frontmatter.retention_at !== undefined && !Number.isFinite(retentionAt) ? ['invalid_retention_at'] : []),
+        ...(note.frontmatter.preserve_until !== undefined && !Number.isFinite(preserveUntil) ? ['invalid_preserve_until'] : []),
+      ];
       const legalHold = note.frontmatter.legal_hold === true;
-      if (!policy && !Number.isFinite(retentionAt) && !Number.isFinite(preserveUntil) && !legalHold) continue;
-      if (policy === 'preserve' && !Number.isFinite(retentionAt) && !legalHold) continue;
+      if (!policy && !Number.isFinite(retentionAt) && !Number.isFinite(preserveUntil) && !legalHold && !invalidDates.length) continue;
+      if (policy === 'preserve' && !Number.isFinite(retentionAt) && !legalHold && !invalidDates.length) continue;
       total += 1;
       const due = Number.isFinite(retentionAt) && retentionAt <= nowMs;
       const protectedUntil = Number.isFinite(preserveUntil) && preserveUntil > nowMs;
       const lifecycle = String(note.frontmatter.lifecycle || '').trim().toLowerCase();
       const reasons = [
+        ...invalidDates,
         ...(due ? ['retention_review_due'] : []),
         ...(legalHold ? ['legal_hold'] : []),
         ...(protectedUntil ? ['preserve_until_active'] : []),
         ...(policy ? [`policy_${policy}`] : []),
         ...(lifecycle === 'archived' || lifecycle === 'superseded' ? ['already_inactive'] : []),
       ];
-      const action = legalHold || protectedUntil || policy === 'preserve'
+      const action = invalidDates.length > 0 || legalHold || protectedUntil || policy === 'preserve'
         ? 'preserve_and_review_metadata'
         : policy === 'tombstone' || policy === 'archive'
           ? 'review_then_apply_revision_checked_disposition'

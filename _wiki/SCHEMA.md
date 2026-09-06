@@ -666,6 +666,35 @@ change during that read requires retry instead of mixing revisions. This also
 applies to the shared cascade and impact projections. Source verification adds
 I/O but does not retain full note bodies for metadata-only decisions.
 
+Other maintenance readers share the scalar/calendar date rules:
+
+- `wiki.knowledge_gaps` reports `invalid_review_snoozed_until` and
+  `invalid_last_recalled_at` with metadata-repair guidance. Missing recall
+  history may be due; malformed history does not prove elapsed recall time.
+- `wiki.recall_queue` also distinguishes malformed from missing history. Unknown
+  `ageDays` is omitted, never a synthetic 9999 days. Invalid history has reason
+  `invalid_last_recalled_at` and a bounded `dateRepairAction` pointing to the
+  owning shared note or caller-private recall record. The review packet routes
+  it to metadata repair instead of `active_recall_due`; its patch preview uses
+  the inspected record's revision, not the shared knowledge note's revision.
+  Normal first-recall priority is a scheduling choice, not elapsed evidence.
+- `wiki.review_packet` defers priorities and computes the next snooze wake time
+  only from valid snooze dates. A malformed date cannot defer repair findings.
+- `wiki.impact_report` emits `invalid_review_at`, not `review_due`, for invalid
+  authored review dates.
+- `wiki.unused_knowledge` requires a valid authored `updated_at`, or `created_at`
+  only when `updated_at` is absent. Invalid age evidence is unknown: never an
+  old age inferred from file timestamps or a fallback creation date. Only valid
+  future snoozes suppress candidates.
+- `wiki.retention_queue` exposes malformed `retention_at`/`preserve_until` as
+  repair reasons and recommends `preserve_and_review_metadata`, even without an
+  existing policy. A valid overdue retention review may coexist with a hold;
+  being due is not permission to dispose of the note.
+
+These are read-side projections; no date, recall history, or source note is
+automatically repaired. This does not claim every work scheduling consumer or
+index-based discovery prefilter has been converted to fresh-source admission.
+
 `read_wiki_projection` accepts `view: progressive` for one bounded context
 packet containing the compact summary, selected highlights, claims, and open
 questions. It also reports `summaryFresh`/`summaryStale`; never treat a stale

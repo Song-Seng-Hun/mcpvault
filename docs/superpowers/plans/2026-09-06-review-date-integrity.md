@@ -54,3 +54,44 @@ Remaining raw snooze consumers in knowledgeGaps, reviewPacket and unusedKnowledg
 need aligned validation, as do work defer/due scheduling, next-actions ordering
 and other maintenance reads. Invalid defer must not accidentally release work
 or descendants. No claim that every date consumer is fixed.
+
+## Follow-up batch: maintenance date consumers
+
+- Convert knowledgeGaps, reviewPacket, impactReport, unusedKnowledge and
+  retentionQueue read-side dates through organizationDateTimestamp.
+- Distinguish missing recall history (eligible for first recall) from malformed
+  history (repair, not elapsed time); expose repair instructions. Do not fall
+  back from an invalid authored modified date to a valid creation date.
+- Preserve on invalid retention or preservation dates, without treating a
+  valid overdue review signal itself as disposition permission.
+- Keep valid dates, offsets, holds, ordinary notes, private recall ownership,
+  fixed MCP tools and revision-safe mutation paths unchanged. No new cache,
+  client setup, background process, or live Vault mutation.
+- RED: 31/33 initial regression tests failed. Expanded snooze assertions proved
+  the same invalid values affected all three routing consumers; a hidden-note
+  control exposed an additional gap admission failure. Five further failing
+  assertions required explicit date-repair guidance rather than generic advice.
+- GREEN: 144 targeted tests across four suites passed; build passed. Actual
+  in-memory MCP calls exercise all five endpoints at 512/1024/12000 characters
+  with pretty JSON and unchanged source Markdown. Full suite/review pending.
+- Review found the dedicated recallQueue still normalized bad dates and
+  synthesized 9999 elapsed days, feeding `active_recall_due` to reviewPacket.
+  Seven further RED tests reproduced the downstream mismatch. Invalid history
+  now routes to its owning metadata record with a revision-checked dry-run
+  patch plan; missing history has no invented age. A private-record regression
+  confirms the patch uses that record's revision, not the public note's.
+- Extended actual MCP checks to recallQueue as a sixth endpoint. Added a
+  failing hidden-recall regression and excluded such rows before counts.
+- Stopped the first full-suite run explicitly after the review finding (owned
+  exec session exited 1 on cancellation); that partial run is not verification.
+- Final targeted verification: 152 tests passed in four suites, build passed,
+  and the reviewer rechecked the recall/private-record routing with no remaining
+  blockers. The reviewer was closed.
+- Final full suite: `npm test -- --maxWorkers=1` passed 2,214 tests with one
+  existing skip across 147 files in 266.18 seconds. Build and `git diff --check`
+  passed; compiled output is included with its source. No live server restart.
+
+Remaining follow-ups: work defer/due scheduling and next-action ordering;
+date-repair discoverability outside these fields; stale index negative-prefilter
+decisions in other readers. This batch does not claim those are resolved or
+that an advisory read is an atomic live-Vault snapshot.
