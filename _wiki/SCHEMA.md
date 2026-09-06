@@ -179,18 +179,23 @@ file resolution and source-to-target scope constraints as learning paths.
 Locator checks group all selected occurrences by target, including repeated
 links to one entry; each target uses one bounded 8 MiB validation read. Retain
 only requested heading/block matches, not cached source bodies. The existing
-case-normalized ATX-heading and terminal-block projection excludes Properties
+case-normalized ATX/Setext-heading and terminal-block projection excludes Properties
 and matching fences; bare duplicate headings remain ambiguous for section
 selection, and checkpoints remain note-granular. An unresolved locator returns its MOC/line/target
 diagnostic and makes navigationComplete false without silently removing the note.
-Qualified ATX selectors use `Parent#Child` along one active ancestor chain,
+Qualified heading selectors use `Parent#Child` along one active ancestor chain,
 including a suffix beginning at a nested parent. A sibling/equal-level heading
 closes the previous branch; a numerical level gap does not invent a parent.
 Presence checks retain requested names/paths only. Section reads and split
 previews share the selector and reject duplicate qualified matches rather than
 choosing the first. Exact literal title matches retain precedence; unqualified
-partial section selection remains compatible. Setext/plugin variants are not
-newly claimed by this change.
+partial section selection remains compatible. Root-level Setext headings use
+`=`/`-` underlines for levels 1/2, retain the full title paragraph with line
+breaks, and locate its first physical line. Sections retain the underline;
+composition prose candidates exclude the entire heading range. Non-paragraph
+blocks do not create Setext anchors, and skipped fences cannot join title
+lines. Nested-container/plugin headings and rendered inline/HTML normalization
+are not implied. No note body is rewritten or normalized by this projection.
 Before returning a learning route or preparing its checkpoint, revalidate the
 captured revisions and moderation state of selected entries and resolved
 prerequisites. Nested MOCs must match their captured revision before traversal.

@@ -134,3 +134,19 @@ test('a qualified heading cannot join unrelated branches merely because both tit
   expect((await wiki.learningPath(principal, 'MOC.md', 2, 30, 16000)).navigationComplete).toBe(false);
   await expect(save()).rejects.toThrow(/locator|heading|block/);
 });
+
+test('Setext source anchors support checkpoints and section ranges without losing underline lines', async () => {
+  const body = 'Course\n===\n\nLesson\n---\nRIGHT-BRANCH\n\nOther\n---\nWRONG-BRANCH\n';
+  const { fs, wiki, principal, save, continuity } = await fixture('[[A#Course#Lesson]]', body);
+  const before = await fs.readNote('A.md');
+  expect((await wiki.learningPath(principal, 'MOC.md', 2, 30, 16000)).navigationComplete).toBe(true);
+  expect((await save()).success).toBe(true);
+  const section = await wiki.readProjection({ principal, path: 'A.md', view: 'section', section: 'Course#Lesson' });
+  const split = await wiki.previewSplit({ principal, path: 'A.md', heading: 'Course#Lesson' });
+  expect(section.content).toBe('Lesson\n---\nRIGHT-BRANCH');
+  expect(split.content).toBe(section.content);
+  expect(split.sourceRevision).toBe(before.revision);
+  expect((await fs.readNote('A.md')).revision).toBe(before.revision);
+  await fs.writeNote({ path: 'A.md', content: body.replace('Lesson\n---', 'Lesson\n\n---'), expectedRevision: before.revision });
+  expect((await continuity.read({ principal })).learningProgress).toMatchObject({ state: 'stale', canResume: false });
+});

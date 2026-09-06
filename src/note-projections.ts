@@ -50,12 +50,102 @@ export function hasUnclosedNoteFence(raw: string): boolean {
   return next.value;
 }
 
-function* noteHeadings(raw: string): Generator<NoteHeading> {
-  const headingRegex = /^ {0,3}(#{1,6})(?:[ \t]+(.*))?$/;
-  for (const { text, line } of visibleNoteLines(raw)) {
-    const match = headingRegex.exec(text);
-    if (match) yield { level: match[1]!.length, text: stripAtxClosingSequence((match[2] ?? '').trim()), line };
+/** Linear cell scan: overlapping whitespace quantifiers can stall on malformed rows. */
+function isTableDelimiter(text: string): boolean {
+  if (!text.includes('|') || /^(?: {4}| {0,3}\t)/.test(text)) return false;
+  const row = text.trim();
+  let start = row.startsWith('|') ? 1 : 0, cells = 0;
+  while (start < row.length) {
+    const separator = row.indexOf('|', start);
+    const end = separator < 0 ? row.length : separator;
+    if (!/^:?-+:?$/.test(row.slice(start, end).trim())) return false;
+    cells++;
+    start = end + 1;
   }
+  return cells > 0;
+}
+
+/** Root-level headings with full physical syntax ranges, from one snapshot. */
+function* noteHeadingRanges(raw: string): Generator<{ heading: NoteHeading; endLine: number }> {
+  const headingRegex = /^ {0,3}(#{1,6})(?:[ \t]+(.*))?$/;
+  const underlineRegex = /^ {0,3}(=+|-+)[ \t]*$/;
+  const thematicRegex = /^ {0,3}(?:(?:\*[ \t]*){3,}|(?:-[ \t]*){3,}|(?:_[ \t]*){3,})$/;
+  const htmlBlockRegex = /^ {0,3}<\/?(?:address|article|aside|base|basefont|blockquote|body|caption|center|col|colgroup|dd|details|dialog|dir|div|dl|dt|fieldset|figcaption|figure|footer|form|frame|frameset|h[1-6]|head|header|hr|html|iframe|legend|li|link|main|menu|menuitem|nav|noframes|ol|optgroup|option|p|param|search|section|summary|table|tbody|td|tfoot|th|thead|title|tr|track|ul)(?:[\s/>]|$)/i;
+  const completeTagRegex = /^ {0,3}<\/?[A-Za-z][A-Za-z0-9-]*(?:[ \t][^<>]*)?\/?>[ \t]*$/;
+  let pending: string[] = [];
+  let startLine = 0, previousLine = 0;
+  let suppressed = false;
+  let indentedCode = false, afterBlank = false;
+  let listIndent: number | undefined;
+  let htmlEnd: RegExp | undefined;
+  let htmlUntilBlank = false;
+  for (const { text, line } of visibleNoteLines(raw)) {
+    if (line !== previousLine + 1) { pending = []; suppressed = false; indentedCode = false; listIndent = undefined; }
+    previousLine = line;
+    if (htmlUntilBlank) {
+      if (!text.trim()) { htmlUntilBlank = false; afterBlank = true; }
+      continue;
+    }
+    if (htmlEnd) {
+      if (htmlEnd.test(text)) htmlEnd = undefined;
+      continue;
+    }
+    if (!text.trim()) { pending = []; suppressed = false; indentedCode = false; afterBlank = true; continue; }
+    const indented = /^(?: {4}| {0,3}\t)/.test(text);
+    if (indentedCode && !indented) { suppressed = false; indentedCode = false; }
+    if (listIndent !== undefined) {
+      let indent = 0;
+      for (const char of text) { if (char === ' ') indent++; else if (char === '\t') indent += 4 - indent % 4; else break; }
+      if (indent >= listIndent) { pending = []; suppressed = true; afterBlank = false; continue; }
+      if (afterBlank) { listIndent = undefined; suppressed = false; }
+    }
+    afterBlank = false;
+    // Preserve an existing HTML block's own terminator; do not reinterpret its content.
+    const rawTag = /^ {0,3}<(script|pre|style|textarea)(?:[\s>]|$)/i.exec(text);
+    const rawEnd = /^ {0,3}<!--/.test(text) ? /-->/ : /^ {0,3}<\?/.test(text) ? /\?>/
+      : /^ {0,3}<!\[CDATA\[/.test(text) ? /\]\]>/ : /^ {0,3}<![A-Z]/.test(text) ? />/
+        : rawTag ? new RegExp(`</${rawTag[1]}>`, 'i') : undefined;
+    if (rawEnd) { pending = []; suppressed = false; if (!rawEnd.test(text)) htmlEnd = rawEnd; continue; }
+    const match = headingRegex.exec(text);
+    if (match) {
+      pending = []; suppressed = false; listIndent = undefined;
+      yield { heading: { level: match[1]!.length, text: stripAtxClosingSequence((match[2] ?? '').trim()), line }, endLine: line };
+      continue;
+    }
+    const underline = underlineRegex.exec(text);
+    if (underline && pending.length && !suppressed) {
+      yield { heading: { level: underline[1]![0] === '=' ? 1 : 2, text: pending.join('\n').trim(), line: startLine }, endLine: line };
+      pending = [];
+      continue;
+    }
+    if (thematicRegex.test(text)) { pending = []; suppressed = false; listIndent = undefined; continue; }
+    if (htmlBlockRegex.test(text) || (!pending.length && completeTagRegex.test(text))) {
+      pending = []; suppressed = false; htmlUntilBlank = true; continue;
+    }
+    if (!pending.length && /^ {0,3}\[[^\]]+\]:[ \t]*\S/.test(text)) {
+      suppressed = false; continue;
+    }
+    const marker = /^( {0,3})([-+*]|\d{1,9}[.)])([ \t]+|$)/.exec(text);
+    // Only nonempty bullets or an ordered item numbered one interrupt prose.
+    const list = marker && (!pending.length || (text.slice(marker[0].length).trim()
+      && (!/^\d/.test(marker[2]!) || Number.parseInt(marker[2]!, 10) === 1))) ? marker : null;
+    if (list) {
+      const markerEnd = list[1]!.length + list[2]!.length;
+      const spacing = list[3]!.includes('\t') ? 4 - markerEnd % 4 : list[3]!.length;
+      listIndent = markerEnd + (spacing >= 1 && spacing <= 4 ? spacing : 1);
+    }
+    if (!pending.length && indented && !suppressed) indentedCode = true;
+    if (list || /^ {0,3}>/.test(text) || isTableDelimiter(text) || (!pending.length && indented)) {
+      pending = []; suppressed = true; continue;
+    }
+    if (suppressed) continue;
+    if (!pending.length) startLine = line;
+    pending.push(text);
+  }
+}
+
+function* noteHeadings(raw: string): Generator<NoteHeading> {
+  for (const { heading } of noteHeadingRanges(raw)) yield heading;
 }
 
 /** Pure projection of one already-authorized raw Markdown snapshot. */
@@ -80,8 +170,11 @@ export function projectNoteHeadingSummary(raw: string, limit = 8): { headings: N
 export function* projectNoteParagraphs(raw: string): Generator<{ text: string; startLine: number; endLine: number }> {
   let pending: string[] = [];
   let startLine = 0, endLine = 0;
+  const ranges = noteHeadingRanges(raw);
+  let range = ranges.next();
   for (const { text, line } of visibleNoteLines(raw)) {
-    const boundary = !text.trim() || /^ {0,3}#{1,6}(?:[ \t]|$)/.test(text);
+    while (!range.done && range.value.endLine < line) range = ranges.next();
+    const boundary = !text.trim() || (!range.done && line >= range.value.heading.line && line <= range.value.endLine);
     if (pending.length && (boundary || line !== endLine + 1)) {
       yield { text: pending.join('\n').trim(), startLine, endLine };
       pending = [];
@@ -94,7 +187,7 @@ export function* projectNoteParagraphs(raw: string): Generator<{ text: string; s
   if (pending.length) yield { text: pending.join('\n').trim(), startLine, endLine };
 }
 
-/** At most six active ATX ancestors; sibling/ancestor headings close branches. */
+/** At most six active heading ancestors; sibling/ancestor headings close branches. */
 function* headingPaths(headings: Iterable<NoteHeading>): Generator<{ heading: NoteHeading; names: string[] }> {
   const ancestors: NoteHeading[] = [];
   for (const heading of headings) {
