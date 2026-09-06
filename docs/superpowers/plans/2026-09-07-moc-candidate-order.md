@@ -26,7 +26,7 @@ metadata/draft projections -> existing envelope and revision checks.
   with sample-local order and identical selected memberships.
 - [x] Run npm run build, npm test -- --maxWorkers=1 and diff check. Record
   exact evidence; inspect generated diff and contract coverage.
-- [ ] Commit explicit source/tests/docs/dist only, push origin main and verify
+- [x] Commit explicit source/tests/docs/dist only, push origin main and verify
   HEAD/origin/main equality. Preserve unrelated .agents/ and .mcpvault/.
 
 ## Evidence
@@ -41,3 +41,5 @@ metadata/draft projections -> existing envelope and revision checks.
   Generated dist mirrors source. Full single-worker suite2713 passed, 1 skipped,
   176 files, 323.85s, exit0. Build and final diff check exit0. All four new tests
   were observed failing before implementation, then passing with the fix.
+- Implementationf62c82f pushed to Song-Seng-Hun/mcpvault main; HEAD and
+  origin/main match. Only unrelated .agents/ and .mcpvault/ remain untracked.
