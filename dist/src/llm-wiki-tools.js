@@ -532,7 +532,7 @@ export function getLlmWikiTools() {
         },
         {
             name: 'get_wiki_graph_health',
-            description: 'Report broken links, orphan notes, empty MOCs, GTD focus problems, Zettelkasten connectivity gaps, typed relation meaning, high-degree graph hubs, knowledge usage, and same-title/alias duplicate candidates with bounded samples. Use it to repair navigation without creating a parallel index; never auto-merge or archive from this report.',
+            description: 'Report broken links, orphan notes, empty MOCs, GTD focus problems, Zettelkasten connectivity gaps, typed relation meaning, high-degree graph hubs, knowledge usage, and same-title/alias duplicate candidates with bounded samples. MOC coverage counts visible non-map knowledge reached through authored map links; maps remain in full graph/usage views, not uncovered knowledge. Coverage is navigation, not truth or primary_moc presence. Use it to repair navigation without creating a parallel index; never auto-merge or archive from this report.',
             inputSchema: { type: 'object', properties: {
                     limit: { type: 'integer', minimum: 1, maximum: 50, default: 20 }, maxChars: { type: 'integer', minimum: 512, maximum: 16000, default: 6000 }, accessToken, prettyPrint,
                 } },
@@ -546,7 +546,7 @@ export function getLlmWikiTools() {
         },
         {
             name: 'get_wiki_moc_candidates',
-            description: 'Suggest bounded MOC structure notes for knowledge that is not currently covered by a MOC. Suggestions include revision-stamped authored order, an Obsidian Markdown draft, destination collision state, and an optional notes.write plan, but never create or rewrite notes.',
+            description: 'Suggest bounded MOC structure notes for non-map knowledge that is not currently reached through authored MOC links. Existing root/nested maps are not uncovered-knowledge candidates; a map-only inventory needs no artificial parent. Suggestions include revision-stamped authored order, an Obsidian Markdown draft, destination collision state, and an optional notes.write plan, but never create or rewrite notes.',
             inputSchema: { type: 'object', properties: { limit: { type: 'integer', minimum: 1, maximum: 30, default: 10 }, maxChars: { type: 'integer', minimum: 512, maximum: 16000, default: 6000 }, accessToken, prettyPrint } },
         },
         {

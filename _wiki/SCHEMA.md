@@ -731,6 +731,12 @@ or legacy `moc`. The `mocs` list alone does not select a preferred entry point.
 Text presence is navigation intent, not proof of a resolvable or valid target.
 Inspect the member note and chosen map before membership preflight; provide the
 complete `additionalMocPaths` set to retain because omission means none.
+Graph MOC coverage counts visible non-MOC knowledge reached through authored
+map links, not `primary_moc` presence. Root/nested maps remain in graph usage
+and hierarchy but are excluded from coverage denominators and uncovered-note
+scaffold candidates. `linkedNotes` and `nestedMocs` retain structural meaning.
+A map-only inventory has knowledgeTotal0 and ratio1. Retired knowledge is still
+part of this navigation inventory; coverage is not a review or truth judgment.
 For an overloaded authored map, `wiki.moc_rebalance` returns a non-mutating,
 revision-stamped proposal. It honors authored headings and source-line order
 before exact structural signals and exposes leftovers and cross-branch

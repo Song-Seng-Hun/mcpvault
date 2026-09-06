@@ -1516,6 +1516,16 @@ revisions, deterministic authored order, a small Obsidian Markdown draft, and
 destination collision state. Its `notes.write` plan is an optional scaffold,
 not an automatic MOC or a reason to overwrite an existing map.
 
+MOC coverage measures visible **non-MOC knowledge** reached through authored
+map links. Root and nested maps remain in the full graph and knowledge-usage
+views, but do not inflate coverage denominators or become uncovered-knowledge
+scaffold candidates themselves. Map-only inventory has zero eligible knowledge
+and coverage ratio1; it does not need an artificial parent or circular link.
+`linkedNotes`/`nestedMocs` still describe map structure. Coverage measures actual
+navigation, not `primary_moc` metadata presence or evidence quality; retired
+knowledge remains part of the visible inventory. Map kinds accept normalized
+scalar text, never array-to-string coercion.
+
 When an authored MOC grows past a useful reading size, call
 `wiki.moc_rebalance` for a revision-stamped, non-mutating split proposal. It
 preserves authored headings and source-line order first, then groups exact

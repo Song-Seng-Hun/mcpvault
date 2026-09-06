@@ -26,8 +26,9 @@ Use this predicate for each map's linked/direct/indirect knowledge counts,
 coverage ratios, uncovered entries and global MOC coverage totals. Keep
 linkedNotes and nestedMocs structural counts unchanged. mocCandidates already
 consumes this coverage view and should no longer propose maps for maps.
-Normalize note_kind with trim/lowercase once during graph collection and use
-that same kind for map discovery. No change to retired-note retention semantics,
+Normalize scalar-text note_kind with trim/lowercase once during graph collection
+and use that same kind for map discovery. Non-text kinds remain unknown, not
+inferred roles from array string coercion. No change to retired-note retention semantics,
 target resolution, source access, or managed type inference.
 
 ## Contract and verification

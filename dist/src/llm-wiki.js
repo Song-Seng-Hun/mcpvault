@@ -8914,7 +8914,7 @@ export class LlmWikiService {
             if (isModerationHidden(note.frontmatter))
                 continue;
             visibleNotePaths.push(note.path);
-            const kind = String(note.frontmatter.note_kind || '').toLowerCase();
+            const kind = typeof note.frontmatter.note_kind === 'string' ? note.frontmatter.note_kind.trim().toLowerCase() : '';
             const managedType = String(note.frontmatter.llm_wiki_type || '').toLowerCase();
             const occurrences = extractObsidianLinkOccurrences(note.content || '');
             const links = occurrences.map(link => link.target);
@@ -8951,7 +8951,7 @@ export class LlmWikiService {
             });
             if (managedType === 'knowledge' || ['atomic', 'knowledge', 'decision'].includes(kind))
                 knowledgePaths.add(normalizePath(note.path).toLowerCase());
-            if (note.frontmatter.note_kind !== 'moc')
+            if (kind !== 'moc')
                 continue;
             mocTotal += 1;
             const questions = Array.isArray(note.frontmatter.moc_questions)
@@ -9441,6 +9441,13 @@ export class LlmWikiService {
         let mocQuestionTotal = 0;
         let mocQuestionLinked = 0;
         const mocPathSet = new Set(mocDrafts.map(moc => normalizePath(moc.path).toLowerCase()));
+        // Maps stay in graph/usage views but are navigation, not missing members
+        // of another map. Reuse the existing sets without copying all knowledge.
+        const isCoverageKnowledge = (path) => knowledgePaths.has(path) && !mocPathSet.has(path);
+        let coverageKnowledgeTotal = knowledgePaths.size;
+        for (const path of mocPathSet)
+            if (knowledgePaths.has(path))
+                coverageKnowledgeTotal -= 1;
         const mocByPath = new Map(mocDrafts.map(moc => [normalizePath(moc.path).toLowerCase(), moc]));
         for (const moc of mocDrafts) {
             const linked = new Set();
@@ -9474,9 +9481,9 @@ export class LlmWikiService {
                         queue.push({ sourcePath: child.path, occurrence, depth: current.depth + 1, direct: false });
                 }
             }
-            const linkedKnowledge = [...linked].filter(path => knowledgePaths.has(path));
-            const directKnowledge = [...direct].filter(path => knowledgePaths.has(path));
-            const indirectKnowledge = [...indirect].filter(path => knowledgePaths.has(path) && !direct.has(path));
+            const linkedKnowledge = [...linked].filter(isCoverageKnowledge);
+            const directKnowledge = [...direct].filter(isCoverageKnowledge);
+            const indirectKnowledge = [...indirect].filter(path => isCoverageKnowledge(path) && !direct.has(path));
             for (const path of linkedKnowledge)
                 mocCoveredKnowledge.add(path);
             const questionCoverage = moc.questions.map((question, index) => {
@@ -9519,7 +9526,7 @@ export class LlmWikiService {
                 questionLinked: linkedQuestions,
                 questionCoverage: questionCoverage.length ? Number((linkedQuestions / questionCoverage.length).toFixed(3)) : 1,
             });
-            mocCoverageItems.push({ path: this.access.toPublicPath(moc.path), title: moc.title, ...(moc.revision && { revision: moc.revision }), ...(moc.navOrder !== undefined && { navOrder: moc.navOrder }), orderedEntries: moc.outline.map(entry => ({ ...entry, target: boundedText(entry.target, 300) })), linkedNotes: linked.size, linkedKnowledge: linkedKnowledge.length, directKnowledge: directKnowledge.length, indirectKnowledge: indirectKnowledge.length, nestedMocs: nestedMocs.size, unresolvedTargets, linkDensity: moc.occurrences.length ? Number((linked.size / moc.occurrences.length).toFixed(3)) : 0, knowledgeCoverage: knowledgePaths.size ? Number((linkedKnowledge.length / knowledgePaths.size).toFixed(3)) : 1, questionTotal: questionCoverage.length, questionLinked: linkedQuestions, questionCoverage: questionCoverage.length ? Number((linkedQuestions / questionCoverage.length).toFixed(3)) : 1 });
+            mocCoverageItems.push({ path: this.access.toPublicPath(moc.path), title: moc.title, ...(moc.revision && { revision: moc.revision }), ...(moc.navOrder !== undefined && { navOrder: moc.navOrder }), orderedEntries: moc.outline.map(entry => ({ ...entry, target: boundedText(entry.target, 300) })), linkedNotes: linked.size, linkedKnowledge: linkedKnowledge.length, directKnowledge: directKnowledge.length, indirectKnowledge: indirectKnowledge.length, nestedMocs: nestedMocs.size, unresolvedTargets, linkDensity: moc.occurrences.length ? Number((linked.size / moc.occurrences.length).toFixed(3)) : 0, knowledgeCoverage: coverageKnowledgeTotal ? Number((linkedKnowledge.length / coverageKnowledgeTotal).toFixed(3)) : 1, questionTotal: questionCoverage.length, questionLinked: linkedQuestions, questionCoverage: questionCoverage.length ? Number((linkedQuestions / questionCoverage.length).toFixed(3)) : 1 });
         }
         const mocSequenceItems = [];
         let mocSequenceLateTotal = 0;
@@ -9746,7 +9753,7 @@ export class LlmWikiService {
             ordering: 'preorder: parent then its complete branch; siblings by nav_order then title/path; unresolved and cyclic branches follow valid roots',
         };
         const uncoveredKnowledge = visibleNotePaths
-            .filter(path => knowledgePaths.has(normalizePath(path).toLowerCase()) && !mocCoveredKnowledge.has(normalizePath(path).toLowerCase()))
+            .filter(path => isCoverageKnowledge(normalizePath(path).toLowerCase()) && !mocCoveredKnowledge.has(normalizePath(path).toLowerCase()))
             .sort((left, right) => left.localeCompare(right))
             .slice(0, boundedLimit)
             .map(path => ({ path: this.access.toPublicPath(path) }));
@@ -9761,10 +9768,10 @@ export class LlmWikiService {
             emptyMocs: { total: emptyMocTotal, items: emptyMocs, truncated: emptyMocTotal > emptyMocs.length },
             mocCount: mocTotal,
             mocCoverage: {
-                knowledgeTotal: knowledgePaths.size,
+                knowledgeTotal: coverageKnowledgeTotal,
                 knowledgeLinkedFromMoc: mocCoveredKnowledge.size,
-                ratio: knowledgePaths.size ? Number((mocCoveredKnowledge.size / knowledgePaths.size).toFixed(3)) : 1,
-                uncoveredKnowledge: { total: Math.max(0, knowledgePaths.size - mocCoveredKnowledge.size), items: uncoveredKnowledge, truncated: knowledgePaths.size - mocCoveredKnowledge.size > uncoveredKnowledge.length },
+                ratio: coverageKnowledgeTotal ? Number((mocCoveredKnowledge.size / coverageKnowledgeTotal).toFixed(3)) : 1,
+                uncoveredKnowledge: { total: Math.max(0, coverageKnowledgeTotal - mocCoveredKnowledge.size), items: uncoveredKnowledge, truncated: coverageKnowledgeTotal - mocCoveredKnowledge.size > uncoveredKnowledge.length },
                 mocs: mocCoverageItems.slice(0, boundedLimit),
                 truncated: mocCoverageItems.length > boundedLimit,
             },
