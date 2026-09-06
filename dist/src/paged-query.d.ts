@@ -1,5 +1,9 @@
 import type { FileSystemService } from './filesystem.js';
-import type { QueryNotesParams, QueryNotesResult } from './types.js';
+import type { QueryNote, QueryNotesParams, QueryNotesResult } from './types.js';
+/** Stream small revision-checked body groups, never a whole hydrated page.
+ * Started siblings settle before failure/return; the next group is not prefetched.
+ */
+export declare function iterateNoteBodies(fileSystem: FileSystemService, params?: QueryNotesParams, canAccessPath?: (path: string) => boolean, canReadNote?: (note: QueryNote) => boolean): AsyncGenerator<QueryNote, void, void>;
 /**
  * Stream matching metadata pages without retaining the complete collection.
  * Callers that need a response window should prefer queryWindow; this helper

@@ -30,7 +30,8 @@ starting the next. Four retains modest IO overlap without a 500-body queue.
   ranking, response limits and no-write behavior. Capture each evaluated revision
   internally; selected candidate's fresh metadata may authorize a curation plan
   only if revision is unchanged. A changed/removed candidate remains advisory
-  without a revision-safe mutation plan; hidden current candidates are omitted.
+  without a revision-safe mutation plan; hidden current candidates and their
+  scanned/reason-count/truncation contributions are removed.
 - This is not an atomic whole-Vault snapshot, nor a fix to every body consumer.
 
 ## Verification

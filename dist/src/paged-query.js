@@ -1,4 +1,31 @@
 const PAGE_SIZE = 500;
+const BODY_BATCH_SIZE = 4;
+/** Stream small revision-checked body groups, never a whole hydrated page.
+ * Started siblings settle before failure/return; the next group is not prefetched.
+ */
+export async function* iterateNoteBodies(fileSystem, params = {}, canAccessPath = () => true, canReadNote = () => true) {
+    const { offset: _offset, after: initialAfter, ...baseParams } = params;
+    let after = initialAfter;
+    while (true) {
+        const page = await fileSystem.queryNotes({
+            ...baseParams, limit: PAGE_SIZE, ...(after ? { after } : {}),
+            includeContent: false, includeTotal: false,
+        }, canAccessPath, canReadNote);
+        for (let start = 0; start < page.notes.length; start += BODY_BATCH_SIZE) {
+            const results = await Promise.allSettled(page.notes.slice(start, start + BODY_BATCH_SIZE)
+                .map(note => fileSystem.readQueryNoteBody(note, canAccessPath, canReadNote)));
+            const failure = results.find(result => result.status === 'rejected');
+            if (failure?.status === 'rejected')
+                throw failure.reason;
+            for (const result of results)
+                if (result.status === 'fulfilled')
+                    yield result.value;
+        }
+        if (!page.truncated || page.notes.length === 0 || !page.nextCursor)
+            return;
+        after = page.nextCursor;
+    }
+}
 /**
  * Stream matching metadata pages without retaining the complete collection.
  * Callers that need a response window should prefer queryWindow; this helper

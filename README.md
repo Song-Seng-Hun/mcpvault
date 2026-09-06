@@ -2914,6 +2914,20 @@ computed result. Repairing the data allows caching again. Ordinary JSON values
 keep the same UTF-8 serialized-byte estimate. This does not bound serialization
 CPU/temporary memory or make JSON size an exact retained-heap measurement.
 
+The maintenance-debt scan reads metadata pages of up to 500 but hydrates source
+bodies in groups of four, consuming each group before starting another. Started
+siblings settle before a read failure is reported; abandoning the iterator does
+not prefetch another group. Each body uses the existing bounded source read and
+revision/path/visibility checks. This limits body retention, not total RSS or
+metadata size; without a metadata index, source discovery still reads files and
+subsequent checked hydration adds IO. No throughput improvement is promised.
+Hidden notes are excluded from maintenance rows and initial counts. A selected
+candidate gets a revision-safe curation plan only if a fresh source check matches
+the revision evaluated during the scan; changed/deleted candidates remain
+advisory without that plan. Newly hidden selected rows and their contributions
+to counts/truncation are removed. Remaining counts describe the scan, not an
+atomic whole-Vault snapshot.
+
 Model-free reuse also starts the resource idle timer: DB/table references are
 released after inactivity, while active searches and indexing batches defer
 release. This does not require loading an embedding model just to start cleanup.

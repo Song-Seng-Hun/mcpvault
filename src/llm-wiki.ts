@@ -9,7 +9,7 @@ import type { ReferenceService } from './references.js';
 import type { SemanticSearchService } from './semantic-search.js';
 import { endpointIdForTool } from './endpoint-registry.js';
 import { organizationDateTimestamp, workDateState } from './organization.js';
-import { iterateNotes } from './paged-query.js';
+import { iterateNotes, iterateNoteBodies } from './paged-query.js';
 import { getOrganizationPropertyContract, getOrganizationRelationContract, hasExplicitKnowledgeDisposition, inapplicableOrganizationProperties, isActionableKnowledge, isOpenActionableKnowledge, knowledgeOrganization, normalizeClarifyDisposition, normalizeDecisionStatus, normalizeIsoDate, normalizeKnowledgeDisposition, normalizeLifecycle, normalizeNoteKind, normalizeRecallQuality, normalizeReviewAt, normalizeReviewChecks, normalizeReviewIntervalDays, normalizeReviewOutcome, normalizeTaskStatus, normalizeVolatilityClass, organizationLintIssues, organizationNoteTemplate, organizationPropertyAppliesTo, temporalValidity, ANSWER_PACKET_INTENTS, BASES_VIEW_IDS, CAPTURE_SOURCES, CATALOG_ORDERS, CLAIM_ROLES, CLAIM_STATUSES, COMPLETION_DISPOSITION_REQUIRED_MESSAGE, CONFIDENCE_LEVELS, DECISION_STATUSES, FOCUS_HORIZONS, ISSUE_KINDS, KNOWLEDGE_ROLES, KNOWLEDGE_STATUSES, NOTE_KINDS, NOTE_TEMPLATE_IDS, RECALL_REPAIR_STATUSES, RELATION_FIELDS, RECIPROCAL_RELATIONS, SERVICE_CLASSES, SOURCE_TRUST_LEVELS, TEMPORAL_VALIDITY_STATES, VOLATILITY_CLASSES, LIFECYCLES, TASK_STATUSES, ISSUE_RESOLUTION_STATUSES, ISSUE_RETROSPECTIVE_STATUSES, WIKI_PROJECTION_VIEWS, type AnswerPacketIntent, type CatalogOrder, type KnowledgeDispositionResult, type TemporalValidityState, type WikiProjectionView } from './organization.js';
 import { extractObsidianLinkOccurrences } from './backlinks.js';
 import { collectPlainFrontmatterReferences, isNavigationalFrontmatterReference } from './property-references.js';
@@ -10474,12 +10474,12 @@ export class LlmWikiService {
         ...(validUpdatedAt !== undefined && { updatedAt: new Date(validUpdatedAt).toISOString(), ageDays: Math.max(0, Math.floor((nowMs - validUpdatedAt) / (24 * 60 * 60 * 1000))) }),
       };
       for (const reason of reasons) counts[reason] = (counts[reason] || 0) + 1;
-      candidates.push({ ...item, score });
+      candidates.push({ ...item, score, evaluatedRevision: note.revision });
       candidates.sort((left, right) => right.score - left.score || String(left.path).localeCompare(String(right.path)));
       if (candidates.length > boundedLimit * 2) candidates.pop();
     };
     let scanned = 0;
-    for await (const note of iterateNotes(this.fileSystem, { includeContent: true }, canAccess)) {
+    for await (const note of iterateNoteBodies(this.fileSystem, {}, canAccess, current => !isModerationHidden(current.frontmatter))) {
       scanned += 1;
       const frontmatter = note.frontmatter;
       const kind = String(frontmatter.note_kind || '').toLowerCase();
@@ -10520,12 +10520,26 @@ export class LlmWikiService {
     }
     const selected: Array<Record<string, unknown>> = [];
     let firstEnriched: Record<string, any> | undefined;
+    let hiddenCandidates = 0;
     for (const item of candidates.slice(0, boundedLimit)) {
-      const { score: _score, ...withoutScore } = item;
+      const { score: _score, evaluatedRevision, ...withoutScore } = item;
       let revision: string | undefined;
       try {
         const physicalPath = this.access.resolveExternalPath(String(item.path), principal);
-        revision = (await this.fileSystem.readNote(physicalPath)).revision;
+        const current = (await this.fileSystem.readNoteMetadata([physicalPath], canAccess,
+          { fresh: true, strict: true, maxBytes: MAX_NOTE_CONTENT_BYTES }))[0];
+        if (current && isModerationHidden(current.frontmatter)) {
+          hiddenCandidates += 1;
+          scanned -= 1;
+          for (const reason of item.reasons as string[]) {
+            const remaining = (counts[reason] ?? 0) - 1;
+            if (remaining > 0) counts[reason] = remaining;
+            else delete counts[reason];
+          }
+          continue;
+        }
+        // Never authorize an old repair decision with a newer source revision.
+        if (current && current.revision === evaluatedRevision) revision = current.revision;
       } catch {
         // Keep a concurrently removed candidate visible without fabricating a
         // revision-safe mutation plan.
@@ -10546,7 +10560,7 @@ export class LlmWikiService {
       debtTotal: Object.values(counts).reduce((sum, count) => sum + count, 0),
       counts,
       items: selected,
-      truncated: candidates.length > selected.length,
+      truncated: candidates.length - hiddenCandidates > selected.length,
       generatedAt: now(),
     };
     if (JSON.stringify(result).length <= boundedChars && (selected.length > 0 || !firstEnriched)) return result;
