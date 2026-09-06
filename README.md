@@ -1815,7 +1815,15 @@ backtick/tilde fences and Properties do not supply headings or block anchors.
 Diagnostics retain the source MOC, authored line and target rather than silently
 skipping a broken lesson. Validation reuses the existing case-normalized ATX
 heading and exact terminal block-anchor projections; it does not claim support
-for every Obsidian/plugin heading variant or disambiguate duplicate headings.
+for every Obsidian/plugin heading variant. Bare repeated titles and identical
+qualified paths remain ambiguous for section selection.
+ATX headings may be qualified as `[[Note#Parent#Child]]`, following
+[Obsidian's subheading-link syntax](https://obsidian.md/help/links).
+The path must follow one active ancestor chain; sibling branches cannot be
+combined. The same rule applies to `wiki.read_projection` section selection and
+`wiki.split_preview`. A qualifier can distinguish repeated child names in
+different branches; identical full paths still require a physical-line choice.
+Exact literal heading titles containing `#` retain precedence for compatibility.
 Progress remains note-granular, not a separate checkpoint for every section.
 Whole-note links incur no new locator-body read, and missing targets do not
 authorize reading a hidden scope. Repair the source link/anchor and rebuild.

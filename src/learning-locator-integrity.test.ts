@@ -113,3 +113,24 @@ test('case-normalized percent-encoded heading names and terminal blocks remain v
   expect((await wiki.learningPath(principal, 'MOC.md', 2, 30, 16000)).navigationComplete).toBe(true);
   expect((await save()).success).toBe(true);
 });
+
+test('qualified subsections work consistently for MOC checkpoints, section reads and split previews', async () => {
+  const body = '# Course\n## First\n### Lesson\nWRONG-BRANCH\n## Second\n### Lesson\nRIGHT-BRANCH\n# End\n';
+  const { wiki, principal, save } = await fixture('[[A#Course#Second#Lesson]]', body);
+  const path = await wiki.learningPath(principal, 'MOC.md', 2, 30, 16000);
+  expect(path.navigationComplete).toBe(true);
+  expect((await save()).success).toBe(true);
+  const section = await wiki.readProjection({ principal, path: 'A.md', view: 'section', section: 'Course#Second#Lesson', maxChars: 4000 });
+  expect(section.content).toContain('RIGHT-BRANCH');
+  expect(section.content).not.toContain('WRONG-BRANCH');
+  const split = await wiki.previewSplit({ principal, path: 'A.md', heading: 'Course#Second#Lesson', maxChars: 4000 });
+  expect(split.content).toContain('RIGHT-BRANCH');
+  expect(split.content).not.toContain('WRONG-BRANCH');
+  expect(split.sourceRevision).toBe(section.revision);
+});
+
+test('a qualified heading cannot join unrelated branches merely because both titles exist', async () => {
+  const { wiki, principal, save } = await fixture('[[A#First#Lesson]]', '# First\n# Second\n## Lesson\n');
+  expect((await wiki.learningPath(principal, 'MOC.md', 2, 30, 16000)).navigationComplete).toBe(false);
+  await expect(save()).rejects.toThrow(/locator|heading|block/);
+});

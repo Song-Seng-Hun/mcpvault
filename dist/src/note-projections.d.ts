@@ -15,7 +15,7 @@ export declare function projectNoteParagraphs(raw: string): Generator<{
     startLine: number;
     endLine: number;
 }>;
-/** Retain only requested normalized names, not a complete outline. */
+/** Retain only requested normalized names/paths, not a complete outline. */
 export declare function projectNoteHeadingPresence(raw: string, requested: ReadonlySet<string>): Set<string>;
 /** Exact terminal block anchors, not ID prefixes, mentions or code examples. */
 export declare function projectNoteBlockPresence(raw: string, requested: ReadonlySet<string>): Set<string>;

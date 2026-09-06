@@ -107,16 +107,48 @@ export function* projectNoteParagraphs(raw) {
     if (pending.length)
         yield { text: pending.join('\n').trim(), startLine, endLine };
 }
-/** Retain only requested normalized names, not a complete outline. */
+/** At most six active ATX ancestors; sibling/ancestor headings close branches. */
+function* headingPaths(headings) {
+    const ancestors = [];
+    for (const heading of headings) {
+        while (ancestors.length && ancestors[ancestors.length - 1].level >= heading.level)
+            ancestors.pop();
+        ancestors.push(heading);
+        yield { heading, names: ancestors.map(item => item.text.trim().toLowerCase()) };
+    }
+}
+/** Retain only requested normalized names/paths, not a complete outline. */
 export function projectNoteHeadingPresence(raw, requested) {
     const wanted = new Set([...requested].map(name => name.trim().toLowerCase()));
+    const qualified = new Map();
+    for (const name of wanted) {
+        const parts = name.split('#').map(part => part.trim());
+        if (parts.length < 2 || parts.some(part => !part))
+            continue;
+        const canonical = parts.join('#');
+        qualified.set(canonical, [...(qualified.get(canonical) || []), name]);
+    }
     const found = new Set();
     if (!wanted.size)
         return found;
-    for (const heading of noteHeadings(raw)) {
+    if (!qualified.size) {
+        for (const heading of noteHeadings(raw)) {
+            const name = heading.text.trim().toLowerCase();
+            if (wanted.has(name))
+                found.add(name);
+            if (found.size === wanted.size)
+                break;
+        }
+        return found;
+    }
+    for (const { heading, names } of headingPaths(noteHeadings(raw))) {
         const name = heading.text.trim().toLowerCase();
         if (wanted.has(name))
             found.add(name);
+        for (let start = 0; start < names.length - 1; start++) {
+            for (const match of qualified.get(names.slice(start).join('#')) || [])
+                found.add(match);
+        }
         if (found.size === wanted.size)
             break;
     }
@@ -154,7 +186,19 @@ export function selectNoteHeading(headings, requested) {
     if (!query)
         throw new Error('A non-empty heading is required');
     const exact = headings.filter(heading => heading.text.trim().toLowerCase() === query);
-    const matches = exact.length ? exact : headings.filter(heading => heading.text.trim().toLowerCase().includes(query));
+    const parts = query.split('#').map(part => part.trim());
+    const isQualified = parts.length > 1 && parts.every(Boolean);
+    const qualified = isQualified ? parts.join('#') : '';
+    let matches = exact.length ? exact : [];
+    if (!exact.length && isQualified) {
+        for (const { heading, names } of headingPaths(headings)) {
+            if (names.length >= parts.length && names.slice(-parts.length).join('#') === qualified)
+                matches.push(heading);
+        }
+    }
+    else if (!exact.length) {
+        matches = headings.filter(heading => heading.text.trim().toLowerCase().includes(query));
+    }
     if (!matches.length)
         throw new Error('Section not found');
     if (matches.length > 1)
