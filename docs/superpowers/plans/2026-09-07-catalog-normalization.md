@@ -40,7 +40,7 @@ guards before cache publication and native sorting. No new public API.
   sort caveat. Run npm run build. Request read-only lifecycle/generation review.
 - [x] Run full npm test -- --maxWorkers=1 after any review fixes, and
   git -c core.safecrlf=false diff --check. Record exact results.
-- [ ] Commit explicit source/tests/docs/dist, push only origin main, and verify
+- [x] Commit explicit source/tests/docs/dist, push only origin main, and verify
   remote tracking HEAD.
 
 ## Evidence
@@ -59,6 +59,9 @@ guards before cache publication and native sorting. No new public API.
   306.78s, successful process exit. Build and whitespace checks passed. No
   production activation or whole-PC performance claim is made. Review worker
   was closed after completing review.
+- Implementation `bd66add` pushed successfully to user fork
+  `Song-Seng-Hun/mcpvault` main. HEAD and origin/main matched afterward; only
+  unrelated `.agents/` and `.mcpvault/` remained untracked. No upstream action.
 
 ## Next measured opportunity (not implemented here)
 
