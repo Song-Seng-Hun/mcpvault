@@ -789,6 +789,15 @@ workflow hold excludes downstream work from forecast stages until repaired.
 Flow reports `blockedReason: invalid_task_status`; lint reports the malformed
 declaration. Do not write `invalid` back as a status: read the current note and
 deliberately repair its Property with a revision-checked edit.
+Reflect, flow, dependency holds and the action list use the same authored-text
+rule: only a nonempty scalar `waiting_for` creates an implicit waiting hold;
+empty or malformed values do not invent an owner. An explicit `task_status:
+waiting` still holds the work until deliberately changed, even without a usable
+owner. Lint asks for that missing owner and reports malformed Property types.
+A nonempty `next_action` or a real entry in `next_actions` counts as action
+presence; empty lists and object/boolean/number placeholders do not. A mixed
+list can contain a usable action while still needing its malformed entries
+repaired. Text presence does not establish feasibility or permission to execute.
 Work, flow, review and project projections capture one request-local metadata
 inventory instead of stitching independently refreshed 500-row pages together.
 `wiki.next_actions` evaluates the entire eligible visible action cohort before

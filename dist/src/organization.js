@@ -104,6 +104,15 @@ export const ORGANIZATION_LIST_FIELDS = ['aliases', 'tags', 'mocs', 'key_points'
  * system without changing its epistemic/content role. Project and task kinds
  * participate even before one of these fields is filled in. */
 export const ACTIONABLE_WORK_PROPERTIES = ['task_status', 'next_action', 'next_actions', 'waiting_for'];
+export function hasAuthoredText(value) {
+    return typeof value === 'string' && Boolean(value.trim());
+}
+/** Presence only: a real string is authored action text, not proof that the
+ * action is feasible, safe or sufficiently specific. */
+export function hasAuthoredNextAction(frontmatter) {
+    return hasAuthoredText(frontmatter.next_action)
+        || (Array.isArray(frontmatter.next_actions) && frontmatter.next_actions.some(hasAuthoredText));
+}
 /** Read-only interpretation, not a repair: only an absent state defaults to
  * open. Invalid declarations remain visible for review but cannot prove work
  * completion or execution readiness. */
@@ -1674,8 +1683,8 @@ export function organizationLintIssues(path, frontmatter, content, nowMs = Date.
                 issues.push({ code: 'stale_summary', detail: 'The note body changed after its stored progressive summary; regenerate the summary before relying on it.' });
         }
     }
-    if (kind === 'project' && lifecycle === 'active' && !frontmatter.next_action && !frontmatter.waiting_for) {
-        issues.push({ code: 'active_project_without_next_action', detail: 'An active project should declare next_action or waiting_for so another agent can move it forward.' });
+    if (kind === 'project' && lifecycle === 'active' && !hasAuthoredNextAction(frontmatter) && !hasAuthoredText(frontmatter.waiting_for)) {
+        issues.push({ code: 'active_project_without_next_action', detail: 'An active project should declare next_action/next_actions or waiting_for so another agent can move it forward.' });
     }
     if (kind === 'project' && lifecycle === 'active' && !frontmatter.project_purpose && !frontmatter.desired_outcome) {
         issues.push({ code: 'active_project_without_outcome', detail: 'An active project should state its purpose or desired_outcome so planning and review can distinguish it from an area.' });
@@ -1689,9 +1698,8 @@ export function organizationLintIssues(path, frontmatter, content, nowMs = Date.
     const actionable = isActionableKnowledge(frontmatter);
     if (actionable) {
         const taskStatus = authoredTaskStatus(frontmatter.task_status);
-        const waiting = taskStatus === 'waiting' || Boolean(String(frontmatter.waiting_for || '').trim());
-        const hasNextAction = Boolean(String(frontmatter.next_action || '').trim()
-            || (Array.isArray(frontmatter.next_actions) && frontmatter.next_actions.some((item) => typeof item === 'string' && item.trim())));
+        const waiting = taskStatus === 'waiting' || hasAuthoredText(frontmatter.waiting_for);
+        const hasNextAction = hasAuthoredNextAction(frontmatter);
         if (kind !== 'project' && lifecycle === 'active' && !hasNextAction && !waiting && !['blocked', 'someday', 'completed', 'cancelled'].includes(taskStatus)) {
             issues.push({ code: 'active_work_without_next_action', detail: 'Active actionable work should declare next_action/next_actions or waiting_for so another agent can move it forward.' });
         }
@@ -1723,11 +1731,11 @@ export function organizationLintIssues(path, frontmatter, content, nowMs = Date.
                 });
             }
         }
-        if (kind !== 'project' && taskStatus === 'waiting' && !String(frontmatter.waiting_for || '').trim()) {
+        if (kind !== 'project' && taskStatus === 'waiting' && !hasAuthoredText(frontmatter.waiting_for)) {
             issues.push({ code: 'waiting_work_without_owner', detail: 'Waiting work should identify the person, event, or resource it is waiting for.' });
         }
     }
-    if (kind === 'project' && lifecycle === 'active' && authoredTaskStatus(frontmatter.task_status) === 'waiting' && !frontmatter.waiting_for) {
+    if (kind === 'project' && lifecycle === 'active' && authoredTaskStatus(frontmatter.task_status) === 'waiting' && !hasAuthoredText(frontmatter.waiting_for)) {
         issues.push({ code: 'waiting_project_without_owner', detail: 'A waiting project should identify the person, event, or resource it is waiting for.' });
     }
     if (frontmatter.triage_disposition !== undefined && !clarifyDispositionSet.has(String(frontmatter.triage_disposition).trim().toLowerCase())) {

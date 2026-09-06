@@ -470,6 +470,13 @@ and is excluded from next actions and forecast stages. Its workflow hold also
 excludes dependent stages. Reflect returns `readiness: invalid_task_status`;
 flow uses the blocked lane with `blockedReason: invalid_task_status`. Repair
 the source at its current revision; reading these views does not change notes.
+Work text presence is shared across Reflect, flow, action selection and lint.
+Only nonempty scalar strings count as waiting owners or scalar next actions;
+`next_actions` needs at least one such entry. Malformed/blank waiting text does
+not imply a workflow hold, but explicit `task_status: waiting` always does.
+Displayed owners are trimmed scalar text; unusable owner values are omitted.
+Lint retains its existing Property-type diagnostics and missing-owner/action
+findings rather than coercing values or silently repairing the note.
 Work dependency projections use a single captured metadata inventory per
 request. `wiki.next_actions` ranks all eligible visible action candidates,
 retaining only the top requested rows rather than cutting off candidate input.

@@ -20,7 +20,7 @@ import { CollectionHealthProjection } from './collection-health.js';
 import { isManagedCommunityPath, isModerationHidden } from './moderation-policy.js';
 import { projectNoteOutline, projectNoteParagraphs, projectNoteHeadingSummary, projectNoteHeadingPresence, projectNoteBlockPresence, projectNoteBlockLines, selectNoteHeading, hasUnclosedNoteFence, noteSectionHasContent } from './note-projections.js';
 import { parseWikiLink } from './wikilink/resolveWikiLink.js';
-import { authoredTaskStatus, normalizeEpistemicStatus } from './organization.js';
+import { authoredTaskStatus, hasAuthoredText, hasAuthoredNextAction, normalizeEpistemicStatus } from './organization.js';
 import { buildMocNavigation, navigationOrder } from './moc-navigation.js';
 import { buildNoteReferenceIndex, normalizeNoteReferenceTerm, noteReferenceDocument, resolveNoteReference } from './note-reference.js';
 import { buildJsonCanvasProjection, canvasFileNodeId, readJsonCanvasMetadata, validateJsonCanvasDocument } from './json-canvas.js';
@@ -55,9 +55,6 @@ function boundedText(value, maxChars) {
     if (text.length <= maxChars)
         return text;
     return `${text.slice(0, Math.max(0, maxChars - 1)).trimEnd()}…`;
-}
-function hasAuthoredText(value) {
-    return typeof value === 'string' && Boolean(value.trim());
 }
 /** Budget the complete report, preserving an executable read when prose is cut. */
 function boundedMaintenanceReport(candidates, total, maxChars, endpointId, extra, retryArguments = extra, retryMaxChars = 16000) {
@@ -1310,7 +1307,7 @@ export class LlmWikiService {
             const status = taskStatus(note);
             const deferUntil = typeof note.frontmatter.defer_until === 'string' ? Date.parse(note.frontmatter.defer_until) : NaN;
             return ['waiting', 'blocked', 'invalid'].includes(status)
-                || Boolean(String(note.frontmatter.waiting_for || '').trim())
+                || hasAuthoredText(note.frontmatter.waiting_for)
                 || (Number.isFinite(deferUntil) && deferUntil > currentTime);
         }));
         const workflowHoldImpact = propagateToDependents(workflowHeldNodes);
@@ -4159,12 +4156,12 @@ export class LlmWikiService {
                     const scheduledAt = typeof note.frontmatter.scheduled_at === 'string' ? note.frontmatter.scheduled_at : undefined;
                     const deferUntil = typeof note.frontmatter.defer_until === 'string' ? note.frontmatter.defer_until : undefined;
                     const overdue = Boolean(dueAt && !Number.isNaN(Date.parse(dueAt)) && Date.parse(dueAt) <= nowMs);
-                    const waiting = taskStatus === 'waiting' || Boolean(note.frontmatter.waiting_for);
+                    const waiting = taskStatus === 'waiting' || hasAuthoredText(note.frontmatter.waiting_for);
                     const blocked = taskStatus === 'blocked' || taskStatus === 'invalid';
                     const dependencyState = dependencySnapshot.stateByPath.get(normalizePath(note.path).toLowerCase());
                     const dependencyBlocked = !dependencyState.executable;
                     const deferred = Boolean(deferUntil && !Number.isNaN(Date.parse(deferUntil)) && Date.parse(deferUntil) > nowMs);
-                    const hasNextAction = Boolean(note.frontmatter.next_action || (Array.isArray(note.frontmatter.next_actions) && note.frontmatter.next_actions.length > 0));
+                    const hasNextAction = hasAuthoredNextAction(note.frontmatter);
                     const missingNextAction = lifecycle === 'active' && !hasNextAction && !waiting && !blocked && !dependencyBlocked && !deferred;
                     const readiness = taskStatus === 'invalid' ? 'invalid_task_status' : blocked ? 'blocked' : waiting ? 'waiting' : dependencyBlocked ? 'dependency_blocked' : deferred ? 'deferred' : hasNextAction ? 'ready' : 'needs_next_action';
                     const workItem = { ...item, ...(dueAt && { dueAt }), ...(scheduledAt && { scheduledAt }), ...(deferUntil && { deferUntil }), readiness, ...(dependencyBlocked && { dependencies: this.workDependencyProjection(dependencyState) }) };
@@ -4190,7 +4187,7 @@ export class LlmWikiService {
                         totalWaiting += 1;
                         pushBounded(waitingItems, {
                             ...workItem,
-                            ...(note.frontmatter.waiting_for && { waitingFor: note.frontmatter.waiting_for }),
+                            ...(hasAuthoredText(note.frontmatter.waiting_for) && { waitingFor: note.frontmatter.waiting_for.trim() }),
                             ...(waitingSince && { waitingSince }),
                             ...(waitingAgeDays !== undefined && { waitingAgeDays }),
                             ...(followUpNeeded && { followUpNeeded: true, followUpReason: 'waiting_14_days_or_more' }),
@@ -4347,13 +4344,13 @@ export class LlmWikiService {
                 continue;
             totalWork += 1;
             const title = note.frontmatter.title || note.path.split('/').at(-1) || note.path;
-            const hasNextAction = Boolean((typeof note.frontmatter.next_action === 'string' && note.frontmatter.next_action.trim()) || (Array.isArray(note.frontmatter.next_actions) && note.frontmatter.next_actions.some((item) => typeof item === 'string' && item.trim())));
+            const hasNextAction = hasAuthoredNextAction(note.frontmatter);
             const dueAt = typeof note.frontmatter.due_at === 'string' ? note.frontmatter.due_at : undefined;
             const deferUntil = typeof note.frontmatter.defer_until === 'string' ? note.frontmatter.defer_until : undefined;
             const overdue = Boolean(dueAt && Number.isFinite(Date.parse(dueAt)) && Date.parse(dueAt) <= nowMs);
             if (overdue)
                 totalOverdue += 1;
-            const waitingState = taskStatus !== 'invalid' && (taskStatus === 'waiting' || Boolean(String(note.frontmatter.waiting_for || '').trim()));
+            const waitingState = taskStatus !== 'invalid' && (taskStatus === 'waiting' || hasAuthoredText(note.frontmatter.waiting_for));
             const blockedState = taskStatus === 'blocked' || taskStatus === 'invalid';
             const deferredState = Boolean(deferUntil && Number.isFinite(Date.parse(deferUntil)) && Date.parse(deferUntil) > nowMs);
             const dependencyKey = normalizePath(note.path).toLowerCase();
@@ -4379,7 +4376,7 @@ export class LlmWikiService {
                 totalDependencyBlocked += 1;
             if (waitingState) {
                 totalWaiting += 1;
-                push(waiting, { ...item, ...(note.frontmatter.waiting_for && { waitingFor: boundedText(note.frontmatter.waiting_for, 300) }), ...(age !== undefined && age >= boundedWaitingAfterDays && { aging: true, agingReason: `waiting_${boundedWaitingAfterDays}_days_or_more` }) });
+                push(waiting, { ...item, ...(hasAuthoredText(note.frontmatter.waiting_for) && { waitingFor: boundedText(note.frontmatter.waiting_for, 300) }), ...(age !== undefined && age >= boundedWaitingAfterDays && { aging: true, agingReason: `waiting_${boundedWaitingAfterDays}_days_or_more` }) });
             }
             else if (blockedState || dependencyBlocked) {
                 totalBlocked += 1;
@@ -7047,7 +7044,7 @@ export class LlmWikiService {
                 }
                 if (requestedEffort && effort !== requestedEffort)
                     continue;
-                const waitingState = taskStatus === 'waiting' || Boolean(String(note.frontmatter.waiting_for || '').trim());
+                const waitingState = taskStatus === 'waiting' || hasAuthoredText(note.frontmatter.waiting_for);
                 if (taskStatus === 'invalid' || taskStatus === 'blocked' || waitingState) {
                     filterDiagnostics.workflowBlocked += uniqueActions.length;
                     continue;
@@ -7089,7 +7086,7 @@ export class LlmWikiService {
                         ...(typeof note.frontmatter.project === 'string' && { project: note.frontmatter.project }),
                         ...(typeof note.frontmatter.due_at === 'string' && { dueAt: note.frontmatter.due_at }),
                         ...(typeof note.frontmatter.scheduled_at === 'string' && { scheduledAt: note.frontmatter.scheduled_at }),
-                        ...(typeof note.frontmatter.waiting_for === 'string' && { waitingFor: note.frontmatter.waiting_for }),
+                        ...(hasAuthoredText(note.frontmatter.waiting_for) && { waitingFor: note.frontmatter.waiting_for.trim() }),
                         ...(estimatedMinutes !== undefined && { estimatedMinutes }),
                         ...(energy && { energy }),
                         ...(effort && { effort }),

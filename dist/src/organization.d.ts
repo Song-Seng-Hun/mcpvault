@@ -227,6 +227,10 @@ export declare const ORGANIZATION_LIST_FIELDS: readonly ["aliases", "tags", "moc
  * system without changing its epistemic/content role. Project and task kinds
  * participate even before one of these fields is filled in. */
 export declare const ACTIONABLE_WORK_PROPERTIES: readonly ['task_status', 'next_action', 'next_actions', 'waiting_for'];
+export declare function hasAuthoredText(value: unknown): value is string;
+/** Presence only: a real string is authored action text, not proof that the
+ * action is feasible, safe or sufficiently specific. */
+export declare function hasAuthoredNextAction(frontmatter: Record<string, unknown>): boolean;
 /** Read-only interpretation, not a repair: only an absent state defaults to
  * open. Invalid declarations remain visible for review but cannot prove work
  * completion or execution readiness. */
