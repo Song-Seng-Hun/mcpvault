@@ -19,7 +19,10 @@ history stays a date repair instead. Real valid/missing behavior remains intact.
 Prioritize exact-source date inspection then revision-safe dry-run notes.patch
 before any automatic-looking review route. Tell agents to use evidence and not
 invent history, change dates to clear the queue or weaken holds. Do not echo raw
-invalid values, rewrite notes or add a new endpoint. Counts, hidden guards,
+invalid values, rewrite notes or add a new endpoint. Managed/immutable records
+are inspection-only: use existing source/legacy mutation guards, Community and
+Wiki control-path checks, source type and immutable Properties before proposing
+a date patch. This is a plan hint, never an authorization bypass. Counts, hidden guards,
 bounded output and the evaluated-revision barrier are unchanged.
 
 Ignoring invalid values would hide repair debt; coercion would invent chronology.

@@ -1059,7 +1059,17 @@ examples do not count, while wikilinks and relative Markdown note links do.
 Unresolved links still express navigation intent; lint resolution checks their
 targets separately. `get_wiki_authority_map` provides a library-style
 preferred-term/alias/stable-ID view and makes terminology collisions visible
-without renaming notes. `get_wiki_answer_packet` combines one progressive
+without renaming notes.
+
+Maintenance dates use strict scalar ISO parsing. Invalid `created_at`,
+`updated_at`, `review_at` or `last_reviewed_at` values are explicit repair reasons,
+not invented ages or elapsed deadlines. Creation is an age fallback only when
+modification is absent; invalid review history is not “never reviewed.” Inspect
+date repair candidates before other curation and propose only evidence-backed,
+revision-checked dry-run patches. Managed/immutable content receives inspection
+guidance instead of a generic patch; use its owning workflow or a new source
+snapshot. Nothing automatically rewrites dates to clear the queue.
+`get_wiki_answer_packet` combines one progressive
 source projection with a few supporting neighbors and counterpoints, keeping
 the answer context bounded and revision-aware. Its `evidenceDiversity` card
 groups cited snapshots by `source_work_id`, `source_family`, or `source_id` so

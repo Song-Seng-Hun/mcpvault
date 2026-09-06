@@ -10490,7 +10490,23 @@ export class LlmWikiService {
         const counts = {};
         const candidates = [];
         const nowMs = Date.now();
-        const curationRoute = (path, revision, reasons) => {
+        const maintenanceDateFields = ['created_at', 'updated_at', 'review_at', 'last_reviewed_at'];
+        const curationRoute = (path, revision, reasons, datePatchAllowed) => {
+            const invalidDates = maintenanceDateFields.filter(field => reasons.includes(`invalid_${field}`));
+            if (invalidDates.length > 0 && !datePatchAllowed)
+                return {
+                    inspect: { endpointId: endpointIdForTool('read_note'), arguments: { path, maxChars: 5000 } },
+                    instruction: 'This date belongs to managed or immutable content. Inspect the source and use its owning workflow, or ingest a corrected source snapshot; do not apply a generic note patch or invent missing history.',
+                };
+            if (invalidDates.length > 0)
+                return {
+                    inspect: { endpointId: endpointIdForTool('read_note'), arguments: { path, maxChars: 5000 } },
+                    then: {
+                        endpointId: endpointIdForTool('patch_note'), arguments: { path, expectedRevision: revision, dryRun: true },
+                        requiredArguments: ['oldString and newString, or patches'],
+                        instruction: `Inspect and repair ${invalidDates.join(', ')} only from evidence. Do not invent review history, replace unknown dates with now, or remove dates merely to clear this queue. Preview the exact edit before applying it.`,
+                    },
+                };
             const missingAction = reasons.some(reason => ['project_without_next_action', 'work_without_next_action'].includes(reason));
             const inspect = missingAction
                 ? { endpointId: endpointIdForTool('read_wiki_projection'), arguments: { path, view: 'full', maxChars: 5000 } }
@@ -10560,7 +10576,14 @@ export class LlmWikiService {
             const lifecycle = String(frontmatter.lifecycle || '').trim().toLowerCase();
             const reasons = [];
             let score = 0;
-            const updatedAt = Date.parse(String(frontmatter.updated_at || frontmatter.created_at || ''));
+            const isKnowledge = kind === 'knowledge' || frontmatter.llm_wiki_type === 'knowledge';
+            const invalidDates = maintenanceDateFields.filter(field => (field === 'created_at' || field === 'updated_at' || isKnowledge)
+                && frontmatter[field] !== undefined && !Number.isFinite(organizationDateTimestamp(frontmatter[field])));
+            if (invalidDates.length > 0) {
+                reasons.push(...invalidDates.map(field => `invalid_${field}`));
+                score += 6;
+            }
+            const updatedAt = organizationDateTimestamp(frontmatter.updated_at === undefined ? frontmatter.created_at : frontmatter.updated_at);
             const old = Number.isFinite(updatedAt) && nowMs - updatedAt >= ageDays * 24 * 60 * 60 * 1000;
             const summaryPresent = hasProgressiveProjection(frontmatter);
             const summaryFresh = !summaryPresent || (typeof frontmatter.summary_of_content_sha256 === 'string' && frontmatter.summary_of_content_sha256 === hash(note.content || ''));
@@ -10572,13 +10595,13 @@ export class LlmWikiService {
                 reasons.push('stale_summary');
                 score += 8;
             }
-            if (kind === 'knowledge' || frontmatter.llm_wiki_type === 'knowledge') {
-                const reviewAt = Date.parse(String(frontmatter.review_at || ''));
+            if (isKnowledge) {
+                const reviewAt = organizationDateTimestamp(frontmatter.review_at);
                 if (Number.isFinite(reviewAt) && reviewAt <= nowMs && !['archived', 'superseded'].includes(lifecycle)) {
                     reasons.push('review_due');
                     score += 10 + Math.min(10, Math.floor((nowMs - reviewAt) / (24 * 60 * 60 * 1000)));
                 }
-                if (!frontmatter.last_reviewed_at && old) {
+                if (frontmatter.last_reviewed_at === undefined && old) {
                     reasons.push('never_reviewed');
                     score += 4;
                 }
@@ -10619,6 +10642,7 @@ export class LlmWikiService {
         for (const item of candidates.slice(0, boundedLimit)) {
             const { score: _score, evaluatedRevision, ...withoutScore } = item;
             let revision;
+            let datePatchAllowed = false;
             try {
                 const physicalPath = this.access.resolveExternalPath(String(item.path), principal);
                 const current = (await this.fileSystem.readNoteMetadata([physicalPath], canAccess, { fresh: true, strict: true, maxBytes: MAX_NOTE_CONTENT_BYTES }))[0];
@@ -10635,8 +10659,18 @@ export class LlmWikiService {
                     continue;
                 }
                 // Never authorize an old repair decision with a newer source revision.
-                if (current && current.revision === evaluatedRevision)
+                if (current && current.revision === evaluatedRevision) {
                     revision = current.revision;
+                    // A date repair hint must not bypass an owning workflow or source
+                    // immutability. Actual writes still enforce their own permissions.
+                    try {
+                        this.access.assertMutationAllowed(physicalPath, 'patch_note');
+                        datePatchAllowed = !this.access.isCommunityPath(physicalPath) && !isWikiControlPath(physicalPath)
+                            && current.frontmatter.immutable !== true
+                            && (!current.frontmatter.llm_wiki_type || current.frontmatter.llm_wiki_type === 'knowledge');
+                    }
+                    catch { /* managed source/legacy content: inspection only */ }
+                }
             }
             catch {
                 // Keep a concurrently removed candidate visible without fabricating a
@@ -10644,7 +10678,7 @@ export class LlmWikiService {
             }
             const enriched = {
                 ...withoutScore,
-                ...(revision && { revision, curationPlan: curationRoute(String(item.path), revision, item.reasons) }),
+                ...(revision && { revision, curationPlan: curationRoute(String(item.path), revision, item.reasons, datePatchAllowed) }),
                 priority: item.score >= 12 ? 'high' : item.score >= 6 ? 'medium' : 'low',
             };
             firstEnriched ||= enriched;
