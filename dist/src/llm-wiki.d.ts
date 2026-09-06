@@ -124,7 +124,6 @@ export declare class LlmWikiService {
      * frontmatter for compatibility.
      */
     private privateRecallPath;
-    private readPrivateRecall;
     /**
      * Capture the revisions of notes linked by the current body/metadata. This
      * is a derived review baseline: Markdown and Git remain authoritative.
@@ -408,13 +407,31 @@ export declare class LlmWikiService {
      * Questions, hypotheses, assumptions, disputed claims, and negative
      * knowledge stay as ordinary Markdown; this is only a bounded projection.
      */
-    knowledgeGaps(principal?: ScopePrincipal, limit?: number, maxChars?: number): Promise<{
-        mode: string;
-        items: Record<string, unknown>[];
+    knowledgeGaps(principal?: ScopePrincipal, limit?: number, maxChars?: number, prettyPrint?: boolean): Promise<{
+        mode: any;
+        items: Record<string, any>[];
         total: number;
         truncated: boolean;
-        note: string;
-    }>;
+        retry: {
+            endpointId: string;
+            reuseOriginalArguments: boolean;
+            overrides: {
+                maxChars: number;
+            };
+        };
+        instruction: string;
+    } | {
+        mode: any;
+        items: Record<string, any>[];
+        total: number;
+        truncated: boolean;
+        taskUnavailable: boolean;
+        instruction: string;
+    } | (Record<string, any> & {
+        items: Array<Record<string, any>>;
+        total: number;
+        truncated: boolean;
+    })>;
     /** Resolve an authored navigation edge using its syntax and source scope. */
     private resolveNavigationLink;
     /** Bounded, explainable neighbors; Markdown identity remains authoritative. */

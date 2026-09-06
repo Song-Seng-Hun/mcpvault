@@ -1545,6 +1545,18 @@ wikilinks, MOCs, and authority terms. `get_wiki_knowledge_gaps` provides a
 bounded active-recall queue for unresolved questions, hypotheses, experiments, assumptions,
 disputed claims, and negative knowledge. It is a prioritization view, not an
 automated truth engine.
+The dynamic endpoint `wiki.knowledge_gaps` reads fresh bounded metadata and uses
+the current reader's private recall question and cadence before shared defaults.
+Agent recall history remains private, even when the shared note has history.
+Rows include source `revision` and, when available, `stateRevision` (`missing`
+for a first private record); use these as `expectedRevision` and
+`expectedStateRevision` when recording a real attempt. Storage failures or
+selected-input drift require refresh, not an assumption of unseen history.
+Questions over 1000 characters are omitted with a revision-pinned `promptAction`
+that reads only the `recall_prompt` Property. Follow its continuations before
+opening an answer. The whole JSON response respects `maxChars`, including pretty
+printing; an empty size-limited queue supplies a larger-budget retry, or an
+explicit unavailable result at the maximum. No workers or client setup are added.
 Durable notes may also declare `retrieval_cues` and `use_when` so an agent can
 recognize when the note is relevant to a live problem. These are bounded
 discovery hints only. Search can reach a canonical note through an alternate

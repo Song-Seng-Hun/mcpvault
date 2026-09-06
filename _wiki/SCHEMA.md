@@ -1531,7 +1531,18 @@ reports unresolved, ambiguous, self-referential, or cyclic `broader_terms`, and
 facets that still use a deprecated or redirect term.
 `get_wiki_knowledge_gaps` returns unresolved epistemic work and negative or
 disputed knowledge as a bounded active-recall queue. It never decides truth or
-changes a note automatically. `get_wiki_graph_health` includes bounded usage
+changes a note automatically. Its dynamic ID is `wiki.knowledge_gaps`; private
+question/cadence override shared defaults while agent history stays personal.
+Fresh source `revision` and available private `stateRevision` (`missing` if
+absent) are write guards, not alternate truth. Selected-source/private drift
+or storage failure rejects the projection; hidden private state is unavailable,
+never a source of prompts or history. Reads use the existing per-note 8 MiB cap.
+Invalid intervals produce `invalid_recall_interval_days` rather than due time.
+Long questions use `promptOmitted` and a revision-checked Property-only
+`promptAction`; never treat a prefix as the whole question. Whole-response
+budgets preserve priority order and give a larger-budget retry or terminal
+unavailability rather than silently skipping an oversized first task.
+`get_wiki_graph_health` includes bounded usage
 and lifecycle projections plus same-title/alias duplicate candidates. Treat
 these as review signals rather than deletion or merge instructions: unused
 knowledge may still be worth preserving, and similar terms can represent

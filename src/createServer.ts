@@ -1446,7 +1446,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         }
 
         case "get_wiki_knowledge_gaps": {
-          return jsonResult(await llmWiki.knowledgeGaps(principal, trimmedArgs.limit, trimmedArgs.maxChars), trimmedArgs.prettyPrint);
+          return jsonResult(await llmWiki.knowledgeGaps(principal, trimmedArgs.limit, trimmedArgs.maxChars, trimmedArgs.prettyPrint), trimmedArgs.prettyPrint);
         }
 
         case "get_wiki_answer_packet": {

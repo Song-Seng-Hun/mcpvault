@@ -1638,17 +1638,6 @@ export class LlmWikiService {
     return `_scopes/agents/${agentId}/_continuity/recall/${hash(normalizePath(notePath).toLowerCase())}.md`;
   }
 
-  private async readPrivateRecall(principal: ScopePrincipal | undefined, notePath: string): Promise<Record<string, any> | undefined> {
-    const path = this.privateRecallPath(principal, notePath);
-    if (!path || !await this.fileSystem.noteExists(path)) return undefined;
-    try {
-      const note = await this.fileSystem.readNote(path);
-      return note.frontmatter;
-    } catch {
-      return undefined;
-    }
-  }
-
   /**
    * Capture the revisions of notes linked by the current body/metadata. This
    * is a derived review baseline: Markdown and Git remain authoritative.
@@ -2987,14 +2976,20 @@ export class LlmWikiService {
    * Questions, hypotheses, assumptions, disputed claims, and negative
    * knowledge stay as ordinary Markdown; this is only a bounded projection.
    */
-  async knowledgeGaps(principal?: ScopePrincipal, limit = 20, maxChars = 7000) {
-    const boundedLimit = Math.min(Math.max(Number(limit) || 20, 1), 100);
+  async knowledgeGaps(principal?: ScopePrincipal, limit = 20, maxChars = 7000, prettyPrint = false) {
+    const boundedLimit = Math.floor(Math.min(Math.max(Number(limit) || 20, 1), 100));
     const boundedChars = Math.min(Math.max(Number(maxChars) || 7000, 512), 16000);
     const canAccess = (path: string) => this.access.canAccessPhysicalPath(path, principal);
-    const candidates: Array<Record<string, unknown>> = [];
+    const changed = () => new Error('Knowledge gap inputs changed or became unavailable; refresh the queue and retry.');
+    const readMetadata = async (path: string) => {
+      try { return (await this.fileSystem.readNoteMetadata([path], canAccess,
+        { fresh: true, strict: true, maxBytes: MAX_NOTE_CONTENT_BYTES }))[0]; }
+      catch { throw changed(); }
+    };
+    const candidates: Array<{ item: Record<string, any>; path: string; revision: string | undefined; statePath: string | undefined; stateRevision: string | undefined }> = [];
     let total = 0;
     const nowMs = Date.now();
-    for await (const note of iterateNotes(this.fileSystem, {}, canAccess)) {
+    for await (const note of this.fileSystem.iterateFreshNoteMetadata(canAccess)) {
       if (note.frontmatter.llm_wiki_type !== 'knowledge' || isModerationHidden(note.frontmatter)) continue;
       const snoozedUntil = organizationDateTimestamp(note.frontmatter.review_snoozed_until);
       if (Number.isFinite(snoozedUntil) && snoozedUntil > nowMs) continue;
@@ -3004,9 +2999,20 @@ export class LlmWikiService {
       const polarity = String(note.frontmatter.knowledge_polarity || '').trim().toLowerCase();
       const reasons: string[] = [];
       if (note.frontmatter.review_snoozed_until !== undefined && !Number.isFinite(snoozedUntil)) reasons.push('invalid_review_snoozed_until');
-      const recallPrompt = typeof note.frontmatter.recall_prompt === 'string' ? note.frontmatter.recall_prompt.trim() : '';
-      const recallIntervalDays = Number(note.frontmatter.recall_interval_days);
-      const privateRecall = recallPrompt ? await this.readPrivateRecall(principal, note.path) : undefined;
+      const statePath = this.privateRecallPath(principal, note.path);
+      const stateNote = statePath ? await readMetadata(statePath) : undefined;
+      const stateHidden = Boolean(stateNote && isModerationHidden(stateNote.frontmatter));
+      const privateRecall = stateHidden ? undefined : stateNote?.frontmatter;
+      const promptValue = privateRecall?.recall_prompt ?? note.frontmatter.recall_prompt;
+      const recallPrompt = typeof promptValue === 'string' ? promptValue.trim() : '';
+      let recallIntervalDays: number | undefined, invalidInterval = false;
+      const intervalValue = privateRecall?.recall_interval_days ?? note.frontmatter.recall_interval_days;
+      try {
+        if (intervalValue != null && typeof intervalValue !== 'number' && typeof intervalValue !== 'string') throw new Error('Invalid interval type');
+        recallIntervalDays = normalizeReviewIntervalDays(intervalValue);
+      }
+      catch { invalidInterval = Boolean(recallPrompt); }
+      if (invalidInterval) reasons.push('invalid_recall_interval_days');
       const recallState = principal?.agentId ? privateRecall : note.frontmatter;
       const lastRecalledTime = organizationDateTimestamp(recallState?.last_recalled_at);
       const lastRecalledAt = Number.isFinite(lastRecalledTime) ? String(recallState!.last_recalled_at).trim() : undefined;
@@ -3014,7 +3020,7 @@ export class LlmWikiService {
       const recallSuccessCount = Number(recallState?.recall_success_count);
       const invalidRecallDate = Boolean(recallPrompt && recallState?.last_recalled_at !== undefined && !Number.isFinite(lastRecalledTime));
       if (invalidRecallDate) reasons.push('invalid_last_recalled_at');
-      const recallDue = Boolean(recallPrompt && Number.isInteger(recallIntervalDays) && recallIntervalDays > 0
+      const recallDue = Boolean(!stateHidden && recallPrompt && recallIntervalDays !== undefined && !invalidInterval
         && (recallState?.last_recalled_at === undefined || (Number.isFinite(lastRecalledTime) && lastRecalledTime + recallIntervalDays * 24 * 60 * 60 * 1000 <= nowMs)));
       if (['question', 'hypothesis', 'experiment', 'assumption'].includes(noteKind)) {
         if (!epistemicStatus) reasons.push('epistemic_status_missing');
@@ -3031,13 +3037,24 @@ export class LlmWikiService {
       const priority = reasons.reduce((score, reason) => score + (reason === 'disputed_claim' ? 5 : reason === 'recall_due' ? 4 : reason === 'negative_knowledge' ? 3 : reason === 'epistemic_status_missing' ? 4 : 2), 0);
       const item: Record<string, unknown> = {
         path: this.access.toPublicPath(note.path),
+        revision: note.revision,
+        ...(statePath && !stateHidden && { stateRevision: stateNote?.revision || 'missing' }),
+        ...(stateHidden && { recallUnavailable: true }),
         title: typeof note.frontmatter.title === 'string' && note.frontmatter.title.trim() ? note.frontmatter.title.trim() : note.path.split('/').at(-1),
         ...(noteKind && { noteKind }),
         ...(String(note.frontmatter.lifecycle || '').trim() && { lifecycle: String(note.frontmatter.lifecycle).trim().toLowerCase() }),
         ...(epistemicStatus && { epistemicStatus }),
         ...(knowledgeStatus && { status: knowledgeStatus }),
         ...(polarity && { polarity }),
-        ...(recallPrompt && { recallPrompt }),
+        ...(recallPrompt && (recallPrompt.length <= 1000 ? { recallPrompt } : {
+          promptOmitted: true,
+          promptAction: { endpointId: 'notes.read', arguments: {
+            path: this.access.toPublicPath(privateRecall?.recall_prompt != null && statePath ? statePath : note.path),
+            expectedRevision: privateRecall?.recall_prompt != null && statePath ? stateNote?.revision : note.revision,
+            property: 'recall_prompt', maxChars: 3000,
+          } },
+        })),
+        ...(recallIntervalDays !== undefined && { recallIntervalDays }),
         ...(lastRecalledAt && { lastRecalledAt }),
         ...(typeof recallState?.recall_quality === 'string' && { recallQuality: String(recallState.recall_quality).trim().toLowerCase() }),
         ...(Array.isArray(recallState?.recall_history) && { recallHistoryCount: recallState.recall_history.length }),
@@ -3051,30 +3068,54 @@ export class LlmWikiService {
       };
       if (reasons.some(reason => reason.startsWith('invalid_'))) {
         item.suggestedAction = 'Repair the invalid date metadata from actual evidence and a current revision before rescheduling; do not invent elapsed time or recall history.';
+      } else if (stateHidden) {
+        item.suggestedAction = 'Personal recall is unavailable; do not record an attempt until the private state is available again. Other research reasons remain advisory.';
+      } else if (recallDue && recallPrompt.length > 1000) {
+        item.suggestedAction = 'Follow promptAction and its Property continuations before attempting recall; do not read the answer body first.';
       }
-      const position = candidates.findIndex(candidate => priority > Number(candidate.priority || 0) || (priority === Number(candidate.priority || 0) && String(item.path).localeCompare(String(candidate.path)) < 0));
+      const candidate = { item, path: note.path, revision: note.revision, statePath, stateRevision: stateNote?.revision };
+      const position = candidates.findIndex(candidate => priority > Number(candidate.item.priority || 0) || (priority === Number(candidate.item.priority || 0) && String(item.path).localeCompare(String(candidate.item.path)) < 0));
       if (position === -1) {
-        if (candidates.length < boundedLimit) candidates.push(item);
+        if (candidates.length < boundedLimit) candidates.push(candidate);
       } else {
-        candidates.splice(position, 0, item);
+        candidates.splice(position, 0, candidate);
         if (candidates.length > boundedLimit) candidates.pop();
       }
     }
-    const items: Array<Record<string, unknown>> = [];
-    let used = 2;
-    for (const item of candidates) {
-      const encoded = JSON.stringify(item);
-      if (used + encoded.length + 1 > boundedChars) break;
-      items.push(item);
-      used += encoded.length + 1;
+    // Check the selected cohort only, including an observed absence of state.
+    // A later external edit is still possible; returned revisions guard writes.
+    for (const candidate of candidates) {
+      const note = await readMetadata(candidate.path);
+      if (!note || isModerationHidden(note.frontmatter) || note.revision !== candidate.revision) throw changed();
+      if (candidate.statePath) {
+        const state = await readMetadata(candidate.statePath);
+        if (state?.revision !== candidate.stateRevision) throw changed();
+      }
     }
-    return {
+    const items: Array<Record<string, any>> = [];
+    const report: Record<string, any> & { items: Array<Record<string, any>>; total: number; truncated: boolean } = {
       mode: 'bounded_knowledge_gap_queue',
       items,
       total,
-      truncated: total > items.length,
+      truncated: total > 0,
       note: 'This queue is for active recall and research prioritization. It does not decide truth, rewrite notes, or replace evidence review.',
     };
+    const fits = (value: unknown) => JSON.stringify(value, null, prettyPrint ? 2 : undefined).length <= boundedChars;
+    for (const { item } of candidates) {
+      if (!fits({ ...report, items: [...items, item], truncated: total > items.length + 1 })) break;
+      items.push(item);
+    }
+    report.truncated = total > items.length;
+    if (items.length || !total) return report;
+    // Preserve the highest-priority task rather than silently skipping it or
+    // shortening an authored question. Maximum-budget failures are terminal.
+    const fallback = { mode: report.mode, items, total, truncated: true,
+      ...(boundedChars < 16000
+        ? { retry: { endpointId: 'wiki.knowledge_gaps', reuseOriginalArguments: true, overrides: { maxChars: 16000 } } }
+        : { taskUnavailable: true }),
+      instruction: boundedChars < 16000 ? 'Retry with the larger budget, preserving identity and other arguments.'
+        : 'The first task cannot fit. Inspect its authored metadata locally; do not repeat unchanged.' };
+    return fallback;
   }
 
   /** Resolve an authored navigation edge using its syntax and source scope. */

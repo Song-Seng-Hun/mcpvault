@@ -240,7 +240,7 @@ export function getLlmWikiTools() {
         },
         {
             name: 'get_wiki_knowledge_gaps',
-            description: 'Return a bounded active-recall and research queue for visible open questions, hypotheses, assumptions, disputed claims, and negative knowledge. Malformed snooze/recall dates produce invalid_<property> repair reasons, never fabricated elapsed time. A missing recall history may be due; invalid history requires repair. It only projects metadata and never decides truth or rewrites notes.',
+            description: 'Return a bounded active-recall and research queue for visible epistemic work, disputes and negative knowledge using fresh metadata. Private question/cadence override shared defaults; agent history stays personal. Use revision/stateRevision as recording guards; refresh on unavailable or changed inputs. Invalid dates/intervals require repair, not fabricated due time. Long questions use promptAction to read only recall_prompt before the answer. Whole JSON respects maxChars; follow retry when present, never repeat taskUnavailable unchanged. Advisory only; no notes are rewritten.',
             inputSchema: { type: 'object', properties: {
                     limit: { type: 'integer', minimum: 1, maximum: 100, default: 20 },
                     maxChars: { type: 'integer', minimum: 512, maximum: 16000, default: 7000 },
