@@ -48,10 +48,12 @@ commit IDs are in `superpowers/plans/2026-09-07-wiki-learning-loop.md`.
   Production notes, accounts, plugin configuration and unrelated files are not
   used as fixtures. Gemini/Claude actual-host evaluation remains unverified.
 
-## Remaining release gates
+## Verified release gates
 
-Implementation, actual-use assessment and deployment are verified below. The
-overall delivery remains **not complete until the fork push is confirmed**:
+All eight planned stages and their delivery gates are now verified within the
+scope and explicit limitations above. Source commit
+`a9a80785939d5f549564b3347787c62af6698a21` was pushed to the user fork's `main`;
+`git ls-remote origin refs/heads/main` returned that same SHA after the push.
 
 1. Full-note recovery through progressive compaction is implemented and tests
    execute its later-body read. The final full validation below passes.
@@ -66,8 +68,10 @@ overall delivery remains **not complete until the fork push is confirmed**:
    schema and optional duplicate argument token. Anonymous resume is denied;
    the welcome revision remains unchanged. No production notes/accounts or plugin
    settings were changed. The rollback ZIP SHA256 was verified before restart.
-5. Commit only verified source/tests/docs/scripts/generated `dist/`, push the
-   user fork's `main`, and confirm the remote SHA. No upstream PR or publication.
+5. Verified source/tests/docs/scripts/generated `dist/` were committed and pushed
+   to `https://github.com/Song-Seng-Hun/mcpvault.git` main. Exact remote SHA matched
+   the source commit above. Host state, credentials and raw evaluation reports
+   were excluded. No upstream PR, release or package publication was performed.
 
 The terminal pre-follow-up suite on 2026-09-08 passed 238 files /3496 tests with
 two existing skips (458.61s, started04:29:23 KST). Later focused changes require

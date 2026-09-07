@@ -153,7 +153,7 @@ credential handoff or automatic public publication is introduced.
 - [x] Add deterministic protocol scenarios covering source comparison -> existing note update -> application observation -> source change -> provenance check -> conditional synthesis -> experiment -> resume.
 - [x] Evaluate explicit path/revision citation, preservation of negation/conditions, unsupported claims, appropriate existing-note edits and duplicate avoidance. Include denied/private operations and limited budgets.
 - [x] Run a real isolated Codex host with minimal user prompts. Report actual model behavior separately from protocol assertions; do not replace unavailable Gemini/Claude runs with simulated success. Remove only exact test-created artifacts/accounts.
-- [ ] Run build/full tests/diff checks, review each of the eight stage criteria against source and test evidence, update the shared server, verify native MCP and push the user fork. Mark the persistent goal complete only after this audit.
+- [x] Run build/full tests/diff checks, review each of the eight stage criteria against source and test evidence, update the shared server, verify native MCP and push the user fork. Mark the persistent goal complete only after this audit.
 
 ## Progress
 
@@ -333,4 +333,8 @@ new checkpoint schema, anonymous resume rejection and unchanged welcome revision
 No production note/account or plugin-setting writes. Rollback ZIP:
 `.mcpvault/backups/understanding-20260908-0320/previous-dist.zip`.
 The requirement-by-requirement audit is `../../wiki-learning-completion-audit.md`.
-Fork commit/push verification is the remaining release gate.
+Source commit `a9a80785939d5f549564b3347787c62af6698a21` was pushed to the user
+fork main; `git ls-remote origin refs/heads/main` confirmed the identical SHA.
+All eight stages and the original delivery gates are verified. This final record
+does not expand the single actual-Codex scenario into a claim of universal model
+reliability or automatically completed experiments.
