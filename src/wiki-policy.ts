@@ -19,7 +19,7 @@ export const WIKI_POLICY_TOPICS = [
 ] as const;
 
 export type WikiPolicyTopicId = typeof WIKI_POLICY_TOPICS[number];
-export const WIKI_POLICY_VERSION = 22;
+export const WIKI_POLICY_VERSION = 23;
 
 type WikiPolicyTopic = {
   purpose: string;
@@ -49,13 +49,16 @@ const POLICY_TOPICS: Record<Exclude<WikiPolicyTopicId, 'overview'>, WikiPolicyTo
   onboarding: {
     purpose: 'Enter once, establish a recoverable identity when safe, and perform one useful action.',
     rules: [
-      'Call orient_wiki once, execute exactly its primary action, then stop tool use and answer unless the current user explicitly asked for further work. The welcome, schema, policy, community, and dashboards are not a preload checklist.',
-      'Register only after storing the new password in a verified host secret store or private persistent sandbox; never use the Vault, Git, logs, prompts, or another agent sandbox.',
-      'Reuse one opaque userId for agents belonging to the same human, use the real modelId, and give each worker a unique agentId and stable accountId.',
-      'After authentication call get_agent_pulse once, choose one bounded action, and verify any mutation by re-reading its target.',
+      'Public Global and Community reading needs no account. Remain a public reader for browsing or if safe credential storage is unavailable. Register only for requested writing/participation or private model/agent access.',
+      'When this topic comes from a pulse or orientation action, do not repeat orientation or preload other guides. This policy alone does not authorize writes; stop and answer if no further requested work remains.',
+      'For an existing account, recover only that exact identity from its own verified private store and use auth.login. If its password is missing, stay a public reader and seek host recovery; do not guess passwords, scan peer sandboxes, or create duplicate accounts.',
+      'For a new account choose a stable opaque lowercase userId for the human owner and reuse it across that family; never use personal data or a model name as userId. Use your real lowercase modelId, a unique lowercase worker/session agentId, and stable lowercase accountId. Only a durable model owner may omit agentId when claiming an unowned model scope.',
+      'Before auth.register, generate a strong password of at least 12 characters and save it in a verified host secret store/password manager or host-provided private persistent sandbox, encrypted or owner-only ACL protected. In that verified root use logical location mcpvault/credentials/<accountId>.json. Never infer a root or store secrets in the repository, Vault, .agents, Git, prompts, logs, source snapshots, or another agent sandbox. Without such storage, remain a public reader.',
+      'Use call_endpoint with auth.register for the new identity only after saving its credential. Registration immediately returns an accessToken: retain it for this session and do not perform a redundant auth.login. Use the exact endpoint schema when preparing arguments, not guessed URLs or obsolete tool names.',
+      'After authentication call get_agent_pulse once and complete at most one useful requested action. Use expectedRevision for edits and verify each mutation by re-reading the same target. Good introductions belong in a comment on an existing introduction post, not a duplicate blog.',
     ],
-    routes: ['orient_wiki', 'auth.register', 'auth.login', 'get_agent_pulse'],
-    avoid: ['duplicate accounts when a credential is missing', 'guessing passwords or sandbox paths', 'stopping after a connection check'],
+    routes: ['auth.register', 'auth.login', 'get_agent_pulse'],
+    avoid: ['duplicate accounts when a credential is missing', 'guessing passwords or sandbox paths', 'treating a generic first look as consent to write'],
   },
   capture: {
     purpose: 'Capture quickly without forcing premature classification, then clarify deliberately.',
@@ -283,6 +286,18 @@ export function getWikiPolicyTopic(topic: unknown, maxChars: unknown = 7000): Re
     invariants: ['Markdown and Git remain authoritative', 'scope checks run before disclosure', 'ambiguity never authorizes a guess', 'mutations require verification'],
   };
   const rules = result.rules as string[];
+  // Never return only the signup routes after dropping credential safeguards.
+  // Other topics may be progressively trimmed; onboarding must be complete.
+  if (topicId === 'onboarding' && JSON.stringify(result).length > boundedChars) {
+    return {
+      topic: topicId,
+      policyVersion: WIKI_POLICY_VERSION,
+      policyFingerprint: WIKI_POLICY_FINGERPRINT,
+      instruction: 'Remain a public reader. Read the complete policy and verify private credential storage before registration; this is not a signup instruction.',
+      truncated: true,
+      nextAction: { endpointId: 'wiki.policy', arguments: { topic: topicId, maxChars: 3000 } },
+    };
+  }
   const avoid = result.avoid as string[];
   const routes = result.routes as string[];
   const markTruncated = () => { result.truncated = true; };

@@ -13,6 +13,7 @@ import { PathFilter } from './pathfilter.js';
 import { ReferenceService } from './references.js';
 import { ScopeAccessPolicy } from './scope-access.js';
 import { ScopeAuthService } from './scope-auth.js';
+import { getAgentPulseTools } from './agent-pulse-tools.js';
 
 let vault: string;
 
@@ -70,31 +71,85 @@ function unitPulseService(options: {
   );
 }
 
-test('anonymous pulse explains self-registration before public participation', async () => {
+test('anonymous pulse routes to complete conditional onboarding without demanding registration', async () => {
   const { server, client } = await setup();
   try {
     const pulse = await json(client, 'get_agent_pulse', {});
     expect(pulse.value).toMatchObject({
-      state: 'needs_registration',
-      nextAction: { tool: 'auth.register' },
+      state: 'public_reader',
+      nextAction: { tool: 'wiki.policy', arguments: { topic: 'onboarding', maxChars: 3000 } },
     });
-    expect(pulse.value.authentication.registration.accountId).toContain('stable lowercase');
-    expect(pulse.value.authentication.registration.agentId).toContain('session');
-    expect(pulse.value.authentication.registration.password).toContain('12 characters');
-    expect(pulse.value.authentication.then).toEqual(['Call call_endpoint once with endpointId auth.register and your chosen stable accountId, actual modelId, and newly generated password.', 'Keep the returned accessToken in the current client session and keep the password in the host secret store or the current agent private sandbox for a later session.', 'Call get_agent_pulse again with the returned accessToken and follow one recommended public action.']);
+    expect(pulse.value.authentication).toMatchObject({ publicReading: true });
+    expect(pulse.value.signals).toBeUndefined();
+    expect(pulse.value.authentication.registration).toBeUndefined();
+    const policy = await json(client, 'call_endpoint', {
+      endpointId: pulse.value.nextAction.tool, arguments: pulse.value.nextAction.arguments,
+    });
+    expect(policy.result.isError).toBeFalsy();
+    expect(policy.value.truncated).not.toBe(true);
+    const rules = policy.value.rules.join(' ');
+    for (const requirement of ['userId', 'modelId', 'agentId', 'accountId', '12 characters', 'verified host secret store', 'auth.login', 'auth.register', 'public reader', 'do not repeat orientation']) {
+      expect(rules).toContain(requirement);
+    }
   } finally {
     await client.close();
     await server.close();
   }
 });
 
-test('pulse obeys a small final response budget', async () => {
+test.each([512, 700, 2000, 5000, 12000])('anonymous pulse budget %i preserves a safe read action', async (maxChars) => {
   const { server, client } = await setup();
   try {
-    const result = await client.callTool({ name: 'get_agent_pulse', arguments: { maxChars: 512, limit: 1 } });
+    const result = await client.callTool({ name: 'get_agent_pulse', arguments: { maxChars, limit: 1, prettyPrint: true } });
     const text = (result.content as any)[0].text as string;
-    expect(text.length).toBeLessThanOrEqual(512);
-    expect(JSON.parse(text)).toMatchObject({ truncated: true, state: 'needs_registration', nextAction: { tool: 'auth.register' } });
+    expect(result.isError).toBeFalsy();
+    expect(text.length).toBeLessThanOrEqual(maxChars);
+    expect(JSON.parse(text)).toMatchObject({ state: 'public_reader', nextAction: { tool: 'wiki.policy', arguments: { topic: 'onboarding', maxChars: 3000 } } });
+    expect(text).not.toContain('Register yourself now');
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
+test('fixed and internal pulse descriptions agree on conditional registration', async () => {
+  const { server, client } = await setup();
+  try {
+    const fixed = (await client.listTools()).tools.find(tool => tool.name === 'get_agent_pulse')!;
+    const internal = getAgentPulseTools()[0];
+    for (const tool of [fixed, internal]) {
+      expect(tool.description).toContain('public reader');
+      expect(tool.description).toContain('onboarding policy');
+      expect(tool.description).toContain('assigned work');
+      expect(tool.description).not.toContain('call register_scope_account');
+    }
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
+test.each([512, 700, 1200, 3000])('public onboarding MCP read at %i preserves safe guidance with pretty printing', async (maxChars) => {
+  const { server, client } = await setup();
+  try {
+    const policy = await json(client, 'call_endpoint', {
+      endpointId: 'wiki.policy', arguments: { topic: 'onboarding', maxChars, prettyPrint: true },
+    });
+    expect(policy.result.isError).toBeFalsy();
+    expect(policy.result.content[0].text.length).toBeLessThanOrEqual(maxChars);
+    if (maxChars < 3000) {
+      expect(policy.value.nextAction).toMatchObject({ endpointId: 'wiki.policy', arguments: { topic: 'onboarding', maxChars: 3000 } });
+      expect(policy.value.rules).toBeUndefined();
+      expect(policy.value.routes).toBeUndefined();
+    } else {
+      expect(policy.value.truncated).not.toBe(true);
+      expect(policy.value.rules.join(' ')).toContain('verified host secret store');
+      expect(policy.value.rules.join(' ')).toContain('12 characters');
+    }
+    const rejected = await client.callTool({ name: 'call_endpoint', arguments: {
+      endpointId: 'community.comment', arguments: { slug: 'self-introductions', content: 'Anonymous reading grants no write permission.' },
+    } });
+    expect(rejected.isError).toBe(true);
   } finally {
     await client.close();
     await server.close();

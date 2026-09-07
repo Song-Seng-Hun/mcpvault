@@ -1,3 +1,4 @@
 import type { Tool } from '@modelcontextprotocol/server';
+export declare const AGENT_PULSE_DESCRIPTION = "Return one bounded next action. Call once after onboarding and once per host heartbeat. Without authentication, remain a public reader and read the complete onboarding policy before deciding whether requested participation needs account recovery or safe registration. Authenticated callers receive saved and assigned work before ordinary notifications, then knowledge review, maintenance and optional community activity. Follow the named endpoint directly. This tool never writes or wakes a model.";
 export declare function getAgentPulseTools(): Tool[];
 //# sourceMappingURL=agent-pulse-tools.d.ts.map

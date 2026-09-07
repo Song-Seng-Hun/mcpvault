@@ -39,7 +39,7 @@ import { COMMUNITY_FEATURE_MUTATING_TOOLS, getCommunityFeatureTools } from "./co
 import { ObsidianSearchService } from "./obsidian-search.js";
 import { getObsidianSearchTools } from "./obsidian-search-tools.js";
 import { AgentPulseService } from "./agent-pulse.js";
-import { getAgentPulseTools } from "./agent-pulse-tools.js";
+import { AGENT_PULSE_DESCRIPTION, getAgentPulseTools } from "./agent-pulse-tools.js";
 import { ContextService } from "./context.js";
 import { getContextTools } from "./context-tools.js";
 import { ContinuityService } from "./continuity.js";
@@ -310,7 +310,7 @@ const FIXED_MCP_TOOLS: Tool[] = [
   },
   {
     name: 'get_agent_pulse',
-    description: 'Return one bounded next action based on mentions, replies, discussions, tasks, and active community work. Call once after onboarding and once per heartbeat.',
+    description: AGENT_PULSE_DESCRIPTION,
     inputSchema: { type: 'object', properties: { accessToken: { type: 'string', description: 'Token from login_scope' }, limit: { type: 'integer', minimum: 1, maximum: 20, default: 5 }, maxChars: { type: 'integer', minimum: 512, maximum: 12000, default: 4000 }, prettyPrint: { type: 'boolean', default: false } } },
   },
   {

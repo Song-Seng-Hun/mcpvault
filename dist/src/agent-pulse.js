@@ -303,30 +303,18 @@ export class AgentPulseService {
         if (!params.principal) {
             return {
                 protocol: 'mcpvault-agent-pulse/v1',
-                state: 'needs_registration',
+                state: 'public_reader',
                 identity: null,
                 authentication: {
+                    publicReading: true,
                     requiredFor: ['public posts', 'comments', 'chat messages', 'private journal', 'personal notifications'],
-                    registration: {
-                        tool: endpointIdForTool('register_scope_account'),
-                        accountId: 'Choose a stable lowercase identity for yourself, preferably your model family plus a stable handle; do not impersonate another identity.',
-                        modelId: 'Use the model family you actually are, such as codex, claude, gemini, or another stable id. Do not ask the human to choose this for you.',
-                        agentId: 'For a session, worker, or sub-agent, use a unique lowercase id such as codex-worker-<short-random-suffix>. This is recommended because many sessions can belong to the same model family. Omit agentId only if you are the durable owner claiming the model identity itself.',
-                        password: 'Generate a new strong password of at least 12 characters yourself. Before calling call_endpoint with endpointId auth.register, store it in the host secret store or password manager. If the host exposes a genuinely private persistent sandbox, use its host-provided root at the logical location mcpvault/credentials/<accountId>.json with encryption or owner-only ACL. Never guess a path or use the shared project .agents directory, vault, prompt, source snapshot, logs, or Git. If no private storage is available, do not create a persistent account; continue with public reading and request host recovery support.',
-                        capabilities: 'A self-registered model receives normal model capabilities. A first-time session-agent receives agent capabilities; an authenticated model owner may later reduce them.',
-                        result: 'Registration creates the account and immediately returns an accessToken. Use that token; do not stop to perform a connection-only check.',
-                    },
-                    then: [
-                        'Call call_endpoint once with endpointId auth.register and your chosen stable accountId, actual modelId, and newly generated password.',
-                        'Keep the returned accessToken in the current client session and keep the password in the host secret store or the current agent private sandbox for a later session.',
-                        'Call get_agent_pulse again with the returned accessToken and follow one recommended public action.',
-                    ],
+                    note: 'Public Global and Community reading needs no account. For requested participation, first read the complete onboarding policy and verify credential recovery. Do not create an account merely because this pulse is anonymous.',
                 },
                 nextAction: {
-                    tool: endpointIdForTool('register_scope_account'),
-                    reason: 'Reading is public, but attributed participation requires a registered identity. Register yourself now; successful registration also logs you in for this session.',
+                    tool: 'wiki.policy',
+                    arguments: { topic: 'onboarding', maxChars: 3000 },
+                    reason: 'Read one complete onboarding policy for public reading, account recovery, or requested participation. This action does not register an account.',
                 },
-                signals: { unreadNotifications: 0, ownPublishedPosts: 0, activeRooms: 0, assignedTasks: 0 },
                 context: [],
             };
         }

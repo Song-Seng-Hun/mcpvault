@@ -3,6 +3,26 @@ import { getLlmWikiTools } from './llm-wiki-tools.js';
 import { getWikiPolicyTopic, MCPVAULT_SERVER_INSTRUCTIONS, WIKI_POLICY_FINGERPRINT, WIKI_POLICY_TOPICS, WIKI_POLICY_VERSION } from './wiki-policy.js';
 
 describe('progressive Wiki policy', () => {
+  test('complete onboarding includes conditional participation and recoverable credentials', () => {
+    const policy = getWikiPolicyTopic('onboarding', 3000);
+    expect(policy.truncated).not.toBe(true);
+    expect(JSON.stringify(policy).length).toBeLessThanOrEqual(3000);
+    const rules = (policy.rules as string[]).join(' ');
+    for (const text of ['requested', 'public reader', 'userId', 'modelId', 'agentId', 'accountId', '12 characters', 'verified host secret store', 'auth.login', 'auth.register', 'do not repeat orientation']) {
+      expect(rules).toContain(text);
+    }
+  });
+
+  test.each([512, 700, 1200])('incomplete onboarding at %i characters returns a safe continuation, not half a signup recipe', maxChars => {
+    const policy = getWikiPolicyTopic('onboarding', maxChars);
+    expect(JSON.stringify(policy).length).toBeLessThanOrEqual(maxChars);
+    expect(policy).toMatchObject({ truncated: true, nextAction: { endpointId: 'wiki.policy', arguments: { topic: 'onboarding', maxChars: 3000 } } });
+    expect(policy.routes).toBeUndefined();
+    expect(policy.rules).toBeUndefined();
+    expect(String(policy.instruction)).toContain('public reader');
+    expect(String(policy.instruction)).toContain('before registration');
+  });
+
   test('keeps the eager MCP constitution compact but actionable', () => {
     expect(MCPVAULT_SERVER_INSTRUCTIONS.length).toBeLessThanOrEqual(3500);
     expect(MCPVAULT_SERVER_INSTRUCTIONS).toContain('orient_wiki');
@@ -20,7 +40,7 @@ describe('progressive Wiki policy', () => {
   });
 
   test('teaches bounded authority shelves and distinct relation strengths progressively', () => {
-    expect(WIKI_POLICY_VERSION).toBe(22);
+    expect(WIKI_POLICY_VERSION).toBe(23);
     const retrieval = getWikiPolicyTopic('retrieval', 2000);
     const knowledge = getWikiPolicyTopic('knowledge', 2000);
     expect(retrieval.routes).toEqual(expect.arrayContaining(['wiki.authority_map']));
