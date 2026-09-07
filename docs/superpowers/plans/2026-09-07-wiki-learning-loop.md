@@ -26,7 +26,7 @@ Output: source locator/passages/integrity state; candidate exact locators, passa
 - [x] Add integration tests via `call_endpoint`: discovery, read-only use, bounded JSON, revision-pinned read action; preserve exactly five tools.
 - [x] Add policy source comparison route and README/schema usage; guide from existing ingest/distillation descriptions without requiring a new account for public comparison.
 - [x] Stage 1 full tests and deployment/native route check.
-- [ ] Stage 1 fork commit/push verification.
+- [x] Stage 1 fork commit/push verification (`d94644c` on origin/main).
 
 Red/green commands:
 ```powershell
@@ -86,7 +86,7 @@ found and reproduced metadata-prefix alias ambiguity, hidden path ambiguity,
 late access revocation and omitted-passage/body continuation defects; fixes and
 regressions are present. Spec and code-quality re-review approved. The first
 full run caught the newly added body-window regression (3212 pass, one fail,
-two skips); a clean run on the final fix is in progress, not yet claimed passed.
+two skips); that failure was repaired before the final run below.
 Final fresh full run: **214 files passed, 3213 tests passed, two pre-existing
 skips**, 461.40 seconds, started 21:41:54 KST. Build and diff checks passed.
 The public production source-lineage query has zero snapshots, so positive
