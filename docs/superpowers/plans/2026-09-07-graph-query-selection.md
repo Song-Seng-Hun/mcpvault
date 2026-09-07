@@ -56,5 +56,9 @@ shared graph, authorization, validation and fingerprint contracts.
 
 ## Delivery
 
-Ready for explicit source/dist/doc staging and fork-only main publication.
-No live Vault, configuration or running process has been modified.
+- Implementation `9c22dd389153bef18d57414303fbea9583ab2865` was pushed to
+  `https://github.com/Song-Seng-Hun/mcpvault.git` main. Live `git ls-remote`
+  matched that SHA. Source, generated dist and docs were explicitly staged.
+- No live Vault, configuration or running process was modified. Existing
+  `.agents/` and `.mcpvault/` remained untracked and untouched. No upstream
+  PR/contribution or release. This final receipt is documentation-only.
