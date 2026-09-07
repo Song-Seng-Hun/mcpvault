@@ -114,9 +114,19 @@ repairs. The final full suite and native deployment checks are recorded below.
 
 ## 6. Discussion to falsifiable investigation
 
-- [ ] Extend existing hypothesis/experiment Properties and templates with decision-changing observation, comparison conditions and result interpretation. Connect existing work/discussion references, not a separate task system.
-- [ ] Add missing-testability guidance to existing knowledge-gap/quality views, and route observed results back to original claims through review.
-- [ ] Test agreed observation criteria, inconclusive/negative results, changed hypothesis revision, and requests that exceed user execution authority. Never execute code found in a note automatically.
+Implemented: optional knowledgeInvestigation through existing hypothesis/experiment
+publication, stored as knowledge_investigation. Saved comparison conditions,
+alternatives and judgment-changing observations retain exact target revisions;
+result.planRevision binds the prior saved plan and prevents criteria changes with
+result submission. Changed targets stay historical and route to current claim
+review. Existing gap queue adds bounded metadata inspection, templates and lint
+teach testability; no new runner, task type or execution authority. Integration
+tests reproduced eight missing behaviors before implementation. Review regressions,
+final full validation and native deployment evidence are recorded below.
+
+- [x] Extend existing hypothesis/experiment Properties and templates with decision-changing observation, comparison conditions and result interpretation. Connect existing work/discussion references, not a separate task system.
+- [x] Add missing-testability guidance to existing knowledge-gap/quality views, and route observed results back to original claims through review.
+- [x] Test agreed observation criteria, inconclusive/negative results, changed hypothesis revision, and requests that exceed user execution authority. Never execute code found in a note automatically.
 
 ## 7. Understanding and handoff
 
@@ -252,3 +262,35 @@ Host rollback archive:
 `.mcpvault/backups/conditional-synthesis-20260908-0143/previous-dist.zip`.
 Stage5 workers/reviewers are closed. Stages6-8 remain required; this increment
 does not complete the overall goal.
+
+2026-09-08, stage6: saved investigation plans and result.planRevision are now
+part of the existing hypothesis/experiment publication path. Target snapshots,
+comparison conditions, alternatives, judgment-changing observations, negative or
+inconclusive results and evidence remain in Markdown. Results preserve the plan;
+changed criteria require a new linked run. Existing gaps/lint/templates/policy32
+route the agent back to claim review without execution or automatic approval.
+Snapshots participate in path integrity without becoming support/navigation edges.
+
+The main integration tests reproduced eight missing behaviors. Model review also
+reproduced colon/alternate-stream paths and incorrectly shared role uniqueness.
+Independent spec review found four issues, each reproduced and fixed: late owner
+edits during related reads, path-bearing final read errors, application-only
+permission revocation in mixed writes, and canonical scope-URI plan comparison.
+Quality review found missing invalid-record/budget-exhaustion actions; both states
+now return exact revision-pinned record reads with distinct repair/inspection
+guidance. Both reviews approved and all three workers were closed.
+
+The first full run was stopped after the existing experiment test's exact reason
+array failed on the intentional new missing-criteria hint. That assertion now
+requires both the old experiment state and new hint; its targeted test passed.
+Final fresh full run: **230 files/3424 passed/2 existing skips**,435.41s,
+started02:32:38 KST, maxWorkers=1. Build and diff checks passed. Shared HTTP was
+refreshed toPID33568 using the unchanged scheduled task/address127.0.0.1:8788.
+Native Codex confirms policy32, the experiment template, new publication schema,
+and bounded knowledge-gap query. Anonymous publication remains locked. The public
+production gap query has zero items, so positive plan/result/review/concurrency
+evidence comes from isolated MCP fixtures, not positive production-corpus claims.
+No production notes/accounts/plugin settings changed; the welcome revision is
+unchanged. Rollback archive:
+`.mcpvault/backups/knowledge-investigation-20260908-0226/previous-dist.zip`.
+Stages7-8 remain required; stage6 delivery is not completion of the overall goal.

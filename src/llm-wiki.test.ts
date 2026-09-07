@@ -1610,7 +1610,7 @@ test('experiment notes connect epistemic work, reproducible Markdown, graph navi
 
     const gaps = await callJson(client, 'call_endpoint', { endpointId: 'wiki.knowledge_gaps', arguments: { limit: 10, maxChars: 6000, accessToken } });
     expect(gaps.value.items).toEqual(expect.arrayContaining([
-      expect.objectContaining({ path: 'Experiments/Latency run 1.md', noteKind: 'experiment', epistemicStatus: 'planned', reasons: ['experiment_planned'] }),
+      expect.objectContaining({ path: 'Experiments/Latency run 1.md', noteKind: 'experiment', epistemicStatus: 'planned', reasons: expect.arrayContaining(['experiment_planned', 'investigation_criteria_missing']) }),
     ]));
     const dashboard = await callJson(client, 'call_endpoint', { endpointId: 'wiki.review_dashboard', arguments: { limit: 10, maxChars: 16000, accessToken } });
     expect(dashboard.value.sections.epistemic.experiments).toMatchObject({

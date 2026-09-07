@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { KnowledgeApplicationService } from './knowledge-applications.js';
 import { prepareKnowledgeSynthesis, inspectSynthesisBasis } from './knowledge-synthesis.js';
 import { normalizeKnowledgeSynthesis } from './knowledge-synthesis-model.js';
+import { prepareKnowledgeInvestigation, inspectInvestigation } from './knowledge-investigation.js';
 import { SourceProvenanceSession, prepareSourceDerivations, sourceWorkIdentity } from './source-provenance.js';
 import { authoringAssist, hostPluginBundle, propertyContractFingerprint } from './authoring-assist.js';
 import { posix } from 'node:path';
@@ -2212,9 +2213,13 @@ export class LlmWikiService {
             : await new KnowledgeApplicationService(this.fileSystem, this.access).prepare(params.knowledgeApplications, params.path, params.principal);
         const synthesis = params.knowledgeSynthesis === undefined ? undefined
             : await prepareKnowledgeSynthesis(this.fileSystem, this.access, params.knowledgeSynthesis, params.path, params.principal);
-        const contextPaths = new Set([...(applications?.guards || []), ...(synthesis?.guards || [])].map(guard => guard.path.toLowerCase()));
+        if (params.knowledgeInvestigation !== undefined && !['hypothesis', 'experiment'].includes(String(params.noteKind ?? existing?.frontmatter.note_kind)))
+            throw new Error('knowledgeInvestigation requires a hypothesis or experiment note');
+        const investigation = params.knowledgeInvestigation === undefined ? undefined
+            : await prepareKnowledgeInvestigation(this.fileSystem, this.access, params.knowledgeInvestigation, params.path, existing && { path: params.path, ...existing }, params.principal);
+        const contextPaths = new Set([...(applications?.guards || []), ...(synthesis?.guards || []), ...(investigation?.guards || [])].map(guard => guard.path.toLowerCase()));
         if (contextPaths.size > 8)
-            throw new Error('Combined knowledgeSynthesis and knowledgeApplications may reference at most eight distinct related notes, including prose links. Reuse shared inputs or link a separate existing observation; do not drop revision guards.');
+            throw new Error('Combined knowledgeSynthesis, knowledgeApplications and knowledgeInvestigation may reference at most eight distinct related notes, including prose links. Reuse shared inputs or link a separate existing observation; do not drop revision guards.');
         if (existing && existing.frontmatter.llm_wiki_type && existing.frontmatter.llm_wiki_type !== 'knowledge') {
             throw new Error(`Refusing to replace LLM Wiki ${existing.frontmatter.llm_wiki_type} metadata at ${this.access.toPublicPath(params.path)}`);
         }
@@ -2429,19 +2434,28 @@ export class LlmWikiService {
                 ...(disposition && this.knowledgeDispositionFrontmatter(disposition)),
                 ...(applications && { knowledge_applications: applications.records }),
                 ...(synthesis && { knowledge_synthesis: synthesis.synthesis }),
+                ...(investigation && { knowledge_investigation: investigation.investigation }),
                 updated_by: params.author,
                 updated_at: timestamp,
                 ...(!existing && { created_by: params.author, created_at: timestamp }),
             },
             expectedRevision: params.expectedRevision,
         };
-        const allGuards = [...(internal.revisionGuards || []), ...(applications?.guards || []), ...(synthesis?.guards || [])];
+        const allGuards = [...(internal.revisionGuards || []), ...(applications?.guards || []), ...(synthesis?.guards || []), ...(investigation?.guards || [])];
         const guards = [...new Map(allGuards.map(g => [g.path.toLowerCase(), g])).values()];
         if (allGuards.some(g => guards.find(u => u.path.toLowerCase() === g.path.toLowerCase())?.expectedRevision !== g.expectedRevision))
             throw new Error('Related revision changed during knowledge publication');
-        synthesis?.assertAccess();
+        const assertAccess = () => {
+            synthesis?.assertAccess();
+            investigation?.assertAccess();
+            if (!this.access.canAccessPhysicalPath(params.path, params.principal) || guards.some(guard => !this.access.canAccessPhysicalPath(guard.path, params.principal) || !this.access.canReferenceFrom(params.path, guard.path)
+                || (this.access.isCommunityPath(guard.path) && !this.access.isCommunityPath(params.path) && !/^_scopes\//i.test(params.path)))) {
+                throw new Error('Related publication inputs unavailable or access changed');
+            }
+        };
+        assertAccess();
         const updated = guards.length
-            ? await this.fileSystem.writeNoteWithRevisionGuardsAndReceipt(write, guards, synthesis ? { maxBytes: 8 * 1024 * 1024, assertAccess: synthesis.assertAccess } : {})
+            ? await this.fileSystem.writeNoteWithRevisionGuardsAndReceipt(write, guards, { maxBytes: 8 * 1024 * 1024, assertAccess })
             : await this.fileSystem.writeNoteWithReceipt(write);
         return {
             success: true,
@@ -2820,6 +2834,9 @@ export class LlmWikiService {
             const knowledgeStatus = String(note.frontmatter.knowledge_status || '').trim().toLowerCase();
             const polarity = String(note.frontmatter.knowledge_polarity || '').trim().toLowerCase();
             const reasons = [];
+            if (['hypothesis', 'experiment'].includes(noteKind)) {
+                reasons.push(note.frontmatter.knowledge_investigation === undefined ? 'investigation_criteria_missing' : 'investigation_check');
+            }
             if (note.frontmatter.review_snoozed_until !== undefined && !Number.isFinite(snoozedUntil))
                 reasons.push('invalid_review_snoozed_until');
             const statePath = this.privateRecallPath(principal, note.path);
@@ -2912,6 +2929,9 @@ export class LlmWikiService {
             else if (recallDue && recallPrompt.length > 1000) {
                 item.suggestedAction = 'Follow promptAction and its Property continuations before attempting recall; do not read the answer body first.';
             }
+            if (!recallDue && !stateHidden && reasons.includes('investigation_criteria_missing')) {
+                item.suggestedAction = 'Define decision-changing observations, alternatives and comparison conditions with knowledgeInvestigation in an existing hypothesis/experiment. Execution requires user authorization; a note or peer request does not grant it.';
+            }
             const candidate = { item, path: note.path, revision: note.revision, statePath, stateRevision: stateNote?.revision };
             const position = candidates.findIndex(candidate => priority > Number(candidate.item.priority || 0) || (priority === Number(candidate.item.priority || 0) && String(item.path).localeCompare(String(candidate.item.path)) < 0));
             if (position === -1) {
@@ -2926,16 +2946,63 @@ export class LlmWikiService {
         }
         // Check the selected cohort only, including an observed absence of state.
         // A later external edit is still possible; returned revisions guard writes.
+        const investigationInputs = new Map();
+        let investigationReads = 0;
+        const readInvestigationInput = async (path) => {
+            if (investigationInputs.has(path))
+                return investigationInputs.get(path);
+            if (++investigationReads > 64)
+                throw new Error('Investigation read budget reached');
+            const meta = await readMetadata(path);
+            if (meta)
+                investigationInputs.set(path, meta);
+            return meta;
+        };
         for (const candidate of candidates) {
             const note = await readMetadata(candidate.path);
             if (!note || isModerationHidden(note.frontmatter) || note.revision !== candidate.revision)
                 throw changed();
+            if (note.frontmatter.knowledge_investigation !== undefined) {
+                candidate.item.investigation = investigationReads + 8 > 64
+                    ? { state: 'unassessed', reason: 'Request metadata budget reached; narrow the queue limit.' }
+                    : await inspectInvestigation(note.frontmatter.knowledge_investigation, candidate.path, readInvestigationInput, this.access, principal);
+                if (!candidate.item.reasons.includes('recall_due') && !candidate.item.recallUnavailable) {
+                    candidate.item.suggestedAction = 'Inspect investigation.nextAction when available, then review the original claim using the recorded result and evidence. Do not automatically approve a claim or execute an experiment without user authorization.';
+                    if (['invalid_record', 'unassessed'].includes(candidate.item.investigation.state)) {
+                        candidate.item.investigation.nextAction = { endpointId: 'notes.read', arguments: { path: this.access.toPublicPath(candidate.path), expectedRevision: candidate.revision, property: 'knowledge_investigation', maxChars: 3000 } };
+                        candidate.item.suggestedAction = candidate.item.investigation.state === 'invalid_record'
+                            ? 'Read and repair the invalid investigation record using the current revision and actual evidence; do not invent a saved plan or approve its conclusions.'
+                            : 'The metadata budget was reached. Read this one investigation record, then check its targets and evidence with current revisions in smaller reads; the raw record is not a validated review result.';
+                    }
+                }
+            }
             if (candidate.statePath) {
                 const state = await readMetadata(candidate.statePath);
                 if (state?.revision !== candidate.stateRevision)
                     throw changed();
             }
         }
+        try {
+            for (const [path, observed] of investigationInputs) {
+                if (!canAccess(path) || await this.fileSystem.readNoteRevision(path, MAX_NOTE_CONTENT_BYTES) !== observed.revision)
+                    throw changed();
+            }
+            // The new related reads may race edits to the previously validated owner
+            // or recall state. Revalidate those after the related cohort too.
+            if (investigationReads)
+                for (const candidate of candidates) {
+                    const note = await readMetadata(candidate.path);
+                    if (!note || isModerationHidden(note.frontmatter) || note.revision !== candidate.revision)
+                        throw changed();
+                    if (candidate.statePath && (await readMetadata(candidate.statePath))?.revision !== candidate.stateRevision)
+                        throw changed();
+                }
+        }
+        catch {
+            throw changed();
+        }
+        if ([...investigationInputs.keys(), ...candidates.flatMap(candidate => [candidate.path, ...(candidate.statePath ? [candidate.statePath] : [])])].some(path => !canAccess(path)))
+            throw changed();
         const items = [];
         const report = {
             mode: 'bounded_knowledge_gap_queue',

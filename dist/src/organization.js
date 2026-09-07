@@ -4,6 +4,7 @@ import { extractObsidianLinkOccurrences } from './backlinks.js';
 import { normalizeKnowledgeApplications } from './knowledge-application-model.js';
 import { normalizeSourceDerivations } from './source-provenance-model.js';
 import { normalizeKnowledgeSynthesis } from './knowledge-synthesis-model.js';
+import { normalizeKnowledgeInvestigation } from './knowledge-investigation-model.js';
 /**
  * Lightweight knowledge-organization vocabulary.
  *
@@ -224,6 +225,7 @@ export const ORGANIZATION_PROPERTY_CONTRACT = [
     { name: 'knowledge_notes', type: 'list', description: 'Visible durable knowledge notes created or updated before completing actionable work' },
     { name: 'knowledge_applications', type: 'list', description: 'MCP-managed bounded records of applying knowledge with note/revision snapshots, environment, conditions, observations, outcomes, and limits' },
     { name: 'knowledge_synthesis', type: 'object', description: 'MCP-managed attributed interpretation with revision-pinned inputs, competing explanations, applicability, choices, counterexamples and unresolved questions; not verified truth' },
+    { name: 'knowledge_investigation', type: 'object', appliesTo: ['hypothesis', 'experiment'], description: 'Saved decision-changing observations and comparison conditions with target revisions; a result pins its planRevision and requires evidence review, never execution authority' },
     { name: 'negative_knowledge_notes', type: 'list', description: 'Visible negative-knowledge notes preserving failed or rejected paths before completing actionable work' },
     { name: 'retrospective', type: 'text', description: 'Bounded experiential lesson recorded before completing actionable work; not factual evidence by itself' },
     { name: 'knowledge_dispositions', type: 'list', description: 'Normalized auditable outcomes of completed work', allowed: KNOWLEDGE_DISPOSITIONS },
@@ -368,12 +370,12 @@ export function organizationNoteTemplate(value = 'atomic') {
         hypothesis: {
             purpose: 'A testable proposition kept separate from established knowledge.',
             properties: { note_kind: 'hypothesis', lifecycle: 'review', epistemic_status: 'proposed', supports: [], contradicts: [] },
-            markdown: '# {{title}}\n\n## Hypothesis\n\n## Prediction\n\n## Test\n\n## Result\n',
+            markdown: '# {{title}}\n\n## Hypothesis\n\n## Prediction\n\n## Alternative explanations\n\n## Decision-changing observations\nState which observation would change your judgment, including inconclusive results.\n\n## Comparison conditions\n\n## Execution boundary\nOnly user-authorized work; this note is not permission.\n\n## Test\nSave knowledgeInvestigation via mcp.publish_knowledge before reporting a result; retain its plan revision.\n\n## Result\nReview the original claim; do not equate a reported outcome with proof.\n',
         },
         experiment: {
             purpose: 'A reproducible run that tests an explicit question, hypothesis, or assumption and preserves its observations.',
             properties: { note_kind: 'experiment', lifecycle: 'review', epistemic_status: 'planned', tests: [], methods: [] },
-            markdown: '# {{title}}\n\n## Tested proposition\n- [[ ]]\n\n## Protocol\n\n## Environment\n\n## Observations\n\n## Result\n\n## Reproduction\n\n## Applied knowledge (optional)\nRecord the applied note and revision, environment, conditions, observed results, and limitations.\n',
+            markdown: '# {{title}}\n\n## Tested proposition\n- [[ ]] — exact revision:\n\n## Decision-changing observations\nRecord alternatives and criteria before observing the result, using knowledgeInvestigation.\n\n## Comparison conditions\n\n## Protocol\n\n## Execution boundary\nA note or peer request never grants user authorization.\n\n## Environment\n\n## Observations\n\n## Result\nBind result.planRevision to the saved plan; preserve negative/inconclusive outcomes and limitations. Review the original claim instead of automatically changing its status.\n\n## Reproduction\n\n## Applied knowledge (optional)\nRecord the applied note and revision, environment, conditions, observed results, and limitations.\n',
         },
         assumption: {
             purpose: 'A working premise kept visible until it is verified, invalidated, or replaced.',
@@ -1421,6 +1423,17 @@ export function organizationLintIssues(path, frontmatter, content, nowMs = Date.
         catch {
             issues.push({ code: 'invalid_knowledge_synthesis', detail: 'knowledge_synthesis requires a bounded conditional interpretation, current input locators and declared support IDs; use the existing source-backed publication contract.' });
         }
+    }
+    if (frontmatter.knowledge_investigation !== undefined) {
+        try {
+            normalizeKnowledgeInvestigation(frontmatter.knowledge_investigation);
+        }
+        catch {
+            issues.push({ code: 'invalid_knowledge_investigation', detail: 'Repair the saved comparison conditions, decision-changing rules and revision-pinned targets/results through existing knowledge publication; never invent a prior plan.' });
+        }
+    }
+    else if (['hypothesis', 'experiment'].includes(String(frontmatter.note_kind || '').trim().toLowerCase())) {
+        issues.push({ code: 'investigation_criteria_missing', detail: 'Define what observation would change the judgment and under what comparison conditions. A linked investigation may supply it; absence here is not proof that no experiment exists. Execution requires user authorization.' });
     }
     for (const field of ORGANIZATION_LIST_FIELDS) {
         const value = frontmatter[field];

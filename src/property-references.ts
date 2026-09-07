@@ -32,7 +32,7 @@ export interface FrontmatterReferenceValue {
  */
 const NON_NAVIGATIONAL_REFERENCE_ROOTS = new Set([
   'review_basis_links', 'review_basis_upstream', 'pending_edits', 'research_trail',
-  'learning_progress', 'knowledge_applications', 'source_derivations', 'knowledge_synthesis',
+  'learning_progress', 'knowledge_applications', 'source_derivations', 'knowledge_synthesis', 'knowledge_investigation',
 ]);
 
 export function isNavigationalFrontmatterReference(reference: FrontmatterReferenceValue): boolean {
@@ -41,6 +41,10 @@ export function isNavigationalFrontmatterReference(reference: FrontmatterReferen
 
 /** Captured file paths are Vault-relative identities or durable scope URIs, not authored wikilinks. */
 export function isReferenceSnapshotPath(segments: Array<string | number>): boolean {
+  if (segments[0] === 'knowledge_investigation') {
+    return (segments.length === 4 && segments[1] === 'targets' && typeof segments[2] === 'number' && segments[3] === 'path')
+      || (segments.length === 5 && segments[1] === 'result' && segments[2] === 'evidence' && typeof segments[3] === 'number' && segments[4] === 'path');
+  }
   if (segments[0] === 'knowledge_synthesis') {
     return segments.length === 4 && segments[1] === 'inputs' && typeof segments[2] === 'number' && segments[3] === 'path';
   }

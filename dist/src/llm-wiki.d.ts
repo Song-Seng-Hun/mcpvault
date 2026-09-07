@@ -248,6 +248,7 @@ export declare class LlmWikiService {
     }>;
     publishKnowledge(params: {
         knowledgeSynthesis?: unknown;
+        knowledgeInvestigation?: unknown;
         knowledgeApplications?: unknown;
         tags?: unknown;
         timeEstimateMinutes?: unknown;

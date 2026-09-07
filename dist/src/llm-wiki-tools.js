@@ -1,5 +1,6 @@
 import { KNOWLEDGE_APPLICATIONS_SCHEMA } from './knowledge-application-model.js';
 import { KNOWLEDGE_SYNTHESIS_SCHEMA } from './knowledge-synthesis-model.js';
+import { KNOWLEDGE_INVESTIGATION_SCHEMA } from './knowledge-investigation-model.js';
 import { ANSWER_PACKET_INTENTS, BASES_VIEW_IDS, CATALOG_ORDERS, CLAIM_ROLES, CLAIM_STATUSES, CONFIDENCE_LEVELS, ISSUE_KINDS, NOTE_TEMPLATE_IDS, RECIPROCAL_RELATIONS, RELATION_FIELDS, TEMPORAL_VALIDITY_STATES, WIKI_PROJECTION_VIEWS, getOrganizationPropertyContract, } from './organization.js';
 import { WIKI_POLICY_TOPICS } from './wiki-policy.js';
 const organizationPropertyContracts = new Map(getOrganizationPropertyContract().map(contract => [contract.name, contract]));
@@ -163,6 +164,7 @@ export function getLlmWikiTools() {
             name: 'publish_knowledge',
             description: 'Create or update active evidence-grounded knowledge while preserving ordinary Markdown/Obsidian/Git behavior. Use wiki.lifecycle_transition instead of this endpoint for retirement or reactivation. Every evidence path must be an immutable source snapshot. Entering taskStatus=completed requires one auditable knowledge disposition. Returned revision identifies this write; re-read the target and inspect any intervening edit before editing again.',
             inputSchema: { type: 'object', properties: {
+                    knowledgeInvestigation: KNOWLEDGE_INVESTIGATION_SCHEMA,
                     knowledgeSynthesis: KNOWLEDGE_SYNTHESIS_SCHEMA,
                     knowledgeApplications: KNOWLEDGE_APPLICATIONS_SCHEMA,
                     ...executionProperties,

@@ -27,6 +27,15 @@ without adding support/backlink edges. Candidate `current_revisions` means
 only revision agreement; an interpretation is not automatically verified.
 See [conditional synthesis](../docs/knowledge-synthesis.md).
 
+`knowledge_investigation` is optional on hypothesis/experiment notes. The existing
+`mcp.publish_knowledge` input `knowledgeInvestigation` records question, 1-4 target
+path/revision snapshots, conditions, 2-4 alternatives, 1-4 decision-changing rules
+and executionBoundary. Optional result records observed/outcome/interpretation/
+limitations and 1-4 evidence snapshots. Its planRevision identifies a previously
+saved plan; criteria cannot change together with results. Target drift requires
+review rather than changing old pins. Read the [investigation workflow](../docs/knowledge-investigation.md)
+for limits, scope and review rules. No note or result grants execution authority.
+
 `source_derivations` is optional immutable source metadata: at most eight
 `{path, revision, relation}` records, where `relation` is `quotation`,
 `adaptation`, or `republication`. Paths are exact Vault-relative source paths,

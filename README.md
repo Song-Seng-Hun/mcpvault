@@ -22,6 +22,10 @@ A local MCP server that lets compatible clients read, search, and edit notes in 
 
 ## Supported clients
 
+Decision-changing [investigations](docs/knowledge-investigation.md) bind reported
+results to saved hypothesis/experiment plans and route them back to claim review,
+without automatic execution or approval.
+
 Conditional [knowledge synthesis](docs/knowledge-synthesis.md) connects authored
 note clusters to competing explanations, applicability, counterexamples and
 revision-pinned inputs. Existing publication and Decision Record endpoints store
