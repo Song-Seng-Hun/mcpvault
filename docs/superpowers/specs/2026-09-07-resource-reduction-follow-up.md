@@ -48,6 +48,24 @@ whole-Vault memory ceiling or header-only disk-I/O claim follows from this.
 
 ## Ranked follow-up with acceptance gates
 
+### Shared process investigation before more micro-optimizations
+
+Fresh repository inspection after the link-parser increment: the checked-in
+`plugins/mcpvault-local/.mcp.json` defines `mcpvault-test` through `node.exe`,
+has no URL and no `--mcp-http` flag. `server.ts` constructs createServer before
+serveStdio for each startup. This proves per-startup service construction in
+that deployment path, not current live process counts or duplicated native
+models (loading is conditional). Installed client configuration may differ.
+
+Investigate shared-server attachment with two disposable clients and an isolated
+fixture before adding more caches/workers: count service/model/index owners and
+measure memory at equal work. Require no new client installation, no auth/scope
+state shared between callers, no silent network exposure, guarded startup and
+ownership, fail-closed endpoint identity, and clean detach/exit. HTTP support
+alone is not proof that current clients share a process. Do not edit live plugin
+configuration, restart servers or terminate supposedly idle processes as part
+of repository-only verification. No shared-process implementation is claimed.
+
 1. **Bounded streaming revision hashing.** Preserve exactly the existing decoded
    UTF-8 revision contract, including malformed UTF-8 and chunk boundaries; do
    not accidentally switch to hashing raw bytes. Preserve PathFilter, path/link
@@ -105,6 +123,12 @@ whole-Vault memory ceiling or header-only disk-I/O claim follows from this.
    orphan windows avoid full-result intermediates. Full counts, permissions and
    view fingerprints still inspect the complete eligible graph. The graph and
    resolver themselves are not newly bounded, and no CPU worker is introduced.
+   `2026-09-07-link-parser-allocation-design.md` also removes full line and
+   per-character arrays from link extraction and caps finite per-line candidate
+   storage to the first K valid matches of each syntax. The full literal mask
+   remains necessary for multiline code; unlimited graph parsing still returns
+   all links. A fixed-baseline differential verifier checks grammar compatibility,
+   independently of the operation-count tests. No whole-process RSS claim.
 4. **GPU remains optional experimentation.** Test a supported runtime/provider
    with the pinned model and quality/latency/memory fixtures, not just a device
    flag. Require CPU fallback, no extra client installation, profile separation,

@@ -124,10 +124,20 @@ export function buildMarkdownLiteralMask(content: string): Uint8Array {
 }
 
 function applyLineMask(line: string, lineOffset: number, mask: Uint8Array): string {
-  const projected = line.split('');
-  for (let index = 0; index < projected.length; index += 1) {
-    if (mask[lineOffset + index]) projected[index] = ' ';
+  const localMask = mask.subarray(lineOffset, lineOffset + line.length);
+  let start = localMask.indexOf(1);
+  if (start === -1) return line;
+  const projected: string[] = [];
+  let cursor = 0;
+  while (start !== -1) {
+    if (start > cursor) projected.push(line.slice(cursor, start));
+    const nextUnmasked = localMask.indexOf(0, start);
+    const end = nextUnmasked === -1 ? line.length : nextUnmasked;
+    projected.push(' '.repeat(end - start));
+    cursor = end;
+    start = localMask.indexOf(1, end);
   }
+  if (cursor < line.length) projected.push(line.slice(cursor));
   return projected.join('');
 }
 
@@ -174,13 +184,14 @@ export function extractObsidianLinkOccurrences(content: string, limit = Number.P
 
 function extractLinkOccurrences(content: string, includeMarkdown: boolean, limit = Number.POSITIVE_INFINITY): Array<OutlinkMatch> {
   const matches: OutlinkMatch[] = [];
-  const lines = content.split('\n');
+  if (!(limit > 0)) return matches;
   const literalMask = buildMarkdownLiteralMask(content);
   let lineOffset = 0;
   let currentHeading: string | undefined;
 
-  for (let index = 0; index < lines.length && matches.length < limit; index += 1) {
-    const rawLine = lines[index]!;
+  for (let index = 0; lineOffset <= content.length && matches.length < limit; index += 1) {
+    const newline = content.indexOf('\n', lineOffset);
+    const rawLine = content.slice(lineOffset, newline === -1 ? content.length : newline);
     const line = rawLine.replace(/\r$/, '');
     const searchableLine = applyLineMask(line, lineOffset, literalMask);
 
@@ -191,8 +202,11 @@ function extractLinkOccurrences(content: string, includeMarkdown: boolean, limit
 
     WIKI_LINK_PATTERN.lastIndex = 0;
     const lineMatches: Array<{ offset: number; item: OutlinkMatch }> = [];
+    // Each syntax is already in source order; only its first K valid matches
+    // can occur among the first K of their union. Infinity retains all matches.
+    const remaining = Math.ceil(limit - matches.length);
     let match: RegExpExecArray | null;
-    while ((match = WIKI_LINK_PATTERN.exec(searchableLine)) !== null) {
+    while (lineMatches.length < remaining && (match = WIKI_LINK_PATTERN.exec(searchableLine)) !== null) {
       const link = line.slice(match.index, match.index + match[0]!.length);
       const parsed = linkDocument(link);
       if (!parsed.document) continue;
@@ -210,10 +224,12 @@ function extractLinkOccurrences(content: string, includeMarkdown: boolean, limit
 
     if (includeMarkdown) {
       MARKDOWN_LINK_PATTERN.lastIndex = 0;
-      while ((match = MARKDOWN_LINK_PATTERN.exec(searchableLine)) !== null) {
+      let markdownCount = 0;
+      while (markdownCount < remaining && (match = MARKDOWN_LINK_PATTERN.exec(searchableLine)) !== null) {
         const link = line.slice(match.index, match.index + match[0]!.length);
         const parsed = markdownLinkDocument(match[2]!);
         if (!parsed.document) continue;
+        markdownCount += 1;
         lineMatches.push({ offset: match.index, item: {
           line: index + 1,
           link,
@@ -230,7 +246,8 @@ function extractLinkOccurrences(content: string, includeMarkdown: boolean, limit
       if (matches.length >= limit) break;
       matches.push(match.item);
     }
-    lineOffset += rawLine.length + 1;
+    if (newline === -1) break;
+    lineOffset = newline + 1;
   }
 
   return matches;
