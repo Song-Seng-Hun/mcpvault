@@ -12,7 +12,9 @@ export declare class ReferenceService {
      * Obsidian links and are reported by lint, while explicit references fail
      * loudly because they claim to be evidence.
      */
-    validateAndNormalize(value: unknown, containerPath: string, principal?: ScopePrincipal, content?: string): Promise<string[]>;
+    validateAndNormalize(value: unknown, containerPath: string, principal?: ScopePrincipal, content?: string, policy?: {
+        strictBodyLinks?: boolean;
+    }): Promise<string[]>;
     resolve(value: unknown, principal?: ScopePrincipal, includeContent?: boolean, limit?: number, maxChars?: number): Promise<Record<string, unknown>[]>;
     readFromNote(params: {
         path: string;

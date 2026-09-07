@@ -46,7 +46,7 @@ export class ReferenceService {
      * Obsidian links and are reported by lint, while explicit references fail
      * loudly because they claim to be evidence.
      */
-    async validateAndNormalize(value, containerPath, principal, content) {
+    async validateAndNormalize(value, containerPath, principal, content, policy = {}) {
         const explicit = normalize(value);
         const references = [];
         for (const raw of explicit) {
@@ -75,6 +75,11 @@ export class ReferenceService {
                     references.push(path);
             }
             catch (error) {
+                // Structured experience fields cannot echo an unresolved alias whose
+                // target is intentionally hidden from the current reader. Ordinary note
+                // bodies retain their existing permissive Obsidian authoring behavior.
+                if (policy.strictBodyLinks)
+                    throw error;
                 // A normal unresolved link is valid Obsidian authoring. Only explicit
                 // references above are treated as a hard evidence/metadata error.
                 if (error instanceof Error && (error.message.includes('ambiguous') || error.message.includes('more-private')))

@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { isReferenceSnapshotPath } from './property-references.js';
+import { collectPlainFrontmatterReferences, isNavigationalFrontmatterReference, isReferenceSnapshotPath } from './property-references.js';
 
 test('snapshot paths match only the producer-defined array shapes', () => {
   for (const root of ['review_basis_links', 'pending_edits', 'research_trail']) {
@@ -19,4 +19,28 @@ test('snapshot paths match only the producer-defined array shapes', () => {
   expect(isReferenceSnapshotPath(['learning_progress', 'entries', 'path'])).toBe(false);
   expect(isReferenceSnapshotPath(['learning_progress', 'entries', 0, 'revision'])).toBe(false);
   expect(isReferenceSnapshotPath(['learning_progress', 'structure_fingerprint'])).toBe(false);
+});
+
+test('recognizes knowledge application locators as non-navigational snapshots', () => {
+  const frontmatter = {
+    knowledge_applications: [{
+      knowledge: { path: 'Knowledge/Result.md', revision: 'a'.repeat(64) },
+      verification: { path: 'Knowledge/Check.md', revision: 'b'.repeat(64) },
+    }],
+  };
+
+  expect(isReferenceSnapshotPath(['knowledge_applications', 0, 'knowledge', 'path'])).toBe(true);
+  expect(isReferenceSnapshotPath(['knowledge_applications', 0, 'verification', 'path'])).toBe(true);
+  const references = collectPlainFrontmatterReferences(frontmatter);
+  expect(references).toEqual([
+    expect.objectContaining({ propertyPath: 'knowledge_applications[0].knowledge.path', value: 'Knowledge/Result.md' }),
+    expect.objectContaining({ propertyPath: 'knowledge_applications[0].verification.path', value: 'Knowledge/Check.md' }),
+  ]);
+  expect(references.every(reference => !isNavigationalFrontmatterReference(reference))).toBe(true);
+});
+
+test('does not treat unknown knowledge application nested paths as references', () => {
+  expect(isReferenceSnapshotPath(['knowledge_applications', 0, 'knowledge', 'revision'])).toBe(false);
+  expect(isReferenceSnapshotPath(['knowledge_applications', 0, 'environment'])).toBe(false);
+  expect(isReferenceSnapshotPath(['knowledge_applications', 'knowledge', 'path'])).toBe(false);
 });

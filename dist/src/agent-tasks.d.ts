@@ -1,3 +1,4 @@
+import { ScopeAccessPolicy } from './scope-access.js';
 import type { FileSystemService } from './filesystem.js';
 import type { ReferenceService } from './references.js';
 import type { ScopeAuthService, ScopePrincipal } from './scope-auth.js';
@@ -26,7 +27,10 @@ export interface AgentTaskWriteContext {
     frontmatter: Record<string, any>;
     removeFields?: string[];
     authorize: boolean;
-    write(params: NoteWriteParams): Promise<{
+    write(params: NoteWriteParams, guards?: Array<{
+        path: string;
+        expectedRevision: string;
+    }>): Promise<{
         revision: string;
     }>;
 }
@@ -40,9 +44,10 @@ export declare class AgentTaskService {
     private readonly fileSystem;
     private readonly references;
     private readonly auth;
+    private readonly access;
     private workExtension?;
     attachWorkExtension(extension: AgentTaskExtension): void;
-    constructor(fileSystem: FileSystemService, references: ReferenceService, auth: ScopeAuthService);
+    constructor(fileSystem: FileSystemService, references: ReferenceService, auth: ScopeAuthService, access?: ScopeAccessPolicy);
     private validatedKnowledgeNotes;
     private assignee;
     private assigneeAccount;
@@ -118,6 +123,7 @@ export declare class AgentTaskService {
         truncated: boolean;
     }>;
     update(params: AgentTaskWorkFields & {
+        knowledgeApplications?: unknown;
         principal?: ScopePrincipal;
         taskId: string;
         status?: string;

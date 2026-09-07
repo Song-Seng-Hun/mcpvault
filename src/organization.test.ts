@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { BASES_VIEW_IDS, CONFIDENCE_LEVELS, KNOWLEDGE_STATUSES, NOTE_TEMPLATE_IDS, RECIPROCAL_RELATIONS, RELATION_FIELDS, SOURCE_TRUST_LEVELS, VOLATILITY_CLASSES, getOrganizationPropertyContract, getOrganizationRelationContract, isActionableKnowledge, isOpenActionableKnowledge, knowledgeOrganization, normalizeKnowledgeDisposition, organizationLintIssues, organizationNoteTemplate, temporalValidity } from './organization.js';
+import { BASES_VIEW_IDS, CONFIDENCE_LEVELS, KNOWLEDGE_STATUSES, NOTE_TEMPLATE_IDS, ORGANIZATION_LIST_FIELDS, RECIPROCAL_RELATIONS, RELATION_FIELDS, SOURCE_TRUST_LEVELS, VOLATILITY_CLASSES, getOrganizationPropertyContract, getOrganizationRelationContract, isActionableKnowledge, isOpenActionableKnowledge, knowledgeOrganization, normalizeKnowledgeDisposition, organizationLintIssues, organizationNoteTemplate, temporalValidity } from './organization.js';
 
 describe('knowledge organization focus and summary metadata', () => {
   test('normalizes and validates knowledge volatility classes', () => {
@@ -677,5 +677,27 @@ describe('knowledge organization focus and summary metadata', () => {
       llm_wiki_type: 'knowledge', note_kind: 'atomic', lifecycle: 'review',
       review_checks: ['not-a-check'], relation_notes: { unknown: 'bad' },
     }, '# Bad review\n').map(issue => issue.code)).toEqual(expect.arrayContaining(['invalid_review_checks', 'invalid_relation_notes']));
+  });
+
+  test('contracts and lints bounded knowledge application snapshots', () => {
+    expect(getOrganizationPropertyContract()).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: 'knowledge_applications', type: 'list', description: expect.stringContaining('MCP-managed') }),
+    ]));
+    expect(ORGANIZATION_LIST_FIELDS).not.toContain('knowledge_applications');
+    expect(knowledgeOrganization({
+      status: 'draft', noteKind: 'experiment', knowledgeApplications: [{
+        id: 'run-1', knowledge: { path: 'Knowledge/Result.md', revision: 'A'.repeat(64) },
+        environment: 'local', conditions: 'same input', outcome: 'succeeded', observed: 'worked',
+      }],
+    })).toMatchObject({ knowledge_applications: [{ id: 'run-1', knowledge: { revision: 'a'.repeat(64) } }] });
+    expect(knowledgeOrganization({ status: 'draft', noteKind: 'experiment', knowledgeApplications: [] })).not.toHaveProperty('knowledge_status');
+    expect(organizationNoteTemplate('experiment').markdown).toContain('applied note');
+    expect(organizationNoteTemplate('experiment').markdown).toContain('environment');
+    expect(organizationNoteTemplate('experiment').markdown).toContain('limitations');
+    const issues = organizationLintIssues('Experiments/Run.md', {
+      llm_wiki_type: 'knowledge', note_kind: 'experiment', knowledge_applications: [{ malicious: 'do not echo this' }],
+    }, '# Run\n');
+    expect(issues).toEqual(expect.arrayContaining([expect.objectContaining({ code: 'invalid_knowledge_applications' })]));
+    expect(issues.map(issue => issue.detail).join(' ')).not.toContain('do not echo this');
   });
 });

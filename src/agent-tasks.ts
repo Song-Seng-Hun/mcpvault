@@ -1,4 +1,6 @@
 import { randomUUID } from 'node:crypto';
+import { KnowledgeApplicationService } from './knowledge-applications.js';
+import { ScopeAccessPolicy } from './scope-access.js';
 import type { FileSystemService } from './filesystem.js';
 import type { ReferenceService } from './references.js';
 import type { ScopeAuthService, ScopePrincipal } from './scope-auth.js';
@@ -19,7 +21,7 @@ export interface AgentTaskWriteContext {
   frontmatter: Record<string, any>;
   removeFields?: string[];
   authorize: boolean;
-  write(params: NoteWriteParams): Promise<{ revision: string }>;
+  write(params: NoteWriteParams, guards?: Array<{ path: string; expectedRevision: string }>): Promise<{ revision: string }>;
 }
 export interface AgentTaskExtension {
   run(action: 'create' | 'update', params: any, proceed: (context?: AgentTaskWriteContext, parameters?: any) => Promise<any>): Promise<any>;
@@ -55,7 +57,7 @@ function requireLogin(principal?: ScopePrincipal): ScopePrincipal {
 export class AgentTaskService {
   private workExtension?: AgentTaskExtension;
   attachWorkExtension(extension: AgentTaskExtension): void { this.workExtension = extension; }
-  constructor(private readonly fileSystem: FileSystemService, private readonly references: ReferenceService, private readonly auth: ScopeAuthService) {}
+  constructor(private readonly fileSystem: FileSystemService, private readonly references: ReferenceService, private readonly auth: ScopeAuthService, private readonly access = new ScopeAccessPolicy()) {}
 
   private async validatedKnowledgeNotes(
     value: unknown,
@@ -226,6 +228,7 @@ export class AgentTaskService {
   }
 
   async update(params: AgentTaskWorkFields & {
+    knowledgeApplications?: unknown;
     principal?: ScopePrincipal;
     taskId: string;
     status?: string;
@@ -293,6 +296,9 @@ export class AgentTaskService {
     }, note.frontmatter);
     const completionDispositionRequired = status === 'completed';
     if (completionDispositionRequired && disposition.knowledgeDispositions.length === 0) throw new Error(COMPLETION_DISPOSITION_REQUIRED_MESSAGE);
+    const applications = params.knowledgeApplications === undefined ? undefined
+      : await new KnowledgeApplicationService(this.fileSystem, this.access).prepare(params.knowledgeApplications, path, principal);
+    if (applications?.records.length && disposition.noReusableKnowledge) throw new Error('An application experience cannot be combined with noReusableKnowledge');
     const timestamp = now();
     const frontmatter: Record<string, any> = {
       ...note.frontmatter, description,
@@ -304,6 +310,7 @@ export class AgentTaskService {
       ...(disposition.knowledgeNotes !== undefined && { knowledge_notes: disposition.knowledgeNotes }),
       ...(disposition.negativeKnowledgeNotes !== undefined && { negative_knowledge_notes: disposition.negativeKnowledgeNotes }),
       knowledge_dispositions: disposition.knowledgeDispositions,
+      ...(applications && { knowledge_applications: applications.records }),
       ...(disposition.knowledgeDispositionReason && { knowledge_disposition_reason: disposition.knowledgeDispositionReason }),
       ...context?.frontmatter,
     };
@@ -312,12 +319,15 @@ export class AgentTaskService {
     if (!disposition.retrospective) delete frontmatter.retrospective;
     if (!disposition.noReusableKnowledge) delete frontmatter.knowledge_disposition_reason;
     for (const field of context?.removeFields || []) delete frontmatter[field];
-    const receipt = await (context ? context.write.bind(context) : this.fileSystem.writeNoteWithReceipt.bind(this.fileSystem))({
+    const write = {
       path,
       content: params.description === undefined ? note.content : `# ${String(note.frontmatter.title || taskId)}\n\n${description}\n`,
       frontmatter,
       expectedRevision: params.expectedRevision,
-    });
+    };
+    const receipt = context ? await context.write(write, applications?.guards)
+      : applications?.guards.length ? await this.fileSystem.writeNoteWithRevisionGuardsAndReceipt(write, applications.guards)
+        : await this.fileSystem.writeNoteWithReceipt(write);
     // These normalized disposition values belong to this write. A later read
     // could combine another editor's lesson with our completion status.
     return {

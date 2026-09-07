@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { extractMarkdownTasks } from './markdown-tasks.js';
 import { extractObsidianLinkOccurrences } from './backlinks.js';
+import { normalizeKnowledgeApplications } from './knowledge-application-model.js';
 
 /**
  * Lightweight knowledge-organization vocabulary.
@@ -243,6 +244,7 @@ export const ORGANIZATION_PROPERTY_CONTRACT: readonly OrganizationPropertyContra
   { name: 'task_context', type: 'text', description: 'Execution context such as @research or @computer' },
   { name: 'task_status', type: 'text', description: 'Operational state for any actionable note, separate from lifecycle and epistemic status', allowed: TASK_STATUSES },
   { name: 'knowledge_notes', type: 'list', description: 'Visible durable knowledge notes created or updated before completing actionable work' },
+  { name: 'knowledge_applications', type: 'list', description: 'MCP-managed bounded records of applying knowledge with note/revision snapshots, environment, conditions, observations, outcomes, and limits' },
   { name: 'negative_knowledge_notes', type: 'list', description: 'Visible negative-knowledge notes preserving failed or rejected paths before completing actionable work' },
   { name: 'retrospective', type: 'text', description: 'Bounded experiential lesson recorded before completing actionable work; not factual evidence by itself' },
   { name: 'knowledge_dispositions', type: 'list', description: 'Normalized auditable outcomes of completed work', allowed: KNOWLEDGE_DISPOSITIONS },
@@ -415,7 +417,7 @@ export function organizationNoteTemplate(value: unknown = 'atomic'): Organizatio
     experiment: {
       purpose: 'A reproducible run that tests an explicit question, hypothesis, or assumption and preserves its observations.',
       properties: { note_kind: 'experiment', lifecycle: 'review', epistemic_status: 'planned', tests: [], methods: [] },
-      markdown: '# {{title}}\n\n## Tested proposition\n- [[ ]]\n\n## Protocol\n\n## Environment\n\n## Observations\n\n## Result\n\n## Reproduction\n',
+      markdown: '# {{title}}\n\n## Tested proposition\n- [[ ]]\n\n## Protocol\n\n## Environment\n\n## Observations\n\n## Result\n\n## Reproduction\n\n## Applied knowledge (optional)\nRecord the applied note and revision, environment, conditions, observed results, and limitations.\n',
     },
     assumption: {
       purpose: 'A working premise kept visible until it is verified, invalidated, or replaced.',
@@ -980,6 +982,7 @@ export interface KnowledgeOrganizationInput {
   openQuestions?: unknown;
   summaryLayer?: unknown;
   summaryHighlights?: unknown;
+  knowledgeApplications?: unknown;
   nextActions?: unknown;
   nextAction?: unknown;
   waitingFor?: unknown;
@@ -1162,6 +1165,9 @@ export function knowledgeOrganization(input: KnowledgeOrganizationInput): Record
     : Number(input.summaryLayer);
   if (summaryLayer !== undefined && (!Number.isInteger(summaryLayer) || summaryLayer < 0 || summaryLayer > 4)) throw new Error('summaryLayer must be an integer from 0 to 4');
   const summaryHighlights = input.summaryHighlights === undefined ? normalizedHighlights(existing.summary_highlights, 'summaryHighlights') : normalizedHighlights(input.summaryHighlights, 'summaryHighlights');
+  const knowledgeApplications = input.knowledgeApplications === undefined
+    ? normalizeKnowledgeApplications(existing.knowledge_applications)
+    : normalizeKnowledgeApplications(input.knowledgeApplications);
   const nextActions = input.nextActions === undefined ? normalizedList(existing.next_actions, 'next_actions', 20, 600) : normalizedList(input.nextActions, 'next_actions', 20, 600);
   const nextAction = input.nextAction === undefined ? optionalText(existing.next_action, 'nextAction', 500) : optionalText(input.nextAction, 'nextAction', 500);
   const waitingFor = input.waitingFor === undefined ? optionalText(existing.waiting_for, 'waiting_for', 500) : optionalText(input.waitingFor, 'waiting_for', 500);
@@ -1300,6 +1306,8 @@ export function knowledgeOrganization(input: KnowledgeOrganizationInput): Record
     ...(openQuestions && { open_questions: openQuestions }),
     ...(summaryLayer !== undefined && { summary_layer: summaryLayer }),
     ...(summaryHighlights && { summary_highlights: summaryHighlights }),
+    ...((input.knowledgeApplications !== undefined || existing.knowledge_applications !== undefined)
+      && { knowledge_applications: knowledgeApplications }),
     ...(nextActions && { next_actions: nextActions }),
     ...(nextAction && { next_action: nextAction }),
     ...(waitingFor && { waiting_for: waitingFor }),
@@ -1527,6 +1535,10 @@ export function organizationLintIssues(path: string, frontmatter: Record<string,
     if (frontmatter[field] !== undefined) {
       try { normalizedList(frontmatter[field], label, maxItems, 500); } catch (error) { issues.push({ code: `invalid_${field}`, detail: error instanceof Error ? error.message : `${field} must be a string array` }); }
     }
+  }
+  if (frontmatter.knowledge_applications !== undefined) {
+    try { normalizeKnowledgeApplications(frontmatter.knowledge_applications); }
+    catch { issues.push({ code: 'invalid_knowledge_applications', detail: 'knowledge_applications must be a bounded array of valid MCP-managed application records.' }); }
   }
   for (const field of ORGANIZATION_LIST_FIELDS) {
     const value = frontmatter[field];

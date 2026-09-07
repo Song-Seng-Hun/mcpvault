@@ -389,6 +389,7 @@ export interface KnowledgeOrganizationInput {
     openQuestions?: unknown;
     summaryLayer?: unknown;
     summaryHighlights?: unknown;
+    knowledgeApplications?: unknown;
     nextActions?: unknown;
     nextAction?: unknown;
     waitingFor?: unknown;

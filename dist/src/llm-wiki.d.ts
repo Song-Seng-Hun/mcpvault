@@ -244,6 +244,7 @@ export declare class LlmWikiService {
         revision: string;
     }>;
     publishKnowledge(params: {
+        knowledgeApplications?: unknown;
         tags?: unknown;
         timeEstimateMinutes?: unknown;
         energy?: unknown;
@@ -531,6 +532,7 @@ export declare class LlmWikiService {
      * filing decisions from the first interaction and keeps the note ordinary
      * Markdown so Obsidian and Git remain the source of truth. */
     capture(params: {
+        knowledgeApplications?: unknown;
         principal?: ScopePrincipal;
         path?: string;
         title?: string;

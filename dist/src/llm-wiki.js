@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
+import { KnowledgeApplicationService } from './knowledge-applications.js';
 import { authoringAssist, hostPluginBundle, propertyContractFingerprint } from './authoring-assist.js';
 import { posix } from 'node:path';
 import { stringify as stringifyYaml } from 'yaml';
@@ -2179,6 +2180,8 @@ export class LlmWikiService {
             throw new Error('status must be draft, verified, disputed, or superseded');
         const exists = await this.fileSystem.noteExists(params.path);
         const existing = exists ? await this.fileSystem.readNote(params.path) : undefined;
+        const applications = params.knowledgeApplications === undefined ? undefined
+            : await new KnowledgeApplicationService(this.fileSystem, this.access).prepare(params.knowledgeApplications, params.path, params.principal);
         if (existing && existing.frontmatter.llm_wiki_type && existing.frontmatter.llm_wiki_type !== 'knowledge') {
             throw new Error(`Refusing to replace LLM Wiki ${existing.frontmatter.llm_wiki_type} metadata at ${this.access.toPublicPath(params.path)}`);
         }
@@ -2231,6 +2234,7 @@ export class LlmWikiService {
             ...(existing?.frontmatter || {}),
             ...knowledgeOrganization({
                 status,
+                ...(applications && { knowledgeApplications: applications.records }),
                 ...(existing && { existing: existing.frontmatter }),
                 ...(params.noteKind !== undefined && { noteKind: params.noteKind }),
                 ...(params.decisionStatus !== undefined && { decisionStatus: params.decisionStatus }),
@@ -2280,6 +2284,7 @@ export class LlmWikiService {
                 knowledge_status: status,
                 ...knowledgeOrganization({
                     ...(params.tags !== undefined && { tags: params.tags }),
+                    ...(applications && { knowledgeApplications: applications.records }),
                     ...(params.timeEstimateMinutes !== undefined && { timeEstimateMinutes: params.timeEstimateMinutes }),
                     ...(params.energy !== undefined && { energy: params.energy }),
                     ...(params.effort !== undefined && { effort: params.effort }),
@@ -2389,14 +2394,18 @@ export class LlmWikiService {
                     status,
                 }),
                 ...(disposition && this.knowledgeDispositionFrontmatter(disposition)),
+                ...(applications && { knowledge_applications: applications.records }),
                 updated_by: params.author,
                 updated_at: timestamp,
                 ...(!existing && { created_by: params.author, created_at: timestamp }),
             },
             expectedRevision: params.expectedRevision,
         };
-        const updated = internal.revisionGuards?.length
-            ? await this.fileSystem.writeNoteWithRevisionGuardsAndReceipt(write, internal.revisionGuards)
+        const guards = [...new Map([...(internal.revisionGuards || []), ...(applications?.guards || [])].map(g => [g.path.toLowerCase(), g])).values()];
+        if ([...(internal.revisionGuards || []), ...(applications?.guards || [])].some(g => guards.find(u => u.path.toLowerCase() === g.path.toLowerCase())?.expectedRevision !== g.expectedRevision))
+            throw new Error('Related revision changed during knowledge publication');
+        const updated = guards.length
+            ? await this.fileSystem.writeNoteWithRevisionGuardsAndReceipt(write, guards)
             : await this.fileSystem.writeNoteWithReceipt(write);
         return {
             success: true,
@@ -3651,8 +3660,10 @@ export class LlmWikiService {
         }
         const captureReason = params.captureReason === undefined ? undefined : boundedText(params.captureReason, 500);
         const captureContext = params.captureContext === undefined ? undefined : boundedText(params.captureContext, 1000);
+        const applications = params.knowledgeApplications === undefined ? undefined
+            : await new KnowledgeApplicationService(this.fileSystem, this.access).prepare(params.knowledgeApplications, path, params.principal);
         const timestamp = now();
-        await this.fileSystem.writeNote({
+        const write = {
             path,
             content: content.endsWith('\n') ? content : `${content}\n`,
             frontmatter: {
@@ -3663,6 +3674,7 @@ export class LlmWikiService {
                 ...(capturedFrom && { captured_from: capturedFrom }),
                 ...(captureReason && { capture_reason: captureReason }),
                 ...(captureContext && { capture_context: captureContext }),
+                ...(applications && { knowledge_applications: applications.records }),
                 ...(relatedTaskReferences[0] && { related_task: relatedTaskReferences[0] }),
                 captured_by: params.capturedBy,
                 captured_at: timestamp,
@@ -3670,8 +3682,10 @@ export class LlmWikiService {
                 updated_at: timestamp,
             },
             expectedRevision: params.expectedRevision || 'missing',
-        });
-        const created = await this.fileSystem.readNote(path);
+        };
+        const created = applications?.guards.length
+            ? await this.fileSystem.writeNoteWithRevisionGuardsAndReceipt(write, applications.guards)
+            : await this.fileSystem.writeNoteWithReceipt(write);
         return {
             success: true,
             path: this.access.toPublicPath(path),

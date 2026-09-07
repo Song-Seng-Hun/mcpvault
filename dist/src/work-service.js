@@ -91,7 +91,7 @@ export class WorkService {
         const requestId = textField(params.requestId, 'requestId', 128, true);
         const fields = ['op', 'projectId', 'taskId', 'title', 'goal', 'allowedWork', 'participants', 'completionCriteria', 'wipLimit', 'personalWipLimit', 'roomId',
             'parentTaskId', 'dependsOn', 'artifacts', 'workKind', 'discussionSlug', 'verification', 'description', 'assignee', 'references', 'status',
-            'reason', 'retrospective', 'knowledgeNotes', 'negativeKnowledgeNotes', 'noReusableKnowledge', 'knowledgeDispositionReason',
+            'reason', 'retrospective', 'knowledgeNotes', 'negativeKnowledgeNotes', 'knowledgeApplications', 'noReusableKnowledge', 'knowledgeDispositionReason',
             'toAccountId', 'completed', 'remaining', 'blocker', 'nextAction', 'artifactFingerprint', 'expectedRevision', 'expectedGeneration'];
         const payload = Object.fromEntries(fields.filter(field => params[field] !== undefined).map(field => [field, params[field]]));
         return { requestId, actor: params.principal.accountId, action, target, payload: fingerprint(payload) };
@@ -542,7 +542,7 @@ export class WorkService {
                 // description, and timestamps; never overlay stale copies of those.
                 authorize: true, frontmatter: Object.fromEntries(TASK_EXTENSION_FIELDS.filter(key => key in fm).map(key => [key, fm[key]])),
                 removeFields: Object.keys(prior?.frontmatter || {}).filter(key => !(key in fm)),
-                write: async (write) => {
+                write: async (write, applicationGuards = []) => {
                     await this.actor(params.principal);
                     const currentProject = await this.projectNote(projectId);
                     if (currentProject.revision !== project.revision)
@@ -550,7 +550,10 @@ export class WorkService {
                     if (!moderate || (!privilegedRelease && !(intent?.kind === 'review' && intent.params.op === 'override')))
                         this.member(currentProject.frontmatter, actor);
                     await this.wip(fm, currentProject.frontmatter, id, prior?.frontmatter);
-                    const unique = [...new Map(guards.filter(g => g.path !== write.path).map(g => [g.path, g])).values()];
+                    const combined = [...guards, ...applicationGuards].filter(g => g.path !== write.path);
+                    const unique = [...new Map(combined.map(g => [g.path.toLowerCase(), g])).values()];
+                    if (combined.some(g => unique.find(u => u.path.toLowerCase() === g.path.toLowerCase())?.expectedRevision !== g.expectedRevision))
+                        throw new Error('Related revision changed during work mutation');
                     // The existing filesystem supports nine locked related revisions.
                     // Fail closed rather than drop guards from a larger mutation.
                     if (unique.length > 9)

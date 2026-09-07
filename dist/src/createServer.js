@@ -10,6 +10,7 @@ import { SearchService } from "./search.js";
 import { RetrievalService } from './retrieval-service.js';
 import { QuestionPacketService } from './question-packet.js';
 import { SourceComparisonService } from './source-comparison.js';
+import { KnowledgeApplicationService } from './knowledge-applications.js';
 import { handleWikiLinkTool } from "./wikilink/index.js";
 import { GitHistoryService } from "./git-history.js";
 import { CollaborationService } from "./scopes.js";
@@ -386,6 +387,7 @@ export function createServer(vaultPath, options = {}) {
     const retrieval = new RetrievalService(searchService, collaboration, semanticSearch, scopeAccess, fileSystem);
     const questionPacket = new QuestionPacketService(fileSystem, scopeAccess, retrieval);
     const sourceComparison = new SourceComparisonService(fileSystem, scopeAccess, retrieval);
+    const knowledgeApplications = new KnowledgeApplicationService(fileSystem, scopeAccess);
     const references = new ReferenceService(fileSystem, scopeAccess);
     const llmWiki = new LlmWikiService(fileSystem, scopeAccess, references, semanticSearch);
     llmWikiCache = llmWiki;
@@ -406,7 +408,7 @@ export function createServer(vaultPath, options = {}) {
     const communityStatus = new CommunityStatusService(fileSystem);
     const agentDirectory = new AgentDirectoryService(fileSystem, scopeAuth);
     const audit = new AuditService(resolvedVaultPath);
-    const agentTasks = new AgentTaskService(fileSystem, references, scopeAuth);
+    const agentTasks = new AgentTaskService(fileSystem, references, scopeAuth, scopeAccess);
     const ideation = new IdeationService(fileSystem, references);
     const communityFeatures = new CommunityFeaturesService(fileSystem, scopeAccess, scopeAuth, reputation, resolvedVaultPath, notifications, fileCatalog);
     communityFeaturesCache = communityFeatures;
@@ -1310,6 +1312,7 @@ export function createServer(vaultPath, options = {}) {
                             ...(trimmedArgs.capturedFrom !== undefined && { capturedFrom: trimmedArgs.capturedFrom }),
                             ...(trimmedArgs.captureReason !== undefined && { captureReason: trimmedArgs.captureReason }),
                             ...(trimmedArgs.captureContext !== undefined && { captureContext: trimmedArgs.captureContext }),
+                            ...(trimmedArgs.knowledgeApplications !== undefined && { knowledgeApplications: trimmedArgs.knowledgeApplications }),
                             ...(trimmedArgs.relatedTask !== undefined && { relatedTask: trimmedArgs.relatedTask }),
                             capturedBy: actorName(principal, trimmedArgs.capturedBy),
                             ...(typeof trimmedArgs.expectedRevision === 'string' && { expectedRevision: trimmedArgs.expectedRevision }),
@@ -1417,6 +1420,9 @@ export function createServer(vaultPath, options = {}) {
                     }
                     case "get_wiki_source_comparison": {
                         return jsonResult(await sourceComparison.read({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
+                    }
+                    case "get_wiki_applications": {
+                        return jsonResult(await knowledgeApplications.read({ ...trimmedArgs, principal }), false);
                     }
                     case "get_wiki_answer_packet": {
                         if (trimmedArgs.query !== undefined)
@@ -2058,6 +2064,7 @@ export function createServer(vaultPath, options = {}) {
                             retrospective: trimmedArgs.retrospective,
                             knowledgeNotes: trimmedArgs.knowledgeNotes,
                             negativeKnowledgeNotes: trimmedArgs.negativeKnowledgeNotes,
+                            knowledgeApplications: trimmedArgs.knowledgeApplications,
                             noReusableKnowledge: trimmedArgs.noReusableKnowledge,
                             knowledgeDispositionReason: trimmedArgs.knowledgeDispositionReason,
                             expectedRevision: trimmedArgs.expectedRevision,

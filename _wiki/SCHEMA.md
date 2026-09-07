@@ -9,6 +9,16 @@ updated_at: 2026-09-01T18:30:44.285Z
 
 ## Question context projections
 
+`knowledge_applications` is an optional list of up to eight bounded reported-use
+records in an existing note/experiment/task, not a separate event ledger.
+Each has `id`, `knowledge: {path, revision}`, `environment`, `conditions`,
+`outcome` (`succeeded`, `failed`, `inconclusive`) and `observed`; optional
+`limitations` and `verification: {path, revision}` preserve unresolved limits
+and an exact check artifact. Revisions are agent-reported SHA-256 snapshots,
+not automatically certified Git history or independent approval. These nested
+paths are non-navigational historical references; they do not establish support
+or remove orphan-knowledge debt. See [application flow](../docs/knowledge-applications.md).
+
 `wiki.source_compare` is a read-only source-to-existing-knowledge worksheet.
 Pass an immutable `sourcePath`, a focused `query`, and optionally the current
 `expectedRevision`. It returns exact source/candidate revisions and passages,

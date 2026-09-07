@@ -23,7 +23,7 @@ const NESTED_REFERENCE_PROPERTIES = new Set([
  */
 const NON_NAVIGATIONAL_REFERENCE_ROOTS = new Set([
     'review_basis_links', 'review_basis_upstream', 'pending_edits', 'research_trail',
-    'learning_progress',
+    'learning_progress', 'knowledge_applications',
 ]);
 export function isNavigationalFrontmatterReference(reference) {
     return !NON_NAVIGATIONAL_REFERENCE_ROOTS.has(reference.root);
@@ -36,6 +36,10 @@ export function isReferenceSnapshotPath(segments) {
     }
     if (segments[0] === 'review_basis_upstream') {
         return segments.length === 4 && segments[1] === 'entries' && typeof segments[2] === 'number' && segments[3] === 'path';
+    }
+    if (segments[0] === 'knowledge_applications') {
+        return segments.length === 4 && typeof segments[1] === 'number'
+            && ['knowledge', 'verification'].includes(String(segments[2])) && segments[3] === 'path';
     }
     return ['review_basis_links', 'pending_edits', 'research_trail'].includes(String(segments[0]))
         && segments.length === 3 && typeof segments[1] === 'number' && segments[2] === 'path';

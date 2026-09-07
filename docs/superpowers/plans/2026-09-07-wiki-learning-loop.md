@@ -37,9 +37,21 @@ Acceptance assertions include `expect(JSON.stringify(result).length).toBeLessTha
 
 ## 2. Applying knowledge and returning experience
 
-- [ ] Extend existing experiment/retrospective authoring contracts with bounded applied-knowledge references (path + revision), environment/conditions, observed outcome, verification reference and unresolved limits; use ordinary notes rather than an application ledger.
-- [ ] Add a bounded application projection over those explicit relations; route task completion and review toward reusing an existing observation rather than mandatory new notes.
-- [ ] Test current versus previously applied revisions, success/failure/inconclusive outcomes, missing verification, multiple environments and confidential references. A success never automatically validates all contexts; no outcome is inferred from likes or task completion.
+Implementation contract: optional `knowledgeApplications` on existing capture,
+knowledge publication and task update, stored as nested `knowledge_applications`.
+At most8 records/8 distinct related notes, no separate CRUD or ledger. Current
+reference guards protect validation while reported historical SHA256 revisions
+remain unchanged; project guards share the existing nine-related-note ceiling.
+Read-only `wiki.applications` pages up to8 observation notes with exact per-record
+cursor, 20/default100/max records and 4000/default12000/max compact JSON chars.
+Source-backed publication and existing completion/review gates are unchanged.
+Global/Community/private compatibility and known prose references are checked;
+success does not certify truth or historical revision existence. Empty partial
+pages and insufficient budgets carry continuation, never a claim of no usage.
+
+- [x] Extend existing experiment/retrospective authoring contracts with bounded applied-knowledge references (path + revision), environment/conditions, observed outcome, verification reference and unresolved limits; use ordinary notes rather than an application ledger.
+- [x] Add a bounded application projection over those explicit relations; route task completion and review toward reusing an existing observation rather than mandatory new notes.
+- [x] Test current versus previously applied revisions, success/failure/inconclusive outcomes, missing verification, multiple environments and confidential references. A success never automatically validates all contexts; no outcome is inferred from likes or task completion.
 
 ## 3. Changed source to concrete review
 
@@ -99,3 +111,25 @@ the new schema; a normal note correctly failed the immutable-source guard.
 No production notes/accounts/configuration were changed. Rollback artifact is
 host-local `.mcpvault/backups/source-comparison-20260907-2143/previous-dist.zip`.
 Stages 2–8 remain required; this is not completion of the persistent goal.
+
+2026-09-07, stage 2: model normalization, existing capture/publication/task
+writers, revision guards, idempotency, non-navigational snapshot Properties,
+lint/templates, bounded `wiki.applications`, policy28 and operation docs added.
+Independent review findings were reproduced before repair: prose private links
+and unresolved aliases, missing candidates falsely ending pagination, final
+revision reads losing their byte limit, cursor sort values and long-locator
+budget fallback. Ordinary unresolved body links remain permissive; only
+structured experience prose opts into strict visible resolution.
+First full run: 217 files /3262 passed /2 existing skips, 465.29s. Native
+discovery then exposed a publication endpoint spelling defect in the guide;
+an exact endpoint-name regression was added and the final full run repeated:
+**217 files /3263 passed /2 existing skips, 453.96s**, started22:47:05 KST.
+Build and diff checks passed. The shared HTTP task was refreshed without
+changing its loopback address or plugin settings. Native Codex discovery shows
+the corrected schema/guide; a normal non-knowledge note correctly fails the
+knowledge-input guard. The production public knowledge query has zero notes,
+so positive recording/read/revision scenarios are isolated MCP fixtures, not
+claimed as positive production-corpus coverage. No production accounts or notes
+were created/changed. Host-local rollback artifact:
+`.mcpvault/backups/knowledge-applications-20260907-2234/previous-dist.zip`.
+Stages 3–8 remain required; stage2 delivery is not completion of this goal.

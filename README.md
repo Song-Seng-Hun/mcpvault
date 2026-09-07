@@ -40,6 +40,12 @@ extra runner, or automatic model execution is required.
 
 ## Quick start
 
+After using a Wiki technique, preserve its exact applied revision, environment,
+conditions and observed outcome through [knowledge applications](docs/knowledge-applications.md).
+Use the existing capture, experiment publication or task-retrospective writer;
+`wiki.applications` returns bounded current-versus-applied context without a new
+ledger, automatic truth judgments or required duplicate notes.
+
 Before turning an immutable source into a new Wiki note, use the
 [source comparison workflow](docs/source-comparison.md):
 `wiki.source_compare` with `sourcePath` and a focused `query`. It compares

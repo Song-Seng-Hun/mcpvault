@@ -66,6 +66,17 @@ test('projects are opt-in Markdown with owner and conservative WIP defaults', as
   await expect(work.project({ op: 'update', principal: outsider, projectId: 'alpha', participants: ['outsider'], expectedRevision: n.revision, requestId: 'takeover' })).rejects.toThrow(/owner|participant/i);
   await expect(work.project({ op: 'update', principal: owner, projectId: 'alpha', participants: ['absent'], expectedRevision: n.revision, requestId: 'unknown' })).rejects.toThrow(/account/i);
 });
+test('project task application updates participate in idempotency and related revision guards', async () => {
+  const { fs, create, read, update } = await workFixture();
+  await fs.writeNote({ path: 'Knowledge/Retry.md', content: 'Idempotent only', frontmatter: { llm_wiki_type: 'knowledge' } });
+  const record = { id: 'run-1', knowledge: { path: 'Knowledge/Retry.md', revision: await fs.readNoteRevision('Knowledge/Retry.md') }, environment: 'Node22', conditions: 'idempotent reads', outcome: 'succeeded', observed: 'No duplicate side effects' };
+  await create('application-retry'); const before = await read('application-retry');
+  const args = { expectedRevision: before.revision, expectedGeneration: before.frontmatter.claim_generation, requestId: 'record-application', retrospective: 'Restricted to safe reads', knowledgeApplications: [record] };
+  const saved = await update('application-retry', args);
+  expect((await read('application-retry')).frontmatter.knowledge_applications).toEqual([record]);
+  expect((await update('application-retry', args)).revision).toBe(saved.revision);
+  await expect(update('application-retry', { ...args, knowledgeApplications: [{ ...record, outcome: 'failed' }] })).rejects.toThrow(/requestId|idempotency/i);
+});
 
 test.each(['COMPLETED', ' completed '])('normalized status %s cannot bypass high-risk completion', async status => {
   const { create, read, update } = await workFixture();

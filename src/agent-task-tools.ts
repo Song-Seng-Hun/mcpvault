@@ -1,4 +1,5 @@
 import type { Tool } from '@modelcontextprotocol/server';
+import { KNOWLEDGE_APPLICATIONS_SCHEMA } from './knowledge-application-model.js';
 import { WORK_TASK_PROPERTIES } from './work-tools.js';
 
 const prettyPrint = { type: 'boolean', description: 'Format JSON response with indentation', default: false } as const;
@@ -33,6 +34,7 @@ export function getAgentTaskTools(): Tool[] {
       name: 'update_agent_task',
       description: 'Update a task owned by its requester or assignee. For a project-backed task, requestId and expectedGeneration are REQUIRED even if projectId is omitted: read work.packet or the task workContext first. Metadata updates preserve manual prose; explicitly setting description replaces the canonical task body, so omit it for progress-only updates. Status changes require a short reason and expectedRevision. Completing a task requires at least one auditable knowledge disposition: link durable knowledgeNotes, link negativeKnowledgeNotes, record a retrospective, or explicitly set noReusableKnowledge with a reason. Useful artifacts may be combined; noReusableKnowledge may not be combined with them. Returned revision, status and disposition describe this write; re-read the same task and inspect intervening edits before updating again.',
       inputSchema: { type: 'object', properties: {
+        knowledgeApplications: KNOWLEDGE_APPLICATIONS_SCHEMA,
         ...WORK_TASK_PROPERTIES,
         taskId: { type: 'string' }, status: { type: 'string', enum: ['proposed', 'accepted', 'in_progress', 'in_review', 'blocked', 'completed', 'cancelled'] }, assignee: { type: 'string' }, description: { type: 'string', maxLength: 4000 }, references: { type: 'array', items: { type: 'string' } }, reason: { type: 'string', maxLength: 500 }, retrospective: { type: 'string', maxLength: 1000, description: 'Reusable experiential lesson or reflection; this is not factual evidence by itself' }, knowledgeNotes: { type: 'array', maxItems: 20, items: { type: 'string' }, description: 'Visible public durable knowledge-note paths created or updated as an outcome' }, negativeKnowledgeNotes: { type: 'array', maxItems: 20, items: { type: 'string' }, description: 'Visible public negative-knowledge paths preserving failed or rejected approaches' }, noReusableKnowledge: { type: 'boolean', description: 'Explicitly state that the task produced no reusable knowledge; requires knowledgeDispositionReason and cannot accompany artifacts' }, knowledgeDispositionReason: { type: 'string', maxLength: 1000, description: 'Auditable reason why no reusable knowledge was produced' }, expectedRevision: { type: 'string' }, accessToken, prettyPrint,
       }, required: ['taskId', 'expectedRevision', 'accessToken'], allOf: [
