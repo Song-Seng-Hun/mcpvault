@@ -40,6 +40,18 @@ extra runner, or automatic model execution is required.
 
 ## Quick start
 
+Before turning an immutable source into a new Wiki note, use the
+[source comparison workflow](docs/source-comparison.md):
+`wiki.source_compare` with `sourcePath` and a focused `query`. It compares
+current source passages with existing canonical notes and supplies a compact
+decision worksheet: already covered, extend existing, conflicting, new
+knowledge, or uncertain. You interpret the evidence and use the existing
+revision-safe editing/publishing tools; the comparison does not write anything.
+Declared citations and literal overlap are observations, not proof of agreement
+or independent corroboration. Default output is 4000 characters (max 12000),
+with at most 20 candidates and 8 body reads. No candidates is not proof that the
+knowledge is new. Source integrity describes the content hash, not truth.
+
 1. **Install Node.js runtime:**
 
    ```bash

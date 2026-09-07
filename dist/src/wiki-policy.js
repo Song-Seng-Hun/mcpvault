@@ -16,7 +16,7 @@ export const WIKI_POLICY_TOPICS = [
     'portability',
     'safety',
 ];
-export const WIKI_POLICY_VERSION = 26;
+export const WIKI_POLICY_VERSION = 27;
 /**
  * The only policy that every MCP client must receive eagerly. Detailed
  * organization guidance is selected through wiki.policy so a rich Wiki does
@@ -93,8 +93,9 @@ const POLICY_TOPICS = {
             'Summaries, key points, highlights, and generated syntheses are projections or interpretations; preserve the full body and their source revision/fingerprint.',
             'When direct obligations and concrete repair are empty, get_agent_pulse may surface one bounded synthesis opportunity. Follow wiki.synthesis_candidates only across an authored MOC, project, domain, or subject boundary; folder or vector similarity never creates a synthesis unit.',
             'wiki.property_contract hostBundle derives optional host forms/templates. wiki.preflight normalizeFormatting previews revision-safe mechanical changes; never refresh evidence or summary hashes just to silence lint.',
+            'Before distillation, use wiki.source_compare sourcePath/query. Compare current passages, decide whether to extend existing knowledge, and retain conditions and source revisions; no match does not prove novelty.',
         ],
-        routes: ['mcp.publish_knowledge', 'wiki.note_template', 'wiki.projection_update', 'wiki.relation_set', 'wiki.reciprocal_link', 'notes.move_preview', 'notes.move', 'wiki.synthesis_candidates', 'wiki.decision_record'],
+        routes: ['wiki.source_compare', 'mcp.publish_knowledge', 'wiki.note_template', 'wiki.projection_update', 'wiki.relation_set', 'wiki.reciprocal_link', 'notes.move_preview', 'notes.move', 'wiki.synthesis_candidates', 'wiki.decision_record'],
         avoid: ['copying one concept into several folders', 'treating a summary or relation as truth', 'merging from similarity alone'],
     },
     evidence: {

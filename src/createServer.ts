@@ -9,6 +9,7 @@ import { PathFilter } from "./pathfilter.js";
 import { SearchService } from "./search.js";
 import { RetrievalService } from './retrieval-service.js';
 import { QuestionPacketService } from './question-packet.js';
+import { SourceComparisonService } from './source-comparison.js';
 import { handleWikiLinkTool } from "./wikilink/index.js";
 import { GitHistoryService } from "./git-history.js";
 import { CollaborationService } from "./scopes.js";
@@ -425,6 +426,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
   const collaboration = new CollaborationService(fileSystem, searchService);
   const retrieval = new RetrievalService(searchService, collaboration, semanticSearch, scopeAccess, fileSystem);
   const questionPacket = new QuestionPacketService(fileSystem, scopeAccess, retrieval);
+  const sourceComparison = new SourceComparisonService(fileSystem, scopeAccess, retrieval);
   const references = new ReferenceService(fileSystem, scopeAccess);
   const llmWiki = new LlmWikiService(fileSystem, scopeAccess, references, semanticSearch);
   llmWikiCache = llmWiki;
@@ -1494,6 +1496,10 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
 
         case "get_wiki_knowledge_gaps": {
           return jsonResult(await llmWiki.knowledgeGaps(principal, trimmedArgs.limit, trimmedArgs.maxChars, trimmedArgs.prettyPrint), trimmedArgs.prettyPrint);
+        }
+
+        case "get_wiki_source_comparison": {
+          return jsonResult(await sourceComparison.read({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
         }
 
         case "get_wiki_answer_packet": {

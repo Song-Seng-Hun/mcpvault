@@ -9,6 +9,18 @@ updated_at: 2026-09-01T18:30:44.285Z
 
 ## Question context projections
 
+`wiki.source_compare` is a read-only source-to-existing-knowledge worksheet.
+Pass an immutable `sourcePath`, a focused `query`, and optionally the current
+`expectedRevision`. It returns exact source/candidate revisions and passages,
+plus declared citations/contradictions and literal overlaps. The agent decides
+`already_covered`, `extend_existing`, `conflicting`, `new_knowledge` or
+`uncertain`; these decisions are not inferred from search or similarity.
+Record the rationale, conditions and source references in the normal existing
+note or attributed draft using revision-safe writes. No separate decision
+ledger or automatic publication exists. Source hash mismatch requires review,
+not a metadata-only hash refresh. Default/max JSON budgets are 4000/12000 chars;
+follow current read actions for omitted content. Bounded absence is not novelty.
+
 `wiki.answer_packet` accepts `query` and an optional selected `path`; path-only
 calls retain their existing behavior. Question mode returns no generated answer
 and writes no document. Its whole JSON budget defaults to 4,000 characters and
