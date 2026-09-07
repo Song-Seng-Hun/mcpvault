@@ -165,6 +165,8 @@ export declare class LlmWikiService {
         revision: string;
     }>;
     ingestSource(params: {
+        principal?: ScopePrincipal;
+        sourceDerivations?: unknown;
         scopeRoot: string;
         sourceId?: string;
         title: string;

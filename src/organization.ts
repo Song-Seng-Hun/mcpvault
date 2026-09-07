@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { extractMarkdownTasks } from './markdown-tasks.js';
 import { extractObsidianLinkOccurrences } from './backlinks.js';
 import { normalizeKnowledgeApplications } from './knowledge-application-model.js';
+import { normalizeSourceDerivations } from './source-provenance-model.js';
 
 /**
  * Lightweight knowledge-organization vocabulary.
@@ -320,6 +321,7 @@ export const ORGANIZATION_PROPERTY_CONTRACT: readonly OrganizationPropertyContra
   { name: 'focus_supports', type: 'list', description: 'Outcomes supported by this note' },
   { name: 'claims', type: 'list', description: 'MCP-managed claim provenance and optional argument roles/Obsidian block-link relations' },
   { name: 'evidence', type: 'list', description: 'Evidence locator objects' },
+  { name: 'source_derivations', type: 'list', appliesTo: ['source'], description: 'MCP-managed pinned source-level quotation/adaptation/republication ancestry; not ordinary citations or independent verification' },
   ...RELATION_FIELDS.map(name => ({ name, type: 'list' as const, description: `Typed Obsidian links: ${name}` })),
   { name: 'relation_notes', type: 'object', description: 'Short rationale for typed relation fields; navigation metadata only' },
   { name: 'relation_evidence', type: 'object', description: 'Scope-safe evidence paths keyed by typed relation field' },
@@ -1539,6 +1541,10 @@ export function organizationLintIssues(path: string, frontmatter: Record<string,
   if (frontmatter.knowledge_applications !== undefined) {
     try { normalizeKnowledgeApplications(frontmatter.knowledge_applications); }
     catch { issues.push({ code: 'invalid_knowledge_applications', detail: 'knowledge_applications must be a bounded array of valid MCP-managed application records.' }); }
+  }
+  if (frontmatter.source_derivations !== undefined) {
+    try { normalizeSourceDerivations(frontmatter.source_derivations); }
+    catch { issues.push({ code: 'invalid_source_derivations', detail: 'source_derivations requires at most eight pinned source-level quotation/adaptation/republication references.' }); }
   }
   for (const field of ORGANIZATION_LIST_FIELDS) {
     const value = frontmatter[field];

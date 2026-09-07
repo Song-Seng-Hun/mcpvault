@@ -74,9 +74,20 @@ The legacy overview receives the same bounded discovery and output safeguards.
 
 ## 4. Evidence independence
 
-- [ ] Extend citation/claim projections to group known shared source works and explicit derivation ancestry. Show observed provenance groups, unresolved ancestry and limits; do not assert independence from missing links.
-- [ ] Surface bounded provenance cautions in answer/review packets. Repeated accounts, models, comments or editions are not independent evidence.
-- [ ] Test same work/different editions, chained quotation, shared parent, cycles, genuine separately recorded experiments and hidden ancestry. Do not introduce a global trust score or leak hidden group counts.
+Implementation contract: optional immutable `source_derivations` from existing
+source ingestion, at most eight exact current source path/revision parents,
+relations quotation/adaptation/republication only. No ordinary citation becomes
+an ancestry claim. Shared bounded request reader and pure graph projection group
+observed path/work overlap, preserve unresolved ancestry and never certify
+independence. Claim matrices/path answer-review packets use twenty source load
+attempts and four hops; question packets reuse only their existing eight-body
+window. No new index, daemon or confidence score. Source snapshots remain
+immutable; changed supplied ancestry on a retry is rejected. The same scope,
+moderation, related-write guards and final revision checks protect the projection.
+
+- [x] Extend citation/claim projections to group known shared source works and explicit derivation ancestry. Show observed provenance groups, unresolved ancestry and limits; do not assert independence from missing links.
+- [x] Surface bounded provenance cautions in answer/review packets. Repeated accounts, models, comments or editions are not independent evidence.
+- [x] Test same work/different editions, chained quotation, shared parent, cycles, genuine separately recorded experiments and hidden ancestry. Do not introduce a global trust score or leak hidden group counts.
 
 ## 5. Explanation and conditional synthesis
 
@@ -171,3 +182,33 @@ scenarios are isolated MCP fixtures, not claimed as production-corpus coverage.
 No production accounts or notes were changed. Rollback archive:
 `.mcpvault/backups/source-changes-20260907-2335/previous-dist.zip`.
 Stages4–8 remain required; stage3 delivery is not completion of this goal.
+
+2026-09-08, stage4: immutable sourceDerivations ingestion, request-local bounded
+provenance reads, explicit work/path ancestry grouping and unresolved-state
+warnings are connected to claim matrices and path/query answer packets.
+Nested source snapshots participate in path integrity without becoming support
+or navigation edges. Shared text accounting includes body, original content,
+raw YAML and serialized Properties; the 16MiB logical payload budget is not a
+claim about process heap usage. Question mode adds no extra body reads.
+
+Independent spec/quality reviews found and repaired padded paths, stale-edge
+cache poisoning, unmarked shared-origin omission, undercounted retained raw
+YAML, and compact-output warning/omission flags. First full run:224 files,
+3336 pass/1 fail/2 existing skips,475.42s. New metadata displaced a counterpoint
+under5000 chars; optional ancestry detail and repeated guidance now shrink
+before original opposing context. Two subsequent full attempts were stopped
+before edits: one for flag propagation, one for a test's obsolete assumption
+that reducing boilerplate by50 chars must remove a neighbor. The latter now
+checks both neighbor preservation and actual omission at a smaller budget.
+
+Final fresh full run: **224 files/3337 passed/2 existing skips**,465.27s,
+started00:46:31 KST. Build and diff checks passed. Native Codex reads confirm
+policy30 and the updated claim-matrix contract; the normal-note guard rejects
+a non-knowledge input. The unchanged welcome revision is preserved. The shared
+server was refreshed toPID27948 at127.0.0.1:8788 with the existing scheduled task;
+no plugin settings, production notes or accounts changed. Production public
+lineage still has zero sources, so positive ancestry/ingestion cases are
+isolated MCP fixtures, not production-corpus coverage. Host rollback archive:
+`.mcpvault/backups/source-provenance-20260908/previous-dist.zip`.
+All spawned stage4 workers/reviewers were closed. Stages5–8 remain required;
+stage4 delivery is not completion of the overall goal.

@@ -123,9 +123,17 @@ test('an answer packet reports truncation when its budget removes supporting row
   await write('B.md'); await write('C.md');
   const full = await wiki.answerPacket(undefined, 'Root.md', 16000, false);
   expect(full.supporting.length).toBe(3);
-  const budget = JSON.stringify(full).length - 50;
+  // Removing a few characters may now compact repeated guidance while keeping
+  // every neighbor. Exercise actual row omission with a substantially smaller
+  // budget instead of coupling this assertion to the boilerplate's exact size.
+  const nearBudget = JSON.stringify(full).length - 50;
+  const near = await wiki.answerPacket(undefined, 'Root.md', nearBudget, false);
+  expect(near.supporting.length).toBe(full.supporting.length);
+  expect(JSON.stringify(near).length).toBeLessThanOrEqual(nearBudget);
+  const budget = Math.max(1024, Math.floor(JSON.stringify(full).length / 2));
   const small = await wiki.answerPacket(undefined, 'Root.md', budget, false);
-  expect(small.supporting.length).toBeLessThan(full.supporting.length);
+  expect((small.supporting || []).length).toBeLessThan(full.supporting.length);
   expect(small.truncated).toBe(true);
+  expect(small.source.path).toBe('Root.md');
   expect(JSON.stringify(small).length).toBeLessThanOrEqual(budget);
 });

@@ -9,6 +9,21 @@ updated_at: 2026-09-01T18:30:44.285Z
 
 ## Question context projections
 
+`source_derivations` is optional immutable source metadata: at most eight
+`{path, revision, relation}` records, where `relation` is `quotation`,
+`adaptation`, or `republication`. Paths are exact Vault-relative source paths,
+not aliases, URLs or ordinary `cites` links; revision is the parent's current
+SHA-256. Capture with `mcp.ingest_source` `sourceDerivations`. Changed ancestry
+requires a new source ID. These path snapshots protect reference integrity but
+do not add navigational/support edges or cure orphan knowledge.
+
+`wiki.claim_matrix` and path answer/review packets project observed common
+source origins, not independence scores. An ancestry gap, cycle, changed
+revision, inaccessible parent or reached bound is unresolved, never evidence
+of independence. Query packets inspect only their already-read source window.
+Multiple editions/accounts/comments and separate experiment records do not
+prove independent replication. See [source provenance](../docs/source-provenance.md).
+
 `knowledge_applications` is an optional list of up to eight bounded reported-use
 records in an existing note/experiment/task, not a separate event ledger.
 Each has `id`, `knowledge: {path, revision}`, `environment`, `conditions`,

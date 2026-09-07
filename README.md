@@ -40,6 +40,13 @@ extra runner, or automatic model execution is required.
 
 ## Quick start
 
+Several articles may repeat the same study. Use
+[observed source ancestry](docs/source-provenance.md) in `wiki.claim_matrix`
+and answer packets to distinguish shared originals from separately recorded
+sources. Capture explicit quotation/adaptation/republication parents with
+`mcp.ingest_source` `sourceDerivations`. Missing ancestry, multiple editions,
+model agreement and separate experiment records never certify independence.
+
 When a new edition arrives, [compare its literal changes](docs/source-changes.md)
 with `wiki.source_lineage` using `sourcePath` and an explicit
 `previousSourcePath`. Inspect source revisions, changed passages and linked

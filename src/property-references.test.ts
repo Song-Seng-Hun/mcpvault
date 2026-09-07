@@ -44,3 +44,10 @@ test('does not treat unknown knowledge application nested paths as references', 
   expect(isReferenceSnapshotPath(['knowledge_applications', 0, 'environment'])).toBe(false);
   expect(isReferenceSnapshotPath(['knowledge_applications', 'knowledge', 'path'])).toBe(false);
 });
+
+test('source derivation snapshots protect path integrity without adding support or navigation edges', () => {
+  const references = collectPlainFrontmatterReferences({ source_derivations: [{ path: '_sources/origin.md', revision: 'a'.repeat(64), relation: 'quotation' }] });
+  expect(references).toEqual([expect.objectContaining({ propertyPath: 'source_derivations[0].path', value: '_sources/origin.md' })]);
+  expect(isNavigationalFrontmatterReference(references[0]!)).toBe(false);
+  expect(isReferenceSnapshotPath(['source_derivations', 0, 'revision'])).toBe(false);
+});

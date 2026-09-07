@@ -19,7 +19,7 @@ export const WIKI_POLICY_TOPICS = [
 ] as const;
 
 export type WikiPolicyTopicId = typeof WIKI_POLICY_TOPICS[number];
-export const WIKI_POLICY_VERSION = 29;
+export const WIKI_POLICY_VERSION = 30;
 
 type WikiPolicyTopic = {
   purpose: string;
@@ -116,6 +116,7 @@ const POLICY_TOPICS: Record<Exclude<WikiPolicyTopicId, 'overview'>, WikiPolicyTo
     rules: [
       'Capture immutable source snapshots before publishing knowledge; preserve source ID, content hash, evidence path, and revision.',
       'Use source work and edition lineage so multiple snapshots of one work are not mistaken for independent corroboration.',
+      'When capturing a quotation, adaptation or republication, use mcp.ingest_source sourceDerivations with up to eight exact Vault-relative source paths and current revisions. This is source-level ancestry, not ordinary citations. wiki.claim_matrix and answer packets report observed common origins and unresolved ancestry; absent links, separate experiment records, repeated accounts/models/comments and likes never prove independence. Immutable snapshots require a new sourceId if provenance changes.',
       'When a new immutable edition is captured, call wiki.source_lineage with sourcePath, choose previousSourcePath and retain both expected revisions. Read changed passages and potentially affected claim locators before using wiki.review_claim; a literal difference is not refutation and a draft review is not approval.',
       'For precise claims record heading, block, source revision, optional line range, and quote hash, then inspect current evidence before changing status.',
       'Use claim roles and Obsidian block links for arguments; graph shape, source count, reactions, and reputation never establish truth.',

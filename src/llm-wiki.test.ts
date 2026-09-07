@@ -4741,6 +4741,10 @@ test('mixed Korean and English retrieval keeps durable Wiki context ahead of noi
     const packet = await callJson(client, 'get_wiki_answer_packet', { path: 'Knowledge/RAG Guide.md', intent: 'decide', includeSemantic: false, maxChars: 5000, accessToken });
     expect(packet.value.source).toMatchObject({ path: 'Knowledge/RAG Guide.md', revision: patched.value.revision, summaryStale: true, navigation: expect.objectContaining({ primaryMoc: expect.anything() }) });
     expect(packet.value.counterpoints).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'Knowledge/RAG Failure.md', relationToSource: 'counterpoint_or_review' })]));
+    expect(packet.value.evidenceDiversity.provenance.unresolved).toBe(true);
+    expect(packet.value.evidenceDiversity.provenance.truncated).toBe(true);
+    expect(packet.value.evidenceDiversity.truncated).toBe(true);
+    expect(JSON.stringify(packet.value).length).toBeLessThanOrEqual(5000);
     expect(packet.value.reasoningTrail.counterexamples).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'Knowledge/RAG Failure.md', revision: expect.stringMatching(/^[a-f0-9]{64}$/) })]));
     expect(packet.value.synthesisPlan.status).toBe('ready_for_decision_draft');
     expect(JSON.stringify(packet.value)).not.toContain('long community context long community context long community context');

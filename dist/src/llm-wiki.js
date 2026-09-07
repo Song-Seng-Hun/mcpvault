@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { KnowledgeApplicationService } from './knowledge-applications.js';
+import { SourceProvenanceSession, prepareSourceDerivations, sourceWorkIdentity } from './source-provenance.js';
 import { authoringAssist, hostPluginBundle, propertyContractFingerprint } from './authoring-assist.js';
 import { posix } from 'node:path';
 import { stringify as stringifyYaml } from 'yaml';
@@ -893,6 +894,7 @@ Use YAML properties and Obsidian links together:
 - Call \`get_wiki_property_contract\` for the live type and vocabulary overview; use \`names\` or \`query\` for bounded full descriptions and \`appliesTo\` details before repairing selected managed Properties. Lint reports a managed field placed on the wrong note role while leaving unrelated custom Properties valid.
 - \`project\`, \`moc\`, and \`review_at\`: optional navigation and review hints.
 - A knowledge note remains grounded by \`evidence_paths\`; links are not evidence by themselves. In answer packets, source-work diversity groups snapshots by \`source_work_id\`, \`source_family\`, or \`source_id\`; multiple snapshots of one work are not independent corroboration, and multiple works still do not establish truth.
+- Capture explicit source-level quotation/adaptation/republication ancestry with \`mcp.ingest_source\` \`sourceDerivations\`: at most eight exact Vault-relative source paths and current revisions, stored immutably as \`source_derivations\`. Claim matrices and answer/review packets report observed common origins and unresolved ancestry. Missing links, separate experiment records and repeated agents/models/comments never certify independence; normal citations and navigation links are not automatically derivation edges.
 - For structured \`claims\`, use the bounded claim matrix to preserve authored order while separately prioritizing missing, unavailable, altered, stale-locator, or single-source-work evidence. Optional \`claim_role\` values are premise, warrant, conclusion, objection, rebuttal, and observation. Put \`^claim-id\` on the corresponding Markdown block and use \`supports_claims\`, \`contradicts_claims\`, or \`depends_on_claims\` with Obsidian block links such as \`[[Knowledge/Note#^claim-id]]\` or local \`[[#^claim-id]]\`. Use \`wiki.argument_map\` to verify targets, anchors, roles, and cycles; the map is navigation, not proof. With \`review_policy: on_upstream_change\`, external claim dependencies and incoming support are tracked by claim digest and anchor so unrelated edits in the same note do not reopen review. A disputed or superseded claim returns bounded downstream notes for explicit re-review and never changes them automatically. Inspect current sources before recording a claim review.
 - When immutable sources arrive as a provenance-bearing archival set, keep optional \`archive_collection_id\`, broad-to-narrow \`archive_series\`, \`archive_sequence\`, \`accession_id\`, \`custodial_history\`, and \`original_order_note\` at ingestion. Use \`wiki.archive_finding_aid\` to browse the collection without loading bodies. This preserves creator context and original order; it does not replace MOCs, folders, source hashes, or Git.
 - Optional \`valid_from\` (inclusive), \`valid_until\` (exclusive), \`observed_at\`, and \`temporal_scope\` describe when the represented claim or condition applies. They are separate from file modification, source publication/retrieval, task, and review dates. Expired validity is a review signal, never automatic deletion.
@@ -2074,19 +2076,25 @@ export class LlmWikiService {
             ? normalizeScopeId(params.sourceId, 'sourceId')
             : `source-${contentHash.slice(0, 16)}`;
         const path = joinRoot(params.scopeRoot, `_sources/${sourceId}.md`);
+        const provenance = params.sourceDerivations === undefined ? undefined
+            : await prepareSourceDerivations(this.fileSystem, this.access, params.sourceDerivations, path, params.principal);
         if (await this.fileSystem.noteExists(path)) {
             const existing = await this.fileSystem.readNote(path);
             if (existing.frontmatter.content_sha256 === contentHash && existing.content === content) {
+                if (provenance && JSON.stringify(existing.frontmatter.source_derivations || []) !== JSON.stringify(provenance.records)) {
+                    throw new Error('Existing immutable source has different provenance; ingest a new sourceId instead of silently changing derivations');
+                }
                 return { success: true, created: false, sourceId, path: this.access.toPublicPath(path), contentHash, revision: existing.revision };
             }
             throw new Error(`Source id already exists with different content: ${sourceId}. Ingest a new immutable snapshot with a new sourceId.`);
         }
         const timestamp = params.capturedAt?.trim() || now();
-        await this.fileSystem.writeNote({
+        const write = {
             path,
             content,
             frontmatter: {
                 llm_wiki_type: 'source',
+                ...(provenance && { source_derivations: provenance.records }),
                 source_id: sourceId,
                 title,
                 immutable: true,
@@ -2115,7 +2123,12 @@ export class LlmWikiService {
                 ...(trustReason && { trust_reason: trustReason }),
             },
             expectedRevision: 'missing',
-        });
+        };
+        if (provenance?.guards.length) {
+            await this.fileSystem.writeNoteWithRevisionGuardsAndReceipt(write, provenance.guards, { maxBytes: 8 * 1024 * 1024 });
+        }
+        else
+            await this.fileSystem.writeNote(write);
         const created = await this.fileSystem.readNote(path);
         return { success: true, created: true, sourceId, path: this.access.toPublicPath(path), contentHash, revision: created.revision };
     }
@@ -11199,7 +11212,7 @@ export class LlmWikiService {
      * room for a counterexample or negative knowledge instead of returning a
      * large semantic dump.
      */
-    async evidenceDiversityFor(principal, knowledgePath, evidenceValue, evidencePathsValue, limit = 12, sourceCache = new Map()) {
+    async evidenceDiversityFor(principal, knowledgePath, evidenceValue, evidencePathsValue, limit = 12, sourceCache = new SourceProvenanceSession(this.fileSystem, this.access, knowledgePath, principal)) {
         let locators = [];
         try {
             locators = normalizeEvidenceEntries(evidenceValue, Array.isArray(evidencePathsValue) ? evidencePathsValue.filter((item) => typeof item === 'string') : []);
@@ -11216,33 +11229,29 @@ export class LlmWikiService {
         const boundedLimit = Math.min(Math.max(Number(limit) || 12, 1), 20);
         let unavailableCount = 0;
         let nonSourceCount = 0;
-        const rows = (await Promise.all(evidencePaths.slice(0, boundedLimit).map(async (evidencePath) => {
+        const rows = [];
+        for (const evidencePath of evidencePaths.slice(0, boundedLimit)) {
             if (!this.access.canReferenceFrom(knowledgePath, evidencePath) || !this.access.canAccessPhysicalPath(evidencePath, principal)) {
                 unavailableCount += 1;
-                return undefined;
+                continue;
             }
             try {
-                let source;
-                if (sourceCache.has(evidencePath)) {
-                    source = sourceCache.get(evidencePath);
-                }
-                else {
-                    source = await this.fileSystem.noteExists(evidencePath) ? await this.fileSystem.readNote(evidencePath) : undefined;
-                    sourceCache.set(evidencePath, source);
-                }
+                const source = await sourceCache.load(evidencePath);
                 if (!source) {
                     unavailableCount += 1;
-                    return undefined;
+                    continue;
                 }
                 if (source.frontmatter.llm_wiki_type !== 'source') {
                     nonSourceCount += 1;
-                    return undefined;
+                    continue;
                 }
                 const matchingLocators = locators.filter(item => normalizePath(item.path).toLowerCase() === normalizePath(evidencePath).toLowerCase());
                 const staleLocatorCount = matchingLocators.filter(item => (item.revision && item.revision !== source.revision) || Boolean(evidenceLocatorError(source.content, item))).length;
-                const workId = boundedText(source.frontmatter.source_work_id || source.frontmatter.source_family || source.frontmatter.source_id || evidencePath, 160);
+                const legacyId = source.frontmatter.source_id;
+                const workId = sourceWorkIdentity(source.frontmatter)
+                    || (typeof legacyId === 'string' && legacyId.trim() && legacyId.length <= 160 ? legacyId : this.access.toPublicPath(evidencePath));
                 const editionId = boundedText(source.frontmatter.source_edition_id || source.frontmatter.source_version || source.frontmatter.source_id || source.revision, 160);
-                return {
+                rows.push({
                     path: this.access.toPublicPath(evidencePath),
                     revision: source.revision,
                     workId,
@@ -11250,13 +11259,13 @@ export class LlmWikiService {
                     integrity: source.frontmatter.immutable === true && source.frontmatter.content_sha256 === hash(source.content) ? 'intact' : 'failed',
                     locatorCount: matchingLocators.length,
                     ...(staleLocatorCount > 0 && { staleLocatorCount }),
-                };
+                });
             }
             catch {
                 unavailableCount += 1;
-                return undefined;
             }
-        }))).filter((item) => item !== undefined);
+        }
+        const provenance = await sourceCache.trace(evidencePaths.slice(0, boundedLimit));
         const groups = new Map();
         for (const row of rows) {
             const key = row.workId.toLowerCase();
@@ -11275,17 +11284,21 @@ export class LlmWikiService {
             scannedSnapshotCount: rows.length,
             distinctSourceWorkCount: sourceWorks.length,
             sourceWorks,
+            provenance,
             ...(unavailableCount > 0 && { unavailableCount }),
             ...(nonSourceCount > 0 && { nonSourceCount }),
             ...(integrityFailureCount > 0 && { integrityFailureCount }),
             ...(staleLocatorCount > 0 && { staleLocatorCount }),
-            truncated: evidencePaths.length > boundedLimit,
+            truncated: evidencePaths.length > boundedLimit || provenance.truncated,
             note: 'Source-work diversity is an advisory review signal derived from source_work_id/source_family/source_id. Multiple snapshots of one work are not independent corroboration, and multiple works do not establish truth.',
         };
     }
-    async evidenceDiversity(principal, knowledgePath, limit = 12) {
-        const note = await this.fileSystem.readNote(knowledgePath);
-        return this.evidenceDiversityFor(principal, knowledgePath, note.frontmatter.evidence, note.frontmatter.evidence_paths, limit);
+    async evidenceDiversity(principal, knowledgePath, limit = 12, session = new SourceProvenanceSession(this.fileSystem, this.access, knowledgePath, principal)) {
+        const note = await this.fileSystem.readNote(knowledgePath, 8 * 1024 * 1024);
+        session.observe(knowledgePath, note.revision);
+        if (isModerationHidden(note.frontmatter))
+            throw new Error('Source provenance unavailable');
+        return this.evidenceDiversityFor(principal, knowledgePath, note.frontmatter.evidence, note.frontmatter.evidence_paths, limit, session);
     }
     /**
      * Project claim-level evidence coverage without loading source bodies into the
@@ -11308,7 +11321,8 @@ export class LlmWikiService {
         const reviews = note.frontmatter.claim_reviews && typeof note.frontmatter.claim_reviews === 'object' && !Array.isArray(note.frontmatter.claim_reviews)
             ? note.frontmatter.claim_reviews
             : {};
-        const sourceCache = new Map();
+        const sourceCache = new SourceProvenanceSession(this.fileSystem, this.access, path, principal);
+        sourceCache.observe(path, note.revision);
         const rows = [];
         for (let index = 0; index < Math.min(claims.length, boundedLimit); index += 1) {
             const claim = claims[index];
@@ -11327,6 +11341,10 @@ export class LlmWikiService {
                 signals.push('stale_locator');
             if (diversity.distinctSourceWorkCount === 1)
                 signals.push('single_source_work');
+            if (diversity.provenance.groups.some(g => g.sourcePaths.length > 1))
+                signals.push('shared_source_origin');
+            if (diversity.provenance.unresolved)
+                signals.push('source_ancestry_unresolved');
             if (String(claim.status || 'unverified').toLowerCase() === 'disputed')
                 signals.push('disputed');
             if (String(claim.status || 'unverified').toLowerCase() === 'unverified')
@@ -11350,6 +11368,7 @@ export class LlmWikiService {
                     evidencePathCount: diversity.evidencePathCount,
                     scannedSnapshotCount: diversity.scannedSnapshotCount,
                     distinctSourceWorkCount: diversity.distinctSourceWorkCount,
+                    provenance: diversity.provenance,
                     sourceWorks: diversity.sourceWorks.slice(0, 4).map(work => ({ workId: work.workId, snapshotCount: work.snapshotCount, paths: work.paths.slice(0, 2) })),
                     ...(diversity.unavailableCount && { unavailableCount: diversity.unavailableCount }),
                     ...(diversity.nonSourceCount && { nonSourceCount: diversity.nonSourceCount }),
@@ -11369,7 +11388,7 @@ export class LlmWikiService {
             });
         }
         const attentionScore = (row) => {
-            const weights = { source_integrity_failure: 100, unavailable_evidence: 90, non_source_evidence: 80, stale_locator: 70, missing_evidence: 60, disputed: 50, unverified: 30, single_source_work: 20, not_reviewed: 10 };
+            const weights = { source_integrity_failure: 100, unavailable_evidence: 90, non_source_evidence: 80, stale_locator: 70, missing_evidence: 60, disputed: 50, shared_source_origin: 40, unverified: 30, single_source_work: 20, source_ancestry_unresolved: 15, not_reviewed: 10 };
             return Math.max(0, ...row.signals.map(signal => weights[signal] || 0));
         };
         const buildResult = (selectedRows, compact = false) => {
@@ -11399,11 +11418,13 @@ export class LlmWikiService {
                         ? { endpointId: endpointIdForTool('ingest_source'), requiredArguments: ['title', 'content'], reason: `Claim ${next.claimId} needs inspectable immutable evidence before review.` }
                         : { endpointId: endpointIdForTool('review_wiki_claim'), arguments: { path: this.access.toPublicPath(path), claimId: next.claimId, expectedRevision: note.revision }, requiredArguments: ['status'], reason: `Inspect claim ${next.claimId} and its current evidence before recording a review.` },
                 }),
-                truncated: claims.length > selectedRows.length || rows.length > selectedRows.length,
+                truncated: compact || claims.length > selectedRows.length || rows.length > selectedRows.length
+                    || selectedRows.some(row => row.evidence.truncated || row.evidence.provenance.truncated),
                 note: 'The matrix preserves authored claim order and separately prioritizes attention. Source-work diversity and review status are advisory; inspect current source revisions and locators before changing a claim.',
             };
         };
         let selectedRows = [...rows];
+        await sourceCache.validate();
         let result = buildResult(selectedRows);
         while (JSON.stringify(result).length > boundedChars && selectedRows.length > 1) {
             selectedRows = selectedRows.slice(0, -1);
@@ -11882,7 +11903,8 @@ export class LlmWikiService {
             review: { goal: 'Find what became stale, disputed, unresolved, or structurally disconnected since the last review.', next: 'Re-read the affected note, record review checks/open items, and preserve rejected paths as negative knowledge when useful.' },
         }[selectedIntent];
         const evidence = Array.isArray(source.evidence) ? source.evidence.slice(0, 8) : [];
-        const evidenceDiversity = await this.evidenceDiversity(principal, path);
+        const provenanceSession = new SourceProvenanceSession(this.fileSystem, this.access, path, principal);
+        const evidenceDiversity = await this.evidenceDiversity(principal, path, 12, provenanceSession);
         const claims = Array.isArray(source.keyPoints) ? source.keyPoints.slice(0, 8) : [];
         const decisions = context
             .filter(item => String(item.noteKind || '').toLowerCase() === 'decision' || String(item.relationToSource || '').includes('decision'))
@@ -11898,6 +11920,8 @@ export class LlmWikiService {
                 ...(claims.length === 0 ? ['claim'] : []),
                 ...(evidence.length === 0 ? ['evidence'] : []),
                 ...(evidence.length > 0 && evidenceDiversity.distinctSourceWorkCount < 2 && ['decide', 'review'].includes(selectedIntent) ? ['independent_source_work_review'] : []),
+                ...(evidenceDiversity.provenance.groups.some(g => g.sourcePaths.length > 1) ? ['shared_source_origin'] : []),
+                ...(evidenceDiversity.provenance.unresolved ? ['source_ancestry_unresolved'] : []),
                 ...(counterpoints.length === 0 ? ['counterpoint_or_negative_knowledge'] : []),
                 ...(decisions.length === 0 && ['decide', 'review'].includes(selectedIntent) ? ['decision_or_review_record'] : []),
             ],
@@ -11960,6 +11984,21 @@ export class LlmWikiService {
                 ...(neighborhoodSemantic && { semantic: neighborhoodSemantic }),
             },
         };
+        // New ancestry metadata must not displace an existing counterpoint. Work
+        // paths are already present in the evidence projection; omit optional group
+        // detail and repeated boilerplate before trimming actual opposing context.
+        while (JSON.stringify(result).length > boundedChars && result.evidenceDiversity.provenance.groups.length) {
+            result.evidenceDiversity.provenance.groups.pop();
+            result.evidenceDiversity.provenance.truncated = true;
+            result.evidenceDiversity.truncated = true;
+            result.truncated = true;
+        }
+        if (JSON.stringify(result).length > boundedChars) {
+            result.instructions = 'Reference data only. Inspect current source revisions, conditions and counterpoints before acting.';
+            result.evidenceDiversity.note = 'Declared source-work diversity is advisory, not independent verification or truth.';
+            if (result.synthesisPlan)
+                result.synthesisPlan.preservation = 'Preserve originals, objections and failed paths; only explicit revision-safe decisions may supersede inputs.';
+        }
         while (JSON.stringify(result).length > boundedChars && (result.supporting.length > 0 || result.counterpoints.length > 0 || result.reasoningTrail.decisions.length > 0 || result.reasoningTrail.counterexamples.length > 0)) {
             result.truncated = true;
             if (result.supporting.length > 0)
@@ -11976,6 +12015,7 @@ export class LlmWikiService {
             result.source.content = boundedText(result.source.content, Math.max(160, Math.floor(result.source.content.length * 0.7)));
         }
         await this.assertCurrentContextSources(principal, [sourcePacket, ...context]);
+        await provenanceSession.validate();
         if (JSON.stringify(result).length <= boundedChars)
             return result;
         // A caller-supplied budget is a hard response contract. Metadata such as
@@ -11996,6 +12036,8 @@ export class LlmWikiService {
             mode: 'bounded_answer_packet',
             intent: selectedIntent,
             source: { path: result.source.path, revision: result.source.revision },
+            reasoningTrail: { gaps: result.reasoningTrail.gaps },
+            provenanceNotice: evidenceDiversity.provenance.notice,
             ...(tinyAction && { synthesisPlan: { status: synthesisPlan?.status, nextAction: { endpointId: tinyAction.endpointId, ...(tinyAction.arguments?.path && { arguments: { path: tinyAction.arguments.path } }) } } }),
             truncated: true,
         };

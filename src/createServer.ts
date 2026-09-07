@@ -1371,6 +1371,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         case "ingest_source": {
           return jsonResult(await llmWiki.ingestSource({
             ...trimmedArgs,
+            principal,
             scopeRoot: trimmedArgs.scopeUri || '',
             capturedBy: actorName(principal, trimmedArgs.capturedBy),
           }), trimmedArgs.prettyPrint);

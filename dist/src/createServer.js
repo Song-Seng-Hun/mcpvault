@@ -1300,6 +1300,7 @@ export function createServer(vaultPath, options = {}) {
                     case "ingest_source": {
                         return jsonResult(await llmWiki.ingestSource({
                             ...trimmedArgs,
+                            principal,
                             scopeRoot: trimmedArgs.scopeUri || '',
                             capturedBy: actorName(principal, trimmedArgs.capturedBy),
                         }), trimmedArgs.prettyPrint);

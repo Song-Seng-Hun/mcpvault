@@ -23,13 +23,16 @@ const NESTED_REFERENCE_PROPERTIES = new Set([
  */
 const NON_NAVIGATIONAL_REFERENCE_ROOTS = new Set([
     'review_basis_links', 'review_basis_upstream', 'pending_edits', 'research_trail',
-    'learning_progress', 'knowledge_applications',
+    'learning_progress', 'knowledge_applications', 'source_derivations',
 ]);
 export function isNavigationalFrontmatterReference(reference) {
     return !NON_NAVIGATIONAL_REFERENCE_ROOTS.has(reference.root);
 }
 /** Captured file paths are Vault-relative identities or durable scope URIs, not authored wikilinks. */
 export function isReferenceSnapshotPath(segments) {
+    if (segments[0] === 'source_derivations') {
+        return segments.length === 3 && typeof segments[1] === 'number' && segments[2] === 'path';
+    }
     if (segments[0] === 'learning_progress') {
         return (segments.length === 2 && ['root_path', 'completed_through'].includes(String(segments[1])))
             || (segments.length === 4 && segments[1] === 'entries' && typeof segments[2] === 'number' && segments[3] === 'path');

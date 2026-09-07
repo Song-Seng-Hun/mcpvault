@@ -7,6 +7,8 @@ import { bodyStartLine, passageAction, RETRIEVAL_NOTE_BYTES } from './retrieval-
 import { endpointIdForTool } from './endpoint-registry.js';
 import { buildMarkdownLiteralMask } from './backlinks.js';
 import { projectNoteBlockLines } from './note-projections.js';
+import { traceSourceOrigins } from './source-provenance-model.js';
+import { sourceWorkIdentity } from './source-provenance.js';
 const hash = (s) => createHash('sha256').update(s).digest('hex');
 const text = (v, max = 180) => typeof v === 'string' ? v.slice(0, max) : '';
 const identity = (v) => v.trim().toLocaleLowerCase();
@@ -79,6 +81,23 @@ export class QuestionPacketService {
             nextAction: { endpointId: 'wiki.search', arguments: { query, limit: 5, maxChars: 4000 }, instruction: 'Refine the search terms or select an exact visible path; no match is not proof of absent knowledge.' },
         };
         const finish = async () => {
+            const seeds = [...sources].filter(([, n]) => n.frontmatter.llm_wiki_type === 'source').map(([p]) => p);
+            if (seeds.length) {
+                // Reuse only already-loaded bodies: ancestry never expands the eight-body
+                // question budget. Unloaded parents are unresolved, not independent.
+                const provenance = await traceSourceOrigins(seeds, async (path) => {
+                    const note = sources.get(path);
+                    if (!note || !canAccess(path) || note.frontmatter.llm_wiki_type !== 'source')
+                        return undefined;
+                    const workId = sourceWorkIdentity(note.frontmatter);
+                    return { path, revision: note.revision, ...(workId && { workId }), derivations: note.frontmatter.source_derivations,
+                        integrity: note.frontmatter.immutable === true && note.frontmatter.content_sha256 === hash(note.content) };
+                });
+                envelope.provenance = { ...provenance, groups: provenance.groups.map(group => ({ sourcePaths: group.sourcePaths.map(publicPath),
+                        sharedOrigins: group.sharedOrigins.map(origin => ({ ...origin, path: publicPath(origin.path) })) })), window: 'already_loaded_sources_only' };
+                if (provenance.unresolved)
+                    gaps.add('source_ancestry_unresolved');
+            }
             // Streaming revalidation of every observed source; no cross-file atomicity claim.
             for (const [path, note] of sources)
                 if (!canAccess(path) || await this.fs.readNoteRevision(path, RETRIEVAL_NOTE_BYTES) !== note.revision)
@@ -90,6 +109,11 @@ export class QuestionPacketService {
                 }
             envelope.gaps = [...gaps];
             const length = () => JSON.stringify(envelope, null, params.prettyPrint ? 2 : undefined).length;
+            while (length() > maxChars && envelope.provenance?.groups.length) {
+                envelope.provenance.groups.pop();
+                envelope.provenance.truncated = true;
+                envelope.truncated = true;
+            }
             let omitted = 0;
             while (length() > maxChars && envelope.sources.length) {
                 const removed = envelope.sources.pop();
@@ -108,6 +132,8 @@ export class QuestionPacketService {
             }
             if (length() > maxChars)
                 throw new PacketBudgetError('Response envelope exceeds maxChars; retry with a larger budget');
+            if ([...sources.keys()].some(path => !canAccess(path)))
+                throw new Error('Context changed; retry the question');
             return envelope;
         };
         try {
