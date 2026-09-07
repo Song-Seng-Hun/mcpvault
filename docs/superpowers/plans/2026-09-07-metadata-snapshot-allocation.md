@@ -50,5 +50,9 @@ checks cumulative limits, writes one exact Buffer; existing IO lifecycle stays.
 
 ## Delivery
 
-Source, generated dist and documentation are ready for explicit staging and
-fork-only origin/main publication; remote verification will be recorded here.
+- Implementation commit: `4d2b2ce5ab011e1bb71624e94b4237a654acc1a0`.
+- Pushed only `https://github.com/Song-Seng-Hun/mcpvault.git` main; live
+  `git ls-remote origin refs/heads/main` matched the implementation SHA.
+- Source, generated dist and documentation were explicitly staged. Existing
+  untracked `.agents/` and `.mcpvault/` remained untouched. This final receipt is
+  documentation-only. No upstream PR, package publication or runtime restart.
