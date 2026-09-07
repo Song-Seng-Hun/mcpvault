@@ -23,6 +23,27 @@ async function writeNote(path: string, content: string): Promise<void> {
 }
 
 describe('VaultGraphIndex', () => {
+  test('orphan candidate filtering precedes paging but preserves visible incoming links', async () => {
+    vaultPath = await mkdtemp(join(tmpdir(), 'mcpvault-orphan-candidate-'));
+    await writeNote('Community/Posts/First.md', '[[Knowledge/Linked]]');
+    await writeNote('Knowledge/Linked.md', '# Linked from the community');
+    await writeNote('Knowledge/Orphan A.md', '# A');
+    await writeNote('Knowledge/Orphan B.md', '# B');
+    await writeNote('Private/Secret.md', '# Private orphan');
+    graph = new VaultGraphIndex(vaultPath, new PathFilter(), new FrontmatterHandler());
+    const visible = (path: string) => !path.startsWith('Private/');
+    const candidate = (path: string) => !path.startsWith('Community/');
+    const first = await graph.findOrphanNotes(1, visible, 0, true, candidate);
+    expect(first).toMatchObject({ total: 2, truncated: true, orphans: [{ path: 'Knowledge/Orphan A.md', incomingLinks: 0 }] });
+    const second = await graph.findOrphanNotes(1, visible, 1, true, candidate);
+    expect(second).toMatchObject({ total: 2, truncated: false, orphans: [{ path: 'Knowledge/Orphan B.md', incomingLinks: 0 }] });
+    expect(first.snapshotFingerprint).toBe(second.snapshotFingerprint);
+    expect(JSON.stringify(first)).not.toContain('Secret');
+    expect((await graph.findOrphanNotes(10, visible)).orphans).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: 'Community/Posts/First.md' }),
+    ]));
+  });
+
   test('explicit note extensions do not use an alias for a missing filename', async () => {
     vaultPath = await mkdtemp(join(tmpdir(), 'mcpvault-extension-graph-'));
     await writeNote('Wiki/Target.md', '# Exact\n');

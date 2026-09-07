@@ -54,6 +54,7 @@ kept that same owner. No Vault documents or accounts were modified.
 This verifies survival across a Codex restart. A Windows logoff/logon cycle
 has not been exercised: the configured interactive task is not an always-on
 service before login or after logoff. Deployment observations are snapshots,
-not a permanent health guarantee. Equal-workload memory/latency measurements
-and native embedding/GPU tests remain separate work. No upstream contribution
-was made and no RAM/VRAM improvement guarantee follows from these observations.
+not a permanent health guarantee. The subsequent equal-workload lexical
+memory/latency comparison is recorded in `2026-09-07-shared-http-benchmark-design.md`;
+native embedding/GPU tests remain pending. No upstream contribution was made
+and no RAM/VRAM improvement guarantee follows from these cutover observations.

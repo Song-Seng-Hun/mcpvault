@@ -5444,7 +5444,16 @@ export class LlmWikiService {
         add(graph.typedRelations?.reciprocityMissing?.items, 'typed_relation_reciprocity_missing', 'wiki.reciprocal_link', 6);
         add(graph.evergreenQuality?.items?.filter((item) => item?.state === 'needs_attention'), 'evergreen_quality_hint', 'wiki.graph_health', 5);
         add(graph.unresolvedLinks?.items, 'broken_link', 'wiki.graph_health', 6);
-        add(graph.orphanNotes?.items, 'orphan_note', 'wiki.graph_health', 7);
+        // Standalone community records are discovered through their own timelines.
+        // Having no Wiki backlinks is not a metadata defect to repair with triage.
+        // Select before pagination: a page full of Community entries must not hide
+        // later Wiki orphans. Keep visibility (and Community backlinks) unchanged.
+        if (Number(graph.orphanNotes?.total || 0) > 0) {
+            const candidates = await this.fileSystem.findOrphanNotes(priorityScanLimit, canAccess, 0, {
+                includeCandidate: path => !isManagedCommunityPath(this.access.toPublicPath(path)),
+            });
+            add(candidates.orphans.map(item => ({ ...item, path: this.access.toPublicPath(item.path) })), 'orphan_note', 'wiki.graph_health', 7);
+        }
         add(recall.items.filter(item => !['invalid_last_recalled_at', 'invalid_recall_interval_days'].includes(String(item.reason))), 'active_recall_due', 'wiki.recall_queue', 2);
         add(recall.items.filter(item => item.reason === 'invalid_last_recalled_at'), 'invalid_last_recalled_at', 'wiki.recall_queue', 0);
         add(recall.items.filter(item => item.reason === 'invalid_recall_interval_days'), 'invalid_recall_interval_days', 'wiki.recall_queue', 0);

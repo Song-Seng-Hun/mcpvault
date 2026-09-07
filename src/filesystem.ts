@@ -2586,8 +2586,8 @@ export class FileSystemService {
     return this.withGraphRead(graph => graph.findUnresolvedLinks(limit, canAccessPath, offset, options.includeSnapshot));
   }
 
-  async findOrphanNotes(limit: number = 100, canAccessPath: (path: string) => boolean = () => true, offset = 0, options: { includeSnapshot?: boolean } = {}): Promise<OrphanNotesResult> {
-    return this.withGraphRead(graph => graph.findOrphanNotes(limit, canAccessPath, offset, options.includeSnapshot));
+  async findOrphanNotes(limit: number = 100, canAccessPath: (path: string) => boolean = () => true, offset = 0, options: { includeSnapshot?: boolean; includeCandidate?: (path: string) => boolean } = {}): Promise<OrphanNotesResult> {
+    return this.withGraphRead(graph => graph.findOrphanNotes(limit, canAccessPath, offset, options.includeSnapshot, options.includeCandidate));
   }
 
   async getDailyNote(dateInput: DailyDateInput = 'today', folder: string = 'Daily Notes'): Promise<DailyNoteResult> {

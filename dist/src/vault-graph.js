@@ -409,7 +409,7 @@ export class VaultGraphIndex {
         }
         return { unresolved, ...(snapshot && { snapshotFingerprint: snapshot.finish() }), total, truncated: total > offset + unresolved.length };
     }
-    async findOrphanNotes(limit, canAccessPath, offset = 0, includeSnapshot = false) {
+    async findOrphanNotes(limit, canAccessPath, offset = 0, includeSnapshot = false, includeCandidate) {
         await this.ensure();
         const { paths: allVisiblePaths, resolver } = this.visibilityContext(canAccessPath);
         const notePaths = allVisiblePaths.filter(isNote);
@@ -433,6 +433,10 @@ export class VaultGraphIndex {
         // visibilityContext already sorts paths using the same locale comparator.
         for (const path of notePaths) {
             if (incoming.has(normalizedPath(path)))
+                continue;
+            // Candidate selection is not visibility: excluded candidates still supply
+            // real incoming links. Apply it before counting/paging/fingerprinting.
+            if (includeCandidate && !includeCandidate(path))
                 continue;
             total += 1;
             const row = { path, incomingLinks: 0 };

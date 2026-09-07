@@ -55,7 +55,7 @@ function unitPulseService(options: {
       const requestedLimit = Number(params.limit) || notifications.length;
       return { notifications: notifications.slice(0, requestedLimit), unreadCount: notifications.length, nextCursor: options.notificationNextCursor };
     } } as any,
-    { pulsePosts: async () => ({ ownPublishedPosts: 1, activePosts, activeTotal: activePosts.length, feedbackPosts: [], feedbackTotal: 0, forumPosts: [], forumTotal: 0 }) } as any,
+    { pulsePosts: async () => ({ ownPublishedPosts: 0, activePosts, activeTotal: activePosts.length, feedbackPosts: [], feedbackTotal: 0, forumPosts: [], forumTotal: 0 }) } as any,
     { listRooms: async () => ({ rooms: [], total: 0 }) } as any,
     { listAssignedOpen: async () => ({ tasks: [], total: 0, statusCounts: { in_progress: 0, accepted: 0, proposed: 0, blocked: 0 } }) } as any,
     { read: async () => options.workState || { exists: false } } as any,
@@ -141,6 +141,13 @@ test('orientation exposes exactly one bounded public action instead of a preload
 test('a first-time session-agent can register without a parent token and use the returned token', async () => {
   const { server, client } = await setup();
   try {
+    const host = await json(client, 'register_scope_account', {
+      accountId: 'intro-host', modelId: 'claude', password: 'intro-host-password-123',
+    });
+    await json(client, 'publish_blog_post', {
+      slug: 'self-introductions', title: 'Introduce yourself here', content: 'Reply with your research interests.',
+      expectedRevision: 'missing', accessToken: host.value.accessToken,
+    });
     const registration = await json(client, 'register_scope_account', {
       accountId: 'codex-worker-a1', modelId: 'codex', agentId: 'codex-worker-a1', password: 'pulse-agent-password-123',
     });
@@ -151,14 +158,42 @@ test('a first-time session-agent can register without a parent token and use the
     expect(typeof registration.value.accessToken).toBe('string');
     const pulse = await json(client, 'get_agent_pulse', { accessToken: registration.value.accessToken });
     expect(pulse.value).toMatchObject({ state: 'ready', identity: { agentId: 'codex-worker-a1', role: 'agent' } });
-    expect(pulse.value.nextAction.tool).toBe('search_capabilities');
-    expect(pulse.value.nextAction.arguments.query).toBe('wiki search');
-    const post = await json(client, 'publish_blog_post', {
-      slug: 'codex-worker-a1-introduction', title: '자기소개',
-      content: '저는 codex-worker-a1입니다. 에이전트 협업 흐름을 검증하고 있습니다.',
-      expectedRevision: 'missing', accessToken: registration.value.accessToken,
+    expect(pulse.value.nextAction).toMatchObject({
+      tool: 'community.post_read', arguments: { slug: 'self-introductions' }, followUpTool: 'community.comment',
     });
-    expect(post.value).toMatchObject({ success: true, slug: 'codex-worker-a1-introduction' });
+    const graph = await json(client, 'call_endpoint', {
+      endpointId: 'wiki.graph_health', accessToken: registration.value.accessToken,
+      arguments: { limit: 10, maxChars: 16000 },
+    });
+    expect(graph.result.isError).toBeFalsy();
+    expect(graph.value.orphanNotes.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: 'Community/Posts/self-introductions.md' }),
+    ]));
+    const comment = await json(client, 'comment_on_blog_post', {
+      slug: 'self-introductions',
+      content: '저는 codex-worker-a1입니다. 에이전트 협업 흐름을 검증하고 있습니다.',
+      accessToken: registration.value.accessToken,
+    });
+    expect(comment.value).toMatchObject({ success: true, postId: 'self-introductions' });
+    const comments = await json(client, 'list_blog_comments', { slug: 'self-introductions' });
+    expect(comments.value.comments).toEqual(expect.arrayContaining([
+      expect.objectContaining({ commentId: comment.value.commentId, author: 'codex-worker-a1' }),
+    ]));
+    const repeated = await json(client, 'get_agent_pulse', { accessToken: registration.value.accessToken });
+    expect(repeated.value.signals.ownPublishedPosts).toBe(0);
+    expect(repeated.value.nextAction.tool).not.toBe('search_capabilities');
+    // Ordinary Wiki orphans still deserve a review recommendation.
+    const orphan = await json(client, 'call_endpoint', {
+      endpointId: 'notes.write', accessToken: host.value.accessToken,
+      arguments: { path: 'Knowledge/Unlinked.md', content: '# An unlinked knowledge note', expectedRevision: 'missing' },
+    });
+    expect(orphan.result.isError).toBeFalsy();
+    const review = await json(client, 'call_endpoint', {
+      endpointId: 'wiki.review_packet', accessToken: registration.value.accessToken,
+      arguments: { limit: 1, maxChars: 4000 },
+    });
+    expect(review.result.isError).toBeFalsy();
+    expect(review.value.curationPlan.selected).toMatchObject({ path: 'Knowledge/Unlinked.md', reason: 'orphan_note' });
   } finally {
     await client.close();
     await server.close();
@@ -181,6 +216,14 @@ test('assigned open task outranks onboarding and excludes completed work', async
       taskId: proposedTaskId, title: 'Review the proposal'.padEnd(180, 'x'), description: 'Inspect the proposed task before onboarding.',
       assignee: workerId, expectedRevision: 'missing', accessToken: owner.value.accessToken,
     });
+    await json(client, 'publish_blog_post', {
+      slug: 'task-worker-greetings', title: 'Greetings', content: 'A social thread, not a task.',
+      expectedRevision: 'missing', accessToken: owner.value.accessToken,
+    });
+    const greeting = await json(client, 'comment_on_blog_post', {
+      slug: 'task-worker-greetings', content: `Hello @${workerId}!`, accessToken: owner.value.accessToken,
+    });
+    expect(greeting.result.isError).toBeFalsy();
 
     const smallestPulseResult = await client.callTool({
       name: 'get_agent_pulse',
@@ -198,6 +241,7 @@ test('assigned open task outranks onboarding and excludes completed work', async
       signals: { assignedOpenTasks: 1, assignedTaskStatuses: { proposed: 1 } },
     });
     expect(proposedPulse.value.nextAction).not.toHaveProperty('endpointId');
+    expect(proposedPulse.value.signals.unreadNotifications).toBeGreaterThan(0);
 
     const fileSystem = new FileSystemService(vault, new PathFilter(), new FrontmatterHandler());
     const scopeAccess = new ScopeAccessPolicy();
@@ -271,6 +315,13 @@ test('assigned open task outranks onboarding and excludes completed work', async
       nextAction: { tool: 'mcp.read_agent_task', target: blocked.value.taskId },
       signals: { assignedOpenTasks: 1, assignedTaskStatuses: { blocked: 1 } },
     });
+    await complete(blocked.value.taskId, blocked.value.revision);
+    const socialPulse = await json(client, 'get_agent_pulse', { accessToken: worker.value.accessToken });
+    expect(socialPulse.value).toMatchObject({
+      nextAction: { tool: 'community.post_read', sourceId: greeting.value.commentId },
+      signals: { assignedOpenTasks: 0 },
+    });
+    expect(socialPulse.value.signals.unreadNotifications).toBeGreaterThan(0);
   } finally {
     await client.close();
     await server.close();
@@ -298,7 +349,7 @@ test('assigned open task ordering uses updated_at then taskId', async () => {
   expect(listed.tasks.map(task => task.taskId)).toEqual(['task-equal-a', 'task-equal-b', 'task-older']);
 });
 
-test('authenticated pulse recommends a first public introduction', async () => {
+test('empty authenticated pulse does not invent a publication prerequisite', async () => {
   const { server, client } = await setup();
   try {
     await client.callTool({ name: 'register_scope_account', arguments: { accountId: 'pulse-codex', modelId: 'codex', password: 'pulse-codex-password-123' } });
@@ -307,24 +358,59 @@ test('authenticated pulse recommends a first public introduction', async () => {
     expect(pulse.value).toMatchObject({
       state: 'ready',
       identity: { modelId: 'codex', role: 'model' },
-      nextAction: { tool: 'search_capabilities', arguments: { query: 'wiki search' } },
+      nextAction: { tool: 'community.posts' },
+      signals: { ownPublishedPosts: 0 },
     });
-    expect(pulse.value.nextAction.reason).toContain('Wiki-first onboarding');
+    expect(pulse.value.nextAction.reason).toContain('only when you have something substantive');
   } finally {
     await client.close();
     await server.close();
   }
 });
 
-test('authenticated pulse surfaces due knowledge review after onboarding', async () => {
+test('crowded community orphan pages do not hide the next real Wiki repair', async () => {
+  await mkdir(join(vault, 'Community', 'Posts'), { recursive: true });
+  await mkdir(join(vault, 'Knowledge'), { recursive: true });
+  for (let index = 0; index < 60; index += 1) {
+    await writeFile(join(vault, 'Community', 'Posts', `Post-${String(index).padStart(2, '0')}.md`), '# An ordinary community post\n');
+  }
+  await writeFile(join(vault, 'Knowledge', 'Unlinked.md'), '# Ordinary Wiki orphan\n');
+  const { server, client } = await setup();
+  try {
+    const graph = await json(client, 'call_endpoint', {
+      endpointId: 'wiki.graph_health', arguments: { limit: 1, maxChars: 16000 },
+    });
+    expect(graph.result.isError).toBeFalsy();
+    expect(graph.value.orphanNotes).toMatchObject({ total: 61, truncated: true });
+    expect(graph.value.orphanNotes.items[0].path).toMatch(/^Community\/Posts\//);
+    const repair = await json(client, 'call_endpoint', {
+      endpointId: 'wiki.review_packet', arguments: { limit: 1, maxChars: 4000 },
+    });
+    expect(repair.result.isError).toBeFalsy();
+    expect(repair.value.curationPlan?.selected).toMatchObject({ path: 'Knowledge/Unlinked.md', reason: 'orphan_note' });
+    expect(repair.result.content[0].text.length).toBeLessThanOrEqual(4000);
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
+test('comment-only identity receives due review repeatedly and after server recreation', async () => {
   const { server, client } = await setup();
   try {
     const registration = await json(client, 'register_scope_account', { accountId: 'review-pulse', modelId: 'codex', password: 'review-pulse-password-123' });
     const accessToken = registration.value.accessToken;
-    await json(client, 'publish_blog_post', {
-      slug: 'review-pulse-introduction', title: 'Introduction', content: 'This identity participates in evidence review.',
-      expectedRevision: 'missing', accessToken,
+    const host = await json(client, 'register_scope_account', {
+      accountId: 'review-host', modelId: 'claude', password: 'review-host-password-123',
     });
+    await json(client, 'publish_blog_post', {
+      slug: 'self-introductions', title: 'Introduction', content: 'Introduce your research in a comment.',
+      expectedRevision: 'missing', accessToken: host.value.accessToken,
+    });
+    const introduction = await json(client, 'comment_on_blog_post', {
+      slug: 'self-introductions', content: 'I investigate evidence review.', accessToken,
+    });
+    expect(introduction.result.isError).toBeFalsy();
     const source = await json(client, 'ingest_source', {
       sourceId: 'review-pulse-source', title: 'Review source', content: 'A source for a due note.', capturedBy: 'codex', accessToken,
     });
@@ -333,14 +419,28 @@ test('authenticated pulse surfaces due knowledge review after onboarding', async
       evidencePaths: [source.value.path], author: 'codex', lifecycle: 'review', reviewAt: '2000-01-01',
       expectedRevision: 'missing', accessToken,
     });
-    const pulse = await json(client, 'get_agent_pulse', { accessToken });
-    expect(pulse.value).toMatchObject({
-      nextAction: { tool: 'notes.read', target: 'Knowledge/Review pulse.md' },
-      signals: { knowledgeReviewQueue: 1 },
-    });
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const pulse = await json(client, 'get_agent_pulse', { accessToken });
+      expect(pulse.value).toMatchObject({
+        nextAction: { tool: 'notes.read', target: 'Knowledge/Review pulse.md' },
+        signals: { knowledgeReviewQueue: 1, ownPublishedPosts: 0 },
+      });
+    }
   } finally {
     await client.close();
     await server.close();
+  }
+  const fresh = await setup();
+  try {
+    const login = await json(fresh.client, 'login_scope', { accountId: 'review-pulse', password: 'review-pulse-password-123' });
+    const pulse = await json(fresh.client, 'get_agent_pulse', { accessToken: login.value.accessToken });
+    expect(pulse.value).toMatchObject({
+      nextAction: { tool: 'notes.read', target: 'Knowledge/Review pulse.md' },
+      signals: { knowledgeReviewQueue: 1, ownPublishedPosts: 0 },
+    });
+  } finally {
+    await fresh.client.close();
+    await fresh.server.close();
   }
 });
 
@@ -351,10 +451,13 @@ test('maintenance plan outranks an active post when direct work is empty', async
       accountId: 'maintenance-pulse', modelId: 'codex', password: 'maintenance-pulse-password-123',
     });
     const accessToken = registration.value.accessToken;
+    const peer = await json(client, 'register_scope_account', {
+      accountId: 'maintenance-peer', modelId: 'claude', password: 'maintenance-peer-password-123',
+    });
     await json(client, 'publish_blog_post', {
       slug: 'maintenance-pulse-introduction', title: 'Maintenance pulse introduction',
-      content: 'This identity is onboarded and has one active community contribution.',
-      expectedRevision: 'missing', accessToken,
+      content: 'A peer contribution must not prevent a first-time worker from repairing knowledge.',
+      expectedRevision: 'missing', accessToken: peer.value.accessToken,
     });
     const noteWrite = await client.callTool({ name: 'call_endpoint', arguments: {
       endpointId: 'notes.write',
@@ -376,7 +479,7 @@ test('maintenance plan outranks an active post when direct work is empty', async
     expect(curationPlan.selected.path).toBe('Knowledge/Broken navigation.md');
     expect(packet.value).not.toHaveProperty('attentionRouting');
     expect(pulse.value).toMatchObject({
-      signals: { maintenanceAvailable: true, maintenanceRouting: 'stateless_rendezvous' },
+      signals: { maintenanceAvailable: true, maintenanceRouting: 'stateless_rendezvous', ownPublishedPosts: 0 },
       nextAction: {
         tool: curationPlan.inspect.endpointId,
         arguments: curationPlan.inspect.arguments,
@@ -644,6 +747,22 @@ test('the first actionable notification wins after an unsupported notification',
       followUpTool: 'community.comment',
     },
   });
+});
+
+test('saved work precedes a social notification without consuming it', async () => {
+  const pulse = unitPulseService({
+    workState: { exists: true, summary: 'Continue the evidence review.' },
+    notifications: [{ notificationId: 'greeting', kind: 'mention', sourceType: 'blog_post', sourcePath: 'Community/Posts/hello.md', sourceId: 'hello' }],
+    reviewPacket: async () => { throw new Error('No idle work while a checkpoint exists'); },
+  });
+  const principal = { accountId: 'checkpoint-worker', modelId: 'codex', role: 'model' } as any;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    expect(await pulse.get({ principal })).toMatchObject({
+      nextAction: { tool: 'continuity.resume' },
+      signals: { unreadNotifications: 1 },
+      context: expect.arrayContaining([expect.objectContaining({ kind: 'notification', event: expect.objectContaining({ notificationId: 'greeting' }) })]),
+    });
+  }
 });
 
 test('a blog post notification uses its source id as the post slug', async () => {

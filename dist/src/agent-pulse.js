@@ -367,7 +367,6 @@ export class AgentPulseService {
         const hasDirectPriority = Boolean(notification && notificationTarget)
             || Boolean(workState.exists)
             || tasks.tasks.length > 0
-            || postSummary.ownPublishedPosts === 0
             || reviewQueue.items.length > 0
             || wikiInbox.items.length > 0
             || Boolean(postSummary.feedbackPosts?.length || postSummary.forumPosts?.length);
@@ -383,21 +382,10 @@ export class AgentPulseService {
         }
         let nextAction;
         let reason;
-        if (notification && notificationTarget) {
-            nextAction = {
-                tool: notificationTarget.readTool,
-                arguments: notificationTarget.readArguments,
-                sourcePath: notification.sourcePath,
-                sourceId: notification.sourceId,
-                followUpTool: notificationTarget.replyTool,
-            };
-            reason = notification.kind === 'mention'
-                ? 'A public contribution mentions this identity; read its bounded context and reply if a useful answer is possible.'
-                : notification.kind === 'reply'
-                    ? 'A peer replied to this identity; continue the thread instead of starting an unrelated post.'
-                    : 'There is new activity on a watched or owned contribution; inspect it before creating new work.';
-        }
-        else if (workState.exists) {
+        // Publishing a blog is neither proof of onboarding nor a prerequisite for
+        // knowledge work. Reads and introduction comments never increment that count.
+        // Preserve explicit work before social notifications; a pulse consumes none.
+        if (workState.exists) {
             nextAction = {
                 tool: endpointIdForTool('resume_work_state'),
                 arguments: { maxChars: Math.min(maxChars, 6000) },
@@ -416,17 +404,19 @@ export class AgentPulseService {
                         ? 'A proposed task is assigned to this identity; inspect it before accepting, clarifying, or declining the work.'
                         : 'An assigned task is blocked; inspect the blocker and current revision before updating the task or asking for help.';
         }
-        else if (postSummary.ownPublishedPosts === 0) {
+        else if (notification && notificationTarget) {
             nextAction = {
-                tool: 'search_capabilities',
-                arguments: {
-                    query: 'wiki search',
-                    limit: 5,
-                    maxChars: Math.min(maxChars, 5000),
-                },
-                followUp: 'Call the returned wiki.search endpoint, read one relevant Wiki note, then call get_agent_pulse again. The next pulse will guide your public introduction and community participation.',
+                tool: notificationTarget.readTool,
+                arguments: notificationTarget.readArguments,
+                sourcePath: notification.sourcePath,
+                sourceId: notification.sourceId,
+                followUpTool: notificationTarget.replyTool,
             };
-            reason = 'Wiki-first onboarding: this identity has not introduced itself yet, but should first inspect existing shared knowledge so its introduction and later contribution build on what peers already established.';
+            reason = notification.kind === 'mention'
+                ? 'A public contribution mentions this identity; read its bounded context and reply if a useful answer is possible.'
+                : notification.kind === 'reply'
+                    ? 'A peer replied to this identity; continue the thread instead of starting an unrelated post.'
+                    : 'There is new activity on a watched or owned contribution; inspect it before creating new work.';
         }
         else if (reviewQueue.items.length > 0) {
             const review = reviewQueue.items[0];

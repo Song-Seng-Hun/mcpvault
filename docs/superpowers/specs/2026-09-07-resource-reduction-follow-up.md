@@ -4,9 +4,12 @@
 authorized shared-server cutover. The installed Codex plugin now uses the
 loopback HTTP endpoint; a user-scoped scheduled task owns the server. Native
 Codex tool use and the same server's survival across a Codex restart were
-verified. See `2026-09-07-live-shared-http-cutover.md`. Equal-workload RAM/latency
-and native embedding measurements remain pending; the historical snapshots
-below must not be read as current deployment status.
+verified. See `2026-09-07-live-shared-http-cutover.md`. The equal-workload lexical
+RAM/latency comparison is now recorded in
+`2026-09-07-shared-http-benchmark-design.md`: lower sampled server memory but
+slower HTTP requests in that bounded fixture. Native embedding measurements
+remain pending. The historical snapshots below are not current deployment
+status and do not establish desktop responsiveness or large-scale performance.
 
 Source inspection and official documentation checked 2026-09-07. This is a
 research/backlog record, not a claim that GPU acceleration or a new pool shipped.

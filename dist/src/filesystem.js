@@ -2503,7 +2503,7 @@ export class FileSystemService {
         return this.withGraphRead(graph => graph.findUnresolvedLinks(limit, canAccessPath, offset, options.includeSnapshot));
     }
     async findOrphanNotes(limit = 100, canAccessPath = () => true, offset = 0, options = {}) {
-        return this.withGraphRead(graph => graph.findOrphanNotes(limit, canAccessPath, offset, options.includeSnapshot));
+        return this.withGraphRead(graph => graph.findOrphanNotes(limit, canAccessPath, offset, options.includeSnapshot, options.includeCandidate));
     }
     async getDailyNote(dateInput = 'today', folder = 'Daily Notes') {
         const date = resolveDailyDate(dateInput);

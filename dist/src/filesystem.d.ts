@@ -212,6 +212,7 @@ export declare class FileSystemService {
     }): Promise<UnresolvedLinksResult>;
     findOrphanNotes(limit?: number, canAccessPath?: (path: string) => boolean, offset?: number, options?: {
         includeSnapshot?: boolean;
+        includeCandidate?: (path: string) => boolean;
     }): Promise<OrphanNotesResult>;
     getDailyNote(dateInput?: DailyDateInput, folder?: string): Promise<DailyNoteResult>;
     writeDailyNote(params: {
