@@ -32,7 +32,7 @@ wrappers never close root services; one lifecycle owns ordered best-effort close
   build, read-only review; `npm test -- --maxWorkers=1`, `git diff --check`.
   README/help explain one server URL shared by clients, no live config migration
   and no auto background daemon.
-- [ ] Explicit source/dist/docs staging, fork-only commit/push, verify remote
+- [x] Explicit source/dist/docs staging, fork-only commit/push, verify remote
   SHA; keep broader Goal active.
 
 ## Evidence
@@ -94,5 +94,17 @@ wrappers never close root services; one lifecycle owns ordered best-effort close
 - `node dist/server.js --mcp-http-only=invalid` exits 1 from parseCliArgs before
   root runtime construction. `node dist/server.js --help` exits 0 and documents
   the new option. Neither touches a live Vault or starts a server.
-- Fork publication pending. Installed plugin configuration, existing servers,
-  real accounts and Vault content remain unchanged.
+- Published `8b0060bea1b55ad62a97e434ca77208c633fd71f` to
+  Song-Seng-Hun/mcpvault main; git ls-remote matched the local SHA. No upstream
+  contribution. Installed plugin configuration, existing servers, real
+  accounts and Vault content remain unchanged. This delivery entry is docs only.
+
+## Next work
+
+The broader Goal remains active. Quantify the resource effect with a bounded,
+same-workload comparison of isolated per-client runtimes versus one HTTP-only
+runtime. Existing memory scripts measure parser/metadata units, not that server
+deployment contrast. Separate sum-of-process RSS from unique physical RAM,
+startup/steady-state memory, native-model load and client overhead. Keep native
+downloads off by default and never mistake this feature's presence for live
+client migration or measured VRAM savings.
