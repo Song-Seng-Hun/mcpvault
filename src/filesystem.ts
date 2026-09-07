@@ -726,8 +726,9 @@ export class FileSystemService {
       throw new Error(`Access denied: ${path}. This path is restricted (system files like .obsidian, .git, and dotfiles are not accessible).`);
     }
 
-    // Check if the path is a directory first
-    const isDir = await this.isDirectory(path);
+    // Reuse this call's checked path: no await occurs between resolvePath and
+    // the directory probe. Public isDirectory still validates its own input.
+    const isDir = await this.isResolvedDirectory(fullPath);
     if (isDir) {
       throw new Error(`Cannot read directory as file: ${path}. Use list_directory tool instead.`);
     }
@@ -1475,6 +1476,11 @@ export class FileSystemService {
       return false;
     }
 
+    return this.isResolvedDirectory(fullPath);
+  }
+
+  /** Internal stat probe only; callers must validate the path and filter first. */
+  private async isResolvedDirectory(fullPath: string): Promise<boolean> {
     try {
       const stats = await stat(fullPath);
       return stats.isDirectory();

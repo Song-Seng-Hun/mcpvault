@@ -134,6 +134,8 @@ export declare class FileSystemService {
     listDirectory(path?: string): Promise<DirectoryListing>;
     exists(path: string): Promise<boolean>;
     isDirectory(path: string): Promise<boolean>;
+    /** Internal stat probe only; callers must validate the path and filter first. */
+    private isResolvedDirectory;
     /**
      * Build one visibility-safe move plan. Resolution uses every physical note
      * so an inaccessible same-name target cannot be mistaken for a unique one.
