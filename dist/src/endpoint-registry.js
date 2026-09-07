@@ -52,6 +52,8 @@ function endpointScore(endpoint, terms) {
         + (corpus.includes(term) ? 1 : 0), 0);
 }
 const EXPLICIT_IDS = {
+    manage_work_project: 'work.project', read_work_board: 'work.board', read_work_packet: 'work.packet',
+    claim_work_task: 'work.claim', handoff_work_task: 'work.handoff', review_work_task: 'work.review',
     register_scope_account: 'auth.register',
     login_scope: 'auth.login',
     logout_scope: 'auth.logout',
@@ -182,6 +184,12 @@ const EXPLICIT_IDS = {
     resume_work_state: 'continuity.resume',
 };
 const EXPLICIT_ROUTES = {
+    manage_work_project: { method: 'POST', url: '/api/work/project' },
+    read_work_board: { method: 'GET', url: '/api/work/board' },
+    read_work_packet: { method: 'GET', url: '/api/work/packet' },
+    claim_work_task: { method: 'POST', url: '/api/work/claim' },
+    handoff_work_task: { method: 'POST', url: '/api/work/handoff' },
+    review_work_task: { method: 'POST', url: '/api/work/review' },
     register_scope_account: { method: 'POST', url: '/api/auth/register' },
     login_scope: { method: 'POST', url: '/api/auth/login' },
     logout_scope: { method: 'POST', url: '/api/auth/logout' },
@@ -440,7 +448,7 @@ function compactEndpoint(endpoint) {
         ...(endpoint.requires.length > 0 && { requires: endpoint.requires }),
         ...(endpoint.reason && { reason: endpoint.reason }),
         schemaOmitted: true,
-        hint: 'Retry with a larger maxChars to receive the input schema.',
+        hint: endpoint.operations ? 'op=read is public; writes require authority. Retry with a larger maxChars for schema and operation permissions.' : 'Retry with a larger maxChars to receive the input schema.',
     };
 }
 const COMPACT_SCHEMA_KEYS = [
@@ -481,6 +489,10 @@ function compactInputSchema(input, depth = 0) {
         if (Array.isArray(source[key]))
             compact[key] = source[key].map(item => compactInputSchema(item, depth + 1));
     }
+    for (const key of ['if', 'then', 'else', 'not']) {
+        if (source[key] !== undefined)
+            compact[key] = compactInputSchema(source[key], depth + 1);
+    }
     return compact;
 }
 function compactEndpointSchema(endpoint) {
@@ -494,6 +506,7 @@ function compactEndpointSchema(endpoint) {
         state: endpoint.state,
         ...(endpoint.requires.length > 0 && { requires: endpoint.requires }),
         ...(endpoint.reason && { reason: endpoint.reason }),
+        ...(endpoint.operations && { operations: endpoint.operations }),
         schemaCompacted: true,
         hint: 'Schema prose was omitted to fit maxChars; field names, constraints, and required arguments remain callable.',
     };
@@ -592,6 +605,14 @@ export class EndpointRegistry {
             const available = !disabled && (item.requires.length === 0 || context.authenticated && missing.length === 0 || item.endpointId === 'auth.register' || item.endpointId === 'auth.login');
             const state = disabled ? 'disabled' : available ? 'ready' : 'locked';
             const reason = disabled ? 'server is read-only' : !context.authenticated && item.requires.length > 0 && item.endpointId !== 'auth.register' && item.endpointId !== 'auth.login' ? 'authentication required' : missing.length > 0 ? `capability required: ${missing.join(', ')}` : undefined;
+            // One mixed-operation endpoint: discovery must not hide its public read
+            // just because writes require authority. Dispatch still checks the exact
+            // operation, independently of these advisory availability descriptions.
+            if (item.endpointId === 'work.project') {
+                const write = { available, state, requires: item.requires, ...(reason && { reason }) };
+                return { ...item, requires: [], available: true, state: 'ready',
+                    operations: { read: { available: true, state: 'ready', requires: [] }, create: write, update: write } };
+            }
             return { ...item, available, state, ...(reason && { reason }) };
         })
             .filter(item => !activeOnly || item.available);

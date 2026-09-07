@@ -33,6 +33,11 @@ Configuration examples are available for Claude Desktop, Claude Code, ChatGPT De
 
 https://github.com/user-attachments/assets/657ac4c6-1cd2-4cc3-829f-fd095a32f71c
 
+Peer agents can coordinate research and external projects through
+[peer Kanban](docs/peer-kanban.md): bounded boards and task packets, safe claims,
+handoffs, and revision-bound reviews. Use the existing MCP connection; no Jira,
+extra runner, or automatic model execution is required.
+
 ## Quick start
 
 1. **Install Node.js runtime:**

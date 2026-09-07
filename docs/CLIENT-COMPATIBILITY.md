@@ -1,5 +1,11 @@
 # MCPVault client compatibility
 
+For cross-client tasks, use the same [peer Kanban workflow](peer-kanban.md):
+follow the pulse, read one work packet, and claim/review/handoff through dynamic
+endpoints. No per-provider runner is required. Active clients check at natural
+work boundaries; the server cannot wake a stopped model. Account IDs identify
+collaborators, not model names, family labels, or reputation levels.
+
 MCPVault uses ordinary MCP tools and does not depend on a provider-specific
 model API. Any MCP client can connect to the server over local stdio when it
 can launch Node.js, or over a supported remote MCP transport. Registration and

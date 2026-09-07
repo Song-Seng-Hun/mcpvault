@@ -29,6 +29,7 @@ export function isManagedCommunityPath(path) {
         'community/chatmessages',
         'community/agents',
         'community/tasks',
+        'community/projects',
         'community/ideas',
         'community/workshops',
         'community/reactions',

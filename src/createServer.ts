@@ -34,6 +34,8 @@ import { AuditService } from "./audit.js";
 import { getAuditTools } from "./audit-tools.js";
 import { AgentTaskService } from "./agent-tasks.js";
 import { AGENT_TASK_MUTATING_TOOLS, getAgentTaskTools } from "./agent-task-tools.js";
+import { getWorkTools, WORK_MUTATING_TOOLS, WORK_TASK_PROPERTIES } from './work-tools.js';
+import { WorkService } from './work-service.js';
 import { CommunityFeaturesService } from "./community-features.js";
 import { COMMUNITY_FEATURE_MUTATING_TOOLS, getCommunityFeatureTools } from "./community-feature-tools.js";
 import { ObsidianSearchService } from "./obsidian-search.js";
@@ -220,6 +222,7 @@ const MUTATING_TOOLS = new Set([
   ...AGENT_DIRECTORY_MUTATING_TOOLS,
   ...NOTIFICATION_MUTATING_TOOLS,
   ...AGENT_TASK_MUTATING_TOOLS,
+  ...WORK_MUTATING_TOOLS,
   ...COMMUNITY_FEATURE_MUTATING_TOOLS,
   ...CONTINUITY_MUTATING_TOOLS,
   ...MODERATION_MUTATING_TOOLS,
@@ -280,6 +283,10 @@ const CAPABILITY_FOR_TOOL: Partial<Record<string, ScopeCapability>> = {
   update_community_status: "status",
   update_agent_profile: "profile",
   create_agent_task: "task",
+  manage_work_project: 'task',
+  claim_work_task: 'task',
+  handoff_work_task: 'task',
+  review_work_task: 'task',
   update_agent_task: "task",
   save_work_state: "journal",
   report_content: "comment",
@@ -463,7 +470,12 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
     access: scopeAccess,
     buildLearningPath: (principal, path, maxDepth, limit, maxChars) => llmWiki.learningPath(principal, path, maxDepth, limit, maxChars, true),
   });
-  const agentPulse = new AgentPulseService(notifications, social, chat, agentTasks, continuity, reputation, llmWiki, ideation);
+  const work = new WorkService(fileSystem, references, scopeAuth, agentTasks, {
+    assertActor: async principal => {
+      if (await moderation.isBanned(principal.accountId, principal.userId)) throw new Error('This account is suspended by moderation');
+    },
+  });
+  const agentPulse = new AgentPulseService(notifications, social, chat, agentTasks, continuity, reputation, llmWiki, ideation, work);
   const endpointRegistry = new EndpointRegistry();
   const requestGate = new RequestConcurrencyGate();
 
@@ -770,6 +782,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         ...getNotificationTools(),
         ...getAuditTools(),
         ...getAgentTaskTools(),
+        ...getWorkTools(),
         ...getCommunityFeatureTools(),
         ...getObsidianSearchTools(),
         ...getAgentPulseTools(),
@@ -1128,7 +1141,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
     let toolName = requestedToolName;
     let args = request.params.arguments;
 
-    if (readOnly && MUTATING_TOOLS.has(toolName) && !(toolName === 'manage_wiki_moc_region' && args?.operation === 'status')) {
+    if (readOnly && MUTATING_TOOLS.has(toolName) && !(toolName === 'manage_wiki_moc_region' && args?.operation === 'status') && !(toolName === 'manage_work_project' && (args?.op === undefined || args?.op === 'read'))) {
       await audit.record({ tool: toolName, ...(args && typeof args === 'object' ? { args: args as Record<string, unknown> } : {}), outcome: 'error', error: 'read-only mode' });
       return {
         content: [{
@@ -1164,6 +1177,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
       }
 
       if (toolName === 'manage_wiki_moc_region' && rawArgs.operation === 'status') toolName = 'read_wiki_moc_region_status';
+      if (toolName === 'manage_work_project' && (rawArgs.op === undefined || rawArgs.op === 'read')) toolName = 'read_work_project';
       if (readOnly && MUTATING_TOOLS.has(toolName)) {
         throw new Error(`Endpoint '${toolName}' is disabled because MCPVault is running in read-only mode.`);
       }
@@ -2194,8 +2208,17 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
           return jsonResult(await audit.list({ ...(principal && { principal }), limit: trimmedArgs.limit, includeErrors: trimmedArgs.includeErrors }), trimmedArgs.prettyPrint);
         }
 
+        case 'manage_work_project':
+        case 'read_work_project': return jsonResult(await work.project({ ...trimmedArgs, principal }), false);
+        case 'read_work_board': return jsonResult(await work.board({ ...trimmedArgs, principal }), false);
+        case 'read_work_packet': return jsonResult(await work.packet({ ...trimmedArgs, principal }), false);
+        case 'claim_work_task': return jsonResult(await work.claim({ ...trimmedArgs, principal }), false);
+        case 'handoff_work_task': return jsonResult(await work.handoff({ ...trimmedArgs, principal }), false);
+        case 'review_work_task': return jsonResult(await work.review({ ...trimmedArgs, principal }), false);
+
         case "create_agent_task": {
           return jsonResult(await agentTasks.create({
+            ...Object.fromEntries(Object.keys(WORK_TASK_PROPERTIES).filter(key => trimmedArgs[key] !== undefined).map(key => [key, trimmedArgs[key]])),
             ...(principal && { principal }),
             taskId: trimmedArgs.taskId,
             title: trimmedArgs.title,
@@ -2221,6 +2244,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
 
         case "update_agent_task": {
           return jsonResult(await agentTasks.update({
+            ...Object.fromEntries(Object.keys(WORK_TASK_PROPERTIES).filter(key => trimmedArgs[key] !== undefined).map(key => [key, trimmedArgs[key]])),
             ...(principal && { principal }),
             taskId: trimmedArgs.taskId,
             status: trimmedArgs.status,
@@ -2935,7 +2959,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
           throw new Error(`Unknown tool: ${toolName}`);
       }
       })();
-      const responseContract = endpointRegistry.resolve(endpointIdForTool(toolName))?.input;
+      const responseContract = endpointRegistry.resolve(toolName === 'read_work_project' ? 'work.project' : endpointIdForTool(toolName))?.input;
       return enforceResponseBudget(toolResponse, normalizedResponseBudget(trimmedArgs.maxChars, responseContract));
     } catch (error) {
       await audit.record({ tool: toolName, ...(principal && { principal }), args: rawArgs, outcome: 'error', error });

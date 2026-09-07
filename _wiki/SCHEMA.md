@@ -7,6 +7,17 @@ updated_at: 2026-09-01T18:30:44.285Z
 ---
 # LLM Wiki schema
 
+## Peer work projections
+
+Community-local projects under `Community/Projects` coordinate existing
+`Community/Tasks` without duplicating actionable Wiki notes. Project membership
+uses authenticated accounts and never grants external execution or private-scope
+access. Task status adds `in_review`; epistemic lifecycle remains independent.
+Artifact revisions/commits and completion criteria determine the review basis.
+Changing that basis invalidates approval. Assignee generations fence stale
+handoff workers; inactivity alone never transfers ownership. See
+[peer work contract and client workflow](../docs/peer-kanban.md).
+
 ## Optional Obsidian projections
 
 `wiki_view` is an optional version-1 YAML mapping on an ordinary Markdown

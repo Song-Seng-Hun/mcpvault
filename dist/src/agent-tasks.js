@@ -1,15 +1,15 @@
 import { randomUUID } from 'node:crypto';
 import { normalizeScopeId } from './scopes.js';
 import { boundItems } from './search-limits.js';
-import { iterateNotes, queryWindow } from './paged-query.js';
+import { iterateNotes } from './paged-query.js';
 import { isModerationHidden } from './moderation-policy.js';
-import { COMPLETION_DISPOSITION_REQUIRED_MESSAGE, hasExplicitKnowledgeDisposition, normalizeKnowledgeDisposition } from './organization.js';
+import { COMPLETION_DISPOSITION_REQUIRED_MESSAGE, normalizeKnowledgeDisposition } from './organization.js';
 const ROOT = 'Community/Tasks';
-export const AGENT_TASK_STATUSES = ['proposed', 'accepted', 'in_progress', 'blocked', 'completed', 'cancelled'];
+export const AGENT_TASK_STATUSES = ['proposed', 'accepted', 'in_progress', 'blocked', 'in_review', 'completed', 'cancelled'];
 const taskPath = (taskId) => `${ROOT}/${normalizeScopeId(taskId, 'taskId')}.md`;
 const identity = (principal) => principal.agentId || principal.modelId;
 const now = () => new Date().toISOString();
-const ASSIGNED_OPEN_STATUS_ORDER = ['in_progress', 'accepted', 'proposed', 'blocked'];
+const ASSIGNED_OPEN_STATUS_ORDER = ['in_progress', 'accepted', 'proposed', 'blocked', 'in_review'];
 function shortText(value, field, maximum, required = false) {
     const text = String(value ?? '').trim();
     if (required && !text)
@@ -18,7 +18,7 @@ function shortText(value, field, maximum, required = false) {
         throw new Error(`${field} must be ${maximum} Unicode characters or fewer`);
     return text;
 }
-function taskStatus(value, fallback = 'proposed') {
+export function taskStatus(value, fallback = 'proposed') {
     const status = String(value || fallback).trim().toLowerCase();
     if (!AGENT_TASK_STATUSES.includes(status))
         throw new Error(`status must be one of: ${AGENT_TASK_STATUSES.join(', ')}`);
@@ -33,6 +33,8 @@ export class AgentTaskService {
     fileSystem;
     references;
     auth;
+    workExtension;
+    attachWorkExtension(extension) { this.workExtension = extension; }
     constructor(fileSystem, references, auth) {
         this.fileSystem = fileSystem;
         this.references = references;
@@ -67,7 +69,22 @@ export class AgentTaskService {
             throw new Error(`No registered model or agent identity found for assignee: ${id}`);
         return id;
     }
+    async assigneeAccount(assignee) {
+        if (!assignee)
+            return undefined;
+        const matches = (await this.auth.listPrincipals()).filter(p => identity(p) === assignee);
+        if (matches.length !== 1)
+            throw new Error('Assignee must resolve to exactly one registered account');
+        return matches[0].accountId;
+    }
     async create(params) {
+        if (this.workExtension)
+            return this.workExtension.run('create', params, (context, parameters) => this.createCore(parameters || params, context));
+        return this.createCore(params);
+    }
+    async createCore(params, context) {
+        if (params.projectId && !context)
+            throw new Error('Project guard requires WorkService');
         const principal = requireLogin(params.principal);
         const title = shortText(params.title, 'title', 180, true);
         const description = shortText(params.description, 'description', 4000, true);
@@ -76,16 +93,20 @@ export class AgentTaskService {
         if (params.expectedRevision && params.expectedRevision !== 'missing')
             throw new Error('A new task must use expectedRevision=missing');
         const assignee = await this.assignee(params.assignee);
+        const assigneeAccount = await this.assigneeAccount(assignee);
         const refs = await this.references.validateAndNormalize(params.references, path, principal, params.description);
         const timestamp = now();
-        const receipt = await this.fileSystem.writeNoteWithReceipt({
+        const receipt = await (context ? context.write.bind(context) : this.fileSystem.writeNoteWithReceipt.bind(this.fileSystem))({
             path,
             content: `# ${title}\n\n${description}\n`,
             frontmatter: {
                 mcpvault_type: 'agent_task', task_id: taskId, title, description,
                 requester: identity(principal), requester_role: principal.role,
+                requester_account_id: principal.accountId,
+                ...(assigneeAccount && { assignee_account_id: assigneeAccount }),
                 ...(assignee && { assignee }), status: 'proposed', references: refs,
                 created_at: timestamp, updated_at: timestamp,
+                ...context?.frontmatter,
             },
             expectedRevision: 'missing',
         });
@@ -97,8 +118,18 @@ export class AgentTaskService {
         const note = await this.fileSystem.readNote(path);
         if (note.frontmatter.mcpvault_type !== 'agent_task')
             throw new Error(`Not an agent task: ${taskId}`);
+        if (isModerationHidden(note.frontmatter))
+            throw new Error('Task is unavailable because moderation has hidden it');
         return {
             path, fm: note.frontmatter, revision: note.revision,
+            ...(typeof note.frontmatter.project_id === 'string' && note.frontmatter.project_id.length <= 64 && {
+                workContext: {
+                    projectId: note.frontmatter.project_id,
+                    ...(Number.isSafeInteger(note.frontmatter.claim_generation) && note.frontmatter.claim_generation >= 0 && { expectedGeneration: note.frontmatter.claim_generation }),
+                    mutationRequires: ['requestId', 'expectedGeneration'],
+                },
+                nextAction: { tool: 'work.packet', arguments: { taskId } },
+            }),
             ...(params.includeContent !== false && { content: note.content }),
             resolvedReferences: await this.references.resolve(note.frontmatter.references, undefined, params.includeContent === true, Math.min(Math.max(Number(params.referenceLimit ?? 10), 1), 50), Math.min(Math.max(Number(params.referenceMaxChars ?? 4000), 1), 20000)),
         };
@@ -113,10 +144,8 @@ export class AgentTaskService {
             filters.requester = normalizeScopeId(params.requester, 'requester');
         const limit = Math.min(Math.max(Number(params.limit ?? 50), 1), 500);
         const maxChars = Math.min(Math.max(Number(params.maxChars ?? 6000), 512), 20000);
-        const [window, total] = await Promise.all([
-            queryWindow(this.fileSystem, { pathPrefix: ROOT, filters, sortBy: 'updated_at', sortOrder: 'desc', limit }),
-            this.fileSystem.countNotes({ pathPrefix: ROOT, filters }),
-        ]);
+        const window = await this.fileSystem.queryNotes({ pathPrefix: ROOT, filters, sortBy: 'updated_at', sortOrder: 'desc', limit, includeContent: false, includeTotal: true }, () => true, note => !isModerationHidden(note.frontmatter));
+        const total = window.total;
         const bounded = boundItems(window.notes.map(note => ({
             path: note.path, taskId: note.frontmatter.task_id, title: note.frontmatter.title,
             requester: note.frontmatter.requester, assignee: note.frontmatter.assignee,
@@ -134,6 +163,7 @@ export class AgentTaskService {
             accepted: 0,
             proposed: 0,
             blocked: 0,
+            in_review: 0,
         };
         const rank = new Map(ASSIGNED_OPEN_STATUS_ORDER.map((status, index) => [status, index]));
         const compare = (left, right) => {
@@ -152,6 +182,8 @@ export class AgentTaskService {
             sortOrder: 'asc',
             includeContent: false,
         })) {
+            if (isModerationHidden(note.frontmatter))
+                continue;
             const rawStatus = String(note.frontmatter.status || '').trim().toLowerCase();
             if (!ASSIGNED_OPEN_STATUS_ORDER.includes(rawStatus))
                 continue;
@@ -171,14 +203,20 @@ export class AgentTaskService {
                 selected.pop();
         }
         const bounded = boundItems(selected.map(task => ({ taskId: task.taskId, status: task.status })), maxChars);
+        const { in_review, ...legacyCounts } = statusCounts;
         return {
             tasks: bounded.items,
-            statusCounts,
+            statusCounts: in_review ? statusCounts : legacyCounts,
             total,
             truncated: total > bounded.items.length || bounded.truncated,
         };
     }
     async update(params) {
+        if (this.workExtension)
+            return this.workExtension.run('update', params, (context, parameters) => this.updateCore(parameters || params, context));
+        return this.updateCore(params);
+    }
+    async updateCore(params, context) {
         const principal = requireLogin(params.principal);
         if (!params.expectedRevision)
             throw new Error('expectedRevision is required; read the task first');
@@ -187,11 +225,21 @@ export class AgentTaskService {
         const note = await this.fileSystem.readNote(path);
         if (note.frontmatter.mcpvault_type !== 'agent_task')
             throw new Error(`Not an agent task: ${taskId}`);
+        if (isModerationHidden(note.frontmatter))
+            throw new Error('Task is unavailable because moderation has hidden it');
+        if ((note.frontmatter.project_id || params.projectId) && !context)
+            throw new Error('Project guard requires WorkService');
         const actor = identity(principal);
         const requester = String(note.frontmatter.requester || '');
         const currentAssignee = String(note.frontmatter.assignee || '');
         const requestedAssignee = params.assignee === undefined ? currentAssignee : ((await this.assignee(params.assignee)) || '');
-        if (actor !== requester && actor !== currentAssignee && !(!currentAssignee && requestedAssignee === actor)) {
+        const accountOwnership = Boolean(note.frontmatter.requester_account_id);
+        const requestedAccount = params.assignee === undefined ? note.frontmatter.assignee_account_id : await this.assigneeAccount(requestedAssignee);
+        const authorized = accountOwnership
+            ? principal.accountId === note.frontmatter.requester_account_id || principal.accountId === note.frontmatter.assignee_account_id
+                || (!currentAssignee && requestedAccount === principal.accountId)
+            : actor === requester || actor === currentAssignee || (!currentAssignee && requestedAssignee === actor);
+        if (!context?.authorize && !authorized) {
             throw new Error('Only the task requester or assignee can update this task');
         }
         const status = taskStatus(params.status, taskStatus(note.frontmatter.status));
@@ -210,14 +258,14 @@ export class AgentTaskService {
             ...(params.noReusableKnowledge !== undefined && { noReusableKnowledge: params.noReusableKnowledge }),
             ...(params.knowledgeDispositionReason !== undefined && { knowledgeDispositionReason: params.knowledgeDispositionReason }),
         }, note.frontmatter);
-        const completionDispositionRequired = status === 'completed'
-            && (previousStatus !== 'completed' || hasExplicitKnowledgeDisposition(params));
+        const completionDispositionRequired = status === 'completed';
         if (completionDispositionRequired && disposition.knowledgeDispositions.length === 0)
             throw new Error(COMPLETION_DISPOSITION_REQUIRED_MESSAGE);
         const timestamp = now();
         const frontmatter = {
             ...note.frontmatter, description,
             ...(requestedAssignee ? { assignee: requestedAssignee } : {}),
+            ...(accountOwnership && requestedAccount && { assignee_account_id: requestedAccount }),
             status, references: refs, updated_at: timestamp,
             ...(status !== previousStatus && { status_reason: reason, status_changed_by: actor, status_changed_at: timestamp }),
             ...(disposition.retrospective && { retrospective: disposition.retrospective }),
@@ -225,16 +273,21 @@ export class AgentTaskService {
             ...(disposition.negativeKnowledgeNotes !== undefined && { negative_knowledge_notes: disposition.negativeKnowledgeNotes }),
             knowledge_dispositions: disposition.knowledgeDispositions,
             ...(disposition.knowledgeDispositionReason && { knowledge_disposition_reason: disposition.knowledgeDispositionReason }),
+            ...context?.frontmatter,
         };
         if (!requestedAssignee)
             delete frontmatter.assignee;
+        if (accountOwnership && !requestedAssignee)
+            delete frontmatter.assignee_account_id;
         if (!disposition.retrospective)
             delete frontmatter.retrospective;
         if (!disposition.noReusableKnowledge)
             delete frontmatter.knowledge_disposition_reason;
-        const receipt = await this.fileSystem.writeNoteWithReceipt({
+        for (const field of context?.removeFields || [])
+            delete frontmatter[field];
+        const receipt = await (context ? context.write.bind(context) : this.fileSystem.writeNoteWithReceipt.bind(this.fileSystem))({
             path,
-            content: `# ${String(note.frontmatter.title || taskId)}\n\n${description}\n`,
+            content: params.description === undefined ? note.content : `# ${String(note.frontmatter.title || taskId)}\n\n${description}\n`,
             frontmatter,
             expectedRevision: params.expectedRevision,
         });

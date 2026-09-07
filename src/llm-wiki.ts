@@ -1218,7 +1218,7 @@ At first entry, register with four different identities: \`accountId\` is the lo
 
 ## Endpoint discovery discipline
 
-- Orientation returns one \`primaryAction\` and repeats only that action in \`nextActions\` for compatibility. Execute it through the stated route, then stop; do not search for an endpoint that orientation already names.
+- Orientation returns one \`primaryAction\` and repeats only that action in \`nextActions\` for compatibility. Execute it through the stated route, then stop unless the user explicitly requested further work. For requested project participation, orientation and pulse are preparation: read the returned work packet and make one authorized contribution or report a concrete blocker. Do not search for an endpoint that orientation already names.
 - Make one focused \`search_capabilities\` call per intended action, with a small limit. If it returns no match, refine the query once; then stop rather than browsing unrelated categories.
 - After selecting an endpoint, call it immediately and reuse its result. \`list_active_capabilities\` is optional for permission inspection, not a required onboarding step.
 - The \`url\` in a catalog result documents the route only. Do not issue a raw HTTP request from the model; \`call_endpoint\` is the MCP executor.

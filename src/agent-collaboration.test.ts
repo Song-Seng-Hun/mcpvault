@@ -237,9 +237,21 @@ test('task completion requires a bounded auditable knowledge disposition', async
     const legacyTask = await createTask('legacy-compatible');
     await writeFile(join(vault, 'Community/Tasks/legacy-compatible.md'), `---\nmcpvault_type: agent_task\ntask_id: legacy-compatible\ntitle: Legacy compatible\ndescription: Historical completion.\nrequester: codex\nrequester_role: model\nstatus: completed\ncreated_at: 2026-01-01T00:00:00.000Z\nupdated_at: 2026-01-01T00:00:00.000Z\n---\n# Legacy compatible\n\nHistorical completion.\n`);
     const legacyRead = await json(client, 'read_agent_task', { taskId: legacyTask.value.taskId });
-    const legacyUpdate = await json(client, 'update_agent_task', {
+    // Historical completed records remain readable, but must repair missing
+    // disposition before another write can preserve completed status.
+    const legacyRejected = await client.callTool({ name: 'update_agent_task', arguments: {
       taskId: legacyTask.value.taskId,
       description: 'Historical completion remains editable.',
+      expectedRevision: legacyRead.value.revision,
+      accessToken,
+    } });
+    expect(legacyRejected.isError).toBe(true);
+    expect((legacyRejected.content as any)[0].text).toMatch(/knowledge disposition/i);
+    expect((await json(client, 'read_agent_task', { taskId: legacyTask.value.taskId })).value.revision).toBe(legacyRead.value.revision);
+    const legacyUpdate = await json(client, 'update_agent_task', {
+      taskId: legacyTask.value.taskId,
+      description: 'Historical completion repaired and editable.',
+      retrospective: 'Historical evidence must include an auditable lesson before preserving completion.',
       expectedRevision: legacyRead.value.revision,
       accessToken,
     });

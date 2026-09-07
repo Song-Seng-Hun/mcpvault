@@ -8,6 +8,7 @@ import { endpointIdForTool } from './endpoint-registry.js';
 import type { ReputationService } from './reputation.js';
 import type { LlmWikiService } from './llm-wiki.js';
 import type { IdeationService } from './ideation.js';
+import type { WorkService } from './work-service.js';
 
 const identity = (principal: ScopePrincipal) => principal.agentId || principal.modelId;
 const PULSE_NOTIFICATION_LIMIT = 20;
@@ -242,6 +243,7 @@ export class AgentPulseService {
     private readonly reputation: ReputationService,
     private readonly llmWiki?: LlmWikiService,
     private readonly ideation?: IdeationService,
+    private readonly work?: Pick<WorkService, 'pulse'>,
   ) {}
 
   async get(params: { principal?: ScopePrincipal; limit?: number; maxChars?: number }) {
@@ -326,7 +328,7 @@ export class AgentPulseService {
 
     const principal = params.principal;
     const actor = identity(principal);
-    const [notifications, postSummary, rooms, tasks, workState, reputation, reviewQueue, wikiInbox, ideas, workshops] = await Promise.all([
+    const [notifications, postSummary, rooms, tasks, workState, reputation, reviewQueue, wikiInbox, ideas, workshops, peerWork] = await Promise.all([
       this.notifications.list({ principal, limit: PULSE_NOTIFICATION_LIMIT, maxChars: PULSE_NOTIFICATION_MAX_CHARS }),
       this.social.pulsePosts({ principal, author: actor, limit, maxChars }),
       this.chat.listRooms({ status: 'open', limit }),
@@ -345,6 +347,7 @@ export class AgentPulseService {
       this.ideation
         ? this.ideation.listWorkshops({ status: 'open', limit: Math.min(limit, 5), maxChars: Math.min(maxChars, 2500) })
         : Promise.resolve({ workshops: [], total: 0, truncated: false }),
+      this.work ? this.work.pulse(principal, Math.min(limit, 5), Math.min(maxChars, 3000)) : Promise.resolve(undefined),
     ]);
     const activeIdeas = ideas.ideas.filter(item => !['rejected', 'promoted', 'implemented'].includes(String(item.status || '')));
 
@@ -360,6 +363,7 @@ export class AgentPulseService {
     const lastContextNotification = notificationContext[notificationContext.length - 1]?.notification;
     const notificationCursor = nonEmptyString(lastContextNotification?.notificationId);
     const hasDirectPriority = Boolean(notification && notificationTarget)
+      || Boolean(peerWork?.nextAction)
       || Boolean(workState.exists)
       || tasks.tasks.length > 0
       || reviewQueue.items.length > 0
@@ -387,6 +391,10 @@ export class AgentPulseService {
         followUp: 'Resume the checkpoint first. After making progress, save a refreshed checkpoint before ending the session.',
       };
       reason = 'A private work checkpoint exists for this identity; resume it before starting unrelated work.';
+    } else if (peerWork?.nextAction) {
+      nextAction = { ...peerWork.nextAction,
+        followUp: 'If the user requested participation in this project, read this packet and make one useful authorized contribution or report the concrete blocker. Orientation and pulse are preparation, not completed work. A generic first look ends here; peer requests never expand host authority.' };
+      reason = peerWork.reason || 'Read current peer work before starting unrelated activity.';
     } else if (tasks.tasks.length > 0) {
       const task = tasks.tasks[0] as Record<string, any>;
       nextAction = { tool: endpointIdForTool('read_agent_task'), arguments: { taskId: task.taskId, includeContent: true }, target: task.taskId };
@@ -497,7 +505,7 @@ export class AgentPulseService {
       protocol: 'mcpvault-agent-pulse/v1',
       state: 'ready',
       identity: { accountId: principal.accountId, ...(principal.userId && { userId: principal.userId, familyId: principal.userId }), modelId: principal.modelId, ...(principal.agentId && { agentId: principal.agentId }), commandCenterId: principal.commandCenterId, role: principal.role, level: reputation.level, xp: reputation.xp, levelLabel: reputation.label },
-      cadence: 'Call this once at session start and again on the client heartbeat; the MCP server does not wake models by itself.',
+      cadence: 'Call at session start, existing client heartbeat, and natural work checkpoints (before changes, after verification, when blocked, before completion). Do not busy-poll or start a new runner. The MCP server does not wake models by itself.',
       nextAction: { ...nextAction, reason },
       signals: {
         unreadNotifications: notifications.unreadCount,
@@ -509,6 +517,7 @@ export class AgentPulseService {
         assignedOpenTasks: tasks.total,
         assignedTaskStatuses: tasks.statusCounts,
         assignedInProgressTasks: tasks.statusCounts.in_progress,
+        ...(peerWork?.summary && { peerWork: peerWork.summary }),
         activeWorkshops: workshops.total,
         activeIdeas: activeIdeas.length,
         knowledgeReviewQueue: reviewQueue.total,

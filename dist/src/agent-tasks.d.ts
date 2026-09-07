@@ -1,16 +1,52 @@
 import type { FileSystemService } from './filesystem.js';
 import type { ReferenceService } from './references.js';
 import type { ScopeAuthService, ScopePrincipal } from './scope-auth.js';
-export declare const AGENT_TASK_STATUSES: readonly ['proposed', 'accepted', 'in_progress', 'blocked', 'completed', 'cancelled'];
+import type { NoteWriteParams } from './types.js';
+export interface WorkArtifact {
+    path?: string;
+    revision?: string;
+    repository?: string;
+    branch?: string;
+    commit?: string;
+    files?: string[];
+}
+export interface AgentTaskWorkFields {
+    projectId?: string;
+    parentTaskId?: string;
+    dependsOn?: string[];
+    completionCriteria?: string[];
+    artifacts?: WorkArtifact[];
+    workKind?: 'general' | 'security' | 'permissions' | 'shared_policy' | 'destructive';
+    discussionSlug?: string;
+    verification?: string;
+    expectedGeneration?: number;
+    requestId?: string;
+}
+export interface AgentTaskWriteContext {
+    frontmatter: Record<string, any>;
+    removeFields?: string[];
+    authorize: boolean;
+    write(params: NoteWriteParams): Promise<{
+        revision: string;
+    }>;
+}
+export interface AgentTaskExtension {
+    run(action: 'create' | 'update', params: any, proceed: (context?: AgentTaskWriteContext, parameters?: any) => Promise<any>): Promise<any>;
+}
+export declare const AGENT_TASK_STATUSES: readonly ['proposed', 'accepted', 'in_progress', 'blocked', 'in_review', 'completed', 'cancelled'];
 export type AgentTaskStatus = typeof AGENT_TASK_STATUSES[number];
+export declare function taskStatus(value: unknown, fallback?: AgentTaskStatus): AgentTaskStatus;
 export declare class AgentTaskService {
     private readonly fileSystem;
     private readonly references;
     private readonly auth;
+    private workExtension?;
+    attachWorkExtension(extension: AgentTaskExtension): void;
     constructor(fileSystem: FileSystemService, references: ReferenceService, auth: ScopeAuthService);
     private validatedKnowledgeNotes;
     private assignee;
-    create(params: {
+    private assigneeAccount;
+    create(params: AgentTaskWorkFields & {
         principal?: ScopePrincipal;
         taskId?: string;
         title: string;
@@ -18,13 +54,8 @@ export declare class AgentTaskService {
         assignee?: string;
         references?: unknown;
         expectedRevision?: string;
-    }): Promise<{
-        success: boolean;
-        taskId: string;
-        path: string;
-        status: string;
-        revision: string;
-    }>;
+    }): Promise<any>;
+    private createCore;
     read(params: {
         taskId: string;
         includeContent?: boolean;
@@ -34,6 +65,17 @@ export declare class AgentTaskService {
         path: string;
         fm: Record<string, any>;
         revision: string;
+        workContext?: {
+            projectId: string;
+            expectedGeneration?: any;
+            mutationRequires: string[];
+        };
+        nextAction?: {
+            tool: string;
+            arguments: {
+                taskId: string;
+            };
+        };
         content?: string;
         resolvedReferences: Record<string, unknown>[];
     }>;
@@ -50,7 +92,7 @@ export declare class AgentTaskService {
             title: any;
             requester: any;
             assignee: any;
-            status: "accepted" | "blocked" | "cancelled" | "completed" | "in_progress" | "proposed";
+            status: "accepted" | "blocked" | "cancelled" | "completed" | "in_progress" | "in_review" | "proposed";
             updatedAt: any;
             revision: undefined;
         }[];
@@ -64,13 +106,18 @@ export declare class AgentTaskService {
     }): Promise<{
         tasks: {
             taskId: string;
-            status: "accepted" | "blocked" | "in_progress" | "proposed";
+            status: "accepted" | "blocked" | "in_progress" | "in_review" | "proposed";
         }[];
-        statusCounts: Record<"accepted" | "blocked" | "in_progress" | "proposed", number>;
+        statusCounts: {
+            accepted: number;
+            blocked: number;
+            in_progress: number;
+            proposed: number;
+        };
         total: number;
         truncated: boolean;
     }>;
-    update(params: {
+    update(params: AgentTaskWorkFields & {
         principal?: ScopePrincipal;
         taskId: string;
         status?: string;
@@ -85,5 +132,6 @@ export declare class AgentTaskService {
         knowledgeDispositionReason?: string;
         expectedRevision: string;
     }): Promise<any>;
+    private updateCore;
 }
 //# sourceMappingURL=agent-tasks.d.ts.map

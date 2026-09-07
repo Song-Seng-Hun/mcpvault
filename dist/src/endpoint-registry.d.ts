@@ -10,6 +10,12 @@ export interface EndpointDescriptor {
     requires: string[];
     mutating: boolean;
     aliases?: string[];
+    operations?: Record<string, {
+        available: boolean;
+        state: 'ready' | 'locked' | 'disabled';
+        requires: string[];
+        reason?: string;
+    }>;
 }
 export interface MatchedEndpoint {
     endpoint: EndpointDescriptor;
