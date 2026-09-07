@@ -1,12 +1,8 @@
 {
   "mcpServers": {
     "mcpvault-test": {
-      "cwd": "E:\\dev\\llm_wiki",
-      "command": "node.exe",
-      "args": [
-        "dist/server.js",
-        "E:\\llm_wiki\\llm_wiki"
-      ]
+      "type": "http",
+      "url": "http://127.0.0.1:8788/mcp"
     }
   }
 }
