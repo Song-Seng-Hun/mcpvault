@@ -2882,18 +2882,24 @@ export class FileSystemService {
     /** Fresh sequential metadata scan with bounded reads from the first file.
      * Discovery retains path names, not all note metadata or bodies. No index
      * refresh or unrestricted query fallback occurs in this iterator. */
-    async *iterateFreshNoteMetadata(canAccessPath) {
+    async *iterateFreshNoteMetadata(canAccessPath, options = {}) {
         const paths = await this.collectVaultFiles();
+        if (options.sortByPath)
+            paths.sort((a, b) => a.localeCompare(b));
         for (const path of paths) {
             if (!/\.(?:md|markdown|txt)$/i.test(path) || !this.pathFilter.isAllowed(path) || !canAccessPath(path))
                 continue;
+            if (options.afterPath && path.localeCompare(options.afterPath) <= 0)
+                continue;
             let notes;
             try {
-                notes = await this.readNoteMetadata([path], canAccessPath, { fresh: true, strict: true, maxBytes: MAX_NOTE_CONTENT_BYTES });
+                notes = await this.readNoteMetadata([path], canAccessPath, { fresh: true, strict: true, maxBytes: options.maxBytes ?? MAX_NOTE_CONTENT_BYTES });
             }
             catch {
                 throw new Error('Bounded metadata inventory unavailable or too large; inspect sources before retrying.');
             }
+            if (!notes[0] && options.strictMissing)
+                throw new Error('Bounded metadata inventory changed or unavailable; repeat the query.');
             if (notes[0])
                 yield notes[0];
         }

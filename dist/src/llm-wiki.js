@@ -8,6 +8,7 @@ import { normalizeScopeId } from './scopes.js';
 import { endpointIdForTool } from './endpoint-registry.js';
 import { organizationDateTimestamp, workDateState } from './organization.js';
 import { iterateNotes, iterateNoteBodies } from './paged-query.js';
+import { readSourceMetadataPage } from './source-metadata-page.js';
 import { getOrganizationPropertyContract, getOrganizationRelationContract, hasExplicitKnowledgeDisposition, inapplicableOrganizationProperties, isActionableKnowledge, isOpenActionableKnowledge, knowledgeOrganization, normalizeClarifyDisposition, normalizeDecisionStatus, normalizeIsoDate, normalizeKnowledgeDisposition, normalizeLifecycle, normalizeNoteKind, normalizeRecallQuality, normalizeReviewAt, normalizeReviewChecks, normalizeReviewIntervalDays, normalizeReviewOutcome, normalizeTaskStatus, normalizeVolatilityClass, organizationLintIssues, organizationNoteTemplate, organizationPropertyAppliesTo, temporalValidity, ANSWER_PACKET_INTENTS, BASES_VIEW_IDS, CAPTURE_SOURCES, CATALOG_ORDERS, CLAIM_ROLES, CLAIM_STATUSES, COMPLETION_DISPOSITION_REQUIRED_MESSAGE, CONFIDENCE_LEVELS, DECISION_STATUSES, FOCUS_HORIZONS, ISSUE_KINDS, KNOWLEDGE_ROLES, KNOWLEDGE_STATUSES, NOTE_KINDS, NOTE_TEMPLATE_IDS, RECALL_REPAIR_STATUSES, RELATION_FIELDS, RECIPROCAL_RELATIONS, SERVICE_CLASSES, SOURCE_TRUST_LEVELS, TEMPORAL_VALIDITY_STATES, VOLATILITY_CLASSES, LIFECYCLES, TASK_STATUSES, ISSUE_RESOLUTION_STATUSES, ISSUE_RETROSPECTIVE_STATUSES, WIKI_PROJECTION_VIEWS } from './organization.js';
 import { extractObsidianLinkOccurrences } from './backlinks.js';
 import { collectPlainFrontmatterReferences, isNavigationalFrontmatterReference } from './property-references.js';
@@ -14293,52 +14294,124 @@ export class LlmWikiService {
      * explicit source_work_id/source_edition_id fields make the model clear
      * when a publisher changes its label or a work has several editions.
      */
-    async sourceLineage(principal, sourceFamily, limit = 20, maxChars = 8000) {
-        const boundedLimit = Math.min(Math.max(Number(limit) || 20, 1), 60);
+    async sourceLineage(principal, sourceFamily, limit = 20, maxChars = 8000, prettyPrint = false, afterPath) {
+        const boundedLimit = Math.min(Math.max(Number(limit) || 20, 1), 20);
         const boundedChars = Math.min(Math.max(Number(maxChars) || 8000, 1024), 20000);
         const requestedFamily = sourceFamily?.trim().toLowerCase();
         const canAccess = (path) => this.access.canAccessPhysicalPath(path, principal);
+        if (afterPath) {
+            const expanded = afterPath.startsWith('scope://') ? this.access.resolveExternalPath(afterPath, principal) : afterPath.replace(/\\/g, '/');
+            afterPath = posix.normalize(expanded);
+            if (posix.isAbsolute(afterPath) || afterPath.includes(':') || afterPath === '..' || afterPath.startsWith('../') || /[\u0000-\u001f\u007f]/.test(afterPath) || !canAccess(afterPath))
+                throw Error('Source lineage changed or is unavailable');
+        }
         const works = new Map();
-        let totalSources = 0;
-        // Sources can live under an authorized model/agent scope as well as the
-        // global _sources root. The access predicate is the boundary; filtering
-        // by one physical prefix would silently omit private lineages.
-        for await (const note of iterateNotes(this.fileSystem, {}, canAccess)) {
+        const page = await readSourceMetadataPage(this.fileSystem, canAccess, note => {
+            if (isModerationHidden(note.frontmatter) || note.frontmatter.immutable !== true)
+                return false;
             if (String(note.frontmatter.llm_wiki_type || '').toLowerCase() !== 'source')
-                continue;
-            totalSources += 1;
-            const workId = String(note.frontmatter.source_work_id || note.frontmatter.source_family || note.frontmatter.source_id || note.path).trim();
-            if (requestedFamily && workId.toLowerCase() !== requestedFamily && String(note.frontmatter.source_family || '').toLowerCase() !== requestedFamily)
-                continue;
-            const sourceNote = await this.fileSystem.readNote(note.path);
-            const editionId = String(note.frontmatter.source_edition_id || note.frontmatter.source_version || note.frontmatter.source_id || note.path).trim();
+                return false;
+            const workId = [note.frontmatter.source_work_id, note.frontmatter.source_family, note.frontmatter.source_id]
+                .find(value => typeof value === 'string' && value.trim());
+            const family = typeof note.frontmatter.source_family === 'string' ? note.frontmatter.source_family.trim().toLowerCase() : undefined;
+            return !requestedFamily || workId?.trim().toLowerCase() === requestedFamily || family === requestedFamily;
+        }, afterPath, boundedLimit);
+        let bodyReads = 0;
+        let omittedEdition = false;
+        let omittedEditionPath;
+        for (const note of page.notes) {
+            const workValue = [note.frontmatter.source_work_id, note.frontmatter.source_family, note.frontmatter.source_id]
+                .find(value => typeof value === 'string' && value.trim());
+            const workId = typeof workValue === 'string' ? workValue.trim() : note.path;
+            const editionValue = [note.frontmatter.source_edition_id, note.frontmatter.source_version, note.frontmatter.source_id]
+                .find(value => typeof value === 'string' && value.trim());
+            const editionId = typeof editionValue === 'string' ? editionValue.trim() : note.path;
             const key = workId.toLowerCase();
-            const work = works.get(key) || { workId: boundedText(workId, 160), label: boundedText(String(note.frontmatter.title || workId), 240), editions: [] };
-            work.editions.push({
-                editionId: boundedText(editionId, 160),
-                sourceId: boundedText(String(note.frontmatter.source_id || note.path.split('/').at(-1) || ''), 160),
+            const work = works.get(key) || { workId, label: boundedText(typeof note.frontmatter.title === 'string' ? note.frontmatter.title : workId, 240), editions: [], observedCount: 0 };
+            work.observedCount += 1;
+            let integrity = 'not_checked';
+            if (bodyReads < 8) {
+                bodyReads += 1;
+                const sourceNote = await this.fileSystem.readNote(note.path, MAX_NOTE_CONTENT_BYTES).catch(() => undefined);
+                if (sourceNote) {
+                    if (sourceNote.revision !== note.revision)
+                        throw new Error('Source lineage changed or is unavailable');
+                    integrity = sourceNote.frontmatter.immutable === true && sourceNote.frontmatter.content_sha256 === hash(sourceNote.content || '') ? 'intact' : 'invalid';
+                }
+            }
+            const edition = {
+                editionId,
+                sourceId: typeof note.frontmatter.source_id === 'string' && note.frontmatter.source_id.trim() ? note.frontmatter.source_id.trim() : note.path.split('/').at(-1) || '',
                 path: this.access.toPublicPath(note.path),
-                title: boundedText(String(note.frontmatter.title || note.path.split('/').at(-1) || ''), 240),
-                sourceVersion: note.frontmatter.source_version,
-                ...(note.frontmatter.published_at && { publishedAt: note.frontmatter.published_at }),
-                ...(note.frontmatter.retrieved_at && { retrievedAt: note.frontmatter.retrieved_at }),
-                ...(note.frontmatter.supersedes_source && { supersedesSource: boundedText(note.frontmatter.supersedes_source, 500) }),
-                revision: sourceNote.revision,
-                integrity: sourceNote.frontmatter.immutable === true && sourceNote.frontmatter.content_sha256 === hash(sourceNote.content || '') ? 'intact' : 'invalid',
-            });
+                title: boundedText(typeof note.frontmatter.title === 'string' ? note.frontmatter.title : note.path.split('/').at(-1) || '', 240),
+                ...(typeof note.frontmatter.source_version === 'string' && { sourceVersion: boundedText(note.frontmatter.source_version, 120) }),
+                ...(typeof note.frontmatter.published_at === 'string' && { publishedAt: boundedText(note.frontmatter.published_at, 120) }),
+                ...(typeof note.frontmatter.retrieved_at === 'string' && { retrievedAt: boundedText(note.frontmatter.retrieved_at, 120) }),
+                revision: note.revision,
+                integrity,
+            };
+            // A physical path is an identifier, never a truncatable display value.
+            if (JSON.stringify(edition).length <= boundedChars)
+                work.editions.push(edition);
+            else {
+                omittedEdition = true;
+                omittedEditionPath ||= this.access.toPublicPath(note.path);
+            }
             works.set(key, work);
         }
         const items = [...works.values()].sort((a, b) => a.workId.localeCompare(b.workId)).slice(0, boundedLimit).map(work => ({
             ...work,
-            editionCount: work.editions.length,
+            editionCount: work.observedCount,
+            returnedEditionCount: work.editions.length,
             editions: work.editions.slice().sort((a, b) => String(a.editionId).localeCompare(String(b.editionId))),
             nextAction: work.editions.length > 1 ? 'Compare editions and cite the exact source revision used by each knowledge note.' : 'Add a source_work_id/source_edition_id pair when a later edition or revision is captured.',
         }));
-        const result = { mode: 'bounded_source_work_edition_lineage', sourceFamily: sourceFamily || undefined, works: items, totals: { sourceSnapshots: totalSources, works: works.size }, truncated: works.size > items.length, note: 'Source snapshots remain immutable Markdown. Work/edition identifiers are grouping metadata, not a replacement for source_id, content hash, or revision.' };
-        while (JSON.stringify(result).length > boundedChars && result.works.length > 1) {
-            result.works.pop();
+        const result = { mode: 'bounded_source_work_edition_lineage', ...(sourceFamily && { sourceFamily: boundedText(sourceFamily, 160) }), works: items, totals: { sourceSnapshots: page.notes.length, works: works.size, sampled: Boolean(afterPath) || page.truncated || omittedEdition }, truncated: page.truncated || omittedEdition || works.size > items.length, note: 'Source snapshots remain immutable Markdown. Counts describe this observed page, not an unscanned inventory. Work/edition identifiers are grouping metadata, not a replacement for source_id, content hash, or revision.' };
+        const continuation = (path) => ({ endpointId: 'wiki.source_lineage', arguments: { ...(sourceFamily && { sourceFamily }), afterPath: this.access.toPublicPath(path), limit: boundedLimit, maxChars: boundedChars } });
+        if (page.truncated && page.afterPath)
+            result.scanContinuation = continuation(page.afterPath);
+        result.nextAction = result.scanContinuation;
+        let firstOmitted;
+        const omitted = (publicPath) => {
+            const note = page.notes.find(n => this.access.toPublicPath(n.path) === publicPath);
+            if (!note)
+                return;
+            if (!firstOmitted || note.path.localeCompare(firstOmitted.path) < 0)
+                firstOmitted = note;
+            result.nextAction = { endpointId: 'wiki.source_lineage', arguments: { sourcePath: this.access.toPublicPath(firstOmitted.path), expectedRevision: firstOmitted.revision, maxChars: Math.min(12000, Math.max(2000, boundedChars)) } };
+            result.scanContinuation = continuation(firstOmitted.path);
             result.truncated = true;
+            result.totals.sampled = true;
+        };
+        if (omittedEditionPath)
+            omitted(omittedEditionPath);
+        while (JSON.stringify(result, null, prettyPrint ? 2 : undefined).length > boundedChars && result.works.length > 0) {
+            const last = result.works.at(-1);
+            if (last?.editions?.length) {
+                omitted(last.editions.pop().path);
+                last.returnedEditionCount = last.editions.length;
+            }
+            else
+                result.works.pop();
+            result.truncated = true;
+            result.totals.sampled = true;
         }
+        try {
+            for (const observed of page.observed) {
+                if (!canAccess(observed.path) || await this.fileSystem.readNoteRevision(observed.path, MAX_NOTE_CONTENT_BYTES) !== observed.revision)
+                    throw new Error('Source lineage changed');
+            }
+        }
+        catch {
+            throw new Error('Source lineage changed or is unavailable');
+        }
+        // Permissions are a final boundary check after every asynchronous
+        // revision read, including the bounded-response fallback below.
+        for (const observed of page.observed)
+            if (!canAccess(observed.path))
+                throw new Error('Source lineage changed or is unavailable');
+        if (JSON.stringify(result, null, prettyPrint ? 2 : undefined).length > boundedChars)
+            return { mode: result.mode, truncated: true, totals: result.totals, retryArguments: { maxChars: Math.min(20000, Math.max(12000, boundedChars + 1024)) } };
         return result;
     }
     /**

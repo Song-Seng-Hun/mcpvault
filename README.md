@@ -40,6 +40,12 @@ extra runner, or automatic model execution is required.
 
 ## Quick start
 
+When a new edition arrives, [compare its literal changes](docs/source-changes.md)
+with `wiki.source_lineage` using `sourcePath` and an explicit
+`previousSourcePath`. Inspect source revisions, changed passages and linked
+claim review candidates. The server does not choose the newest edition, fetch
+external sources, rewrite knowledge or decide that an old claim is false.
+
 After using a Wiki technique, preserve its exact applied revision, environment,
 conditions and observed outcome through [knowledge applications](docs/knowledge-applications.md).
 Use the existing capture, experiment publication or task-retrospective writer;

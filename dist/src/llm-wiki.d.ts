@@ -3877,23 +3877,7 @@ export declare class LlmWikiService {
      * explicit source_work_id/source_edition_id fields make the model clear
      * when a publisher changes its label or a work has several editions.
      */
-    sourceLineage(principal?: ScopePrincipal, sourceFamily?: string, limit?: number, maxChars?: number): Promise<{
-        mode: string;
-        sourceFamily: string | undefined;
-        works: {
-            workId: string;
-            label: string;
-            editionCount: number;
-            editions: Record<string, unknown>[];
-            nextAction: string;
-        }[];
-        totals: {
-            sourceSnapshots: number;
-            works: number;
-        };
-        truncated: boolean;
-        note: string;
-    }>;
+    sourceLineage(principal?: ScopePrincipal, sourceFamily?: string, limit?: number, maxChars?: number, prettyPrint?: boolean, afterPath?: string): Promise<any>;
     /**
      * Project archival provenance and original order without inventing another
      * source database. An overview lists collections; a collection/series drill

@@ -246,7 +246,12 @@ export declare class FileSystemService {
     /** Fresh sequential metadata scan with bounded reads from the first file.
      * Discovery retains path names, not all note metadata or bodies. No index
      * refresh or unrestricted query fallback occurs in this iterator. */
-    iterateFreshNoteMetadata(canAccessPath: (path: string) => boolean): AsyncGenerator<QueryNote>;
+    iterateFreshNoteMetadata(canAccessPath: (path: string) => boolean, options?: {
+        afterPath?: string;
+        sortByPath?: boolean;
+        maxBytes?: number;
+        strictMissing?: boolean;
+    }): AsyncGenerator<QueryNote>;
     /** Internal whole-inventory consumer. Unlike independent cursor pages, all
      * rows belong to one captured metadata cohort. This is not an OS transaction. */
     readQueryInventory(canAccessPath: (path: string) => boolean, canReadNote: (note: QueryNote) => boolean, includeContentFor?: (note: QueryNote) => boolean, consumeContent?: (note: QueryNote) => void | Promise<void>): Promise<QueryNote[]>;

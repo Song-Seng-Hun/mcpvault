@@ -16,7 +16,7 @@ export const WIKI_POLICY_TOPICS = [
     'portability',
     'safety',
 ];
-export const WIKI_POLICY_VERSION = 28;
+export const WIKI_POLICY_VERSION = 29;
 /**
  * The only policy that every MCP client must receive eagerly. Detailed
  * organization guidance is selected through wiki.policy so a rich Wiki does
@@ -104,6 +104,7 @@ const POLICY_TOPICS = {
         rules: [
             'Capture immutable source snapshots before publishing knowledge; preserve source ID, content hash, evidence path, and revision.',
             'Use source work and edition lineage so multiple snapshots of one work are not mistaken for independent corroboration.',
+            'When a new immutable edition is captured, call wiki.source_lineage with sourcePath, choose previousSourcePath and retain both expected revisions. Read changed passages and potentially affected claim locators before using wiki.review_claim; a literal difference is not refutation and a draft review is not approval.',
             'For precise claims record heading, block, source revision, optional line range, and quote hash, then inspect current evidence before changing status.',
             'Use claim roles and Obsidian block links for arguments; graph shape, source count, reactions, and reputation never establish truth.',
         ],

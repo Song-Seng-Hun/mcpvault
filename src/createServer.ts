@@ -10,6 +10,7 @@ import { SearchService } from "./search.js";
 import { RetrievalService } from './retrieval-service.js';
 import { QuestionPacketService } from './question-packet.js';
 import { SourceComparisonService } from './source-comparison.js';
+import { SourceChangeService } from './source-change.js';
 import { KnowledgeApplicationService } from './knowledge-applications.js';
 import { handleWikiLinkTool } from "./wikilink/index.js";
 import { GitHistoryService } from "./git-history.js";
@@ -428,6 +429,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
   const retrieval = new RetrievalService(searchService, collaboration, semanticSearch, scopeAccess, fileSystem);
   const questionPacket = new QuestionPacketService(fileSystem, scopeAccess, retrieval);
   const sourceComparison = new SourceComparisonService(fileSystem, scopeAccess, retrieval);
+  const sourceChange = new SourceChangeService(fileSystem, scopeAccess);
   const knowledgeApplications = new KnowledgeApplicationService(fileSystem, scopeAccess);
   const references = new ReferenceService(fileSystem, scopeAccess);
   const llmWiki = new LlmWikiService(fileSystem, scopeAccess, references, semanticSearch);
@@ -1739,7 +1741,8 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         }
 
         case "get_wiki_source_lineage": {
-          return jsonResult(await llmWiki.sourceLineage(principal, trimmedArgs.sourceFamily, trimmedArgs.limit, trimmedArgs.maxChars), trimmedArgs.prettyPrint);
+          if (trimmedArgs.sourcePath !== undefined) return jsonResult(await sourceChange.read({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
+          return jsonResult(await llmWiki.sourceLineage(principal, trimmedArgs.sourceFamily, trimmedArgs.limit, trimmedArgs.maxChars, trimmedArgs.prettyPrint, trimmedArgs.afterPath), trimmedArgs.prettyPrint);
         }
 
         case "get_wiki_archive_finding_aid": {
