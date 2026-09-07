@@ -99,6 +99,12 @@ whole-Vault memory ceiling or header-only disk-I/O claim follows from this.
    serial I/O and already-native inference do not automatically benefit. Compare
    p95 event-loop delay, RSS and completed-work throughput at equal concurrency.
    Do not spawn a worker/model per agent or copy an entire Vault into each worker.
+   A concrete pre-offload improvement is recorded in
+   `2026-09-07-graph-query-selection-design.md`: backlink selection's linear
+   worst-item scan per candidate becomes an existing bounded heap; outlink and
+   orphan windows avoid full-result intermediates. Full counts, permissions and
+   view fingerprints still inspect the complete eligible graph. The graph and
+   resolver themselves are not newly bounded, and no CPU worker is introduced.
 4. **GPU remains optional experimentation.** Test a supported runtime/provider
    with the pinned model and quality/latency/memory fixtures, not just a device
    flag. Require CPU fallback, no extra client installation, profile separation,

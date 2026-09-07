@@ -13,6 +13,7 @@ import { extractInlineTags } from './markdown-tags.js';
 import { SourceReadLimitError } from './bounded-source-read.js';
 import { NavigationViewFingerprint } from './navigation-view.js';
 import { createGraphLinkProjector } from './graph-link-projection.js';
+import { createBoundedTopK } from './search-limits.js';
 const GRAPH_RECONCILE_INTERVAL_MS = 60_000;
 const NO_WATCHER_RECONCILE_INTERVAL_MS = 5_000;
 const GRAPH_CONTENT_AUDIT_INTERVAL_MS = 15 * 60_000;
@@ -116,19 +117,6 @@ function resolveTargets(target, resolver, sourcePath, authoredLink) {
             return identityMatches;
     }
     return [];
-}
-function addTopMatch(items, item, limit, compare) {
-    if (items.length < limit) {
-        items.push(item);
-        return;
-    }
-    let worst = 0;
-    for (let index = 1; index < items.length; index += 1) {
-        if (compare(items[index], items[worst]) > 0)
-            worst = index;
-    }
-    if (compare(item, items[worst]) < 0)
-        items[worst] = item;
 }
 /**
  * Incremental Obsidian graph read model for backlinks, tags, unresolved links,
@@ -249,10 +237,11 @@ export class VaultGraphIndex {
         const project = this.linkProjector(visible.resolver, allResolver);
         const validationResolver = validateTargets ? this.targetValidationResolver(visible, canAccessPath) : visible.resolver;
         const contexts = new Map();
-        const backlinks = [];
         const sourceEntries = new Map();
         let total = 0;
         const compare = (a, b) => a.path.localeCompare(b.path) || a.line - b.line;
+        // Encounter order makes same-line ties stable across heap selection/pages.
+        const backlinks = createBoundedTopK(offset + limit, (a, b) => compare(a.link, b.link) || a.order - b.order);
         const incoming = this.incomingBacklinks(visible);
         const edges = incoming ? incoming.get(normalizedTarget) || [] : this.matchingBacklinks(visible, normalizedTarget);
         const checkedSources = new Map();
@@ -293,7 +282,7 @@ export class VaultGraphIndex {
                 ...(link.propertyPath && { propertyPath: link.propertyPath }),
             };
             snapshot?.add(entry.path, entry.revision, project(entry, backlink));
-            addTopMatch(backlinks, backlink, offset + limit, compare);
+            backlinks.add({ link: backlink, order: total });
         }
         if (validateTargets) {
             const targets = new Map();
@@ -323,8 +312,7 @@ export class VaultGraphIndex {
         if (this.changeGeneration !== startGeneration || this.visibilityContext(canAccessPath) !== visible) {
             throw new Error('Graph changed or visibility changed during navigation; retry the query. No stable navigation view was returned.');
         }
-        backlinks.sort(compare);
-        const page = backlinks.slice(offset, offset + limit).map(link => project(sourceEntries.get(link.path), link));
+        const page = backlinks.values().slice(offset, offset + limit).map(({ link }) => project(sourceEntries.get(link.path), link));
         return { target, ...(includeSourceRevision && { targetRevision: targetEntry.revision }), ...(snapshot && { snapshotFingerprint: snapshot.finish() }), backlinks: page, total, truncated: total > offset + page.length };
     }
     async getOutlinks(path, limit, canAccessPath, offset = 0, includeSourceRevision = false, includeSnapshot = false, validateTargets) {
@@ -341,9 +329,12 @@ export class VaultGraphIndex {
         const project = this.linkProjector(visible.resolver, allResolver);
         const validationResolver = validateTargets ? this.targetValidationResolver(visible, canAccessPath) : visible.resolver;
         const targetRevisions = new Map();
-        const outlinks = entry.links.filter(link => {
+        const outlinks = [];
+        const snapshot = includeSnapshot ? new NavigationViewFingerprint(['outlinks', source, entry.revision]) : undefined;
+        let total = 0;
+        for (const link of entry.links) {
             if (/^scope:\/\/(?:model|agent|user)\//i.test(link.target.trim()))
-                return false;
+                continue;
             const anyMatches = resolveTargets(link.target, allResolver, entry.path, link.link);
             const visibleMatches = resolveTargets(link.target, visible.resolver, entry.path, link.link);
             const validationMatches = validationResolver === visible.resolver ? visibleMatches
@@ -356,26 +347,25 @@ export class VaultGraphIndex {
                     if (target && path !== source && canAccessPath(path))
                         targetRevisions.set(path, target.revision);
                 }
-            if (anyMatches.length === 0)
-                return true;
-            return visibleMatches.length > 0;
-        });
+            if (anyMatches.length > 0 && visibleMatches.length === 0)
+                continue;
+            total += 1;
+            snapshot?.add(source, entry.revision, project(entry, link));
+            if (total > offset && outlinks.length < limit)
+                outlinks.push(link);
+        }
         if (validateTargets)
             await validateTargets(targetRevisions);
         if (this.changeGeneration !== startGeneration || this.visibilityContext(canAccessPath) !== visible) {
             throw new Error('Graph changed or visibility changed during navigation; retry the query. No stable navigation view was returned.');
         }
-        const snapshot = includeSnapshot ? new NavigationViewFingerprint(['outlinks', source, entry.revision]) : undefined;
-        if (snapshot)
-            for (const link of outlinks)
-                snapshot.add(source, entry.revision, project(entry, link));
         return {
             source,
             ...(includeSourceRevision && { sourceRevision: entry.revision }),
             ...(snapshot && { snapshotFingerprint: snapshot.finish() }),
-            outlinks: outlinks.slice(offset, offset + limit).map(link => project(entry, link)),
-            total: outlinks.length,
-            truncated: outlinks.length > offset + limit,
+            outlinks: outlinks.map(link => project(entry, link)),
+            total,
+            truncated: total > offset + limit,
         };
     }
     targetValidationResolver(visible, canAccessPath) {
@@ -424,7 +414,7 @@ export class VaultGraphIndex {
         const { paths: allVisiblePaths, resolver } = this.visibilityContext(canAccessPath);
         const notePaths = allVisiblePaths.filter(isNote);
         const visible = new Set(notePaths);
-        const incomingCounts = new Map(notePaths.map(path => [normalizedPath(path), 0]));
+        const incoming = new Set();
         for (const source of notePaths) {
             const entry = this.entries.get(source);
             if (!entry)
@@ -432,21 +422,25 @@ export class VaultGraphIndex {
             for (const link of entry.links) {
                 for (const destination of resolveTargets(link.target, resolver, entry.path, link.link)) {
                     if (normalizedPath(destination) !== normalizedPath(source) && visible.has(destination)) {
-                        const key = normalizedPath(destination);
-                        incomingCounts.set(key, (incomingCounts.get(key) || 0) + 1);
+                        incoming.add(normalizedPath(destination));
                     }
                 }
             }
         }
-        const orphans = notePaths
-            .filter(path => incomingCounts.get(normalizedPath(path)) === 0)
-            .map(path => ({ path, incomingLinks: 0 }))
-            .sort((left, right) => left.path.localeCompare(right.path));
+        const orphans = [];
         const snapshot = includeSnapshot ? new NavigationViewFingerprint(['orphans']) : undefined;
-        if (snapshot)
-            for (const row of orphans)
-                snapshot.add(row.path, this.entries.get(row.path).revision, row);
-        return { orphans: orphans.slice(offset, offset + limit), ...(snapshot && { snapshotFingerprint: snapshot.finish() }), total: orphans.length, truncated: orphans.length > offset + limit };
+        let total = 0;
+        // visibilityContext already sorts paths using the same locale comparator.
+        for (const path of notePaths) {
+            if (incoming.has(normalizedPath(path)))
+                continue;
+            total += 1;
+            const row = { path, incomingLinks: 0 };
+            snapshot?.add(path, this.entries.get(path).revision, row);
+            if (total > offset && orphans.length < limit)
+                orphans.push(row);
+        }
+        return { orphans, ...(snapshot && { snapshotFingerprint: snapshot.finish() }), total, truncated: total > offset + limit };
     }
     async listAllTags(canAccessPath) {
         await this.ensure();

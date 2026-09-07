@@ -17,6 +17,7 @@ import { extractInlineTags } from './markdown-tags.js';
 import { SourceReadLimitError } from './bounded-source-read.js';
 import { NavigationViewFingerprint } from './navigation-view.js';
 import { createGraphLinkProjector } from './graph-link-projection.js';
+import { createBoundedTopK } from './search-limits.js';
 
 const GRAPH_RECONCILE_INTERVAL_MS = 60_000;
 const NO_WATCHER_RECONCILE_INTERVAL_MS = 5_000;
@@ -150,18 +151,6 @@ function resolveTargets(target: string, resolver: Resolver, sourcePath?: string,
   return [];
 }
 
-function addTopMatch<T>(items: T[], item: T, limit: number, compare: (a: T, b: T) => number): void {
-  if (items.length < limit) {
-    items.push(item);
-    return;
-  }
-  let worst = 0;
-  for (let index = 1; index < items.length; index += 1) {
-    if (compare(items[index]!, items[worst]!) > 0) worst = index;
-  }
-  if (compare(item, items[worst]!) < 0) items[worst] = item;
-}
-
 /**
  * Incremental Obsidian graph read model for backlinks, tags, unresolved links,
  * and orphan notes. It stores only parsed link/tag/identity metadata and refreshes a
@@ -275,10 +264,12 @@ export class VaultGraphIndex {
     const project = this.linkProjector(visible.resolver, allResolver);
     const validationResolver = validateTargets ? this.targetValidationResolver(visible, canAccessPath) : visible.resolver;
     const contexts = new Map<GraphEntry, { lines: Set<number>; headings: Set<string> }>();
-    const backlinks: BacklinkMatch[] = [];
     const sourceEntries = new Map<string, GraphEntry>();
     let total = 0;
     const compare = (a: BacklinkMatch, b: BacklinkMatch) => a.path.localeCompare(b.path) || a.line - b.line;
+    // Encounter order makes same-line ties stable across heap selection/pages.
+    const backlinks = createBoundedTopK<{ link: BacklinkMatch; order: number }>(offset + limit,
+      (a, b) => compare(a.link, b.link) || a.order - b.order);
     const incoming = this.incomingBacklinks(visible);
     const edges = incoming ? incoming.get(normalizedTarget) || [] : this.matchingBacklinks(visible, normalizedTarget);
     const checkedSources = new Map<string, boolean>();
@@ -313,7 +304,7 @@ export class VaultGraphIndex {
           ...(link.propertyPath && { propertyPath: link.propertyPath }),
         };
         snapshot?.add(entry.path, entry.revision, project(entry, backlink));
-        addTopMatch(backlinks, backlink, offset + limit, compare);
+        backlinks.add({ link: backlink, order: total });
     }
     if (validateTargets) {
       const targets = new Map<string, string>();
@@ -337,8 +328,7 @@ export class VaultGraphIndex {
     if (this.changeGeneration !== startGeneration || this.visibilityContext(canAccessPath) !== visible) {
       throw new Error('Graph changed or visibility changed during navigation; retry the query. No stable navigation view was returned.');
     }
-    backlinks.sort(compare);
-    const page = backlinks.slice(offset, offset + limit).map(link => project(sourceEntries.get(link.path)!, link));
+    const page = backlinks.values().slice(offset, offset + limit).map(({ link }) => project(sourceEntries.get(link.path)!, link));
     return { target, ...(includeSourceRevision && { targetRevision: targetEntry.revision }), ...(snapshot && { snapshotFingerprint: snapshot.finish() }), backlinks: page, total, truncated: total > offset + page.length };
   }
 
@@ -355,8 +345,11 @@ export class VaultGraphIndex {
     const project = this.linkProjector(visible.resolver, allResolver);
     const validationResolver = validateTargets ? this.targetValidationResolver(visible, canAccessPath) : visible.resolver;
     const targetRevisions = new Map<string, string>();
-    const outlinks = entry.links.filter(link => {
-      if (/^scope:\/\/(?:model|agent|user)\//i.test(link.target.trim())) return false;
+    const outlinks: OutlinkMatch[] = [];
+    const snapshot = includeSnapshot ? new NavigationViewFingerprint(['outlinks', source, entry.revision]) : undefined;
+    let total = 0;
+    for (const link of entry.links) {
+      if (/^scope:\/\/(?:model|agent|user)\//i.test(link.target.trim())) continue;
       const anyMatches = resolveTargets(link.target, allResolver, entry.path, link.link);
       const visibleMatches = resolveTargets(link.target, visible.resolver, entry.path, link.link);
       const validationMatches = validationResolver === visible.resolver ? visibleMatches
@@ -367,22 +360,22 @@ export class VaultGraphIndex {
         const target = this.entries.get(path);
         if (target && path !== source && canAccessPath(path)) targetRevisions.set(path, target.revision);
       }
-      if (anyMatches.length === 0) return true;
-      return visibleMatches.length > 0;
-    });
+      if (anyMatches.length > 0 && visibleMatches.length === 0) continue;
+      total += 1;
+      snapshot?.add(source, entry.revision, project(entry, link));
+      if (total > offset && outlinks.length < limit) outlinks.push(link);
+    }
     if (validateTargets) await validateTargets(targetRevisions);
     if (this.changeGeneration !== startGeneration || this.visibilityContext(canAccessPath) !== visible) {
       throw new Error('Graph changed or visibility changed during navigation; retry the query. No stable navigation view was returned.');
     }
-    const snapshot = includeSnapshot ? new NavigationViewFingerprint(['outlinks', source, entry.revision]) : undefined;
-    if (snapshot) for (const link of outlinks) snapshot.add(source, entry.revision, project(entry, link));
     return {
       source,
       ...(includeSourceRevision && { sourceRevision: entry.revision }),
       ...(snapshot && { snapshotFingerprint: snapshot.finish() }),
-      outlinks: outlinks.slice(offset, offset + limit).map(link => project(entry, link)),
-      total: outlinks.length,
-      truncated: outlinks.length > offset + limit,
+      outlinks: outlinks.map(link => project(entry, link)),
+      total,
+      truncated: total > offset + limit,
     };
   }
 
@@ -427,26 +420,30 @@ export class VaultGraphIndex {
     const { paths: allVisiblePaths, resolver } = this.visibilityContext(canAccessPath);
     const notePaths = allVisiblePaths.filter(isNote);
     const visible = new Set(notePaths);
-    const incomingCounts = new Map(notePaths.map(path => [normalizedPath(path), 0]));
+    const incoming = new Set<string>();
     for (const source of notePaths) {
       const entry = this.entries.get(source);
       if (!entry) continue;
       for (const link of entry.links) {
         for (const destination of resolveTargets(link.target, resolver, entry.path, link.link)) {
           if (normalizedPath(destination) !== normalizedPath(source) && visible.has(destination)) {
-            const key = normalizedPath(destination);
-            incomingCounts.set(key, (incomingCounts.get(key) || 0) + 1);
+            incoming.add(normalizedPath(destination));
           }
         }
       }
     }
-    const orphans = notePaths
-      .filter(path => incomingCounts.get(normalizedPath(path)) === 0)
-      .map(path => ({ path, incomingLinks: 0 }))
-      .sort((left, right) => left.path.localeCompare(right.path));
+    const orphans: OrphanNotesResult['orphans'] = [];
     const snapshot = includeSnapshot ? new NavigationViewFingerprint(['orphans']) : undefined;
-    if (snapshot) for (const row of orphans) snapshot.add(row.path, this.entries.get(row.path)!.revision, row);
-    return { orphans: orphans.slice(offset, offset + limit), ...(snapshot && { snapshotFingerprint: snapshot.finish() }), total: orphans.length, truncated: orphans.length > offset + limit };
+    let total = 0;
+    // visibilityContext already sorts paths using the same locale comparator.
+    for (const path of notePaths) {
+      if (incoming.has(normalizedPath(path))) continue;
+      total += 1;
+      const row = { path, incomingLinks: 0 };
+      snapshot?.add(path, this.entries.get(path)!.revision, row);
+      if (total > offset && orphans.length < limit) orphans.push(row);
+    }
+    return { orphans, ...(snapshot && { snapshotFingerprint: snapshot.finish() }), total, truncated: total > offset + limit };
   }
 
   async listAllTags(canAccessPath: (path: string) => boolean): Promise<Array<{ tag: string; count: number }>> {

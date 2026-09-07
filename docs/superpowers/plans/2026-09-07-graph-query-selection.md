@@ -7,27 +7,54 @@
 shared graph, authorization, validation and fingerprint contracts.
 **Tech Stack:** Node, TypeScript, Vitest, existing createBoundedTopK.
 
-- [ ] Create `src/graph-query-selection.test.ts`: synthetic entries and paths;
+- [x] Create `src/graph-query-selection.test.ts`: synthetic entries and paths;
   bypass only IO refresh with an ensure spy. Use real graph query/resolver logic.
   RED comparison bound for 600 backlink authors and K=64, no `links.filter` for
   outlink window, no orphan object map/full sort for 600 unlinked notes.
   Run `npm test -- src/graph-query-selection.test.ts --maxWorkers=1`.
-- [ ] Modify `src/vault-graph.ts` backlink selection:
+- [x] Modify `src/vault-graph.ts` backlink selection:
   `createBoundedTopK<{link:BacklinkMatch;order:number}>(offset+limit, (a,b) =>
   compare(a.link,b.link) || a.order-b.order)`; add each accepted row once and
   project `values().slice(offset,offset+limit)`. Remove addTopMatch.
-- [ ] Stream outlinks: count eligible edges, collect selected raw links only,
+- [x] Stream outlinks: count eligible edges, collect selected raw links only,
   add every eligible link to optional NavigationViewFingerprint; keep full
   target-validation collection and post-await checks; project returned page.
-- [ ] Stream orphans: `incoming = new Set<string>()`, add nonself resolved note
+- [x] Stream orphans: `incoming = new Set<string>()`, add nonself resolved note
   destinations; scan sorted notePaths, count/add fingerprint for zero incoming,
   push rows only when `total > offset && orphans.length < limit`.
-- [ ] Extend tests: deterministic tie pages, offsets beyond total, hidden
+- [x] Extend tests: deterministic tie pages, offsets beyond total, hidden
   source/target filtering, whole-view fingerprints identical across pages,
   dependency validation outside page, rejection after async generation/scope
   changes. Assert original synthetic entries stay unchanged. Target graph,
   navigation and search-limits suites plus new file before build.
-- [ ] Run build, independent read-only review, full single-worker tests and
+- [x] Run build, independent read-only review, full single-worker tests and
   git diff --check. Document exact resource improvement/limits in README and
-  evidence here. Explicitly stage source/generated dist/doc files; commit and
-  push only user fork main, verify remote SHA. Leave Goal active.
+  evidence here. Publication is recorded below. Leave Goal active.
+
+## Evidence
+
+- RED: all three new operation/allocation tests failed on old code (09:04:58
+  local): 35,049 author comparisons for N=600/K=64; full links.filter invoked;
+  600 mapped orphan rows for a 3-row page. All result assertions passed first.
+- GREEN: initial 5 files / 40 tests passed. Expanded graph/navigation/source
+  snapshot/moderation/visibility/search-limits selection: 7 files / 76 tests
+  passed (09:07:54 local, 9.53s). New file includes 9 tests. Synthetic graph
+  tests isolate query work; existing file-backed tests validate integration.
+- `npm run build` and `git diff --check` passed.
+- Astra High read-only review (Halley): no actionable correctness/security
+  defects. Suggested strengthening the orphan allocation test beyond map();
+  reviewer was closed after completion.
+- Full `npm test -- --maxWorkers=1`: 190 files passed; 2,944 tests passed,
+  2 skipped (2,946 total), 333.91s, terminal exit 0, 09:09:02 local start.
+- After the full run, test-only strengthening added push/sort instrumentation:
+  maximum retained orphan-result array length was exactly 3 for a 3-row page
+  over 600 notes, with zero orphan-row sorting. The 9-test file passed again at
+  09:15:08 local; production code/dist did not change after the full run.
+- Comparison assertion is below 10,000 on that synthetic case, not a production
+  latency/RSS or end-to-end complexity claim. Resolver construction, source
+  validation and complete-view hashing have separate cost; all remain active.
+
+## Delivery
+
+Ready for explicit source/dist/doc staging and fork-only main publication.
+No live Vault, configuration or running process has been modified.
