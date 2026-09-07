@@ -50,4 +50,8 @@
 
 ## Delivery
 
-Ready for fork-only source/dist/docs/script publication and remote verification.
+- Implementation `f605ad183edd57071f18aa3ee450377ed4fe4e9b` pushed only to
+  `https://github.com/Song-Seng-Hun/mcpvault.git` main. Live `git ls-remote`
+  matched the implementation SHA. This final receipt is documentation-only.
+- Existing untracked `.agents/` and `.mcpvault/` remained untouched. No runtime
+  reload, plugin configuration edit, live Vault mutation or upstream contribution.
