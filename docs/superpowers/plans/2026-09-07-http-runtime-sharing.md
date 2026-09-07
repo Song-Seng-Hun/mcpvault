@@ -23,10 +23,8 @@ fresh lightweight request servers, per-call authentication unchanged.
   concurrent identity A/B and anonymous whoami, and fresh request wrappers.
 - [x] Focused HTTP/createServer/auth tests, build, independent review, full
   one-worker tests, diff check. Record separate-runtime limitations and no
-  native-model/RSS measurement claim. Stage explicit source/dist/docs/tests,
-  commit/push fork main only, verify remote SHA. Leave live configuration alone.
-  Verification is complete; publication is tracked separately below.
-- [ ] Commit/push the verified implementation and verify fork main SHA.
+  native-model/RSS measurement claim. Leave live configuration alone.
+- [x] Commit/push the verified implementation and verify fork main SHA.
 
 ## Evidence
 
@@ -58,4 +56,17 @@ fresh lightweight request servers, per-call authentication unchanged.
 - Final full suite including review improvements: 192 files / 2,966 passed /
   2 skipped (2,968 total), 373.67s, start 09:52:10 local; exit 0.
   `git diff --check` passed. No production code changed after this run.
-- Publication pending.
+- Published implementation `be790ea25e6f2da73cf72c64886309669672d6ae` to
+  Song-Seng-Hun/mcpvault main; `git ls-remote origin refs/heads/main` matched
+  the local SHA. No upstream contribution. Unrelated `.agents/` and
+  `.mcpvault/` remain untracked. This delivery entry is documentation only.
+
+## Next boundary
+
+This increment removes recurring catalog allocation and proves existing HTTP
+service ownership; it does not consolidate independently launched stdio
+processes. A shared attachment design still needs authenticated endpoint
+identity, startup race/ownership protection, compatible client lifecycle and
+isolated resource measurements before any live deployment change. GPU and
+worker offload remain separate measured experiments, not assumed benefits.
+The broader Goal remains active.
