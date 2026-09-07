@@ -6,6 +6,8 @@ export interface ParsedCliArgs {
     mcpHttpHost?: string;
     mcpHttpTlsCert?: string;
     mcpHttpTlsKey?: string;
+    /** Dedicated HTTP process; omitted preserves legacy stdio behavior. */
+    stdio?: false;
 }
 /**
  * Parse runtime options without importing server.ts, which starts the MCP

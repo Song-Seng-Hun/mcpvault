@@ -1,6 +1,7 @@
 #!/usr/bin/env node
-import { serveStdio } from "@modelcontextprotocol/server/stdio";
-import { createServer } from "./src/createServer.js";
+import { serveStdio, StdioServerTransport } from "@modelcontextprotocol/server/stdio";
+import { createServer, getServerRuntime } from "./src/createServer.js";
+import { createServerLifecycle } from "./src/server-lifecycle.js";
 import { parseCliArgs } from "./src/cli.js";
 import { startRestApi } from "./src/rest-api.js";
 import { startMcpHttpApi } from "./src/mcp-http.js";
@@ -48,6 +49,9 @@ Options:
   --http[=PORT]   Also expose the optional localhost REST adapter (default 8787)
   --mcp-http[=PORT]
                   Expose MCP 2026 Stateless Streamable HTTP (default 8788)
+  --mcp-http-only[=PORT]
+                  Dedicated shared HTTP process; no stdio transport (default 8788)
+                  Connect clients to the same /mcp URL; keep this process running
                   Optional LAN/TLS flags: --mcp-http-host HOST,
                   --mcp-http-cert FILE, --mcp-http-key FILE
                   Optional env: MCPVAULT_MCP_HTTP_HOST,
@@ -66,63 +70,79 @@ Examples:
 }
 // Remove runtime options before joining trailing args, preserving support for
 // unquoted vault paths with spaces. When omitted, use the current directory.
-const { vaultPathArg, readOnly, restPort, mcpHttpPort, mcpHttpHost, mcpHttpTlsCert, mcpHttpTlsKey } = parseCliArgs(cliArgs);
+const { vaultPathArg, readOnly, restPort, mcpHttpPort, mcpHttpHost, mcpHttpTlsCert, mcpHttpTlsKey, stdio } = parseCliArgs(cliArgs);
 const vaultPath = resolve(vaultPathArg || process.cwd());
 if (mcpHttpPort === undefined && (mcpHttpHost || mcpHttpTlsCert || mcpHttpTlsKey)) {
     throw new Error('--mcp-http-host, --mcp-http-cert, and --mcp-http-key require --mcp-http');
 }
 const mcpServer = createServer(vaultPath, { version: VERSION, readOnly });
-// Serve both the legacy handshake-based protocol and MCP 2026-07-28 from the
-// same process. The opening exchange selects the era for this connection.
-const serverHandle = serveStdio(() => mcpServer, { onerror: (error) => console.error(error) });
-let restHandle;
-if (restPort !== undefined) {
-    restHandle = await startRestApi(mcpServer, { port: restPort });
-    console.error(`MCPVault REST adapter listening on http://${restHandle.host}:${restHandle.port}`);
-}
-let mcpHttpHandle;
-if (mcpHttpPort !== undefined) {
-    const configuredHost = mcpHttpHost || process.env.MCPVAULT_MCP_HTTP_HOST;
-    const configuredTlsCert = mcpHttpTlsCert || process.env.MCPVAULT_MCP_HTTP_TLS_CERT;
-    const configuredTlsKey = mcpHttpTlsKey || process.env.MCPVAULT_MCP_HTTP_TLS_KEY;
-    if (Boolean(configuredTlsCert) !== Boolean(configuredTlsKey)) {
-        throw new Error('MCP HTTP TLS requires both a certificate and a private key');
+const lifecycle = createServerLifecycle(mcpServer);
+const ownsNetwork = mcpHttpPort !== undefined || restPort !== undefined;
+let isShuttingDown = false;
+try {
+    // Each protocol owns only its wrapper. The CLI alone owns shared services,
+    // including when stdio never receives an opening handshake.
+    if (stdio !== false) {
+        const transport = new StdioServerTransport();
+        const closeTransport = transport.close.bind(transport);
+        transport.close = async () => {
+            await closeTransport();
+            // Fatal wire errors can pause stdin without emitting EOF. Observe the
+            // wire, not a probe/product disposal during protocol negotiation.
+            if (!ownsNetwork)
+                void shutdown();
+        };
+        lifecycle.add(serveStdio(() => getServerRuntime(mcpServer).createRequestServer(), { transport, onerror: (error) => console.error(error) }));
     }
-    const configuredHosts = String(process.env.MCPVAULT_ALLOWED_HOSTS || '').split(',').map(value => value.trim()).filter(Boolean);
-    const configuredOrigins = String(process.env.MCPVAULT_ALLOWED_ORIGINS || '').split(',').map(value => value.trim()).filter(Boolean);
-    mcpHttpHandle = await startMcpHttpApi(mcpServer, {
-        port: mcpHttpPort,
-        ...(configuredHost && { host: configuredHost }),
-        ...(configuredHosts.length > 0 && { allowedHosts: configuredHosts }),
-        ...(configuredOrigins.length > 0 && { allowedOrigins: configuredOrigins }),
-        ...(configuredTlsCert && configuredTlsKey && {
-            tls: {
-                cert: readFileSync(configuredTlsCert),
-                key: readFileSync(configuredTlsKey),
-            },
-        }),
-    });
-    console.error(`MCPVault Stateless MCP HTTP listening on ${mcpHttpHandle.protocol}://${mcpHttpHandle.host}:${mcpHttpHandle.port}${mcpHttpHandle.path}`);
+    if (restPort !== undefined) {
+        const restHandle = await startRestApi(mcpServer, { port: restPort });
+        lifecycle.add(restHandle);
+        console.error(`MCPVault REST adapter listening on http://${restHandle.host}:${restHandle.port}`);
+    }
+    if (mcpHttpPort !== undefined) {
+        const configuredHost = mcpHttpHost || process.env.MCPVAULT_MCP_HTTP_HOST;
+        const configuredTlsCert = mcpHttpTlsCert || process.env.MCPVAULT_MCP_HTTP_TLS_CERT;
+        const configuredTlsKey = mcpHttpTlsKey || process.env.MCPVAULT_MCP_HTTP_TLS_KEY;
+        if (Boolean(configuredTlsCert) !== Boolean(configuredTlsKey)) {
+            throw new Error('MCP HTTP TLS requires both a certificate and a private key');
+        }
+        const configuredHosts = String(process.env.MCPVAULT_ALLOWED_HOSTS || '').split(',').map(value => value.trim()).filter(Boolean);
+        const configuredOrigins = String(process.env.MCPVAULT_ALLOWED_ORIGINS || '').split(',').map(value => value.trim()).filter(Boolean);
+        const mcpHttpHandle = await startMcpHttpApi(mcpServer, {
+            port: mcpHttpPort,
+            ...(configuredHost && { host: configuredHost }),
+            ...(configuredHosts.length > 0 && { allowedHosts: configuredHosts }),
+            ...(configuredOrigins.length > 0 && { allowedOrigins: configuredOrigins }),
+            ...(configuredTlsCert && configuredTlsKey && {
+                tls: {
+                    cert: readFileSync(configuredTlsCert),
+                    key: readFileSync(configuredTlsKey),
+                },
+            }),
+        });
+        lifecycle.add(mcpHttpHandle);
+        console.error(`MCPVault Stateless MCP HTTP listening on ${mcpHttpHandle.protocol}://${mcpHttpHandle.host}:${mcpHttpHandle.port}${mcpHttpHandle.path}`);
+    }
+}
+catch (error) {
+    console.error('MCPVault startup failed:', error);
+    for (const closeError of await lifecycle.close())
+        console.error('MCPVault cleanup failed:', closeError);
+    process.exit(1);
 }
 // Exit when the client disconnects (stdin EOF) or the process is asked to
 // terminate. Hosts that don't send an MCP shutdown request otherwise leave
 // this process running forever, orphaned once stdin closes (#159).
-let isShuttingDown = false;
 async function shutdown() {
     if (isShuttingDown)
         return;
     isShuttingDown = true;
-    try {
-        await mcpHttpHandle?.close();
-        await restHandle?.close();
-        await serverHandle.close();
-    }
-    catch {
-        // Best-effort: exit regardless of transport close errors.
-    }
-    process.exit(0);
+    const errors = await lifecycle.close();
+    for (const error of errors)
+        console.error('MCPVault cleanup failed:', error);
+    process.exit(errors.length ? 1 : 0);
 }
-if (mcpHttpPort === undefined && restPort === undefined) {
+if (!ownsNetwork) {
     process.stdin.on("end", shutdown);
     process.stdin.on("close", shutdown);
 }

@@ -1,0 +1,1 @@
+{"version":3,"file":"server-lifecycle.d.ts","sourceRoot":"","sources":["../../src/server-lifecycle.ts"],"names":[],"mappings":"AAAA,UAAU,SAAS;IACjB,KAAK,IAAI,IAAI,GAAG,OAAO,CAAC,IAAI,CAAC,CAAC;CAC/B;AAED,mFAAmF;AACnF,wBAAgB,qBAAqB,CAAC,IAAI,EAAE,SAAS;IAIjD,GAAG,SAAS,SAAS,GAAG,IAAI;IAI5B,KAAK,IAAI,OAAO,CAAC,OAAO,EAAE,CAAC;EAa9B"}

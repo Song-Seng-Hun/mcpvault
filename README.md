@@ -1728,6 +1728,31 @@ not cached with the definitions. Disconnecting one HTTP client does not close
 the shared runtime services. Separate server processes (including separately
 launched stdio clients) still own separate service bundles; this is not an
 automatic shared-process launcher or a measured memory-saving guarantee.
+
+For a dedicated shared server, use one long-running process:
+
+```bash
+node dist/server.js /path/to/vault --mcp-http-only=8788
+```
+
+Register `http://127.0.0.1:8788/mcp` in each local client's **HTTP MCP URL**
+configuration. These clients share the same runtime; do not also configure a
+separate `command` launch per client when sharing is the intent. The ordinary
+REST port is not an MCP URL. Authentication remains per call, and each agent
+keeps its own account/token. This command does not install a service, discover
+or terminate other servers, or rewrite client/plugin configurations. Keep the
+server process running; stopping it disconnects all attached clients.
+
+`--mcp-http-only` defaults to port 8788 and does not consume or respond to MCP on
+stdin. Closing stdin does not stop it. The existing `--mcp-http` option still
+supports both stdio and HTTP, and running without network options retains stdio
+disconnect/EOF shutdown. In all modes the CLI owns runtime cleanup, including
+partially started transports. A terminal stdio wire failure also cleans up a
+stdio-only runtime; it does not stop an HTTP/REST-owned runtime. Recoverable
+protocol errors do not themselves terminate the process.
+LAN/TLS restrictions below still apply; a second
+computer must use the server's permitted HTTPS address, not its own localhost.
+
 The adapter clamps request bodies to 2 MiB, limits headers, keep-alive
 requests, connections, and request duration, and limits anonymous account
 registration to five attempts per client address per ten minutes. These are

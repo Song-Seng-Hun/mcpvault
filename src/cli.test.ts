@@ -2,6 +2,12 @@ import { describe, expect, test } from "vitest";
 import { parseCliArgs } from "./cli.js";
 
 describe("parseCliArgs", () => {
+  test("starts a dedicated HTTP runtime without stdio using one option", () => {
+    expect(parseCliArgs(['/My', 'Vault', '--mcp-http-only'])).toEqual({ vaultPathArg: '/My Vault', readOnly: false, mcpHttpPort: 8788, stdio: false });
+    expect(parseCliArgs(['/vault', '--mcp-http-only=0'])).toMatchObject({ vaultPathArg: '/vault', mcpHttpPort: 0, stdio: false });
+    expect(parseCliArgs(['--mcp-http-only', '9010', '/vault'])).toMatchObject({ vaultPathArg: '/vault', mcpHttpPort: 9010, stdio: false });
+    expect(() => parseCliArgs(['/vault', '--mcp-http-only=bad'])).toThrow('--mcp-http-only must be a numeric port');
+  });
   test("defaults to writable mode and preserves a vault path", () => {
     expect(parseCliArgs(["/path/to/vault"])).toEqual({
       vaultPathArg: "/path/to/vault",

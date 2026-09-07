@@ -78,6 +78,16 @@ change prepares normalized endpoint schemas once and makes tools/list and REST
 ensure avoid redundant catalog rebuilds. Direct-process plugin deployment is
 unchanged; automatic shared-process attachment remains a separate design task.
 
+The dedicated HTTP lifecycle increment (`2026-09-07-http-only-lifecycle-design.md`)
+adds `--mcp-http-only[=PORT]`: URL-capable clients can attach directly to one
+explicit server process without a per-client stdio bridge or automatic daemon
+discovery. The CLI owns root cleanup independently of protocol handshakes and
+wire failure. Real-process tests cover shared reads, detach/EOF, startup failure,
+and observed cleanup completion. This is the preferred simple attachment path
+before considering a discovery/auto-spawn system. Installed plugin settings
+remain unchanged; same-workload RSS/latency measurements are still required to
+quantify memory reduction, especially when native embedding is active.
+
 1. **Bounded streaming revision hashing.** Preserve exactly the existing decoded
    UTF-8 revision contract, including malformed UTF-8 and chunk boundaries; do
    not accidentally switch to hashing raw bytes. Preserve PathFilter, path/link

@@ -6,6 +6,8 @@ export interface ParsedCliArgs {
   mcpHttpHost?: string;
   mcpHttpTlsCert?: string;
   mcpHttpTlsKey?: string;
+  /** Dedicated HTTP process; omitted preserves legacy stdio behavior. */
+  stdio?: false;
 }
 
 /**
@@ -21,6 +23,7 @@ export function parseCliArgs(args: string[]): ParsedCliArgs {
   let mcpHttpHost: string | undefined;
   let mcpHttpTlsCert: string | undefined;
   let mcpHttpTlsKey: string | undefined;
+  let stdio: false | undefined;
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index]!;
@@ -63,7 +66,8 @@ export function parseCliArgs(args: string[]): ParsedCliArgs {
       continue;
     }
 
-    if (arg === "--mcp-http") {
+    if (arg === "--mcp-http" || arg === "--mcp-http-only") {
+      if (arg === "--mcp-http-only") stdio = false;
       const next = args[index + 1];
       if (next && /^\d+$/.test(next)) {
         mcpHttpPort = Number(next);
@@ -74,9 +78,11 @@ export function parseCliArgs(args: string[]): ParsedCliArgs {
       continue;
     }
 
-    if (arg.startsWith("--mcp-http=")) {
-      const value = arg.slice("--mcp-http=".length);
-      if (!/^\d+$/.test(value)) throw new Error("--mcp-http must be a numeric port");
+    if (arg.startsWith("--mcp-http=") || arg.startsWith("--mcp-http-only=")) {
+      const option = arg.slice(0, arg.indexOf('='));
+      if (option === "--mcp-http-only") stdio = false;
+      const value = arg.slice(option.length + 1);
+      if (!/^\d+$/.test(value)) throw new Error(`${option} must be a numeric port`);
       mcpHttpPort = Number(value);
       continue;
     }
@@ -132,6 +138,7 @@ export function parseCliArgs(args: string[]): ParsedCliArgs {
   return {
     vaultPathArg: pathArgs.join(" ").trim(),
     readOnly,
+    ...(stdio === false && { stdio }),
     ...(restPort !== undefined && { restPort }),
     ...(mcpHttpPort !== undefined && { mcpHttpPort }),
     ...(mcpHttpHost !== undefined && { mcpHttpHost }),

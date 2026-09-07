@@ -30,6 +30,15 @@ Keep resource disposal in a small lifecycle module, not copied error branches.
 Entrypoint startup remains sequential; signal handlers are installed after
 successful startup. No promise of native model/RSS savings without measurements.
 
+Review refinement: the SDK can terminally close its stdio wire on stdout errors
+or input buffer overflow without emitting stdin EOF. Observe the actual wire
+close (not disposable protocol-product close) and trigger CLI shutdown only
+when neither HTTP nor REST owns the process. Ordinary negotiation/probe disposal
+must not tear down the root. A disposable Node preload can observe the root's
+real close completion and inject a stdout error/signal event via fixture IPC;
+the witness must not replace resource cleanup or add production test hooks.
+This makes cleanup assertions stronger than process-exit/SIGKILL checks alone.
+
 ## Verification
 
 CLI parsing covers bare/separate/equals ports, spaces, invalid values, and
