@@ -518,8 +518,21 @@ export class FileSystemService {
   private frontmatterHandler: FrontmatterHandler;
   private pathFilter: PathFilter;
   private mutationTails = new Map<string, Promise<void>>();
+  private readonly noteChangeObservers = new Set<(path: string) => void>();
+
+  /** Request-local invalidation observers; call the disposer in finally. */
+  observeNoteChanges(observer: (path: string) => void): () => void {
+    this.noteChangeObservers.add(observer);
+    return () => { this.noteChangeObservers.delete(observer); };
+  }
+
+  /** Internal comparison identity shared with mutation locks; never a display path. */
+  noteChangeIdentity(path: string): string { return this.mutationLockKey(path); }
 
   private notifyNoteChanged(path: string, kind: 'upsert' | 'delete'): void {
+    for (const observer of this.noteChangeObservers) {
+      try { observer(path); } catch { /* An observer cannot change a write's result. */ }
+    }
     const callback = this.onNoteChanged;
     if (!callback || !/\.(?:md|markdown|txt)$/i.test(path)) return;
     try {
@@ -782,9 +795,12 @@ export class FileSystemService {
   }
 
   /** Revision of this serialized write, not a subsequent read/current-state guarantee. */
-  async writeNoteWithReceipt(params: NoteWriteParams): Promise<{ revision: string }> {
+  async writeNoteWithReceipt(params: NoteWriteParams, policy: { maxBytes?: number; assertAccess?: () => void } = {}): Promise<{ revision: string }> {
     const path = this.normalizePath(params.path);
-    const receipt = await this.withMutationLock(path, () => this.writeNoteUnlocked({ ...params, path }));
+    const receipt = await this.withMutationLock(path, () => {
+      policy.assertAccess?.();
+      return this.writeNoteUnlocked({ ...params, path }, policy.maxBytes, policy.assertAccess);
+    });
     return { revision: receipt.revision };
   }
 

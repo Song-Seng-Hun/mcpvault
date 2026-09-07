@@ -2190,6 +2190,26 @@ Its optional `learningProgress` needs only `rootPath`, authored/recommended
 `order`, optional `maxDepth`, and the last `completedThrough` path. The server
 builds the revision snapshot; routine pulses return an unchecked compact hint,
 while explicit `continuity.resume` performs the more expensive drift check.
+Optional `understanding` preserves at most four brief self-explanations with
+exact support/check-report revisions, unresolved questions and next investigation
+steps. Reading progress is not understanding, and `peer_check_report` is not
+certified independent verification. Existing understanding checkpoints require
+`expectedRevision` for updates; omission preserves the records and `[]` clears
+them explicitly. Empty understanding is `not_recorded`, never verified-current.
+Resume detects changed, unavailable and expired references
+without upgrading historical claims. Account-bound private ownership is not
+transferred by a task handoff. See [understanding handoff](docs/continuity-understanding.md)
+for body-line locators, recovery states and a bounded example.
+For a requested next-session handoff, save private continuity after the final
+note/projection edit and resume to verify; do not publish a duplicate follow-up
+note merely to retain session state. Changed-reference reports pair saved and
+current revisions without guessing the semantic change. See
+[learning-loop evaluation](docs/wiki-learning-evaluation.md) for the isolated
+protocol scenario and opt-in actual Codex trial; model behavior and protocol
+assertions are assessed separately.
+Model-only checkpoints use an account-qualified `_continuity/accounts/<account>/`
+subtree. Old model `_continuity/work-state.md` remains intact for host review,
+but is not exposed through MCP or automatically migrated. Agent paths are unchanged.
 Its `maxChars` is a total JSON budget (including Properties and pretty
 indentation), not just a body allowance. A compact response prioritizes the
 validated learning action, topic/next action and some body context. Metadata

@@ -8271,7 +8271,11 @@ export class LlmWikiService {
                     claimPoints.length > 0 && `Claims:\n${claimPoints.join('\n')}`,
                     evidencePaths.length > 0 && `Evidence:\n${evidencePaths.map(path => `- ${path}`).join('\n')}`,
                     questions.length > 0 && `Open questions:\n${questions.join('\n')}`,
-                ].filter(Boolean).join('\n\n') || bodyExcerpt(1);
+                ].filter(Boolean).join('\n\n');
+                // Citation links alone are not a summary. Keep the actual prose
+                // discoverable; evidence is already returned in its own field.
+                if (!summary && !highlights.length && !claimPoints.length && !questions.length)
+                    content = bodyExcerpt(1);
             }
             else {
                 content = summary || (claimPoints.length > 0 ? claimPoints.join('\n') : bodyExcerpt(1));
@@ -8492,6 +8496,14 @@ export class LlmWikiService {
             ...(sectionRange && { section: { requested: params.section, ...sectionRange } }),
             ...(sectionContext && { context: sectionContext }),
             ...(excerptRange && { contentSource: 'body_excerpt', excerptRange }),
+            ...(view === 'progressive' && {
+                bodyComplete: false,
+                notice: 'This is a selected projection, not the complete note. Omitted text is not absent from the note; read nextAction before claiming missing content.',
+                nextAction: {
+                    endpointId: 'notes.read',
+                    arguments: { path: this.access.toPublicPath(params.path), expectedRevision: note.revision, maxChars: 4000 },
+                },
+            }),
             ...(view !== 'full' && headings.length > 0 && { headings: headings.slice(0, 50) }),
             content: bounded,
             truncated: bounded.length < content.length,

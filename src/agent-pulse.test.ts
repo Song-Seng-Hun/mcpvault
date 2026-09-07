@@ -286,7 +286,14 @@ test('assigned open task outranks onboarding and excludes completed work', async
     });
     const smallestPulseText = (smallestPulseResult.content as any)[0].text as string;
     expect(smallestPulseText.length).toBeLessThanOrEqual(512);
-    expect(JSON.parse(smallestPulseText)).toMatchObject({
+    const smallestPulse = JSON.parse(smallestPulseText);
+    expect(smallestPulse).toMatchObject({ guidanceOmitted: true, nextAction: { tool: 'get_agent_pulse' } });
+    const recoveredPulse = await json(client, 'get_agent_pulse', {
+      ...smallestPulse.nextAction.arguments, accessToken: worker.value.accessToken,
+    });
+    expect(JSON.stringify(recoveredPulse.value).length).toBeLessThanOrEqual(smallestPulse.nextAction.arguments.maxChars);
+    expect(recoveredPulse.value.cadence).toContain('continuity.save');
+    expect(recoveredPulse.value).toMatchObject({
       nextAction: { tool: 'mcp.read_agent_task', target: task.value.taskId },
     });
 
@@ -642,7 +649,7 @@ test('distributes equal-priority maintenance by authenticated identity and keeps
   }
 });
 
-test('maintenance action survives the minimum pulse response budget', async () => {
+test('minimum pulse budget recovers complete guidance and the exact maintenance action', async () => {
   const { server, client } = await setup();
   try {
     const registration = await json(client, 'register_scope_account', {
@@ -672,9 +679,14 @@ test('maintenance action survives the minimum pulse response budget', async () =
       name: 'get_agent_pulse', arguments: { accessToken, limit: 1, maxChars: 512 },
     });
     const pulseText = String((pulseResult.content as any)[0].text);
-    const pulse = JSON.parse(pulseText);
+    const tinyPulse = JSON.parse(pulseText);
 
     expect(pulseText.length).toBeLessThanOrEqual(512);
+    expect(tinyPulse).toMatchObject({ guidanceOmitted: true, nextAction: { tool: 'get_agent_pulse' } });
+    const recovered = await json(client, 'get_agent_pulse', { ...tinyPulse.nextAction.arguments, accessToken });
+    const pulse = recovered.value;
+    expect(JSON.stringify(pulse).length).toBeLessThanOrEqual(tinyPulse.nextAction.arguments.maxChars);
+    expect(pulse.cadence).toContain('continuity.save');
     expect(pulse.nextAction).toMatchObject({
       tool: packet.value.curationPlan.inspect.endpointId,
       target: 'Knowledge/Minimum budget defect.md',
@@ -722,6 +734,13 @@ test('a tiny pulse retries with a larger budget instead of truncating a long mai
     });
     expect(value.nextAction.arguments.maxChars).toBeGreaterThan(512);
     expect(text).not.toContain(path.slice(0, 160));
+    const recovered = await json(client, 'get_agent_pulse', { ...value.nextAction.arguments, accessToken });
+    expect(JSON.stringify(recovered.value).length).toBeLessThanOrEqual(value.nextAction.arguments.maxChars);
+    expect(recovered.value.cadence).toContain('continuity.save');
+    expect(recovered.value.nextAction).toMatchObject({
+      tool: 'wiki.read_projection', target: path,
+      selectedRevision: JSON.parse(String((write.content as any)[0].text)).revision,
+    });
   } finally {
     await client.close();
     await server.close();

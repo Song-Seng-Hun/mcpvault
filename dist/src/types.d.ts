@@ -156,6 +156,8 @@ export interface PathFilterConfig {
 }
 export interface SearchParams {
     query: string;
+    /** INTERNAL: caller-specific path visibility guard. Never cache predicate searches. */
+    canAccessPath?: (path: string) => boolean;
     limit?: number;
     /** Maximum compact JSON characters returned by the search payload. */
     maxChars?: number;

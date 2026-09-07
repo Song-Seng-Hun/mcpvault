@@ -130,15 +130,29 @@ final full validation and native deployment evidence are recorded below.
 
 ## 7. Understanding and handoff
 
-- [ ] Extend existing continuity/recall with bounded self-explanation, supporting locators, unanswered questions, evidence of checks and the next investigation step. Keep private state private and revise through existing save/resume guards.
-- [ ] Distinguish read progress, self-reported understanding and independently checked results. Revalidate cited revisions on resume; do not save hidden reasoning, prompts, secrets or duplicated bodies.
-- [ ] Test drift after handoff, unresolved questions, account isolation, expired references, output truncation and resumed next actions.
+Implementation contract: optional `understanding` on existing continuity.save,
+stored as private `learning_understanding`, at most four entries / eight distinct
+support or check-report notes / 10000 input JSON characters. Entries contain a
+brief self-explanation, exact path/revision and optional body line range,
+self-check or peer-check report, open questions and next investigation step.
+Recorded peer reports do not certify independence or truth. Current references,
+stale references, temporal/review cautions and unavailable inputs are distinct.
+Resume revalidates references and the checkpoint before returning bounded data;
+omitted details cannot authorize advancing. No note bodies or hidden reasoning
+are copied. Existing records survive omission; replacement/clear and updates to
+an understanding-bearing checkpoint require its expectedRevision. Account-bound
+ownership supplements existing agent/model scope checks; no cross-account
+credential handoff or automatic public publication is introduced.
+
+- [x] Extend existing continuity/recall with bounded self-explanation, supporting locators, unanswered questions, evidence of checks and the next investigation step. Keep private state private and revise through existing save/resume guards.
+- [x] Distinguish read progress, self-reported understanding and independently checked results. Revalidate cited revisions on resume; do not save hidden reasoning, prompts, secrets or duplicated bodies.
+- [x] Test drift after handoff, unresolved questions, account isolation, expired references, output truncation and resumed next actions.
 
 ## 8. Actual use evaluation and release audit
 
-- [ ] Add deterministic protocol scenarios covering source comparison -> existing note update -> application observation -> source change -> provenance check -> conditional synthesis -> experiment -> resume.
-- [ ] Evaluate explicit path/revision citation, preservation of negation/conditions, unsupported claims, appropriate existing-note edits and duplicate avoidance. Include denied/private operations and limited budgets.
-- [ ] Run a real isolated Codex host with minimal user prompts. Report actual model behavior separately from protocol assertions; do not replace unavailable Gemini/Claude runs with simulated success. Remove only exact test-created artifacts/accounts.
+- [x] Add deterministic protocol scenarios covering source comparison -> existing note update -> application observation -> source change -> provenance check -> conditional synthesis -> experiment -> resume.
+- [x] Evaluate explicit path/revision citation, preservation of negation/conditions, unsupported claims, appropriate existing-note edits and duplicate avoidance. Include denied/private operations and limited budgets.
+- [x] Run a real isolated Codex host with minimal user prompts. Report actual model behavior separately from protocol assertions; do not replace unavailable Gemini/Claude runs with simulated success. Remove only exact test-created artifacts/accounts.
 - [ ] Run build/full tests/diff checks, review each of the eight stage criteria against source and test evidence, update the shared server, verify native MCP and push the user fork. Mark the persistent goal complete only after this audit.
 
 ## Progress
@@ -294,3 +308,29 @@ No production notes/accounts/plugin settings changed; the welcome revision is
 unchanged. Rollback archive:
 `.mcpvault/backups/knowledge-investigation-20260908-0226/previous-dist.zip`.
 Stages7-8 remain required; stage6 delivery is not completion of the overall goal.
+
+2026-09-08, stages7-8: account-bound private understanding, exact supporting
+revisions/locators, check reports, unresolved questions and resumable next steps
+are integrated into existing continuity. Reading and self-reported comprehension
+are distinct; drift, unavailable data, expired knowledge and empty records cannot
+claim verified understanding. Related guards, search filtering, generic path
+access and account-qualified model checkpoints protect the same private boundary.
+
+The deterministic MCP story exercises all eight stages. Nine sequential actual
+Codex trials exposed and repaired projection authorization, schema discovery,
+whole-file replacement guidance, dropped pulse instructions, missing body context,
+empty understanding and stale-reference interpretation issues. Trial9's two fresh
+sessions passed independent transcript/artifact assessment; prior failures and
+costs remain documented in `../../wiki-learning-evaluation.md`. No general model
+reliability or Gemini/Claude host success is claimed. Temporary fixtures/accounts
+were cleaned; host-local reports are excluded from Git.
+
+Final full suite: **238 files/3499 passed/2 existing skips**,457.50s,
+started05:09:39 KST, maxWorkers=1. Build and diff checks passed. Spec and quality
+reviews approved; all workers closed. Shared HTTP refreshed toPID16012 through
+the existing task, unchanged127.0.0.1:8788. Native Codex confirmed policy33,
+new checkpoint schema, anonymous resume rejection and unchanged welcome revision.
+No production note/account or plugin-setting writes. Rollback ZIP:
+`.mcpvault/backups/understanding-20260908-0320/previous-dist.zip`.
+The requirement-by-requirement audit is `../../wiki-learning-completion-audit.md`.
+Fork commit/push verification is the remaining release gate.

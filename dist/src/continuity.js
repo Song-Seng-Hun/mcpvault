@@ -1,13 +1,15 @@
 import { createHash } from 'node:crypto';
 import { ScopeAccessPolicy } from './scope-access.js';
 import { normalizeScopeId } from './scopes.js';
+import { isModerationHidden } from './moderation-policy.js';
+import { inspectUnderstanding, prepareUnderstanding, UNDERSTANDING_READ_BYTES, UNDERSTANDING_UNAVAILABLE } from './continuity-understanding.js';
 const MAX_TEXT = 4000;
 const MAX_LEARNING_ENTRIES = 50;
 const REVISION_PATTERN = /^[a-f0-9]{64}$/;
 function ownerPath(principal) {
     if (principal.agentId)
         return `_scopes/agents/${normalizeScopeId(principal.agentId, 'agentId')}/_continuity/work-state.md`;
-    return `_scopes/models/${normalizeScopeId(principal.modelId, 'modelId')}/_continuity/work-state.md`;
+    return `_scopes/models/${normalizeScopeId(principal.modelId, 'modelId')}/_continuity/accounts/${normalizeScopeId(principal.accountId, 'accountId')}/work-state.md`;
 }
 function requiredPrincipal(principal) {
     if (!principal)
@@ -44,6 +46,8 @@ function packResumeState(full, maxChars, prettyPrint) {
         ...full, fm: {}, content: '', truncated: true,
         nextAction: { endpointId: 'mcp.read_note_lines', arguments: { path: full.path, expectedRevision: full.revision, startLine: 1, endLine: 40, maxChars: 6000 } },
     };
+    if (full.understanding)
+        result.nextAction = { endpointId: 'continuity.resume', arguments: { maxChars: 12000, prettyPrint: false } };
     // Keep the validated next target before optional history and duplicate prose.
     if (!fits(result) && result.learningProgress?.drift) {
         const { drift: _drift, ...progress } = result.learningProgress;
@@ -56,6 +60,10 @@ function packResumeState(full, maxChars, prettyPrint) {
         // A partial next target is not executable. Require revalidation at a larger
         // budget rather than claiming that a missing action is ready to resume.
         result.learningProgress = { state: result.learningProgress.state, canResume: false, detailsOmitted: true };
+    }
+    if (!fits(result) && result.understanding) {
+        result.understanding = { state: result.understanding.state, canResume: false, detailsOmitted: true };
+        result.nextAction = { endpointId: 'continuity.resume', arguments: { maxChars: 12000 } };
     }
     if (!fits(result))
         throw new Error('Resume identity and safety state exceed maxChars; retry continuity.resume with maxChars=12000 and prettyPrint=false.');
@@ -407,44 +415,86 @@ export class ContinuityService {
         if (params.cursors !== undefined && (!params.cursors || typeof params.cursors !== 'object' || Array.isArray(params.cursors)))
             throw new Error('cursors must be an object');
         const path = ownerPath(principal);
-        const existing = await this.fileSystem.noteExists(path) ? await this.fileSystem.readNote(path) : undefined;
+        if (!this.access.canAccessPhysicalPath(path, principal))
+            throw Error(UNDERSTANDING_UNAVAILABLE);
+        const existing = await this.fileSystem.noteExists(path) ? await this.fileSystem.readNote(path, UNDERSTANDING_READ_BYTES) : undefined;
+        if (existing && isModerationHidden(existing.frontmatter))
+            throw Error(UNDERSTANDING_UNAVAILABLE);
+        if (existing?.frontmatter.owner_account_id !== undefined && existing.frontmatter.owner_account_id !== principal.accountId)
+            throw Error(UNDERSTANDING_UNAVAILABLE);
+        const previousUnderstanding = existing?.frontmatter.learning_understanding;
+        if (existing && (params.understanding !== undefined || previousUnderstanding !== undefined) && !params.expectedRevision)
+            throw Error('expectedRevision is required for an understanding checkpoint update; resume first.');
+        const prepared = params.understanding === undefined ? undefined : await prepareUnderstanding(this.fileSystem, this.access, principal, path, params.understanding);
+        const understanding = prepared?.entries ?? previousUnderstanding;
         const expectedRevision = params.expectedRevision || existing?.revision || 'missing';
         const updatedAt = new Date().toISOString();
-        const receipt = await this.fileSystem.writeNoteWithReceipt({
+        const write = {
             path,
             content: render({ topic, summary, nextAction, ...(openQuestions && { openQuestions }), ...(references && { references }), ...(params.cursors && { cursors: params.cursors }), focus: { ...(focusQuestions && { questions: focusQuestions }), ...(focusProjects && { projects: focusProjects }), ...(focusNotes && { notes: focusNotes }) }, ...(pending && { pendingEdits: pending }), ...(trail && { researchTrail: trail }), ...(learningProgress && { learningProgress }) }),
             frontmatter: {
                 mcpvault_type: 'agent_work_state', owner: principal.agentId || principal.modelId,
+                owner_account_id: principal.accountId,
                 model_id: principal.modelId, ...(principal.agentId && { agent_id: principal.agentId }),
                 topic, next_action: nextAction, open_questions: openQuestions || [], references: references || [],
                 cursors: params.cursors || {}, focus_questions: focusQuestions || [], focus_projects: focusProjects || [], focus_notes: focusNotes || [], pending_edits: pending || [], research_trail: trail || [], ...(learningProgress && { learning_progress: learningProgress }), updated_at: updatedAt,
+                ...(understanding !== undefined && { learning_understanding: understanding }),
             },
             expectedRevision,
-        });
+        };
+        const assertAccess = () => { if (!this.access.canAccessPhysicalPath(path, principal))
+            throw Error(UNDERSTANDING_UNAVAILABLE); prepared?.assertAccess(); };
+        assertAccess();
+        const receipt = prepared?.guards.length
+            ? await this.fileSystem.writeNoteWithRevisionGuardsAndReceipt(write, prepared.guards, { maxBytes: UNDERSTANDING_READ_BYTES, assertAccess })
+            : await this.fileSystem.writeNoteWithReceipt(write, { maxBytes: UNDERSTANDING_READ_BYTES, assertAccess });
         const learningCompletedIndex = learningProgress?.completed_through ? learningProgress.entries.findIndex(item => item.path === learningProgress.completed_through) : -1;
         const learningState = learningProgress && learningCompletedIndex + 1 >= learningProgress.entries.length ? 'complete' : 'ready';
-        return { success: true, path: `scope://${principal.agentId ? 'agent' : 'model'}/${principal.agentId || principal.modelId}/_continuity/work-state.md`, updatedAt, revision: receipt.revision, ...(learningProgress && { learningProgress: this.compactLearningProgress(learningProgress, learningState) }) };
+        return { success: true, path: this.access.toPublicPath(path), updatedAt, revision: receipt.revision, ...(learningProgress && { learningProgress: this.compactLearningProgress(learningProgress, learningState) }) };
     }
     async read(params) {
         const principal = requiredPrincipal(params.principal);
         const path = ownerPath(principal);
-        if (!await this.fileSystem.noteExists(path))
-            return { exists: false, path: `scope://${principal.agentId ? 'agent' : 'model'}/${principal.agentId || principal.modelId}/_continuity/work-state.md` };
-        const note = await this.fileSystem.readNote(path);
-        const requestedChars = Number(params.maxChars ?? 6000);
-        const maxChars = Number.isFinite(requestedChars) ? Math.min(Math.max(Math.floor(requestedChars), 512), 12000) : 6000;
-        const { learning_progress: rawLearningProgress, ...frontmatter } = note.frontmatter;
-        const learningProgress = rawLearningProgress === undefined
-            ? undefined
-            : await this.validateLearningProgress(principal, rawLearningProgress, params.validateLearningProgress !== false);
-        return packResumeState({
-            exists: true,
-            path: `scope://${principal.agentId ? 'agent' : 'model'}/${principal.agentId || principal.modelId}/_continuity/work-state.md`,
-            fm: frontmatter,
-            content: note.content,
-            truncated: false,
-            revision: note.revision,
-            ...(learningProgress && { learningProgress }),
-        }, maxChars, params.prettyPrint === true);
+        const watched = new Set([this.fileSystem.noteChangeIdentity(path)]);
+        let changed = false;
+        const unobserve = this.fileSystem.observeNoteChanges(target => { if (watched.has(this.fileSystem.noteChangeIdentity(target)))
+            changed = true; });
+        try {
+            if (!await this.fileSystem.noteExists(path))
+                return { exists: false, path: this.access.toPublicPath(path), ...(!principal.agentId && { legacyCheckpointPolicy: 'Old model work-state.md is host-review-only; never copy ownerless historical state to another account automatically.' }) };
+            if (!this.access.canAccessPhysicalPath(path, principal))
+                throw Error(UNDERSTANDING_UNAVAILABLE);
+            const note = await this.fileSystem.readNote(path, UNDERSTANDING_READ_BYTES);
+            if (isModerationHidden(note.frontmatter))
+                throw Error(UNDERSTANDING_UNAVAILABLE);
+            if (note.frontmatter.owner_account_id !== undefined && note.frontmatter.owner_account_id !== principal.accountId)
+                throw Error(UNDERSTANDING_UNAVAILABLE);
+            const requestedChars = Number(params.maxChars ?? 6000);
+            const maxChars = Number.isFinite(requestedChars) ? Math.min(Math.max(Math.floor(requestedChars), 512), 12000) : 6000;
+            const { learning_progress: rawLearningProgress, learning_understanding: rawUnderstanding, ...frontmatter } = note.frontmatter;
+            const learningProgress = rawLearningProgress === undefined
+                ? undefined
+                : await this.validateLearningProgress(principal, rawLearningProgress, params.validateLearningProgress !== false);
+            const understanding = rawUnderstanding === undefined ? undefined : await inspectUnderstanding(this.fileSystem, this.access, principal, path, rawUnderstanding, params.validateLearningProgress !== false, target => watched.add(this.fileSystem.noteChangeIdentity(target)));
+            if (await this.fileSystem.readNoteRevision(path, UNDERSTANDING_READ_BYTES) !== note.revision || !this.access.canAccessPhysicalPath(path, principal))
+                throw Error(UNDERSTANDING_UNAVAILABLE);
+            await understanding?.revalidate();
+            if (changed || !this.access.canAccessPhysicalPath(path, principal))
+                throw Error(UNDERSTANDING_UNAVAILABLE);
+            understanding?.assertAccess?.();
+            return packResumeState({
+                exists: true,
+                path: this.access.toPublicPath(path),
+                fm: frontmatter,
+                content: note.content,
+                truncated: false,
+                revision: note.revision,
+                ...(learningProgress && { learningProgress }),
+                ...(understanding && { understanding: understanding.projection }),
+            }, maxChars, params.prettyPrint === true);
+        }
+        finally {
+            unobserve();
+        }
     }
 }

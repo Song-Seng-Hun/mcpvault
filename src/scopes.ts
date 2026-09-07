@@ -164,7 +164,7 @@ export class CollaborationService {
     return { success: true, agentId, generation: nextGeneration, currentSession: params.newSessionId, recoveredFrom: previous, path };
   }
 
-  async readScopedNote(params: { path: string; modelId?: string; agentId?: string; userId?: string; commandCenterId?: string }) {
+  async readScopedNote(params: { path: string; modelId?: string; agentId?: string; userId?: string; commandCenterId?: string }, canAccessPath: (path: string) => boolean = () => true) {
     const logical = normalizeLogicalPath(params.path);
     const modelId = await this.inferModelId(params.agentId, params.modelId);
     const candidates: Array<{ scope: ScopeKind; path: string }> = [];
@@ -173,14 +173,16 @@ export class CollaborationService {
     candidates.push({ scope: 'community', path: `${scopeRoot('community', params.commandCenterId || 'local')}/${logical}` });
     candidates.push({ scope: 'global', path: logical });
     for (const candidate of candidates) {
+      if (!canAccessPath(candidate.path)) continue;
       if (!await this.fileSystem.noteExists(candidate.path)) continue;
       const note = await this.fileSystem.readNote(candidate.path);
+      if (!canAccessPath(candidate.path)) throw new Error('Scoped note unavailable');
       return { scope: candidate.scope, logicalPath: logical, physicalPath: candidate.path, fm: note.frontmatter, content: note.content, revision: note.revision };
     }
     throw new Error(`Scoped note not found in ${candidates.map(item => item.scope).join(' > ')} precedence: ${logical}`);
   }
 
-  async searchScopedNotes(params: { query: string; modelId?: string; agentId?: string; userId?: string; commandCenterId?: string; limit?: number; maxChars?: number; searchContent?: boolean; searchFrontmatter?: boolean; caseSensitive?: boolean; includeRevisions?: boolean; expandAuthority?: boolean }) {
+  async searchScopedNotes(params: { query: string; modelId?: string; agentId?: string; userId?: string; commandCenterId?: string; limit?: number; maxChars?: number; searchContent?: boolean; searchFrontmatter?: boolean; caseSensitive?: boolean; includeRevisions?: boolean; expandAuthority?: boolean }, canAccessPath?: (path: string) => boolean) {
     const limit = normalizeSearchLimit(params.limit);
     const maxChars = normalizeSearchMaxChars(params.maxChars);
     const modelId = await this.inferModelId(params.agentId, params.modelId);
@@ -194,6 +196,7 @@ export class CollaborationService {
     for (const item of scopes) {
       const results = await this.searchService.search({
         query: params.query, limit: 20,
+        ...(canAccessPath && { canAccessPath }),
         ...(params.searchContent !== undefined && { searchContent: params.searchContent }),
         ...(params.searchFrontmatter !== undefined && { searchFrontmatter: params.searchFrontmatter }),
         ...(params.caseSensitive !== undefined && { caseSensitive: params.caseSensitive }),
@@ -202,6 +205,7 @@ export class CollaborationService {
         ...(item.root ? { pathPrefix: item.root } : { excludePaths: ['_scopes', '_collaboration', '_whispers'] }),
       });
       for (const result of results) {
+        if (canAccessPath && !canAccessPath(result.p)) throw new Error('Scoped search access changed; retry');
         const logicalPath = item.root ? result.p.slice(item.root.length + 1) : result.p;
         if (found.has(logicalPath)) continue;
         found.add(logicalPath);
@@ -214,6 +218,7 @@ export class CollaborationService {
       }
     }
     merged.sort((a, b) => Number(b.wiki) - Number(a.wiki) || a.scopeRank - b.scopeRank || a.order - b.order);
+    if (canAccessPath && merged.some(item => !canAccessPath(item.value.physicalPath))) throw new Error('Scoped search access changed; retry');
     return boundSearchResults(merged.slice(0, limit).map(item => item.value), maxChars);
   }
 

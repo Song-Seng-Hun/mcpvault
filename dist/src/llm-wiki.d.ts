@@ -2167,7 +2167,14 @@ export declare class LlmWikiService {
         summaryHighlights?: any[];
         claims?: any[];
         nextActions?: any[];
-        nextAction?: string;
+        nextAction?: string | {
+            endpointId: string;
+            arguments: {
+                path: string;
+                expectedRevision: string;
+                maxChars: number;
+            };
+        };
         waitingFor?: string;
         desiredOutcome?: string;
         projectPurpose?: string;
@@ -2247,6 +2254,8 @@ export declare class LlmWikiService {
             startLine: number;
             endLine: number;
         };
+        bodyComplete?: boolean;
+        notice?: string;
         headings?: import("./types.js").NoteHeading[];
         content: string;
         truncated: boolean;

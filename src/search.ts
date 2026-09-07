@@ -996,6 +996,7 @@ export class SearchService {
     const parsedQuery = parseSearchQuery(normalizedQuery);
     const normalizedPrefix = pathPrefix ? normalizeSubtree(pathPrefix) : '';
     const normalizedExcludes = (excludePaths || []).map(normalizeSubtree).filter(Boolean).sort();
+    const hasAccessPredicate = typeof params.canAccessPath === 'function';
     const cacheKey = JSON.stringify({
       query: normalizedQuery,
       limit,
@@ -1011,7 +1012,7 @@ export class SearchService {
     // Delivered filesystem changes must invalidate even the result-cache fast
     // path (including cached misses and notes newly hidden by moderation).
     await this.catalog?.flushPendingEvents();
-    const cached = this.cache.get(cacheKey);
+    const cached = hasAccessPredicate ? undefined : this.cache.get(cacheKey);
     if (cached && cached.expiresAt > Date.now()) {
       this.cache.delete(cacheKey);
       this.cache.set(cacheKey, cached);
@@ -1023,7 +1024,7 @@ export class SearchService {
       derivedCacheBudget.remove(this.cacheOwner, cacheKey);
     }
 
-    const running = this.inFlight.get(cacheKey);
+    const running = hasAccessPredicate ? undefined : this.inFlight.get(cacheKey);
     if (running) return (await running).map(result => ({ ...result }));
 
     const generation = this.cacheGeneration;
@@ -1051,14 +1052,36 @@ export class SearchService {
     // The server-owned document index has already performed the filesystem
     // reads. Search only the visible in-memory documents on this pass.
     const scopedDocumentIds = this.scopedDocumentIds(normalizedPrefix, normalizedExcludes);
-    const corpusStats = this.getCorpusStats(scopedDocumentIds, searchContent, searchFrontmatter, normalizedPrefix, normalizedExcludes);
+    const accessibleDocumentIds = hasAccessPredicate
+      ? new Set([...scopedDocumentIds].filter(documentId => {
+        const document = this.documentsById.get(documentId);
+        return document !== undefined && params.canAccessPath!(document.relativePath);
+      }))
+      : scopedDocumentIds;
+    const assertDocumentAccess = (document: IndexedDocument | undefined): void => {
+      if (!hasAccessPredicate) return;
+      if (!document || !params.canAccessPath!(document.relativePath)) {
+        throw new Error('Search access changed during search');
+      }
+    };
+    const assertCorpusAccessUnchanged = (): void => {
+      if (!hasAccessPredicate) return;
+      for (const documentId of accessibleDocumentIds) {
+        assertDocumentAccess(this.documentsById.get(documentId));
+      }
+    };
+    const corpusStats = this.getCorpusStats(accessibleDocumentIds, searchContent, searchFrontmatter, normalizedPrefix, normalizedExcludes, !hasAccessPredicate);
     const { totalDocLength, docCount } = corpusStats;
-    const candidateIds = this.candidateIds(terms, searchContent, searchFrontmatter, caseSensitive, scopedDocumentIds);
+    const candidateIds = this.candidateIds(terms, searchContent, searchFrontmatter, caseSensitive, accessibleDocumentIds);
     const filteredCandidateIds = new Set<number>();
     for (const documentId of candidateIds) {
       const document = this.documentsById.get(documentId);
       if (!document || !this.pathFilter.isAllowed(document.relativePath) || document.moderationHidden) continue;
-      if (Object.keys(parsedQuery.filters).length > 0 || excludeTerms.length > 0) await this.loadText(document);
+      if (Object.keys(parsedQuery.filters).length > 0 || excludeTerms.length > 0) {
+        assertDocumentAccess(document);
+        await this.loadText(document);
+        assertDocumentAccess(document);
+      }
       if (matchesSearchFilters(document, parsedQuery.filters)) filteredCandidateIds.add(documentId);
     }
     // First pass loads text only as needed and computes corpus document
@@ -1067,7 +1090,11 @@ export class SearchService {
       const document = this.documentsById.get(documentId);
       if (!document || !this.pathFilter.isAllowed(document.relativePath)) continue;
       if (document.moderationHidden) continue;
-      if (searchContent || searchFrontmatter) await this.loadText(document);
+      if (searchContent || searchFrontmatter) {
+        assertDocumentAccess(document);
+        await this.loadText(document);
+        assertDocumentAccess(document);
+      }
       const searchIn = caseSensitive
         ? searchableTextFor(document, searchContent, searchFrontmatter)
         : searchableTextFor(document, searchContent, searchFrontmatter).toLowerCase();
@@ -1081,6 +1108,7 @@ export class SearchService {
       }
     }
 
+    assertCorpusAccessUnchanged();
     const service = this;
     const candidates = (function* (): IterableIterator<RankCandidate> {
       for (const documentId of filteredCandidateIds) {
@@ -1100,7 +1128,8 @@ export class SearchService {
       ...(parsedQuery.filters.taskTerms ? ['filter_task'] : []),
     ];
     const results = boundSearchResults(ranked.map(candidate => this.materializeResult(candidate, terms, scoringTerms, searchContent, searchFrontmatter, caseSensitive, params.includeRevisions === true, filterReasons)), maxChars);
-    if (generation === this.cacheGeneration) {
+    assertCorpusAccessUnchanged();
+    if (!hasAccessPredicate && generation === this.cacheGeneration) {
       const cachedResults = results.map(result => ({ ...result }));
       const entry: SearchCacheEntry = { expiresAt: Date.now() + SEARCH_CACHE_TTL_MS, results: cachedResults };
       this.cache.set(cacheKey, entry);
@@ -1121,11 +1150,11 @@ export class SearchService {
     }
     return results;
     })();
-    this.inFlight.set(cacheKey, computation);
+    if (!hasAccessPredicate) this.inFlight.set(cacheKey, computation);
     try {
       return await computation;
     } finally {
-      if (this.inFlight.get(cacheKey) === computation) this.inFlight.delete(cacheKey);
+      if (!hasAccessPredicate && this.inFlight.get(cacheKey) === computation) this.inFlight.delete(cacheKey);
     }
   }
 
@@ -1475,6 +1504,7 @@ export class SearchService {
     searchFrontmatter: boolean,
     pathPrefix: string,
     excludePaths: string[],
+    useCache = true,
   ): CorpusStats {
     const key = JSON.stringify({
       searchContent,
@@ -1482,7 +1512,7 @@ export class SearchService {
       pathPrefix,
       excludePaths: [...excludePaths].sort(),
     });
-    const cached = this.corpusStatsCache.get(key);
+    const cached = useCache ? this.corpusStatsCache.get(key) : undefined;
     if (cached) {
       this.corpusStatsCache.delete(key);
       this.corpusStatsCache.set(key, cached);
@@ -1499,6 +1529,7 @@ export class SearchService {
       docCount += 1;
     }
     const stats = { docCount, totalDocLength };
+    if (!useCache) return stats;
     this.corpusStatsCache.set(key, stats);
     derivedCacheBudget.register(this.corpusCacheOwner, key, estimateCacheBytes(stats) + Buffer.byteLength(key, 'utf8') + 64, () => {
       if (this.corpusStatsCache.get(key) !== stats) return;

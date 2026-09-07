@@ -327,6 +327,27 @@ authored nor recommended checkpoints may certify that
 subset. Ordinary continuity notes without learningProgress remain available
 for recording the repair task. Context-pack MOC entries obey the same exact
 file resolution and source-to-target scope constraints as learning paths.
+Optional `learning_understanding` in a private continuity checkpoint contains
+up to four records: `explanation`, `supports` (exact path/revision and optional
+paired inclusive body `startLine`/`endLine`), `checks` (self_check or
+peer_check_report, method, reported outcome and evidence locators),
+`openQuestions`, `nextStep`. Raw input is capped at 10000 JSON characters and
+eight distinct related notes. `owner_account_id` binds new checkpoints to the
+authenticated account as well as its model/agent path. Legacy checkpoints
+without that field retain their existing scope checks; next save binds the
+owner. Model-only checkpoints now use `_continuity/accounts/<accountId>/work-state.md`
+inside their model scope; all MCP path/search/reference adapters enforce the
+account boundary. Old model `_continuity/work-state.md` remains untouched and
+host-review-only, never automatically claimed or copied. Existing agent paths
+are unchanged. Existing understanding requires checkpoint expectedRevision even when
+omitted, is preserved by omission and cleared only by explicit empty array.
+These locators are historical references for move/delete integrity, not live
+graph evidence. Resume strips the raw field and returns a revalidated projection;
+An empty array is not_recorded with canResume=false; no pinned understanding
+was checked. current_references is not a truth claim, and stale_references, review_required,
+references_unavailable or invalid_checkpoint cannot authorize advancing.
+Pulse returns saved_unchecked for nonempty records without loading related bodies. Unknown validity
+is not latest/verified, and peer-check reports do not certify independence.
 Locator checks group all selected occurrences by target, including repeated
 links to one entry; each target uses one bounded 8 MiB validation read. Retain
 only requested heading/block matches, not cached source bodies. The existing

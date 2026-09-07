@@ -15,6 +15,7 @@ type ResumeState = {
     content: string;
     truncated: boolean;
     learningProgress?: Record<string, any>;
+    understanding?: Record<string, any>;
     nextAction?: {
         endpointId: string;
         arguments: Record<string, unknown>;
@@ -43,6 +44,7 @@ export declare class ContinuityService {
         pendingEdits?: unknown;
         researchTrail?: unknown;
         learningProgress?: unknown;
+        understanding?: unknown;
         expectedRevision?: string;
     }): Promise<{
         success: boolean;
@@ -92,6 +94,7 @@ export declare class ContinuityService {
     }): Promise<ResumeState | {
         exists: boolean;
         path: string;
+        legacyCheckpointPolicy?: string;
     }>;
 }
 export {};

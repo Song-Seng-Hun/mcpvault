@@ -104,7 +104,7 @@ export declare class CollaborationService {
         agentId?: string;
         userId?: string;
         commandCenterId?: string;
-    }): Promise<{
+    }, canAccessPath?: (path: string) => boolean): Promise<{
         scope: ScopeKind;
         logicalPath: string;
         physicalPath: string;
@@ -125,6 +125,6 @@ export declare class CollaborationService {
         caseSensitive?: boolean;
         includeRevisions?: boolean;
         expandAuthority?: boolean;
-    }): Promise<any[]>;
+    }, canAccessPath?: (path: string) => boolean): Promise<any[]>;
 }
 //# sourceMappingURL=scopes.d.ts.map

@@ -30,6 +30,15 @@ function privateOwner(path) {
     const segment = match[1].toLowerCase();
     return { kind: segment === 'models' ? 'model' : segment === 'agents' ? 'agent' : 'user', id: match[2].toLowerCase() };
 }
+/** Reserved private checkpoint subtrees, including Windows path aliases. */
+function modelCheckpoint(path) {
+    const segments = normalizePhysicalPath(path).split('/').map(part => part === '.' || part === '..' ? part : part.replace(/[. ]+$/, ''));
+    const canonical = posix.normalize(segments.join('/')).toLowerCase();
+    const match = /^_scopes\/models\/([^/]+)\/_continuity\/(work-state\.md|accounts(?:\/([^/]+)(?:\/.*)?)?)$/.exec(canonical);
+    if (!match)
+        return undefined;
+    return { modelId: match[1], ...(match[3] && { accountId: match[3] }), legacy: match[2] === 'work-state.md' };
+}
 export class ScopeAccessPolicy {
     commandCenterId;
     constructor(options = {}) {
@@ -51,6 +60,14 @@ export class ScopeAccessPolicy {
     }
     canAccessPhysicalPath(path, principal) {
         const normalized = normalizePhysicalPath(path);
+        const checkpoint = modelCheckpoint(path);
+        if (checkpoint) {
+            if (!principal || checkpoint.legacy || principal.modelId !== checkpoint.modelId)
+                return false;
+            if (principal.commandCenterId && principal.commandCenterId !== this.commandCenterId)
+                return false;
+            return checkpoint.accountId === undefined || checkpoint.accountId === principal.accountId;
+        }
         if (!normalized)
             return true;
         if (normalized.toLowerCase() === PRIVATE_ROOT || normalized.toLowerCase().startsWith(`${PRIVATE_ROOT}/`)) {
@@ -76,6 +93,8 @@ export class ScopeAccessPolicy {
     }
     resolveExternalPath(value, principal) {
         const raw = String(value || '').trim();
+        if (/^(?:[a-z]:|[/\\]|~(?:[/\\]|$))/i.test(raw))
+            throw new Error('Access denied: use a Vault-relative path or authorized scope:// URI, not a host-absolute path');
         const parsed = parseScopePath(raw);
         if (parsed) {
             if (parsed.kind === 'community' && parsed.id !== this.commandCenterId) {
@@ -96,9 +115,14 @@ export class ScopeAccessPolicy {
             if (parsed.kind === 'global' && this.isPrivateServicePath(expanded)) {
                 throw new Error('Private and service paths are not addressable through the global scope');
             }
+            if (!this.canAccessPhysicalPath(expanded, principal))
+                throw new Error('Access denied: private checkpoint or scope is unavailable');
             return expanded;
         }
         const normalized = normalizePhysicalPath(raw);
+        if (modelCheckpoint(raw) || this.isPrivateServicePath(posix.normalize(normalized))) {
+            throw new Error('Access denied: direct private paths require an authorized scope:// URI');
+        }
         if (this.isPrivateServicePath(normalized)) {
             if (normalized.toLowerCase() === WHISPER_ROOT || normalized.toLowerCase().startsWith(`${WHISPER_ROOT}/`)) {
                 throw new Error('Direct _whispers paths are private; use list_whispers');
@@ -128,6 +152,13 @@ export class ScopeAccessPolicy {
         this.assertLegacyDiscussionMutationAllowed(path, operation);
     }
     canReferenceFrom(containerPath, referencedPath) {
+        const checkpoint = modelCheckpoint(referencedPath);
+        if (checkpoint) {
+            const containerCheckpoint = modelCheckpoint(containerPath);
+            if (checkpoint.legacy || !checkpoint.accountId || !containerCheckpoint || containerCheckpoint.legacy
+                || containerCheckpoint.modelId !== checkpoint.modelId || containerCheckpoint.accountId !== checkpoint.accountId)
+                return false;
+        }
         const container = privateOwner(containerPath);
         const referenced = privateOwner(referencedPath);
         if (!container)

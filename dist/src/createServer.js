@@ -224,6 +224,7 @@ const MUTATING_TOOLS = new Set([
     "update_task",
 ]);
 const CAPABILITY_FOR_TOOL = {
+    update_wiki_projection: 'write',
     manage_wiki_moc_region: 'write',
     write_note: "write",
     patch_note: "write",
@@ -455,7 +456,7 @@ export function createServer(vaultPath, options = {}) {
     const buildInternalTools = () => [
         {
             name: "read_note",
-            description: "Read a note from the Obsidian vault. Set property to read only one string Property, without the body or other Properties; follow its revision-guarded offset continuation for long values.",
+            description: "Read a note from the Obsidian vault. Vault-relative paths are not local client paths: cite the exact [[Vault/path]] and revision, never invent an absolute filesystem link. Set property to read only one string Property, without the body or other Properties; follow its revision-guarded offset continuation for long values.",
             inputSchema: {
                 type: "object",
                 properties: {
@@ -472,7 +473,7 @@ export function createServer(vaultPath, options = {}) {
         },
         {
             name: "write_note",
-            description: "Write a note to the Obsidian vault. Returns a compact JSON receipt with success, path, mode and this write's revision, without echoing the body. Append/prepend stop on source read failures and recheck the merge source against expectedRevision; never replace unreadable content with only the addition. Re-read the same target; inspect any intervening edit before using its new revision.",
+            description: "Overwrite replaces the complete Markdown file including YAML Properties: omitted Properties are deleted, even when frontmatter is not supplied. For existing knowledge prefer notes.patch or notes.change_set; preserve llm_wiki_type, note_kind, evidence_paths and unrelated Properties. Update evidence_paths when adding a source; body wikilinks alone do not establish provenance. Same-account next-session handoff belongs in continuity.save with understanding and final revision-pinned supports, not a duplicate public follow-up note. Returns a compact JSON receipt with success, path, mode and this write's revision, without echoing the body. Append/prepend stop on source read failures and recheck the merge source against expectedRevision; never replace unreadable content with only the addition. Re-read the same target; inspect any intervening edit before using its new revision.",
             inputSchema: {
                 type: "object",
                 properties: {
@@ -1246,6 +1247,7 @@ export function createServer(vaultPath, options = {}) {
                             ...(trimmedArgs.pendingEdits !== undefined && { pendingEdits: trimmedArgs.pendingEdits }),
                             ...(trimmedArgs.researchTrail !== undefined && { researchTrail: trimmedArgs.researchTrail }),
                             ...(trimmedArgs.learningProgress !== undefined && { learningProgress: trimmedArgs.learningProgress }),
+                            ...(trimmedArgs.understanding !== undefined && { understanding: trimmedArgs.understanding }),
                             ...(trimmedArgs.summaryLayer !== undefined && { summaryLayer: trimmedArgs.summaryLayer }),
                             ...(trimmedArgs.summaryHighlights !== undefined && { summaryHighlights: trimmedArgs.summaryHighlights }),
                             ...(trimmedArgs.references !== undefined && { references: trimmedArgs.references }),
@@ -1278,7 +1280,7 @@ export function createServer(vaultPath, options = {}) {
                             ...(principal?.modelId && { modelId: principal.modelId }),
                             ...(principal?.agentId && { agentId: principal.agentId }),
                             commandCenterId: scopeAccess.getCommandCenterId(),
-                        }), trimmedArgs.prettyPrint);
+                        }, canAccessPath), trimmedArgs.prettyPrint);
                     }
                     case "search_scoped_notes": {
                         return jsonResult(await collaboration.searchScopedNotes({
@@ -1291,7 +1293,7 @@ export function createServer(vaultPath, options = {}) {
                             ...(principal?.modelId && { modelId: principal.modelId }),
                             ...(principal?.agentId && { agentId: principal.agentId }),
                             commandCenterId: scopeAccess.getCommandCenterId(),
-                        }), trimmedArgs.prettyPrint);
+                        }, canAccessPath), trimmedArgs.prettyPrint);
                     }
                     case "initialize_llm_wiki": {
                         const scopeRoot = trimmedArgs.scopeUri || '';
@@ -2674,6 +2676,14 @@ export function createServer(vaultPath, options = {}) {
         }
         catch (error) {
             await audit.record({ tool: toolName, ...(principal && { principal }), args: rawArgs, outcome: 'error', error });
+            if (toolName === 'save_work_state' && principal && error instanceof Error
+                && /^(topic|summary|nextAction|understanding|check\b|openQuestions|nextStep|explanation|supports)\b/.test(error.message)) {
+                return { ...jsonResult({
+                        error: 'invalid_checkpoint_input',
+                        message: 'Read the exact schema before retrying. Keep required top-level fields and nest explanations/supports inside understanding. [] clears understanding; it does not repair it.',
+                        nextAction: { tool: 'search_capabilities', arguments: { query: 'continuity.save', maxChars: 12000 } },
+                    }), isError: true };
+            }
             return {
                 content: [{ type: "text", text: `Error: ${error instanceof Error ? error.message : 'Unknown error'}` }],
                 isError: true
@@ -3027,12 +3037,15 @@ function boundedWikiProjectionResult(value, args) {
         // not optional display metadata. Preserve false as well as true.
         ...(typeof value.summaryFresh === 'boolean' && { summaryFresh: value.summaryFresh }),
         ...(typeof value.summaryStale === 'boolean' && { summaryStale: value.summaryStale }),
+        ...(value.bodyComplete === false && { bodyComplete: false }),
         ...(dateIssues.length > 0 && { dateIssues }),
         content: '', truncated: true,
         // A body-only continuation cannot recover malformed Properties. Preserve
         // the same revision, but inspect metadata before interpreting these dates.
         nextAction: dateIssues.length > 0 ? {
             endpointId: 'notes.read', arguments: { path, expectedRevision: revision, maxChars: 8000 },
+        } : value.view === 'progressive' && value.bodyComplete === false ? {
+            endpointId: 'notes.read', arguments: { path, expectedRevision: revision, maxChars: 4000 },
         } : {
             endpointId: endpointIdForTool(range ? 'read_note_lines' : 'get_note_outline'),
             arguments: { path, ...(range || {}), expectedRevision: revision, maxChars: Math.min(12000, maxChars) },
@@ -3376,10 +3389,14 @@ function compactOverflowValue(value, maxChars) {
     const pulseRetryAction = source.protocol === 'mcpvault-agent-pulse/v1'
         ? {
             tool: 'get_agent_pulse',
-            arguments: { limit: 1, maxChars: Math.min(12000, Math.max(1600, maxChars * 2)) },
+            arguments: { limit: 1, maxChars: Math.min(12000, Math.max(6000, maxChars * 2)) },
             reason: 'The exact next action does not fit this response budget. Retry the pulse with the larger bounded budget.',
         }
         : undefined;
+    // Preserve the complete compact handoff route, not only the maintenance
+    // action. Dropping it made small-budget clients publish session state.
+    if (pulseRetryAction && typeof source.cadence === 'string' && source.cadence.length <= 600)
+        compact.cadence = source.cadence;
     for (const key of ['protocol', 'state', 'scope', 'path', 'revision', 'roomId', 'messageId', 'commentId', 'slug', 'total', 'totalMessages', 'nextCursor', 'contextBefore', 'contractFingerprint', 'counterpartFingerprint', 'compatible', 'complete', 'nextSnoozedReviewAt', 'priorityScanTruncated']) {
         const candidate = source[key];
         if (typeof candidate === 'string' || typeof candidate === 'number' || typeof candidate === 'boolean')
@@ -3483,6 +3500,8 @@ function compactOverflowValue(value, maxChars) {
     if (JSON.stringify(compact).length <= maxChars)
         return compact;
     const tiny = { truncated: true, maxChars };
+    if (compact.cadence)
+        tiny.cadence = compact.cadence;
     for (const key of ['scope', 'path', 'revision', 'contractFingerprint', 'counterpartFingerprint', 'compatible'])
         if (compact[key] !== undefined)
             tiny[key] = compact[key];
@@ -3500,6 +3519,11 @@ function compactOverflowValue(value, maxChars) {
     }
     if (JSON.stringify(tiny).length <= maxChars)
         return tiny;
+    if (pulseRetryAction && typeof source.cadence === 'string')
+        return {
+            truncated: true, maxChars, guidanceOmitted: true,
+            nextAction: { ...pulseRetryAction, reason: 'Handoff guidance does not fit. Retry this bounded pulse before choosing the next action.' },
+        };
     if (pulseRetryAction)
         return { truncated: true, maxChars, nextAction: pulseRetryAction };
     return { truncated: true, maxChars };

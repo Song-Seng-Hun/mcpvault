@@ -60,10 +60,10 @@ export class RetrievalService {
       if (params.pathPrefix) {
         const prefix = this.physical({ p: params.pathPrefix } as RetrievalHit, params.principal);
         const excludePaths = [...(safe.excludePaths || []), ...(prefix.toLowerCase().startsWith('_scopes/') ? [] : ['_scopes']), '_whispers'];
-        return (await this.search.search({ ...safe, query, pathPrefix: prefix === '.' ? '' : prefix, excludePaths }))
+        return (await this.search.search({ ...safe, query, pathPrefix: prefix === '.' ? '' : prefix, excludePaths, canAccessPath: path => this.access.canAccessPhysicalPath(path, params.principal) }))
           .filter(hit => this.access.canAccessPhysicalPath(hit.p, params.principal));
       }
-      return this.collaboration.searchScopedNotes({ ...safe, query, ...(params.principal?.modelId && { modelId: params.principal.modelId }), ...(params.principal?.agentId && { agentId: params.principal.agentId }) });
+      return this.collaboration.searchScopedNotes({ ...safe, query, ...(params.principal?.modelId && { modelId: params.principal.modelId }), ...(params.principal?.agentId && { agentId: params.principal.agentId }) }, path => this.access.canAccessPhysicalPath(path, params.principal));
     };
     let usedQuery = params.query; let results = await lexical(usedQuery); let expanded = false;
     if (!results.length && allowExpansion) {

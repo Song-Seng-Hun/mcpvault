@@ -366,6 +366,8 @@ const ENDPOINT_ALIASES: Record<string, string[]> = {
   moderate_content: ['moderation', 'warn', 'hide', 'quarantine', 'remove', 'restore', 'ban', 'unban', 'safety'],
   get_reputation: ['reputation', 'level', 'xp', 'experience', 'likes', 'dislikes', 'author level', 'user level'],
   patch_note: ['edit', 'partial', 'harness', 'replace', 'hunk'],
+  save_work_state: ['session', 'handoff', 'checkpoint', 'save', 'understanding', 'resume', 'private', '세션', '인계', '이어가기', '이해', '저장'],
+  resume_work_state: ['session', 'handoff', 'checkpoint', 'understanding', 'resume', 'private', '세션', '인계', '이어가기', '이해', '복원'],
   patch_multiple_notes: ['edit', 'multiple notes', 'change set', 'transaction', 'atomic', 'rollback', 'reciprocal links', 'bulk properties'],
   sync_note_revisions: ['sync', 'delta', 'revision', 'cache', 'changed notes'],
   read_note_lines: ['read', 'partial', 'section', 'range', 'large note'],
@@ -629,9 +631,15 @@ export class EndpointRegistry {
     const limit = catalogLimit(requestedLimit);
     const maxChars = catalogMaxChars(requestedMaxChars);
     const descriptors = [...this.descriptors.values()];
+    // An explicitly named endpoint is a schema lookup, even when the caller
+    // adds intent words. Cross-references in another tool's prose must not
+    // hijack that lookup. Multiple explicit IDs remain a bounded selection.
+    const namedIds = new Set(terms.map(term => this.descriptors.has(term)
+      ? term
+      : term.replace(/^[`"'(\[]+|[`"')\],;:.]+$/g, '')).filter(term => this.descriptors.has(term)));
     const normalizedQuery = normalizeEndpointAlias(text);
     const exactLegacyToolName = LEGACY_EXACT_TOOL_BY_QUERY.get(normalizedQuery);
-    const endpoints = (exactLegacyToolName ? descriptors.filter(item => item.toolName === exactLegacyToolName) : descriptors.filter(item => {
+    const endpoints = (namedIds.size ? descriptors.filter(item => namedIds.has(item.endpointId)) : exactLegacyToolName ? descriptors.filter(item => item.toolName === exactLegacyToolName) : descriptors.filter(item => {
         if (terms.length === 0) return true;
         const corpus = `${item.endpointId} ${item.toolName} ${item.description} ${(item.aliases || []).join(' ')} ${item.url}`.toLowerCase();
         return terms.every(term => corpus.includes(term) || corpus.replace(/[_./-]+/g, ' ').includes(term));

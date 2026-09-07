@@ -113,18 +113,20 @@ describe('legacy discussion MCP mutation boundary', () => {
     './_collaboration//discussions/history.md',
     '_collaboration/discussions/../discussions/history.md',
     'elsewhere/../_collaboration/discussions/history.md',
-    '\\_collaboration\\discussions\\history.md',
     '_COLLABORATION/DISCUSSIONS/history.md',
     'scope://global/_collaboration/discussions/history.md',
   ])('rejects equivalent write path %s', async path => {
     const response = await call('notes.write', { path, content: 'changed', expectedRevision: revision });
+    expect(response.result.isError, response.text).toBe(true);
     expect(response.text).toContain('historical read-only');
     await expectPreserved();
   });
 
-  test('rejects absolute vault paths accepted by the filesystem', async () => {
-    const response = await call('notes.write', { path: join(vault, legacyPath), content: 'changed', expectedRevision: revision });
-    expect(response.text).toContain('historical read-only');
+  test.each(['root-relative', 'absolute'])('rejects host %s paths before the historical-write guard', async kind => {
+    const path = kind === 'root-relative' ? '\\_collaboration\\discussions\\history.md' : join(vault, legacyPath);
+    const response = await call('notes.write', { path, content: 'changed', expectedRevision: revision });
+    expect(response.result.isError, response.text).toBe(true);
+    expect(response.text).toContain('Access denied: use a Vault-relative path or authorized scope:// URI, not a host-absolute path');
     await expectPreserved();
   });
 

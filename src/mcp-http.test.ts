@@ -85,4 +85,14 @@ test('serves MCP 2026 Stateless Streamable HTTP with a fresh protocol server per
   const pulse = await authenticatedClient.callTool({ name: 'get_agent_pulse', arguments: { limit: 1, maxChars: 2000 } });
   expect(pulse.isError).toBeFalsy();
   expect((JSON.parse((pulse.content[0] as { text: string }).text) as { identity: { agentId: string } }).identity.agentId).toBe('http-agent');
+  expect(JSON.stringify(pulse.content)).toContain('HTTP bearer');
+  expect(JSON.stringify(pulse.content)).toContain('no duplicate accessToken');
+  const saved = await authenticatedClient.callTool({ name: 'call_endpoint', arguments: {
+    endpointId: 'continuity.save', arguments: { topic: 'HTTP handoff', summary: 'Bearer identity reused.', nextAction: 'Resume this checkpoint.', expectedRevision: 'missing' },
+  } });
+  expect(saved.isError).toBeFalsy();
+  const savedValue = JSON.parse((saved.content[0] as { text: string }).text);
+  const resumed = await authenticatedClient.callTool({ name: 'call_endpoint', arguments: { endpointId: 'continuity.resume', arguments: { maxChars: 4000 } } });
+  expect(resumed.isError).toBeFalsy();
+  expect(JSON.parse((resumed.content[0] as { text: string }).text).revision).toBe(savedValue.revision);
 });

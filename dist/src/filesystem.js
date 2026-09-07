@@ -470,7 +470,21 @@ export class FileSystemService {
     frontmatterHandler;
     pathFilter;
     mutationTails = new Map();
+    noteChangeObservers = new Set();
+    /** Request-local invalidation observers; call the disposer in finally. */
+    observeNoteChanges(observer) {
+        this.noteChangeObservers.add(observer);
+        return () => { this.noteChangeObservers.delete(observer); };
+    }
+    /** Internal comparison identity shared with mutation locks; never a display path. */
+    noteChangeIdentity(path) { return this.mutationLockKey(path); }
     notifyNoteChanged(path, kind) {
+        for (const observer of this.noteChangeObservers) {
+            try {
+                observer(path);
+            }
+            catch { /* An observer cannot change a write's result. */ }
+        }
         const callback = this.onNoteChanged;
         if (!callback || !/\.(?:md|markdown|txt)$/i.test(path))
             return;
@@ -730,9 +744,12 @@ export class FileSystemService {
         await this.writeNoteWithReceipt(params);
     }
     /** Revision of this serialized write, not a subsequent read/current-state guarantee. */
-    async writeNoteWithReceipt(params) {
+    async writeNoteWithReceipt(params, policy = {}) {
         const path = this.normalizePath(params.path);
-        const receipt = await this.withMutationLock(path, () => this.writeNoteUnlocked({ ...params, path }));
+        const receipt = await this.withMutationLock(path, () => {
+            policy.assertAccess?.();
+            return this.writeNoteUnlocked({ ...params, path }, policy.maxBytes, policy.assertAccess);
+        });
         return { revision: receipt.revision };
     }
     /**

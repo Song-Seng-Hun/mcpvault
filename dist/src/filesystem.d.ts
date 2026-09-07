@@ -32,6 +32,11 @@ export declare class FileSystemService {
     private frontmatterHandler;
     private pathFilter;
     private mutationTails;
+    private readonly noteChangeObservers;
+    /** Request-local invalidation observers; call the disposer in finally. */
+    observeNoteChanges(observer: (path: string) => void): () => void;
+    /** Internal comparison identity shared with mutation locks; never a display path. */
+    noteChangeIdentity(path: string): string;
     private notifyNoteChanged;
     private revision;
     private withMutationLock;
@@ -65,7 +70,10 @@ export declare class FileSystemService {
     private assertExpectedRevision;
     writeNote(params: NoteWriteParams): Promise<void>;
     /** Revision of this serialized write, not a subsequent read/current-state guarantee. */
-    writeNoteWithReceipt(params: NoteWriteParams): Promise<{
+    writeNoteWithReceipt(params: NoteWriteParams, policy?: {
+        maxBytes?: number;
+        assertAccess?: () => void;
+    }): Promise<{
         revision: string;
     }>;
     /**

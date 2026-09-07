@@ -54,6 +54,7 @@ const knowledgeDispositionProperties = {
     knowledgeDispositionReason: organizationPropertySchema('knowledge_disposition_reason', { maxLength: 1000 }),
 };
 export const LLM_WIKI_MUTATING_TOOLS = [
+    'update_wiki_projection',
     'initialize_llm_wiki', 'ingest_source', 'capture_wiki_note', 'clarify_wiki_note', 'distill_wiki_source', 'publish_knowledge', 'publish_decision_record', 'triage_wiki_note', 'review_wiki_note', 'review_wiki_claim', 'report_wiki_issue', 'propose_wiki_term_change', 'resolve_wiki_issue', 'export_wiki_base', 'export_wiki_canvas',
 ];
 export function getLlmWikiTools() {

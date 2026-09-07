@@ -23,13 +23,17 @@ const NESTED_REFERENCE_PROPERTIES = new Set([
  */
 const NON_NAVIGATIONAL_REFERENCE_ROOTS = new Set([
     'review_basis_links', 'review_basis_upstream', 'pending_edits', 'research_trail',
-    'learning_progress', 'knowledge_applications', 'source_derivations', 'knowledge_synthesis', 'knowledge_investigation',
+    'learning_progress', 'learning_understanding', 'knowledge_applications', 'source_derivations', 'knowledge_synthesis', 'knowledge_investigation',
 ]);
 export function isNavigationalFrontmatterReference(reference) {
     return !NON_NAVIGATIONAL_REFERENCE_ROOTS.has(reference.root);
 }
 /** Captured file paths are Vault-relative identities or durable scope URIs, not authored wikilinks. */
 export function isReferenceSnapshotPath(segments) {
+    if (segments[0] === 'learning_understanding') {
+        return (segments.length === 5 && typeof segments[1] === 'number' && segments[2] === 'supports' && typeof segments[3] === 'number' && segments[4] === 'path')
+            || (segments.length === 7 && typeof segments[1] === 'number' && segments[2] === 'checks' && typeof segments[3] === 'number' && segments[4] === 'evidence' && typeof segments[5] === 'number' && segments[6] === 'path');
+    }
     if (segments[0] === 'knowledge_investigation') {
         return (segments.length === 4 && segments[1] === 'targets' && typeof segments[2] === 'number' && segments[3] === 'path')
             || (segments.length === 5 && segments[1] === 'result' && segments[2] === 'evidence' && typeof segments[3] === 'number' && segments[4] === 'path');

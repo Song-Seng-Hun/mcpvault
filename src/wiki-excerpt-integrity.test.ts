@@ -137,6 +137,29 @@ test('blank claim text does not suppress valid authored key points', async () =>
   expect(value.excerptRange).toBeUndefined();
 });
 
+test('evidence-only metadata cannot hide real progressive prose or imply the body is absent', async () => {
+  const raw = '---\nevidence_paths:\n  - "[[_sources/Manual]]"\n---\n# Recommendation\nUse reliable events only.\n\n## Later observation\nNetwork partitions remain untested.';
+  await writeFile(join(vault, path), raw);
+  const { value } = await call({ view: 'progressive' });
+  expect(value.content).toContain('Use reliable events only.');
+  expect(value.bodyComplete).toBe(false);
+  expect(value.notice).toContain('not the complete note');
+  expect(value.nextAction.arguments).toMatchObject({ path, expectedRevision: digest(raw) });
+  const recovered = await call(value.nextAction.arguments, value.nextAction.endpointId);
+  expect(recovered.text).toContain('Network partitions remain untested.');
+  await writeFile(join(vault, path), raw + '\nChanged');
+  expect((await call(value.nextAction.arguments, value.nextAction.endpointId)).result.isError).toBe(true);
+});
+
+test.each([512, 4000])('authored progressive projections advertise omitted body even within a %s budget', async maxChars => {
+  await writeFile(join(vault, path), '---\nsummary: Short authored summary\n---\n# Body\n' + 'IMPORTANT CONDITION '.repeat(100) + '\n\n## Later\nLATER-LIMITATION');
+  const { value } = await call({ view: 'progressive', maxChars });
+  expect(value.bodyComplete).toBe(false);
+  expect(value.nextAction.endpointId).toBe('notes.read');
+  expect(value.nextAction.arguments.expectedRevision).toBe(value.revision);
+  expect((await call(value.nextAction.arguments, value.nextAction.endpointId)).text).toContain('LATER-LIMITATION');
+});
+
 test.each(['summary', 'progressive'])('blank metadata does not impersonate useful %s content', async view => {
   await writeFile(join(vault, path), '---\nsummary: "   "\nclaims:\n  - text: ""\nsummary_highlights:\n  - text: "  "\nopen_questions:\n  - "  "\nevidence_paths:\n  - " "\n---\n# Body\nREAL-PROSE');
   const { value } = await call({ view });

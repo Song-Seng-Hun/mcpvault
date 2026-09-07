@@ -19,7 +19,7 @@ export const WIKI_POLICY_TOPICS = [
 ] as const;
 
 export type WikiPolicyTopicId = typeof WIKI_POLICY_TOPICS[number];
-export const WIKI_POLICY_VERSION = 32;
+export const WIKI_POLICY_VERSION = 33;
 
 type WikiPolicyTopic = {
   purpose: string;
@@ -183,6 +183,8 @@ const POLICY_TOPICS: Record<Exclude<WikiPolicyTopicId, 'overview'>, WikiPolicyTo
       'For wiki.record_recall, use the knowledge expectedRevision and, when private state exists, expectedStateRevision from queue stateRevision or the last receipt. Refresh both after conflicts. Omission or missing is only for first creation; existing private questions/cadence are preserved unless explicitly replaced.',
       'Use resurfacing as a small deterministic rediscovery sample; re-read the current note revision before relying on it.',
       'Before interruption or handoff, save only bounded focus, cursors, revision guards, research summaries, and optional MOC learningProgress in the private continuity checkpoint; resume it to detect path or note drift before reading on.',
+      'Optional continuity.save understanding records a short explanation, exact supporting revisions/body-line locators, self_check or peer_check_report evidence, openQuestions and nextStep. A peer report does not establish independent verification. Reading, self-reported understanding and check reports remain distinct.',
+      'Use checkpoint expectedRevision when replacing, clearing (understanding: []) or updating existing understanding state; omission preserves it. continuity.resume rechecks references, validity and access. current_references means unchanged references, not truth; canResume=false means inspect the returned recovery action first. Private checkpoint ownership does not transfer with a colleague task or model name.',
       'Recall history, reading continuity, evidence review, and knowledge status are separate signals; none proves a claim.',
     ],
     routes: ['wiki.recall_queue', 'wiki.record_recall', 'wiki.resurface', 'continuity.resume', 'continuity.save'],
