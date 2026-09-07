@@ -186,6 +186,95 @@ test('catalog preparation does not mutate tool-module input schemas', async () =
   });
 });
 
+test('four HTTP clients observe create, replace and delete through warmed shared search caches', async () => {
+  await fixture(async ({ create, expose, connect }) => {
+    const api = await expose(create());
+    const clients = await Promise.all(Array.from({ length: 4 }, () => connect(api)));
+    const call = async (client: Client, endpointId: string, args: Record<string, unknown>) => {
+      const result = await client.callTool({ name: 'call_endpoint', arguments: { endpointId, arguments: args } });
+      expect(result.isError, JSON.stringify(result.content)).toBeFalsy();
+      return JSON.parse((result.content[0] as { text: string }).text);
+    };
+    const account = await call(clients[0], 'auth.register', {
+      accountId: 'cache-writer', userId: 'cache-family', modelId: 'codex', agentId: 'cache-writer',
+      password: 'disposable-cache-fixture-password',
+    });
+    const search = (client: Client, query: string) => call(client, 'wiki.search', {
+      query, semantic: false, limit: 1, maxChars: 512,
+    });
+    const path = 'SharedCacheProbe.md';
+    for (const query of ['CacheOriginalToken', 'CacheReplacementToken']) {
+      for (const result of await Promise.all(clients.map(client => search(client, query)))) expect(result).toEqual([]);
+    }
+    await call(clients[0], 'notes.write', {
+      path, content: '# Probe\nCacheOriginalToken\n' + '가나다 bounded context '.repeat(100),
+      expectedRevision: 'missing', accessToken: account.accessToken,
+    });
+    for (const result of await Promise.all(clients.map(client => search(client, 'CacheOriginalToken')))) {
+      expect(result.map((entry: { p: string }) => entry.p)).toEqual([path]);
+      expect(JSON.stringify(result).length).toBeLessThanOrEqual(512);
+    }
+    const before = await call(clients[1], 'notes.read', { path, maxChars: 2000 });
+    await call(clients[2], 'notes.write', {
+      path, content: '# Probe\nCacheReplacementToken', expectedRevision: before.revision, accessToken: account.accessToken,
+    });
+    for (const client of clients) {
+      expect(await search(client, 'CacheOriginalToken')).toEqual([]);
+      expect((await search(client, 'CacheReplacementToken')).map((entry: { p: string }) => entry.p)).toEqual([path]);
+      const after = await call(client, 'notes.read', { path, maxChars: 2000 });
+      expect(after.revision).not.toBe(before.revision);
+      expect(after.content).toContain('CacheReplacementToken');
+    }
+    const preview = await call(clients[3], 'notes.delete_preview', { path, accessToken: account.accessToken });
+    expect(preview.total).toBe(0);
+    await call(clients[3], 'notes.delete', { path, confirmPath: path, trashMode: 'local', accessToken: account.accessToken });
+    for (const result of await Promise.all(clients.map(client => search(client, 'CacheReplacementToken')))) expect(result).toEqual([]);
+    for (const client of clients) {
+      const deleted = await client.callTool({ name: 'call_endpoint', arguments: {
+        endpointId: 'notes.read', arguments: { path, maxChars: 2000 },
+      } });
+      expect(deleted.isError).toBe(true);
+      expect(JSON.stringify(deleted.content)).toMatch(/not found|does not exist|ENOENT/i);
+    }
+    expect(owners).toEqual({ catalog: 1, metadata: 1, graph: 1, search: 1, semantic: 1 });
+  });
+});
+
+test('concurrent HTTP writers using the same revision have one winner visible to both clients', async () => {
+  await fixture(async ({ create, expose, connect, seed }) => {
+    const path = 'ConcurrentProbe.md';
+    await seed(path, '# Original\nSharedRevisionOriginal');
+    const api = await expose(create()), first = await connect(api), second = await connect(api);
+    const call = (client: Client, endpointId: string, args: Record<string, unknown>) => client.callTool({
+      name: 'call_endpoint', arguments: { endpointId, arguments: args },
+    });
+    const registration = await call(first, 'auth.register', {
+      accountId: 'race-writer', userId: 'race-family', modelId: 'codex', agentId: 'race-writer',
+      password: 'disposable-race-fixture-password',
+    });
+    expect(registration.isError).toBeFalsy();
+    const { accessToken } = JSON.parse((registration.content[0] as { text: string }).text);
+    const read = await call(first, 'notes.read', { path, maxChars: 2000 });
+    expect(read.isError).toBeFalsy();
+    const { revision } = JSON.parse((read.content[0] as { text: string }).text);
+    const writes = await Promise.all([first, second].map((client, index) => call(client, 'notes.write', {
+      path, content: `# Winner\nSharedRevisionWinner${index}`, expectedRevision: revision, accessToken,
+    })));
+    expect(writes.filter(result => !result.isError)).toHaveLength(1);
+    expect(writes.filter(result => result.isError)).toHaveLength(1);
+    expect(JSON.stringify(writes.find(result => result.isError)!.content)).toMatch(/revision conflict/i);
+    const winner = writes.findIndex(result => !result.isError);
+    for (const client of [first, second]) {
+      const result = await call(client, 'notes.read', { path, maxChars: 2000 });
+      expect(result.isError).toBeFalsy();
+      const note = JSON.parse((result.content[0] as { text: string }).text);
+      expect(note.content).toBe(`# Winner\nSharedRevisionWinner${winner}`);
+      expect(note.revision).not.toBe(revision);
+    }
+    expect(owners).toEqual({ catalog: 1, metadata: 1, graph: 1, search: 1, semantic: 1 });
+  });
+});
+
 test('permission changes refresh discovery and execution without rebuilding the shared catalog', async () => {
   await fixture(async ({ create, expose, connect }) => {
     const server = create(), runtime = getServerRuntime(server)!;
