@@ -523,7 +523,12 @@ of loading the selected body again, then checks each distinct source/state
 receipt once before returning. Caller-private recall state includes an explicit
 missing observation; date repairs retain their original revision. Changed,
 hidden, deleted, or unreadable admitted inputs require refreshing the packet,
-not attaching a newer write guard to an older question. This is not an atomic
+not attaching a newer write guard to an older question. Returned orphan
+priorities also recheck their incoming-link status after these receipt reads:
+a newly observed Wiki or Community backlink requires refreshing the packet
+even if the target body did not change. This adds one graph query for the
+bounded candidate set, not one per candidate, and unrelated graph activity
+does not invalidate the action by itself. This is not an atomic
 Vault snapshot: revisionless findings and every supporting graph reference are
 not independently certified. Inspect the proposed target and retain its
 `expectedRevision` for the actual write. No additional client setup is needed.

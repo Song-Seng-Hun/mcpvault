@@ -5723,6 +5723,26 @@ export class LlmWikiService {
         }
         for (const [path, revision] of revisionGuards)
             await verifyRevision(path, revision);
+        // A target's revision cannot prove that no other note has linked to it.
+        // Recheck only returned orphan claims, not the entire orphan fingerprint:
+        // unrelated activity must not starve a busy command center's review reads.
+        const orphanPaths = new Set(priorities
+            .filter(item => Array.isArray(item.reasons) && item.reasons.includes('orphan_note'))
+            .map(item => physicalPathByPublicPath.get(String(item.path)))
+            .filter((path) => path !== undefined));
+        if (orphanPaths.size > 0) {
+            try {
+                const current = await this.fileSystem.findOrphanNotes(orphanPaths.size, canAccess, 0, {
+                    includeCandidate: path => orphanPaths.has(path),
+                });
+                const stillOrphan = new Set(current.orphans.map(item => item.path));
+                if ([...orphanPaths].some(path => !canAccess(path) || !stillOrphan.has(path)))
+                    throw changed();
+            }
+            catch {
+                throw changed();
+            }
+        }
         const result = {
             purpose: 'One bounded action packet for the next knowledge-organization step. It is advisory; inspect the selected note and use expectedRevision before changing it.',
             priorities,
