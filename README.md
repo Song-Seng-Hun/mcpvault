@@ -1721,6 +1721,13 @@ the ordinary REST adapter above. The MCP connection has no server-side
 `Mcp-Session-Id`: every request carries its protocol metadata and bearer
 authentication, while MCPVault keeps one long-lived vault runtime for the file
 watcher, Markdown/Git source of truth, and disposable search/vector indexes.
+Within that runtime, endpoint definitions and input schemas are prepared once;
+`tools/list` and adapter initialization do not rebuild the internal catalog.
+Authentication and capability availability are still evaluated for every call,
+not cached with the definitions. Disconnecting one HTTP client does not close
+the shared runtime services. Separate server processes (including separately
+launched stdio clients) still own separate service bundles; this is not an
+automatic shared-process launcher or a measured memory-saving guarantee.
 The adapter clamps request bodies to 2 MiB, limits headers, keep-alive
 requests, connections, and request duration, and limits anonymous account
 registration to five attempts per client address per ten minutes. These are

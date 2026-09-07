@@ -1045,11 +1045,30 @@ export function createServer(vaultPath, options = {}) {
         // Keep the optional client-vector input visible in the endpoint contract.
         // The default path still embeds on demand in the server, so clients do not
         // need any local model or setup unless they explicitly want to offload it.
-        return buildInternalTools();
+        return buildInternalTools().map(tool => {
+            if (SCOPE_AUTH_TOOL_NAMES.has(tool.name))
+                return tool;
+            const schema = tool.inputSchema;
+            // Normalize once without mutating shared tool-module schema constants.
+            return { ...tool, inputSchema: { ...tool.inputSchema, properties: {
+                        ...schema.properties,
+                        accessToken: schema.properties?.accessToken || {
+                            type: 'string',
+                            description: 'Optional token from login_scope. Without it, public Global and the current command-center Community are visible; User/family, model, and agent scopes remain hidden.',
+                        },
+                    } } };
+        });
+    };
+    let endpointRegistryInitialized = false;
+    const ensureEndpointRegistry = () => {
+        if (endpointRegistryInitialized)
+            return;
+        endpointRegistry.setTools(buildCatalogTools(), CAPABILITY_FOR_TOOL, MUTATING_TOOLS);
+        endpointRegistryInitialized = true;
     };
     // Initialize once at construction so fixed control calls work even when an
     // MCP host relies on a cached tools/list response and skips re-listing.
-    endpointRegistry.setTools(buildCatalogTools(), CAPABILITY_FOR_TOOL, MUTATING_TOOLS);
+    ensureEndpointRegistry();
     const dispatchTool = async (requestedToolName, requestArgs = {}) => {
         const request = { params: { name: requestedToolName, arguments: requestArgs } };
         let toolName = requestedToolName;
@@ -2653,28 +2672,15 @@ export function createServer(vaultPath, options = {}) {
         }
     };
     const installMcpHandlers = (target) => {
-        target.setRequestHandler("tools/list", async () => {
-            const tools = buildCatalogTools();
-            for (const tool of tools) {
-                if (SCOPE_AUTH_TOOL_NAMES.has(tool.name))
-                    continue;
-                const schema = tool.inputSchema;
-                schema.properties ||= {};
-                schema.properties.accessToken ||= {
-                    type: "string",
-                    description: "Optional token from login_scope. Without it, public Global and the current command-center Community are visible; User/family, model, and agent scopes remain hidden.",
-                };
-            }
-            endpointRegistry.setTools(tools, CAPABILITY_FOR_TOOL, MUTATING_TOOLS);
-            return { tools: FIXED_MCP_TOOLS };
-        });
+        // Definitions are runtime-local and static; availability/auth remain per call.
+        target.setRequestHandler("tools/list", async () => ({ tools: FIXED_MCP_TOOLS }));
         target.setRequestHandler("tools/call", async (request) => requestGate.run(() => dispatchTool(request.params.name, (request.params.arguments || {})), requestFairnessKey((request.params.arguments || {}))));
     };
     installMcpHandlers(server);
     SERVER_RUNTIMES.set(server, {
         endpointRegistry,
         dispatchTool,
-        ensureEndpointRegistry: () => endpointRegistry.setTools(buildCatalogTools(), CAPABILITY_FOR_TOOL, MUTATING_TOOLS),
+        ensureEndpointRegistry,
         createRequestServer: () => {
             const requestServer = new Server({ name, version }, {
                 capabilities: { tools: {} },

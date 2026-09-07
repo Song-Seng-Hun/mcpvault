@@ -66,6 +66,18 @@ alone is not proof that current clients share a process. Do not edit live plugin
 configuration, restart servers or terminate supposedly idle processes as part
 of repository-only verification. No shared-process implementation is claimed.
 
+The subsequent `2026-09-07-http-runtime-sharing-design.md` verifies the existing
+HTTP ownership boundary using two actual SDK clients: request wrappers do not
+construct new catalog/metadata/graph/search/semantic service bundles, while two
+top-level createServer calls do. After client detach, no owner close has run and
+the remaining client performs an actual lexical search. Concurrent private-note
+reads deny foreign/anonymous identities, and capability changes plus re-login
+update both discovery and execution without rebuilding the catalog. This is an
+object-ownership test, not a native-model load count or RSS benchmark. Its code
+change prepares normalized endpoint schemas once and makes tools/list and REST
+ensure avoid redundant catalog rebuilds. Direct-process plugin deployment is
+unchanged; automatic shared-process attachment remains a separate design task.
+
 1. **Bounded streaming revision hashing.** Preserve exactly the existing decoded
    UTF-8 revision contract, including malformed UTF-8 and chunk boundaries; do
    not accidentally switch to hashing raw bytes. Preserve PathFilter, path/link
