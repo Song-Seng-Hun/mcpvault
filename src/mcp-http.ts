@@ -1,6 +1,8 @@
 import { createServer as createHttpServer, type IncomingMessage, type Server as HttpServer, type ServerResponse } from 'node:http';
 import { createServer as createHttpsServer, type Server as HttpsServer } from 'node:https';
 import { isIP } from 'node:net';
+import { Readable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 import { createMcpHandler, type Server } from '@modelcontextprotocol/server';
 import { getServerRuntime } from './createServer.js';
 
@@ -134,7 +136,7 @@ function originAllowed(request: IncomingMessage, allowedOrigins: readonly string
   return typeof origin !== 'string' || allowedOrigins.includes(origin);
 }
 
-function writeResponse(response: ServerResponse, webResponse: Response): void {
+async function writeResponse(response: ServerResponse, webResponse: Response): Promise<void> {
   response.statusCode = webResponse.status;
   webResponse.headers.forEach((value, key) => response.setHeader(key, value));
 
@@ -143,19 +145,9 @@ function writeResponse(response: ServerResponse, webResponse: Response): void {
     return;
   }
 
-  const reader = webResponse.body.getReader();
-  void (async () => {
-    try {
-      while (true) {
-        const chunk = await reader.read();
-        if (chunk.done) break;
-        if (response.destroyed) break;
-        response.write(Buffer.from(chunk.value));
-      }
-    } finally {
-      response.end();
-    }
-  })();
+  // Couple upstream reads to socket backpressure. Pipeline also cancels the
+  // Web producer on disconnect and rejects stream failures to our caller.
+  await pipeline(Readable.fromWeb(webResponse.body), response);
 }
 
 function addCorsHeaders(response: ServerResponse, request: IncomingMessage, allowedOrigins: readonly string[]): void {
@@ -310,8 +302,15 @@ export async function startMcpHttpApi(server: Server, options: McpHttpOptions = 
         ...(body && request.method !== 'GET' && request.method !== 'HEAD' ? { body } : {}),
       });
       const webResponse = await mcpHandler.fetch(webRequest);
-      writeResponse(response, webResponse);
+      await writeResponse(response, webResponse);
     } catch (error) {
+      // A failed stream is incomplete, not a successful truncated result or a
+      // second JSON response appended after headers/body have already gone out.
+      if (response.destroyed) return;
+      if (response.headersSent) {
+        response.destroy();
+        return;
+      }
       addCorsHeaders(response, request, allowedOrigins);
       response.statusCode = 400;
       response.setHeader('content-type', 'application/json; charset=utf-8');

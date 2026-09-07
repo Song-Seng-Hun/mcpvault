@@ -1,6 +1,8 @@
 import { createServer as createHttpServer } from 'node:http';
 import { createServer as createHttpsServer } from 'node:https';
 import { isIP } from 'node:net';
+import { Readable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 import { createMcpHandler } from '@modelcontextprotocol/server';
 import { getServerRuntime } from './createServer.js';
 function headerValues(request) {
@@ -106,29 +108,16 @@ function originAllowed(request, allowedOrigins) {
     const origin = request.headers.origin;
     return typeof origin !== 'string' || allowedOrigins.includes(origin);
 }
-function writeResponse(response, webResponse) {
+async function writeResponse(response, webResponse) {
     response.statusCode = webResponse.status;
     webResponse.headers.forEach((value, key) => response.setHeader(key, value));
     if (!webResponse.body) {
         response.end();
         return;
     }
-    const reader = webResponse.body.getReader();
-    void (async () => {
-        try {
-            while (true) {
-                const chunk = await reader.read();
-                if (chunk.done)
-                    break;
-                if (response.destroyed)
-                    break;
-                response.write(Buffer.from(chunk.value));
-            }
-        }
-        finally {
-            response.end();
-        }
-    })();
+    // Couple upstream reads to socket backpressure. Pipeline also cancels the
+    // Web producer on disconnect and rejects stream failures to our caller.
+    await pipeline(Readable.fromWeb(webResponse.body), response);
 }
 function addCorsHeaders(response, request, allowedOrigins) {
     const origin = request.headers.origin;
@@ -281,9 +270,17 @@ export async function startMcpHttpApi(server, options = {}) {
                 ...(body && request.method !== 'GET' && request.method !== 'HEAD' ? { body } : {}),
             });
             const webResponse = await mcpHandler.fetch(webRequest);
-            writeResponse(response, webResponse);
+            await writeResponse(response, webResponse);
         }
         catch (error) {
+            // A failed stream is incomplete, not a successful truncated result or a
+            // second JSON response appended after headers/body have already gone out.
+            if (response.destroyed)
+                return;
+            if (response.headersSent) {
+                response.destroy();
+                return;
+            }
             addCorsHeaders(response, request, allowedOrigins);
             response.statusCode = 400;
             response.setHeader('content-type', 'application/json; charset=utf-8');
