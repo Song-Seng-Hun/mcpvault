@@ -22,6 +22,11 @@ A local MCP server that lets compatible clients read, search, and edit notes in 
 
 ## Supported clients
 
+Conditional [knowledge synthesis](docs/knowledge-synthesis.md) connects authored
+note clusters to competing explanations, applicability, counterexamples and
+revision-pinned inputs. Existing publication and Decision Record endpoints store
+the interpretation; candidate reads never merge originals or certify truth.
+
 Optional [Obsidian workflows](docs/obsidian-workflows.md) add contextual
 authoring, saved scoped metadata views, opt-in event-updated MOC regions, and
 authored parent/previous/next navigation. The host can optionally install

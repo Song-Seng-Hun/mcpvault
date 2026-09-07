@@ -1,6 +1,13 @@
 import { expect, test } from 'vitest';
 import { collectPlainFrontmatterReferences, isNavigationalFrontmatterReference, isReferenceSnapshotPath } from './property-references.js';
 
+test('conditional synthesis inputs retain snapshot integrity without inventing support edges', () => {
+  const refs = collectPlainFrontmatterReferences({ knowledge_synthesis: { inputs: [{ id: 'a', path: 'A.md', revision: 'a'.repeat(64) }] } });
+  expect(refs).toEqual([expect.objectContaining({ propertyPath: 'knowledge_synthesis.inputs[0].path', value: 'A.md' })]);
+  expect(isNavigationalFrontmatterReference(refs[0]!)).toBe(false);
+  expect(isReferenceSnapshotPath(['knowledge_synthesis', 'explanations', 0, 'path'])).toBe(false);
+});
+
 test('snapshot paths match only the producer-defined array shapes', () => {
   for (const root of ['review_basis_links', 'pending_edits', 'research_trail']) {
     expect(isReferenceSnapshotPath([root, 0, 'path'])).toBe(true);

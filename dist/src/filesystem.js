@@ -767,9 +767,10 @@ export class FileSystemService {
             return { path: guardPath, expectedRevision: guard.expectedRevision };
         });
         return this.withMutationLocks([path, ...normalizedGuards.map(guard => guard.path)], async () => {
+            policy.assertAccess?.();
             for (const guard of normalizedGuards)
                 await this.assertExpectedRevision(guard.path, guard.expectedRevision, policy.maxBytes);
-            const receipt = await this.writeNoteUnlocked({ ...params, path }, policy.maxBytes);
+            const receipt = await this.writeNoteUnlocked({ ...params, path }, policy.maxBytes, policy.assertAccess);
             return { revision: receipt.revision };
         });
     }
@@ -846,7 +847,7 @@ export class FileSystemService {
         }
         return { path, revision: this.revision(content), document };
     }
-    async writeNoteUnlocked(params, revisionMaxBytes) {
+    async writeNoteUnlocked(params, revisionMaxBytes, assertAccess) {
         const { content, frontmatter, mode = 'overwrite', expectedRevision } = params;
         const path = this.normalizePath(params.path);
         const fullPath = this.resolveWritablePath(path);
@@ -916,6 +917,8 @@ export class FileSystemService {
             await mkdir(dirname(fullPath), { recursive: true });
             // The missing guard must survive another process creating the target
             // after our existence check. Exclusive creation never truncates it.
+            // Recheck caller policy after all awaited preparation, at write dispatch.
+            assertAccess?.();
             await writeFile(fullPath, finalContent, expectedRevision === 'missing'
                 ? { encoding: 'utf-8', flag: 'wx' } : 'utf-8');
             this.notifyNoteChanged(path, 'upsert');

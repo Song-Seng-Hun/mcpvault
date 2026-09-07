@@ -3,6 +3,7 @@ import { extractMarkdownTasks } from './markdown-tasks.js';
 import { extractObsidianLinkOccurrences } from './backlinks.js';
 import { normalizeKnowledgeApplications } from './knowledge-application-model.js';
 import { normalizeSourceDerivations } from './source-provenance-model.js';
+import { normalizeKnowledgeSynthesis } from './knowledge-synthesis-model.js';
 /**
  * Lightweight knowledge-organization vocabulary.
  *
@@ -40,7 +41,7 @@ export const TERM_STATUSES = ['preferred', 'deprecated', 'redirect'];
 export const KNOWLEDGE_ROLES = ['concept', 'argument', 'model', 'observation', 'counterargument'];
 /** Optional note-template IDs. Knowledge-role templates refine a durable note
  * without introducing another note kind or storage format. */
-export const NOTE_TEMPLATE_IDS = ['atomic', 'literature', 'question', 'hypothesis', 'experiment', 'assumption', 'decision', 'project', 'moc', 'negative', ...KNOWLEDGE_ROLES];
+export const NOTE_TEMPLATE_IDS = ['atomic', 'literature', 'question', 'hypothesis', 'experiment', 'assumption', 'decision', 'project', 'moc', 'negative', 'synthesis', ...KNOWLEDGE_ROLES];
 /** Standard Obsidian Bases projections. Keep the runtime and tool schema on
  * one shared list so a documented view cannot become unreachable. */
 export const BASES_VIEW_IDS = ['all', 'inbox', 'inbox_oldest', 'projects', 'project_next_actions', 'review', 'epistemic', 'experiments', 'open_questions', 'decisions', 'knowledge', 'concepts', 'arguments', 'models', 'observations', 'counterarguments', 'unreviewed_evidence', 'negative_knowledge', 'deprecated_terms', 'maintenance', 'authority', 'review_checklist', 'collections', 'archives'];
@@ -222,6 +223,7 @@ export const ORGANIZATION_PROPERTY_CONTRACT = [
     { name: 'task_status', type: 'text', description: 'Operational state for any actionable note, separate from lifecycle and epistemic status', allowed: TASK_STATUSES },
     { name: 'knowledge_notes', type: 'list', description: 'Visible durable knowledge notes created or updated before completing actionable work' },
     { name: 'knowledge_applications', type: 'list', description: 'MCP-managed bounded records of applying knowledge with note/revision snapshots, environment, conditions, observations, outcomes, and limits' },
+    { name: 'knowledge_synthesis', type: 'object', description: 'MCP-managed attributed interpretation with revision-pinned inputs, competing explanations, applicability, choices, counterexamples and unresolved questions; not verified truth' },
     { name: 'negative_knowledge_notes', type: 'list', description: 'Visible negative-knowledge notes preserving failed or rejected paths before completing actionable work' },
     { name: 'retrospective', type: 'text', description: 'Bounded experiential lesson recorded before completing actionable work; not factual evidence by itself' },
     { name: 'knowledge_dispositions', type: 'list', description: 'Normalized auditable outcomes of completed work', allowed: KNOWLEDGE_DISPOSITIONS },
@@ -382,6 +384,11 @@ export function organizationNoteTemplate(value = 'atomic') {
             purpose: 'A durable decision with alternatives, consequences, and evidence.',
             properties: { note_kind: 'decision', lifecycle: 'active', knowledge_role: 'argument', related: [] },
             markdown: '# {{title}}\n\n## Context\n\n## Decision\n\n## Alternatives\n- \n\n## Consequences\n- \n\n## Evidence\n- [[ ]]\n',
+        },
+        synthesis: {
+            purpose: 'Explain an authored cluster conditionally, preserving disagreements and input revisions. Use wiki.synthesis_candidates before existing source-backed publication; this is an interpretation, not a new authority.',
+            properties: { note_kind: 'knowledge', lifecycle: 'review', knowledge_role: 'model', derived_from: [] },
+            markdown: '# {{title}}\n\n## Question\n\n## Inputs and revisions\n- [[ ]] — revision:\n\n## Competing explanations\nFor each: explanation, applies when, limitations, and exact supporting inputs.\n\n## Conditional choices\nFor each: conditions, selected explanation, basis and why. Do not force a universal winner.\n\n## Counterexamples\nPreserve dissent and failed paths with exact references.\n\n## Unresolved questions\n\n## Evidence\nKeep immutable sources separate from interpretations.\n',
         },
         project: {
             purpose: 'An outcome-oriented project with one immediately actionable next step.',
@@ -1405,6 +1412,14 @@ export function organizationLintIssues(path, frontmatter, content, nowMs = Date.
         }
         catch {
             issues.push({ code: 'invalid_source_derivations', detail: 'source_derivations requires at most eight pinned source-level quotation/adaptation/republication references.' });
+        }
+    }
+    if (frontmatter.knowledge_synthesis !== undefined) {
+        try {
+            normalizeKnowledgeSynthesis(frontmatter.knowledge_synthesis);
+        }
+        catch {
+            issues.push({ code: 'invalid_knowledge_synthesis', detail: 'knowledge_synthesis requires a bounded conditional interpretation, current input locators and declared support IDs; use the existing source-backed publication contract.' });
         }
     }
     for (const field of ORGANIZATION_LIST_FIELDS) {

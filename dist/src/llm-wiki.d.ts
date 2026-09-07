@@ -81,6 +81,7 @@ interface ReviewPacketOptions {
     attentionKey?: string;
 }
 interface SynthesisCandidatesOptions {
+    prettyPrint?: boolean;
     /** Internal identity key used only to distribute equal-score idle work. */
     attentionKey?: string;
     /** Public stable locator used to reopen the exact candidate selected by a pulse. */
@@ -246,6 +247,7 @@ export declare class LlmWikiService {
         revision: string;
     }>;
     publishKnowledge(params: {
+        knowledgeSynthesis?: unknown;
         knowledgeApplications?: unknown;
         tags?: unknown;
         timeEstimateMinutes?: unknown;
@@ -3806,6 +3808,7 @@ export declare class LlmWikiService {
         truncated: boolean;
     }>;
     publishDecisionRecord(params: {
+        knowledgeSynthesis?: unknown;
         principal?: ScopePrincipal;
         path: string;
         title: string;
@@ -3893,19 +3896,7 @@ export declare class LlmWikiService {
      * semantic clustering endpoint: MOC/project/domain/subject metadata is the
      * authored boundary, and the returned plan preserves every input note.
      */
-    synthesisCandidates(principal?: ScopePrincipal, limit?: number, maxChars?: number, options?: SynthesisCandidatesOptions): Promise<{
-        purpose: string;
-        items: Record<string, unknown>[];
-        total: number;
-        truncated: boolean;
-        groupingRule: string;
-        attentionRouting?: {
-            mode: string;
-            candidateBand: number;
-            exclusive: boolean;
-        };
-        generatedAt: string;
-    }>;
+    synthesisCandidates(principal?: ScopePrincipal, limit?: number, maxChars?: number, options?: SynthesisCandidatesOptions): Promise<Record<string, any>>;
     promotionCandidates(principal?: ScopePrincipal, limit?: number, maxChars?: number, prettyPrint?: boolean): Promise<{
         items: Record<string, unknown>[];
         total: number;

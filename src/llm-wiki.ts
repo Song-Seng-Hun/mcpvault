@@ -1,5 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { KnowledgeApplicationService } from './knowledge-applications.js';
+import { prepareKnowledgeSynthesis, inspectSynthesisBasis } from './knowledge-synthesis.js';
+import { normalizeKnowledgeSynthesis } from './knowledge-synthesis-model.js';
 import { SourceProvenanceSession, prepareSourceDerivations, sourceWorkIdentity } from './source-provenance.js';
 import { authoringAssist, hostPluginBundle, propertyContractFingerprint, type AuthoringContext } from './authoring-assist.js';
 import { posix } from 'node:path';
@@ -804,6 +806,7 @@ interface ReviewPacketOptions {
 }
 
 interface SynthesisCandidatesOptions {
+  prettyPrint?: boolean;
   /** Internal identity key used only to distribute equal-score idle work. */
   attentionKey?: string;
   /** Public stable locator used to reopen the exact candidate selected by a pulse. */
@@ -1019,6 +1022,18 @@ function typedRelationTargetKindReason(relation: string, targetKind: string): st
 }
 
 const DEFAULT_SCHEMA = `# LLM Wiki schema
+
+## Conditional synthesis
+
+Use \`wiki.synthesis_candidates\` and \`wiki.note_template\` with template
+\`synthesis\` to prepare an attributed explanation, not a verified fact.
+Existing \`mcp.publish_knowledge\` and \`wiki.decision_record\` accept optional
+\`knowledgeSynthesis\`: question, 2–8 current id/path/revision inputs, competing
+explanations with conditions/limitations/basis IDs, choices, counterexamples and
+unresolvedQuestions. Stored \`knowledge_synthesis\` keeps input pins unchanged
+when omitted on an ordinary edit. Retired/disputed inputs need explicit
+\`historical_context\`. Preserve original notes and dissent; inspect
+\`synthesisBasis\` drift before revising. See \`wiki.policy\` knowledge.
 
 This vault uses ordinary Markdown, YAML frontmatter, Obsidian links, and Git as one coherent knowledge system.
 
@@ -2330,6 +2345,7 @@ export class LlmWikiService {
   }
 
   async publishKnowledge(params: {
+    knowledgeSynthesis?: unknown;
     knowledgeApplications?: unknown;
     tags?: unknown;
     timeEstimateMinutes?: unknown;
@@ -2468,6 +2484,10 @@ export class LlmWikiService {
     const existing = exists ? await this.fileSystem.readNote(params.path) : undefined;
     const applications = params.knowledgeApplications === undefined ? undefined
       : await new KnowledgeApplicationService(this.fileSystem, this.access).prepare(params.knowledgeApplications, params.path, params.principal);
+    const synthesis = params.knowledgeSynthesis === undefined ? undefined
+      : await prepareKnowledgeSynthesis(this.fileSystem, this.access, params.knowledgeSynthesis, params.path, params.principal);
+    const contextPaths = new Set([...(applications?.guards || []), ...(synthesis?.guards || [])].map(guard => guard.path.toLowerCase()));
+    if (contextPaths.size > 8) throw new Error('Combined knowledgeSynthesis and knowledgeApplications may reference at most eight distinct related notes, including prose links. Reuse shared inputs or link a separate existing observation; do not drop revision guards.');
     if (existing && existing.frontmatter.llm_wiki_type && existing.frontmatter.llm_wiki_type !== 'knowledge') {
       throw new Error(`Refusing to replace LLM Wiki ${existing.frontmatter.llm_wiki_type} metadata at ${this.access.toPublicPath(params.path)}`);
     }
@@ -2685,16 +2705,19 @@ export class LlmWikiService {
         }),
         ...(disposition && this.knowledgeDispositionFrontmatter(disposition)),
         ...(applications && { knowledge_applications: applications.records }),
+        ...(synthesis && { knowledge_synthesis: synthesis.synthesis }),
         updated_by: params.author,
         updated_at: timestamp,
         ...(!existing && { created_by: params.author, created_at: timestamp }),
       },
       expectedRevision: params.expectedRevision,
     };
-    const guards = [...new Map([...(internal.revisionGuards || []), ...(applications?.guards || [])].map(g => [g.path.toLowerCase(), g])).values()];
-    if ([...(internal.revisionGuards || []), ...(applications?.guards || [])].some(g => guards.find(u => u.path.toLowerCase() === g.path.toLowerCase())?.expectedRevision !== g.expectedRevision)) throw new Error('Related revision changed during knowledge publication');
+    const allGuards = [...(internal.revisionGuards || []), ...(applications?.guards || []), ...(synthesis?.guards || [])];
+    const guards = [...new Map(allGuards.map(g => [g.path.toLowerCase(), g])).values()];
+    if (allGuards.some(g => guards.find(u => u.path.toLowerCase() === g.path.toLowerCase())?.expectedRevision !== g.expectedRevision)) throw new Error('Related revision changed during knowledge publication');
+    synthesis?.assertAccess();
     const updated = guards.length
-      ? await this.fileSystem.writeNoteWithRevisionGuardsAndReceipt(write, guards)
+      ? await this.fileSystem.writeNoteWithRevisionGuardsAndReceipt(write, guards, synthesis ? { maxBytes: 8 * 1024 * 1024, assertAccess: synthesis.assertAccess } : {})
       : await this.fileSystem.writeNoteWithReceipt(write);
     return {
       success: true,
@@ -13456,6 +13479,7 @@ export class LlmWikiService {
   }
 
   async publishDecisionRecord(params: {
+    knowledgeSynthesis?: unknown;
     principal?: ScopePrincipal;
     path: string;
     title: string;
@@ -13559,6 +13583,7 @@ export class LlmWikiService {
     ].join('\n');
     const knowledgeStatus = status === 'accepted' ? 'verified' : status === 'superseded' || status === 'rejected' ? 'superseded' : 'draft';
     const published = await this.publishKnowledge({
+      ...(params.knowledgeSynthesis !== undefined && { knowledgeSynthesis: params.knowledgeSynthesis }),
       ...(params.principal && { principal: params.principal }),
       path: params.path,
       content,
@@ -14282,6 +14307,7 @@ export class LlmWikiService {
   async synthesisCandidates(principal?: ScopePrincipal, limit = 10, maxChars = 7000, options: SynthesisCandidatesOptions = {}) {
     const boundedLimit = Math.min(Math.max(Number(limit) || 10, 1), 30);
     const boundedChars = Math.min(Math.max(Number(maxChars) || 7000, 768), 16000);
+    const fits = (value: unknown) => JSON.stringify(value, null, options.prettyPrint ? 2 : undefined).length <= boundedChars;
     const canAccess = (path: string) => this.access.canAccessPhysicalPath(path, principal);
     type Member = {
       physicalPath: string;
@@ -14299,9 +14325,11 @@ export class LlmWikiService {
       counterpoint: boolean;
       contradicts: string[];
       inputLinks: string[];
+      synthesisRecord?: unknown;
     };
     type Group = {
       key: string;
+      scopeRoot: string;
       basis: { kind: 'moc' | 'project' | 'domain' | 'subject_term'; value: string };
       inputTotal: number;
       outputTotal: number;
@@ -14332,11 +14360,12 @@ export class LlmWikiService {
       else if (domains[0]) basis = { kind: 'domain', value: domains[0] };
       else if (subjectTerms[0]) basis = { kind: 'subject_term', value: subjectTerms[0] };
       if (!basis?.value) continue;
-      const key = `${basis.kind}:${basis.value.toLocaleLowerCase()}`;
+      const scopeRoot = canvasScopeRoot(note.path);
+      const key = `${scopeRoot ? `${scopeRoot.toLowerCase()}|` : ''}${basis.kind}:${basis.value.toLocaleLowerCase()}`;
       let group = groups.get(key);
       if (!group) {
         if (groups.size >= maxGroups) { scanTruncated = true; continue; }
-        group = { key, basis, inputTotal: 0, outputTotal: 0, inputs: [], outputs: [], truncated: false };
+        group = { key, scopeRoot, basis, inputTotal: 0, outputTotal: 0, inputs: [], outputs: [], truncated: false };
         groups.set(key, group);
       }
       const knowledgeRole = typeof frontmatter.knowledge_role === 'string' ? frontmatter.knowledge_role.trim().toLocaleLowerCase() : undefined;
@@ -14344,6 +14373,7 @@ export class LlmWikiService {
       // synthesized this cluster. Only an explicit synthesis stage (or a
       // Decision Record) may suppress covered inputs.
       const isSynthesis = noteKind === 'decision'
+        || frontmatter.knowledge_synthesis !== undefined
         || String(frontmatter.interpretation_status || '').toLocaleLowerCase() === 'synthesized';
       const nav = navigationOrder(frontmatter.nav_order);
       const member: Member = {
@@ -14362,6 +14392,7 @@ export class LlmWikiService {
         counterpoint: String(frontmatter.knowledge_polarity || '').toLocaleLowerCase() === 'negative' || knowledgeRole === 'counterargument',
         contradicts: facetStrings(frontmatter.contradicts),
         inputLinks: facetStrings(frontmatter.derived_from, frontmatter.refines, frontmatter.references),
+        ...(frontmatter.knowledge_synthesis !== undefined && { synthesisRecord: frontmatter.knowledge_synthesis }),
       };
       const bucket = isSynthesis ? group.outputs : group.inputs;
       if (isSynthesis) group.outputTotal += 1;
@@ -14371,7 +14402,7 @@ export class LlmWikiService {
     }
 
     let ranked = [...groups.values()].flatMap(group => {
-      if (group.inputTotal < 2 || group.inputs.length < 2) return [];
+      if ((group.inputTotal < 2 || group.inputs.length < 2) && !group.outputs.some(output => output.synthesisRecord !== undefined)) return [];
       const inputByPhysical = new Map(group.inputs.map(item => [normalizePath(item.physicalPath).toLocaleLowerCase(), item]));
       const inputReferenceIndex = buildNoteReferenceIndex(group.inputs.map(item => ({
         path: item.physicalPath,
@@ -14382,6 +14413,15 @@ export class LlmWikiService {
       })));
       const coverageFor = (output: Member) => {
         const covered = new Set<string>();
+        if (output.synthesisRecord !== undefined) {
+          try {
+            for (const input of normalizeKnowledgeSynthesis(output.synthesisRecord).inputs) {
+              const path = this.access.resolveExternalPath(input.path, principal);
+              const key = normalizePath(path).toLocaleLowerCase();
+              if (inputByPhysical.has(key) && canAccess(path) && this.access.canReferenceFrom(output.physicalPath, path)) covered.add(key);
+            }
+          } catch { /* Invalid records cannot establish coverage; the basis projection reports them. */ }
+        }
         for (const rawTarget of output.inputLinks) {
           for (const target of resolveNoteReference(relationDocument(rawTarget), inputReferenceIndex, {
             sourcePath: output.physicalPath,
@@ -14390,11 +14430,14 @@ export class LlmWikiService {
         }
         return covered;
       };
+      const outputFocus = options.focusPath?.trim().toLocaleLowerCase();
       const outputCoverage = group.outputs.map(output => ({ output, covered: coverageFor(output) }))
-        .sort((left, right) => right.covered.size - left.covered.size || left.output.path.localeCompare(right.output.path));
+        .sort((left, right) => Number(right.output.path.toLocaleLowerCase() === outputFocus) - Number(left.output.path.toLocaleLowerCase() === outputFocus)
+          || Number(right.output.synthesisRecord !== undefined) - Number(left.output.synthesisRecord !== undefined)
+          || right.covered.size - left.covered.size || left.output.path.localeCompare(right.output.path));
       const existing = outputCoverage[0];
       const uncovered = existing ? group.inputs.filter(item => !existing.covered.has(normalizePath(item.physicalPath).toLocaleLowerCase())) : group.inputs;
-      if (existing && uncovered.length === 0 && !group.truncated && group.inputTotal <= group.inputs.length) return [];
+      if (existing && !group.outputs.some(output => output.synthesisRecord !== undefined) && uncovered.length === 0 && !group.truncated && group.inputTotal <= group.inputs.length) return [];
       const tensionPairs = new Set<string>();
       for (const input of group.inputs) {
         for (const rawTarget of input.contradicts) {
@@ -14423,7 +14466,7 @@ export class LlmWikiService {
       ? options.focusPath.trim().toLocaleLowerCase()
       : undefined;
     const focusedCandidate = focusPath
-      ? ranked.find(candidate => candidate.group.inputs.some(input => input.path.toLocaleLowerCase() === focusPath))
+      ? ranked.find(candidate => [...candidate.group.inputs, ...candidate.group.outputs].some(input => input.path.toLocaleLowerCase() === focusPath))
       : undefined;
     if (focusedCandidate) ranked = [focusedCandidate, ...ranked.filter(candidate => candidate !== focusedCandidate)];
     const attentionKey = !focusedCandidate && typeof options.attentionKey === 'string' && options.attentionKey.length > 0
@@ -14445,12 +14488,25 @@ export class LlmWikiService {
     }
 
     const items: Array<Record<string, unknown>> = [];
+    const observed = new Map<string, QueryNote>();
+    const currentMetadata = async (path: string): Promise<QueryNote> => {
+      if (!canAccess(path)) throw Error('Synthesis input unavailable or changed; retry the query');
+      const key = path.toLowerCase();
+      const cached = observed.get(key); if (cached) return cached;
+      if (observed.size >= 64) throw Error('Synthesis metadata window exhausted; focus one candidate');
+      const current = (await this.fileSystem.readNoteMetadata([path], canAccess, { fresh: true, strict: true, maxBytes: 8 * 1024 * 1024 }))[0];
+      if (!current?.revision || isModerationHidden(current.frontmatter)) throw Error('Synthesis input unavailable or changed; retry the query');
+      observed.set(key, current); return current;
+    };
+    let omittedFocus: string | undefined;
     for (const candidate of ranked.slice(0, boundedLimit)) {
+      // Reserve a bounded window for selected inputs, counterpoints, tension
+      // endpoints and the existing output's pinned inputs (at most41 records).
+      if (observed.size > 23) { omittedFocus = candidate.group.inputs[0]?.path || candidate.existing?.output.path; break; }
       const materialize = async (member: Member) => {
-        let revision = member.revision;
-        if (!revision) {
-          try { revision = (await this.fileSystem.readNote(member.physicalPath)).revision; } catch { /* changed during scan; omit unsafe follow-up */ }
-        }
+        const current = await currentMetadata(member.physicalPath);
+        const revision = current.revision;
+        if (member.revision && member.revision !== revision) throw Error('Synthesis input unavailable or changed; retry the query');
         return {
           path: member.path,
           title: member.title,
@@ -14464,18 +14520,31 @@ export class LlmWikiService {
       };
       const orderedInputs = [...candidate.group.inputs]
         .sort((left, right) => navigationOrder(left.navOrder) - navigationOrder(right.navOrder) || left.title.localeCompare(right.title) || left.path.localeCompare(right.path));
-      const readOrder = [];
-      for (const input of orderedInputs.slice(0, 12)) readOrder.push(await materialize(input));
+      const readOrder: Array<Awaited<ReturnType<typeof materialize>>> = [];
+      for (const input of orderedInputs.slice(0, 8)) readOrder.push(await materialize(input));
+      const counterpointInputs = [];
+      for (const input of candidate.counterpoints.slice(0, 8)) counterpointInputs.push(await materialize(input));
+      const tensionPairs = candidate.tensionPairs.slice(0, 8).map(pair => pair.split('|'));
+      for (const path of new Set(tensionPairs.flat())) {
+        const input = candidate.group.inputs.find(input => input.path === path);
+        if (!input) throw Error('Synthesis input unavailable or changed; retry the query');
+        await materialize(input);
+      }
       const existingSynthesis = candidate.existing ? await materialize(candidate.existing.output) : undefined;
+      const synthesisBasis = candidate.existing ? await inspectSynthesisBasis(candidate.existing.output.synthesisRecord,
+        candidate.existing.output.physicalPath, currentMetadata, this.access, principal) : undefined;
       const basisTitle = candidate.group.basis.value.split('/').at(-1)?.replace(/\.md$/i, '') || 'Knowledge';
       const safeStem = basisTitle.replace(/[<>:"/\\|?*\u0000-\u001f]/g, '-').replace(/\s+/g, ' ').trim().slice(0, 100) || 'Knowledge';
-      const suggestedPath = existingSynthesis?.path || `Knowledge/Syntheses/${safeStem} synthesis.md`;
+      const suggestedPath = existingSynthesis?.path || this.access.toPublicPath(`${candidate.group.scopeRoot ? `${candidate.group.scopeRoot}/` : ''}Knowledge/Syntheses/${safeStem} synthesis.md`);
       let targetExists = Boolean(existingSynthesis);
       if (!targetExists) {
         try { targetExists = await this.fileSystem.noteExists(this.access.resolveExternalPath(suggestedPath, principal)); } catch { targetExists = true; }
       }
       const references = readOrder.map(item => item.path);
-      const anchor = readOrder[0];
+      const groupingArguments = candidate.group.basis.kind === 'moc' ? { primaryMoc: candidate.group.basis.value }
+        : candidate.group.basis.kind === 'project' ? { project: candidate.group.basis.value }
+          : candidate.group.basis.kind === 'domain' ? { domain: candidate.group.basis.value } : { subjectTerms: [candidate.group.basis.value] };
+      const anchor = readOrder[0] || existingSynthesis;
       const synthesisPlan = existingSynthesis
         ? {
             mode: 'extend_existing_synthesis',
@@ -14502,7 +14571,7 @@ export class LlmWikiService {
               ],
               guard: { autoFix: false, preserveInputs: true, inspectCounterpoints: true },
             };
-      const item = {
+      const item: Record<string, any> = {
         basis: candidate.group.basis,
         score: candidate.score,
         mode: synthesisPlan.mode,
@@ -14512,18 +14581,51 @@ export class LlmWikiService {
         suggestedPath,
         targetExists,
         readOrder,
-        counterpointPaths: candidate.counterpoints.slice(0, 8).map(item => item.path),
-        tensionPairs: candidate.tensionPairs.slice(0, 8).map(pair => pair.split('|')),
+        counterpointPaths: counterpointInputs.map(item => item.path),
+        counterpointInputs,
+        counterpointsTruncated: candidate.counterpoints.length > counterpointInputs.length,
+        tensionPairs,
+        tensionsTruncated: candidate.tensionPairs.length > tensionPairs.length,
         evidenceReadyInputs: candidate.evidenceReadyInputs,
         openQuestionCount: candidate.openQuestionCount,
         inputsTruncated: candidate.group.truncated || candidate.group.inputTotal > readOrder.length,
         synthesisPlan,
+        ...(synthesisBasis && { synthesisBasis }),
+        worksheet: {
+          field: 'knowledgeSynthesis',
+          inputs: readOrder.map((input, index) => ({ id: `input-${index + 1}`, path: input.path, revision: input.revision })),
+          required: ['question', 'explanations', 'choices', 'counterexamples', 'unresolvedQuestions'],
+          requiresInputSelection: readOrder.length < 2 || candidate.group.inputTotal > readOrder.length,
+          publishEndpoint: endpointIdForTool('publish_knowledge'),
+          ...(!targetExists || existingSynthesis ? { publishArguments: { path: suggestedPath, expectedRevision: existingSynthesis?.revision || 'missing', ...groupingArguments } } : {}),
+          guidance: 'Read inputs, then author competing explanations with appliesWhen, limitations and basis input IDs. Record conditional choices and counterexamples, or leave choices empty with unresolvedQuestions. Reuse existing synthesis; current pins are not truth. Use wiki.decision_record only for an actual decision. Preserve authored cluster boundaries and every original.',
+        },
         instruction: 'Synthesize only after reading the returned revisions. Preserve disagreement, cite immutable evidence, link derived_from inputs, and keep every source note as independent Markdown/Git history.',
       };
-      if (JSON.stringify({ items: [...items, item] }).length > boundedChars) break;
+      // Preserve exact locators by eliminating repeated projections before
+      // dropping a candidate. These fields merely point back to readOrder.
+      if (!fits({ items: [...items, item], envelopeReserve: ' '.repeat(1200) })) {
+        delete item.synthesisPlan.readInputs;
+        item.synthesisPlan.readInputsFrom = 'readOrder';
+        if (Array.isArray(item.synthesisPlan.then)) for (const action of item.synthesisPlan.then) {
+          if (action.arguments?.references) {
+            delete action.arguments.references;
+            action.referencesFrom = 'readOrder.path';
+          }
+        }
+        item.counterpointInputs = counterpointInputs.filter(input => !readOrder.some(selected => selected.path === input.path));
+        item.counterpointLocatorsFrom = 'readOrder and counterpointInputs';
+        item.projectionCompacted = true;
+      }
+      if (!fits({ items: [...items, item], envelopeReserve: ' '.repeat(1200) })) { omittedFocus = anchor?.path; break; }
       items.push(item);
     }
-    return {
+    if (!omittedFocus && ranked.length > items.length) omittedFocus = ranked[items.length]?.group.inputs[0]?.path || ranked[items.length]?.existing?.output.path;
+    for (const current of observed.values()) {
+      if (!canAccess(current.path) || await this.fileSystem.readNoteRevision(current.path, 8 * 1024 * 1024) !== current.revision) throw Error('Synthesis input unavailable or changed; retry the query');
+    }
+    if ([...observed.values()].some(note => !canAccess(note.path))) throw Error('Synthesis input unavailable or changed; retry the query');
+    const result: Record<string, any> = {
       purpose: 'Bounded, explicit-metadata synthesis opportunities for the Distill -> Express step. These are authored clusters, not semantic truth or merge instructions.',
       items,
       total: ranked.length,
@@ -14532,6 +14634,28 @@ export class LlmWikiService {
       ...(attentionKey && candidateBand.length > 0 && { attentionRouting: { mode: 'stateless_rendezvous', candidateBand: candidateBand.length, exclusive: false } }),
       generatedAt: now(),
     };
+    const setContinuation = () => {
+      if (omittedFocus) result.nextAction = { endpointId: 'wiki.synthesis_candidates', arguments: { focusPath: omittedFocus, limit: 1, maxChars: 16000 } };
+    };
+    setContinuation();
+    while (items.length && !fits(result)) {
+      const removed = items.pop()!;
+      omittedFocus = (removed.readOrder as Array<{ path: string }>)[0]?.path || (removed.existingSynthesis as { path?: string } | undefined)?.path;
+      result.truncated = true; setContinuation();
+    }
+    if (!items.length && boundedChars === 16000 && omittedFocus) {
+      const current = [...observed.values()].find(note => this.access.toPublicPath(note.path) === omittedFocus);
+      if (current) {
+        result.nextAction = { endpointId: 'notes.read', arguments: { path: omittedFocus, expectedRevision: current.revision, maxChars: 4000 } };
+        result.reason = 'The candidate exceeds even the maximum response budget after removing duplicate projections. Read this exact original, inspect its authored cluster and counterpoints in smaller reads, and do not infer complete coverage from this partial result.';
+      }
+    }
+    if (!fits(result)) {
+      delete result.generatedAt; delete result.attentionRouting; delete result.groupingRule;
+      result.purpose = 'Authored synthesis candidates, not truth or merge instructions.';
+    }
+    if (!fits(result)) return { items: [], total: ranked.length, truncated: true, reason: 'Locator exceeds response budget; repeat the same query with maxChars:16000.' };
+    return result;
   }
 
   async promotionCandidates(principal?: ScopePrincipal, limit = 10, maxChars = 6000, prettyPrint = false) {

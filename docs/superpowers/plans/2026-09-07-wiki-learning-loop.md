@@ -91,9 +91,26 @@ moderation, related-write guards and final revision checks protect the projectio
 
 ## 5. Explanation and conditional synthesis
 
-- [ ] Extend existing synthesis candidate/template workflow with question, competing explanations, applicability, counterexamples, unresolved choices and revision-pinned inputs; route to existing publish/Decision Record operations.
-- [ ] Preserve authored cluster boundaries, originals, dissent and input staleness. A generated synthesis remains an attributed interpretation.
-- [ ] Test multiple valid contextual choices, unsupported conclusions, input changes and an already existing synthesis; avoid duplicate publication as default.
+Implementation contract: optional `knowledgeSynthesis` on the
+existing knowledge and Decision Record writers, stored as `knowledge_synthesis`.
+Two to eight exact current input snapshots, competing explanations, contextual
+choices, counterexamples and unresolved questions. Structural support is not
+semantic proof. Historical/disputed inputs require an explicit context role.
+Scope/prose checks and related revision locks are reused; permission checks also
+run after lock waiting and at write dispatch. Omission keeps historical pins.
+The existing candidate projection gains same-scope grouping, a bounded worksheet,
+current metadata/revision validation, existing-basis drift and formatted budget
+continuation. Source notes and authored relations remain unchanged. A synthesis
+template is an ordinary knowledge/model note, not a new knowledge kind.
+
+Focused evidence: pure contract red15 -> green15; publication red7 -> green7;
+permission-after-preparation and omitted-counterpoint regressions were reproduced
+and repaired. Independent spec and quality reviews approved after regression
+repairs. The final full suite and native deployment checks are recorded below.
+
+- [x] Extend existing synthesis candidate/template workflow with question, competing explanations, applicability, counterexamples, unresolved choices and revision-pinned inputs; route to existing publish/Decision Record operations.
+- [x] Preserve authored cluster boundaries, originals, dissent and input staleness. A generated synthesis remains an attributed interpretation.
+- [x] Test multiple valid contextual choices, unsupported conclusions, input changes and an already existing synthesis; avoid duplicate publication as default.
 
 ## 6. Discussion to falsifiable investigation
 
@@ -212,3 +229,26 @@ isolated MCP fixtures, not production-corpus coverage. Host rollback archive:
 `.mcpvault/backups/source-provenance-20260908/previous-dist.zip`.
 All spawned stage4 workers/reviewers were closed. Stages5–8 remain required;
 stage4 delivery is not completion of the overall goal.
+
+2026-09-08, stage5: conditional synthesis contract, existing publication/decision
+writers, ordinary synthesis template, revision-pinned Properties and bounded
+same-scope candidate worksheets implemented. Originals and dissent remain intact;
+current revisions are not proof. Independent reviews exposed permission timing,
+historical premises, hidden counterpoints, lost drift after archive/delete/regroup,
+oversized continuation, legacy-output selection and combined related-guard limits.
+Each finding was reproduced and repaired; final spec and quality reviews approved.
+The combined application/synthesis budget is eight distinct related notes including
+prose links; shared paths are deduplicated and the existing internal guard retained.
+
+Final fresh full run: **227 files/3382 passed/2 existing skips**,443.08s,
+started01:51:58 KST, with maxWorkers=1. Build and diff checks passed. The existing
+shared HTTP task was refreshed toPID28460 at127.0.0.1:8788; native Codex confirmed
+policy31, the synthesis template, publication schema and bounded candidate read.
+Anonymous publication remains locked. The production candidate query returned
+zero items, so positive publication/drift/concurrency cases are isolated MCP
+fixtures, not claimed as positive production-corpus coverage. No production
+notes/accounts/plugin settings changed; the welcome revision is unchanged.
+Host rollback archive:
+`.mcpvault/backups/conditional-synthesis-20260908-0143/previous-dist.zip`.
+Stage5 workers/reviewers are closed. Stages6-8 remain required; this increment
+does not complete the overall goal.

@@ -1,0 +1,121 @@
+import { posix } from 'node:path';
+import { isModerationHidden } from './moderation-policy.js';
+import { ReferenceService } from './references.js';
+import { extractObsidianLinkOccurrences } from './backlinks.js';
+import { parseWikiLink } from './wikilink/resolveWikiLink.js';
+import { normalizeKnowledgeSynthesis } from './knowledge-synthesis-model.js';
+const BYTES = 8 * 1024 * 1024;
+const UNAVAILABLE = 'Synthesis input unavailable or changed; read current context and retry';
+const INPUT_KINDS = new Set(['atomic', 'knowledge', 'literature', 'question', 'hypothesis', 'experiment', 'assumption', 'decision']);
+const historicalInput = (fm) => ['archived', 'superseded', 'tombstoned'].includes(String(fm.lifecycle || '').trim().toLowerCase())
+    || ['disputed', 'superseded'].includes(String(fm.knowledge_status || '').trim().toLowerCase())
+    || ['rejected', 'superseded'].includes(String(fm.decision_status || '').trim().toLowerCase());
+/** Inspect only visible current metadata; never expose unavailable input identities. */
+export async function inspectSynthesisBasis(value, container, read, access, principal) {
+    if (value === undefined)
+        return { state: 'unrecorded' };
+    let synthesis;
+    try {
+        synthesis = normalizeKnowledgeSynthesis(value);
+    }
+    catch {
+        return { state: 'invalid_record' };
+    }
+    const changedInputIds = [], historicalInputIds = [];
+    for (const input of synthesis.inputs) {
+        try {
+            const path = input.path.startsWith('scope://') ? access.resolveExternalPath(input.path, principal) : input.path;
+            if (!access.canAccessPhysicalPath(path, principal) || !access.canReferenceFrom(container, path)
+                || (access.isCommunityPath(path) && !access.isCommunityPath(container) && !/^_scopes\//i.test(container)))
+                return { state: 'inputs_unavailable' };
+            const current = await read(path);
+            if (current.frontmatter.llm_wiki_type !== 'knowledge')
+                return { state: 'inputs_unavailable' };
+            if (current.revision !== input.revision)
+                changedInputIds.push(input.id);
+            if (historicalInput(current.frontmatter))
+                historicalInputIds.push(input.id);
+        }
+        catch {
+            return { state: 'inputs_unavailable' };
+        }
+    }
+    return { state: changedInputIds.length ? 'inputs_changed' : historicalInputIds.length ? 'review_required' : 'current_revisions',
+        changedInputIds, historicalInputIds, notice: 'Current revisions do not verify the interpretation. Historical or disputed inputs are context, not current premises.' };
+}
+/** Validates a supplied interpretation for the existing publication transaction.
+ * No separate writer, source promotion, truth score, or automatic input update. */
+export async function prepareKnowledgeSynthesis(fs, access, value, container, principal) {
+    const synthesis = normalizeKnowledgeSynthesis(value);
+    const physical = (value) => {
+        const expanded = value.startsWith('scope://') ? access.resolveExternalPath(value, principal) : value.replace(/\\/g, '/');
+        if (posix.isAbsolute(expanded) || expanded.includes(':') || /[\u0000-\u001f\u007f]/.test(expanded))
+            throw Error(UNAVAILABLE);
+        const path = posix.normalize(expanded);
+        if (path === '..' || path.startsWith('../') || !access.canAccessPhysicalPath(path, principal))
+            throw Error(UNAVAILABLE);
+        return path;
+    };
+    container = physical(container);
+    const allowed = (path) => access.canAccessPhysicalPath(container, principal)
+        && access.canAccessPhysicalPath(path, principal) && access.canReferenceFrom(container, path)
+        && (!access.isCommunityPath(path) || access.isCommunityPath(container) || /^_scopes\//i.test(container));
+    const guards = new Map();
+    const inputIdentities = new Set();
+    const observe = async (path) => {
+        if (!allowed(path) || path.toLowerCase() === container.toLowerCase())
+            throw Error(UNAVAILABLE);
+        const key = path.toLowerCase();
+        if (!guards.has(key) && guards.size >= 8)
+            throw Error('Synthesis may reference at most eight distinct related notes, including prose links');
+        const meta = (await fs.readNoteMetadata([path], allowed, { fresh: true, strict: true, maxBytes: BYTES }))[0];
+        if (!meta?.revision || isModerationHidden(meta.frontmatter))
+            throw Error(UNAVAILABLE);
+        const old = guards.get(key);
+        if (old && old.expectedRevision !== meta.revision)
+            throw Error(UNAVAILABLE);
+        guards.set(key, { path, expectedRevision: meta.revision });
+        return meta;
+    };
+    for (const input of synthesis.inputs) {
+        const path = physical(input.path), key = path.toLowerCase();
+        if (inputIdentities.has(key))
+            throw Error('Duplicate synthesis input identity');
+        inputIdentities.add(key);
+        const meta = await observe(path);
+        if (meta.revision !== input.revision || meta.frontmatter.llm_wiki_type !== 'knowledge'
+            || !INPUT_KINDS.has(String(meta.frontmatter.note_kind || 'knowledge')))
+            throw Error(UNAVAILABLE);
+        if (historicalInput(meta.frontmatter) && input.role !== 'historical_context')
+            throw Error('Retired or disputed synthesis input requires explicit historical_context role; preserve failed paths without treating them as current premises');
+        input.path = access.toPublicPath(path);
+    }
+    const fields = [synthesis.question, ...synthesis.explanations.flatMap(e => [e.explanation, e.appliesWhen, e.limitations]),
+        ...synthesis.choices.flatMap(c => [c.when, c.reason]), ...synthesis.counterexamples.map(c => c.description), ...synthesis.unresolvedQuestions];
+    const links = fields.flatMap(field => extractObsidianLinkOccurrences(field));
+    if (links.length > 16)
+        throw Error('Synthesis prose supports at most sixteen links; put long analysis in a linked note');
+    const refs = new ReferenceService(fs, access);
+    try {
+        for (const link of links) {
+            const raw = /^!?\[\[/.test(link.link) ? parseWikiLink(link.link.replace(/^!/, '')).document : link.target;
+            const decoded = decodeURIComponent(raw).replace(/\\/g, '/');
+            const path = decoded.startsWith('scope://') ? physical(decoded)
+                : physical(decoded.startsWith('.') ? posix.join(posix.dirname(container), decoded) : decoded);
+            if (!allowed(path))
+                throw Error(UNAVAILABLE);
+        }
+        for (const field of fields)
+            for (const path of await refs.validateAndNormalize(undefined, container, principal, field, { strictBodyLinks: true }))
+                await observe(path);
+    }
+    catch {
+        throw Error(UNAVAILABLE);
+    }
+    const assertAccess = () => {
+        if (!allowed(container) || [...guards.values()].some(g => !allowed(g.path)))
+            throw Error(UNAVAILABLE);
+    };
+    assertAccess();
+    return { synthesis, guards: [...guards.values()], assertAccess };
+}

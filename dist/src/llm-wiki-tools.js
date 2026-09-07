@@ -1,4 +1,5 @@
 import { KNOWLEDGE_APPLICATIONS_SCHEMA } from './knowledge-application-model.js';
+import { KNOWLEDGE_SYNTHESIS_SCHEMA } from './knowledge-synthesis-model.js';
 import { ANSWER_PACKET_INTENTS, BASES_VIEW_IDS, CATALOG_ORDERS, CLAIM_ROLES, CLAIM_STATUSES, CONFIDENCE_LEVELS, ISSUE_KINDS, NOTE_TEMPLATE_IDS, RECIPROCAL_RELATIONS, RELATION_FIELDS, TEMPORAL_VALIDITY_STATES, WIKI_PROJECTION_VIEWS, getOrganizationPropertyContract, } from './organization.js';
 import { WIKI_POLICY_TOPICS } from './wiki-policy.js';
 const organizationPropertyContracts = new Map(getOrganizationPropertyContract().map(contract => [contract.name, contract]));
@@ -144,6 +145,7 @@ export function getLlmWikiTools() {
             name: 'publish_decision_record',
             description: 'Create or update a structured Decision Record as an evidence-grounded knowledge note. Record context, the decision, alternatives, consequences, status, and evidence so later agents can audit or supersede it without duplicating Git history.',
             inputSchema: { type: 'object', properties: {
+                    knowledgeSynthesis: KNOWLEDGE_SYNTHESIS_SCHEMA,
                     path: { type: 'string' }, title: { type: 'string' }, context: { type: 'string', maxLength: 4000 }, decision: { type: 'string', maxLength: 4000 },
                     alternatives: { type: 'array', items: { type: 'string', maxLength: 1000 }, maxItems: 12 }, consequences: { type: 'array', items: { type: 'string', maxLength: 1000 }, maxItems: 12 },
                     status: organizationPropertySchema('decision_status', { default: 'proposed' }), supersedes: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 30, description: 'Older Decision Records replaced by this one; direction is new -> old.' }, replacedBy: { type: 'string', maxLength: 500, description: 'Successor path when explicitly retiring this record.' }, evidencePaths: { type: 'array', items: { type: 'string' }, maxItems: 20 }, references: { type: 'array', items: { type: 'string' } },
@@ -161,6 +163,7 @@ export function getLlmWikiTools() {
             name: 'publish_knowledge',
             description: 'Create or update active evidence-grounded knowledge while preserving ordinary Markdown/Obsidian/Git behavior. Use wiki.lifecycle_transition instead of this endpoint for retirement or reactivation. Every evidence path must be an immutable source snapshot. Entering taskStatus=completed requires one auditable knowledge disposition. Returned revision identifies this write; re-read the target and inspect any intervening edit before editing again.',
             inputSchema: { type: 'object', properties: {
+                    knowledgeSynthesis: KNOWLEDGE_SYNTHESIS_SCHEMA,
                     knowledgeApplications: KNOWLEDGE_APPLICATIONS_SCHEMA,
                     ...executionProperties,
                     ...temporalProperties,
@@ -849,7 +852,7 @@ export function getLlmWikiTools() {
         },
         {
             name: 'get_wiki_synthesis_candidates',
-            description: 'Find bounded authored clusters of durable notes that may merit a model, argument, or decision synthesis. It groups by one explicit primary MOC/moc, project, domain, or subject term; returns current input revisions, counterpoints, existing-synthesis coverage, and a revision-safe non-mutating plan. Coverage and contradiction links use the same visible path/title/alias/preferred-term/stable-ID/relative-path resolver as the graph. Pass a pulse-returned focusPath to reopen that exact stateless candidate. It never clusters by folder/vector similarity, merges originals, guesses ambiguity, or treats synthesis as truth.',
+            description: 'Find bounded authored, same-scope clusters that may merit conditional explanation or a decision. Returns up to eight current selected inputs per candidate, counterpoints, existing-synthesis coverage, synthesisBasis drift and a knowledgeSynthesis worksheet for existing publication/Decision Record operations. Maximum64 fresh metadata reads; whole formatted response obeys maxChars. Read inputs before filling explanations, conditions, limitations, support IDs and unresolved choices. Prefer the existing synthesis; current revisions never certify truth. Coverage and contradiction links share the visible graph resolver. Use returned focusPath continuation for omitted candidates. No folder/vector clustering, automatic merge or factual judgment.',
             inputSchema: { type: 'object', properties: { focusPath: { type: 'string', maxLength: 1024, description: 'Optional visible input-note path returned by an idle pulse; keeps the same synthesis candidate first after a stateless round trip' }, limit: { type: 'integer', minimum: 1, maximum: 30, default: 10 }, maxChars: { type: 'integer', minimum: 768, maximum: 16000, default: 7000 }, accessToken, prettyPrint } },
         },
         {

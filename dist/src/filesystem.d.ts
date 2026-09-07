@@ -83,6 +83,7 @@ export declare class FileSystemService {
         expectedRevision: string;
     }>, policy?: {
         maxBytes?: number;
+        assertAccess?: () => void;
     }): Promise<{
         revision: string;
     }>;

@@ -9,6 +9,24 @@ updated_at: 2026-09-01T18:30:44.285Z
 
 ## Question context projections
 
+`knowledge_synthesis` is an optional bounded object on a knowledge note or
+Decision Record. It stores `question`, `inputs` (2–8 exact id/path/revision
+snapshots), `explanations` (2–4 id/explanation/appliesWhen/limitations/basis
+records), `choices` (when/explanationId/basis/reason), `counterexamples`
+(description/basis), and `unresolvedQuestions`. Each basis lists input IDs.
+An input's optional `role` defaults to `premise`; retired/rejected/disputed
+knowledge requires explicit `historical_context`. This does not endorse old
+claims. The total submitted record is limited to 12000 JSON characters.
+Inputs, prose links and simultaneous knowledgeApplications share a combined
+limit of eight distinct related notes; shared paths consume one slot.
+Submit through existing `mcp.publish_knowledge` or `wiki.decision_record`
+`knowledgeSynthesis`, guarded by current input revisions. Omission preserves
+prior input pins without recertifying freshness. Source-backed publication
+and scope rules remain required. Nested input paths protect reference integrity
+without adding support/backlink edges. Candidate `current_revisions` means
+only revision agreement; an interpretation is not automatically verified.
+See [conditional synthesis](../docs/knowledge-synthesis.md).
+
 `source_derivations` is optional immutable source metadata: at most eight
 `{path, revision, relation}` records, where `relation` is `quotation`,
 `adaptation`, or `republication`. Paths are exact Vault-relative source paths,
