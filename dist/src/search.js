@@ -43,6 +43,7 @@ function unquoteSearchToken(value) {
     }
     return value;
 }
+export function positiveSearchTerms(query) { return parseSearchQuery(query).terms; }
 function parseSearchQuery(query) {
     const terms = [];
     const excludeTerms = [];

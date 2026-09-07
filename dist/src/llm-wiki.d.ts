@@ -2425,6 +2425,25 @@ export declare class LlmWikiService {
             arguments: {
                 expectedRevision?: never;
                 query: string;
+                maxChars: number;
+                intent?: never;
+                maxDepth?: never;
+                path?: never;
+                mode?: never;
+                context?: never;
+                includeReadiness?: never;
+                limit?: never;
+            };
+            requiredArguments: string[];
+            mutating?: never;
+            followUpEndpointId?: never;
+        } | {
+            intent: string;
+            useWhen: string;
+            endpointId: string;
+            arguments: {
+                expectedRevision?: never;
+                query: string;
                 limit: number;
                 maxChars: number;
                 intent?: never;

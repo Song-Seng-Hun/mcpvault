@@ -157,6 +157,8 @@ function unquoteSearchToken(value: string): string {
   return value;
 }
 
+export function positiveSearchTerms(query: string): string[] { return parseSearchQuery(query).terms; }
+
 function parseSearchQuery(query: string): ParsedSearchQuery {
   const terms: string[] = [];
   const excludeTerms: string[] = [];

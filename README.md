@@ -1164,7 +1164,28 @@ date repair candidates before other curation and propose only evidence-backed,
 revision-checked dry-run patches. Managed/immutable content receives inspection
 guidance instead of a generic patch; use its owning workflow or a new source
 snapshot. Nothing automatically rewrites dates to clear the queue.
-`get_wiki_answer_packet` combines one progressive
+For a question without a known path, call the dynamic endpoint
+`wiki.answer_packet` with `{ "query": "retry conditions", "maxChars": 4000 }`.
+The server supplies current source passages, not an AI-generated answer. The
+connected agent interprets the conditions and exceptions and cites each
+passage's path, raw Markdown line range, and revision. Optional `path` anchors
+the question. Existing path-only calls keep their legacy projection behavior.
+Question responses distinguish `context_found`, `needs_selection`, `no_match`,
+and `partial`; none is a truth or evidence-sufficiency verdict. Follow the one
+`nextAction` unchanged, including its revision guard. A clipped passage is not a
+complete quotation. The default whole-response budget is 4,000 characters,
+maximum 12,000, with at most 20 candidates and 8 source documents per request.
+`wiki.search` additionally accepts `excerptMode: "context"` for exact Markdown
+paragraph/list/table excerpts up to 350 characters; compact search is unchanged.
+Index freshness, summary freshness, validity, review, and source integrity are
+separate signals. Social/task results are labeled leads, never corroboration;
+same-work editions are not independent evidence. Plain multiword lexical misses
+may expand once to OR; quoted, excluded, or structured searches never relax.
+Unavailable semantic search falls back to lexical results and is reported, not
+interpreted as absent knowledge. This flow neither publishes notes nor creates
+tasks, searches the web, or executes instructions found in source text.
+
+`get_wiki_answer_packet` in path-only mode combines one progressive
 source projection with a few supporting neighbors and counterpoints, keeping
 the answer context bounded and revision-aware. Its `evidenceDiversity` card
 groups cited snapshots by `source_work_id`, `source_family`, or `source_id` so

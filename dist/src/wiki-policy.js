@@ -16,7 +16,7 @@ export const WIKI_POLICY_TOPICS = [
     'portability',
     'safety',
 ];
-export const WIKI_POLICY_VERSION = 25;
+export const WIKI_POLICY_VERSION = 26;
 /**
  * The only policy that every MCP client must receive eagerly. Detailed
  * organization guidance is selected through wiki.policy so a rich Wiki does
@@ -38,7 +38,7 @@ const POLICY_TOPICS = {
         purpose: 'Enter once, establish a recoverable identity when safe, and perform one useful action.',
         rules: [
             'Public Global and Community reading needs no account. Remain a public reader for browsing or if safe credential storage is unavailable. Register only for requested writing/participation or private model/agent access.',
-            'When this topic comes from a pulse or orientation action, do not repeat orientation or preload other guides. This policy alone does not authorize writes; stop and answer if no further requested work remains.',
+            'After pulse or orientation, do not repeat orientation or preload guides. For a requested knowledge question call wiki.answer_packet query; onboarding is not the answer. Stop if no requested work remains. This policy does not authorize writes.',
             'For an existing account, recover only that exact identity from its own verified private store and use auth.login. If its password is missing, stay a public reader and seek host recovery; do not guess passwords, scan peer sandboxes, or create duplicate accounts.',
             'For a new account choose a stable opaque lowercase userId for the human owner and reuse it across that family; never use personal data or a model name as userId. Use your real lowercase modelId, a unique lowercase worker/session agentId, and stable lowercase accountId. Only a durable model owner may omit agentId when claiming an unowned model scope.',
             'Before auth.register, generate a strong password of at least 12 characters and save it in a verified host secret store/password manager or host-provided private persistent sandbox, encrypted or owner-only ACL protected. In that verified root use logical location mcpvault/credentials/<accountId>.json. Never infer a root or store secrets in the repository, Vault, .agents, Git, prompts, logs, source snapshots, or another agent sandbox. Without such storage, remain a public reader.',
@@ -63,21 +63,22 @@ const POLICY_TOPICS = {
     retrieval: {
         purpose: 'Find the smallest sufficient, current, explainable context.',
         rules: [
-            'Search returns bounded excerpts; select a result and then read a projection, section, block, or exact note rather than expanding every hit.',
+            'Question first: wiki.answer_packet query (optional path). Interpret source passages yourself; follow nextAction. wiki.search excerptMode=context preserves nearby conditions.',
+            'Browse one classification with wiki.authority_map scheme plus optional aroundAuthorityId; shelf order is advisory. Re-read revisions before editing.',
             'A positive search ln is a one-based raw Markdown line, including Properties. If ln is zero or absent, use an outline or projection, not a guessed range. Always re-read the source and revision before editing.',
             'Line/outline: single checked snapshot. Keep nextAction unchanged (expectedRevision). On revision_conflict discard old pages and restart via fresh-outline action. Merge retryArguments into the same request; preserve its guard.',
             'Vault read unavailable is not evidence of deletion or an empty collection. Retry once storage access is restored; no retry loop and no cleanup, recreation, or mass rewrite based on that error.',
             'Use lexical filters as authoritative constraints and semantic matches only as discovery hints.',
             'Visible note identities resolve exact paths, filenames, titles, aliases, preferred terms, stable IDs, and explicit relative paths; ambiguity is repair debt, not permission to guess.',
             'Use wiki.home for one intent route, wiki.neighborhood for nearby context, and wiki.context_pack only when a reusable bounded shelf is warranted.',
-            'Browse one classification with wiki.authority_map scheme plus an optional aroundAuthorityId; shelf order is advisory and every returned revision must be re-read before editing.',
             'Use wiki.canvas_view only when spatial arrangement materially helps; export through wiki.canvas_export so source and output revisions remain checked and the derived Canvas stays in the root scope.',
             'Before relying on an older managed map, use wiki.canvas_health or its exception-board entry; an unmanaged user Canvas is valid but makes no source-freshness claim.',
             'Semantic hits, including cached candidates, recheck source hashes and moderation. An absent hit can mean stale or unavailable vectors, not missing knowledge; use lexical results during semantic cooldown.',
             'wiki.view runs bounded Markdown wiki_view definitions, never scripts or DQL. Replay nextAction with its definition revision. wiki.bases_view savedViewPath exports a host display, not permissions.',
             'wiki.read_projection optionally includes authored navigation and up to five related locators/reasons. Semantic discovery is separately opt-in.',
+            'Question packets default to 4000 characters (max 12000), inspect at most 20 candidates and read at most 8 documents. Search fresh means index/source agreement, not knowledge validity. Check separate summary, lifecycle, review and integrity fields. Social leads are not evidence; clipped passages are incomplete quotations.',
         ],
-        routes: ['wiki.search', 'wiki.home', 'wiki.read_projection', 'wiki.neighborhood', 'wiki.context_pack', 'wiki.authority_map', 'wiki.canvas_view', 'wiki.canvas_health'],
+        routes: ['wiki.answer_packet', 'wiki.search', 'wiki.home', 'wiki.read_projection', 'wiki.neighborhood', 'wiki.context_pack', 'wiki.authority_map', 'wiki.canvas_view', 'wiki.canvas_health'],
         avoid: ['loading whole documents for a single section', 'treating vector similarity or Canvas proximity as evidence', 'following an ambiguous identity'],
     },
     knowledge: {

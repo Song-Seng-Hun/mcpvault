@@ -2,6 +2,7 @@ import type { PathFilter } from './pathfilter.js';
 import type { SearchParams, SearchResult } from './types.js';
 import type { VaultCatalogChange, VaultFileCatalog } from './vault-catalog.js';
 import { VaultIoCoordinator } from './vault-io.js';
+export declare function positiveSearchTerms(query: string): string[];
 export declare class SearchService {
     private pathFilter;
     private readonly catalog?;

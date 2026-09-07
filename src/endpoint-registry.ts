@@ -375,7 +375,7 @@ const ENDPOINT_ALIASES: Record<string, string[]> = {
   get_wiki_trail: ['wiki', 'trail', 'path', 'connection', 'multi-hop', 'graph', 'links', 'between notes'],
   get_wiki_placement_candidates: ['wiki', 'placement', 'para', 'folder', 'filing', 'organization', 'misplaced', 'lifecycle'],
   get_wiki_knowledge_gaps: ['wiki', 'question', 'hypothesis', 'experiment', 'reproducible', 'assumption', 'epistemic', 'active recall', 'research gap', 'disputed', 'negative knowledge'],
-  get_wiki_answer_packet: ['wiki', 'answer', 'context', 'packet', 'counterpoint', 'supporting', 'progressive', 'intent', 'reasoning trail', 'claim', 'evidence', 'decision'],
+  get_wiki_answer_packet: ['wiki', 'answer', 'question', 'query', 'context', 'packet', 'counterpoint', 'supporting', 'progressive', 'intent', 'reasoning trail', 'claim', 'evidence', 'decision', '질문', '근거', '답변'],
   get_wiki_claim_matrix: ['wiki', 'claim', 'matrix', 'evidence', 'coverage', 'source work', 'review', 'argument map', 'provenance'],
   get_wiki_argument_map: ['wiki', 'claim', 'argument', 'argument map', 'supports', 'contradicts', 'depends on', 'premise', 'warrant', 'conclusion', 'objection', 'rebuttal', 'obsidian block link'],
   get_wiki_context_pack: ['wiki', 'context pack', 'shelf', 'bundle', 'entrypoint', 'project context', 'moc context', 'bounded context'],

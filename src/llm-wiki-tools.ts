@@ -93,7 +93,7 @@ export function getLlmWikiTools(): Tool[] {
     },
     {
       name: 'orient_wiki',
-      description: 'Call this first after connecting. It returns visible scope, safety context, and exactly one primary action without scanning catalog or lint state. Execute only that action, then stop tool use and answer unless the current user explicitly requested another step. Welcome, schema, policy, community, and dashboards are progressive resources, never a preload checklist.',
+      description: 'Call this first after connecting. It returns visible scope, safety context, and exactly one primary action without scanning catalog or lint state. Execute only that action, then stop for a generic first look. For a requested knowledge question, onboarding is preparation: continue with wiki.answer_packet query. Welcome, schema, policy, community, and dashboards are progressive resources, never a preload checklist.',
       inputSchema: { type: 'object', properties: { accessToken, maxChars: { type: 'integer', minimum: 512, maximum: 20000, default: 3000, description: 'Hard response budget; orientation remains compact even when a larger budget is allowed' }, prettyPrint } },
     },
     {
@@ -285,14 +285,16 @@ export function getLlmWikiTools(): Tool[] {
     },
     {
       name: 'get_wiki_answer_packet',
-      description: 'Build one bounded intent-aware context packet for a selected Wiki note. It combines the current progressive projection, temporal applicability, explainable neighbors, source-work diversity, a question-to-claim-to-evidence-to-counterexample-to-decision reasoning trail, and bounded next guidance. Diversity is advisory: snapshots of one work are not independent corroboration and several works do not prove truth. Choose capture, explore, decide, execute, or review; revisions remain freshness guards and selected bodies stay compact.',
+      description: 'Get bounded source context for a question using query, optionally anchored to path. Question mode searches Wiki first, reads relevant original passages and declared evidence/counterpoints, and marks social/task material as leads only. It never generates an answer, certifies truth or changes notes. Follow its exact revision-guarded nextAction; ambiguous identities require selection. Question defaults: 4000 characters, maximum12000,20 candidates,8 source documents. Without query, the existing path-based progressive packet and intent behavior are preserved.',
       inputSchema: { type: 'object', properties: {
         path: { type: 'string', description: 'Existing visible Markdown note path' },
-        maxChars: { type: 'integer', minimum: 1024, maximum: 16000, default: 7000 },
+        query: { type: 'string', minLength: 1, maxLength: 1000, description: 'Question or search terms. Exact phrases, filters and exclusions are never automatically relaxed.' },
+        expectedRevision: { type: 'string', description: 'Optional current revision guard when query is anchored to a selected path.' },
+        maxChars: { type: 'integer', minimum: 1024, maximum: 16000, default: 4000, description: 'Question mode defaults 4000/max 12000; path-only defaults 7000/max 16000 when omitted. Includes the complete response and formatting.' },
         includeSemantic: { type: 'boolean', description: 'Add optional bounded semantic candidates to neighbor discovery (default: true)' },
         intent: { type: 'string', enum: [...ANSWER_PACKET_INTENTS], default: 'decide', description: 'Order and interpret the compact packet for the current job: capture rough input, explore connections, decide with evidence, execute a next action, or review freshness/quality.' },
         accessToken, prettyPrint,
-      }, required: ['path'] },
+      }, anyOf: [{ required: ['path'] }, { required: ['query'] }] },
     },
     {
       name: 'get_wiki_claim_matrix',

@@ -9160,6 +9160,7 @@ export class LlmWikiService {
             childrenTruncated: children.length > boundedLimit,
         }));
         const workflowRoutes = [
+            { intent: 'answer_question', useWhen: 'You have a question and need current source passages, conditions, counterpoints, and evidence without knowing the folder structure.', endpointId: endpointIdForTool('get_wiki_answer_packet'), arguments: { query: '<question>', maxChars: 4000 }, requiredArguments: ['query'] },
             { intent: 'find', useWhen: 'You need an existing note or fact.', endpointId: endpointIdForTool('search_notes'), arguments: { query: '<terms>', limit: 5, maxChars: 4000 }, requiredArguments: ['query'] },
             { intent: 'capture', useWhen: 'You must preserve a new observation before classifying it.', endpointId: endpointIdForTool('capture_wiki_note'), arguments: { expectedRevision: 'missing' }, requiredArguments: ['content'], mutating: true },
             { intent: 'organize_inbox', useWhen: 'You are processing captures, not creating new knowledge.', endpointId: endpointIdForTool('get_wiki_inbox'), arguments: { limit: 5, maxChars: 4000 }, followUpEndpointId: endpointIdForTool('clarify_wiki_note') },
@@ -15575,7 +15576,7 @@ export class LlmWikiService {
             actionBudget: {
                 endpointCalls: 1,
                 stopAfterAction: true,
-                instruction: 'Execute only primaryAction now. Then stop tool use and answer the current user. Follow another link, continuation, policy topic, schema section, community area, or dashboard only when the user requested that specific work.',
+                instruction: 'Execute only primaryAction now. Then stop tool use for a generic first look. If the user asked a knowledge question, onboarding is preparation: next call wiki.answer_packet with query set to that question (public reads need no account). Follow further context only for requested work.',
             },
             routing: 'For via=call_endpoint, pass primaryAction.endpointId and arguments to call_endpoint. For via=direct_mcp, call that fixed MCP tool directly. Do not search for an endpoint already named here.',
             participation: {

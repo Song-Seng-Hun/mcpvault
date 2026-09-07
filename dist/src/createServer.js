@@ -7,6 +7,8 @@ import { packNavigationPage, NAVIGATION_READ_GUIDANCE } from './navigation-page.
 import { FrontmatterHandler, parseFrontmatter } from "./frontmatter.js";
 import { PathFilter } from "./pathfilter.js";
 import { SearchService } from "./search.js";
+import { RetrievalService } from './retrieval-service.js';
+import { QuestionPacketService } from './question-packet.js';
 import { handleWikiLinkTool } from "./wikilink/index.js";
 import { GitHistoryService } from "./git-history.js";
 import { CollaborationService } from "./scopes.js";
@@ -55,7 +57,7 @@ import { ReputationService } from "./reputation.js";
 import { REPUTATION_MUTATING_TOOLS, getReputationTools } from "./reputation-tools.js";
 import { SemanticSearchService } from "./semantic-search.js";
 import { cleanupStaleDerivedTemps } from './derived-temp-cleanup.js';
-import { boundSearchResults, normalizeSearchMaxChars } from "./search-limits.js";
+import { normalizeSearchMaxChars } from "./search-limits.js";
 import { EndpointRegistry, endpointIdForTool } from "./endpoint-registry.js";
 import { resolve } from "path";
 import { VaultMetadataIndex } from "./vault-index.js";
@@ -65,7 +67,6 @@ import { VaultIoCoordinator } from "./vault-io.js";
 import { IdeationService } from "./ideation.js";
 import { IDEATION_MUTATING_TOOLS, getIdeationTools } from "./ideation-tools.js";
 import { getWikiPolicyTopic, MCPVAULT_SERVER_INSTRUCTIONS } from './wiki-policy.js';
-const SEMANTIC_QUERY_TIMEOUT_MS = 2_000;
 const REQUEST_QUEUE_WAIT_MS = 10_000;
 class RequestConcurrencyGate {
     maxConcurrent;
@@ -381,6 +382,8 @@ export function createServer(vaultPath, options = {}) {
     const fileSystem = new FileSystemService(resolvedVaultPath, pathFilter, frontmatterHandler, queueReadModelChange, metadataIndex, graphIndex, vaultIo, scopeAccess);
     const gitHistory = new GitHistoryService(resolvedVaultPath, pathFilter);
     const collaboration = new CollaborationService(fileSystem, searchService);
+    const retrieval = new RetrievalService(searchService, collaboration, semanticSearch, scopeAccess, fileSystem);
+    const questionPacket = new QuestionPacketService(fileSystem, scopeAccess, retrieval);
     const references = new ReferenceService(fileSystem, scopeAccess);
     const llmWiki = new LlmWikiService(fileSystem, scopeAccess, references, semanticSearch);
     llmWikiCache = llmWiki;
@@ -535,6 +538,7 @@ export function createServer(vaultPath, options = {}) {
                 type: "object",
                 properties: {
                     query: { type: "string", description: "Search query text" },
+                    excerptMode: { type: 'string', enum: ['compact', 'context'], description: 'Optional context returns source paragraphs/list items/table rows (up to 350 characters), heading context and a revision-guarded read action. Default compact output is unchanged.' },
                     limit: { type: "number", description: "Maximum number of documents (default: 5, max: 20)", default: 5 },
                     maxChars: { type: "integer", minimum: 512, maximum: 12000, description: "Maximum compact JSON characters returned (default: 4000)", default: 4000 },
                     searchContent: { type: "boolean", description: "Search in note content (default: true)", default: true },
@@ -1410,6 +1414,8 @@ export function createServer(vaultPath, options = {}) {
                         return jsonResult(await llmWiki.knowledgeGaps(principal, trimmedArgs.limit, trimmedArgs.maxChars, trimmedArgs.prettyPrint), trimmedArgs.prettyPrint);
                     }
                     case "get_wiki_answer_packet": {
+                        if (trimmedArgs.query !== undefined)
+                            return jsonResult(await questionPacket.read({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
                         return jsonResult(await llmWiki.answerPacket(principal, trimmedArgs.path, trimmedArgs.maxChars, trimmedArgs.includeSemantic !== false, trimmedArgs.intent), trimmedArgs.prettyPrint);
                     }
                     case "get_wiki_claim_matrix": {
@@ -2184,75 +2190,7 @@ export function createServer(vaultPath, options = {}) {
                         };
                     }
                     case "search_notes": {
-                        const lexicalResults = trimmedArgs.pathPrefix
-                            ? (await searchService.search({
-                                query: trimmedArgs.query,
-                                limit: trimmedArgs.limit,
-                                maxChars: trimmedArgs.maxChars,
-                                searchContent: trimmedArgs.searchContent,
-                                searchFrontmatter: trimmedArgs.searchFrontmatter,
-                                caseSensitive: trimmedArgs.caseSensitive,
-                                pathPrefix: trimmedArgs.pathPrefix,
-                                excludePaths: trimmedArgs.excludePaths,
-                                includeRevisions: trimmedArgs.includeRevisions === true,
-                                expandAuthority: trimmedArgs.expandAuthority === true,
-                            })).filter(result => canAccessPath(result.p))
-                            : await collaboration.searchScopedNotes({
-                                query: trimmedArgs.query,
-                                limit: trimmedArgs.limit,
-                                maxChars: trimmedArgs.maxChars,
-                                searchContent: trimmedArgs.searchContent,
-                                searchFrontmatter: trimmedArgs.searchFrontmatter,
-                                caseSensitive: trimmedArgs.caseSensitive,
-                                includeRevisions: trimmedArgs.includeRevisions === true,
-                                expandAuthority: trimmedArgs.expandAuthority === true,
-                                ...(principal?.modelId && { modelId: principal.modelId }),
-                                ...(principal?.agentId && { agentId: principal.agentId }),
-                            });
-                        let results = lexicalResults;
-                        // Structured Obsidian filters are evaluated by the authoritative
-                        // lexical index. Do not merge unfiltered vector hits into a filtered
-                        // result set; that would violate the user's path/tag/property intent.
-                        const hasStructuredSearchFilter = /(?:^|\s)(?:-?(?:path|tag|property|section|block|task|task-todo|task-done):\S+|\[[^\]]+\]|-\S+)/i.test(String(trimmedArgs.query || ''));
-                        if (trimmedArgs.semantic === true && !hasStructuredSearchFilter) {
-                            const semantic = await Promise.race([
-                                semanticSearch.search({
-                                    query: trimmedArgs.query,
-                                    limit: trimmedArgs.limit,
-                                    maxChars: trimmedArgs.maxChars,
-                                    pathPrefix: trimmedArgs.pathPrefix,
-                                    excludePaths: trimmedArgs.excludePaths,
-                                    includeRevisions: trimmedArgs.includeRevisions === true,
-                                    ...(Array.isArray(trimmedArgs.queryVector) && { queryVector: trimmedArgs.queryVector }),
-                                    principal,
-                                }),
-                                new Promise(resolve => {
-                                    const timer = setTimeout(() => resolve({
-                                        results: [],
-                                        available: false,
-                                        indexed: 0,
-                                        pending: 0,
-                                        error: 'Semantic search timed out; lexical results were returned.',
-                                    }), SEMANTIC_QUERY_TIMEOUT_MS);
-                                    timer.unref?.();
-                                }),
-                            ]);
-                            const byPath = new Map(lexicalResults.map(result => [result.p, result]));
-                            for (const result of semantic.results) {
-                                const existing = byPath.get(result.p);
-                                byPath.set(result.p, existing ? {
-                                    ...existing,
-                                    vs: true,
-                                    why: Array.from(new Set([...(existing.why || []), 'semantic_match'])),
-                                    fresh: existing.fresh === 'verified' ? 'verified' : 'current',
-                                } : result);
-                            }
-                            results = [...byPath.values()]
-                                .sort((a, b) => Number(Boolean(b.wk)) - Number(Boolean(a.wk)))
-                                .slice(0, Math.min(20, Number(trimmedArgs.limit || 5)));
-                            results = boundSearchResults(results, normalizeSearchMaxChars(trimmedArgs.maxChars));
-                        }
-                        searchService.recordUsage(principal?.accountId || principal?.agentId || 'anonymous', String(trimmedArgs.query || ''), results.length);
+                        const results = await retrieval.searchNotes({ ...trimmedArgs, principal });
                         const indent = trimmedArgs.prettyPrint ? 2 : undefined;
                         return {
                             content: [{ type: "text", text: JSON.stringify(results, null, indent) }]
@@ -2714,7 +2652,8 @@ export function createServer(vaultPath, options = {}) {
                 }
             })();
             const responseContract = endpointRegistry.resolve(toolName === 'read_work_project' ? 'work.project' : endpointIdForTool(toolName))?.input;
-            return enforceResponseBudget(toolResponse, normalizedResponseBudget(trimmedArgs.maxChars, responseContract));
+            const responseBudget = trimmedArgs.maxChars ?? (toolName === 'get_wiki_answer_packet' && trimmedArgs.query === undefined ? 7000 : undefined);
+            return enforceResponseBudget(toolResponse, normalizedResponseBudget(responseBudget, responseContract));
         }
         catch (error) {
             await audit.record({ tool: toolName, ...(principal && { principal }), args: rawArgs, outcome: 'error', error });
