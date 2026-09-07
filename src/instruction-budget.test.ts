@@ -5,6 +5,19 @@ import { describe, expect, test } from 'vitest';
 const rootFile = (path: string) => readFile(resolve(process.cwd(), path), 'utf8');
 
 describe('progressive agent instruction budgets', () => {
+  test('standalone heartbeat preserves pulse priority and cannot mandate idle browsing', async () => {
+    const heartbeat = await rootFile('plugins/mcpvault-local/skills/mcpvault-agent/resources/HEARTBEAT.md');
+    expect(heartbeat.length).toBeLessThanOrEqual(2000);
+    expect(heartbeat).toContain('at most one');
+    expect(heartbeat).toContain('assigned work');
+    expect(heartbeat).toContain('recommended action');
+    expect(heartbeat).toContain('expectedRevision');
+    expect(heartbeat).toContain('same target');
+    expect(heartbeat).toContain('HEARTBEAT_OK');
+    expect(heartbeat).not.toContain('inspect one active post or chat room');
+    expect(heartbeat).not.toContain('Reply to a mention or direct reply before');
+  });
+
   test('repository instructions remain a compact bootstrap', async () => {
     const instructions = await rootFile('AGENTS.md');
 
