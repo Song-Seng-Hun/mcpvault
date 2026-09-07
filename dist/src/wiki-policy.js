@@ -16,7 +16,7 @@ export const WIKI_POLICY_TOPICS = [
     'portability',
     'safety',
 ];
-export const WIKI_POLICY_VERSION = 23;
+export const WIKI_POLICY_VERSION = 24;
 /**
  * The only policy that every MCP client must receive eagerly. Detailed
  * organization guidance is selected through wiki.policy so a rich Wiki does
@@ -51,6 +51,7 @@ const POLICY_TOPICS = {
     capture: {
         purpose: 'Capture quickly without forcing premature classification, then clarify deliberately.',
         rules: [
+            'Optional wiki.note_template authoring selects knowledge/capture/reply/new_topic and lists missing inputs. Reply to an existing slug through community.comment, never a new post. Host QuickAdd captures one unique Inbox note; plugins are not required by MCP clients.',
             'Use wiki.capture for a fleeting Inbox note; preserve only bounded origin, reason, context, and a scope-safe related task.',
             'Use wiki.inbox and mcp.get_wiki_inbox_plan for an oldest-first queue, then wiki.clarify with one GTD disposition and the current revision.',
             'Clarification records intent but does not silently move or delete the note; use the normal move preview and revision-safe edit workflow later.',
@@ -73,6 +74,8 @@ const POLICY_TOPICS = {
             'Use wiki.canvas_view only when spatial arrangement materially helps; export through wiki.canvas_export so source and output revisions remain checked and the derived Canvas stays in the root scope.',
             'Before relying on an older managed map, use wiki.canvas_health or its exception-board entry; an unmanaged user Canvas is valid but makes no source-freshness claim.',
             'Semantic hits, including cached candidates, recheck source hashes and moderation. An absent hit can mean stale or unavailable vectors, not missing knowledge; use lexical results during semantic cooldown.',
+            'wiki.view runs bounded Markdown wiki_view definitions, never scripts or DQL. Replay nextAction with its definition revision. wiki.bases_view savedViewPath exports a host display, not permissions.',
+            'wiki.read_projection optionally includes authored navigation and up to five related locators/reasons. Semantic discovery is separately opt-in.',
         ],
         routes: ['wiki.search', 'wiki.home', 'wiki.read_projection', 'wiki.neighborhood', 'wiki.context_pack', 'wiki.authority_map', 'wiki.canvas_view', 'wiki.canvas_health'],
         avoid: ['loading whole documents for a single section', 'treating vector similarity or Canvas proximity as evidence', 'following an ambiguous identity'],
@@ -88,6 +91,7 @@ const POLICY_TOPICS = {
             'Use question, hypothesis, assumption, experiment, decision, and negative knowledge for different epistemic jobs instead of flattening them into generic notes.',
             'Summaries, key points, highlights, and generated syntheses are projections or interpretations; preserve the full body and their source revision/fingerprint.',
             'When direct obligations and concrete repair are empty, get_agent_pulse may surface one bounded synthesis opportunity. Follow wiki.synthesis_candidates only across an authored MOC, project, domain, or subject boundary; folder or vector similarity never creates a synthesis unit.',
+            'wiki.property_contract hostBundle derives optional host forms/templates. wiki.preflight normalizeFormatting previews revision-safe mechanical changes; never refresh evidence or summary hashes just to silence lint.',
         ],
         routes: ['mcp.publish_knowledge', 'wiki.note_template', 'wiki.projection_update', 'wiki.relation_set', 'wiki.reciprocal_link', 'notes.move_preview', 'notes.move', 'wiki.synthesis_candidates', 'wiki.decision_record'],
         avoid: ['copying one concept into several folders', 'treating a summary or relation as truth', 'merging from similarity alone'],
@@ -145,6 +149,7 @@ const POLICY_TOPICS = {
             'Use one primary_moc as a launch point and bounded additional mocs for legitimate multiple contexts; do not duplicate the note.',
             'Use wiki.canvas_view for an optional spatial projection of the authored MOC and dependency edges; use wiki.canvas_health before reusing an old managed export and regenerate it after source revisions change.',
             'Use wiki.moc_rebalance only after an overload signal. Inspect its authored heading and source-line order, leftovers, and cross-branch dependencies before applying existing revision-safe planners.',
+            'wiki.moc_region previews/registers/stops one scope-local generated region using revision/fingerprint guards. Manual prose/order stay unchanged; generated navigation is not evidence or an orphan repair. wiki.moc_region_status reports conflicts and suspended grants without write access.',
         ],
         routes: ['wiki.learning_path', 'wiki.moc_rebalance', 'wiki.moc_order', 'wiki.hierarchy_change', 'wiki.moc_membership', 'wiki.moc_candidates', 'wiki.graph_health', 'wiki.context_pack', 'wiki.canvas_view', 'wiki.canvas_export', 'wiki.canvas_health'],
         avoid: ['inferring hierarchy from every body link', 'automatic MOC reorder', 'treating a thematic external prerequisite as a broken course', 'treating a Canvas position as canonical structure'],

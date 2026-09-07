@@ -25,7 +25,7 @@ export declare function extractWikiLinkOccurrences(content: string): Array<Outli
  * based and bounded so callers can provide a useful locator without loading
  * the source note again.
  */
-export declare function extractObsidianLinkOccurrences(content: string, limit?: number): Array<OutlinkMatch>;
+export declare function extractObsidianLinkOccurrences(content: string, limit?: number, authoredOnly?: boolean): Array<OutlinkMatch>;
 export declare function findUnresolvedLinkMatches(content: string, vaultFiles: string[]): UnresolvedLinkMatch[];
 export declare function resolveWikiLinkTargets(target: string, vaultFiles: string[]): string[];
 //# sourceMappingURL=backlinks.d.ts.map

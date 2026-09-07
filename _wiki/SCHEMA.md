@@ -7,6 +7,29 @@ updated_at: 2026-09-01T18:30:44.285Z
 ---
 # LLM Wiki schema
 
+## Optional Obsidian projections
+
+`wiki_view` is an optional version-1 YAML mapping on an ordinary Markdown
+note: `filters` (up to 12 exact scalar Property conditions), `columns` (1–8
+Property names), `pathPrefix`, `sortBy`, `sortOrder`, and `limit` (1–100).
+`wiki.view` returns selected metadata only, applying visibility before paging.
+The definition revision must remain unchanged while following its cursor.
+No JavaScript, DQL, template execution, or private-scope export is authorized
+by a view. Native Bases export is a host-local view, not an access boundary.
+
+Managed MOC regions use exact `%% MCPVault MOC BEGIN %%` / `%% MCPVault MOC END %%`
+markers outside matching code fences. Marker syntax is advisory; it grants no
+write permission. Explicit owner-bound registrations exist only in host state,
+not in note Properties. Generated navigation does not supply evidence or count
+as an orphan repair. Manual Markdown and YAML outside the region are preserved.
+Use `wiki.moc_region` preview/register/regenerate/stop and the read-only
+`wiki.moc_region_status` (also operation=status) to inspect conflicts.
+
+Host templates/fileClasses are generated from `wiki.property_contract` with
+`hostBundle: true`, using its canonical contract fingerprint. Form definitions
+are derived, optional, and restricted to ordinary title/tags editing. See
+[workflow details](../docs/obsidian-workflows.md).
+
 This vault uses ordinary Markdown, YAML frontmatter, Obsidian links, and Git as one coherent knowledge system.
 
 Frontmatter is data, never executable code. Author ordinary leading `---` YAML

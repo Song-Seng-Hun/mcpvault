@@ -107,6 +107,7 @@ with `wiki.canvas_health`; unmanaged Canvases make no freshness claim.
 
 ## 4. Write Obsidian-native, revision-safe content
 
+Host helpers: `wiki.policy`.
 Use ordinary Markdown, YAML Properties, `[[Note]]`,
 `[[folder/Note#Heading]]`, `[[Note#^block-id]]`, aliases, headings, and tags.
 Resolvable links become scope-safe references, but links are navigation rather

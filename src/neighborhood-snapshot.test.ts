@@ -30,6 +30,16 @@ test('neighborhood locators identify the document and revision that actually con
   ]));
 });
 
+test('optional read navigation retains ordinary links when semantic inference throws', async () => {
+  const { fs, access } = await fixture();
+  const semantic = { search: vi.fn().mockRejectedValue(new Error('inference offline')) } as unknown as SemanticSearchService;
+  const wiki = new LlmWikiService(fs, access, new ReferenceService(fs, access), semantic);
+  const result = await wiki.readNavigation(undefined, 'Root.md', await fs.readNoteRevision('Root.md'), { includeRelated: true, includeSemantic: true });
+  expect(semantic.search).toHaveBeenCalledOnce();
+  expect(result.related.items.map((item: { path: string }) => item.path)).toContain('A.md');
+  expect(result.related.items.length).toBeLessThanOrEqual(5);
+});
+
 test.each(['outlinks', 'backlinks'] as const)('neighborhood rejects a changed %s source instead of relabeling old context as current', async mode => {
   const { fs, wiki, write } = await fixture();
   const method = mode === 'outlinks' ? 'getOutlinks' : 'getBacklinks';

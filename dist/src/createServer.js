@@ -47,6 +47,8 @@ import { CONTINUITY_MUTATING_TOOLS, getContinuityTools } from "./continuity-tool
 import { ModerationService } from "./moderation.js";
 import { MODERATION_MUTATING_TOOLS, getModerationTools } from "./moderation-tools.js";
 import { isManagedCommunityPath, isModerationHidden, moderationStatus } from "./moderation-policy.js";
+import { WikiViewService } from './wiki-views.js';
+import { MocRegionService } from './wiki-moc-regions.js';
 import { ReputationService } from "./reputation.js";
 import { REPUTATION_MUTATING_TOOLS, getReputationTools } from "./reputation-tools.js";
 import { SemanticSearchService } from "./semantic-search.js";
@@ -184,6 +186,7 @@ function requestFairnessKey(args) {
 }
 const MUTATING_TOOLS = new Set([
     "write_note",
+    "manage_wiki_moc_region",
     "patch_note",
     "patch_multiple_notes",
     "delete_note",
@@ -214,6 +217,7 @@ const MUTATING_TOOLS = new Set([
     "update_task",
 ]);
 const CAPABILITY_FOR_TOOL = {
+    manage_wiki_moc_region: 'write',
     write_note: "write",
     patch_note: "write",
     patch_multiple_notes: "write",
@@ -374,6 +378,12 @@ export function createServer(vaultPath, options = {}) {
     const llmWiki = new LlmWikiService(fileSystem, scopeAccess, references, semanticSearch);
     llmWikiCache = llmWiki;
     const moderation = new ModerationService(resolvedVaultPath, fileSystem, scopeAuth);
+    const wikiViews = new WikiViewService(fileSystem, scopeAccess);
+    const mocRegions = new MocRegionService(resolvedVaultPath, fileSystem, scopeAccess, async (accountId) => {
+        const owner = (await scopeAuth.listPrincipals()).find(account => account.accountId === accountId);
+        return owner && scopeAuth.hasCapability(owner, 'write') && !await moderation.isBanned(owner.accountId, owner.userId) ? owner : undefined;
+    }, readOnly);
+    void mocRegions.start().then(() => mocRegions.flush()).catch(() => { });
     const reputation = new ReputationService(fileSystem, scopeAuth, moderation);
     reputationCache = reputation;
     const notifications = new NotificationService(fileSystem, reputation, resolvedVaultPath, fileCatalog);
@@ -394,6 +404,7 @@ export function createServer(vaultPath, options = {}) {
     // process) cannot leave notifications, reputation, community discovery,
     // or Wiki catalog/lint caches stale until a restart.
     const readModelCatalogUnsubscribe = fileCatalog.subscribeBatch(changes => {
+        void mocRegions.notify(changes).catch(() => undefined);
         if (changes) {
             reputationCache?.invalidateMany(changes);
             notificationsCache?.invalidateMany(changes);
@@ -1073,7 +1084,7 @@ export function createServer(vaultPath, options = {}) {
         const request = { params: { name: requestedToolName, arguments: requestArgs } };
         let toolName = requestedToolName;
         let args = request.params.arguments;
-        if (readOnly && MUTATING_TOOLS.has(toolName)) {
+        if (readOnly && MUTATING_TOOLS.has(toolName) && !(toolName === 'manage_wiki_moc_region' && args?.operation === 'status')) {
             await audit.record({ tool: toolName, ...(args && typeof args === 'object' ? { args: args } : {}), outcome: 'error', error: 'read-only mode' });
             return {
                 content: [{
@@ -1106,6 +1117,8 @@ export function createServer(vaultPath, options = {}) {
             else if (!FIXED_MCP_TOOL_NAMES.has(requestedToolName) && !ALLOW_HIDDEN_DIRECT_TOOLS_IN_TESTS) {
                 throw new Error(`Direct MCP tool '${requestedToolName}' is not exposed. Use search_capabilities and call_endpoint.`);
             }
+            if (toolName === 'manage_wiki_moc_region' && rawArgs.operation === 'status')
+                toolName = 'read_wiki_moc_region_status';
             if (readOnly && MUTATING_TOOLS.has(toolName)) {
                 throw new Error(`Endpoint '${toolName}' is disabled because MCPVault is running in read-only mode.`);
             }
@@ -1550,7 +1563,7 @@ export function createServer(vaultPath, options = {}) {
                         }), trimmedArgs.prettyPrint);
                     }
                     case "read_wiki_projection": {
-                        return boundedWikiProjectionResult(await llmWiki.readProjection({
+                        const projection = await llmWiki.readProjection({
                             ...(principal && { principal }),
                             path: trimmedArgs.path,
                             ...(typeof trimmedArgs.view === 'string' && { view: trimmedArgs.view }),
@@ -1559,7 +1572,14 @@ export function createServer(vaultPath, options = {}) {
                             ...(trimmedArgs.contextBefore !== undefined && { contextBefore: trimmedArgs.contextBefore }),
                             ...(trimmedArgs.contextAfter !== undefined && { contextAfter: trimmedArgs.contextAfter }),
                             ...(trimmedArgs.maxChars !== undefined && { maxChars: trimmedArgs.maxChars }),
-                        }), trimmedArgs);
+                        });
+                        if (trimmedArgs.includeNavigation || trimmedArgs.includeRelated) {
+                            const extras = await llmWiki.readNavigation(principal, trimmedArgs.path, projection.revision, trimmedArgs);
+                            if (extras.navigation)
+                                extras.navigation = { ...projection.navigation, ...extras.navigation };
+                            Object.assign(projection, extras);
+                        }
+                        return boundedWikiProjectionResult(projection, trimmedArgs);
                     }
                     case "get_wiki_impact_report": {
                         return jsonResult(await llmWiki.impactReport(principal, trimmedArgs.limit, trimmedArgs.maxChars, trimmedArgs.maxCascadeDepth), trimmedArgs.prettyPrint);
@@ -1636,6 +1656,7 @@ export function createServer(vaultPath, options = {}) {
                     }
                     case "get_wiki_property_contract": {
                         return jsonResult(llmWiki.propertyContract({
+                            ...(trimmedArgs.hostBundle === true && { hostBundle: true }),
                             ...(trimmedArgs.maxChars !== undefined && { maxChars: trimmedArgs.maxChars }),
                             ...(trimmedArgs.names !== undefined && { names: trimmedArgs.names }),
                             ...(typeof trimmedArgs.query === 'string' && { query: trimmedArgs.query }),
@@ -1708,12 +1729,17 @@ export function createServer(vaultPath, options = {}) {
                         }), trimmedArgs.prettyPrint);
                     }
                     case "get_wiki_note_template": {
-                        return jsonResult(llmWiki.noteTemplate(trimmedArgs.noteKind, trimmedArgs.maxChars), trimmedArgs.prettyPrint);
+                        return jsonResult(llmWiki.noteTemplate(trimmedArgs.noteKind, trimmedArgs.maxChars, trimmedArgs.authoring), trimmedArgs.prettyPrint);
                     }
+                    case 'read_wiki_saved_view': return jsonResult(await wikiViews.read(principal, trimmedArgs), trimmedArgs.prettyPrint);
+                    case 'manage_wiki_moc_region': return jsonResult(await mocRegions.run(principal, trimmedArgs), trimmedArgs.prettyPrint);
+                    case 'read_wiki_moc_region_status': return jsonResult(await mocRegions.run(principal, { path: trimmedArgs.path, operation: 'status' }), trimmedArgs.prettyPrint);
                     case "get_wiki_vocabulary_health": {
                         return jsonResult(await llmWiki.vocabularyHealth(principal, trimmedArgs.limit, trimmedArgs.maxChars), trimmedArgs.prettyPrint);
                     }
                     case "get_wiki_bases_view": {
+                        if (trimmedArgs.savedViewPath !== undefined)
+                            return jsonResult(await wikiViews.bases(principal, { path: trimmedArgs.savedViewPath, expectedRevision: trimmedArgs.expectedRevision, maxChars: trimmedArgs.maxChars, prettyPrint: trimmedArgs.prettyPrint }), trimmedArgs.prettyPrint);
                         return jsonResult(await llmWiki.exportBasesView(principal, trimmedArgs.noteKind, trimmedArgs.lifecycle, trimmedArgs.limit, trimmedArgs.maxChars, trimmedArgs.view), trimmedArgs.prettyPrint);
                     }
                     case "export_wiki_base": {
@@ -1753,6 +1779,8 @@ export function createServer(vaultPath, options = {}) {
                         return jsonResult(await llmWiki.home(principal, trimmedArgs.limit, trimmedArgs.maxChars), trimmedArgs.prettyPrint);
                     }
                     case "preflight_wiki_publish": {
+                        if (trimmedArgs.normalizeFormatting === true)
+                            return jsonResult(await llmWiki.formattingPreview(principal, trimmedArgs.path, trimmedArgs.expectedRevision), trimmedArgs.prettyPrint);
                         return jsonResult(await llmWiki.preflightPublish({
                             ...(principal && { principal }),
                             path: trimmedArgs.path,
@@ -2693,6 +2721,7 @@ export function createServer(vaultPath, options = {}) {
     const closeServer = server.close.bind(server);
     server.close = async () => {
         readModelCatalogUnsubscribe();
+        await mocRegions.close();
         await metadataIndex.close();
         await searchService.close();
         await semanticSearch.close();

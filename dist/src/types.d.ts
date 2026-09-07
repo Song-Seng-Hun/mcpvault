@@ -374,6 +374,7 @@ export interface ReadNoteLinesParams {
     endLine: number;
 }
 export interface BacklinkMatch {
+    origin?: 'generated-navigation';
     path: string;
     /** Opt-in raw-file revision captured when this context was parsed. */
     sourceRevision?: string;
@@ -403,6 +404,7 @@ export interface BacklinksResult {
     truncated: boolean;
 }
 export interface OutlinkMatch {
+    origin?: 'generated-navigation';
     target: string;
     line: number;
     link: string;

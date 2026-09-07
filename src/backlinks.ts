@@ -1,4 +1,5 @@
 import type { BacklinkMatch, OutlinkMatch, UnresolvedLinkMatch } from './types.js';
+import { managedNavigationRegion } from './managed-navigation.js';
 
 const WIKI_LINK_PATTERN = /!?(\[\[[^\]]+\]\])/g;
 // Obsidian also indexes ordinary Markdown links whose destination is a note.
@@ -178,11 +179,13 @@ export function extractWikiLinkOccurrences(content: string): Array<OutlinkMatch>
  * based and bounded so callers can provide a useful locator without loading
  * the source note again.
  */
-export function extractObsidianLinkOccurrences(content: string, limit = Number.POSITIVE_INFINITY): Array<OutlinkMatch> {
-  return extractLinkOccurrences(content, true, limit);
+export function extractObsidianLinkOccurrences(content: string, limit = Number.POSITIVE_INFINITY, authoredOnly = false): Array<OutlinkMatch> {
+  return extractLinkOccurrences(content, true, limit, authoredOnly);
 }
 
-function extractLinkOccurrences(content: string, includeMarkdown: boolean, limit = Number.POSITIVE_INFINITY): Array<OutlinkMatch> {
+function extractLinkOccurrences(content: string, includeMarkdown: boolean, limit = Number.POSITIVE_INFINITY, authoredOnly = false): Array<OutlinkMatch> {
+  let managed: ReturnType<typeof managedNavigationRegion>;
+  try { managed = managedNavigationRegion(content); } catch { /* Malformed regions remain ordinary readable Markdown. */ }
   const matches: OutlinkMatch[] = [];
   if (!(limit > 0)) return matches;
   const literalMask = buildMarkdownLiteralMask(content);
@@ -244,7 +247,8 @@ function extractLinkOccurrences(content: string, includeMarkdown: boolean, limit
     lineMatches.sort((left, right) => left.offset - right.offset);
     for (const match of lineMatches) {
       if (matches.length >= limit) break;
-      matches.push(match.item);
+      if (authoredOnly && managed && lineOffset >= managed.start && lineOffset < managed.end) continue;
+      matches.push(managed && lineOffset >= managed.start && lineOffset < managed.end ? { ...match.item, origin: 'generated-navigation' } : match.item);
     }
     if (newline === -1) break;
     lineOffset = newline + 1;
@@ -256,7 +260,7 @@ function extractLinkOccurrences(content: string, includeMarkdown: boolean, limit
 export function findUnresolvedLinkMatches(content: string, vaultFiles: string[]): UnresolvedLinkMatch[] {
   const normalizedFiles = vaultFiles.map(normalizePath);
   return extractObsidianLinkOccurrences(content)
-    .filter(({ target }) => resolveWikiLinkTargets(target, normalizedFiles).length === 0)
+    .filter(({ target, origin }) => origin !== 'generated-navigation' && resolveWikiLinkTargets(target, normalizedFiles).length === 0)
     .map(({ target, line, link, context, heading, targetHeading, targetBlockId }) => ({
       target,
       line,

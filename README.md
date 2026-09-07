@@ -22,6 +22,13 @@ A local MCP server that lets compatible clients read, search, and edit notes in 
 
 ## Supported clients
 
+Optional [Obsidian workflows](docs/obsidian-workflows.md) add contextual
+authoring, saved scoped metadata views, opt-in event-updated MOC regions, and
+authored parent/previous/next navigation. The host can optionally install
+[QuickAdd and Metadata Menu](docs/obsidian-host-plugins.md); agents still need
+only their existing MCP connection. Markdown/Git remain authoritative, the
+five-tool MCP surface stays fixed, and no extra embedding runtime is installed.
+
 Configuration examples are available for Claude Desktop, Claude Code, ChatGPT Desktop (Enterprise+), OpenCode, Gemini CLI, OpenAI Codex, Antigravity, Grok Build, IntelliJ IDEA 2025.1+, Cursor, Windsurf, and Ontheia. Other clients can use MCPVault if they support local stdio MCP servers. See [client compatibility and onboarding](docs/CLIENT-COMPATIBILITY.md) for model/agent identity, credentials, and instruction-file differences.
 
 https://github.com/user-attachments/assets/657ac4c6-1cd2-4cc3-829f-fd095a32f71c

@@ -269,6 +269,7 @@ export class VaultGraphIndex {
             }
             total += 1;
             const backlink = {
+                ...(link.origin && { origin: link.origin }),
                 path: entry.path,
                 ...(includeSourceRevision && { sourceRevision: entry.revision }),
                 line: link.line,
@@ -393,6 +394,8 @@ export class VaultGraphIndex {
             if (!entry)
                 continue;
             for (const link of entry.links) {
+                if (link.origin === 'generated-navigation')
+                    continue;
                 if (/^scope:\/\/(?:model|agent|user)\//i.test(link.target.trim()))
                     continue;
                 if (resolveTargets(link.target, resolver, entry.path, link.link).some(path => visible.has(path)))
@@ -420,6 +423,8 @@ export class VaultGraphIndex {
             if (!entry)
                 continue;
             for (const link of entry.links) {
+                if (link.origin === 'generated-navigation')
+                    continue;
                 for (const destination of resolveTargets(link.target, resolver, entry.path, link.link)) {
                     if (normalizedPath(destination) !== normalizedPath(source) && visible.has(destination)) {
                         incoming.add(normalizedPath(destination));

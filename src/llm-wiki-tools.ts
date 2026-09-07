@@ -70,6 +70,28 @@ export const LLM_WIKI_MUTATING_TOOLS = [
 export function getLlmWikiTools(): Tool[] {
   return [
     {
+      name: 'read_wiki_saved_view',
+      description: 'Run a saved wiki_view YAML definition using the existing scoped metadata index. Only selected columns, no bodies or scripts. Replay nextAction with the definition revision; cursor pages are not an atomic vault snapshot.',
+      inputSchema: { type: 'object', properties: {
+        path: { type: 'string' }, expectedRevision: { type: 'string' },
+        after: { type: 'object', properties: { path: { type: 'string' }, value: { type: ['string', 'number', 'boolean', 'null'] }, missing: { type: 'boolean' } }, required: ['path'], additionalProperties: false },
+        limit: { type: 'integer', minimum: 1, maximum: 100, default: 20 }, maxChars: { type: 'integer', minimum: 512, maximum: 12000, default: 4000 }, accessToken, prettyPrint,
+      }, required: ['path'] },
+    },
+    {
+      name: 'manage_wiki_moc_region',
+      description: 'Manage one opt-in server-generated MOC link region. Preview first and replay its revision/fingerprint to register or regenerate; stop requires current revision. Only the registering account controls it. Global/Community same-scope folders only; no manual prose/order/source rewrites. Status reports conflicts or revoked grants. Requires write capability; no document can self-register.',
+      inputSchema: { type: 'object', properties: {
+        path: { type: 'string' }, operation: { type: 'string', enum: ['preview', 'register', 'regenerate', 'stop', 'status'] }, pathPrefix: { type: 'string' },
+        expectedRevision: { type: 'string' }, expectedFingerprint: { type: 'string' }, maxChars: { type: 'integer', minimum: 1024, maximum: 20000, default: 12000 }, accessToken, prettyPrint,
+      }, required: ['path', 'operation'] },
+    },
+    {
+      name: 'read_wiki_moc_region_status',
+      description: 'Read one visible public MOC registration status without write capability, including after a ban/revocation or on read-only servers. No mutation or implicit regeneration; compatible with wiki.moc_region operation=status.',
+      inputSchema: { type: 'object', properties: { path: { type: 'string' }, maxChars: { type: 'integer', minimum: 1024, maximum: 4000, default: 2000 }, accessToken, prettyPrint }, required: ['path'] },
+    },
+    {
       name: 'orient_wiki',
       description: 'Call this first after connecting. It returns visible scope, safety context, and exactly one primary action without scanning catalog or lint state. Execute only that action, then stop tool use and answer unless the current user explicitly requested another step. Welcome, schema, policy, community, and dashboards are progressive resources, never a preload checklist.',
       inputSchema: { type: 'object', properties: { accessToken, maxChars: { type: 'integer', minimum: 512, maximum: 20000, default: 3000, description: 'Hard response budget; orientation remains compact even when a larger budget is allowed' }, prettyPrint } },
@@ -533,6 +555,9 @@ export function getLlmWikiTools(): Tool[] {
       name: 'read_wiki_projection',
       description: 'Read one Wiki note progressively from one checked source snapshot. Start with summary/key_points, then outline or a unique section/block with bounded nearby context. Key points prefer claims, then authored key_points, then body paragraphs. Missing summary/progressive metadata falls back to one leading paragraph; key_points fallback uses at most five. contentSource=body_excerpt and excerptRange identify source context, not a synthesized summary or complete note coverage. summaryFresh/summaryStale survive compaction and describe stored metadata versus the body digest, not factual truth; inspect source before relying on stale summaries. Exact headings take priority; ambiguous locators require outline/line selection. Full reads are explicit and bounded. If truncated, nextAction re-reads the section/excerpt envelope or outline with a revision guard; replace rather than append the preview. Malformed root dates instead route dateRepairAction/nextAction to revision-checked notes.read for Properties; dateIssuesOmitted still means a warning. Inspect source before correcting dates; never guess or erase holds.',
       inputSchema: { type: 'object', properties: {
+        includeNavigation: { type: 'boolean', default: false, description: 'Optional parent/previous/next from the authored MOC order; never inferred evidence.' },
+        includeRelated: { type: 'boolean', default: false, description: 'Optional at most five related-note locators and match reasons, no copied bodies.' },
+        includeSemantic: { type: 'boolean', default: false, description: 'Opt-in existing semantic index for related suggestions; no additional model is installed.' },
         path: { type: 'string' }, view: { type: 'string', enum: [...WIKI_PROJECTION_VIEWS], default: 'summary', description: 'Use progressive for one bounded packet containing summary, selected passages, claims, and open questions.' },
         section: { type: 'string', description: 'Unique ATX/Setext heading text or Parent#Child path along one actual ancestor chain when view=section. Exact literal titles take precedence; unqualified unique partial matches remain supported. Setext ranges retain title and underline. Never join unrelated branches.' }, blockId: { type: 'string', maxLength: 100, description: 'Unique terminal Obsidian block ID (without ^) when view=section. Returns its physical anchor line plus nearby context; ignores Properties and fenced examples.' }, contextBefore: { type: 'integer', minimum: 0, maximum: 3, default: 1, description: 'Nearby lines before the selected heading/block' }, contextAfter: { type: 'integer', minimum: 0, maximum: 3, default: 1, description: 'Nearby lines after the selected heading/block' }, maxChars: { type: 'integer', minimum: 512, maximum: 12000, default: 4000 }, accessToken, prettyPrint,
       }, required: ['path'] },
@@ -585,6 +610,7 @@ export function getLlmWikiTools(): Tool[] {
       name: 'get_wiki_property_contract',
       description: 'Return the bounded MCPVault frontmatter contract before writing or repairing a note. The unfiltered response is a compact complete overview; pass exact names or one query to page through full descriptions, allowed values, and note-role applicability. Custom Properties remain allowed and this never scans or mutates notes.',
       inputSchema: { type: 'object', properties: {
+        hostBundle: { type: 'boolean', default: false, description: 'Return the complete derived QuickAdd/Metadata Menu host bundle instead of contract rows. Optional host installer input; no installation or writes occur.' },
         names: { type: 'array', maxItems: 40, items: { type: 'string', minLength: 1, maxLength: 100 }, description: 'Exact managed Property names for a focused full-detail response; do not combine with query' },
         query: { type: 'string', maxLength: 100, description: 'Case-insensitive match over Property name, description, allowed values, and appliesTo roles; do not combine with names' },
         offset: { type: 'integer', minimum: 0, maximum: 500, default: 0 },
@@ -674,6 +700,9 @@ export function getLlmWikiTools(): Tool[] {
       name: 'get_wiki_note_template',
       description: 'Return a small optional Obsidian Markdown/Properties scaffold for a common note kind or a concept, argument, model, observation, or counterargument knowledge role. It never creates a file and never makes templates mandatory.',
       inputSchema: { type: 'object', properties: {
+        authoring: { type: 'object', description: 'Optional contextual input checklist and exact existing executor. Values are inert data, not template code.', properties: {
+          intent: { type: 'string', enum: ['knowledge', 'capture', 'reply', 'new_topic'] }, slug: { type: 'string', maxLength: 120 }, provided: { type: 'object', maxProperties: 20 },
+        }, additionalProperties: false },
         noteKind: { type: 'string', enum: [...NOTE_TEMPLATE_IDS], default: 'atomic', description: 'Template ID; role templates still use ordinary atomic/knowledge notes plus knowledge_role' },
         maxChars: { type: 'integer', minimum: 512, maximum: 16000, default: 7000 }, accessToken, prettyPrint,
       } },
@@ -682,6 +711,8 @@ export function getLlmWikiTools(): Tool[] {
       name: 'get_wiki_bases_view',
       description: 'Return a bounded, optional Obsidian Bases YAML view for visible Wiki notes, including decisions, any-note action candidates, and focused concept, argument, model, observation, and counterargument shelves. This exports a local view definition only; it is not an MCP permission boundary and does not write a file.',
       inputSchema: { type: 'object', properties: {
+        savedViewPath: { type: 'string', description: 'Optional existing Markdown with wiki_view. Exports that exact restricted definition instead of a preset; host view is not a permission boundary.' },
+        expectedRevision: { type: 'string', description: 'Optional saved definition revision' },
         view: { type: 'string', enum: [...BASES_VIEW_IDS], default: 'all', description: 'Optional standard Obsidian Bases projection' },
         noteKind: { type: 'string', description: 'Optional exact note_kind filter' },
         lifecycle: { type: 'string', description: 'Optional exact lifecycle filter' },
@@ -751,6 +782,7 @@ export function getLlmWikiTools(): Tool[] {
       name: 'preflight_wiki_publish',
       description: 'Compare a proposed Wiki note with existing accessible notes and return bounded possible duplicates or related notes. This is advisory and never blocks publication.',
       inputSchema: { type: 'object', properties: {
+        normalizeFormatting: { type: 'boolean', default: false, description: 'Preview mechanical CRLF-to-LF normalization instead of publish checks. Returns an exact notes.change_set dry-run; does not change Properties, semantic review, or summary fingerprints.' },
         path: { type: 'string' }, title: { type: 'string' }, content: { type: 'string' }, limit: { type: 'integer', minimum: 1, maximum: 10, default: 3 }, maxChars: { type: 'integer', minimum: 512, maximum: 12000, default: 4000 }, accessToken, prettyPrint,
       }, required: ['path', 'content'] },
     },

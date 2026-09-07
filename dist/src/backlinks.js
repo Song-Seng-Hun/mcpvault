@@ -1,3 +1,4 @@
+import { managedNavigationRegion } from './managed-navigation.js';
 const WIKI_LINK_PATTERN = /!?(\[\[[^\]]+\]\])/g;
 // Obsidian also indexes ordinary Markdown links whose destination is a note.
 // Keep this intentionally small: external URLs, images, and anchor-only links
@@ -167,10 +168,15 @@ export function extractWikiLinkOccurrences(content) {
  * based and bounded so callers can provide a useful locator without loading
  * the source note again.
  */
-export function extractObsidianLinkOccurrences(content, limit = Number.POSITIVE_INFINITY) {
-    return extractLinkOccurrences(content, true, limit);
+export function extractObsidianLinkOccurrences(content, limit = Number.POSITIVE_INFINITY, authoredOnly = false) {
+    return extractLinkOccurrences(content, true, limit, authoredOnly);
 }
-function extractLinkOccurrences(content, includeMarkdown, limit = Number.POSITIVE_INFINITY) {
+function extractLinkOccurrences(content, includeMarkdown, limit = Number.POSITIVE_INFINITY, authoredOnly = false) {
+    let managed;
+    try {
+        managed = managedNavigationRegion(content);
+    }
+    catch { /* Malformed regions remain ordinary readable Markdown. */ }
     const matches = [];
     if (!(limit > 0))
         return matches;
@@ -232,7 +238,9 @@ function extractLinkOccurrences(content, includeMarkdown, limit = Number.POSITIV
         for (const match of lineMatches) {
             if (matches.length >= limit)
                 break;
-            matches.push(match.item);
+            if (authoredOnly && managed && lineOffset >= managed.start && lineOffset < managed.end)
+                continue;
+            matches.push(managed && lineOffset >= managed.start && lineOffset < managed.end ? { ...match.item, origin: 'generated-navigation' } : match.item);
         }
         if (newline === -1)
             break;
@@ -243,7 +251,7 @@ function extractLinkOccurrences(content, includeMarkdown, limit = Number.POSITIV
 export function findUnresolvedLinkMatches(content, vaultFiles) {
     const normalizedFiles = vaultFiles.map(normalizePath);
     return extractObsidianLinkOccurrences(content)
-        .filter(({ target }) => resolveWikiLinkTargets(target, normalizedFiles).length === 0)
+        .filter(({ target, origin }) => origin !== 'generated-navigation' && resolveWikiLinkTargets(target, normalizedFiles).length === 0)
         .map(({ target, line, link, context, heading, targetHeading, targetBlockId }) => ({
         target,
         line,

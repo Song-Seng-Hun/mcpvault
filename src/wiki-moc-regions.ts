@@ -1,0 +1,172 @@
+import { createHash, randomUUID } from 'node:crypto';
+import { lstat, mkdir, readFile, realpath, rename, writeFile } from 'node:fs/promises';
+import { join, posix, relative } from 'node:path';
+import type { FileSystemService } from './filesystem.js';
+import type { ScopeAccessPolicy } from './scope-access.js';
+import type { ScopePrincipal } from './scope-auth.js';
+import type { VaultCatalogChange } from './vault-catalog.js';
+import { isManagedCommunityPath, isModerationHidden } from './moderation-policy.js';
+import { managedNavigationRegion, MOC_BEGIN, MOC_END } from './managed-navigation.js';
+
+const hash = (value: string) => createHash('sha256').update(value).digest('hex');
+const normalized = (path: string) => posix.normalize(path.replace(/\\/g, '/'));
+const identity = (path: string) => process.platform === 'win32' ? path.toLowerCase() : path;
+type Registration = { path: string; pathPrefix: string; owner: string; regionHash: string; pendingHash?: string; status: 'active' | 'stopped' | 'conflict' | 'suspended' };
+export interface MocRegionOptions { path: string; operation: 'preview' | 'register' | 'regenerate' | 'stop' | 'status'; pathPrefix?: string; expectedRevision?: string; expectedFingerprint?: string; maxChars?: number }
+
+/** Trusted registrations are separate from editable Markdown. One queue, no polling. */
+export class MocRegionService {
+  private registrations = new Map<string, Registration>();
+  private pending = new Set<string>();
+  private tail: Promise<unknown> = Promise.resolve();
+  private startup?: Promise<void>;
+  private timer: ReturnType<typeof setTimeout> | undefined;
+  private closed = false;
+  constructor(private readonly vault: string, private readonly fs: FileSystemService, private readonly access: ScopeAccessPolicy,
+    private readonly authorize: (accountId: string) => Promise<ScopePrincipal | undefined>, private readonly readOnly = false) {}
+  private async exclusive<T>(operation: () => Promise<T>): Promise<T> {
+    const task = this.tail.then(operation, operation); this.tail = task.catch(() => undefined); return task;
+  }
+  private async statePath(create = false) {
+    const directory = join(this.vault, '.mcpvault');
+    for (const path of [this.vault, directory, join(directory, 'moc-regions.json')]) {
+      try { if ((await lstat(path)).isSymbolicLink()) throw new Error('MOC registration state cannot use symlinks'); }
+      catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
+    }
+    if (create) await mkdir(directory, { recursive: true, mode: 0o700 });
+    return join(directory, 'moc-regions.json');
+  }
+  private async save() {
+    const path = await this.statePath(true); const temporary = `${path}.${randomUUID()}.tmp`;
+    await writeFile(temporary, JSON.stringify({ version: 1, registrations: [...this.registrations.values()] }), { mode: 0o600, flag: 'wx' });
+    await rename(temporary, path);
+  }
+  async start() {
+    if (!this.startup) this.startup = (async () => {
+      try {
+        const path = await this.statePath();
+        if ((await lstat(path)).size > 128 * 1024) throw new Error('MOC registration state exceeds limit');
+        const data = JSON.parse(await readFile(path, 'utf8'));
+        if (data.version !== 1 || !Array.isArray(data.registrations) || data.registrations.length > 32) throw new Error('Invalid MOC registrations');
+        for (const row of data.registrations) {
+          if (!row || typeof row.owner !== 'string' || !/^[a-f0-9]{64}$/.test(row.regionHash) || !['active', 'stopped', 'conflict', 'suspended'].includes(row.status) || (row.pendingHash && !/^[a-f0-9]{64}$/.test(row.pendingHash))) throw new Error('Invalid MOC registration');
+          this.validatePath(row.path); this.validatePrefix(row.pathPrefix, row.path);
+          if (this.registrations.has(identity(row.path))) throw new Error('Duplicate MOC registration');
+          this.registrations.set(identity(row.path), row);
+          if (row.status === 'active' && !this.readOnly) this.pending.add(identity(row.path));
+        }
+      } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
+    })();
+    await this.startup;
+  }
+  private validatePath(path: string) {
+    if (typeof path !== 'string' || path.length > 500 || normalized(path) !== path || path.startsWith('/') || path.split('/').some(part => part === '..' || part.startsWith('.')) || !this.access.canAccessPhysicalPath(path) || !/\.md$/i.test(path) || isManagedCommunityPath(path)) throw new Error('Managed MOC requires an ordinary public Global or Community Markdown path');
+    this.access.assertMutationAllowed(path, 'Managed MOC');
+  }
+  private validatePrefix(prefix: string, path: string) {
+    if (typeof prefix !== 'string' || !prefix || prefix.length > 500 || normalized(prefix) !== prefix || prefix.startsWith('/') || prefix.split('/').some(part => part === '..' || part.startsWith('.')) || !this.access.canAccessPhysicalPath(prefix) || this.access.isCommunityPath(path) !== this.access.isCommunityPath(prefix)) throw new Error('MOC pathPrefix must be a nonempty folder in the same public scope');
+    this.access.assertMutationAllowed(prefix, 'Managed MOC');
+  }
+  private async projection(path: string, prefix: string) {
+    this.validatePath(path); this.validatePrefix(prefix, path);
+    const note = await this.fs.readNote(path);
+    if (note.frontmatter.note_kind !== 'moc' || isModerationHidden(note.frontmatter)) throw new Error('Visible note_kind=moc required');
+    const region = managedNavigationRegion(note.originalContent);
+    let queryPrefix = prefix;
+    if (process.platform === 'win32') {
+      const vaultRoot = await realpath(this.vault);
+      try {
+        const canonical = relative(vaultRoot, await realpath(join(this.vault, prefix))).replace(/\\/g, '/');
+        if (identity(canonical) !== identity(prefix)) throw new Error('MOC folder aliases are not supported');
+        queryPrefix = canonical;
+      } catch (error) {
+        // A deleted/moved folder is an empty inventory, not a manual-region conflict.
+        // The filesystem query still applies its normal path and symlink checks.
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+      }
+    }
+    const page = await this.fs.queryNotes({ pathPrefix: `${queryPrefix}/`, sortBy: 'path', limit: 101, includeContent: false, includeTotal: false },
+      candidate => identity(candidate) !== identity(path) && this.access.canAccessPhysicalPath(candidate) && this.access.isCommunityPath(path) === this.access.isCommunityPath(candidate),
+      candidate => !isModerationHidden(candidate.frontmatter));
+    if (page.notes.length > 100 || page.truncated) throw new Error('MOC region exceeds 100 links; narrow its folder or split the MOC');
+    if (page.notes.some(row => /[\[\]#|\r\n]/.test(row.path))) throw new Error('MOC target filename cannot be represented by an exact wikilink');
+    const text = `${MOC_BEGIN}\n${page.notes.map(row => `- [[${row.path}]]`).join('\n')}\n${MOC_END}\n`;
+    const fingerprint = hash(JSON.stringify([path, prefix, note.revision, page.notes.map(row => [row.path, row.revision]), text]));
+    return { note, region, text, fingerprint };
+  }
+  async run(principal: ScopePrincipal | undefined, options: MocRegionOptions): Promise<any> {
+    await this.start();
+    return this.exclusive(async () => {
+      const path = this.access.resolveExternalPath(options.path, principal); this.validatePath(path);
+      const prior = this.registrations.get(identity(path));
+      if (options.operation === 'status') {
+        const note = await this.fs.readNote(path);
+        if (isModerationHidden(note.frontmatter)) throw new Error('MOC unavailable');
+        const status = prior?.status === 'active' && !await this.authorize(prior.owner) ? 'suspended' : prior?.status ?? 'unregistered';
+        return { path, revision: note.revision, status };
+      }
+      if (!principal || !await this.authorize(principal.accountId)) throw new Error('Current write permission is required for MOC management');
+      if (prior && prior.owner !== principal.accountId) throw new Error('Only the registering account may manage this region');
+      const prefix = options.pathPrefix ?? prior?.pathPrefix;
+      if (options.operation === 'stop') {
+        if (this.readOnly) throw new Error('Read-only server');
+        if (!prior || (await this.fs.readNote(path)).revision !== options.expectedRevision) throw new Error('Registration or revision changed');
+        prior.status = 'stopped'; this.pending.delete(identity(path)); await this.save();
+        return { path, status: 'stopped', revision: options.expectedRevision };
+      }
+      if (!['preview', 'register', 'regenerate'].includes(options.operation)) throw new Error('Unknown MOC operation');
+      if (!prefix) throw new Error('pathPrefix is required when registering a MOC');
+      const current = await this.projection(path, prefix);
+      if (options.operation === 'preview') {
+        const result = { path, revision: current.note.revision, preview: current.text, fingerprint: current.fingerprint, applyAction: { endpointId: 'wiki.moc_region', arguments: { operation: prior ? 'regenerate' : 'register', path, pathPrefix: prefix, expectedRevision: current.note.revision, expectedFingerprint: current.fingerprint } } };
+        if (JSON.stringify(result).length > (options.maxChars ?? 12000)) throw new Error('Increase maxChars or narrow MOC folder to preserve the complete preview');
+        return result;
+      }
+      if (this.readOnly) throw new Error('Read-only server');
+      if (options.expectedRevision !== current.note.revision || options.expectedFingerprint !== current.fingerprint) throw new Error('MOC preview fingerprint or revision changed');
+      if (!prior && this.registrations.size >= 32) throw new Error('Maximum 32 managed MOC regions');
+      const registration: Registration = { path, pathPrefix: prefix, owner: principal.accountId, regionHash: hash(current.region?.text ?? ''), status: 'active' };
+      this.registrations.set(identity(path), registration); await this.write(registration, current);
+      return { path, status: registration.status, revision: (await this.fs.readNote(path)).revision };
+    });
+  }
+  private async write(row: Registration, current: Awaited<ReturnType<MocRegionService['projection']>>) {
+    // Persist intent before writing. Old or pending hashes permit crash recovery.
+    if (!await this.authorize(row.owner)) { row.status = 'suspended'; await this.save(); return; }
+    row.pendingHash = hash(current.text); await this.save();
+    const original = current.note.originalContent;
+    const content = current.region
+      ? original.slice(0, current.region.start) + current.text + original.slice(current.region.end)
+      : original + (original.endsWith('\n') ? '\n' : '\n\n') + current.text;
+    if (content !== original) await this.fs.writeNote({ path: row.path, content, expectedRevision: current.note.revision });
+    row.regionHash = row.pendingHash; delete row.pendingHash; await this.save();
+  }
+  async notify(changes?: readonly VaultCatalogChange[]) {
+    if (this.closed || this.readOnly) return;
+    await this.start();
+    for (const row of this.registrations.values()) if (row.status === 'active' && (!changes || changes.some(change => identity(change.path) === identity(row.path) || identity(change.path) === identity(row.pathPrefix) || identity(change.path).startsWith(`${identity(row.pathPrefix)}/`) || identity(row.pathPrefix).startsWith(`${identity(change.path)}/`)))) this.pending.add(identity(row.path));
+    if (this.pending.size && !this.timer) { this.timer = setTimeout(() => { this.timer = undefined; void this.flush().catch(() => undefined); }, 250); this.timer.unref(); }
+  }
+  async flush() {
+    await this.start();
+    if (this.timer) { clearTimeout(this.timer); this.timer = undefined; }
+    await this.exclusive(async () => {
+      if (this.closed || this.readOnly) return;
+      const paths = [...this.pending]; this.pending.clear();
+      for (const path of paths) {
+        const row = this.registrations.get(path)!; if (row.status !== 'active') continue;
+        try {
+          if (!await this.authorize(row.owner)) { row.status = 'suspended'; await this.save(); continue; }
+          const current = await this.projection(row.path, row.pathPrefix);
+          const observed = hash(current.region?.text ?? '');
+          if (observed !== row.regionHash && observed !== row.pendingHash) throw new Error('Managed region edited');
+          const verified = await this.projection(row.path, row.pathPrefix);
+          if (verified.fingerprint !== current.fingerprint) throw new Error('MOC sources changed repeatedly; obtain a fresh preview');
+          if (current.region?.text === current.text && !row.pendingHash) continue;
+          await this.write(row, current);
+        } catch { row.status = 'conflict'; await this.save(); }
+      }
+    });
+  }
+  async close() { this.closed = true; if (this.timer) clearTimeout(this.timer); await this.tail; }
+}

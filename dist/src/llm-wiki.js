@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
+import { authoringAssist, hostPluginBundle, propertyContractFingerprint } from './authoring-assist.js';
 import { posix } from 'node:path';
 import { stringify as stringifyYaml } from 'yaml';
 import { MAX_NOTE_CONTENT_BYTES } from './filesystem.js';
@@ -590,7 +591,7 @@ function compareMocNavigation(left, right) {
         || String(left.path).localeCompare(String(right.path));
 }
 function mocOutlineFromOccurrences(occurrences, limit = 24) {
-    return occurrences.slice(0, limit).map(link => ({
+    return occurrences.filter(link => link.origin !== 'generated-navigation').slice(0, limit).map(link => ({
         target: link.target, line: link.line,
         ...(link.heading && { section: boundedText(link.heading, 200) }),
         ...(link.targetHeading && { targetHeading: boundedText(link.targetHeading, 200) }),
@@ -598,7 +599,7 @@ function mocOutlineFromOccurrences(occurrences, limit = 24) {
     }));
 }
 function mocBodyOutline(content, limit = 24) {
-    return mocOutlineFromOccurrences(extractObsidianLinkOccurrences(content, limit), limit);
+    return mocOutlineFromOccurrences(extractObsidianLinkOccurrences(content, limit, true), limit);
 }
 function catalogEntryCompare(left, right, orderBy = 'location') {
     if (orderBy === 'time') {
@@ -2991,7 +2992,7 @@ export class LlmWikiService {
                     unresolvedLinks += 1;
                 continue;
             }
-            add(targets[0], 100, 'direct_link', { line: link.line, context: boundedText(link.context, 240),
+            add(targets[0], 100, link.origin === 'generated-navigation' ? 'generated_navigation' : 'direct_link', { line: link.line, context: boundedText(link.context, 240),
                 contextPath: sourcePath, contextRevision: source.revision, relations: [link.relation || 'links_to'] });
         }
         for (const link of backlinks.backlinks) {
@@ -3012,7 +3013,7 @@ export class LlmWikiService {
             if (typeof link.sourceRevision !== 'string' || !/^[a-f0-9]{64}$/.test(link.sourceRevision)) {
                 throw new Error('A context source changed or became unavailable; re-read the root note and retry.');
             }
-            add(link.path, 95, 'backlink', { line: link.line, context: boundedText(link.context, 240),
+            add(link.path, 95, link.origin === 'generated-navigation' ? 'generated_navigation' : 'backlink', { line: link.line, context: boundedText(link.context, 240),
                 contextPath: link.path, contextRevision: link.sourceRevision, revision: link.sourceRevision, relations: [link.relation || 'backlinks_to'] });
         }
         const mocRefs = (frontmatter) => {
@@ -5864,7 +5865,13 @@ export class LlmWikiService {
         const boundedChars = Math.min(Math.max(Number(options.maxChars) || 7000, 512), 16000);
         const allFields = getOrganizationPropertyContract();
         const relations = getOrganizationRelationContract();
-        const contractFingerprint = hash(JSON.stringify({ fields: allFields, relations }));
+        const contractFingerprint = propertyContractFingerprint();
+        if (options.hostBundle) {
+            const bundle = hostPluginBundle();
+            if (JSON.stringify(bundle).length > boundedChars)
+                throw new Error('Increase maxChars to preserve the complete host plugin bundle');
+            return bundle;
+        }
         if (options.names !== undefined && !Array.isArray(options.names))
             throw new Error('names must be an array of Property names');
         const requestedNames = Array.isArray(options.names)
@@ -7226,11 +7233,66 @@ export class LlmWikiService {
             throw new Error('maxChars is too small to preserve the complete lifecycle-transition plan; increase maxChars');
         return result;
     }
-    noteTemplate(noteKind = 'atomic', maxChars = 7000) {
+    async readNavigation(principal, path, expectedRevision, options) {
+        if (!this.access.canAccessPhysicalPath(path, principal))
+            throw new Error('Source unavailable');
+        const source = await this.fileSystem.readNote(path);
+        if (source.revision !== expectedRevision || isModerationHidden(source.frontmatter))
+            throw new Error('Read source changed');
+        const result = {};
+        if (options.includeNavigation) {
+            let root = source.frontmatter.note_kind === 'moc' ? path : undefined;
+            const authoredParent = source.frontmatter.primary_moc || source.frontmatter.moc;
+            if (typeof authoredParent === 'string') {
+                const occurrence = extractObsidianLinkOccurrences(authoredParent, 1)[0];
+                const matches = await this.resolveNavigationLink(principal, path, occurrence || { target: authoredParent, link: `[[${authoredParent}]]` });
+                root = matches.length === 1 ? matches[0] : undefined;
+            }
+            if (root) {
+                const learning = await this.learningPath(principal, root, 0, 50, 16000);
+                const entries = learning.authoredOrder || [];
+                const index = entries.findIndex((entry) => entry.path === this.access.toPublicPath(path));
+                const locator = (entry) => entry && { path: entry.path, revision: entry.revision, ...(entry.targetHeading && { heading: entry.targetHeading }), ...(entry.targetBlockId && { blockId: entry.targetBlockId }) };
+                result.navigation = { origin: 'authored-moc-order', parent: learning.root,
+                    ...(index > 0 && { previous: locator(entries[index - 1]) }),
+                    ...(index >= 0 && index + 1 < entries.length && { next: locator(entries[index + 1]) }),
+                    ...(root === path && entries.length && { next: locator(entries[0]) }),
+                    truncated: learning.truncated === true, ...(index < 0 && root !== path && { membershipUnresolved: true }) };
+            }
+            else
+                result.navigation = { origin: 'authored-moc-order', available: false };
+        }
+        if (options.includeRelated) {
+            const nearby = await this.neighborhood(principal, path, 5, 5000, options.includeSemantic === true);
+            result.related = { advisory: true, items: nearby.neighbors.slice(0, 5).map(item => ({ path: item.path, title: String(item.title || item.path).slice(0, 160), revision: item.revision, reasons: item.reasons,
+                    ...(item.line !== undefined && { locator: { path: item.contextPath, revision: item.contextRevision, line: item.line } }),
+                    readAction: { endpointId: 'notes.read', arguments: { path: item.path, expectedRevision: item.revision, maxChars: 2000 } } })), truncated: nearby.truncated };
+        }
+        if ((await this.fileSystem.readNote(path)).revision !== expectedRevision)
+            throw new Error('Read source changed');
+        return result;
+    }
+    async formattingPreview(principal, path, expectedRevision) {
+        if (!this.access.canAccessPhysicalPath(path, principal) || isManagedCommunityPath(path))
+            throw new Error('Formatting requires an accessible ordinary note');
+        this.access.assertMutationAllowed(path, 'Formatting preview');
+        const note = await this.fileSystem.readNote(path);
+        if (isModerationHidden(note.frontmatter))
+            throw new Error('Source unavailable');
+        if (expectedRevision && expectedRevision !== note.revision)
+            throw new Error('Source revision changed');
+        const changed = note.originalContent.includes('\r\n');
+        return { path: this.access.toPublicPath(path), revision: note.revision, formatting: {
+                mechanicalOnly: true, wouldChange: changed, rule: 'CRLF to LF; preserve Markdown spaces, Properties, provenance and stored summary fingerprints.',
+                ...(changed && { nextAction: { endpointId: 'notes.change_set', arguments: { dryRun: true, changes: [{ path: this.access.toPublicPath(path), expectedRevision: note.revision, patches: [{ oldString: '\r\n', newString: '\n', replaceAll: true }] }] } } }),
+            } };
+    }
+    noteTemplate(noteKind = 'atomic', maxChars = 7000, context) {
         const boundedChars = Math.min(Math.max(Number(maxChars) || 7000, 512), 16000);
         const template = organizationNoteTemplate(noteKind);
         const result = {
             ...template,
+            ...(context && { authoring: authoringAssist(noteKind, context) }),
             usage: 'Optional scaffold only. Keep ordinary Markdown authoritative, fill evidence/references for durable knowledge, and run lint before publishing. The template never creates a note by itself.',
         };
         if (JSON.stringify(result).length <= boundedChars)
@@ -12005,7 +12067,8 @@ export class LlmWikiService {
                 return;
             visitedMocs.add(mocKey);
             const linkWindow = Math.min(200, Math.max(24, boundedLimit * 4));
-            const links = extractObsidianLinkOccurrences(mocNote.content || '', linkWindow + 1);
+            // Inventory links are navigable but never authored pedagogical order.
+            const links = extractObsidianLinkOccurrences(mocNote.content || '', linkWindow + 1, true);
             if (links.length > linkWindow)
                 truncated = true;
             for (const link of links.slice(0, linkWindow)) {

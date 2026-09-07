@@ -176,6 +176,8 @@ export interface OrganizationPropertyContractEntry {
 }
 
 export const ORGANIZATION_PROPERTY_CONTRACT: readonly OrganizationPropertyContractEntry[] = [
+  { name: 'title', type: 'text', description: 'Optional human-readable note title; the file path remains authoritative' },
+  { name: 'wiki_view', type: 'object', description: 'Versioned restricted saved metadata query; no JavaScript or DQL execution' },
   { name: 'note_kind', type: 'text', description: 'What the note is for', allowed: NOTE_KINDS },
   { name: 'lifecycle', type: 'text', description: 'What should happen to the knowledge next', allowed: LIFECYCLES },
   { name: 'knowledge_status', type: 'text', description: 'Reviewable publication state for durable knowledge', allowed: KNOWLEDGE_STATUSES },

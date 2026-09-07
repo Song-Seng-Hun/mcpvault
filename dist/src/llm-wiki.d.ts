@@ -1,3 +1,4 @@
+import { type AuthoringContext } from './authoring-assist.js';
 import { type FileSystemService } from './filesystem.js';
 import type { ScopeAccessPolicy } from './scope-access.js';
 import type { ScopePrincipal } from './scope-auth.js';
@@ -1126,7 +1127,19 @@ export declare class LlmWikiService {
         query?: string;
         offset?: number;
         limit?: number;
+        hostBundle?: boolean;
     }): {
+        fingerprint: string;
+        templates: {
+            path: string;
+            content: string;
+        }[];
+        fileClassesPath: string;
+        fileClasses: {
+            path: string;
+            content: string;
+        }[];
+    } | {
         purpose: string;
         contractFingerprint: string;
         fields: import("./organization.js").OrganizationPropertyContractEntry[];
@@ -1756,18 +1769,83 @@ export declare class LlmWikiService {
         } | undefined;
         generatedAt: string;
     }>;
-    noteTemplate(noteKind?: string, maxChars?: number): {
+    readNavigation(principal: ScopePrincipal | undefined, path: string, expectedRevision: string, options: {
+        includeNavigation?: boolean;
+        includeRelated?: boolean;
+        includeSemantic?: boolean;
+    }): Promise<Record<string, any>>;
+    formattingPreview(principal: ScopePrincipal | undefined, path: string, expectedRevision?: string): Promise<{
+        path: string;
+        revision: string;
+        formatting: {
+            mechanicalOnly: boolean;
+            wouldChange: boolean;
+            rule: string;
+            nextAction?: {
+                endpointId: string;
+                arguments: {
+                    dryRun: boolean;
+                    changes: {
+                        path: string;
+                        expectedRevision: string;
+                        patches: {
+                            oldString: string;
+                            newString: string;
+                            replaceAll: boolean;
+                        }[];
+                    }[];
+                };
+            };
+        };
+    }>;
+    noteTemplate(noteKind?: string, maxChars?: number, context?: AuthoringContext): {
         templateId: string;
         noteKind: NoteKind;
         purpose: string;
         properties: Record<string, unknown>;
         markdown: string;
+        authoring?: {
+            contractFingerprint: string;
+            defaults: Record<string, unknown>;
+            fields: import("./organization.js").OrganizationPropertyContractEntry[];
+            missing: string[];
+            nextAction: {
+                endpointId: string;
+                arguments: {
+                    slug?: string;
+                };
+                instruction: string;
+            };
+            normalization: {
+                mechanical: string[];
+                semantic: string[];
+                instruction: string;
+            };
+        };
         usage: string;
     } | {
         templateId: string;
         noteKind: NoteKind;
         purpose: string;
         properties: Record<string, unknown>;
+        authoring?: {
+            contractFingerprint: string;
+            defaults: Record<string, unknown>;
+            fields: import("./organization.js").OrganizationPropertyContractEntry[];
+            missing: string[];
+            nextAction: {
+                endpointId: string;
+                arguments: {
+                    slug?: string;
+                };
+                instruction: string;
+            };
+            normalization: {
+                mechanical: string[];
+                semantic: string[];
+                instruction: string;
+            };
+        };
         usage: string;
         markdown: string;
         truncated: boolean;
@@ -2581,6 +2659,7 @@ export declare class LlmWikiService {
         unresolvedLinks: {
             total: number;
             items: {
+                origin?: 'generated-navigation';
                 target: string;
                 line: number;
                 link: string;
