@@ -59,6 +59,116 @@ async function workFixture() {
   return { ...f, work, create, read, update, claim };
 }
 
+test('flexible team declarations stay on projects and do not grant participation', async () => {
+  const { work, fs, owner, outsider, create } = await workFixture();
+  const p = await fs.readNote('Community/Projects/alpha.md');
+  await work.project({ op: 'update', principal: owner, projectId: 'alpha', expectedRevision: p.revision,
+    requestId: 'perspectives', requiredPerspectives: ['security', 'usability'], teamStatus: 'active' } as any);
+  expect((await fs.readNote('Community/Projects/alpha.md')).frontmatter.required_perspectives).toEqual(['security', 'usability']);
+  await expect(create('not-member', { principal: outsider, responsibility: { perspective: 'security' } })).rejects.toThrow(/participant/i);
+});
+
+test('declared exclusive resources serialize competing claims while advice may overlap', async () => {
+  const { fs, create, claim, read, peer } = await workFixture();
+  await fs.writeNote({ path: 'Knowledge/shared.md', content: 'shared' });
+  const responsibility = { question: 'Check shared behavior', perspective: 'security', mode: 'exclusive_write',
+    resources: [{ path: 'Knowledge/shared.md' }], deliverables: ['Patch'], conditions: ['Preserve privacy'] };
+  await create('writer-a', { responsibility }); await create('writer-b', { responsibility });
+  const results = await Promise.allSettled([claim('writer-a'), claim('writer-b', peer)]);
+  expect((await read('writer-a')).frontmatter.responsibility).toEqual(responsibility);
+  expect(results.filter(r => r.status === 'fulfilled')).toHaveLength(1);
+});
+
+test('exclusive scope conflicts are checked across tasks and legacy updates', async () => {
+  const { fs, create, claim, peer, owner, update, read } = await workFixture();
+  await fs.writeNote({ path: 'Knowledge/shared.md', content: 'shared' });
+  const responsibility = { mode: 'exclusive_write', resources: [{ path: 'Knowledge/shared.md' }] };
+  await create('writer-one', { responsibility }); await create('writer-two', { responsibility });
+  const outcomes = await Promise.allSettled([claim('writer-one'), claim('writer-two', peer)]);
+  expect(outcomes.filter(r => r.status === 'fulfilled')).toHaveLength(1);
+  expect(String((outcomes.find(r => r.status === 'rejected') as PromiseRejectedResult).reason)).toMatch(/resource|overlap/i);
+  const loser = (await read('writer-one')).frontmatter.assignee_account_id ? 'writer-two' : 'writer-one';
+  const winnerPeer = loser === 'writer-one';
+  await expect(update(loser, { principal: winnerPeer ? owner : peer, assignee: winnerPeer ? 'owner' : 'peer', status: 'in_progress' })).rejects.toThrow(/resource|overlap/i);
+});
+
+test('advisory perspective can overlap and an active responsibility cannot silently change roles', async () => {
+  const { fs, create, claim, peer, update, read } = await workFixture();
+  await fs.writeNote({ path: 'Knowledge/shared.md', content: 'shared' });
+  await create('writer', { responsibility: { mode: 'exclusive_write', resources: [{ path: 'Knowledge/shared.md' }] } });
+  await create('advisor', { responsibility: { mode: 'advice', resources: [{ path: 'Knowledge/shared.md' }], perspective: 'usability' } });
+  await claim('writer'); await claim('advisor', peer);
+  await expect(update('writer', { responsibility: { mode: 'advice', resources: [] } })).rejects.toThrow(/release|handoff|active|responsibility/i);
+  expect((await read('advisor')).frontmatter.responsibility.perspective).toBe('usability');
+});
+
+test('coverage reports only declared gaps with bounded current continuation', async () => {
+  const { work, fs, owner, create } = await workFixture();
+  const p = await fs.readNote('Community/Projects/alpha.md');
+  await work.project({ op: 'update', projectId: 'alpha', principal: owner, expectedRevision: p.revision,
+    requestId: 'coverage-contract', requiredPerspectives: ['security', 'usability'] } as any);
+  await create('security-task', { responsibility: { perspective: 'security', coversCriteria: ['Evidence verified'] } });
+  const result = await (work as any).coverage({ projectId: 'alpha', limit: 1, maxChars: 4000 });
+  expect(JSON.stringify(result).length).toBeLessThanOrEqual(4000);
+  expect(result.truncated).toBe(true);
+  expect(JSON.stringify(await (work as any).coverage({ projectId: 'alpha' }))).toMatch(/usability/);
+  await create('new-task');
+  await expect((work as any).coverage({ projectId: 'alpha', cursor: result.cursor })).rejects.toThrow(/changed|cursor/i);
+});
+
+test('responsibility changes invalidate review and reject unregistered criteria and private resources', async () => {
+  const { create, update, read, fs } = await workFixture();
+  await expect(create('bad-criterion', { responsibility: { coversCriteria: ['Invented criterion'] } })).rejects.toThrow(/criteria/i);
+  await expect(create('private-resource', { responsibility: { mode: 'exclusive_write', resources: [{ path: '_scopes/agents/outsider/secret.md' }] } })).rejects.toThrow();
+  await create('basis', { responsibility: { question: 'Original question' } });
+  const before = await read('basis');
+  const { reviewBasis } = await import('./work-model.js');
+  await fs.writeNote({ path: 'Community/Tasks/basis.md', content: before.content, expectedRevision: before.revision,
+    frontmatter: { ...before.frontmatter, work_review: { decision: 'approve', fingerprint: reviewBasis(before.frontmatter) } } });
+  await update('basis', { responsibility: { question: 'Changed question' } });
+  expect((await read('basis')).frontmatter.work_review).toBeUndefined();
+});
+
+test('temporary team closes only after finished work and explicit reopening restores new tasks', async () => {
+  const { work, fs, owner, create, update } = await workFixture();
+  await create('unfinished');
+  const configure = async (teamStatus: 'active' | 'completed') => work.project({ op: 'update', projectId: 'alpha', principal: owner,
+    teamStatus, expectedRevision: (await fs.readNote('Community/Projects/alpha.md')).revision, requestId: `team-${teamStatus}` });
+  await expect(configure('completed')).rejects.toThrow(/finish|cancel/i);
+  await update('unfinished', { status: 'cancelled', reason: 'Explicitly retired' });
+  await configure('completed');
+  await expect(create('late')).rejects.toThrow(/closed/i);
+  await configure('active'); await create('reopened');
+});
+
+test('hidden resource and group locators do not leak through bounded projections', async () => {
+  const { fs, create, work, owner, tasks } = await workFixture();
+  await fs.writeNote({ path: 'Knowledge/to-hide.md', content: 'Resource' });
+  await fs.writeNote({ path: 'Community/Groups/secret.md', content: '', frontmatter: { mcpvault_type: 'work_group', group_id: 'secret' } });
+  const p = await fs.readNote('Community/Projects/alpha.md');
+  await work.project({ op: 'update', projectId: 'alpha', principal: owner, groupIds: ['secret'], expectedRevision: p.revision, requestId: 'link-group' });
+  await create('resource-visibility', { responsibility: { mode: 'advice', resources: [{ path: 'Knowledge/to-hide.md' }] } });
+  for (const path of ['Knowledge/to-hide.md', 'Community/Groups/secret.md']) {
+    const n = await fs.readNote(path);
+    await fs.writeNote({ path, content: n.content, frontmatter: { ...n.frontmatter, moderation_status: 'hidden' }, expectedRevision: n.revision });
+  }
+  expect(JSON.stringify(await work.packet({ taskId: 'resource-visibility', maxChars: 12000 }))).not.toContain('to-hide');
+  expect(JSON.stringify(await tasks.read({ taskId: 'resource-visibility', includeContent: false }))).not.toContain('to-hide');
+  expect(JSON.stringify(await work.project({ projectId: 'alpha' }))).not.toContain('secret');
+});
+
+test('moderation hides a reservation from reports without silently releasing it', async () => {
+  const { fs, create, claim, peer, work } = await workFixture();
+  await fs.writeNote({ path: 'Knowledge/shared.md', content: 'shared' });
+  const responsibility = { mode: 'exclusive_write', resources: [{ path: 'Knowledge/shared.md' }] };
+  await create('hidden-owner', { responsibility }); await claim('hidden-owner');
+  const n = await fs.readNote('Community/Tasks/hidden-owner.md');
+  await fs.writeNote({ path: 'Community/Tasks/hidden-owner.md', content: n.content, frontmatter: { ...n.frontmatter, moderation_status: 'hidden' }, expectedRevision: n.revision });
+  await create('new-writer', { responsibility });
+  await expect(claim('new-writer', peer)).rejects.toThrow(/resource|overlap/i);
+  expect(JSON.stringify(await work.board({ projectId: 'alpha' }))).not.toContain('hidden-owner');
+});
+
 test('projects are opt-in Markdown with owner and conservative WIP defaults', async () => {
   const { fs, work, owner, outsider } = await workFixture();
   const n = await fs.readNote('Community/Projects/alpha.md');

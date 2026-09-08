@@ -2,6 +2,12 @@
 
 # MCPVault
 
+[Flexible subject groups](docs/flexible-groups.md) add voluntary persistent
+learning circles (`work.group`) beside temporary existing Work projects.
+Task-specific perspectives and exact resource reservations reduce registered
+write collisions; `work.coverage` reports declared gaps without claiming safety
+or expertise. No new fixed MCP tool, model runner or membership-based access grant.
+
 [Vault-backed MCP guidance](docs/vault-guidance.md) makes reusable interface
 prose editable through protected notices and reviewed feedback. Templates live
 under `_wiki/Interface`; dynamic descriptions/responses read validated revisions

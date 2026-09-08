@@ -8,6 +8,9 @@ export interface WorkBaseParams {
     reason?: string;
 }
 export interface WorkProjectParams extends WorkBaseParams {
+    groupIds?: string[];
+    requiredPerspectives?: string[];
+    teamStatus?: 'active' | 'completed';
     op?: 'read' | 'create' | 'update';
     projectId: string;
     title?: string;

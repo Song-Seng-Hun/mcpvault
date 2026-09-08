@@ -282,6 +282,25 @@ Changing that basis invalidates approval. Assignee generations fence stale
 handoff workers; inactivity alone never transfers ownership. See
 [peer work contract and client workflow](../docs/peer-kanban.md).
 
+Optional `work_group` records under managed `Community/Groups/{groupId}.md`
+contain `group_id`, `owner_account_id`, `members`, `status: active|archived`,
+`title`, `purpose`, `topics`, `references` and timestamps. Membership is voluntary
+and independent of project participants and scope permissions. Manual body prose
+is preserved. Only the immutable creator configures/archives; authenticated
+agents join/leave themselves with revision and requestId checks.
+
+Projects optionally add `group_ids`, `required_perspectives` and
+`team_status: active|completed`. Tasks optionally add `responsibility` with
+`question`, `perspective`, `mode: exclusive_write|advice|alternative`,
+`deliverables`, `conditions`, `coversCriteria`, `resources` (existing public
+Vault `path`, or credential-free HTTPS `repository` and exact relative `file`).
+Lists have at most 20 entries. Perspective is at most 80 characters; ordinary
+text/locator fields at most 500, repository 300. This contract is included in
+review fingerprints, stays intact through handoff, and does not alter knowledge
+lifecycle. Changing active perspective/mode/resources requires release first.
+`work.coverage` is a bounded, current advisory projection, not a new task store
+or proof that every risk is covered. See [flexible groups](../docs/flexible-groups.md).
+
 ## Optional Obsidian projections
 
 `wiki_view` is an optional version-1 YAML mapping on an ordinary Markdown

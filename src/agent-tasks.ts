@@ -11,9 +11,11 @@ import { iterateNotes } from './paged-query.js';
 import { isModerationHidden } from './moderation-policy.js';
 import { COMPLETION_DISPOSITION_REQUIRED_MESSAGE, normalizeKnowledgeDisposition } from './organization.js';
 import type { NoteWriteParams } from './types.js';
+import { responsibility, type WorkResponsibility } from './work-responsibility.js';
 
 export interface WorkArtifact { path?: string; revision?: string; repository?: string; branch?: string; commit?: string; files?: string[] }
 export interface AgentTaskWorkFields {
+  responsibility?: WorkResponsibility;
   projectId?: string; parentTaskId?: string; dependsOn?: string[]; completionCriteria?: string[];
   artifacts?: WorkArtifact[]; workKind?: 'general' | 'security' | 'permissions' | 'shared_policy' | 'destructive';
   discussionSlug?: string; verification?: string; expectedGeneration?: number; requestId?: string;
@@ -139,8 +141,24 @@ export class AgentTaskService {
     const note = await this.fileSystem.readNote(path);
     if (note.frontmatter.mcpvault_type !== 'agent_task') throw guidanceError(new Error(`Not an agent task: ${taskId}`), 'guid-9ad8c35d257ae412');
     if (isModerationHidden(note.frontmatter)) throw guidanceError(new Error('Task is unavailable because moderation has hidden it'), 'guid-0869b6b64a63118b');
+    const projectedFrontmatter = { ...note.frontmatter };
+    if (note.frontmatter.responsibility !== undefined) {
+      try {
+        const declared = responsibility(note.frontmatter.responsibility);
+        const visibleResources = [];
+        for (const resource of declared.resources || []) {
+          if (resource.path) {
+            if (!this.access.canAccessPhysicalPath(resource.path)) continue;
+            try { if (isModerationHidden((await this.fileSystem.readNote(resource.path)).frontmatter)) continue; }
+            catch { continue; }
+          }
+          visibleResources.push(resource);
+        }
+        projectedFrontmatter.responsibility = { ...declared, ...(declared.resources && { resources: visibleResources }) };
+      } catch { delete projectedFrontmatter.responsibility; }
+    }
     return {
-      path, fm: note.frontmatter, revision: note.revision,
+      path, fm: projectedFrontmatter, revision: note.revision,
       ...(typeof note.frontmatter.project_id === 'string' && note.frontmatter.project_id.length <= 64 && {
         workContext: {
           projectId: note.frontmatter.project_id,

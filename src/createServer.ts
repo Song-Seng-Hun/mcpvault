@@ -53,6 +53,7 @@ import { getAuditTools } from "./audit-tools.js";
 import { AgentTaskService } from "./agent-tasks.js";
 import { AGENT_TASK_MUTATING_TOOLS, getAgentTaskTools } from "./agent-task-tools.js";
 import { getWorkTools, WORK_MUTATING_TOOLS, WORK_TASK_PROPERTIES } from './work-tools.js';
+import { WorkGroupService } from './work-groups.js';
 import { getRoleplayTools, ROLEPLAY_MUTATING_TOOLS } from './roleplay-tools.js';
 import { getNoticeTools } from './notice-tools.js';
 import { NoticeRegistry, NoticeService } from './notices.js';
@@ -337,6 +338,7 @@ const CAPABILITY_FOR_TOOL: Partial<Record<string, ScopeCapability>> = {
   record_community_participation: "profile",
   create_agent_task: "task",
   manage_work_project: 'task',
+  manage_work_group: 'task',
   manage_roleplay_world: 'chat', manage_roleplay_character: 'chat', manage_roleplay_scene: 'chat',
   revise_notice: 'write', preview_notice: 'write',
   submit_roleplay_action: 'chat', resolve_roleplay_action: 'chat', correct_roleplay_turn: 'chat',
@@ -558,6 +560,11 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
   const continuity = new ContinuityService(fileSystem, {
     access: scopeAccess,
     buildLearningPath: (principal, path, maxDepth, limit, maxChars) => llmWiki.learningPath(principal, path, maxDepth, limit, maxChars, true),
+  });
+  const workGroups = new WorkGroupService(fileSystem, references, scopeAuth, {
+    assertActor: async principal => {
+      if (await moderation.isBanned(principal.accountId, principal.userId)) throw guidanceError(new Error('This account is suspended by moderation'), 'guid-3ce72ccf715bd653');
+    },
   });
   const work = new WorkService(fileSystem, references, scopeAuth, agentTasks, {
     assertTaskMutation: async taskId => {
@@ -1282,7 +1289,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
     let toolName = requestedToolName;
     let args = request.params.arguments;
 
-    if (readOnly && MUTATING_TOOLS.has(toolName) && !(toolName === 'manage_wiki_moc_region' && args?.operation === 'status') && !(['manage_work_project', 'manage_community_participation'].includes(toolName) && (args?.op === undefined || args?.op === 'read'))) {
+    if (readOnly && MUTATING_TOOLS.has(toolName) && !(toolName === 'manage_wiki_moc_region' && args?.operation === 'status') && !(['manage_work_project', 'manage_work_group', 'manage_community_participation'].includes(toolName) && (args?.op === undefined || args?.op === 'read'))) {
       await audit.record({ tool: toolName, ...(args && typeof args === 'object' ? { args: args as Record<string, unknown> } : {}), outcome: 'error', error: 'read-only mode' });
       return {
         content: [{
@@ -1319,6 +1326,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
 
       if (toolName === 'manage_wiki_moc_region' && rawArgs.operation === 'status') toolName = 'read_wiki_moc_region_status';
       if (toolName === 'manage_work_project' && (rawArgs.op === undefined || rawArgs.op === 'read')) toolName = 'read_work_project';
+      if (toolName === 'manage_work_group' && (rawArgs.op === undefined || rawArgs.op === 'read')) toolName = 'read_work_group';
       if (['manage_roleplay_world', 'manage_roleplay_character', 'manage_roleplay_scene'].includes(toolName) && (!rawArgs.op || rawArgs.op === 'read')) toolName = toolName.replace('manage_', 'read_');
       if (toolName === 'correct_roleplay_turn' && rawArgs.op === 'preview') toolName = 'preview_roleplay_correction';
       if (toolName === 'manage_community_participation' && (rawArgs.op === undefined || rawArgs.op === 'read')) toolName = 'read_community_participation';
@@ -2505,6 +2513,9 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         }
         case 'manage_work_project':
         case 'read_work_project': return jsonResult(await work.project({ ...trimmedArgs, principal }), false);
+        case 'manage_work_group':
+        case 'read_work_group': return jsonResult(await workGroups.group({ ...trimmedArgs, principal }), false);
+        case 'read_work_coverage': return jsonResult(await work.coverage({ ...trimmedArgs, principal }), false);
         case 'read_work_board': return jsonResult(await work.board({ ...trimmedArgs, principal }), false);
         case 'read_work_packet': return jsonResult(await work.packet({ ...trimmedArgs, principal }), false);
         case 'claim_work_task': return jsonResult(await work.claim({ ...trimmedArgs, principal }), false);
@@ -3233,7 +3244,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
           throw guidanceError(new Error(`Unknown tool: ${toolName}`), 'guid-d20e8d6594572863');
       }
       });
-      const responseContract = endpointRegistry.resolve(toolName === 'read_work_project' ? 'work.project' : toolName === 'read_community_participation' ? 'community.participation' : endpointIdForTool(toolName))?.input;
+      const responseContract = endpointRegistry.resolve(toolName === 'read_work_group' ? 'work.group' : toolName === 'read_work_project' ? 'work.project' : toolName === 'read_community_participation' ? 'community.participation' : endpointIdForTool(toolName))?.input;
       const responseBudget = trimmedArgs.maxChars ?? (toolName === 'get_wiki_answer_packet' && trimmedArgs.query === undefined ? 7000 : undefined);
       return enforceResponseBudget(toolResponse, normalizedResponseBudget(responseBudget, responseContract));
     } catch (error) {

@@ -6,6 +6,7 @@ import type { WorkArtifact } from './agent-tasks.js';
 
 export interface WorkBaseParams { principal?: ScopePrincipal; requestId?: string; expectedRevision?: string; expectedGeneration?: number; reason?: string }
 export interface WorkProjectParams extends WorkBaseParams {
+  groupIds?: string[]; requiredPerspectives?: string[]; teamStatus?: 'active' | 'completed';
   op?: 'read' | 'create' | 'update'; projectId: string; title?: string; goal?: string; allowedWork?: string[];
   participants?: string[]; completionCriteria?: string[]; wipLimit?: number; personalWipLimit?: number; roomId?: string; maxChars?: number;
 }
@@ -32,7 +33,7 @@ function order(value: any): any {
   return value;
 }
 export const fingerprint = (value: unknown) => createHash('sha256').update(canonical(value)).digest('hex');
-export const reviewBasis = (fm: Properties) => fingerprint({ description: fm.description, completionCriteria: fm.completion_criteria || [], artifacts: fm.artifacts || [], workKind: fm.work_kind, verification: fm.verification || '' });
+export const reviewBasis = (fm: Properties) => fingerprint({ description: fm.description, completionCriteria: fm.completion_criteria || [], artifacts: fm.artifacts || [], workKind: fm.work_kind, verification: fm.verification || '', ...(fm.responsibility && { responsibility: fm.responsibility }) });
 export function textField(value: unknown, field: string, max = 500, required = false): string {
   if (value !== undefined && typeof value !== 'string') throw guidanceError(new Error(`${field} must be a string`), 'guid-9a47fff07b9e2cc5');
   const text = String(value ?? '').trim();

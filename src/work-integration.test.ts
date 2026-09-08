@@ -105,6 +105,11 @@ test('work project public reads and work mutations have different authority', as
     expect(auth.error, auth.text).toBeFalsy();
     const created = await call('work.project', { op: 'create', projectId: 'review-project', title: 'Peer review', goal: 'Verify one result', allowedWork: ['Research public evidence'], completionCriteria: ['A verified note'], expectedRevision: 'missing', requestId: 'create-project' }, auth.value.accessToken);
     expect(created.error, created.text).toBeFalsy();
+    const group = await call('work.group', { op: 'create', groupId: 'research-circle', title: 'Research circle', purpose: 'Voluntary cross-field learning', requestId: 'create-circle', expectedRevision: 'missing' }, auth.value.accessToken);
+    expect(group.error, group.text).toBeFalsy();
+    expect((await call('work.group', { groupId: 'research-circle' })).error).toBeFalsy();
+    expect((await call('work.group', { op: 'join', groupId: 'research-circle', expectedRevision: group.value.revision, requestId: 'anon-join' })).error).toBe(true);
+    expect((await call('work.coverage', { projectId: 'review-project', maxChars: 4000 })).error).toBeFalsy();
     const read = await call('work.project', { op: 'read', projectId: 'review-project' });
     expect(read.error, read.text).toBeFalsy();
     expect(read.text).toContain('Peer review');
@@ -124,6 +129,10 @@ test('work project public reads and work mutations have different authority', as
     expect(descriptor).toMatchObject({ available: true, operations: { read: { available: true }, update: { available: false, state: 'disabled' } } });
     expect((await readonly.call('work.project', { op: 'read', projectId: 'review-project' })).error).toBeFalsy();
     expect((await readonly.call('work.board', { projectId: 'review-project' })).error).toBeFalsy();
+    expect((await readonly.call('work.group', { groupId: 'research-circle' })).error).toBeFalsy();
+    const refusedGroup = await readonly.call('work.group', { op: 'join', groupId: 'research-circle', requestId: 'read-only' });
+    expect(refusedGroup.error).toBe(true);
+    expect(refusedGroup.text).toMatch(/read.only/i);
     for (const [endpoint, op] of [['work.project', 'create'], ['work.claim', 'start'], ['work.handoff', 'propose'], ['work.review', 'request']]) {
       const refused = await readonly.call(endpoint!, { op, projectId: 'review-project', taskId: 'unknown' });
       expect(refused.error, endpoint).toBe(true);

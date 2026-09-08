@@ -7,6 +7,7 @@ import { boundItems } from './search-limits.js';
 import { iterateNotes } from './paged-query.js';
 import { isModerationHidden } from './moderation-policy.js';
 import { COMPLETION_DISPOSITION_REQUIRED_MESSAGE, normalizeKnowledgeDisposition } from './organization.js';
+import { responsibility } from './work-responsibility.js';
 const ROOT = 'Community/Tasks';
 export const AGENT_TASK_STATUSES = ['proposed', 'accepted', 'in_progress', 'blocked', 'in_review', 'completed', 'cancelled'];
 const taskPath = (taskId) => `${ROOT}/${normalizeScopeId(taskId, 'taskId')}.md`;
@@ -125,8 +126,33 @@ export class AgentTaskService {
             throw guidanceError(new Error(`Not an agent task: ${taskId}`), 'guid-9ad8c35d257ae412');
         if (isModerationHidden(note.frontmatter))
             throw guidanceError(new Error('Task is unavailable because moderation has hidden it'), 'guid-0869b6b64a63118b');
+        const projectedFrontmatter = { ...note.frontmatter };
+        if (note.frontmatter.responsibility !== undefined) {
+            try {
+                const declared = responsibility(note.frontmatter.responsibility);
+                const visibleResources = [];
+                for (const resource of declared.resources || []) {
+                    if (resource.path) {
+                        if (!this.access.canAccessPhysicalPath(resource.path))
+                            continue;
+                        try {
+                            if (isModerationHidden((await this.fileSystem.readNote(resource.path)).frontmatter))
+                                continue;
+                        }
+                        catch {
+                            continue;
+                        }
+                    }
+                    visibleResources.push(resource);
+                }
+                projectedFrontmatter.responsibility = { ...declared, ...(declared.resources && { resources: visibleResources }) };
+            }
+            catch {
+                delete projectedFrontmatter.responsibility;
+            }
+        }
         return {
-            path, fm: note.frontmatter, revision: note.revision,
+            path, fm: projectedFrontmatter, revision: note.revision,
             ...(typeof note.frontmatter.project_id === 'string' && note.frontmatter.project_id.length <= 64 && {
                 workContext: {
                     projectId: note.frontmatter.project_id,

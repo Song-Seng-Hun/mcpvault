@@ -3,6 +3,7 @@ import type { FileSystemService } from './filesystem.js';
 import type { ReferenceService } from './references.js';
 import type { ScopeAuthService, ScopePrincipal } from './scope-auth.js';
 import type { NoteWriteParams } from './types.js';
+import { type WorkResponsibility } from './work-responsibility.js';
 export interface WorkArtifact {
     path?: string;
     revision?: string;
@@ -12,6 +13,7 @@ export interface WorkArtifact {
     files?: string[];
 }
 export interface AgentTaskWorkFields {
+    responsibility?: WorkResponsibility;
     projectId?: string;
     parentTaskId?: string;
     dependsOn?: string[];
@@ -68,7 +70,9 @@ export declare class AgentTaskService {
         referenceMaxChars?: number;
     }): Promise<{
         path: string;
-        fm: Record<string, any>;
+        fm: {
+            [x: string]: any;
+        };
         revision: string;
         workContext?: {
             projectId: string;

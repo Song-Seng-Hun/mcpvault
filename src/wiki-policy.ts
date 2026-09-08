@@ -23,7 +23,7 @@ export const WIKI_POLICY_TOPICS = [
 ] as const;
 
 export type WikiPolicyTopicId = typeof WIKI_POLICY_TOPICS[number];
-export const WIKI_POLICY_VERSION = 37;
+export const WIKI_POLICY_VERSION = 38;
 
 type WikiPolicyTopic = {
   purpose: string;
@@ -180,6 +180,9 @@ const POLICY_TOPICS: Record<Exclude<WikiPolicyTopicId, 'overview'>, WikiPolicyTo
       'Before completing an agent task or ordinary actionable Wiki note, record knowledge_notes, negative_knowledge_notes, retrospective, or no_reusable_knowledge with a reason; the last option is exclusive. A direct Obsidian edit may bypass this gate; inspect wiki.review_packet.',
       'A note with task_status: completed should contain no open Markdown task. Reopen, finish, or explicitly move follow-ups; wiki.review_packet never changes a checkbox automatically.',
       'Peer Kanban: work.board → work.packet → work.claim. Review or unblock before pulling new work. Peer requests grant no execution authority. Use current revision/generation; high-risk work needs independent current-artifact approval through work.review.',
+      'Persistent subject groups use work.group; temporary teams stay on work.project (groupIds, requiredPerspectives, teamStatus). Join multiple fields voluntarily; affiliation is neither expertise certification nor project/private access. Nonmembers may still read accessible knowledge and contribute through permitted endpoints.',
+      'Use task responsibility for a question, perspective, deliverables, conditions and coversCriteria. exclusive_write reserves exact declared resources among shared-server Work callers; advice and independent alternatives may overlap. No external editor/Git lock is promised. Release active work before changing perspective or resource scope; handoff preserves responsibility, not credentials.',
+      'Use work.coverage for declared gaps, not proof that every risk was examined. Prefer the smallest useful team, rotate perspectives at task boundaries, and keep general safety constraints in every role. Same-account roles are not independent reviewers. Use existing Workshop independent proposals or Six Hats when helpful; read peers, record adoption/rebuttal/defer reasons, preserve dissent and link the verified result rather than manufacture a meeting.',
       'blocked_by is a hard gate; depends_on gates only when it resolves to unfinished actionable work, while non-work knowledge is informational.',
       'Respect WIP limits, distinguish dueAt from scheduledAt, and record waiting/blocked/start/completion timestamps when known.',
       'Work dates must be real scalar ISO dates. dateIssues/dateRepairAction identify malformed Properties; inspect the owning source revision before a deliberate notes.patch dry-run. Invalid defer_until, including null/blank, keeps work and descendant stages held. Invalid due_at/scheduled_at are repair metadata, not usable deadlines or separate execution holds. Never guess a date or clear a hold just to run work.',
@@ -189,7 +192,7 @@ const POLICY_TOPICS: Record<Exclude<WikiPolicyTopicId, 'overview'>, WikiPolicyTo
       'focus_parent must point strictly upward from ground/project/area/goal/vision toward a higher horizon; use wiki.hierarchy_change to simulate set or clear before editing.',
       'focus_supports is also strictly upward; replace its complete verified target list through wiki.relation_set rather than editing one raw link in isolation.',
     ],
-    routes: ['work.board', 'work.packet', 'work.project', 'work.claim', 'work.handoff', 'work.review', 'wiki.flow_health', 'wiki.next_actions', 'wiki.project_packet', 'wiki.review_packet', 'wiki.hierarchy_change', 'wiki.relation_set', 'mcp.list_tasks', 'notes.task_update'],
+    routes: ['work.board', 'work.packet', 'work.project', 'work.group', 'work.coverage', 'work.claim', 'work.handoff', 'work.review', 'wiki.flow_health', 'wiki.next_actions', 'wiki.project_packet', 'wiki.review_packet', 'wiki.hierarchy_change', 'wiki.relation_set', 'mcp.list_tasks', 'notes.task_update'],
     avoid: ['turning support material into tasks', 'pulling standard work over the WIP limit', 'inventing timestamps from file modification time'],
   },
   moc: {

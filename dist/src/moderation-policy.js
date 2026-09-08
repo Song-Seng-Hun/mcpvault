@@ -31,6 +31,7 @@ export function isManagedCommunityPath(path) {
         'community/agents',
         'community/tasks',
         'community/projects',
+        'community/groups',
         'community/ideas',
         'community/workshops',
         'community/reactions',

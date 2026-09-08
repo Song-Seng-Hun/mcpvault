@@ -2,6 +2,25 @@ import { expect, test } from 'vitest';
 import { EndpointRegistry } from './endpoint-registry.js';
 import { getAgentTaskTools } from './agent-task-tools.js';
 import { getWorkTools } from './work-tools.js';
+import { WORK_MUTATING_TOOLS } from './work-tools.js';
+import { isManagedCommunityPath } from './moderation-policy.js';
+import { GUIDANCE_DEFINITIONS } from './guidance-defaults.generated.js';
+
+test('new dynamic endpoint descriptions are included in Vault-backed guidance', () => {
+  expect(GUIDANCE_DEFINITIONS.some(d => d.template.startsWith('Voluntary persistent subject group:'))).toBe(true);
+  expect(GUIDANCE_DEFINITIONS.some(d => d.template.startsWith('Bounded advisory gaps in declared project perspectives'))).toBe(true);
+});
+
+test('group discovery preserves anonymous read while writes and managed notes remain protected', () => {
+  const registry = new EndpointRegistry();
+  registry.setTools(getWorkTools(), { manage_work_group: 'task' }, new Set(WORK_MUTATING_TOOLS));
+  const found = registry.list('work.group', 1, 12000, { readOnly: true, authenticated: false, capabilities: new Set() }, false).endpoints[0] as any;
+  expect(found.endpointId).toBe('work.group');
+  expect(found.operations.read.available).toBe(true);
+  expect(found.operations.join.available).toBe(false);
+  expect(isManagedCommunityPath('Community/Groups/research.md')).toBe(true);
+  expect(registry.resolve('work.coverage')).toBeDefined();
+});
 
 test('mixed create/update schemas do not advertise resetting defaults on partial edits', () => {
   const update = getAgentTaskTools().find(tool => tool.name === 'update_agent_task')!.inputSchema.properties as any;

@@ -1,4 +1,5 @@
 import { guidanceError, guidanceText } from './guidance-runtime.js';
+import { responsibility, resourceKeys as declaredResourceKeys, assignmentShape } from './work-responsibility.js';
 import { posix } from 'node:path';
 import { ScopeAccessPolicy } from './scope-access.js';
 import { normalizeScopeId } from './scopes.js';
@@ -14,7 +15,7 @@ const taskPath = (id) => `Community/Tasks/${normalizeScopeId(id, 'taskId')}.md`;
 const timestamp = () => new Date().toISOString();
 const RECEIPTS = 16;
 const EVENTS = 16;
-const TASK_EXTENSION_FIELDS = ['project_id', 'parent_task_id', 'depends_on', 'completion_criteria', 'artifacts', 'work_kind', 'discussion_slug',
+const TASK_EXTENSION_FIELDS = ['responsibility', 'project_id', 'parent_task_id', 'depends_on', 'completion_criteria', 'artifacts', 'work_kind', 'discussion_slug',
     'verification', 'author_account_id', 'claim_generation', 'started_at', 'last_progress_at', 'assignee_account_id',
     'work_review', 'work_reviews', 'work_handoff', 'work_changes'];
 /** Markdown is the sole durable state, including approvals and retry receipts.
@@ -107,7 +108,7 @@ export class WorkService {
     }
     request(params, action, target) {
         const requestId = textField(params.requestId, 'requestId', 128, true);
-        const fields = ['op', 'projectId', 'taskId', 'title', 'goal', 'allowedWork', 'participants', 'completionCriteria', 'wipLimit', 'personalWipLimit', 'roomId',
+        const fields = ['responsibility', 'groupIds', 'requiredPerspectives', 'teamStatus', 'op', 'projectId', 'taskId', 'title', 'goal', 'allowedWork', 'participants', 'completionCriteria', 'wipLimit', 'personalWipLimit', 'roomId',
             'parentTaskId', 'dependsOn', 'artifacts', 'workKind', 'discussionSlug', 'verification', 'description', 'assignee', 'references', 'status',
             'reason', 'retrospective', 'knowledgeNotes', 'negativeKnowledgeNotes', 'knowledgeApplications', 'noReusableKnowledge', 'knowledgeDispositionReason',
             'toAccountId', 'completed', 'remaining', 'blocker', 'nextAction', 'artifactFingerprint', 'expectedRevision', 'expectedGeneration'];
@@ -184,7 +185,9 @@ export class WorkService {
             else if (value !== undefined)
                 omit(key);
         }
-        for (const key of ['allowed_work', 'completion_criteria', 'participants']) {
+        if (['active', 'completed'].includes(note.frontmatter.team_status))
+            project.team_status = note.frontmatter.team_status;
+        for (const key of ['allowed_work', 'completion_criteria', 'participants', 'required_perspectives', 'group_ids']) {
             const value = note.frontmatter[key];
             if (!Array.isArray(value)) {
                 if (value !== undefined)
@@ -226,14 +229,23 @@ export class WorkService {
         const op = params.op || 'read';
         if (op === 'read') {
             const n = await this.projectNote(id);
-            let projected = n;
+            const visibleGroups = [];
+            for (const groupId of Array.isArray(n.frontmatter.group_ids) ? n.frontmatter.group_ids.slice(0, 20) : []) {
+                try {
+                    const group = await this.visible(`Community/Groups/${normalizeScopeId(groupId, 'groupId')}.md`);
+                    if (group.frontmatter.mcpvault_type === 'work_group')
+                        visibleGroups.push(groupId);
+                }
+                catch { /* Membership is not permission; hidden group links disappear. */ }
+            }
+            let projected = { ...n, frontmatter: { ...n.frontmatter, ...(n.frontmatter.group_ids && { group_ids: visibleGroups }) } };
             if (n.frontmatter.room_id) {
                 try {
                     await this.communityTarget('room', n.frontmatter.room_id);
                 }
                 catch {
-                    const { room_id: _room, ...frontmatter } = n.frontmatter;
-                    projected = { ...n, frontmatter };
+                    const { room_id: _room, ...frontmatter } = projected.frontmatter;
+                    projected = { ...projected, frontmatter };
                 }
             }
             return this.projectProjection(id, projected, params.maxChars);
@@ -266,6 +278,25 @@ export class WorkService {
             fm.goal = textField(params.goal ?? fm.goal, 'goal', 2000, true);
             fm.allowed_work = listField(params.allowedWork ?? fm.allowed_work, 'allowedWork', 20, true);
             fm.completion_criteria = listField(params.completionCriteria ?? fm.completion_criteria, 'completionCriteria', 20, true);
+            if (params.requiredPerspectives !== undefined)
+                fm.required_perspectives = listField(params.requiredPerspectives, 'requiredPerspectives', 20).map(p => textField(p, 'perspective', 80, true));
+            if (params.groupIds !== undefined)
+                fm.group_ids = listField(params.groupIds, 'groupIds', 20).map(id => normalizeScopeId(id, 'groupId'));
+            if (params.teamStatus !== undefined) {
+                if (!['active', 'completed'].includes(params.teamStatus))
+                    throw guidanceError(new Error('Invalid teamStatus'), 'guid-2549869126c304ae');
+                if (params.teamStatus === 'completed' && (await this.inventory(id)).some(n => n.fm.mcpvault_type === 'agent_task' && !finished(n.fm)))
+                    throw guidanceError(new Error('Finish or cancel project tasks before closing the temporary team'), 'guid-af96c1af5ebec3c8');
+                fm.team_status = params.teamStatus;
+            }
+            const groupGuards = [];
+            for (const groupId of fm.group_ids || []) {
+                const groupPath = `Community/Groups/${normalizeScopeId(groupId, 'groupId')}.md`;
+                const group = await this.visible(groupPath);
+                if (group.frontmatter.mcpvault_type !== 'work_group')
+                    throw guidanceError(new Error('Group is unavailable'), 'guid-557e3c65a6af7537');
+                groupGuards.push({ path: groupPath, expectedRevision: group.revision });
+            }
             fm.participants = [actor.accountId, ...listField(params.participants ?? fm.participants ?? [], 'participants', 100)
                     .map(id => normalizeScopeId(id, 'participant')).filter(id => id !== actor.accountId)];
             const accounts = new Set((await this.auth.listPrincipals()).map(p => p.accountId));
@@ -284,8 +315,8 @@ export class WorkService {
             this.addReceipt(fm, content, request, result, prior);
             await this.actor(params.principal);
             const write = { path, content, frontmatter: fm, expectedRevision: prior?.revision || 'missing' };
-            const receipt = room
-                ? await this.fileSystem.writeNoteWithRevisionGuardsAndReceipt(write, [{ path: room.path, expectedRevision: room.note.revision }])
+            const receipt = room || groupGuards.length
+                ? await this.fileSystem.writeNoteWithRevisionGuardsAndReceipt(write, [...groupGuards, ...(room ? [{ path: room.path, expectedRevision: room.note.revision }] : [])], { maxGuards: 32 })
                 : await this.fileSystem.writeNoteWithReceipt(write);
             await this.fileSystem.readNote(path);
             return { ...result, revision: receipt.revision };
@@ -434,6 +465,8 @@ export class WorkService {
                 await this.options.assertTaskMutation?.(normalizeScopeId(params.taskId, 'taskId'));
             const requestedProject = prior?.frontmatter.project_id || params.projectId;
             if (!requestedProject) {
+                if (params.responsibility !== undefined)
+                    throw guidanceError(new Error('Task responsibility requires an explicit Work project; legacy tasks are not automatically migrated'), 'guid-a7a4967a7d9d677d');
                 if (intent)
                     throw guidanceError(new Error('Work actions require a project-backed task'), 'guid-b17f67cf5c49f2e8');
                 return proceed();
@@ -443,6 +476,8 @@ export class WorkService {
                 throw guidanceError(new Error('Task project ownership is immutable; existing unprojected tasks are not migrated'), 'guid-a714750a675ca5e7');
             const actor = await this.actor(params.principal);
             const project = await this.projectNote(normalizeScopeId(projectId, 'projectId'));
+            if (project.frontmatter.team_status === 'completed')
+                throw guidanceError(new Error('Temporary team is closed; project owner must explicitly reopen it'), 'guid-f088e892bea65283');
             const moderate = this.auth.hasCapability(actor, 'moderate');
             if (!(moderate && ((intent?.kind === 'claim' && intent.params.op === 'release') || (intent?.kind === 'review' && intent.params.op === 'override'))))
                 this.member(project.frontmatter, actor);
@@ -505,6 +540,11 @@ export class WorkService {
                 fm.discussion_slug = params.discussionSlug ? normalizeScopeId(params.discussionSlug, 'discussionSlug') : '';
             if (params.verification !== undefined)
                 fm.verification = textField(params.verification, 'verification', 1000);
+            if (params.responsibility !== undefined) {
+                fm.responsibility = responsibility(params.responsibility);
+                if (prior && started(prior.frontmatter) && fingerprint(assignmentShape(fm.responsibility)) !== fingerprint(assignmentShape(prior.frontmatter.responsibility)))
+                    throw guidanceError(new Error('Release active work before changing its responsibility role or resources; handoff preserves the responsibility'), 'guid-e1b5d0184d4835f6');
+            }
             // Match AgentTaskService's canonical value before ANY readiness, WIP or
             // completion check. Validating a raw value then persisting a normalized
             // one would let alternate casing bypass those checks.
@@ -516,6 +556,19 @@ export class WorkService {
                 guards.push({ path: discussion.path, expectedRevision: discussion.note.revision });
             }
             fm.artifacts = await this.artifacts(params.artifacts ?? fm.artifacts ?? [], actor, guards);
+            if (fm.responsibility) {
+                const declared = responsibility(fm.responsibility);
+                if (declared.coversCriteria?.some(c => !project.frontmatter.completion_criteria?.includes(c)))
+                    throw guidanceError(new Error('coversCriteria must name declared project completion criteria'), 'guid-b8de90e5165d86fd');
+                for (const resource of declared.resources || [])
+                    if (resource.path) {
+                        resource.path = this.publicPath(resource.path);
+                        await this.references.validateAndNormalize([resource.path], taskPath(id), actor);
+                        const target = await this.visible(resource.path);
+                        guards.push({ path: resource.path, expectedRevision: target.revision });
+                    }
+                fm.responsibility = declared;
+            }
             await this.dependencies(fm, id, guards);
             if (params.assignee !== undefined) {
                 const account = params.assignee ? await this.accountForAssignee(params.assignee, project.frontmatter) : undefined;
@@ -535,11 +588,14 @@ export class WorkService {
             if (['in_progress', 'blocked', 'in_review'].includes(fm.status))
                 fm.started_at ||= timestamp();
             const newlyClaimed = fm.assignee_account_id && fm.assignee_account_id !== prior?.frontmatter.assignee_account_id;
+            if (newlyClaimed)
+                fm.started_at ||= timestamp();
             if (prior && fm.claim_generation !== generation)
                 delete fm.work_review;
             if (newlyClaimed || (started(fm) && (!started(prior?.frontmatter || {}) || params.dependsOn !== undefined)) || fm.status === 'completed')
                 await this.ready(fm);
             await this.wip(fm, project.frontmatter, id, prior?.frontmatter);
+            await this.resourceAdmission(fm, id);
             if (prior && reviewBasis(fm) !== reviewBasis(prior.frontmatter))
                 delete fm.work_review;
             if (fm.status === 'completed') {
@@ -572,6 +628,7 @@ export class WorkService {
                     if (!moderate || (!privilegedRelease && !(intent?.kind === 'review' && intent.params.op === 'override')))
                         this.member(currentProject.frontmatter, actor);
                     await this.wip(fm, currentProject.frontmatter, id, prior?.frontmatter);
+                    await this.resourceAdmission(fm, id);
                     const combined = [...guards, ...applicationGuards].filter(g => g.path !== write.path);
                     const unique = [...new Map(combined.map(g => [g.path.toLowerCase(), g])).values()];
                     if (combined.some(g => unique.find(u => u.path.toLowerCase() === g.path.toLowerCase())?.expectedRevision !== g.expectedRevision))
@@ -783,6 +840,103 @@ export class WorkService {
         }
         return keys;
     }
+    async resourceAdmission(fm, taskId) {
+        if (finished(fm) || !(started(fm) || fm.assignee_account_id) || !fm.responsibility)
+            return;
+        const declared = responsibility(fm.responsibility);
+        if (declared.mode !== 'exclusive_write')
+            return;
+        const wanted = new Set(declaredResourceKeys(declared));
+        // A hidden task still owns its declared reservation. Never return this
+        // internal admission inventory as a report or disclose the competing actor.
+        for await (const other of iterateNotes(this.fileSystem, { pathPrefix: 'Community/Tasks', filters: { mcpvault_type: 'agent_task' }, includeContent: false }, path => this.access.canAccessPhysicalPath(path))) {
+            const prior = other.frontmatter;
+            if (prior.task_id === taskId || finished(prior) || !(started(prior) || prior.assignee_account_id) || !prior.responsibility)
+                continue;
+            const reserved = responsibility(prior.responsibility);
+            if (reserved.mode === 'exclusive_write' && declaredResourceKeys(reserved).some(key => wanted.has(key))) {
+                throw guidanceError(new Error('Exclusive resource overlap; coordinate or release the existing reservation before claiming'), 'guid-72ba3ac7ccff169c');
+            }
+        }
+    }
+    async responsibilityItems(fm) {
+        if (!fm.responsibility)
+            return [];
+        let declared;
+        try {
+            declared = responsibility(fm.responsibility);
+        }
+        catch {
+            return [{ kind: 'responsibility_diagnostic', text: guidanceText('guid-f44d6f86f70cd6e7', 'Malformed responsibility; repair through the current task contract before further work.') }];
+        }
+        const items = [];
+        for (const key of ['question', 'perspective', 'mode'])
+            if (declared[key])
+                items.push({ kind: 'responsibility', field: key, text: declared[key] });
+        for (const key of ['conditions', 'deliverables', 'coversCriteria'])
+            for (const text of declared[key] || [])
+                items.push({ kind: 'responsibility', field: key, text });
+        for (const resource of declared.resources || []) {
+            if (resource.path) {
+                try {
+                    const path = this.publicPath(resource.path);
+                    const note = await this.visible(path);
+                    items.push({ kind: 'resource', path, revision: note.revision });
+                }
+                catch { /* Do not disclose a hidden resource, even its declared path. */ }
+            }
+            else
+                items.push({ kind: 'resource', ...resource, advisory: true });
+        }
+        return items;
+    }
+    async coverage(params) {
+        const id = normalizeScopeId(params.projectId, 'projectId');
+        const project = await this.projectNote(id);
+        const inventory = await this.inventory(id);
+        const tasks = inventory.filter(n => n.fm.mcpvault_type === 'agent_task' && n.fm.status !== 'cancelled');
+        const rows = [];
+        const declared = new Map();
+        for (const task of tasks) {
+            try {
+                if (task.fm.responsibility)
+                    declared.set(task.path, responsibility(task.fm.responsibility));
+            }
+            catch {
+                rows.push({ kind: 'invalid_responsibility', taskId: task.fm.task_id, revision: task.revision });
+            }
+        }
+        for (const perspective of listField(project.frontmatter.required_perspectives || [], 'required_perspectives', 20)) {
+            if (!tasks.some(t => declared.get(t.path)?.perspective === perspective))
+                rows.push({ kind: 'missing_perspective', perspective });
+        }
+        for (const criterion of listField(project.frontmatter.completion_criteria || [], 'completion_criteria', 20)) {
+            if (!tasks.some(t => declared.get(t.path)?.coversCriteria?.includes(criterion)))
+                rows.push({ kind: 'uncovered_criterion', criterion });
+        }
+        for (const task of tasks) {
+            const fm = task.fm;
+            const base = { taskId: fm.task_id, revision: task.revision, nextAction: { endpoint: 'work.packet', args: { taskId: fm.task_id } } };
+            if (!finished(fm) && !fm.assignee_account_id)
+                rows.push({ ...base, kind: 'unassigned' });
+            if (!declared.get(task.path)?.deliverables?.length && !fm.artifacts?.length)
+                rows.push({ ...base, kind: 'missing_deliverable' });
+            if (fm.work_kind !== 'general' || fm.status === 'in_review') {
+                const approved = ['approve', 'override'].includes(fm.work_review?.decision) && fm.work_review?.fingerprint === reviewBasis(fm);
+                if (!approved)
+                    rows.push({ ...base, kind: fm.work_review ? 'review_pending_or_stale' : 'missing_review' });
+            }
+            if (fm.work_review && ['question', 'changes_requested'].includes(fm.work_review.decision))
+                rows.push({ ...base, kind: 'unresolved_review' });
+            if (fm.work_handoff?.state === 'proposed')
+                rows.push({ ...base, kind: 'handoff_waiting' });
+            if (fm.work_handoff && !fm.work_handoff.next_action)
+                rows.push({ ...base, kind: 'handoff_gap' });
+        }
+        const sig = fingerprint({ project: project.revision, inventory });
+        return page(rows, { projectId: id, projectRevision: project.revision, advisory: true,
+            warning: guidanceText('guid-6d673a241b7aa571', 'Only declared visible work is checked. This is not a completeness, expertise or safety certificate.') }, sig, params, `coverage:${id}`);
+    }
     async board(params) {
         const id = normalizeScopeId(params.projectId, 'projectId');
         const project = await this.projectNote(id);
@@ -803,6 +957,8 @@ export class WorkService {
         const rows = selected.map(n => ({ path: n.path, taskId: n.fm.task_id, title: String(n.fm.title || posix.basename(n.path)).slice(0, 180),
             status: n.fm.status || n.fm.task_status || 'open', kind: n.fm.mcpvault_type === 'agent_task' ? 'task' : 'knowledge',
             assigneeAccountId: n.fm.assignee_account_id, generation: n.fm.claim_generation,
+            ...(typeof n.fm.responsibility?.perspective === 'string' && { perspective: n.fm.responsibility.perspective.slice(0, 80) }),
+            ...(['exclusive_write', 'advice', 'alternative'].includes(n.fm.responsibility?.mode) && { participationMode: n.fm.responsibility.mode }),
             ...(paid[n.fm.task_id] && { paidContract: paid[n.fm.task_id] }),
             ...(this.blocker(n.fm) && { blockedReason: this.blocker(n.fm) }),
             ...(n.fm.work_review && { review: { decision: String(n.fm.work_review.decision || '').slice(0, 32),
@@ -874,6 +1030,7 @@ export class WorkService {
             ...String(project.frontmatter.goal || '').match(/.{1,400}/gs)?.map(text => ({ kind: 'goal', text })) || [],
             ...(project.frontmatter.allowed_work || []).map((text) => ({ kind: 'allowedWork', text })),
             { kind: 'authority', text: guidanceText('guid-f23e84610cfaea5b', 'Task participation grants no external execution authority.') },
+            ...await this.responsibilityItems(fm),
             ...String(fm.description || '').match(/.{1,400}/gs)?.map(text => ({ kind: 'description', text })) || [],
             ...(fm.completion_criteria || []).map((text) => ({ kind: 'criterion', text })),
             ...locators,
@@ -882,12 +1039,12 @@ export class WorkService {
             ...(fm.work_handoff ? Object.entries(fm.work_handoff).filter(([k]) => k !== 'artifacts').map(([key, value]) => ({ kind: 'handoff', key, value })) : []),
             ...(fm.work_changes || []).slice(-5).reverse().map((change) => ({ kind: 'change', ...change })),
         ];
-        const signature = fingerprint({ revision: n.revision, project: project.revision, artifactFingerprint, locators, nextActions });
+        const signature = fingerprint({ revision: n.revision, project: project.revision, artifactFingerprint, locators, nextActions, items });
         return page(items, { taskId: id, revision: n.revision, artifactFingerprint, generation: fm.claim_generation,
             ...(params.knownRevision && { changed: params.knownRevision !== n.revision }) }, signature, params, `packet:${id}`);
     }
     async packetActions(id, note, project, principal) {
-        if (!principal || finished(note.frontmatter))
+        if (!principal || finished(note.frontmatter) || project.team_status === 'completed')
             return [];
         let actor;
         try {
@@ -914,6 +1071,12 @@ export class WorkService {
             }
             catch {
                 return [{ kind: 'nextAction', tool: 'work.board', arguments: { projectId: fm.project_id }, reason: guidanceText('guid-178e721211cda701', 'Dependencies are not ready') }];
+            }
+            try {
+                await this.resourceAdmission({ ...fm, assignee_account_id: actor.accountId }, id);
+            }
+            catch {
+                return [{ kind: 'nextAction', tool: 'work.coverage', arguments: { projectId: fm.project_id }, reason: guidanceText('guid-10b4772d386de91c', 'Declared resource coordination needs attention before claiming.') }];
             }
             return [action('work.claim', 'claim')];
         }
@@ -973,6 +1136,8 @@ export class WorkService {
                 }
             }
             if (!project.participants?.includes(actor.accountId))
+                continue;
+            if (project.team_status === 'completed')
                 continue;
             let rank = 9;
             let reason = '';

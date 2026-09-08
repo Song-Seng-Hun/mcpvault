@@ -60,6 +60,9 @@ export declare class WorkService {
     private blocker;
     private boardWip;
     private resourceKeys;
+    private resourceAdmission;
+    private responsibilityItems;
+    coverage(params: WorkBoardParams): Promise<import("./work-model.js").WorkPage>;
     board(params: WorkBoardParams): Promise<import("./work-model.js").WorkPage>;
     packet(params: WorkPacketParams): Promise<import("./work-model.js").WorkPage>;
     private packetActions;

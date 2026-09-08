@@ -69,6 +69,7 @@ const EXPLICIT_IDS = {
     memory_recall: 'memory.recall',
     memory_brief: 'memory.brief',
     memory_consolidate: 'memory.consolidate',
+    manage_work_group: 'work.group', read_work_coverage: 'work.coverage',
     manage_work_project: 'work.project', read_work_board: 'work.board', read_work_packet: 'work.packet',
     claim_work_task: 'work.claim', handoff_work_task: 'work.handoff', review_work_task: 'work.review',
     register_scope_account: 'auth.register',
@@ -213,6 +214,8 @@ const EXPLICIT_ROUTES = {
     preview_notice: { method: 'POST', url: '/api/notices/preview' },
     revise_notice: { method: 'POST', url: '/api/notices/revise' },
     manage_work_project: { method: 'POST', url: '/api/work/project' },
+    manage_work_group: { method: 'POST', url: '/api/work/group' },
+    read_work_coverage: { method: 'GET', url: '/api/work/coverage' },
     manage_community_participation: { method: 'POST', url: '/api/community/participation' },
     record_community_participation: { method: 'POST', url: '/api/community/participation/record' },
     get_wiki_bridge_candidates: { method: 'GET', url: '/api/wiki/bridge-candidates' },
@@ -668,10 +671,11 @@ export class EndpointRegistry {
             // One mixed-operation endpoint: discovery must not hide its public read
             // just because writes require authority. Dispatch still checks the exact
             // operation, independently of these advisory availability descriptions.
-            if (item.endpointId === 'work.project') {
+            if (['work.project', 'work.group'].includes(item.endpointId)) {
                 const write = { available, state, requires: item.requires, ...(reason && { reason }) };
                 return { ...item, requires: [], available: true, state: 'ready',
-                    operations: { read: { available: true, state: 'ready', requires: [] }, create: write, update: write } };
+                    operations: { read: { available: true, state: 'ready', requires: [] }, create: write, update: write,
+                        ...(item.endpointId === 'work.group' && { join: write, leave: write, archive: write }) } };
             }
             if (['roleplay.world', 'roleplay.character', 'roleplay.scene'].includes(item.endpointId)) {
                 const write = { available, state, requires: item.requires, ...(reason && { reason }) };
