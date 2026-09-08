@@ -6,6 +6,7 @@ import { isModerationHidden, moderationStatus } from './moderation-policy.js';
 import { boundItems } from './search-limits.js';
 import { queryWindow } from './paged-query.js';
 import { readNotesInBatches } from './batch-read.js';
+import { attachPublicCreateRequest, preparePublicCreateRequest, runPublicCreate } from './community-public-retry.js';
 const ROOM_ROOT = 'Community/ChatRooms';
 const MESSAGE_ROOT = 'Community/ChatMessages';
 const ROOM_STATUSES = new Set(['open', 'archived']);
@@ -109,36 +110,61 @@ export class ChatService {
         const note = await this.fileSystem.readNote(path);
         if (note.frontmatter.mcpvault_type !== 'chat_room')
             throw new Error(`Not a chat room: ${roomId}`);
+        if (isModerationHidden(note.frontmatter))
+            throw new Error('Chat room is unavailable');
         return { path, note };
     }
     async sendMessage(params) {
         const principal = requireParticipant(params.principal);
         const roomId = normalizeScopeId(params.roomId, 'roomId');
-        const room = await this.readRoom(roomId);
-        if (room.note.frontmatter.status !== 'open')
-            throw new Error('Cannot send a message to an archived room');
         const content = shortMessage(params.content);
-        const messageId = params.messageId ? normalizeScopeId(params.messageId, 'messageId') : `message-${randomUUID().slice(0, 10)}`;
-        if (params.replyTo)
-            await this.fileSystem.readNote(messagePath(roomId, params.replyTo));
-        const timestamp = now();
-        const path = messagePath(roomId, messageId);
-        const references = await this.references.validateAndNormalize(params.references, path, principal, content);
-        await this.fileSystem.writeNote({
-            path,
-            content: `${content}\n`,
-            frontmatter: {
-                mcpvault_type: 'chat_message', message_id: messageId, room_id: roomId,
-                author: identity(principal), author_role: principal.role, ...ownershipMetadata(principal), created_at: timestamp, updated_at: timestamp,
-                mentions: extractMentions(content),
-                references,
-                workflow_status: 'open',
-                ...(params.replyTo && { reply_to: normalizeScopeId(params.replyTo, 'replyTo') }),
-            },
-            expectedRevision: 'missing',
+        const replyTo = params.replyTo ? normalizeScopeId(params.replyTo, 'replyTo') : undefined;
+        const requestedMessageId = params.messageId ? normalizeScopeId(params.messageId, 'messageId') : undefined;
+        const request = preparePublicCreateRequest({
+            principal, requestId: params.requestId, action: 'chat.message', generatedPrefix: 'message',
+            ...(requestedMessageId && { requestedTargetId: requestedMessageId }),
+            payload: { roomId, content, replyTo, messageId: requestedMessageId, references: params.references },
         });
-        const created = await this.fileSystem.readNote(path);
-        return { success: true, messageId, roomId, path, revision: created.revision };
+        const messageId = request?.targetId || requestedMessageId || `message-${randomUUID().slice(0, 10)}`;
+        const path = messagePath(roomId, messageId);
+        let references = [];
+        let guards = [];
+        return runPublicCreate({
+            fileSystem: this.fileSystem, principal, request, targetPath: path, participationActions: ['respond'],
+            revalidate: async () => {
+                const room = await this.readRoom(roomId);
+                if (room.note.frontmatter.status !== 'open')
+                    throw new Error('Cannot send a message to an archived room');
+                guards = [{ path: room.path, expectedRevision: room.note.revision }];
+                if (replyTo) {
+                    const parentPath = messagePath(roomId, replyTo);
+                    const parent = await this.fileSystem.readNote(parentPath);
+                    if (parent.frontmatter.mcpvault_type !== 'chat_message' || parent.frontmatter.room_id !== roomId || isModerationHidden(parent.frontmatter)) {
+                        throw new Error('Reply target is unavailable');
+                    }
+                    guards.push({ path: parentPath, expectedRevision: parent.revision });
+                }
+                references = await this.references.validateAndNormalize(params.references, path, principal, content);
+                return { parentPaths: guards.map(guard => guard.path) };
+            },
+            create: async (participationGuard) => {
+                const timestamp = now();
+                const body = `${content}\n`;
+                const frontmatter = attachPublicCreateRequest(request, {
+                    mcpvault_type: 'chat_message', message_id: messageId, room_id: roomId,
+                    author: identity(principal), author_role: principal.role, ...ownershipMetadata(principal), created_at: timestamp, updated_at: timestamp,
+                    mentions: extractMentions(content), references, workflow_status: 'open', ...(replyTo && { reply_to: replyTo }),
+                }, body);
+                const receipt = await this.fileSystem.writeNoteWithRevisionGuardsAndReceipt({ path, content: body, frontmatter, expectedRevision: 'missing' }, [...guards, ...(participationGuard ? [participationGuard] : [])]);
+                return { success: true, messageId, roomId, path, revision: receipt.revision };
+            },
+            replay: note => {
+                if (note.frontmatter.mcpvault_type !== 'chat_message' || note.frontmatter.message_id !== messageId || note.frontmatter.room_id !== roomId) {
+                    throw new Error('Public request result is unavailable');
+                }
+                return { success: true, messageId, roomId, path, revision: note.revision };
+            },
+        });
     }
     async editMessage(params) {
         const principal = requireParticipant(params.principal);

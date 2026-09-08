@@ -44,6 +44,40 @@ function unquoteSearchToken(value) {
     return value;
 }
 export function positiveSearchTerms(query) { return parseSearchQuery(query).terms; }
+/** Separate from the standard search's 20-hit / JSON display limits. */
+export function memoryCandidateLimit(value) {
+    const limit = value ?? 10_000;
+    if (!Number.isInteger(limit) || limit < 1)
+        throw new Error('Memory candidate limit must be a positive integer');
+    return Math.min(limit, 10_000);
+}
+/** Such queries require exact source/region verification. Never approximate
+ * them with n-grams or relax their exclusions in candidate-only retrieval.
+ * Plain OR is already the ordinary lexical any-term discovery operation. */
+export function memoryQueryNeedsSource(query) {
+    return /["'\[\]:()]|(?:^|\s)-\S/.test(query);
+}
+/** I/O-free ordinary-query confirmation over the caller's SAME-revision
+ * source/block. Pass record-local cues/use_when in frontmatter for block memory.
+ * Any positive term suffices, matching existing lexical OR/ordinary semantics.
+ * undefined means unsupported constraints, never an ordinary-query fallback. */
+export function memorySourceMatches(params) {
+    if (memoryQueryNeedsSource(params.query))
+        return undefined;
+    const terms = positiveSearchTerms(params.query);
+    if (!terms.length)
+        return true;
+    const authority = authorityMetadataFromFrontmatter(params.frontmatter);
+    const retrieval = retrievalMetadataFromFrontmatter(params.frontmatter);
+    const fields = [params.path.split('/').pop()?.replace(/\.md$/i, '') || params.path,
+        ...authority.authorityTerms, ...authority.authorityIds, ...retrieval.cues,
+        ...(retrieval.useWhen ? [retrieval.useWhen] : []),
+        ...(params.searchContent !== false ? [params.content] : []),
+        ...(params.searchFrontmatter ? [JSON.stringify(params.frontmatter || {})] : []),
+    ];
+    return terms.some(term => fields.some(field => params.caseSensitive
+        ? field.includes(term) : field.toLowerCase().includes(term.toLowerCase())));
+}
 function parseSearchQuery(query) {
     const terms = [];
     const excludeTerms = [];
@@ -932,6 +966,66 @@ export class SearchService {
             if (this.snapshotPending)
                 this.scheduleSnapshotSave();
         }
+    }
+    /** No candidate body hydration. ensureIndex is existing index maintenance
+     * (including cold initialization), not part of the read projection below.
+     * N-grams intentionally form a lossless superset of ordinary term matches;
+     * only the caller's revision-checked source read can establish an exact match. */
+    async memoryCandidates(params) {
+        const limit = memoryCandidateLimit(params.limit);
+        if (typeof params.canAccessPath !== 'function')
+            throw new Error('Memory candidates require a visibility predicate');
+        if (memoryQueryNeedsSource(params.query) || params.caseSensitive)
+            return { results: [], complete: false };
+        await this.catalog?.flushPendingEvents();
+        await this.ensureIndex();
+        // No await, loadText, source reads, result-cache reads or index writes below.
+        const prefix = params.pathPrefix === '.' ? '' : normalizeSubtree(params.pathPrefix || '');
+        const excludes = (params.excludePaths || []).map(normalizeSubtree).filter(Boolean);
+        const inScope = (path) => this.pathFilter.isAllowed(path) && params.canAccessPath(path)
+            && (!prefix || path === prefix || path.startsWith(`${prefix}/`))
+            && !excludes.some(exclude => path === exclude || path.startsWith(`${exclude}/`));
+        let complete = true;
+        const admitted = new Set();
+        for (const document of this.documents.values()) {
+            if (!inScope(document.relativePath) || document.moderationHidden)
+                continue;
+            if (params.candidateRevisions && params.candidateRevisions.get(document.relativePath) !== document.revision) {
+                // Omitted paths are outside the caller's collection, not stale hits.
+                if (params.candidateRevisions.has(document.relativePath))
+                    complete = false;
+                continue;
+            }
+            admitted.add(document.documentId);
+        }
+        if (params.candidateRevisions)
+            for (const [path, revision] of params.candidateRevisions) {
+                if (inScope(path) && this.documents.get(path)?.revision !== revision)
+                    complete = false;
+            }
+        const terms = positiveSearchTerms(params.query).map(term => term.toLowerCase());
+        const ids = this.candidateIds(terms, params.searchContent !== false, params.searchFrontmatter === true, false, admitted);
+        const candidates = [];
+        for (const id of ids) {
+            const document = this.documentsById.get(id);
+            if (!document || !admitted.has(id))
+                continue;
+            const discovery = [...document.authorityTerms, ...document.authorityIds, ...document.retrievalCues,
+                ...(document.useWhen ? [document.useWhen] : [])].join('\n').toLowerCase();
+            const score = terms.reduce((value, term) => value + Number(discovery.includes(term)), 0);
+            candidates.push({ score, result: {
+                    p: document.relativePath, t: document.relativePath.split('/').pop()?.replace(/\.md$/i, '') || document.relativePath,
+                    ex: '', mc: 0, rv: document.revision, why: ['indexed_candidate'],
+                } });
+            // Retain at most the hard maximum plus an overflow witness. No partial
+            // window is ever advertised as complete or usable for a lossless cursor.
+            if (candidates.length > limit) {
+                complete = false;
+                break;
+            }
+        }
+        candidates.sort((a, b) => b.score - a.score || a.result.p.localeCompare(b.result.p));
+        return { results: candidates.slice(0, limit).map(item => item.result), complete };
     }
     async search(params) {
         const { query, limit = 5, searchContent = true, searchFrontmatter = false, caseSensitive = false, pathPrefix, excludePaths } = params;

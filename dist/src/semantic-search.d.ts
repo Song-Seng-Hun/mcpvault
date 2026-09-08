@@ -2,7 +2,7 @@ import type { PathFilter } from './pathfilter.js';
 import type { ScopePrincipal } from './scope-auth.js';
 import { ScopeAccessPolicy } from './scope-access.js';
 import type { VaultCatalogChange, VaultFileCatalog } from './vault-catalog.js';
-import type { SearchParams, SearchResult } from './types.js';
+import type { SearchParams, SearchResult, MemorySearchParams, MemorySearchOutcome } from './types.js';
 import { VaultIoCoordinator } from './vault-io.js';
 type ChangeKind = 'upsert' | 'delete';
 interface SemanticSearchParams extends SearchParams {
@@ -14,6 +14,9 @@ export interface SemanticSearchOutcome {
     indexed: number;
     pending: number;
     error?: string | undefined;
+}
+export interface MemorySemanticSearchOutcome extends MemorySearchOutcome {
+    available: boolean;
 }
 export interface SemanticIndexStatus {
     enabled: true;
@@ -83,6 +86,12 @@ export declare class SemanticSearchService {
     close(): Promise<void>;
     private clearQueryCache;
     private clearVectorCache;
+    /** Query only disposable vector metadata. The caller has already selected
+     * visible memory paths; no result/body hydration or predicate-cache reuse is
+     * allowed here. Source revision/body verification belongs to its read budget. */
+    memoryCandidates(params: MemorySearchParams & {
+        principal?: ScopePrincipal;
+    }): Promise<MemorySemanticSearchOutcome>;
     search(params: SemanticSearchParams): Promise<SemanticSearchOutcome>;
     private searchCurrent;
     private hydrateRows;

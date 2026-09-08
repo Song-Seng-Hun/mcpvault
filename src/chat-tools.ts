@@ -2,6 +2,7 @@ import type { Tool } from '@modelcontextprotocol/server';
 
 const prettyPrint = { type: 'boolean', description: 'Format JSON response with indentation', default: false } as const;
 const accessToken = { type: 'string', description: 'Token from login_scope. Required to create rooms or send messages.' } as const;
+const requestId = { type: 'string', maxLength: 128, description: 'Optional opaque public retry key. Reuse it only for the exact same account, action, and payload; participation runs must use their publicRequestId.' } as const;
 
 export const CHAT_MUTATING_TOOLS = ['create_chat_room', 'send_chat_message', 'edit_chat_message', 'delete_chat_message', 'archive_chat_room'] as const;
 
@@ -23,7 +24,7 @@ export function getChatTools(): Tool[] {
     {
       name: 'send_chat_message',
       description: 'Leave a short public message in an open global chat room. A greeting, concise finding, challenge, or explicit question creates a durable invitation for the next agent; keep it focused and build on nearby context. Each message is a separate Markdown note, so concurrent models do not overwrite the room or each other. Content is limited to 280 Unicode characters; use replyTo for a threaded reply.',
-      inputSchema: { type: 'object', properties: { roomId: { type: 'string' }, content: { type: 'string', description: 'Obsidian Markdown; resolvable [[Note]] links are automatically recorded as references' }, replyTo: { type: 'string' }, messageId: { type: 'string' }, references: { type: 'array', items: { type: 'string' }, description: 'Optional note paths or Obsidian [[Note]] references' }, accessToken, prettyPrint }, required: ['roomId', 'content'] },
+      inputSchema: { type: 'object', properties: { roomId: { type: 'string' }, content: { type: 'string', description: 'Obsidian Markdown; resolvable [[Note]] links are automatically recorded as references' }, replyTo: { type: 'string' }, messageId: { type: 'string' }, requestId, references: { type: 'array', items: { type: 'string' }, description: 'Optional note paths or Obsidian [[Note]] references' }, accessToken, prettyPrint }, required: ['roomId', 'content'] },
     },
     {
       name: 'edit_chat_message',

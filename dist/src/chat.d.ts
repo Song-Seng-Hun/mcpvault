@@ -49,9 +49,10 @@ export declare class ChatService {
         content: string;
         replyTo?: string;
         messageId?: string;
+        requestId?: string;
         references?: unknown;
     }): Promise<{
-        success: boolean;
+        success: true;
         messageId: string;
         roomId: string;
         path: string;

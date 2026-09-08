@@ -1,8 +1,23 @@
 import type { PathFilter } from './pathfilter.js';
-import type { SearchParams, SearchResult } from './types.js';
+import type { SearchParams, SearchResult, MemorySearchParams, MemorySearchOutcome } from './types.js';
 import type { VaultCatalogChange, VaultFileCatalog } from './vault-catalog.js';
 import { VaultIoCoordinator } from './vault-io.js';
 export declare function positiveSearchTerms(query: string): string[];
+/** Separate from the standard search's 20-hit / JSON display limits. */
+export declare function memoryCandidateLimit(value?: number): number;
+/** Such queries require exact source/region verification. Never approximate
+ * them with n-grams or relax their exclusions in candidate-only retrieval.
+ * Plain OR is already the ordinary lexical any-term discovery operation. */
+export declare function memoryQueryNeedsSource(query: string): boolean;
+/** I/O-free ordinary-query confirmation over the caller's SAME-revision
+ * source/block. Pass record-local cues/use_when in frontmatter for block memory.
+ * Any positive term suffices, matching existing lexical OR/ordinary semantics.
+ * undefined means unsupported constraints, never an ordinary-query fallback. */
+export declare function memorySourceMatches(params: Pick<SearchParams, 'query' | 'caseSensitive' | 'searchContent' | 'searchFrontmatter'> & {
+    path: string;
+    content: string;
+    frontmatter?: Record<string, unknown>;
+}): boolean | undefined;
 export declare class SearchService {
     private pathFilter;
     private readonly catalog?;
@@ -64,6 +79,11 @@ export declare class SearchService {
     private restoreSnapshot;
     private scheduleSnapshotSave;
     private flushSnapshot;
+    /** No candidate body hydration. ensureIndex is existing index maintenance
+     * (including cold initialization), not part of the read projection below.
+     * N-grams intentionally form a lossless superset of ordinary term matches;
+     * only the caller's revision-checked source read can establish an exact match. */
+    memoryCandidates(params: MemorySearchParams): Promise<MemorySearchOutcome>;
     search(params: SearchParams): Promise<SearchResult[]>;
     private ensureIndex;
     private startWatcher;

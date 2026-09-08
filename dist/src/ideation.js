@@ -2,6 +2,8 @@ import { randomUUID } from 'node:crypto';
 import { normalizeScopeId } from './scopes.js';
 import { boundItems } from './search-limits.js';
 import { queryWindow } from './paged-query.js';
+import { isModerationHidden } from './moderation-policy.js';
+import { attachPublicCreateRequest, preparePublicCreateRequest, runPublicCreate } from './community-public-retry.js';
 const IDEA_ROOT = 'Community/Ideas';
 const WORKSHOP_ROOT = 'Community/Workshops';
 const MAX_CONTRIBUTION_CHARS = 280;
@@ -106,30 +108,60 @@ export class IdeationService {
         const problem = text(params.problem, 'problem', MAX_LONG_TEXT_CHARS);
         const constraints = list(params.constraints, 'constraints', 12, 500);
         const successCriteria = list(params.successCriteria, 'successCriteria', 12, 500);
-        const ideaId = params.ideaId ? normalizeScopeId(params.ideaId, 'ideaId') : `idea-${randomUUID().slice(0, 12)}`;
-        const path = ideaPath(ideaId);
         if (params.expectedRevision && params.expectedRevision !== 'missing')
             throw new Error('A new idea must use expectedRevision=missing');
-        const references = await this.references.validateAndNormalize(params.references, path, principal, seed);
-        const timestamp = now();
-        await this.fileSystem.writeNote({
-            path,
-            content: `${ideaBody({ title, seed, problem, constraints, successCriteria })}\n`,
-            frontmatter: {
-                mcpvault_type: 'idea', idea_id: ideaId, title, author: identity(principal),
-                status: 'seed', parent_ideas: [], ...(params.workshopId && { workshop_id: normalizeScopeId(params.workshopId, 'workshopId') }),
-                references, constraints, success_criteria: successCriteria,
-                created_at: timestamp, updated_at: timestamp,
-            },
-            expectedRevision: 'missing',
+        const workshopId = params.workshopId ? normalizeScopeId(params.workshopId, 'workshopId') : undefined;
+        const requestedIdeaId = params.ideaId ? normalizeScopeId(params.ideaId, 'ideaId') : undefined;
+        const request = preparePublicCreateRequest({
+            principal, requestId: params.requestId, action: 'idea.create', generatedPrefix: 'idea',
+            ...(requestedIdeaId && { requestedTargetId: requestedIdeaId }),
+            payload: { ideaId: requestedIdeaId, title, seed, problem, constraints, successCriteria, workshopId, references: params.references },
         });
-        const created = await this.fileSystem.readNote(path);
-        return { success: true, ideaId, path, status: 'seed', revision: created.revision };
+        const ideaId = request?.targetId || requestedIdeaId || `idea-${randomUUID().slice(0, 12)}`;
+        const path = ideaPath(ideaId);
+        let references = [];
+        let guards = [];
+        return runPublicCreate({
+            fileSystem: this.fileSystem, principal, request, targetPath: path, participationActions: ['initiate'], topicMetadata: { title },
+            revalidate: async () => {
+                guards = [];
+                if (workshopId) {
+                    const workshop = await this.readTyped(workshopPath(workshopId), 'workshop');
+                    if (workshop.frontmatter.status === 'closed' || workshop.frontmatter.phase === 'closed')
+                        throw new Error('This workshop is closed');
+                    guards.push({ path: workshopPath(workshopId), expectedRevision: workshop.revision });
+                }
+                references = await this.references.validateAndNormalize(params.references, path, principal, seed);
+                return { parentPaths: guards.map(guard => guard.path) };
+            },
+            create: async (participationGuard) => {
+                const timestamp = now();
+                const body = `${ideaBody({ title, seed, problem, constraints, successCriteria })}\n`;
+                const frontmatter = attachPublicCreateRequest(request, {
+                    mcpvault_type: 'idea', idea_id: ideaId, title, author: identity(principal), status: 'seed', parent_ideas: [],
+                    ...(workshopId && { workshop_id: workshopId }), references, constraints, success_criteria: successCriteria,
+                    created_at: timestamp, updated_at: timestamp,
+                }, body);
+                const write = { path, content: body, frontmatter, expectedRevision: 'missing' };
+                const allGuards = [...guards, ...(participationGuard ? [participationGuard] : [])];
+                const receipt = allGuards.length
+                    ? await this.fileSystem.writeNoteWithRevisionGuardsAndReceipt(write, allGuards)
+                    : await this.fileSystem.writeNoteWithReceipt(write);
+                return { success: true, ideaId, path, status: 'seed', revision: receipt.revision };
+            },
+            replay: note => {
+                if (note.frontmatter.mcpvault_type !== 'idea' || note.frontmatter.idea_id !== ideaId)
+                    throw new Error('Public request result is unavailable');
+                return { success: true, ideaId, path, status: 'seed', revision: note.revision };
+            },
+        });
     }
     async readTyped(path, type) {
         const note = await this.fileSystem.readNote(path);
         if (note.frontmatter.mcpvault_type !== type)
             throw new Error(`Expected ${type} at ${path}`);
+        if (isModerationHidden(note.frontmatter) || note.frontmatter.content_status === 'deleted')
+            throw new Error(`${type} is unavailable`);
         return note;
     }
     async listIdeas(params) {
@@ -227,22 +259,54 @@ export class IdeationService {
     async contributeIdea(params) {
         const principal = requireLogin(params.principal);
         const ideaId = normalizeScopeId(params.ideaId, 'ideaId');
-        const idea = await this.readTyped(ideaPath(ideaId), 'idea');
-        if (['rejected', 'promoted'].includes(String(idea.frontmatter.status)))
-            throw new Error('This idea is closed for new contributions');
         const kind = enumValue(params.kind, 'kind', IDEA_CONTRIBUTION_KINDS, 'extension');
         const content = text(params.content, 'content', MAX_CONTRIBUTION_CHARS, true);
-        const contributionId = `contrib-${randomUUID().slice(0, 12)}`;
-        const path = ideaContributionPath(ideaId, contributionId);
-        const references = await this.references.validateAndNormalize(params.references, path, principal, content);
-        await this.fileSystem.writeNote({
-            path, content: `${content}\n`, frontmatter: {
-                mcpvault_type: 'idea_contribution', contribution_id: contributionId, idea_id: ideaId, kind,
-                author: identity(principal), ...(params.replyTo && { reply_to: normalizeScopeId(params.replyTo, 'replyTo') }),
-                references, created_at: now(),
-            }, expectedRevision: 'missing',
+        const replyTo = params.replyTo ? normalizeScopeId(params.replyTo, 'replyTo') : undefined;
+        const request = preparePublicCreateRequest({
+            principal, requestId: params.requestId, action: 'idea.contribute', generatedPrefix: 'contrib',
+            payload: { ideaId, kind, content, replyTo, references: params.references },
         });
-        return { success: true, ideaId, contributionId, kind, path };
+        const contributionId = request?.targetId || `contrib-${randomUUID().slice(0, 12)}`;
+        const path = ideaContributionPath(ideaId, contributionId);
+        let references = [];
+        let guards = [];
+        return runPublicCreate({
+            fileSystem: this.fileSystem, principal, request, targetPath: path, participationActions: ['respond', 'explore'],
+            revalidate: async () => {
+                const idea = await this.readTyped(ideaPath(ideaId), 'idea');
+                if (['rejected', 'promoted'].includes(String(idea.frontmatter.status)))
+                    throw new Error('This idea is closed for new contributions');
+                guards = [{ path: ideaPath(ideaId), expectedRevision: idea.revision }];
+                if (replyTo) {
+                    const parentPath = ideaContributionPath(ideaId, replyTo);
+                    const parent = await this.readTyped(parentPath, 'idea_contribution');
+                    if (parent.frontmatter.idea_id !== ideaId)
+                        throw new Error('Reply target is unavailable');
+                    guards.push({ path: parentPath, expectedRevision: parent.revision });
+                }
+                references = await this.references.validateAndNormalize(params.references, path, principal, content);
+                return { parentPaths: guards.map(guard => guard.path) };
+            },
+            create: async (participationGuard) => {
+                const body = `${content}\n`;
+                const frontmatter = attachPublicCreateRequest(request, {
+                    mcpvault_type: 'idea_contribution', contribution_id: contributionId, idea_id: ideaId, kind,
+                    author: identity(principal), ...(replyTo && { reply_to: replyTo }), references, created_at: now(),
+                }, body);
+                const write = { path, content: body, frontmatter, expectedRevision: 'missing' };
+                const allGuards = [...guards, ...(participationGuard ? [participationGuard] : [])];
+                const receipt = allGuards.length
+                    ? await this.fileSystem.writeNoteWithRevisionGuardsAndReceipt(write, allGuards)
+                    : await this.fileSystem.writeNoteWithReceipt(write);
+                return { success: true, ideaId, contributionId, kind, path, revision: receipt.revision };
+            },
+            replay: note => {
+                if (note.frontmatter.mcpvault_type !== 'idea_contribution' || note.frontmatter.idea_id !== ideaId || note.frontmatter.contribution_id !== contributionId) {
+                    throw new Error('Public request result is unavailable');
+                }
+                return { success: true, ideaId, contributionId, kind, path, revision: note.revision };
+            },
+        });
     }
     async evaluateIdea(params) {
         const principal = requireLogin(params.principal);
@@ -275,28 +339,80 @@ export class IdeationService {
         const prompt = text(params.prompt, 'prompt', MAX_LONG_TEXT_CHARS, true);
         const agenda = list(params.agenda, 'agenda', 12, 500);
         const ideaIds = list(params.ideaIds, 'ideaIds', 20, 64).map(value => normalizeScopeId(value, 'ideaId'));
-        for (const ideaId of ideaIds)
-            await this.readTyped(ideaPath(ideaId), 'idea');
         const timeboxMinutes = params.timeboxMinutes === undefined ? undefined : Math.min(Math.max(Number(params.timeboxMinutes), 1), 10080);
         if (timeboxMinutes !== undefined && !Number.isInteger(timeboxMinutes))
             throw new Error('timeboxMinutes must be an integer');
         const maxContributionsPerAgent = params.maxContributionsPerAgent === undefined ? 3 : Math.min(Math.max(Number(params.maxContributionsPerAgent), 1), 20);
         if (!Number.isInteger(maxContributionsPerAgent))
             throw new Error('maxContributionsPerAgent must be an integer');
-        const workshopId = params.workshopId ? normalizeScopeId(params.workshopId, 'workshopId') : `workshop-${randomUUID().slice(0, 12)}`;
-        const path = workshopPath(workshopId);
-        const references = await this.references.validateAndNormalize(params.references, path, principal, prompt);
-        const timestamp = now();
-        await this.fileSystem.writeNote({
-            path, content: `${workshopBody({ title, prompt, agenda })}\n`, frontmatter: {
-                mcpvault_type: 'workshop', workshop_id: workshopId, title, prompt, agenda, idea_ids: ideaIds,
-                phase: 'diverge', status: 'open', facilitator: identity(principal), references,
-                ...(timeboxMinutes !== undefined && { timebox_minutes: timeboxMinutes }), max_contributions_per_agent: maxContributionsPerAgent,
-                created_at: timestamp, updated_at: timestamp,
-            }, expectedRevision: 'missing',
+        const requestedWorkshopId = params.workshopId ? normalizeScopeId(params.workshopId, 'workshopId') : undefined;
+        const reservedResearchId = requestedWorkshopId ? /^research-[a-f0-9]{48}$/.test(requestedWorkshopId) : false;
+        if (reservedResearchId && !params.researchWork)
+            throw new Error('A reserved research workshop requires its current researchWork claim');
+        if (params.researchWork && !reservedResearchId)
+            throw new Error('researchWork is available only for an exact reserved research workshop id');
+        const researchWork = params.researchWork ? {
+            taskId: normalizeScopeId(params.researchWork.taskId, 'researchWork.taskId'),
+            expectedRevision: String(params.researchWork.expectedRevision || '').trim().toLowerCase(),
+            expectedGeneration: Number(params.researchWork.expectedGeneration),
+        } : undefined;
+        if (researchWork && (researchWork.taskId !== requestedWorkshopId || !/^[a-f0-9]{64}$/.test(researchWork.expectedRevision)
+            || !Number.isSafeInteger(researchWork.expectedGeneration) || researchWork.expectedGeneration < 0)) {
+            throw new Error('researchWork must identify the matching task, current revision, and non-negative claim generation');
+        }
+        const request = preparePublicCreateRequest({
+            principal, requestId: params.requestId, action: 'workshop.create', generatedPrefix: 'workshop',
+            ...(requestedWorkshopId && { requestedTargetId: requestedWorkshopId }),
+            payload: { workshopId: requestedWorkshopId, title, prompt, agenda, ideaIds, timeboxMinutes, maxContributionsPerAgent, references: params.references, researchWork },
         });
-        const created = await this.fileSystem.readNote(path);
-        return { success: true, workshopId, path, phase: 'diverge', revision: created.revision };
+        const workshopId = request?.targetId || requestedWorkshopId || `workshop-${randomUUID().slice(0, 12)}`;
+        const path = workshopPath(workshopId);
+        let references = [];
+        let guards = [];
+        return runPublicCreate({
+            fileSystem: this.fileSystem, principal, request, targetPath: path, participationActions: ['initiate'], topicMetadata: { title },
+            revalidate: async () => {
+                guards = [];
+                for (const ideaId of ideaIds) {
+                    const idea = await this.readTyped(ideaPath(ideaId), 'idea');
+                    guards.push({ path: ideaPath(ideaId), expectedRevision: idea.revision });
+                }
+                if (researchWork) {
+                    const taskPath = `Community/Tasks/${researchWork.taskId}.md`;
+                    const task = await this.readTyped(taskPath, 'agent_task');
+                    if (task.frontmatter.task_id !== researchWork.taskId || !task.frontmatter.project_id || task.frontmatter.status !== 'in_progress'
+                        || task.frontmatter.assignee_account_id !== principal.accountId
+                        || task.frontmatter.claim_generation !== researchWork.expectedGeneration
+                        || task.revision !== researchWork.expectedRevision) {
+                        throw new Error('Research task claim changed; refresh the work packet before creating or replaying this workshop');
+                    }
+                    guards.push({ path: taskPath, expectedRevision: task.revision });
+                }
+                references = await this.references.validateAndNormalize(params.references, path, principal, prompt);
+                return { parentPaths: guards.map(guard => guard.path) };
+            },
+            create: async (participationGuard) => {
+                const timestamp = now();
+                const body = `${workshopBody({ title, prompt, agenda })}\n`;
+                const frontmatter = attachPublicCreateRequest(request, {
+                    mcpvault_type: 'workshop', workshop_id: workshopId, title, prompt, agenda, idea_ids: ideaIds,
+                    phase: 'diverge', status: 'open', facilitator: identity(principal), references,
+                    ...(timeboxMinutes !== undefined && { timebox_minutes: timeboxMinutes }), max_contributions_per_agent: maxContributionsPerAgent,
+                    created_at: timestamp, updated_at: timestamp,
+                }, body);
+                const write = { path, content: body, frontmatter, expectedRevision: 'missing' };
+                const allGuards = [...guards, ...(participationGuard ? [participationGuard] : [])];
+                const receipt = allGuards.length
+                    ? await this.fileSystem.writeNoteWithRevisionGuardsAndReceipt(write, allGuards)
+                    : await this.fileSystem.writeNoteWithReceipt(write);
+                return { success: true, workshopId, path, phase: 'diverge', revision: receipt.revision };
+            },
+            replay: note => {
+                if (note.frontmatter.mcpvault_type !== 'workshop' || note.frontmatter.workshop_id !== workshopId)
+                    throw new Error('Public request result is unavailable');
+                return { success: true, workshopId, path, phase: 'diverge', revision: note.revision };
+            },
+        });
     }
     async listWorkshops(params) {
         const filters = { mcpvault_type: 'workshop' };
@@ -333,22 +449,53 @@ export class IdeationService {
     async contributeWorkshop(params) {
         const principal = requireLogin(params.principal);
         const workshopId = normalizeScopeId(params.workshopId, 'workshopId');
-        const workshop = await this.readTyped(workshopPath(workshopId), 'workshop');
-        if (workshop.frontmatter.status === 'closed' || workshop.frontmatter.phase === 'closed')
-            throw new Error('This workshop is closed for contributions');
-        const phase = enumValue(workshop.frontmatter.phase, 'phase', WORKSHOP_PHASES, 'diverge');
-        if (params.expectedPhase && params.expectedPhase !== phase)
-            throw new Error(`Workshop phase changed to ${phase}; reread it before contributing`);
         const kind = enumValue(params.kind, 'kind', WORKSHOP_CONTRIBUTION_KINDS, 'idea');
         const content = text(params.content, 'content', MAX_CONTRIBUTION_CHARS, true);
         const ideaId = params.ideaId ? normalizeScopeId(params.ideaId, 'ideaId') : undefined;
-        if (ideaId)
-            await this.readTyped(ideaPath(ideaId), 'idea');
-        const contributionId = `contrib-${randomUUID().slice(0, 12)}`;
+        const expectedPhase = params.expectedPhase ? enumValue(params.expectedPhase, 'expectedPhase', WORKSHOP_PHASES, 'diverge') : undefined;
+        const request = preparePublicCreateRequest({
+            principal, requestId: params.requestId, action: 'workshop.contribute', generatedPrefix: 'contrib',
+            payload: { workshopId, kind, content, ideaId, expectedPhase, references: params.references },
+        });
+        const contributionId = request?.targetId || `contrib-${randomUUID().slice(0, 12)}`;
         const path = workshopContributionPath(workshopId, contributionId);
-        const references = await this.references.validateAndNormalize(params.references, path, principal, content);
-        await this.fileSystem.writeNote({ path, content: `${content}\n`, frontmatter: { mcpvault_type: 'workshop_contribution', contribution_id: contributionId, workshop_id: workshopId, phase, kind, ...(ideaId && { idea_id: ideaId }), author: identity(principal), references, created_at: now() }, expectedRevision: 'missing' });
-        return { success: true, workshopId, contributionId, phase, kind, path };
+        let phase = 'diverge';
+        let references = [];
+        let guards = [];
+        return runPublicCreate({
+            fileSystem: this.fileSystem, principal, request, targetPath: path, participationActions: ['respond', 'explore'],
+            revalidate: async () => {
+                const workshop = await this.readTyped(workshopPath(workshopId), 'workshop');
+                if (workshop.frontmatter.status === 'closed' || workshop.frontmatter.phase === 'closed')
+                    throw new Error('This workshop is closed for contributions');
+                phase = enumValue(workshop.frontmatter.phase, 'phase', WORKSHOP_PHASES, 'diverge');
+                if (expectedPhase && expectedPhase !== phase)
+                    throw new Error(`Workshop phase changed to ${phase}; reread it before contributing`);
+                guards = [{ path: workshopPath(workshopId), expectedRevision: workshop.revision }];
+                if (ideaId) {
+                    const idea = await this.readTyped(ideaPath(ideaId), 'idea');
+                    guards.push({ path: ideaPath(ideaId), expectedRevision: idea.revision });
+                }
+                references = await this.references.validateAndNormalize(params.references, path, principal, content);
+                return { parentPaths: guards.map(guard => guard.path) };
+            },
+            create: async (participationGuard) => {
+                const body = `${content}\n`;
+                const frontmatter = attachPublicCreateRequest(request, {
+                    mcpvault_type: 'workshop_contribution', contribution_id: contributionId, workshop_id: workshopId, phase, kind,
+                    ...(ideaId && { idea_id: ideaId }), author: identity(principal), references, created_at: now(),
+                }, body);
+                const receipt = await this.fileSystem.writeNoteWithRevisionGuardsAndReceipt({ path, content: body, frontmatter, expectedRevision: 'missing' }, [...guards, ...(participationGuard ? [participationGuard] : [])]);
+                return { success: true, workshopId, contributionId, phase, kind, path, revision: receipt.revision };
+            },
+            replay: note => {
+                if (note.frontmatter.mcpvault_type !== 'workshop_contribution' || note.frontmatter.workshop_id !== workshopId || note.frontmatter.contribution_id !== contributionId) {
+                    throw new Error('Public request result is unavailable');
+                }
+                const storedPhase = enumValue(note.frontmatter.phase, 'phase', WORKSHOP_PHASES, 'diverge');
+                return { success: true, workshopId, contributionId, phase: storedPhase, kind, path, revision: note.revision };
+            },
+        });
     }
     async updateWorkshopPhase(params) {
         const principal = requireLogin(params.principal);

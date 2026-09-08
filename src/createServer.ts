@@ -8,6 +8,12 @@ import { FrontmatterHandler, parseFrontmatter } from "./frontmatter.js";
 import { PathFilter } from "./pathfilter.js";
 import { SearchService } from "./search.js";
 import { RetrievalService } from './retrieval-service.js';
+import { LayeredMemoryService } from './layered-memory.js';
+import { getLayeredMemoryTools } from './layered-memory-tools.js';
+import { CommunityParticipationService } from './community-participation.js';
+import { getCommunityParticipationTools, PARTICIPATION_MUTATING_TOOLS } from './community-participation-tools.js';
+import { ResearchBridgeService } from './research-bridge.js';
+import { getResearchBridgeTools } from './research-bridge-tools.js';
 import { QuestionPacketService } from './question-packet.js';
 import { SourceComparisonService } from './source-comparison.js';
 import { SourceChangeService } from './source-change.js';
@@ -227,6 +233,7 @@ const MUTATING_TOOLS = new Set([
   ...NOTIFICATION_MUTATING_TOOLS,
   ...AGENT_TASK_MUTATING_TOOLS,
   ...WORK_MUTATING_TOOLS,
+  ...PARTICIPATION_MUTATING_TOOLS,
   ...COMMUNITY_FEATURE_MUTATING_TOOLS,
   ...CONTINUITY_MUTATING_TOOLS,
   ...MODERATION_MUTATING_TOOLS,
@@ -287,6 +294,8 @@ const CAPABILITY_FOR_TOOL: Partial<Record<string, ScopeCapability>> = {
   send_whisper: "whisper",
   update_community_status: "status",
   update_agent_profile: "profile",
+  manage_community_participation: "profile",
+  record_community_participation: "profile",
   create_agent_task: "task",
   manage_work_project: 'task',
   claim_work_task: 'task',
@@ -327,7 +336,7 @@ const FIXED_MCP_TOOLS: Tool[] = [
   {
     name: 'get_agent_pulse',
     description: AGENT_PULSE_DESCRIPTION,
-    inputSchema: { type: 'object', properties: { accessToken: { type: 'string', description: 'Token from login_scope' }, limit: { type: 'integer', minimum: 1, maximum: 20, default: 5 }, maxChars: { type: 'integer', minimum: 512, maximum: 12000, default: 4000 }, prettyPrint: { type: 'boolean', default: false } } },
+    inputSchema: { type: 'object', properties: { purpose: { type: 'string', enum: ['work', 'community'], default: 'work' }, hostBusy: { type: 'boolean', default: false }, accessToken: { type: 'string', description: 'Token from login_scope' }, limit: { type: 'integer', minimum: 1, maximum: 20, default: 5 }, maxChars: { type: 'integer', minimum: 512, maximum: 12000, default: 4000 }, prettyPrint: { type: 'boolean', default: false } } },
   },
   {
     name: 'list_active_capabilities',
@@ -428,6 +437,8 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
   const gitHistory = new GitHistoryService(resolvedVaultPath, pathFilter);
   const collaboration = new CollaborationService(fileSystem, searchService);
   const retrieval = new RetrievalService(searchService, collaboration, semanticSearch, scopeAccess, fileSystem);
+  const layeredMemory = new LayeredMemoryService(fileSystem, retrieval, scopeAccess);
+  const researchBridge = new ResearchBridgeService(fileSystem, scopeAccess, retrieval);
   const questionPacket = new QuestionPacketService(fileSystem, scopeAccess, retrieval);
   const sourceComparison = new SourceComparisonService(fileSystem, scopeAccess, retrieval);
   const sourceChange = new SourceChangeService(fileSystem, scopeAccess);
@@ -485,7 +496,8 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
       if (await moderation.isBanned(principal.accountId, principal.userId)) throw new Error('This account is suspended by moderation');
     },
   });
-  const agentPulse = new AgentPulseService(notifications, social, chat, agentTasks, continuity, reputation, llmWiki, ideation, work);
+  const participation = new CommunityParticipationService(fileSystem, { access: scopeAccess, notifications });
+  const agentPulse = new AgentPulseService(notifications, social, chat, agentTasks, continuity, reputation, llmWiki, ideation, work, participation);
   const endpointRegistry = new EndpointRegistry();
   const requestGate = new RequestConcurrencyGate();
 
@@ -785,6 +797,9 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         ...getScopeAuthTools(),
         ...getLlmWikiTools(),
         ...getSocialTools(),
+        ...getLayeredMemoryTools(),
+        ...getCommunityParticipationTools(),
+        ...getResearchBridgeTools(),
         ...getChatTools(),
         ...getReferenceTools(),
         ...getWhisperTools(),
@@ -1152,7 +1167,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
     let toolName = requestedToolName;
     let args = request.params.arguments;
 
-    if (readOnly && MUTATING_TOOLS.has(toolName) && !(toolName === 'manage_wiki_moc_region' && args?.operation === 'status') && !(toolName === 'manage_work_project' && (args?.op === undefined || args?.op === 'read'))) {
+    if (readOnly && MUTATING_TOOLS.has(toolName) && !(toolName === 'manage_wiki_moc_region' && args?.operation === 'status') && !(['manage_work_project', 'manage_community_participation'].includes(toolName) && (args?.op === undefined || args?.op === 'read'))) {
       await audit.record({ tool: toolName, ...(args && typeof args === 'object' ? { args: args as Record<string, unknown> } : {}), outcome: 'error', error: 'read-only mode' });
       return {
         content: [{
@@ -1189,6 +1204,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
 
       if (toolName === 'manage_wiki_moc_region' && rawArgs.operation === 'status') toolName = 'read_wiki_moc_region_status';
       if (toolName === 'manage_work_project' && (rawArgs.op === undefined || rawArgs.op === 'read')) toolName = 'read_work_project';
+      if (toolName === 'manage_community_participation' && (rawArgs.op === undefined || rawArgs.op === 'read')) toolName = 'read_community_participation';
       if (readOnly && MUTATING_TOOLS.has(toolName)) {
         throw new Error(`Endpoint '${toolName}' is disabled because MCPVault is running in read-only mode.`);
       }
@@ -1263,6 +1279,14 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
           return jsonResult({ ...result, note: 'Capability availability reflects this session; data state such as unread mentions is returned by the endpoint itself.' }, trimmedArgs.prettyPrint);
         }
 
+        case 'memory_recall':
+        case 'memory_brief':
+        case 'memory_consolidate': {
+          const result = await layeredMemory.read(toolName.slice('memory_'.length) as 'recall' | 'brief' | 'consolidate', { ...trimmedArgs, principal });
+          if (principal && JSON.stringify(scopeAuth.authenticate(rawArgs.accessToken)) !== JSON.stringify(principal)) throw new Error('Memory authentication changed; login again before reading');
+          return jsonResult(result, false);
+        }
+
         case "search_capabilities": {
           const result = endpointRegistry.list(
             trimmedArgs.query,
@@ -1275,11 +1299,32 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         }
 
         case "get_agent_pulse": {
-          return jsonResult(await agentPulse.get({
+          const packet = await agentPulse.get({
             ...(principal && { principal }),
             limit: trimmedArgs.limit,
             maxChars: trimmedArgs.maxChars,
-          }), trimmedArgs.prettyPrint);
+            ...(trimmedArgs.purpose !== undefined && { purpose: trimmedArgs.purpose }),
+            ...(trimmedArgs.hostBusy !== undefined && { hostBusy: trimmedArgs.hostBusy }),
+          });
+          if (principal && scopeAuth.authenticate(rawArgs.accessToken)?.accountId !== principal.accountId) throw new Error('Session expired during pulse; login again');
+          return jsonResult(packet, trimmedArgs.purpose === 'community' ? false : trimmedArgs.prettyPrint);
+        }
+
+        case 'get_wiki_bridge_candidates': {
+          const packet = await researchBridge.candidates({ ...trimmedArgs, principal } as any);
+          if (principal && JSON.stringify(scopeAuth.authenticate(rawArgs.accessToken)) !== JSON.stringify(principal)) throw new Error('Research authentication changed; login again before reading');
+          return jsonResult(packet, false);
+        }
+        case 'read_community_participation':
+        case 'manage_community_participation': {
+          const packet = await participation.settings({ ...trimmedArgs, principal, ...(toolName === 'read_community_participation' && { op: 'read' }), authorize: () => { if (!principal || JSON.stringify(scopeAuth.authenticate(rawArgs.accessToken)) !== JSON.stringify(principal)) throw new Error('Participation authentication changed'); } });
+          if (!principal || scopeAuth.authenticate(rawArgs.accessToken)?.accountId !== principal.accountId) throw new Error('Session expired during participation read');
+          return jsonResult(packet, false);
+        }
+        case 'record_community_participation': {
+          const packet = await participation.record({ ...trimmedArgs, principal, authorize: () => { if (!principal || JSON.stringify(scopeAuth.authenticate(rawArgs.accessToken)) !== JSON.stringify(principal)) throw new Error('Participation authentication changed'); } } as any);
+          if (!principal || JSON.stringify(scopeAuth.authenticate(rawArgs.accessToken)) !== JSON.stringify(principal)) throw new Error('Participation authentication changed');
+          return jsonResult(packet, false);
         }
 
         case "read_context": {
@@ -2018,12 +2063,13 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
           return jsonResult(await social.writeJournalEntry({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
         }
 
-        case "list_journal_entries": {
-          return jsonResult(await social.listJournalEntries({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
-        }
-
+        case "list_journal_entries":
         case "read_journal_entry": {
-          return jsonResult(await social.readJournalEntry({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
+          const result = toolName === 'list_journal_entries'
+            ? await social.listJournalEntries({ ...trimmedArgs, principal })
+            : await social.readJournalEntry({ ...trimmedArgs, principal });
+          if (principal && JSON.stringify(scopeAuth.authenticate(rawArgs.accessToken)) !== JSON.stringify(principal)) throw new Error('Journal authentication changed; login again before reading');
+          return jsonResult(result, trimmedArgs.prettyPrint);
         }
 
         case "publish_blog_post": {
@@ -2287,7 +2333,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         }
 
         case "create_idea": {
-          return jsonResult(await ideation.createIdea({ ...(principal && { principal }), ideaId: trimmedArgs.ideaId, title: trimmedArgs.title, seed: trimmedArgs.seed, problem: trimmedArgs.problem, constraints: trimmedArgs.constraints, successCriteria: trimmedArgs.successCriteria, references: trimmedArgs.references, workshopId: trimmedArgs.workshopId, expectedRevision: trimmedArgs.expectedRevision }), trimmedArgs.prettyPrint);
+          return jsonResult(await ideation.createIdea({ ...(principal && { principal }), ideaId: trimmedArgs.ideaId, title: trimmedArgs.title, seed: trimmedArgs.seed, problem: trimmedArgs.problem, constraints: trimmedArgs.constraints, successCriteria: trimmedArgs.successCriteria, references: trimmedArgs.references, workshopId: trimmedArgs.workshopId, expectedRevision: trimmedArgs.expectedRevision, requestId: trimmedArgs.requestId }), trimmedArgs.prettyPrint);
         }
 
         case "list_ideas": {
@@ -2307,7 +2353,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         }
 
         case "contribute_idea": {
-          return jsonResult(await ideation.contributeIdea({ ...(principal && { principal }), ideaId: trimmedArgs.ideaId, kind: trimmedArgs.kind, content: trimmedArgs.content, references: trimmedArgs.references, replyTo: trimmedArgs.replyTo }), trimmedArgs.prettyPrint);
+          return jsonResult(await ideation.contributeIdea({ ...(principal && { principal }), ideaId: trimmedArgs.ideaId, kind: trimmedArgs.kind, content: trimmedArgs.content, references: trimmedArgs.references, replyTo: trimmedArgs.replyTo, requestId: trimmedArgs.requestId }), trimmedArgs.prettyPrint);
         }
 
         case "evaluate_idea": {
@@ -2315,7 +2361,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         }
 
         case "create_workshop": {
-          return jsonResult(await ideation.createWorkshop({ ...(principal && { principal }), workshopId: trimmedArgs.workshopId, title: trimmedArgs.title, prompt: trimmedArgs.prompt, agenda: trimmedArgs.agenda, ideaIds: trimmedArgs.ideaIds, timeboxMinutes: trimmedArgs.timeboxMinutes, maxContributionsPerAgent: trimmedArgs.maxContributionsPerAgent, references: trimmedArgs.references }), trimmedArgs.prettyPrint);
+          return jsonResult(await ideation.createWorkshop({ ...(principal && { principal }), workshopId: trimmedArgs.workshopId, title: trimmedArgs.title, prompt: trimmedArgs.prompt, agenda: trimmedArgs.agenda, ideaIds: trimmedArgs.ideaIds, timeboxMinutes: trimmedArgs.timeboxMinutes, maxContributionsPerAgent: trimmedArgs.maxContributionsPerAgent, references: trimmedArgs.references, requestId: trimmedArgs.requestId, ...(trimmedArgs.researchWork && { researchWork: trimmedArgs.researchWork }) }), trimmedArgs.prettyPrint);
         }
 
         case "list_workshops": {
@@ -2327,7 +2373,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         }
 
         case "contribute_workshop": {
-          return jsonResult(await ideation.contributeWorkshop({ ...(principal && { principal }), workshopId: trimmedArgs.workshopId, kind: trimmedArgs.kind, content: trimmedArgs.content, ideaId: trimmedArgs.ideaId, expectedPhase: trimmedArgs.expectedPhase, references: trimmedArgs.references }), trimmedArgs.prettyPrint);
+          return jsonResult(await ideation.contributeWorkshop({ ...(principal && { principal }), workshopId: trimmedArgs.workshopId, kind: trimmedArgs.kind, content: trimmedArgs.content, ideaId: trimmedArgs.ideaId, expectedPhase: trimmedArgs.expectedPhase, references: trimmedArgs.references, requestId: trimmedArgs.requestId }), trimmedArgs.prettyPrint);
         }
 
         case "update_workshop_phase": {
@@ -2916,7 +2962,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
           throw new Error(`Unknown tool: ${toolName}`);
       }
       })();
-      const responseContract = endpointRegistry.resolve(toolName === 'read_work_project' ? 'work.project' : endpointIdForTool(toolName))?.input;
+      const responseContract = endpointRegistry.resolve(toolName === 'read_work_project' ? 'work.project' : toolName === 'read_community_participation' ? 'community.participation' : endpointIdForTool(toolName))?.input;
       const responseBudget = trimmedArgs.maxChars ?? (toolName === 'get_wiki_answer_packet' && trimmedArgs.query === undefined ? 7000 : undefined);
       return enforceResponseBudget(toolResponse, normalizedResponseBudget(responseBudget, responseContract));
     } catch (error) {

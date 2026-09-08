@@ -2439,6 +2439,7 @@ export declare class LlmWikiService {
             useWhen: string;
             endpointId: string;
             arguments: {
+                limit?: never;
                 expectedRevision?: never;
                 query: string;
                 maxChars: number;
@@ -2448,7 +2449,6 @@ export declare class LlmWikiService {
                 mode?: never;
                 context?: never;
                 includeReadiness?: never;
-                limit?: never;
             };
             requiredArguments: string[];
             mutating?: never;
@@ -2477,6 +2477,7 @@ export declare class LlmWikiService {
             useWhen: string;
             endpointId: string;
             arguments: {
+                limit?: never;
                 query?: never;
                 expectedRevision: string;
                 intent?: never;
@@ -2485,7 +2486,6 @@ export declare class LlmWikiService {
                 mode?: never;
                 context?: never;
                 includeReadiness?: never;
-                limit?: never;
                 maxChars?: never;
             };
             requiredArguments: string[];
@@ -4139,8 +4139,8 @@ export declare class LlmWikiService {
             endpointId: string;
             via: 'call_endpoint';
             arguments: {
-                path?: never;
                 limit?: never;
+                path?: never;
                 topic: string;
                 maxChars: number;
             };
@@ -4189,8 +4189,8 @@ export declare class LlmWikiService {
                 maxChars: number;
                 topic?: never;
             } | {
-                path?: never;
                 limit?: never;
+                path?: never;
                 topic: string;
                 maxChars: number;
             };
@@ -4236,8 +4236,8 @@ export declare class LlmWikiService {
             endpointId: string;
             via: 'call_endpoint';
             arguments: {
-                path?: never;
                 limit?: never;
+                path?: never;
                 topic: string;
                 maxChars: number;
             };
@@ -4273,8 +4273,8 @@ export declare class LlmWikiService {
                 maxChars: number;
                 topic?: never;
             } | {
-                path?: never;
                 limit?: never;
+                path?: never;
                 topic: string;
                 maxChars: number;
             };
@@ -4297,8 +4297,8 @@ export declare class LlmWikiService {
                 maxChars: number;
                 topic?: never;
             } | {
-                path?: never;
                 limit?: never;
+                path?: never;
                 topic: string;
                 maxChars: number;
             };

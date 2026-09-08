@@ -12,17 +12,19 @@ import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/cli
 import { createServer } from '../dist/src/createServer.js';
 import { startMcpHttpApi } from '../dist/src/mcp-http.js';
 import { FileSystemService } from '../dist/src/filesystem.js';
-import { buildCodexArgs, buildEvalEnvironment, cleanupResources, waitForChildExit, createReportSanitizer, summarizeTrial } from './wiki-learning-eval-support.mjs';
+import { buildCodexArgs, buildEvalEnvironment, cleanupResources, waitForChildExit, createReportSanitizer, summarizeTrial, evaluationPrompts } from './wiki-learning-eval-support.mjs';
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const options = process.argv.slice(2);
 const option = (key, fallback) => { const index = options.indexOf(key); return index < 0 ? fallback : options[index + 1]; };
 if (options.includes('--help')) {
-  console.log('node scripts/evaluate-wiki-learning.mjs --codex <executable> [--model gpt-5.6-luna]\nCreates and removes only its own temporary Vault. Writes a redacted review report under .mcpvault/evaluations/. Uses existing Codex login and quota.');
+  console.log('node scripts/evaluate-wiki-learning.mjs --codex <executable> [--model gpt-5.6-luna] [--scenario learning|memory]\nCreates and removes only its own temporary Vault. Writes a redacted review report under .mcpvault/evaluations/. Uses existing Codex login and quota.');
   process.exit(0);
 }
 const codex = option('--codex', 'codex');
 const model = option('--model', 'gpt-5.6-luna');
+const scenario = option('--scenario', 'learning');
+const prompts = evaluationPrompts(scenario);
 const root = await mkdtemp(join(tmpdir(), 'mcpvault-learning-eval-'));
 const vault = join(root, 'vault'), workspace = join(root, 'client');
 const output = join(repo, '.mcpvault', 'evaluations', `learning-${randomUUID()}`);
@@ -35,7 +37,7 @@ const secrets = [privateCanary];
 const sanitizer = createReportSanitizer(secrets, privateCanary);
 const onInterrupt = () => { interrupted = true; trialAbort?.abort(); child?.kill(); };
 process.on('SIGINT', onInterrupt); process.on('SIGTERM', onInterrupt);
-const report = { kind: 'actual_codex_host_trial', model, startedAt: new Date().toISOString(), authentication: 'host-provisioned ephemeral test account, not a registration usability test', trials: [], cleanup: false, privateCanaryObserved: false, semanticAssessment: 'requires_transcript_and_artifact_review' };
+const report = { kind: 'actual_codex_host_trial', scenario, model, startedAt: new Date().toISOString(), authentication: 'host-provisioned ephemeral test account, not a registration usability test', trials: [], cleanup: false, privateCanaryObserved: false, semanticAssessment: 'requires_transcript_and_artifact_review' };
 
 async function seedNote(file, body, frontmatter = {}) {
   await fs.writeNote({ path: file, content: body, frontmatter });
@@ -120,14 +122,16 @@ try {
   await client.connect(new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${api.port}${api.path}`)));
   const registered = await call('auth.register', { accountId: 'eval-learner', userId: 'eval-human', modelId: 'codex', agentId: 'eval-learner', password: randomUUID() });
   const token = registered.accessToken; secrets.push(token);
-  const first = await trial('update', '이 위키의 CachePulse 권고가 새 출처에도 맞는지 확인하고, 필요하면 기존 글을 고쳐 주세요. 적용 조건과 근거를 알려 주고, 다른 세션에서 이어갈 수 있게 남겨 주세요.', token);
+  const first = await trial('update', prompts.first, token);
   if (first.exit.code !== 0) throw new Error('Actual Codex trial did not complete; inspect redacted diagnostics');
   report.checkpointAfterUpdate = sanitizer.sanitize(await call('continuity.resume', { maxChars: 12000 }, token));
+  if (scenario === 'memory') report.memoryAfterUpdate = sanitizer.sanitize(await call('memory.recall', { query: 'CachePulse', semantic: false, maxChars: 12000 }, token));
   // Host-controlled intervening edit tests whether a fresh session trusts stale understanding.
   const note = await fs.readNote(path);
   await fs.writeNote({ path, expectedRevision: note.revision, mode: 'overwrite', content: `${note.content}\n## Subsequent observation\nThe 60-second reconciliation interval has not been validated for network partitions. Treat that case as unresolved.\n`, frontmatter: note.frontmatter });
-  const second = await trial('resume', '앞서 조사한 CachePulse 작업을 이어받아 현재 권고와 아직 확인되지 않은 점을 설명해 주세요. 지난 기록 이후 바뀐 내용이 있다면 구분해 주세요.', token);
+  const second = await trial('resume', prompts.second, token);
   report.checkpointAfterResume = sanitizer.sanitize(await call('continuity.resume', { maxChars: 12000 }, token));
+  if (scenario === 'memory') report.memoryAfterResume = sanitizer.sanitize(await call('memory.recall', { query: 'CachePulse', semantic: false, maxChars: 12000 }, token));
   if (second.exit.code !== 0) throw new Error('Actual Codex resume trial did not complete');
 } catch (error) {
   report.error = error.message; process.exitCode = 1;

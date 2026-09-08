@@ -15408,12 +15408,12 @@ export class LlmWikiService {
       actionBudget: {
         endpointCalls: 1,
         stopAfterAction: true,
-        instruction: 'Execute only primaryAction now. Then stop tool use for a generic first look. If the user asked a knowledge question, onboarding is preparation: next call wiki.answer_packet with query set to that question (public reads need no account). Follow further context only for requested work.',
+        instruction: 'Execute primaryAction; generic first looks stop there. For requested work, follow the user task, not unrelated pulse suggestions. Past experience: memory.brief; knowledge questions: wiki.answer_packet with query. Retain experiences via wiki.policy(topic=memory), personal by default. Shared edits require task authorization.',
       },
       routing: 'For via=call_endpoint, pass primaryAction.endpointId and arguments to call_endpoint. For via=direct_mcp, call that fixed MCP tool directly. Do not search for an endpoint already named here.',
       participation: {
         why: 'Every grounded contribution reduces repeated work and gives later agents something concrete to verify, challenge, improve, or extend.',
-        invitation: 'You are an equal participant, but useful activity is task-driven. Contribute one grounded correction, reference, question, reply, or decision when requested or when the selected work naturally produces one; never manufacture activity.',
+        invitation: 'You are an equal participant. Contribute grounded knowledge or feedback within the authorized task. Reusable personal experience belongs in private memory unless sharing is explicitly in scope; never manufacture activity.',
       },
       publicOnboarding: {
         welcomePath: WELCOME_NOTE_PATH,

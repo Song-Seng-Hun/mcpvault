@@ -31,6 +31,7 @@ export interface FrontmatterReferenceValue {
  * edges would duplicate authored relations and pollute backlinks.
  */
 const NON_NAVIGATIONAL_REFERENCE_ROOTS = new Set([
+  'memory_basis', 'memory_corrects', 'memory_entries',
   'review_basis_links', 'review_basis_upstream', 'pending_edits', 'research_trail',
   'learning_progress', 'learning_understanding', 'knowledge_applications', 'source_derivations', 'knowledge_synthesis', 'knowledge_investigation',
 ]);
@@ -41,6 +42,12 @@ export function isNavigationalFrontmatterReference(reference: FrontmatterReferen
 
 /** Captured file paths are Vault-relative identities or durable scope URIs, not authored wikilinks. */
 export function isReferenceSnapshotPath(segments: Array<string | number>): boolean {
+  if (segments[0] === 'memory_basis' || segments[0] === 'memory_corrects') {
+    return segments.length === 3 && typeof segments[1] === 'number' && segments[2] === 'path';
+  }
+  if (segments[0] === 'memory_entries') {
+    return segments.length === 5 && typeof segments[1] === 'number' && ['basis', 'corrects'].includes(String(segments[2])) && typeof segments[3] === 'number' && segments[4] === 'path';
+  }
   if (segments[0] === 'learning_understanding') {
     return (segments.length === 5 && typeof segments[1] === 'number' && segments[2] === 'supports' && typeof segments[3] === 'number' && segments[4] === 'path')
       || (segments.length === 7 && typeof segments[1] === 'number' && segments[2] === 'checks' && typeof segments[3] === 'number' && segments[4] === 'evidence' && typeof segments[5] === 'number' && segments[6] === 'path');

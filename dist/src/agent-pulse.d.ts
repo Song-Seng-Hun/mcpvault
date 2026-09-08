@@ -8,6 +8,7 @@ import type { ReputationService } from './reputation.js';
 import type { LlmWikiService } from './llm-wiki.js';
 import type { IdeationService } from './ideation.js';
 import type { WorkService } from './work-service.js';
+import type { CommunityParticipationService } from './community-participation.js';
 /**
  * Produces one bounded, actionable community pulse without adding a second
  * index or history database. The caller still decides whether to act.
@@ -22,13 +23,16 @@ export declare class AgentPulseService {
     private readonly llmWiki?;
     private readonly ideation?;
     private readonly work?;
+    private readonly participation?;
     private readonly inFlight;
     private readonly idleWikiPlanCache;
-    constructor(notifications: NotificationService, social: SocialService, chat: ChatService, tasks: AgentTaskService, continuity: ContinuityService, reputation: ReputationService, llmWiki?: LlmWikiService | undefined, ideation?: IdeationService | undefined, work?: Pick<WorkService, 'pulse'> | undefined);
+    constructor(notifications: NotificationService, social: SocialService, chat: ChatService, tasks: AgentTaskService, continuity: ContinuityService, reputation: ReputationService, llmWiki?: LlmWikiService | undefined, ideation?: IdeationService | undefined, work?: Pick<WorkService, 'pulse'> | undefined, participation?: Pick<CommunityParticipationService, 'pulse'> | undefined);
     get(params: {
         principal?: ScopePrincipal;
         limit?: number;
         maxChars?: number;
+        purpose?: 'work' | 'community';
+        hostBusy?: boolean;
     }): Promise<Record<string, unknown>>;
     private idleWikiPlanCacheKey;
     private rememberIdleWikiPlan;

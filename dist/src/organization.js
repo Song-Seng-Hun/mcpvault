@@ -5,6 +5,8 @@ import { normalizeKnowledgeApplications } from './knowledge-application-model.js
 import { normalizeSourceDerivations } from './source-provenance-model.js';
 import { normalizeKnowledgeSynthesis } from './knowledge-synthesis-model.js';
 import { normalizeKnowledgeInvestigation } from './knowledge-investigation-model.js';
+import { MEMORY_ROLES } from './memory-contract.js';
+import { RESEARCH_TEMPLATE_IDS, getResearchTemplate, RESEARCH_LITERATURE_SECTIONS, RESEARCH_EXPERIMENT_SECTIONS } from './research-templates.js';
 /**
  * Lightweight knowledge-organization vocabulary.
  *
@@ -42,7 +44,7 @@ export const TERM_STATUSES = ['preferred', 'deprecated', 'redirect'];
 export const KNOWLEDGE_ROLES = ['concept', 'argument', 'model', 'observation', 'counterargument'];
 /** Optional note-template IDs. Knowledge-role templates refine a durable note
  * without introducing another note kind or storage format. */
-export const NOTE_TEMPLATE_IDS = ['atomic', 'literature', 'question', 'hypothesis', 'experiment', 'assumption', 'decision', 'project', 'moc', 'negative', 'synthesis', ...KNOWLEDGE_ROLES];
+export const NOTE_TEMPLATE_IDS = ['atomic', 'literature', 'question', 'hypothesis', 'experiment', 'assumption', 'decision', 'project', 'moc', 'negative', 'synthesis', ...KNOWLEDGE_ROLES, ...RESEARCH_TEMPLATE_IDS];
 /** Standard Obsidian Bases projections. Keep the runtime and tool schema on
  * one shared list so a documented view cannot become unreachable. */
 export const BASES_VIEW_IDS = ['all', 'inbox', 'inbox_oldest', 'projects', 'project_next_actions', 'review', 'epistemic', 'experiments', 'open_questions', 'decisions', 'knowledge', 'concepts', 'arguments', 'models', 'observations', 'counterarguments', 'unreviewed_evidence', 'negative_knowledge', 'deprecated_terms', 'maintenance', 'authority', 'review_checklist', 'collections', 'archives'];
@@ -211,6 +213,11 @@ export const ORGANIZATION_PROPERTY_CONTRACT = [
     { name: 'summary_layer', type: 'number', description: 'Progressive Summarization layer from 0 to 4' },
     { name: 'summary_highlights', type: 'list', description: 'Bounded highlighted passages; nested objects are MCP-managed' },
     { name: 'summary_of_content_sha256', type: 'text', description: 'Body digest for projection freshness' },
+    { name: 'memory_role', type: 'text', allowed: MEMORY_ROLES, description: 'Optional whole-note memory role, independent of note kind, lifecycle and scope. Never grants authority.' },
+    { name: 'memory_state', type: 'text', allowed: ['active', 'archived'], description: 'Memory retrieval participation only; archived is omitted unless includeHistory=true. Not deletion or knowledge lifecycle.' },
+    { name: 'memory_entries', type: 'list', description: 'Up to 32 bounded memory records anchored to unique visible block_id values; role, state, observed_at, validity, cues, use_when, basis and corrects. No copied body or credentials.' },
+    { name: 'memory_basis', type: 'list', description: 'At most 8 exact {path,revision,block_id?} sources for whole-note memory; readers must be able to access every source.' },
+    { name: 'memory_corrects', type: 'list', description: 'At most 8 {path,block_id?} historical memory targets corrected by this record; preserve the original, do not silently rewrite it.' },
     { name: 'next_action', type: 'text', description: 'One concrete GTD action on any actionable note' },
     { name: 'next_actions', type: 'list', description: 'Bounded GTD action list on any actionable note' },
     { name: 'time_estimate_minutes', type: 'number', description: 'Optional rough effort estimate for one execution step' },
@@ -351,6 +358,9 @@ export function getOrganizationPropertyContract() {
 export function organizationNoteTemplate(value = 'atomic') {
     const requested = String(value ?? 'atomic').trim().toLowerCase();
     const templateId = NOTE_TEMPLATE_IDS.includes(requested) ? requested : 'atomic';
+    const research = getResearchTemplate(templateId);
+    if (research)
+        return { templateId, noteKind: research.properties.note_kind, ...research };
     const templates = {
         atomic: {
             purpose: 'One reusable concept or claim written in your own words.',
@@ -434,6 +444,10 @@ export function organizationNoteTemplate(value = 'atomic') {
         },
     };
     const template = templates[templateId] || templates.atomic;
+    if (templateId === 'literature')
+        template.markdown = template.markdown.replace('## Interpretation\n', '') + '\n' + RESEARCH_LITERATURE_SECTIONS + '\n';
+    if (templateId === 'experiment')
+        template.markdown += '\n' + RESEARCH_EXPERIMENT_SECTIONS + '\n';
     const noteKind = template.properties.note_kind;
     return { templateId, noteKind, ...template };
 }

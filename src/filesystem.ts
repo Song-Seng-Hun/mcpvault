@@ -25,6 +25,7 @@ import { projectNoteOutline, projectNoteLineWindow } from './note-projections.js
 import { isMissingVaultPath, QuerySnapshotChangedError, VaultReadUnavailableError } from './vault-read-errors.js';
 import { readBoundedSource, SourceReadLimitError } from './bounded-source-read.js';
 import { packQueryPage, type PackedQueryPage } from './query-page.js';
+import { assertMemoryContent } from './memory-contract.js';
 
 /** Hard per-note write limit so stdio callers cannot exhaust the vault disk. */
 export const MAX_NOTE_CONTENT_BYTES = 8 * 1024 * 1024;
@@ -36,6 +37,7 @@ function assertNoteContentSize(content: string, path: string): void {
   if (byteLength > MAX_NOTE_CONTENT_BYTES) {
     throw new Error(`Note exceeds ${MAX_NOTE_CONTENT_BYTES} bytes: ${path}`);
   }
+  assertMemoryContent(content, path);
 }
 
 function getFrontmatterValue(frontmatter: Record<string, any>, key: string): { found: boolean; value?: unknown } {
@@ -514,10 +516,14 @@ export function classifyWriteError(error: unknown, path: string): Error {
   return new Error(`Failed to write file: ${path} - ${error instanceof Error ? error.message : 'Unknown error'}`);
 }
 
+// Short mutation locks are shared by every service instance for a real Vault.
+// This is process-local coordination, not a cross-process transaction promise.
+const vaultMutationTails = new Map<string, Promise<void>>();
+
 export class FileSystemService {
   private frontmatterHandler: FrontmatterHandler;
   private pathFilter: PathFilter;
-  private mutationTails = new Map<string, Promise<void>>();
+  private readonly mutationTails = vaultMutationTails;
   private readonly noteChangeObservers = new Set<(path: string) => void>();
 
   /** Request-local invalidation observers; call the disposer in finally. */
@@ -835,8 +841,8 @@ export class FileSystemService {
       if (identity === targetIdentity) throw new Error('A guarded note write cannot repeat the target as a related-note guard, including equivalent path spellings');
       if (guardIdentities.has(identity)) throw new Error('A related note may appear only once in revision guards, including equivalent path spellings');
       guardIdentities.add(identity);
-      if (!/^[a-f0-9]{64}$/i.test(String(guard?.expectedRevision || ''))) {
-        throw new Error(`Each related-note guard requires a current SHA-256 revision: ${guardPath}`);
+      if (guard?.expectedRevision !== 'missing' && !/^[a-f0-9]{64}$/i.test(String(guard?.expectedRevision || ''))) {
+        throw new Error(`Each related-note guard requires a current SHA-256 revision or missing: ${guardPath}`);
       }
       return { path: guardPath, expectedRevision: guard.expectedRevision };
     });
@@ -1947,6 +1953,12 @@ export class FileSystemService {
   }
 
   async moveFile(params: MoveFileParams): Promise<MoveResult> {
+    const oldPath = this.normalizePath(params.oldPath);
+    const newPath = this.normalizePath(params.newPath);
+    return this.withMutationLocks([oldPath, newPath], () => this.moveFileUnlocked({ ...params, oldPath, newPath }));
+  }
+
+  private async moveFileUnlocked(params: MoveFileParams): Promise<MoveResult> {
     const { overwrite = false } = params;
     const oldPath = this.normalizePath(params.oldPath);
     const newPath = this.normalizePath(params.newPath);
@@ -1982,6 +1994,17 @@ export class FileSystemService {
 
     const oldFullPath = this.resolveWritablePath(oldPath);
     const newFullPath = this.resolveWritablePath(newPath);
+
+    // Generic attachment moves also accept Markdown. Validate against the
+    // destination audience before deleting an existing target or moving bytes.
+    if (/\.(?:md|markdown|txt)$/i.test(oldPath) || /\.(?:md|markdown|txt)$/i.test(newPath)) {
+      try {
+        const source = await this.vaultIo.readUtf8Bounded(oldFullPath, MAX_NOTE_CONTENT_BYTES);
+        assertMemoryContent(source, newPath);
+      } catch (error) {
+        return { success: false, oldPath, newPath, message: `Move validation failed: ${error instanceof Error ? error.message : 'source unavailable'}` };
+      }
+    }
 
     try {
       const sourceStat = await stat(oldFullPath);

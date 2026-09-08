@@ -1,6 +1,14 @@
 import { expect, test } from 'vitest';
 import { EventEmitter } from 'node:events';
-import { buildCodexArgs, buildEvalEnvironment, cleanupResources, waitForChildExit, sanitizeEvent, summarizeTrial, createReportSanitizer } from '../scripts/wiki-learning-eval-support.mjs';
+import { buildCodexArgs, buildEvalEnvironment, cleanupResources, waitForChildExit, sanitizeEvent, summarizeTrial, createReportSanitizer, evaluationPrompts } from '../scripts/wiki-learning-eval-support.mjs';
+
+test('memory host trial uses task prompts without preteaching endpoint or memory schema steps', () => {
+  const prompts = evaluationPrompts('memory');
+  expect(prompts.first).toContain('CachePulse');
+  expect(prompts.second).toContain('이전');
+  expect(JSON.stringify(prompts)).not.toMatch(/memory\.|journal|continuity|block_id|endpoint|schema/i);
+  expect(() => evaluationPrompts('unknown')).toThrow();
+});
 
 test('isolates actual Codex evaluation from installed plugins, shell and production MCP', () => {
   const args = buildCodexArgs('http://127.0.0.1:34567/mcp', 'C:/temporary/work', 'gpt-5.6-luna');

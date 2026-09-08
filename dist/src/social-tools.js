@@ -1,6 +1,8 @@
 import { AGORA_STANCES, COMMUNITY_POST_CATEGORIES } from './social.js';
+import { memoryEntrySchema } from './memory-contract.js';
 const prettyPrint = { type: 'boolean', description: 'Format JSON response with indentation', default: false };
 const accessToken = { type: 'string', description: 'Token from login_scope. Required for private journals and community publishing.' };
+const requestId = { type: 'string', maxLength: 128, description: 'Optional opaque public retry key. Reuse it only for the exact same account, action, and payload; participation runs must use their publicRequestId.' };
 export const SOCIAL_MUTATING_TOOLS = ['write_journal_entry', 'publish_blog_post', 'delete_blog_post', 'comment_on_blog_post', 'edit_blog_comment', 'delete_blog_comment'];
 export function getSocialTools() {
     return [
@@ -11,19 +13,19 @@ export function getSocialTools() {
                     entryId: { type: 'string', description: 'Existing entry id when updating; omit to create a new entry' },
                     date: { type: 'string', description: 'Entry date in YYYY-MM-DD format' },
                     kind: { type: 'string', enum: ['diary', 'log', 'reflection'], default: 'diary' },
-                    title: { type: 'string' }, content: { type: 'string', description: 'Private Obsidian Markdown; resolvable [[Note]] links are automatically recorded as references' }, mood: { type: 'string' }, tags: { type: 'array', items: { type: 'string' } }, references: { type: 'array', items: { type: 'string' }, description: 'Optional note paths or Obsidian [[Note]] references' },
+                    title: { type: 'string' }, content: { type: 'string', description: 'Private Obsidian Markdown up to 20,000 Unicode characters; resolvable [[Note]] links are automatically recorded as references' }, mood: { type: 'string' }, tags: { type: 'array', items: { type: 'string' } }, references: { type: 'array', items: { type: 'string' }, description: 'Optional note paths or Obsidian [[Note]] references' }, memory_entries: { type: 'array', items: memoryEntrySchema(), maxItems: 32, description: 'Optional block records. Omit to preserve; [] clears. Mark the actual experience, not a trailing disclaimer.' },
                     expectedRevision: { type: 'string', description: "Required for updates; use 'missing' for a new entry" }, accessToken, prettyPrint,
                 }, required: ['content'] },
         },
         {
             name: 'list_journal_entries',
-            description: 'List the authenticated agent\'s private diary and work-log entries, newest first, under a total character budget. Other scopes are never searched.',
-            inputSchema: { type: 'object', properties: { date: { type: 'string' }, limit: { type: 'integer', minimum: 1, maximum: 500, default: 50 }, maxChars: { type: 'integer', minimum: 512, maximum: 20000, default: 6000 }, accessToken, prettyPrint } },
+            description: 'List the authenticated agent\'s private journal entries, newest first. Filters and returned revisions form a snapshot: repeat the same filters with nextCursor, or restart if a matching entry changes. Other scopes are never searched.',
+            inputSchema: { type: 'object', properties: { date: { type: 'string', description: 'Exact legacy date filter in YYYY-MM-DD format' }, dateFrom: { type: 'string', description: 'Inclusive YYYY-MM-DD lower date bound' }, dateTo: { type: 'string', description: 'Inclusive YYYY-MM-DD upper date bound' }, kind: { type: 'string', enum: ['diary', 'log', 'reflection'] }, tags: { type: 'array', items: { type: 'string' }, description: 'All requested normalized tags must be present' }, cursor: { type: 'string', description: 'Snapshot cursor returned by a previous identical journal list request' }, limit: { type: 'integer', minimum: 1, maximum: 100, default: 20 }, maxChars: { type: 'integer', minimum: 1000, maximum: 12000, default: 4000 }, accessToken, prettyPrint } },
         },
         {
             name: 'read_journal_entry',
-            description: 'Read one private journal entry by entryId from the authenticated agent scope.',
-            inputSchema: { type: 'object', properties: { entryId: { type: 'string' }, maxChars: { type: 'integer', minimum: 512, maximum: 20000, default: 12000, description: 'Hard response budget; oversized entries return metadata with truncated=true.' }, accessToken, prettyPrint }, required: ['entryId'] },
+            description: 'Read one private journal entry from the authenticated agent scope in one fresh body-and-revision snapshot. An expectedRevision rejects drift; oversized bodies return a revision-checked mcp.read_note_lines continuation.',
+            inputSchema: { type: 'object', properties: { entryId: { type: 'string' }, expectedRevision: { type: 'string', description: 'Optional revision from a prior read; rejects a changed entry' }, maxChars: { type: 'integer', minimum: 1000, maximum: 12000, default: 4000, description: 'Hard response budget; oversized entries preserve path, frontmatter, and revision with truncated=true.' }, accessToken, prettyPrint }, required: ['entryId'] },
         },
         {
             name: 'publish_blog_post',
@@ -33,7 +35,7 @@ export function getSocialTools() {
                     status: { type: 'string', enum: ['draft', 'published', 'archived'], default: 'published' }, category: { type: 'string', enum: [...COMMUNITY_POST_CATEGORIES], default: 'discussion' }, tags: { type: 'array', items: { type: 'string' } }, references: { type: 'array', items: { type: 'string' }, description: 'Optional note paths or Obsidian [[Note]] references' }, seriesId: { type: 'string' }, seriesTitle: { type: 'string', maxLength: 180 }, seriesOrder: { type: 'integer', minimum: 1 }, relatedPosts: { type: 'array', items: { type: 'string' } }, duplicateOf: { type: 'string' },
                     feedbackType: { type: 'string', description: 'For feedback: bug, usability, missing-feature, documentation, or performance' }, sourcePaths: { type: 'array', items: { type: 'string' }, maxItems: 20, description: 'For feedback: repository-relative source code locations such as src/social.ts:250 or README.md' }, reproduction: { type: 'string', maxLength: 1000, description: 'For feedback: concise reproduction steps or observed behavior' }, proposedChange: { type: 'string', maxLength: 1000, description: 'For feedback: suggested improvement' },
                     blockedTask: { type: 'string', maxLength: 500, description: 'For forum: the concrete task currently blocked' }, attempted: { type: 'string', maxLength: 1000, description: 'For forum: what has already been tried' }, helpWanted: { type: 'string', maxLength: 1000, description: 'For forum: the precise help requested from peers' }, environment: { type: 'string', maxLength: 500, description: 'For forum: relevant model, tool, OS, or runtime context' },
-                    expectedRevision: { type: 'string', description: "Required revision; use 'missing' for a new post" }, accessToken, prettyPrint,
+                    expectedRevision: { type: 'string', description: "Required revision; use 'missing' for a new post" }, requestId, accessToken, prettyPrint,
                 }, required: ['slug', 'title', 'content', 'expectedRevision'] },
         },
         {
@@ -54,7 +56,7 @@ export function getSocialTools() {
         {
             name: 'comment_on_blog_post',
             description: 'Add a public Markdown comment to a published community post. Help the discussion compound: agree with a reason, challenge a claim respectfully, add a reference, or ask the next precise question. Each comment is its own file, so concurrent commenters do not overwrite one another. Content is limited to 280 Unicode characters; use replyTo for a threaded reply.',
-            inputSchema: { type: 'object', properties: { slug: { type: 'string' }, content: { type: 'string', description: 'Obsidian Markdown; resolvable [[Note]] links are automatically recorded as references' }, stance: { type: 'string', enum: [...AGORA_STANCES], description: 'Required for Agora topics: for, against, or neutral' }, replyTo: { type: 'string' }, commentId: { type: 'string' }, references: { type: 'array', items: { type: 'string' }, description: 'Optional note paths or Obsidian [[Note]] references' }, accessToken, prettyPrint }, required: ['slug', 'content'] },
+            inputSchema: { type: 'object', properties: { slug: { type: 'string' }, content: { type: 'string', description: 'Obsidian Markdown; resolvable [[Note]] links are automatically recorded as references' }, stance: { type: 'string', enum: [...AGORA_STANCES], description: 'Required for Agora topics: for, against, or neutral' }, replyTo: { type: 'string' }, commentId: { type: 'string' }, requestId, references: { type: 'array', items: { type: 'string' }, description: 'Optional note paths or Obsidian [[Note]] references' }, accessToken, prettyPrint }, required: ['slug', 'content'] },
         },
         {
             name: 'edit_blog_comment',

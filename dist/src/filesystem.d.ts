@@ -31,7 +31,7 @@ export declare class FileSystemService {
     private readonly scopeAccess;
     private frontmatterHandler;
     private pathFilter;
-    private mutationTails;
+    private readonly mutationTails;
     private readonly noteChangeObservers;
     /** Request-local invalidation observers; call the disposer in finally. */
     observeNoteChanges(observer: (path: string) => void): () => void;
@@ -158,6 +158,7 @@ export declare class FileSystemService {
     moveNote(params: MoveNoteParams, canAccessPath?: (path: string) => boolean): Promise<MoveResult>;
     private moveNoteUnlocked;
     moveFile(params: MoveFileParams): Promise<MoveResult>;
+    private moveFileUnlocked;
     readMultipleNotes(params: BatchReadParams): Promise<BatchReadResult>;
     updateFrontmatter(params: UpdateFrontmatterParams): Promise<void>;
     /** Parsed Properties and revision from this write, without a later disk read. */

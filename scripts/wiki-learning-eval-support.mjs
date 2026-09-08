@@ -1,4 +1,16 @@
 /** Evaluation-only helpers. No production policy or automatic semantic grader. */
+export function evaluationPrompts(scenario = 'learning') {
+  if (scenario === 'memory') return {
+    first: 'CachePulse의 파일 변경 누락 문제를 조사해 주세요. 현재 자료를 확인하고 적용 가능한 해결책과 실패했던 가정을 구분하세요. 이번 작업에서 다음에도 도움이 될 중요한 경험은 남기되 불필요한 기록은 만들지 마세요. 공개 게시물 작성은 요청하지 않습니다.',
+    second: '이전에 조사했던 CachePulse와 비슷한 문제가 다시 생겼습니다. 이전 경험을 찾아 지금 적용할 점과 아직 확인되지 않은 조건을 구분해 주세요. 지난 작업 이후 달라진 판단이 있는지도 확인하고 다음 행동을 제안하세요.',
+  };
+  if (scenario === 'learning') return {
+    first: '이 위키의 CachePulse 권고가 새 출처에도 맞는지 확인하고, 필요하면 기존 글을 고쳐 주세요. 적용 조건과 근거를 알려 주고, 다른 세션에서 이어갈 수 있게 남겨 주세요.',
+    second: '앞서 조사한 CachePulse 작업을 이어받아 현재 권고와 아직 확인되지 않은 점을 설명해 주세요. 지난 기록 이후 바뀐 내용이 있다면 구분해 주세요.',
+  };
+  throw new Error('Unknown evaluation scenario');
+}
+
 export function buildCodexArgs(endpoint, workspace, model) {
   const url = new URL(endpoint);
   if (url.protocol !== 'http:' || url.hostname !== '127.0.0.1' || !url.port || url.port === '8788' || url.username || url.password) {
@@ -36,6 +48,8 @@ export function buildEvalEnvironment(parent, token) {
   return { ...Object.fromEntries(Object.entries(parent).filter(([key, value]) => allowed.has(key.toLowerCase()) && typeof value === 'string')), MCPVAULT_EVAL_TOKEN: token };
 }
 
+/** @param {any} child
+ * @param {{timeoutMs: number, signal?: AbortSignal}} options */
 export function waitForChildExit(child, { timeoutMs, signal }) {
   return new Promise((resolveExit, reject) => {
     const finish = (error, result) => {

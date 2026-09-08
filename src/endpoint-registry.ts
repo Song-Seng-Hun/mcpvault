@@ -85,6 +85,12 @@ function endpointScore(endpoint: EndpointDescriptor, terms: string[]): number {
 }
 
 const EXPLICIT_IDS: Record<string, string> = {
+  manage_community_participation: 'community.participation',
+  record_community_participation: 'community.participation_record',
+  get_wiki_bridge_candidates: 'wiki.bridge_candidates',
+  memory_recall: 'memory.recall',
+  memory_brief: 'memory.brief',
+  memory_consolidate: 'memory.consolidate',
   manage_work_project: 'work.project', read_work_board: 'work.board', read_work_packet: 'work.packet',
   claim_work_task: 'work.claim', handoff_work_task: 'work.handoff', review_work_task: 'work.review',
   register_scope_account: 'auth.register',
@@ -221,6 +227,9 @@ const EXPLICIT_IDS: Record<string, string> = {
 
 const EXPLICIT_ROUTES: Record<string, { method: 'GET' | 'POST'; url: string }> = {
   manage_work_project: { method: 'POST', url: '/api/work/project' },
+  manage_community_participation: { method: 'POST', url: '/api/community/participation' },
+  record_community_participation: { method: 'POST', url: '/api/community/participation/record' },
+  get_wiki_bridge_candidates: { method: 'GET', url: '/api/wiki/bridge-candidates' },
   read_work_board: { method: 'GET', url: '/api/work/board' },
   read_work_packet: { method: 'GET', url: '/api/work/packet' },
   claim_work_task: { method: 'POST', url: '/api/work/claim' },
@@ -352,6 +361,9 @@ const EXPLICIT_ROUTES: Record<string, { method: 'GET' | 'POST'; url: string }> =
 };
 
 const ENDPOINT_ALIASES: Record<string, string[]> = {
+  get_wiki_bridge_candidates: ['research', 'bridge', 'analogy', 'cross-domain'],
+  manage_community_participation: ['participation', 'community goals', 'pause', 'heartbeat'],
+  record_community_participation: ['participation run', 'resume', 'skip', 'defer'],
   publish_blog_post: ['community', 'post', 'agora', 'debate', 'topic', 'introduction', 'feedback', 'forum', 'blocked', 'help request', 'source code', 'improvement', 'create_discussion', 'create discussion'],
   delete_blog_post: ['community', 'post', 'delete', 'remove', 'archive'],
   list_blog_posts: ['community', 'posts', 'agora', 'debate', 'topic', 'feed'],
@@ -493,7 +505,7 @@ function compactEndpoint(endpoint: EndpointDescriptor & { available: boolean; st
     ...(endpoint.requires.length > 0 && { requires: endpoint.requires }),
     ...(endpoint.reason && { reason: endpoint.reason }),
     schemaOmitted: true,
-    hint: endpoint.operations ? 'op=read is public; writes require authority. Retry with a larger maxChars for schema and operation permissions.' : 'Retry with a larger maxChars to receive the input schema.',
+    hint: endpoint.operations ? 'Read and write permissions differ by operation. Retry with a larger maxChars for the schema and exact operation permissions.' : 'Retry with a larger maxChars to receive the input schema.',
   };
 }
 
@@ -658,6 +670,12 @@ export class EndpointRegistry {
           const write = { available, state, requires: item.requires, ...(reason && { reason }) };
           return { ...item, requires: [], available: true, state: 'ready' as const,
             operations: { read: { available: true, state: 'ready' as const, requires: [] }, create: write, update: write } };
+        }
+        if (item.endpointId === 'community.participation') {
+          const write = { available, state, requires: item.requires, ...(reason && { reason }) };
+          const read = { available: context.authenticated, state: context.authenticated ? 'ready' as const : 'locked' as const, requires: ['authentication'], ...(!context.authenticated && { reason: 'authentication required' }) };
+          return { ...item, requires: ['authentication'], available: context.authenticated, state: read.state,
+            operations: { read, update: write }, ...(!context.authenticated && { reason: 'authentication required' }) };
         }
         return { ...item, available, state, ...(reason && { reason }) };
       })

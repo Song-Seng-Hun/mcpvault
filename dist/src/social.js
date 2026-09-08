@@ -1,10 +1,12 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { normalizeScopeId } from './scopes.js';
 import { isClosedWorkflowStatus, matchesWorkflowFilter, workflowStatus } from './community-status.js';
 import { isModerationHidden, moderationStatus } from './moderation-policy.js';
 import { boundItems } from './search-limits.js';
 import { iterateNotes, queryWindow } from './paged-query.js';
 import { readNotesInBatches } from './batch-read.js';
+import { endpointIdForTool } from './endpoint-registry.js';
+import { attachPublicCreateRequest, preparePublicCreateRequest, runPublicCreate } from './community-public-retry.js';
 const JOURNAL_ROOT = '_journal/entries';
 const BLOG_ROOT = 'Community/Posts';
 const COMMENTS_ROOT = 'Community/Comments';
@@ -13,6 +15,11 @@ const POST_STATUSES = new Set(['draft', 'published', 'archived']);
 export const COMMUNITY_POST_CATEGORIES = ['question', 'discussion', 'proposal', 'announcement', 'bug', 'research', 'showcase', 'agora', 'feedback', 'forum'];
 export const AGORA_STANCES = ['for', 'against', 'neutral'];
 export const MAX_COMMUNITY_TEXT_LENGTH = 280;
+const MAX_JOURNAL_TEXT_LENGTH = 20_000;
+const DEFAULT_JOURNAL_LIMIT = 20;
+const MAX_JOURNAL_LIMIT = 100;
+const DEFAULT_JOURNAL_MAX_CHARS = 4_000;
+const MAX_JOURNAL_MAX_CHARS = 12_000;
 const now = () => new Date().toISOString();
 const today = () => now().slice(0, 10);
 const agentJournalRoot = (agentId) => `_scopes/agents/${normalizeScopeId(agentId, 'agentId')}/${JOURNAL_ROOT}`;
@@ -53,6 +60,67 @@ function requireShortCommunityText(content) {
     if (length > MAX_COMMUNITY_TEXT_LENGTH)
         throw new Error(`content must be ${MAX_COMMUNITY_TEXT_LENGTH} Unicode characters or fewer (received ${length})`);
     return normalized;
+}
+function requireJournalText(content) {
+    const normalized = String(content ?? '').trim();
+    if (!normalized)
+        throw new Error('content is required');
+    const length = Array.from(normalized).length;
+    if (length > MAX_JOURNAL_TEXT_LENGTH)
+        throw new Error(`journal content must be ${MAX_JOURNAL_TEXT_LENGTH} Unicode characters or fewer (received ${length})`);
+    return normalized;
+}
+function journalWindowNumber(value, fallback, maximum) {
+    const parsed = value === undefined ? fallback : Number(value);
+    if (!Number.isInteger(parsed) || parsed < 1)
+        throw new Error('journal window limits must be positive integers');
+    return Math.min(parsed, maximum);
+}
+function journalResponseBudget(value, fallback) {
+    const parsed = value === undefined ? fallback : Number(value);
+    if (!Number.isInteger(parsed) || parsed < 1_000)
+        throw new Error('journal maxChars must be an integer of at least 1000');
+    return Math.min(parsed, MAX_JOURNAL_MAX_CHARS);
+}
+function journalCursorEncode(value) {
+    return Buffer.from(JSON.stringify(value), 'utf8').toString('base64url');
+}
+function journalCursorDecode(value) {
+    if (typeof value !== 'string' || !value)
+        throw new Error('cursor must be a journal cursor returned by list_journal_entries');
+    try {
+        const parsed = JSON.parse(Buffer.from(value, 'base64url').toString('utf8'));
+        if (typeof parsed.fingerprint !== 'string' || typeof parsed.path !== 'string')
+            throw new Error('invalid cursor');
+        return { fingerprint: parsed.fingerprint, path: parsed.path };
+    }
+    catch {
+        throw new Error('cursor must be a journal cursor returned by list_journal_entries');
+    }
+}
+function fitJournalResponse(base, content, maxChars, continuation) {
+    const full = { ...base, content };
+    if (JSON.stringify(full).length <= maxChars)
+        return full;
+    const withoutContent = { ...base, content: '', truncated: true, nextAction: continuation };
+    if (JSON.stringify(withoutContent).length > maxChars) {
+        return { path: base.path, revision: base.revision, frontmatterOmitted: true, content: '', truncated: true, nextAction: continuation };
+    }
+    const codepoints = Array.from(content);
+    let low = 0;
+    let high = codepoints.length;
+    let best = { ...base, content: '', truncated: true, nextAction: continuation };
+    while (low <= high) {
+        const middle = Math.floor((low + high) / 2);
+        const candidate = { ...base, content: codepoints.slice(0, middle).join(''), truncated: true, nextAction: continuation };
+        if (JSON.stringify(candidate).length <= maxChars) {
+            best = candidate;
+            low = middle + 1;
+        }
+        else
+            high = middle - 1;
+    }
+    return best;
 }
 function windowNumber(value, fallback, maximum) {
     const number = value === undefined ? fallback : Number(value);
@@ -151,29 +219,32 @@ export class SocialService {
             pathPrefix: root,
             filters: { mcpvault_type: 'journal_entry', entry_id: normalizedId },
             limit: 2,
-            includeContent: true,
+            includeContent: false,
         }, path => this.access.canAccessPhysicalPath(path, { accountId: '', modelId: '', agentId, role: 'agent' }));
         const found = result.notes[0];
         if (!found)
             throw new Error(`Journal entry not found: ${normalizedId}`);
-        return found;
+        return { ...(await this.fileSystem.readNote(found.path)), path: found.path };
     }
     async writeJournalEntry(params) {
         const principal = requireAgent(params.principal);
-        const content = requireShortCommunityText(params.content);
-        const date = validateDate(params.date);
-        const kind = String(params.kind || 'diary').trim().toLowerCase();
+        const content = requireJournalText(params.content);
+        const requestedEntryId = params.entryId
+            ? normalizeScopeId(params.entryId, 'entryId')
+            : undefined;
+        const existing = requestedEntryId ? await this.findJournalEntry(principal.agentId, requestedEntryId) : undefined;
+        const date = params.date === undefined
+            ? (existing ? validateDate(existing.frontmatter.date) : validateDate(undefined))
+            : validateDate(params.date);
+        const kind = String(params.kind ?? existing?.frontmatter.kind ?? 'diary').trim().toLowerCase();
         if (!JOURNAL_KINDS.has(kind))
             throw new Error('kind must be diary, log, or reflection');
-        const entryId = params.entryId
-            ? normalizeScopeId(params.entryId, 'entryId')
-            : `${date}-${randomUUID().slice(0, 8)}`;
-        const existing = params.entryId ? await this.findJournalEntry(principal.agentId, entryId) : undefined;
+        const resolvedEntryId = requestedEntryId || `${date}-${randomUUID().slice(0, 8)}`;
         if (existing && !params.expectedRevision)
             throw new Error("expectedRevision is required for a journal update; read the entry first");
         if (existing && String(existing.frontmatter.date) !== date)
             throw new Error('date cannot change when updating a journal entry');
-        const path = existing?.path || `${agentJournalRoot(principal.agentId)}/${date}/${entryId}.md`;
+        const path = existing?.path || `${agentJournalRoot(principal.agentId)}/${date}/${resolvedEntryId}.md`;
         const timestamp = now();
         const existingFrontmatter = existing?.frontmatter || {};
         const references = await this.references.validateAndNormalize(params.references ?? existingFrontmatter.references, path, principal, content);
@@ -183,11 +254,12 @@ export class SocialService {
             content: params.title?.trim() ? `# ${params.title.trim()}\n\n${content}\n` : `${content}\n`,
             frontmatter: {
                 ...existingFrontmatter,
-                mcpvault_type: 'journal_entry', entry_id: entryId, date, kind,
+                mcpvault_type: 'journal_entry', entry_id: resolvedEntryId, date, kind,
                 author: identity(principal), author_role: principal.role, ...ownershipMetadata(principal),
                 ...(params.title?.trim() && { title: params.title.trim() }),
                 ...(params.mood?.trim() && { mood: params.mood.trim() }),
                 ...(params.tags !== undefined && { tags: cleanTags(params.tags) }),
+                ...(params.memory_entries !== undefined && { memory_entries: params.memory_entries }),
                 references,
                 ...(existing ? { updated_at: timestamp } : { created_at: timestamp, updated_at: timestamp }),
             },
@@ -197,7 +269,7 @@ export class SocialService {
         return {
             success: true,
             created: !existing,
-            entryId,
+            entryId: resolvedEntryId,
             date,
             kind,
             path: this.access.toPublicPath(path),
@@ -209,38 +281,84 @@ export class SocialService {
         const filters = { mcpvault_type: 'journal_entry' };
         if (params.date !== undefined)
             filters.date = validateDate(params.date);
-        const limit = Math.min(Math.max(Number(params.limit ?? 50), 1), 500);
-        const window = await queryWindow(this.fileSystem, {
+        const dateFrom = params.dateFrom === undefined ? undefined : validateDate(params.dateFrom);
+        const dateTo = params.dateTo === undefined ? undefined : validateDate(params.dateTo);
+        if (dateFrom && dateTo && dateFrom > dateTo)
+            throw new Error('dateFrom must not be after dateTo');
+        const kind = params.kind === undefined ? undefined : String(params.kind).trim().toLowerCase();
+        if (kind !== undefined && !JOURNAL_KINDS.has(kind))
+            throw new Error('kind must be diary, log, or reflection');
+        const tags = params.tags === undefined ? [] : cleanTags(params.tags).sort();
+        const limit = journalWindowNumber(params.limit, DEFAULT_JOURNAL_LIMIT, MAX_JOURNAL_LIMIT);
+        const maxChars = journalResponseBudget(params.maxChars, DEFAULT_JOURNAL_MAX_CHARS);
+        const access = (path) => this.access.canAccessPhysicalPath(path, principal);
+        // Metadata and revision form the cursor snapshot; bodies are never read for a list.
+        const captured = [];
+        for await (const note of iterateNotes(this.fileSystem, {
             pathPrefix: agentJournalRoot(principal.agentId), filters,
-            sortBy: 'date', sortOrder: 'desc',
-            limit,
-        }, () => true, path => this.access.canAccessPhysicalPath(path, principal));
-        const total = await this.fileSystem.countNotes({ pathPrefix: agentJournalRoot(principal.agentId), filters }, path => this.access.canAccessPhysicalPath(path, principal));
-        const bounded = boundItems(window.notes.map(note => ({
-            path: this.access.toPublicPath(note.path),
-            entryId: note.frontmatter.entry_id,
-            date: note.frontmatter.date,
-            kind: note.frontmatter.kind,
-            title: note.frontmatter.title,
-            mood: note.frontmatter.mood,
-            tags: note.frontmatter.tags || [],
-            updatedAt: note.frontmatter.updated_at,
-        })), Math.min(Math.max(Number(params.maxChars ?? 6000), 512), 20000));
+            sortBy: 'date', sortOrder: 'desc', includeContent: false,
+        }, access))
+            captured.push(note);
+        const notes = captured.filter(note => {
+            const date = String(note.frontmatter.date || '');
+            const noteTags = Array.isArray(note.frontmatter.tags) ? note.frontmatter.tags.map(tag => String(tag).toLowerCase()) : [];
+            return (!dateFrom || date >= dateFrom) && (!dateTo || date <= dateTo)
+                && (!kind || note.frontmatter.kind === kind) && tags.every(tag => noteTags.includes(tag));
+        });
+        const fingerprint = createHash('sha256').update(JSON.stringify([
+            principal.agentId, params.date, dateFrom, dateTo, kind, tags,
+            notes.map(note => [note.path, note.revision]),
+        ])).digest('hex');
+        let start = 0;
+        if (params.cursor !== undefined) {
+            const cursor = journalCursorDecode(params.cursor);
+            if (cursor.fingerprint !== fingerprint)
+                throw new Error('Journal snapshot changed; repeat the query without a cursor');
+            start = notes.findIndex(note => note.path === cursor.path) + 1;
+            if (start === 0)
+                throw new Error('Journal cursor is outside the current snapshot');
+        }
+        const rows = notes.map(note => ({
+            path: this.access.toPublicPath(note.path), entryId: note.frontmatter.entry_id, date: note.frontmatter.date,
+            kind: note.frontmatter.kind, title: note.frontmatter.title, mood: note.frontmatter.mood,
+            tags: note.frontmatter.tags || [], updatedAt: note.frontmatter.updated_at, revision: note.revision,
+        }));
+        let end = start;
+        while (end < rows.length && end - start < limit) {
+            const nextEnd = end + 1;
+            const hasMore = nextEnd < rows.length;
+            const candidate = {
+                entries: rows.slice(start, nextEnd), total: rows.length, truncated: hasMore,
+                ...(hasMore && { nextCursor: journalCursorEncode({ fingerprint, path: notes[nextEnd - 1].path }) }),
+            };
+            if (JSON.stringify(candidate).length > maxChars)
+                break;
+            end = nextEnd;
+        }
+        const hasMore = end < rows.length;
         return {
-            entries: bounded.items,
-            total,
-            truncated: window.truncated || total > window.notes.length || bounded.truncated,
+            entries: rows.slice(start, end), total: rows.length, truncated: hasMore,
+            ...(hasMore && end > start && { nextCursor: journalCursorEncode({ fingerprint, path: notes[end - 1].path }) }),
         };
     }
     async readJournalEntry(params) {
         const principal = requireAgent(params.principal);
         const entry = await this.findJournalEntry(principal.agentId, params.entryId);
-        return {
-            path: this.access.toPublicPath(entry.path),
+        if (params.expectedRevision !== undefined && params.expectedRevision !== entry.revision) {
+            throw new Error('Journal entry revision changed; reread the entry before continuing');
+        }
+        const path = this.access.toPublicPath(entry.path);
+        const prefix = entry.originalContent.slice(0, entry.originalContent.length - entry.content.length);
+        const startLine = (prefix.match(/\n/g) || []).length + 1;
+        const endLine = startLine + (entry.content.match(/\n/g) || []).length;
+        return fitJournalResponse({
+            path,
             fm: entry.frontmatter,
-            content: entry.content,
-            revision: (await this.fileSystem.readNote(entry.path)).revision,
-        };
+            revision: entry.revision,
+        }, entry.content, journalResponseBudget(params.maxChars, DEFAULT_JOURNAL_MAX_CHARS), {
+            endpointId: endpointIdForTool('read_note_lines'),
+            arguments: { path, startLine, endLine, expectedRevision: entry.revision, maxChars: DEFAULT_JOURNAL_MAX_CHARS },
+        });
     }
     async readBlogPost(slug) {
         const path = blogPath(slug);
@@ -288,54 +406,97 @@ export class SocialService {
             throw new Error('seriesOrder must be a positive integer when seriesId is set');
         const relatedPosts = params.relatedPosts === undefined ? (existing?.note.frontmatter.related_posts || []) : (Array.isArray(params.relatedPosts) ? params.relatedPosts.map(value => publicPostReference(String(value))) : []);
         const duplicateOf = params.duplicateOf === undefined ? existing?.note.frontmatter.duplicate_of : (params.duplicateOf ? publicPostReference(params.duplicateOf) : undefined);
-        for (const related of relatedPosts) {
-            const relatedNote = await this.fileSystem.readNote(String(related));
-            if (relatedNote.frontmatter.mcpvault_type !== 'blog_post')
-                throw new Error(`related post is not a community post: ${related}`);
-        }
-        if (duplicateOf) {
-            const duplicateNote = await this.fileSystem.readNote(String(duplicateOf));
-            if (duplicateNote.frontmatter.mcpvault_type !== 'blog_post')
-                throw new Error(`duplicateOf is not a community post: ${duplicateOf}`);
-        }
-        const timestamp = now();
-        await this.fileSystem.writeNote({
-            path,
-            content: `${content}\n`,
-            frontmatter: {
-                ...(existing?.note.frontmatter || {}), mcpvault_type: 'blog_post', post_id: slug, title,
-                author: existing?.note.frontmatter.author || identity(principal), author_role: existing?.note.frontmatter.author_role || principal.role, ...ownershipMetadata(principal),
-                status, tags: cleanTags(params.tags ?? existing?.note.frontmatter.tags),
-                category,
-                ...(seriesId && { series_id: seriesId, ...(params.seriesTitle || existing?.note.frontmatter.series_title ? { series_title: String(params.seriesTitle || existing?.note.frontmatter.series_title).trim().slice(0, 180) } : {}), series_order: Number(seriesOrder) }),
-                ...(!seriesId && existing?.note.frontmatter.series_id && { series_id: null, series_title: null, series_order: null }),
-                related_posts: relatedPosts,
-                ...(duplicateOf ? { duplicate_of: duplicateOf } : {}),
-                ...(category === 'feedback' && {
-                    source_paths: sourcePaths,
-                    ...(params.feedbackType !== undefined && { feedback_type: String(params.feedbackType).trim().slice(0, 120) }),
-                    ...(params.reproduction !== undefined && { reproduction: String(params.reproduction).trim().slice(0, 1000) }),
-                    ...(params.proposedChange !== undefined && { proposed_change: String(params.proposedChange).trim().slice(0, 1000) }),
-                }),
-                ...(category === 'forum' && {
-                    blocked_task: String(params.blockedTask ?? existing?.note.frontmatter.blocked_task ?? '').trim().slice(0, 500),
-                    ...(params.attempted !== undefined && { attempted: String(params.attempted).trim().slice(0, 1000) }),
-                    ...(params.helpWanted !== undefined && { help_wanted: String(params.helpWanted).trim().slice(0, 1000) }),
-                    ...(params.environment !== undefined && { environment: String(params.environment).trim().slice(0, 500) }),
-                }),
-                references: await this.references.validateAndNormalize(params.references ?? existing?.note.frontmatter.references, path, principal, content),
-                ...(existing ? { updated_at: timestamp } : { created_at: timestamp, updated_at: timestamp }),
-                ...(!existing && { workflow_status: 'open' }),
-            },
-            expectedRevision: params.expectedRevision,
-        });
-        const written = await this.fileSystem.readNote(path);
-        return {
-            success: true, created: !existing, slug, path, status, category,
-            ...(category === 'feedback' && { sourcePaths }),
-            ...(category === 'forum' && { blockedTask: written.frontmatter.blocked_task }),
-            revision: written.revision,
+        let guards = [];
+        const validateRelated = async () => {
+            const byPath = new Map();
+            for (const related of relatedPosts) {
+                const relatedNote = await this.fileSystem.readNote(String(related));
+                if (relatedNote.frontmatter.mcpvault_type !== 'blog_post' || isModerationHidden(relatedNote.frontmatter))
+                    throw new Error(`related post is unavailable: ${related}`);
+                byPath.set(String(related), { path: String(related), expectedRevision: relatedNote.revision });
+            }
+            if (duplicateOf) {
+                const duplicateNote = await this.fileSystem.readNote(String(duplicateOf));
+                if (duplicateNote.frontmatter.mcpvault_type !== 'blog_post' || isModerationHidden(duplicateNote.frontmatter))
+                    throw new Error('duplicateOf is unavailable');
+                byPath.set(String(duplicateOf), { path: String(duplicateOf), expectedRevision: duplicateNote.revision });
+            }
+            guards = Array.from(byPath.values());
         };
+        await validateRelated();
+        let normalizedReferences = await this.references.validateAndNormalize(params.references ?? existing?.note.frontmatter.references, path, principal, content);
+        const tags = cleanTags(params.tags ?? existing?.note.frontmatter.tags);
+        const seriesTitle = seriesId && (params.seriesTitle || existing?.note.frontmatter.series_title)
+            ? String(params.seriesTitle || existing?.note.frontmatter.series_title).trim().slice(0, 180)
+            : undefined;
+        const feedbackType = params.feedbackType === undefined ? undefined : String(params.feedbackType).trim().slice(0, 120);
+        const reproduction = params.reproduction === undefined ? undefined : String(params.reproduction).trim().slice(0, 1000);
+        const proposedChange = params.proposedChange === undefined ? undefined : String(params.proposedChange).trim().slice(0, 1000);
+        const blockedTask = category === 'forum' ? String(params.blockedTask ?? existing?.note.frontmatter.blocked_task ?? '').trim().slice(0, 500) : undefined;
+        const attempted = params.attempted === undefined ? undefined : String(params.attempted).trim().slice(0, 1000);
+        const helpWanted = params.helpWanted === undefined ? undefined : String(params.helpWanted).trim().slice(0, 1000);
+        const environment = params.environment === undefined ? undefined : String(params.environment).trim().slice(0, 500);
+        const request = preparePublicCreateRequest({
+            principal, requestId: params.requestId, action: 'community.post', generatedPrefix: 'post', requestedTargetId: slug,
+            payload: { slug, title, content, status, tags, references: normalizedReferences, category, seriesId, seriesTitle, seriesOrder,
+                relatedPosts, duplicateOf, feedbackType, sourcePaths, reproduction, proposedChange, blockedTask, attempted, helpWanted, environment },
+        });
+        const body = `${content}\n`;
+        const makeFrontmatter = (timestamp) => ({
+            ...(existing?.note.frontmatter || {}), mcpvault_type: 'blog_post', post_id: slug, title,
+            author: existing?.note.frontmatter.author || identity(principal), author_role: existing?.note.frontmatter.author_role || principal.role, ...ownershipMetadata(principal),
+            status, tags, category,
+            ...(seriesId && { series_id: seriesId, ...(seriesTitle && { series_title: seriesTitle }), series_order: Number(seriesOrder) }),
+            ...(!seriesId && existing?.note.frontmatter.series_id && { series_id: null, series_title: null, series_order: null }),
+            related_posts: relatedPosts, ...(duplicateOf ? { duplicate_of: duplicateOf } : {}),
+            ...(category === 'feedback' && { source_paths: sourcePaths, ...(feedbackType !== undefined && { feedback_type: feedbackType }),
+                ...(reproduction !== undefined && { reproduction }), ...(proposedChange !== undefined && { proposed_change: proposedChange }) }),
+            ...(category === 'forum' && { blocked_task: blockedTask, ...(attempted !== undefined && { attempted }),
+                ...(helpWanted !== undefined && { help_wanted: helpWanted }), ...(environment !== undefined && { environment }) }),
+            references: normalizedReferences,
+            ...(existing ? { updated_at: timestamp } : { created_at: timestamp, updated_at: timestamp, workflow_status: 'open' }),
+        });
+        const resultFor = (revision, frontmatter, created) => ({
+            success: true, created, slug, path, status, category,
+            ...(category === 'feedback' && { sourcePaths }), ...(category === 'forum' && { blockedTask: frontmatter.blocked_task }), revision,
+        });
+        if (!request) {
+            const frontmatter = makeFrontmatter(now());
+            const receipt = await this.fileSystem.writeNoteWithReceipt({ path, content: body, frontmatter, expectedRevision: params.expectedRevision });
+            return resultFor(receipt.revision, frontmatter, !existing);
+        }
+        return runPublicCreate({
+            fileSystem: this.fileSystem, principal, request, targetPath: path, participationActions: ['initiate'], topicMetadata: { title, tags },
+            revalidate: async () => {
+                await validateRelated();
+                normalizedReferences = await this.references.validateAndNormalize(params.references ?? existing?.note.frontmatter.references, path, principal, content);
+                if (await this.fileSystem.noteExists(path)) {
+                    const current = await this.readBlogPost(slug);
+                    if (current.note.frontmatter.author !== identity(principal))
+                        throw new Error('Only the original post author can update this post');
+                }
+                else if (params.expectedRevision !== 'missing') {
+                    throw new Error("requestId is only available for creation with expectedRevision='missing'");
+                }
+                return { parentPaths: guards.map(guard => guard.path) };
+            },
+            create: async (participationGuard) => {
+                if (existing)
+                    throw new Error('requestId cannot be used to update a community post');
+                const frontmatter = attachPublicCreateRequest(request, makeFrontmatter(now()), body);
+                const allGuards = [...guards, ...(participationGuard ? [participationGuard] : [])];
+                const receipt = allGuards.length
+                    ? await this.fileSystem.writeNoteWithRevisionGuardsAndReceipt({ path, content: body, frontmatter, expectedRevision: 'missing' }, allGuards)
+                    : await this.fileSystem.writeNoteWithReceipt({ path, content: body, frontmatter, expectedRevision: 'missing' });
+                return resultFor(receipt.revision, frontmatter, true);
+            },
+            replay: note => {
+                if (note.frontmatter.mcpvault_type !== 'blog_post' || note.frontmatter.post_id !== slug || note.frontmatter.author !== identity(principal)) {
+                    throw new Error('Public request result is unavailable');
+                }
+                return resultFor(note.revision, note.frontmatter, true);
+            },
+        });
     }
     async deleteBlogPost(params) {
         const principal = requirePublisher(params.principal);
@@ -557,29 +718,55 @@ export class SocialService {
             throw new Error('Comments are available only on published posts');
         const content = requireShortCommunityText(params.content);
         const stance = debateStance(params.stance, post.note.frontmatter.category === 'agora');
-        const commentId = params.commentId ? normalizeScopeId(params.commentId, 'commentId') : `comment-${randomUUID().slice(0, 10)}`;
-        if (params.replyTo) {
-            await this.fileSystem.readNote(commentPath(slug, params.replyTo));
-        }
-        const timestamp = now();
-        const path = commentPath(slug, commentId);
-        const references = await this.references.validateAndNormalize(params.references, path, principal, content);
-        await this.fileSystem.writeNote({
-            path,
-            content: `${content}\n`,
-            frontmatter: {
-                mcpvault_type: 'blog_comment', comment_id: commentId, post_id: slug,
-                author: identity(principal), author_role: principal.role, ...ownershipMetadata(principal), created_at: timestamp, updated_at: timestamp,
-                mentions: extractMentions(content),
-                references,
-                workflow_status: 'open',
-                ...(stance && { stance }),
-                ...(params.replyTo && { reply_to: normalizeScopeId(params.replyTo, 'replyTo') }),
-            },
-            expectedRevision: 'missing',
+        const replyTo = params.replyTo ? normalizeScopeId(params.replyTo, 'replyTo') : undefined;
+        const requestedCommentId = params.commentId ? normalizeScopeId(params.commentId, 'commentId') : undefined;
+        const request = preparePublicCreateRequest({
+            principal, requestId: params.requestId, action: 'community.comment', generatedPrefix: 'comment',
+            ...(requestedCommentId && { requestedTargetId: requestedCommentId }),
+            payload: { slug, content, stance, replyTo, commentId: requestedCommentId, references: params.references },
         });
-        const written = await this.fileSystem.readNote(path);
-        return { success: true, commentId, postId: slug, path, revision: written.revision };
+        const commentId = request?.targetId || requestedCommentId || `comment-${randomUUID().slice(0, 10)}`;
+        const path = commentPath(slug, commentId);
+        let references = [];
+        let guards = [];
+        return runPublicCreate({
+            fileSystem: this.fileSystem, principal, request, targetPath: path, participationActions: ['respond'],
+            revalidate: async () => {
+                const currentPost = await this.readBlogPost(slug);
+                if (currentPost.note.frontmatter.status !== 'published')
+                    throw new Error('Comments are available only on published posts');
+                if (debateStance(params.stance, currentPost.note.frontmatter.category === 'agora') !== stance)
+                    throw new Error('Post category changed; reread before commenting');
+                guards = [{ path: currentPost.path, expectedRevision: currentPost.note.revision }];
+                if (replyTo) {
+                    const parentPath = commentPath(slug, replyTo);
+                    const parent = await this.fileSystem.readNote(parentPath);
+                    if (parent.frontmatter.mcpvault_type !== 'blog_comment' || parent.frontmatter.post_id !== slug || isModerationHidden(parent.frontmatter)) {
+                        throw new Error('Reply target is unavailable');
+                    }
+                    guards.push({ path: parentPath, expectedRevision: parent.revision });
+                }
+                references = await this.references.validateAndNormalize(params.references, path, principal, content);
+                return { parentPaths: guards.map(guard => guard.path) };
+            },
+            create: async (participationGuard) => {
+                const timestamp = now();
+                const body = `${content}\n`;
+                const frontmatter = attachPublicCreateRequest(request, {
+                    mcpvault_type: 'blog_comment', comment_id: commentId, post_id: slug,
+                    author: identity(principal), author_role: principal.role, ...ownershipMetadata(principal), created_at: timestamp, updated_at: timestamp,
+                    mentions: extractMentions(content), references, workflow_status: 'open', ...(stance && { stance }), ...(replyTo && { reply_to: replyTo }),
+                }, body);
+                const receipt = await this.fileSystem.writeNoteWithRevisionGuardsAndReceipt({ path, content: body, frontmatter, expectedRevision: 'missing' }, [...guards, ...(participationGuard ? [participationGuard] : [])]);
+                return { success: true, commentId, postId: slug, path, revision: receipt.revision };
+            },
+            replay: note => {
+                if (note.frontmatter.mcpvault_type !== 'blog_comment' || note.frontmatter.comment_id !== commentId
+                    || note.frontmatter.post_id !== slug || note.frontmatter.author !== identity(principal))
+                    throw new Error('Public request result is unavailable');
+                return { success: true, commentId, postId: slug, path, revision: note.revision };
+            },
+        });
     }
     async editBlogComment(params) {
         const principal = requirePublisher(params.principal);

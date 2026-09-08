@@ -11,6 +11,11 @@ export declare const WORKSHOP_CONTRIBUTION_KINDS: readonly ['idea', 'extension',
 export type WorkshopContributionKind = typeof WORKSHOP_CONTRIBUTION_KINDS[number];
 export declare const IDEA_EVALUATION_FIELDS: readonly ['novelty', 'usefulness', 'feasibility', 'risk', 'evidenceQuality'];
 export type IdeaEvaluationField = typeof IDEA_EVALUATION_FIELDS[number];
+export interface ResearchWorkshopWork {
+    taskId: string;
+    expectedRevision: string;
+    expectedGeneration: number;
+}
 export declare class IdeationService {
     private readonly fileSystem;
     private readonly references;
@@ -26,11 +31,12 @@ export declare class IdeationService {
         references?: unknown;
         workshopId?: string;
         expectedRevision?: string;
+        requestId?: string;
     }): Promise<{
-        success: boolean;
+        success: true;
         ideaId: string;
         path: string;
-        status: string;
+        status: 'seed';
         revision: string;
     }>;
     private readTyped;
@@ -72,10 +78,10 @@ export declare class IdeationService {
         references?: unknown;
         expectedParentRevision: string;
     }): Promise<{
-        success: boolean;
+        success: true;
         ideaId: string;
         path: string;
-        status: string;
+        status: 'seed';
         parentIdeaId: string;
         revision: string;
     }>;
@@ -99,12 +105,14 @@ export declare class IdeationService {
         content: string;
         references?: unknown;
         replyTo?: string;
+        requestId?: string;
     }): Promise<{
-        success: boolean;
+        success: true;
         ideaId: string;
         contributionId: string;
         kind: "challenge" | "counterexample" | "evidence" | "extension" | "outcome" | "question" | "synthesis";
         path: string;
+        revision: string;
     }>;
     evaluateIdea(params: {
         principal?: ScopePrincipal;
@@ -133,11 +141,13 @@ export declare class IdeationService {
         timeboxMinutes?: number;
         maxContributionsPerAgent?: number;
         references?: unknown;
+        requestId?: string;
+        researchWork?: ResearchWorkshopWork;
     }): Promise<{
-        success: boolean;
+        success: true;
         workshopId: string;
         path: string;
-        phase: string;
+        phase: 'diverge';
         revision: string;
     }>;
     listWorkshops(params: {
@@ -175,13 +185,15 @@ export declare class IdeationService {
         ideaId?: string;
         references?: unknown;
         expectedPhase?: string;
+        requestId?: string;
     }): Promise<{
-        success: boolean;
+        success: true;
         workshopId: string;
         contributionId: string;
         phase: "closed" | "cluster" | "critique" | "decide" | "diverge" | "evaluate" | "synthesize";
         kind: "challenge" | "counterexample" | "decision" | "evaluation" | "extension" | "idea" | "synthesis";
         path: string;
+        revision: string;
     }>;
     updateWorkshopPhase(params: {
         principal?: ScopePrincipal;

@@ -293,6 +293,9 @@ test('assigned open task outranks onboarding and excludes completed work', async
     });
     expect(JSON.stringify(recoveredPulse.value).length).toBeLessThanOrEqual(smallestPulse.nextAction.arguments.maxChars);
     expect(recoveredPulse.value.cadence).toContain('continuity.save');
+    expect(recoveredPulse.value.cadence).toContain('mcp.write_journal_entry');
+    expect(recoveredPulse.value.cadence).toContain('default personal');
+    expect(recoveredPulse.value.cadence).toContain('shared edits require authorization');
     expect(recoveredPulse.value).toMatchObject({
       nextAction: { tool: 'mcp.read_agent_task', target: task.value.taskId },
     });

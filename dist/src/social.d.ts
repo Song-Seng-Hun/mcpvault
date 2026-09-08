@@ -26,6 +26,7 @@ export declare class SocialService {
         mood?: string;
         tags?: unknown;
         references?: unknown;
+        memory_entries?: unknown;
         expectedRevision?: string;
     }): Promise<{
         success: boolean;
@@ -38,9 +39,14 @@ export declare class SocialService {
     }>;
     listJournalEntries(params: {
         principal?: ScopePrincipal;
+        date?: string;
+        dateFrom?: string;
+        dateTo?: string;
+        kind?: string;
+        tags?: unknown;
+        cursor?: unknown;
         limit?: number;
         maxChars?: number;
-        date?: string;
     }): Promise<{
         entries: {
             path: string;
@@ -51,19 +57,31 @@ export declare class SocialService {
             mood: any;
             tags: any;
             updatedAt: any;
+            revision: string | undefined;
         }[];
         total: number;
         truncated: boolean;
+        nextCursor?: string;
     }>;
     readJournalEntry(params: {
         principal?: ScopePrincipal;
         entryId: string;
+        expectedRevision?: string;
+        maxChars?: number;
     }): Promise<{
         path: string;
-        fm: Record<string, any>;
-        content: string | undefined;
         revision: string;
-    }>;
+        frontmatterOmitted: boolean;
+        content: string;
+        truncated: boolean;
+        nextAction: Record<string, unknown>;
+    } | ({
+        path: string;
+        fm: Record<string, any>;
+        revision: string;
+    } & {
+        content: string;
+    })>;
     private readBlogPost;
     publishBlogPost(params: {
         principal?: ScopePrincipal;
@@ -88,8 +106,9 @@ export declare class SocialService {
         helpWanted?: string;
         environment?: string;
         expectedRevision: string;
+        requestId?: string;
     }): Promise<{
-        success: boolean;
+        success: true;
         created: boolean;
         slug: string;
         path: string;
@@ -319,8 +338,9 @@ export declare class SocialService {
         commentId?: string;
         references?: unknown;
         stance?: string;
+        requestId?: string;
     }): Promise<{
-        success: boolean;
+        success: true;
         commentId: string;
         postId: string;
         path: string;

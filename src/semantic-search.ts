@@ -6,7 +6,8 @@ import type { PathFilter } from './pathfilter.js';
 import type { ScopePrincipal } from './scope-auth.js';
 import { ScopeAccessPolicy } from './scope-access.js';
 import type { VaultCatalogChange, VaultFileCatalog } from './vault-catalog.js';
-import type { SearchParams, SearchResult } from './types.js';
+import type { SearchParams, SearchResult, MemorySearchParams, MemorySearchOutcome } from './types.js';
+import { memoryCandidateLimit, memoryQueryNeedsSource } from './search.js';
 import { boundSearchResults, normalizeSearchLimit, normalizeSearchMaxChars } from './search-limits.js';
 import { generateObsidianUri } from './uri.js';
 import { VaultIoCoordinator } from './vault-io.js';
@@ -93,6 +94,10 @@ export interface SemanticSearchOutcome {
   indexed: number;
   pending: number;
   error?: string | undefined;
+}
+
+export interface MemorySemanticSearchOutcome extends MemorySearchOutcome {
+  available: boolean;
 }
 
 export interface SemanticIndexStatus {
@@ -464,6 +469,95 @@ export class SemanticSearchService {
     derivedCacheBudget.clearOwner(this.vectorCacheOwner);
   }
 
+  /** Query only disposable vector metadata. The caller has already selected
+   * visible memory paths; no result/body hydration or predicate-cache reuse is
+   * allowed here. Source revision/body verification belongs to its read budget. */
+  async memoryCandidates(params: MemorySearchParams & { principal?: ScopePrincipal }): Promise<MemorySemanticSearchOutcome> {
+    // Existing semantic search has no calibrated relevance cutoff. Preserve its
+    // maximum 20-neighbor discovery window, independently of lexical's 10k cap.
+    const limit = Math.min(memoryCandidateLimit(params.limit), 20);
+    const unavailable = (): MemorySemanticSearchOutcome => ({ results: [], available: false, complete: false });
+    if (typeof params.canAccessPath !== 'function') throw new Error('Memory candidates require a visibility predicate');
+    if (this.inferenceAbort.signal.aborted || memoryQueryNeedsSource(params.query) || params.caseSensitive) return unavailable();
+    const safe: MemorySearchParams & { principal?: ScopePrincipal } = { ...params };
+    if (safe.pathPrefix === '.') safe.pathPrefix = '';
+    this.activeSearches++;
+    try {
+      await this.catalog?.flushPendingEvents();
+      await this.manifestReady;
+      const generation = this.queryGeneration;
+      if (Date.now() < this.unavailableUntil) return unavailable();
+      const groups = new Map<string, Array<{ path: string; hash: string }>>();
+      let complete = true;
+      let admittedCount = 0;
+      const paths = params.candidateRevisions ? params.candidateRevisions.keys() : Object.keys(this.manifest);
+      for (const path of paths) {
+        if (!this.pathIsVisible(path, safe)) continue;
+        if (++admittedCount > 10_000) return unavailable();
+        const entry = this.manifest[path];
+        if (!entry || entry.embeddingProfile !== SEMANTIC_EMBEDDING_PROFILE || !/^[a-f0-9]{64}$/.test(entry.hash)
+          || (params.candidateRevisions && params.candidateRevisions.get(path) !== entry.hash) || this.pending.has(path)) {
+          complete = false; continue;
+        }
+        // Scope derives from the admitted path, never a persisted table label.
+        const name = tableName(scopeForPath(path));
+        const group = groups.get(name) || [];
+        group.push({ path, hash: entry.hash }); groups.set(name, group);
+      }
+      if (!groups.size) return { results: [], available: true, complete };
+      const names = await this.getTableNames();
+      const vector = params.queryVector !== undefined ? params.queryVector.slice() : await this.embedQuery(params.query.trim());
+      if (vector.length !== EMBEDDING_DIMENSIONS || vector.some(value => !Number.isFinite(value))) return unavailable();
+      const bestByPath = new Map<string, { result: SearchResult; distance: number }>();
+      for (const [name, group] of groups) {
+        if (!names.has(name)) { complete = false; continue; }
+        const table = await this.getTable(name);
+        if (!(await table.schema()).fields.some((field: { name: string }) => field.name === 'embeddingProfile')) { complete = false; continue; }
+        // Bounded SQL allowlists, BEFORE vector top-K. A bounded chunk window
+        // may contain duplicates; saturation must remain partial, never a miss.
+        for (let start = 0; start < group.length; start += 128) {
+          const batch = group.slice(start, start + 128);
+          const allowed = new Map(batch.map(item => [item.path, item.hash]));
+          const predicate = batch.map(item => `(path = '${item.path.replace(/'/g, "''")}' AND hash = '${item.hash}')`).join(' OR ');
+          const rows = await table.vectorSearch(vector)
+            .where(`embeddingProfile = '${SEMANTIC_EMBEDDING_PROFILE}' AND (${predicate})`)
+            .distanceType('cosine').limit(10_001).toArray();
+          if (rows.length >= 10_001) complete = false;
+          const seen = new Set<string>();
+          for (const row of rows) {
+            if (!isCanonicalSemanticPath(row.path) || !allowed.has(row.path) || !this.pathIsVisible(row.path, safe)) continue;
+            if (row.hash !== allowed.get(row.path) || row.embeddingProfile !== SEMANTIC_EMBEDDING_PROFILE) { complete = false; continue; }
+            const distance = Number(row._distance);
+            if (!Number.isFinite(distance)) { complete = false; continue; }
+            seen.add(row.path);
+            // Orthogonal/opposite vectors have no positive cosine similarity.
+            // This minimal gate is not a calibrated claim of task relevance.
+            if (distance >= 1) continue;
+            const prior = bestByPath.get(row.path);
+            if (!prior || distance < prior.distance) bestByPath.set(row.path, { distance, result: {
+              p: row.path, t: row.path.split('/').pop()?.replace(/\.md$/i, '') || row.path,
+              ex: '', mc: 0, rv: row.hash, vs: true, semanticDistance: distance, why: ['semantic_candidate'],
+            } });
+          }
+          // Missing/stale rows in a supposedly indexed batch are not exhaustion.
+          if (batch.some(item => !seen.has(item.path))) complete = false;
+          if (generation !== this.queryGeneration) return unavailable();
+        }
+      }
+      const ordered = [...bestByPath.values()].sort((a, b) => a.distance - b.distance || a.result.p.localeCompare(b.result.p));
+      if (ordered.length > limit) complete = false;
+      if (ordered.some(item => !this.pathIsVisible(item.result.p, safe)
+        || (params.candidateRevisions && params.candidateRevisions.get(item.result.p) !== item.result.rv))) return unavailable();
+      return { results: ordered.slice(0, limit).map(item => item.result), available: true, complete };
+    } catch {
+      // Never echo native/model errors, SQL predicates, paths or credentials.
+      return unavailable();
+    } finally {
+      this.activeSearches--;
+      if (this.db || this.embedder) this.scheduleResourceRelease();
+    }
+  }
+
   async search(params: SemanticSearchParams): Promise<SemanticSearchOutcome> {
     if (this.inferenceAbort.signal.aborted) return { results: [], available: false, indexed: this.indexedCount(), pending: this.pending.size, error: 'Semantic service is closed.' };
     this.activeSearches++;
@@ -497,7 +591,7 @@ export class SemanticSearchService {
     try {
       await this.catalog?.flushPendingEvents();
       const generation = this.queryGeneration;
-      const cached = this.queryCache.get(cacheKey);
+      const cached = params.canAccessPath ? undefined : this.queryCache.get(cacheKey);
       if (cached && cached.generation === this.queryGeneration && cached.expiresAt > Date.now()) {
         this.queryCache.delete(cacheKey);
         this.queryCache.set(cacheKey, cached);
@@ -565,6 +659,7 @@ export class SemanticSearchService {
         .map(({ row }) => ({ id: row.id, path: row.path, hash: row.hash }));
       const results = await this.hydrateRows(ordered, params);
       if (generation !== this.queryGeneration) return this.changedQueryOutcome();
+      if (!params.canAccessPath) {
       this.queryCache.set(cacheKey, {
         expiresAt: Date.now() + SEMANTIC_QUERY_CACHE_TTL_MS,
         generation,
@@ -576,6 +671,7 @@ export class SemanticSearchService {
         estimateCacheBytes(ordered) + Buffer.byteLength(cacheKey, 'utf8') + 128,
         () => this.queryCache.delete(cacheKey),
       );
+      }
       while (this.queryCache.size > SEMANTIC_QUERY_CACHE_MAX_ENTRIES) {
         const oldest = this.queryCache.keys().next();
         if (oldest.done) break;
@@ -1306,7 +1402,7 @@ export class SemanticSearchService {
     // externally supplied snapshot. Re-apply the authoritative file filter
     // before hydrating any result so a derived cache can never expose .git,
     // .obsidian, dotfiles, or other restricted paths.
-    if (!this.pathCanBeIndexed(path) || !this.accessPolicy.canAccessPhysicalPath(path, params.principal)) return false;
+    if (!this.pathCanBeIndexed(path) || !this.accessPolicy.canAccessPhysicalPath(path, params.principal) || (params.canAccessPath && !params.canAccessPath(path))) return false;
     const prefix = normalizePath(params.pathPrefix || '');
     if (prefix && !isUnder(path, prefix)) return false;
     const excludes = (params.excludePaths || []).map(normalizePath).filter(Boolean);

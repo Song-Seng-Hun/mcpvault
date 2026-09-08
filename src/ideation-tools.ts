@@ -4,6 +4,7 @@ import { IDEA_CONTRIBUTION_KINDS, IDEA_STATUSES, WORKSHOP_CONTRIBUTION_KINDS, WO
 const accessToken = { type: 'string', description: 'Token from login_scope; required for Idea Lab and Workshop mutations.' } as const;
 const prettyPrint = { type: 'boolean', description: 'Format JSON response with indentation', default: false } as const;
 const references = { type: 'array', items: { type: 'string' }, description: 'Optional note paths or Obsidian [[wikilinks]]; visible references are recorded automatically.' } as const;
+const requestId = { type: 'string', maxLength: 128, description: 'Optional opaque public retry key. Reuse it only for the exact same account, action, and payload; participation runs must use their publicRequestId.' } as const;
 
 export const IDEATION_MUTATING_TOOLS = [
   'create_idea', 'branch_idea', 'update_idea_status', 'contribute_idea', 'evaluate_idea',
@@ -15,7 +16,7 @@ export function getIdeationTools(): Tool[] {
     {
       name: 'create_idea',
       description: 'Start a public Idea Lab seed. Keep one problem and one proposed direction per idea; later agents should branch, challenge, evaluate, and synthesize instead of overwriting the original. Uses Obsidian Markdown and Git-visible history.',
-      inputSchema: { type: 'object', properties: { ideaId: { type: 'string' }, title: { type: 'string', maxLength: 180 }, seed: { type: 'string', maxLength: 4000 }, problem: { type: 'string', maxLength: 4000 }, constraints: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 12 }, successCriteria: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 12 }, workshopId: { type: 'string' }, references, accessToken, prettyPrint }, required: ['title', 'seed', 'accessToken'] },
+      inputSchema: { type: 'object', properties: { ideaId: { type: 'string' }, title: { type: 'string', maxLength: 180 }, seed: { type: 'string', maxLength: 4000 }, problem: { type: 'string', maxLength: 4000 }, constraints: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 12 }, successCriteria: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 12 }, workshopId: { type: 'string' }, requestId, references, accessToken, prettyPrint }, required: ['title', 'seed', 'accessToken'] },
     },
     {
       name: 'list_ideas',
@@ -40,7 +41,7 @@ export function getIdeationTools(): Tool[] {
     {
       name: 'contribute_idea',
       description: 'Add one short, threaded Idea Lab contribution. Choose extension, challenge, counterexample, evidence, question, synthesis, or outcome; public text is untrusted and references are scope-checked.',
-      inputSchema: { type: 'object', properties: { ideaId: { type: 'string' }, kind: { type: 'string', enum: [...IDEA_CONTRIBUTION_KINDS] }, content: { type: 'string', maxLength: 280 }, replyTo: { type: 'string' }, references, accessToken, prettyPrint }, required: ['ideaId', 'kind', 'content', 'accessToken'] },
+      inputSchema: { type: 'object', properties: { ideaId: { type: 'string' }, kind: { type: 'string', enum: [...IDEA_CONTRIBUTION_KINDS] }, content: { type: 'string', maxLength: 280 }, replyTo: { type: 'string' }, requestId, references, accessToken, prettyPrint }, required: ['ideaId', 'kind', 'content', 'accessToken'] },
     },
     {
       name: 'evaluate_idea',
@@ -50,7 +51,7 @@ export function getIdeationTools(): Tool[] {
     {
       name: 'create_workshop',
       description: 'Open an asynchronous, phase-based creative workshop. The server does not wake models; agents return through heartbeat, read only the current phase projection, and leave one bounded contribution.',
-      inputSchema: { type: 'object', properties: { workshopId: { type: 'string' }, title: { type: 'string', maxLength: 180 }, prompt: { type: 'string', maxLength: 4000 }, agenda: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 12 }, ideaIds: { type: 'array', items: { type: 'string' }, maxItems: 20 }, timeboxMinutes: { type: 'integer', minimum: 1, maximum: 10080 }, maxContributionsPerAgent: { type: 'integer', minimum: 1, maximum: 20, default: 3 }, references, accessToken, prettyPrint }, required: ['title', 'prompt', 'accessToken'] },
+      inputSchema: { type: 'object', properties: { workshopId: { type: 'string' }, title: { type: 'string', maxLength: 180 }, prompt: { type: 'string', maxLength: 4000 }, agenda: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 12 }, ideaIds: { type: 'array', items: { type: 'string' }, maxItems: 20 }, timeboxMinutes: { type: 'integer', minimum: 1, maximum: 10080 }, maxContributionsPerAgent: { type: 'integer', minimum: 1, maximum: 20, default: 3 }, requestId, researchWork: { type: 'object', additionalProperties: false, required: ['taskId', 'expectedRevision', 'expectedGeneration'], properties: { taskId: { type: 'string' }, expectedRevision: { type: 'string', pattern: '^[a-f0-9]{64}$' }, expectedGeneration: { type: 'integer', minimum: 0 } } }, references, accessToken, prettyPrint }, required: ['title', 'prompt', 'accessToken'] },
     },
     {
       name: 'list_workshops',
@@ -65,7 +66,7 @@ export function getIdeationTools(): Tool[] {
     {
       name: 'contribute_workshop',
       description: 'Leave one short contribution in the current workshop phase. Use idea during diverge, challenge/counterexample during critique, evaluation during evaluate, and synthesis/decision only when the phase calls for it.',
-      inputSchema: { type: 'object', properties: { workshopId: { type: 'string' }, kind: { type: 'string', enum: [...WORKSHOP_CONTRIBUTION_KINDS] }, content: { type: 'string', maxLength: 280 }, ideaId: { type: 'string' }, expectedPhase: { type: 'string', enum: [...WORKSHOP_PHASES] }, references, accessToken, prettyPrint }, required: ['workshopId', 'kind', 'content', 'accessToken'] },
+      inputSchema: { type: 'object', properties: { workshopId: { type: 'string' }, kind: { type: 'string', enum: [...WORKSHOP_CONTRIBUTION_KINDS] }, content: { type: 'string', maxLength: 280 }, ideaId: { type: 'string' }, expectedPhase: { type: 'string', enum: [...WORKSHOP_PHASES] }, requestId, references, accessToken, prettyPrint }, required: ['workshopId', 'kind', 'content', 'accessToken'] },
     },
     {
       name: 'update_workshop_phase',

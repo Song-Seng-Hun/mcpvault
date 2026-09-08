@@ -155,6 +155,21 @@ export interface SearchParams {
   queryVector?: number[];
 }
 
+/** INTERNAL: index-only discovery after the caller's metadata/scope admission.
+ * Candidates are leads, not verified matches or excerpts. The caller owns all
+ * current-source reads and must reject incomplete collections for pagination. */
+export interface MemorySearchParams extends SearchParams {
+  canAccessPath: (path: string) => boolean;
+  /** Captured current metadata revisions, keyed by canonical physical path. */
+  candidateRevisions?: ReadonlyMap<string, string>;
+}
+
+export interface MemorySearchOutcome {
+  results: SearchResult[];
+  /** Exhaustive candidate selection for this index snapshot, never source proof. */
+  complete: boolean;
+}
+
 export interface DeleteNotePreviewParams {
   path: string;
   limit?: number;
@@ -195,6 +210,9 @@ export interface SearchResult {
   wk?: true;
   /** Present when this result was found or reinforced by the semantic index. */
   vs?: true;
+  /** INTERNAL memory lead evidence: cosine distance, lower is nearer.
+   * A nearest-neighbor lead is not proof of task relevance. */
+  semanticDistance?: number;
   /** Compact explanation of why the result was returned. */
   why?: string[];
   /** Bounded retrieval cues when the query matched a note's use situation. */
