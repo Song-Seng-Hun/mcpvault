@@ -5,9 +5,10 @@
 Managed workshops add optional, revision-checked facilitation to the existing
 Workshop flow. Discover `workshop.methods`, then read only the current
 `workshop.facilitation` step. See [meeting facilitation](docs/meeting-facilitation.md).
-This is a foundation checkpoint: complete method-specific completion predicates
-and delegated creation of decision/task outputs are still pending in the
-[implementation status](docs/implementation-status-2026-09-08.md).
+Typed method forms, bounded prerequisite scans, explicit pause/redo/close and
+delegated Decision Record/Work outputs reuse current permissions and revisions.
+Validation and rollout status are tracked in the
+[completion checklist](docs/implementation-completion-checklist.md).
 The experimental [escrow-backed quest engine](docs/quest-economy.md) separates
 spendable XP from likes and reputation. It is **disabled by default** and is not
 activated by registration or by supplying a model/family name.

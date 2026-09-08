@@ -1,4 +1,5 @@
 import { Server, type Tool } from "@modelcontextprotocol/server";
+import { workshopDecisionContext } from './workshop-output.js';
 import { FileSystemService, MAX_NOTE_CONTENT_BYTES } from "./filesystem.js";
 import { projectNoteOutline, projectNoteLineWindow } from './note-projections.js';
 import { packTaskPage } from './task-page.js';
@@ -10,7 +11,7 @@ import { SearchService } from "./search.js";
 import { RetrievalService } from './retrieval-service.js';
 import { LayeredMemoryService } from './layered-memory.js';
 import { getLayeredMemoryTools } from './layered-memory-tools.js';
-import { CommunityParticipationService } from './community-participation.js';
+import { CommunityParticipationService, aggregateParticipationOwnerUsage } from './community-participation.js';
 import { getCommunityParticipationTools, PARTICIPATION_MUTATING_TOOLS } from './community-participation-tools.js';
 import { ResearchBridgeService } from './research-bridge.js';
 import { getResearchBridgeTools } from './research-bridge-tools.js';
@@ -531,11 +532,43 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
       await assertEconomyConfigured(resolvedVaultPath,Boolean(options.economy));
       if (options.economy) await new EconomyService(fileSystem, options.economy.ledger, options.economy.policy, { assertActor: async () => {} }).assertFreeTaskMutation(taskId);
     },
+    ...(options.economy&&{paidProjection:async(taskIds:string[],principal?:ScopePrincipal)=>new EconomyService(fileSystem,options.economy!.ledger,options.economy!.policy,{
+      assertActor:async actor=>{
+        if(!(await scopeAuth.listPrincipals()).some(p=>p.accountId===actor.accountId)||await moderation.isBanned(actor.accountId,actor.userId))throw new Error('Current authorized account required');
+      },
+    }).workProjection(principal,taskIds)}),
     assertActor: async principal => {
       if (await moderation.isBanned(principal.accountId, principal.userId)) throw new Error('This account is suspended by moderation');
     },
   });
-  const participation = new CommunityParticipationService(fileSystem, { access: scopeAccess, notifications });
+  const participation = new CommunityParticipationService(fileSystem, { access: scopeAccess, notifications,
+    ...(options.economy && {ownerUsage:async(principal:ScopePrincipal)=>{
+      const owners=options.economy!.policy.owners,owner=owners[principal.accountId];
+      if(!owner)return undefined; // Free community participation remains available.
+      const peers=(await scopeAuth.listPrincipals()).filter(p=>p.accountId!==principal.accountId&&owners[p.accountId]===owner);
+      return aggregateParticipationOwnerUsage(fileSystem,principal,peers,Date.now());
+    },...new EconomyService(fileSystem,options.economy.ledger,options.economy.policy,{assertActor:async actor=>{
+        if(!(await scopeAuth.listPrincipals()).some(p=>p.accountId===actor.accountId)||await moderation.isBanned(actor.accountId,actor.userId))throw new Error('Current authorized account required');
+      }}).participationOptions()}),
+  });
+  ideation.attachOutputAdapter({
+    authorizeProject:(principal,projectId,owner,delegate,grantor)=>work.authorizeWorkshopProject(principal,projectId,owner,delegate,grantor),
+    assertAccess:async(principal,input)=>{
+      const current=(await scopeAuth.listPrincipals()).find(p=>p.accountId===principal.accountId);
+      const capability=input.type==='decision'?'publish':'task';
+      if(!current||!scopeAuth.hasCapability(current,capability)||!scopeAuth.hasCapability(principal,capability)||await moderation.isBanned(current.accountId,current.userId))throw new Error('Current output capability is required');
+    },
+    create:async(input,guards,receipt,principal,projectId,assertAccess)=>{
+      await assertAccess();
+      if(input.type==='task') return work.createWorkshopTask({principal,projectId,taskId:input.path.split('/').at(-1)!.replace(/\.md$/,''),title:input.title,
+        description:`${input.description}\n\nWorkshop: [[${receipt.workshopPath}]]`,completionCriteria:input.completionCriteria,
+        workKind:input.kind as 'general',references:[receipt.workshopPath,...input.evidencePaths],expectedRevision:'missing',requestId:`output-${receipt.payloadFingerprint}`},guards,receipt,assertAccess);
+      const context=workshopDecisionContext(input);
+      return llmWiki.publishDecisionRecord({principal,path:input.path,title:input.title,context,decision:input.decision!,alternatives:input.alternatives,consequences:input.consequences,
+        evidencePaths:input.evidencePaths,references:[receipt.workshopPath,...input.evidencePaths],author:principal.agentId||principal.modelId,status:'accepted',expectedRevision:'missing'},
+        {revisionGuards:guards,workshopOutput:receipt,assertOutputAccess:assertAccess});
+    },
+  });
   const agentPulse = new AgentPulseService(notifications, social, chat, agentTasks, continuity, reputation, llmWiki, ideation, work, participation);
   const endpointRegistry = new EndpointRegistry();
   const requestGate = new RequestConcurrencyGate();
@@ -1314,11 +1347,17 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
       }
       const canAccessPath = (path: string) => scopeAccess.canAccessPhysicalPath(path, principal);
       const revalidateActor = async (): Promise<ScopePrincipal> => {
-        const current = scopeAuth.authenticate(rawArgs.accessToken);
-        if (!current || !principal || current.accountId !== principal.accountId || current.sessionGeneration !== principal.sessionGeneration) throw new Error('Authenticated actor changed');
-        if (requiredCapability && !scopeAuth.hasCapability(current, requiredCapability)) throw new Error('Capability was revoked');
+        const authenticateActor = () => {
+          const current = scopeAuth.authenticate(rawArgs.accessToken);
+          if (!current || !principal || current.accountId !== principal.accountId || current.sessionGeneration !== principal.sessionGeneration) throw new Error('Authenticated actor changed');
+          if (requiredCapability && !scopeAuth.hasCapability(current, requiredCapability)) throw new Error('Capability was revoked');
+          if (toolName === 'update_workshop_facilitation' && trimmedArgs.operation === 'execute_output'
+            && !scopeAuth.hasCapability(current, trimmedArgs.payload?.type === 'decision' ? 'publish' : 'task')) throw new Error('Output capability was revoked');
+          return current;
+        };
+        const current = authenticateActor();
         if (await moderation.isBanned(current.accountId, current.userId)) throw new Error('This account is suspended by moderation');
-        return current;
+        return authenticateActor();
       };
       assertImmutableSourceBoundary(toolName, trimmedArgs, scopeAccess);
       assertManagedCommunityBoundary(toolName, trimmedArgs);
@@ -2463,7 +2502,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
           return jsonResult(await ideation.createWorkshop({ ...(principal && { principal }), workshopId: trimmedArgs.workshopId, title: trimmedArgs.title, prompt: trimmedArgs.prompt, agenda: trimmedArgs.agenda, ideaIds: trimmedArgs.ideaIds, timeboxMinutes: trimmedArgs.timeboxMinutes, maxContributionsPerAgent: trimmedArgs.maxContributionsPerAgent, references: trimmedArgs.references, requestId: trimmedArgs.requestId, facilitation: trimmedArgs.facilitation, revalidateActor, ...(trimmedArgs.researchWork && { researchWork: trimmedArgs.researchWork }) }), trimmedArgs.prettyPrint);
         }
         case 'list_workshop_methods':
-          return jsonResult(ideation.getWorkshopMethods({ methodId: trimmedArgs.methodId, cursor: trimmedArgs.cursor, maxChars: trimmedArgs.maxChars }), false);
+          return jsonResult(ideation.getWorkshopMethods({ methodId: trimmedArgs.methodId, stepId:trimmedArgs.stepId, cursor: trimmedArgs.cursor, maxChars: trimmedArgs.maxChars }), false);
         case 'read_workshop_facilitation':
           return jsonResult(await ideation.readWorkshopFacilitation({ ...(principal && { principal }), workshopId: trimmedArgs.workshopId, cursor: trimmedArgs.cursor, limit: trimmedArgs.limit, maxChars: trimmedArgs.maxChars }), false);
         case 'update_workshop_facilitation':
@@ -2491,11 +2530,12 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
                 // Work receipt, never from assignee equality alone.
                 const { work_receipts: receipts, ...state } = task.frontmatter;
                 const receipt = Array.isArray(receipts) && receipts.find((r: any) => r.actor===actor.accountId && r.requestId===bridgeId && r.action==='claim.start' && r.target===contract.terms.taskId);
-                if (!receipt || receipt.state!==workFingerprint({ state:JSON.stringify(state), content:task.content }) || receipt.result?.generation!==task.frontmatter.claim_generation || task.frontmatter.status!=='in_progress') throw new Error('Work bridge divergence; host reconciliation required');
+                if (!receipt || receipt.state!==workFingerprint({ state:JSON.stringify(state), content:task.content }) || receipt.result?.generation!==task.frontmatter.claim_generation || task.frontmatter.status!=='in_progress'
+                  || task.frontmatter.economy_contract_id!==contract.id || task.frontmatter.economy_claim_request_id!==bridgeId || task.frontmatter.economy_claim_generation!==task.frontmatter.claim_generation) throw new Error('Work bridge divergence; host reconciliation required');
                 return {revision:task.revision,generation:Number(task.frontmatter.claim_generation),requestId:bridgeId};
               }
               if(task.revision!==contract.terms.taskRevision)throw new Error('Work source changed before paid claim');
-              const result = await work.claim({ op: 'start', taskId: contract.terms.taskId, principal: actor, expectedRevision: task.revision, expectedGeneration: Number(task.frontmatter.claim_generation || 0), requestId: bridgeId, reason: `Exclusive paid claim ${contract.id}` });
+              const result = await work.claimPaid({ op: 'start', taskId: contract.terms.taskId, principal: actor, expectedRevision: task.revision, expectedGeneration: Number(task.frontmatter.claim_generation || 0), requestId: bridgeId, reason: `Exclusive paid claim ${contract.id}` },contract.id);
               return {revision:String(result.revision),generation:Number(result.generation),requestId:bridgeId};
             },
           });

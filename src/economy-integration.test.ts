@@ -1,4 +1,4 @@
-import { afterEach, expect, test } from 'vitest';
+import { afterEach, expect, test,vi } from 'vitest';
 import { mkdtemp, mkdir, rm, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -6,6 +6,8 @@ import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
 import { createServer } from './createServer.js';
 import { EconomyLedger } from './economy-ledger.js';
 import type { EconomyPolicy } from './economy-model.js';
+import {FileSystemService} from './filesystem.js';
+import {validatePaidClaimRecovery} from './economy-claim-recovery.js';
 
 const roots:string[]=[];
 afterEach(async()=>{for(const p of roots.splice(0))await rm(p,{recursive:true,force:true});});
@@ -23,7 +25,8 @@ test('quest endpoints preserve five tools, remain disabled without host setup, a
   expect(unavailable.isError).toBe(true);expect(JSON.stringify(unavailable.content)).toContain('disabled');
  } finally {await client.close();await server.close();}
 });
-test.each(['research','mechanical'] as const)('three authenticated owners settle %s work without double payment',async(kind)=>{
+test.each(['research','mechanical','recovery'] as const)('three authenticated owners settle %s work without double payment',async(mode)=>{
+ const kind=mode==='recovery'?'research':mode;
  const root=await mkdtemp(join(tmpdir(),'paid-work-mcp-'));roots.push(root);
  const vault=join(root,'vault'),host=join(root,'host');await mkdir(vault);await mkdir(host);
  const policy:EconomyPolicy={version:1,revision:'pilot',enabled:true,treasury:'treasury',operators:['operator'],owners:{treasury:'host',alice:'owner-a',bob:'owner-b',carol:'owner-c'},reviewers:['carol'],subjectiveReview:true,maxSupply:5000,minReward:10,maxReward:100,postingFee:2,reviewFee:5,dailySpend:107,dailyPosts:1,openContracts:2};
@@ -44,7 +47,26 @@ test.each(['research','mechanical'] as const)('three authenticated owners settle
   const draft=await call('alice','quest.contract',{op:'draft',contractId:'q',requestId:'draft',expectedRevision:'missing',terms:{taskId:'paid-one',taskRevision:task.revision,title:'Counterexample review',criteria:kind==='mechanical'?['literal:contrary case limits']:['Preserve contrary evidence'],exclusions:['No external execution'],reward:100,kind,deadline:'2027-01-01T00:00:00.000Z',verifier:kind==='mechanical'?'markdown-literal-v1':'independent-review-v1'}});
   const funded=await call('alice','quest.contract',{op:'fund',contractId:'q',requestId:'fund',expectedRevision:draft.revision});
   await expect(call('bob','work.claim',{op:'start',taskId:'paid-one',requestId:'bypass',expectedRevision:task.revision,expectedGeneration:0})).rejects.toThrow(/quest/);
-  const claimed=await call('bob','quest.contract',{op:'claim',contractId:'q',requestId:'claim',expectedRevision:funded.revision,expectedGeneration:0});
+  let claimed;
+  if(mode==='recovery') {
+    const original=ledger.transact.bind(ledger);
+    const spy=vi.spyOn(ledger,'transact').mockImplementation(async(command,validate)=>{
+      if(command.op==='claim')throw new Error('Simulated crash after Work write before journal');
+      return original(command,validate);
+    });
+    await expect(call('bob','quest.contract',{op:'claim',contractId:'q',requestId:'claim',expectedRevision:funded.revision,expectedGeneration:0})).rejects.toThrow(/crash/);
+    spy.mockRestore();
+    const local=new FileSystemService(vault),n=await local.readNote('Community/Tasks/paid-one.md');
+    const recovery={op:'recover_claim' as const,actor:'operator',account:'bob',contractId:'q',expectedRevision:funded.revision,expectedGeneration:0,requestId:'host-repair',reason:'Recover exact committed Work receipt',workBinding:{revision:n.revision,generation:1,requestId:n.frontmatter.economy_claim_request_id}};
+    await expect(validatePaidClaimRecovery(await ledger.snapshot(),{...recovery,account:'carol'},local)).rejects.toThrow(/divergence/i);
+    claimed=await ledger.transact(recovery,state=>validatePaidClaimRecovery(state,recovery,local));
+    expect((await ledger.snapshot()).contracts.q?.escrow).toBe(105);
+  } else claimed=await call('bob','quest.contract',{op:'claim',contractId:'q',requestId:'claim',expectedRevision:funded.revision,expectedGeneration:0});
+  const paidTask=await call('bob','notes.read',{path:'Community/Tasks/paid-one.md',maxChars:12000});
+  expect(paidTask.fm.economy_contract_id).toBe('q');
+  expect(paidTask.fm.economy_claim_generation).toBe(1);
+  expect(paidTask.fm.economy_claim_request_id).toMatch(/^quest-/);
+  expect((await call('bob','work.packet',{taskId:'paid-one',maxChars:12000})).items.find((v:any)=>v.kind==='paidContract').contractId).toBe('q');
   expect(await call('alice','quest.contract',{op:'fund',contractId:'q',requestId:'fund',expectedRevision:draft.revision})).toEqual(funded);
   const result=await call('bob','notes.write',{path:'Knowledge/Result.md',content:'# Result\nA contrary case limits the original claim.',expectedRevision:'missing'});
   const taskPath=join(vault,'Community/Tasks/paid-one.md'), original=await readFile(taskPath,'utf8');

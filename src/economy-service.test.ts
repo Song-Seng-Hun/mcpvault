@@ -28,6 +28,7 @@ test('wallet is personal and raw journal is excluded from all note paths',async(
  const {service,fs,ledger}=await fixture();
  try {
   expect(await service.wallet(actor('alice'),{})).toMatchObject({availableXp:200,escrowXp:0});
+  expect((await service.wallet(actor('alice'),{})).items).toContainEqual(expect.objectContaining({kind:'transaction',availableChange:200}));
   expect(JSON.stringify(await service.wallet(actor('bob'),{}))).not.toContain('alice');
   await expect(service.wallet(actor('unapproved'),{})).rejects.toThrow(/approved/);
   await expect(fs.readNote('.mcpvault-economy/journal/0000000001.md')).rejects.toThrow();

@@ -1,8 +1,11 @@
+import { AsyncResource } from 'node:async_hooks';
+import { posix } from 'node:path';
+import { assertEnterpriseStorageAccess, assertEnterpriseStorageFresh, withEnterpriseStorageContext } from './enterprise-storage-context.js';
 import { ScopeAccessPolicy } from './scope-access.js';
 import { normalizeScopeId } from './scopes.js';
 import { isModerationHidden } from './moderation-policy.js';
 import { coordinate, fingerprint, integer, textField } from './work-model.js';
-import { communityActivitySnapshot, communityCandidates, matchesParticipationTopic } from './community-participation-candidates.js';
+import { communityActivitySnapshot, communityCandidates, matchesParticipationTopic, isParticipationTask } from './community-participation-candidates.js';
 import { COMMUNITY_ACTIVITY_TEMPLATE_IDS, getCommunityActivityTemplate } from './community-participation-activities.js';
 const DEFAULTS = { enabled: false, paused: false, allowedTopics: [], allowedActions: [], dailyLimit: 6, dailyInitiationLimit: 1 };
 const READ_BYTES = 2_000_000;
@@ -17,6 +20,80 @@ const timestamp = (value, field) => {
 };
 export function participationPath(principal) {
     return `_scopes/models/${normalizeScopeId(principal.modelId, 'modelId')}/_continuity/accounts/${normalizeScopeId(principal.accountId, 'accountId')}/community-participation.md`;
+}
+/** Host-only projection for cross-account owner limits. It deliberately omits
+ * goals, history, seen targets, receipts, and all other private state. */
+export function participationOwnerUsage(frontmatter, now) {
+    const state = frontmatter.participation;
+    if (frontmatter.mcpvault_type !== 'community_participation' || state?.version !== 1 || !state.daily || typeof state.daily.day !== 'string' || !/^\d{4}-\d\d-\d\d$/.test(state.daily.day) || !Number.isSafeInteger(state.daily.runs) || state.daily.runs < 0 || !Number.isSafeInteger(state.daily.initiations) || state.daily.initiations < 0)
+        throw new Error('Invalid participation state; manual repair required before owner aggregation');
+    const day = new Date(now).toISOString().slice(0, 10);
+    return { runs: state.daily.day === day ? state.daily.runs : 0, initiations: state.daily.day === day ? state.daily.initiations : 0, activeRun: Boolean(state.activeRun) };
+}
+/** Host-injected verified peers only. The privileged closure exposes counters
+ * and a write to the requesting account, never peer paths or private bodies. */
+export async function aggregateParticipationOwnerUsage(fs, principal, peers, now) {
+    const conflict = () => new Error('Owner participation budget conflict; reread participation settings and retry');
+    const fresh = AsyncResource.bind(() => assertEnterpriseStorageFresh());
+    const hostAccess = new ScopeAccessPolicy();
+    const host = (run) => withEnterpriseStorageContext({ access: hostAccess, assertFresh: fresh }, run);
+    const key = (path) => posix.normalize(path.replace(/\\/g, '/')).toLowerCase();
+    const target = participationPath(principal), guards = [];
+    let runs = 0, initiations = 0, activeRun = false;
+    try {
+        fresh();
+        if (peers.length > 120)
+            throw conflict();
+        const unique = new Map(peers.filter(peer => peer.accountId !== principal.accountId).map(peer => [key(participationPath(peer)), peer]));
+        await host(async () => {
+            for (const peer of unique.values()) {
+                fresh();
+                const path = participationPath(peer);
+                if (!await fs.noteExists(path)) {
+                    guards.push({ path, expectedRevision: 'missing' });
+                    continue;
+                }
+                const note = await fs.readNote(path, READ_BYTES), usage = participationOwnerUsage(note.frontmatter, now);
+                runs += usage.runs;
+                initiations += usage.initiations;
+                activeRun ||= usage.activeRun;
+                guards.push({ path, expectedRevision: note.revision });
+            }
+        });
+    }
+    catch {
+        throw conflict();
+    }
+    return { runs, initiations, activeRun, commit: async (write, ownGuards, policy) => {
+            try {
+                fresh();
+                policy.assertAccess();
+                if (write.path !== target)
+                    throw conflict();
+                assertEnterpriseStorageAccess(target, true);
+                for (const guard of ownGuards)
+                    assertEnterpriseStorageAccess(guard.path);
+                const merged = new Map();
+                for (const guard of [...guards, ...ownGuards]) {
+                    const identity = key(guard.path);
+                    if (identity === key(target)) {
+                        if (guard.expectedRevision !== write.expectedRevision)
+                            throw conflict();
+                        continue;
+                    }
+                    const prior = merged.get(identity);
+                    if (prior && prior.expectedRevision !== guard.expectedRevision)
+                        throw conflict();
+                    merged.set(identity, { path: posix.normalize(guard.path.replace(/\\/g, '/')), expectedRevision: guard.expectedRevision });
+                }
+                const assertAccess = AsyncResource.bind(() => { fresh(); policy.assertAccess(); assertEnterpriseStorageAccess(target, true); for (const guard of ownGuards)
+                    assertEnterpriseStorageAccess(guard.path); });
+                return await host(() => merged.size ? fs.writeNoteWithRevisionGuardsAndReceipt(write, [...merged.values()], { ...policy, assertAccess }) : fs.writeNoteWithReceipt(write, { ...policy, assertAccess }));
+            }
+            catch {
+                throw conflict();
+            }
+        } };
 }
 /** All authority remains in one revision-safe, account-private Markdown file.
  * Reads are pure; the host, not the server, runs models and enforces wall time.
@@ -115,10 +192,25 @@ export class CommunityParticipationService {
             throw new Error('Target revision changed; reread before recording');
         return { path, revision: input.revision, ...(input.activityRevision && { activityRevision: input.activityRevision }) };
     }
+    async activitySnapshot(principal, target, state, topics = state.settings.allowedTopics) {
+        if (/^Community\/Tasks\/[^/]+\.md$/.test(target.path)) {
+            if (!this.options.economyTargetSnapshot || !target.activityRevision)
+                throw new Error('Quest activity snapshot required; reread participation pulse');
+            const snapshot = await this.options.economyTargetSnapshot(principal, target.path, { topics, goals: state.goals, seen: [], now: this.now() });
+            if (snapshot.revision !== target.revision || snapshot.activityRevision !== target.activityRevision)
+                throw new Error('Target activity revision changed; reread before recording');
+            if (!topics.some(topic => matchesParticipationTopic(snapshot.frontmatter, topic)))
+                throw new Error('Target outside allowed participation topic');
+            return snapshot;
+        }
+        return communityActivitySnapshot(this.fileSystem, this.access, principal, target.path);
+    }
     async publicNote(path) {
         const visible = (fm) => !isModerationHidden(fm) && fm.content_status !== 'deleted' && (fm.mcpvault_type !== 'blog_post' || fm.status === 'published');
         const note = await this.fileSystem.readNote(path, 100_000);
         if (!visible(note.frontmatter))
+            throw new Error('Public target unavailable');
+        if (path.startsWith('Community/Tasks/') && !isParticipationTask(path, note.frontmatter))
             throw new Error('Public target unavailable');
         const parents = [
             /^Community\/Comments\/([^/]+)\//.exec(path)?.[1] && `Community/Posts/${/^Community\/Comments\/([^/]+)\//.exec(path)[1]}.md`,
@@ -149,13 +241,16 @@ export class CommunityParticipationService {
             // Receipts are never silently evicted: old retry keys must remain safe.
             if (Object.keys(state.receipts).length >= 8000)
                 throw new Error('Participation receipt capacity reached; archive with operator review');
-            const guards = await mutation(state, principal, key);
+            const effects = await mutation(state, principal, key);
             state.receipts[fingerprint(key)] = hash;
             const content = '# Community participation\n\nPrivate opt-in, goals, handled targets and execution receipts. Host schedules and budgets execution; this file never wakes a model.\n';
             const write = { path: loaded.path, expectedRevision: loaded.revision, content, frontmatter: { mcpvault_type: 'community_participation', participation: state } };
-            const policy = { maxBytes: READ_BYTES, assertAccess: () => { this.actor(principal); params.authorize?.(); } };
-            if (guards?.length)
-                await this.fileSystem.writeNoteWithRevisionGuardsAndReceipt(write, [...new Map(guards.map(g => [g.path, g])).values()], policy);
+            const policy = { maxBytes: READ_BYTES, maxGuards: 128, assertAccess: () => { this.actor(principal); params.authorize?.(); } };
+            const guards = [...new Map((effects?.guards || []).map(g => [g.path, g])).values()];
+            if (effects?.commit)
+                await effects.commit(write, guards, policy);
+            else if (guards.length)
+                await this.fileSystem.writeNoteWithRevisionGuardsAndReceipt(write, guards, policy);
             else
                 await this.fileSystem.writeNoteWithReceipt(write, policy);
             return this.view(await this.load(principal), params.maxChars);
@@ -178,6 +273,8 @@ export class CommunityParticipationService {
                     if (!seen)
                         throw new Error('Defer a selected target through participation_record first');
                     await this.publicNote(path);
+                    if (/^Community\/Tasks\//.test(path))
+                        await this.activitySnapshot(principal, seen, state);
                     seen.deferUntil = timestamp(item.until, 'until') || new Date(this.now()).toISOString();
                 }
             }
@@ -216,10 +313,23 @@ export class CommunityParticipationService {
         return this.change(params, payload, async (state, principal, key) => {
             const now = new Date(this.now()).toISOString();
             const guards = [];
+            let ownerUsage;
             if (params.op === 'start') {
                 const blocked = this.gate(state, params.hostBusy);
                 if (blocked)
                     throw new Error(`Participation ${blocked}`);
+                if (this.options.ownerUsage) {
+                    ownerUsage = await this.options.ownerUsage(principal);
+                    if (ownerUsage) {
+                        if (!Number.isSafeInteger(ownerUsage.runs) || ownerUsage.runs < 0 || !Number.isSafeInteger(ownerUsage.initiations) || ownerUsage.initiations < 0 || typeof ownerUsage.activeRun !== 'boolean')
+                            throw new Error('Verified owner participation usage is invalid');
+                        const runs = this.day(state).runs + ownerUsage.runs, initiations = this.day(state).initiations + ownerUsage.initiations;
+                        if (ownerUsage.activeRun)
+                            throw new Error('Owner has an active or unresolved participation run');
+                        if (runs >= 6 || (params.action === 'initiate' && initiations >= 1))
+                            throw new Error('Owner participation budget exhausted');
+                    }
+                }
                 if (state.lastStartedAt && this.now() - Date.parse(state.lastStartedAt) < 30 * 60_000)
                     throw new Error('Nearby trigger coalesced; do not catch up missed runs');
                 const action = params.action || 'explore';
@@ -233,7 +343,7 @@ export class CommunityParticipationService {
                     throw new Error('Daily initiation budget exhausted');
                 const target = params.target ? await this.target(params.target, principal) : undefined;
                 if (target) {
-                    const snapshot = await communityActivitySnapshot(this.fileSystem, this.access, principal, target.path);
+                    const snapshot = await this.activitySnapshot(principal, target, state, [topic]);
                     if (!matchesParticipationTopic(snapshot.frontmatter, topic))
                         throw new Error('Target outside allowed participation topic');
                     if (target.activityRevision && snapshot.activityRevision !== target.activityRevision)
@@ -279,6 +389,8 @@ export class CommunityParticipationService {
                 const target = params.target ? await this.target(params.target, principal) : run.target;
                 if (target) {
                     const until = timestamp(params.deferUntil, 'deferUntil');
+                    if (/^Community\/Tasks\//.test(target.path) && (params.target || until))
+                        await this.activitySnapshot(principal, target, state, [run.topic]);
                     const seen = { ...target, handledAt: now, ...(until && { deferUntil: until }), ...(result && { result }) };
                     const index = state.seen.findIndex(s => s.path === target.path);
                     if (index >= 0)
@@ -295,7 +407,7 @@ export class CommunityParticipationService {
             }
             else
                 throw new Error('Unknown participation record operation');
-            return guards;
+            return guards.length || ownerUsage ? { guards, ...(ownerUsage && { commit: ownerUsage.commit }) } : undefined;
         });
     }
     async pulse(params) {
@@ -323,7 +435,10 @@ export class CommunityParticipationService {
         }
         // No markRead call: selecting a later notification must not consume earlier ones.
         const notifications = await this.options.notifications?.list({ principal, includeRead: true, limit: 20, maxChars: 2000 });
-        const candidates = await communityCandidates(this.fileSystem, this.access, { principal, topics: loaded.state.settings.allowedTopics, interests, goals: loaded.state.goals, seen: loaded.state.seen, notificationPaths: (notifications?.notifications || []).map(n => n.sourcePath), now: this.now() });
+        const community = await communityCandidates(this.fileSystem, this.access, { principal, topics: loaded.state.settings.allowedTopics, interests, goals: loaded.state.goals, seen: loaded.state.seen, notificationPaths: (notifications?.notifications || []).map(n => n.sourcePath), now: this.now() });
+        const economy = await this.options.economyCandidates?.(principal, { topics: loaded.state.settings.allowedTopics, now: this.now(), goals: loaded.state.goals, seen: loaded.state.seen }) || [];
+        const rank = { follow_up: 0, interest: 1, discovery: 2 };
+        const candidates = [...economy, ...community].sort((a, b) => rank[a.lane] - rank[b.lane] || b.changedAt.localeCompare(a.changedAt) || a.path.localeCompare(b.path));
         result.state = result.startAfter ? 'coalesced' : candidates.length ? 'ready' : 'idle';
         result.truncated = candidates.length > limit;
         const selected = [];

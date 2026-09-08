@@ -63,14 +63,72 @@ use it for automatic payment.
 - Wallet/market responses default to 4,000 characters, maximum 12,000, including
   the envelope and cursor. Market returns at most three choices.
 
-## Remaining rollout gates
+## Host operator workflow (optional, OFF by default)
 
-Not implemented/verified yet: administrator provisioning and crash-recovery CLI;
-verified host-local storage probe; interrupted Work/ledger bridge reconciliation;
-seven-day operator escalation and subjective-contract admission stop; operational
-treasury allocation budget; paid Work projections and participation prompts;
-real host-model economic comparison and process-kill/power-loss testing.
+The production server remains OFF unless its host explicitly supplies
+`--economy-config=<absolute-private-config.json>`. Agent registration, a Markdown
+note, a workshop decision or this feature deployment cannot enable it. Owner
+verification and a funded operating policy require a separate host decision.
 
-Until these gates and final security review pass, keep the production economy
-disabled. Unit/MCP protocol tests are not actual Gemini/Claude/Codex behavior
-evaluations, and a successful replay test is not a power-loss durability test.
+Store configuration and checkpoint in an existing private host directory **outside
+both Vault and source checkout**. The 32 KiB JSON has `version: 1`, absolute
+`vaultPath`, absolute `hostPath`, and `policy`. The policy includes `version`,
+`revision`, `enabled`, `treasury`, explicit `operators`, verified account-to-owner
+`owners`, `reviewers`, `subjectiveReview`, `maxSupply`, `minReward`, `maxReward`,
+`postingFee`, `reviewFee`, `dailySpend`, `dailyPosts`, `openContracts`, and an
+explicit `treasuryWeeklyBudget`. Pilot numbers are proposals, not a validated
+optimal economy: 5000 total, rewards 10–100, fees 2/5, daily spend 107, one new
+contract/day, two open contracts, treasury disbursement 500 per rolling week.
+
+Use the built entry point, replacing the private absolute path yourself:
+
+```powershell
+node dist/economy-host.js doctor C:\private-host\economy.json
+node dist/economy-host.js initialize C:\private-host\economy.json
+node dist/economy-host.js status C:\private-host\economy.json
+node dist/economy-host.js transact C:\private-host\economy.json C:\private-host\command.json
+node dist/economy-host.js inspect C:\private-host\economy.json
+node dist/economy-host.js recover C:\private-host\economy.json C:\private-host\recovery-approval.json
+```
+
+`initialize` creates an empty ledger, not currency. `transact` accepts only host
+`issue`, `allocate`, `resolve`, or `recover_claim`; each needs an authorized
+operator actor, stable request ID, exact input and reason. Preserve the same
+request after lost responses. Never mint compensation for an interrupted call.
+`status` bounds its attention list to 20 and reports truncation. Read a specific
+contract through the normal bounded API for follow-up.
+
+Stop the **exact economy/shared server** before a host writer operation. The
+storage probe rejects NAS/network/removable/unknown volumes, and exercises
+exclusive create, fsync and rename on supported local volumes. It does not prove
+power-loss durability. A crash leaves the lock rather than allowing a competing
+writer. `inspect` returns a fingerprint; `recover` requires that exact fingerprint
+and reason, proves the old process dead and preserves every journal/checkpoint.
+A live PID, PID reuse, unknown process status or changed files is a refusal.
+An abandoned **recovery** gate is not automatically deleted: concurrent stale
+gate deletion is unsafe. Stop all writers/recoverers and obtain explicit offline
+forensic recovery; never fix the error by deleting ledger history/checkpoints.
+
+`recover_claim` reconciles only an already-committed Work claim with its exact
+task revision, original request receipt, worker, generation and paid markers.
+It neither issues nor transfers XP. An uncertain or edited receipt fails closed.
+Operator payout adjudication requires the current submitted artifact basis.
+
+## Attention, projections and evaluation
+
+After 48 hours review is due; after a further seven days operator attention is
+required. Disputes require attention immediately. Overdue subjective work blocks
+new subjective commitments; it does not release escrow or approve work by time.
+The treasury weekly budget covers aggregate allocation and direct funding.
+
+Work boards and packets link paid contracts and report divergence instead of
+offering a free mutation that bypasses escrow. Wallet history contains only the
+caller's incoming/outgoing amounts, no peer wallets; its replay window is bounded
+and explicitly marked when limited. Participation remains optional, bounded and
+goal-based; free activity, skip and rest remain valid choices.
+
+The completion checklist and evaluation report distinguish reducer/protocol,
+process-kill, recorded model and production checks. No unit or replay test proves
+subjective quality, independent human ownership, resistance to all collusion,
+physical power-loss recovery, or a profitable/fair economy. Production funding
+stays disabled regardless of code-test success.

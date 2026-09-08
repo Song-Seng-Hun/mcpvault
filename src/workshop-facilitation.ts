@@ -3,6 +3,7 @@
  * does not read files, authenticate callers, write notes, call models, or
  * advance time. The IdeationService supplies those boundaries.
  */
+import { validateWorkshopLineage, workshopLineagePrerequisites, type WorkshopLineagePrerequisiteCoverage } from './workshop-lineage.js';
 
 export const FACILITATION_METHOD_IDS = [
   'page-led', 'checklist', 'how-might-we', 'brainwriting', 'six-hats', 'scamper',
@@ -96,7 +97,7 @@ export const FACILITATION_METHODS: readonly FacilitationMethod[] = [
     { key: 'one', title: 'Individual reflection', ...submit(['ideas and origin'], 'Actual participants provide individual input.', 'Async individual responses.', 2) },
     { key: 'two', title: 'Pairs', ...submit(['extensions and participant accounts'], 'Pairs contain two actual accounts or a declared reduced variant.', 'Wait for a second account or select reduced variant.', 2) },
     { key: 'four', title: 'Fours', ...submit(['group synthesis and participant accounts'], 'Groups contain four actual accounts or a declared reduced variant.', 'Wait for four accounts or select reduced variant.', 4) },
-    { key: 'all', title: 'All', ...submit(['synthesis, minority, uncertainty'], 'All current groups are represented without invented attendees.', 'Async all-hands summary.') },
+    { key: 'all', title: 'All', ...submit(['synthesis, minority, uncertainty, participant accounts'], 'All current groups are represented without invented attendees.', 'Async all-hands summary.') },
   ]),
   method('affinity-kj', 'Affinity / KJ', 'Async grouping preserves ungrouped items and permits multiple memberships.', [
     { key: 'collect', title: 'Collect', ...submit(['idea IDs and origin'], 'Original items remain addressable.', 'Collect short notes asynchronously.') },
@@ -159,6 +160,7 @@ export interface WorkshopFacilitation {
   methods: FacilitationMethodState[];
   currentStepId: string;
   round: number;
+  brainwritingCycle?: number;
   facilitatorAccountId: string;
   facilitatorGeneration: number;
   participants: string[];
@@ -174,6 +176,11 @@ export interface FacilitationSubmission {
   accountId: string;
   stepId: string;
   structured: Record<string, unknown>;
+}
+export interface FacilitationCompletion {
+  complete: boolean;
+  unmet: string[];
+  minimumAccounts?: number;
 }
 
 function object(value: unknown, field: string): Record<string, unknown> {
@@ -209,7 +216,16 @@ function currentStep(methods: readonly FacilitationMethodState[], stepId: string
 function exactSteps(id: FacilitationMethodId, value: unknown): readonly FacilitationStep[] {
   const known = catalogue.get(id)!;
   if (value === undefined) return known.steps;
-  if (!Array.isArray(value) || value.length !== known.steps.length || value.some((step, index) => JSON.stringify(step) !== JSON.stringify(known.steps[index]))) {
+  const matches = (step: unknown, index: number): boolean => {
+    const current = known.steps[index]!;
+    if (JSON.stringify(step) === JSON.stringify(current)) return true;
+    // The original v1 persisted its display hints. Accept only that exact
+    // historical shape; submission/attendance validation remains current.
+    if (id !== '1-2-4-all' || current.id !== '1-2-4-all-all') return false;
+    const required = ['synthesis, minority, uncertainty'];
+    return JSON.stringify(step) === JSON.stringify({ ...current, required, requiredFields: fieldsFor(required) });
+  };
+  if (!Array.isArray(value) || value.length !== known.steps.length || value.some((step, index) => !matches(step, index))) {
     throw new Error('Managed facilitation steps must match the current versioned catalogue');
   }
   return known.steps;
@@ -218,7 +234,7 @@ function exactSteps(id: FacilitationMethodId, value: unknown): readonly Facilita
 /** Validates user input as well as persisted Markdown frontmatter. */
 export function createFacilitation(value: unknown): WorkshopFacilitation {
   const raw = object(value, 'facilitation');
-  onlyKeys(raw, 'facilitation', ['version', 'purpose', 'scope', 'successCriteria', 'sourceRevisions', 'methods', 'currentStepId', 'round', 'facilitatorAccountId', 'facilitatorGeneration', 'participants', 'decisionAuthority', 'checks', 'waitingReason', 'resumeCondition', 'outputs', 'ordinaryRedoCount']);
+  onlyKeys(raw, 'facilitation', ['version', 'purpose', 'scope', 'successCriteria', 'sourceRevisions', 'methods', 'currentStepId', 'round', 'brainwritingCycle', 'facilitatorAccountId', 'facilitatorGeneration', 'participants', 'decisionAuthority', 'checks', 'waitingReason', 'resumeCondition', 'outputs', 'ordinaryRedoCount']);
   if (raw.version !== 1) throw new Error('facilitation.version must be 1');
   const rawMethods = raw.methods;
   if (!Array.isArray(rawMethods) || rawMethods.length < 1 || rawMethods.length > MAX_METHODS) throw new Error(`facilitation.methods must contain 1 to ${MAX_METHODS} methods`);
@@ -243,16 +259,23 @@ export function createFacilitation(value: unknown): WorkshopFacilitation {
     });
   })());
   if (sourceRevisions.length < 1) throw new Error('sourceRevisions must contain at least one current source path and revision');
-  const participants = strings(raw.participants ?? [], 'participants', 64);
+  const participants = strings(raw.participants ?? [], 'participants', 64).map((item, index) => {
+    if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/u.test(item)) throw new Error(`participants[${index}] must be a bounded account identifier`);
+    return item;
+  });
   const facilitatorAccountId = short(raw.facilitatorAccountId, 'facilitatorAccountId');
+  if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/u.test(facilitatorAccountId)) throw new Error('facilitatorAccountId must be a bounded account identifier');
   if (!participants.includes(facilitatorAccountId)) participants.unshift(facilitatorAccountId);
   const authority = object(raw.decisionAuthority ?? {}, 'decisionAuthority');
   onlyKeys(authority, 'decisionAuthority', ['approverAccountId', 'delegatedAccountId', 'delegationReason']);
   const decisionAuthority = {
-    ...(authority.approverAccountId === undefined ? {} : { approverAccountId: short(authority.approverAccountId, 'decisionAuthority.approverAccountId') }),
-    ...(authority.delegatedAccountId === undefined ? {} : { delegatedAccountId: short(authority.delegatedAccountId, 'decisionAuthority.delegatedAccountId') }),
+    ...(authority.approverAccountId === undefined ? {} : { approverAccountId: identifier(authority.approverAccountId, 'decisionAuthority.approverAccountId') }),
+    ...(authority.delegatedAccountId === undefined ? {} : { delegatedAccountId: identifier(authority.delegatedAccountId, 'decisionAuthority.delegatedAccountId') }),
     ...(authority.delegationReason === undefined ? {} : { delegationReason: short(authority.delegationReason, 'decisionAuthority.delegationReason') }),
   };
+  for (const accountId of [decisionAuthority.approverAccountId, decisionAuthority.delegatedAccountId]) {
+    if (accountId !== undefined && !participants.includes(accountId)) throw new Error('decisionAuthority accounts must be explicitly configured actual participants');
+  }
   const defaultStep = methods[0]!.steps[0]!.id;
   const currentStepId = raw.currentStepId === undefined ? defaultStep : short(raw.currentStepId, 'currentStepId');
   currentStep(methods, currentStepId);
@@ -260,8 +283,9 @@ export function createFacilitation(value: unknown): WorkshopFacilitation {
   for (const [index, check] of checks.entries()) {
     for (const field of ['itemId', 'status', 'evidence', 'reason', 'actor']) if (check[field] !== undefined) validateNested(check[field], `checks[${index}].${field}`, 0);
   }
-  const outputs = raw.outputs === undefined ? [] : arrayObjects(raw.outputs, 'outputs', ['type', 'status', 'synthesis', 'structured', 'references', 'alternatives', 'evidence', 'reason', 'reviewConditions', 'createdAt']);
+  const outputs = raw.outputs === undefined ? [] : arrayObjects(raw.outputs, 'outputs', ['type', 'status', 'synthesis', 'structured', 'references', 'alternatives', 'evidence', 'reason', 'reviewConditions', 'createdAt','round']);
   for (const [index, output] of outputs.entries()) {
+    if(output.round!==undefined)number(output.round,`outputs[${index}].round`,1,64);
     if (output.type !== undefined) short(output.type, `outputs[${index}].type`);
     if (output.status !== 'proposed' && output.status !== 'unverified') {
       throw new Error(`outputs[${index}].status must be proposed or unverified until an authorized output bridge verifies it`);
@@ -278,6 +302,7 @@ export function createFacilitation(value: unknown): WorkshopFacilitation {
   return {
     version: 1, purpose: short(raw.purpose, 'purpose'), scope: short(raw.scope, 'scope'), successCriteria: strings(raw.successCriteria, 'successCriteria'),
     sourceRevisions, methods, currentStepId, round, facilitatorAccountId, facilitatorGeneration, participants, decisionAuthority, checks, outputs, ordinaryRedoCount,
+    ...(raw.brainwritingCycle===undefined?{}:{brainwritingCycle:number(raw.brainwritingCycle,'brainwritingCycle',1,6)}),
     ...(raw.waitingReason === undefined ? {} : { waitingReason: short(raw.waitingReason, 'waitingReason') }),
     ...(raw.resumeCondition === undefined ? {} : { resumeCondition: short(raw.resumeCondition, 'resumeCondition') }),
   };
@@ -301,12 +326,14 @@ const allowedSubmissionKeys = new Set([
   'mapNodes', 'mapEdges', 'ballot', 'ranking', 'criteria', 'alternatives', 'evidence', 'risks', 'benefits', 'uncertainty', 'revisit',
   'adopted', 'rejected', 'minority', 'synthesis', 'participantAccounts', 'roles', 'reason', 'reviewConditions', 'mitigation', 'earlySignal',
   'ownerAction', 'timeline', 'impact', 'contributingFactors', 'helpfulResponse', 'prevention', 'experiment', 'variant', 'reducedVariant',
-  'purpose', 'scope', 'outcome', 'sourceRevisions', 'failureScenario',
+  'purpose', 'scope', 'outcome', 'sourceRevisions', 'failureScenario', 'constraints', 'preferences', 'operator', 'extensions',
+  'unassignedIdeaIds', 'account', 'clarifications', 'causes', 'retrospectiveVariant', 'repairs', 'unresolvedExceptions', 'cycle', 'cycleMinutes',
 ]);
 const allowedNestedKeys = new Set([
   'id', 'ideaId', 'parentIdeaId', 'alternativeId', 'fromId', 'toId', 'itemId', 'accountId', 'rank', 'type', 'label', 'title', 'status',
   'reason', 'evidence', 'actor', 'origin', 'extension', 'challenge', 'path', 'revision', 'ownerAction', 'earlySignal', 'participantAccounts',
   'members', 'name', 'value', 'criteria', 'reviewCondition', 'revisit', 'uncertainty', 'impact', 'timeline', 'mitigation',
+  'riskId', 'category', 'driver', 'approver', 'contributors', 'informed',
 ]);
 function validateNested(value: unknown, field: string, depth: number): void {
   if (depth > 4) throw new Error(`${field} exceeds the maximum nesting depth`);
@@ -339,25 +366,292 @@ function validateStructured(value: unknown): Record<string, unknown> {
   return structured;
 }
 
+/** Synthesis is a cross-method output, not another submission to the last
+ * method's form (a closing checklist need not be duplicated in the synthesis). */
+export function validateFacilitationSynthesis(value:unknown):Record<string,unknown> {
+  const result=validateStructured(value);
+  if(Object.keys(result).some(k=>!['adopted','rejected','minority','uncertainty','revisit'].includes(k)))throw new Error('Unknown synthesis field');
+  for(const field of ['adopted','rejected','minority','uncertainty'])textItems(result[field],`synthesis.${field}`,true);
+  short(result.revisit,'synthesis.revisit');
+  return result;
+}
+
+type ContractContext = { facilitation: WorkshopFacilitation; accountId: string; step: FacilitationStep; existingSubmissions?: readonly FacilitationSubmission[] };
+
+function items(value: unknown, field: string, allowEmpty = false): unknown[] {
+  if (value === undefined) throw new Error(`${field} is required`);
+  if (!Array.isArray(value) || (!allowEmpty && value.length === 0) || value.length > MAX_ARRAY_ITEMS) throw new Error(`${field} must be a non-empty bounded array`);
+  return value;
+}
+function textItems(value: unknown, field: string, allowEmpty = false): string[] {
+  return items(value, field, allowEmpty).map((item, index) => short(item, `${field}[${index}]`));
+}
+function identifier(value: unknown, field: string): string {
+  const result = short(value, field);
+  if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/u.test(result)) throw new Error(`${field} must be a bounded identifier`);
+  return result;
+}
+function record(value: unknown, field: string, allowed: readonly string[]): Record<string, unknown> {
+  if (value === undefined) throw new Error(`${field} is required`);
+  const result = object(value, field);
+  onlyKeys(result, field, allowed);
+  return result;
+}
+function records(value: unknown, field: string, allowed: readonly string[], allowEmpty = false): Record<string, unknown>[] {
+  return items(value, field, allowEmpty).map((item, index) => record(item, `${field}[${index}]`, allowed));
+}
+function account(value: unknown, field: string, context: ContractContext): string {
+  const result = identifier(value, field);
+  if (!context.facilitation.participants.includes(result)) throw new Error(`${field} must name an explicitly configured actual participant account`);
+  return result;
+}
+function participantAccounts(value: unknown, field: string, context: ContractContext, minimum: number, allowReduced: boolean): string[] {
+  const result = textItems(value, field);
+  const unique = new Set(result);
+  if (unique.size !== result.length) throw new Error(`${field} may not repeat an account`);
+  result.forEach((item, index) => account(item, `${field}[${index}]`, context));
+  if (result.length < minimum && !allowReduced) throw new Error(`${field} requires ${minimum} actual participant accounts`);
+  return result;
+}
+function exactParticipantAccounts(value: unknown, field: string, context: ContractContext, count: number, allowReduced: boolean): string[] {
+  const result = participantAccounts(value, field, context, count, allowReduced);
+  if (!allowReduced && result.length !== count) throw new Error(`${field} requires exactly ${count} actual participant accounts`);
+  return result;
+}
+function ideaRecords(value: unknown, field: string, parentRequired = false): string[] {
+  const result = records(value, field, ['ideaId', 'origin', 'parentIdeaId', 'extension', 'challenge']);
+  const ids = result.map((item, index) => {
+    const id = identifier(item.ideaId, `${field}[${index}].ideaId`);
+    short(item.origin, `${field}[${index}].origin`);
+    if (parentRequired) {
+      identifier(item.parentIdeaId, `${field}[${index}].parentIdeaId`);
+      short(item.extension, `${field}[${index}].extension`);
+    }
+    if (item.challenge !== undefined) short(item.challenge, `${field}[${index}].challenge`);
+    return id;
+  });
+  if (new Set(ids).size !== ids.length) throw new Error(`${field} may not repeat an idea ID`);
+  return ids;
+}
+function linkedRecords(value: unknown, field: string, idField: 'alternativeId' | 'riskId', extraField = 'value'): void {
+  for (const [index, item] of records(value, field, [idField, extraField, 'reason']).entries()) {
+    identifier(item[idField], `${field}[${index}].${idField}`);
+    short(item[extraField], `${field}[${index}].${extraField}`);
+    if (item.reason !== undefined) short(item.reason, `${field}[${index}].reason`);
+  }
+}
+function validateSourcePins(value: unknown, field: string, context: ContractContext): void {
+  const configured = new Set(context.facilitation.sourceRevisions.map(source => JSON.stringify([source.path, source.revision])));
+  for (const [index, item] of records(value, field, ['path', 'revision']).entries()) {
+    const path = short(item.path, `${field}[${index}].path`);
+    const revision = short(item.revision, `${field}[${index}].revision`);
+    if (!revisionPattern.test(revision) || !configured.has(JSON.stringify([path, revision]))) throw new Error(`${field} must pin a configured current source revision`);
+  }
+}
+function validateAcknowledgement(value: unknown, context: ContractContext): void {
+  const acknowledgement = record(value, 'acknowledgement', ['path', 'revision', 'accountId']);
+  const path = short(acknowledgement.path, 'acknowledgement.path');
+  const revision = short(acknowledgement.revision, 'acknowledgement.revision');
+  if (!context.facilitation.sourceRevisions.some(source => source.path === path && source.revision === revision)) throw new Error('acknowledgement must name a configured current source revision');
+  if (account(acknowledgement.accountId, 'acknowledgement.accountId', context) !== context.accountId) throw new Error('acknowledgement must be made by the authenticated submitting account');
+}
+function validateOwnerAction(value: unknown, field: string, context: ContractContext): void {
+  const action = record(value, field, ['accountId', 'value']);
+  account(action.accountId, `${field}.accountId`, context);
+  short(action.value, `${field}.value`);
+}
+function validateBallot(value: unknown, field: string, idField: 'alternativeId' | 'riskId' = 'alternativeId'): string[] {
+  const alternatives = new Set<string>();
+  for (const [index, entry] of records(value, field, [idField, 'rank']).entries()) {
+    const alternative = identifier(entry[idField], `${field}[${index}].${idField}`);
+    if (alternatives.has(alternative)) throw new Error('Duplicate ballot alternative');
+    alternatives.add(alternative);
+    number(entry.rank, `${field}[${index}].rank`, 1, MAX_ARRAY_ITEMS);
+  }
+  return [...alternatives];
+}
+function frozenAlternativeIds(submissions: readonly FacilitationSubmission[] | undefined): Set<string> {
+  let fingerprint: string | undefined;
+  let ids = new Set<string>();
+  for (const submission of submissions || []) {
+    if (submission.stepId !== 'dot-voting-freeze' || !Array.isArray(submission.structured.alternatives)) continue;
+    const alternatives: Array<[string, string]> = [];
+    for (const item of submission.structured.alternatives) {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
+      const record = item as Record<string, unknown>;
+      if (typeof record.id === 'string' && typeof record.label === 'string') alternatives.push([record.id, record.label]);
+    }
+    const candidate = JSON.stringify({ alternatives, criteria: Array.isArray(submission.structured.criteria) ? submission.structured.criteria : [] });
+    if (fingerprint !== undefined && fingerprint !== candidate) throw new Error('Frozen alternatives conflict and cannot be changed or unioned silently');
+    fingerprint = candidate;
+    ids = new Set(alternatives.map(([id]) => id));
+  }
+  return ids;
+}
+function validateChecklist(value: unknown, context: ContractContext): void {
+  const ids = new Set<string>();
+  for (const [index, check] of records(value, 'checks', ['itemId', 'status', 'evidence', 'reason', 'actor']).entries()) {
+    const itemId = identifier(check.itemId, `checks[${index}].itemId`);
+    if (ids.has(itemId)) throw new Error('Duplicate checklist item');
+    ids.add(itemId);
+    const status = short(check.status, `checks[${index}].status`);
+    if (!['unknown', 'pass', 'fail', 'not_applicable'].includes(status)) throw new Error('Invalid checklist status');
+    if (account(check.actor, `checks[${index}].actor`, context) !== context.accountId) throw new Error('Checklist actor must be the authenticated submitting account');
+    short(check.reason, `checks[${index}].reason`);
+    short(check.evidence, `checks[${index}].evidence`);
+  }
+}
+function validateStepContract(structured: Record<string, unknown>, context: ContractContext): void {
+  const stepId = context.step.id;
+  const requireText = (key: string) => {
+    if (structured[key] === undefined) throw new Error(`structured.${key} is required`);
+    return short(structured[key], `structured.${key}`);
+  };
+  const requireTexts = (key: string, allowEmpty = false) => textItems(structured[key], `structured.${key}`, allowEmpty);
+  switch (stepId) {
+    case 'page-led-frame':
+      requireText('purpose'); requireText('scope'); requireText('outcome'); requireTexts('questions'); validateSourcePins(structured.sourceRevisions, 'structured.sourceRevisions', context); break;
+    case 'page-led-read': validateAcknowledgement(structured.acknowledgement, context); break;
+    case 'page-led-discuss': requireTexts('observations'); requireText('extension'); requireText('challenge'); break;
+    case 'checklist-prepare': case 'checklist-progress': case 'checklist-close': {
+      validateChecklist(structured.checks, context);
+      const open = (structured.checks as unknown[]).some(item => ['unknown', 'fail'].includes(String((item as Record<string, unknown>).status)));
+      if (open && stepId === 'checklist-close' && structured.repairs === undefined && structured.unresolvedExceptions === undefined) throw new Error('Closing checklist exceptions require typed repairs or unresolvedExceptions');
+      if (structured.repairs !== undefined) records(structured.repairs, 'structured.repairs', ['itemId', 'ownerAction', 'reason']).forEach((repair, index) => {
+        identifier(repair.itemId, `structured.repairs[${index}].itemId`);
+        validateOwnerAction(repair.ownerAction, `structured.repairs[${index}].ownerAction`, context);
+        short(repair.reason, `structured.repairs[${index}].reason`);
+      });
+      if (structured.unresolvedExceptions !== undefined) requireTexts('unresolvedExceptions');
+      break;
+    }
+    case 'how-might-we-observe': requireTexts('observations'); requireTexts('evidence'); break;
+    case 'how-might-we-question': requireTexts('questions'); break;
+    case 'how-might-we-refine': requireTexts('questions'); requireText('challenge'); break;
+    case 'brainwriting-independent': {
+      const variant = short(structured.variant, 'structured.variant');
+      if (!['6-3-5', 'async', 'small-group'].includes(variant)) throw new Error('Brainwriting requires an honest 6-3-5, async, or small-group variant');
+      const ids = ideaRecords(structured.ideaIds, 'structured.ideaIds');
+      if (variant === '6-3-5') {
+        if (ids.length !== 3) throw new Error('6-3-5 requires exactly three independent ideas per actual account');
+        if (number(structured.cycle, 'structured.cycle', 1, 6) !== (context.facilitation.brainwritingCycle??1)) throw new Error('6-3-5 cycle must match the current method cycle');
+        if (number(structured.cycleMinutes, 'structured.cycleMinutes', 5, 5) !== 5) throw new Error('6-3-5 requires an explicit five-minute cycle');
+      }
+      break;
+    }
+    case 'brainwriting-build': {
+      const ideas=ideaRecords(structured.ideaIds, 'structured.ideaIds', true); requireText('extension'); requireTexts('parentIdeaIds');
+      if((context.facilitation.brainwritingCycle??1)>1||structured.variant==='6-3-5') {
+        const cycle=context.facilitation.brainwritingCycle??1;
+        if(structured.variant!=='6-3-5'||structured.cycle!==cycle||structured.cycleMinutes!==5||ideas.length!==3)throw new Error('6-3-5 requires three ideas and explicit current five-minute cycle');
+        const previous=(context.existingSubmissions??[]).filter(s=>s.structured.variant==='6-3-5'&&s.structured.cycle===cycle-1&&s.accountId!==context.accountId);
+        const parents=new Set(previous.flatMap(s=>Array.isArray(s.structured.ideaIds)?s.structured.ideaIds.map((i:any)=>i.ideaId):[]));
+        if((structured.ideaIds as any[]).some(i=>!parents.has(i.parentIdeaId)))throw new Error('6-3-5 builds on actual peers from the immediately previous cycle');
+      }
+      break;
+    }
+    case 'six-hats-setup': requireTexts('questions'); requireTexts('constraints'); break;
+    case 'six-hats-information': requireTexts('evidence'); requireTexts('uncertainty'); break;
+    case 'six-hats-alternatives': ideaRecords(structured.ideaIds, 'structured.ideaIds'); break;
+    case 'six-hats-benefits': linkedRecords(structured.benefits, 'structured.benefits', 'alternativeId'); break;
+    case 'six-hats-risks': linkedRecords(structured.risks, 'structured.risks', 'alternativeId'); requireText('challenge'); break;
+    case 'six-hats-intuition': requireTexts('preferences'); requireTexts('uncertainty'); break;
+    case 'six-hats-synthesis': requireTexts('adopted'); requireTexts('rejected'); requireTexts('minority'); requireTexts('uncertainty'); requireText('revisit'); break;
+    case 'scamper-substitute': case 'scamper-combine': case 'scamper-adapt': case 'scamper-modify': case 'scamper-other-use': case 'scamper-eliminate': case 'scamper-reverse':
+      if (short(structured.operator, 'structured.operator') !== stepId.slice('scamper-'.length)) throw new Error('SCAMPER operator must match the current method step');
+      ideaRecords(structured.ideaIds, 'structured.ideaIds', true); requireTexts('parentIdeaIds'); break;
+    case 'crazy8s-eight': if (ideaRecords(structured.ideaIds, 'structured.ideaIds').length !== 8) throw new Error('Crazy 8s requires exactly eight distinct idea IDs'); break;
+    case 'crazy8s-select': validateBallot(structured.ranking, 'structured.ranking'); requireTexts('criteria'); requireText('reason'); break;
+    case '1-2-4-all-one': ideaRecords(structured.ideaIds, 'structured.ideaIds'); break;
+    case '1-2-4-all-two': requireTexts('extensions'); exactParticipantAccounts(structured.participantAccounts, 'structured.participantAccounts', context, 2, structured.reducedVariant !== undefined); if (structured.reducedVariant !== undefined) requireText('reducedVariant'); break;
+    case '1-2-4-all-four': requireText('synthesis'); exactParticipantAccounts(structured.participantAccounts, 'structured.participantAccounts', context, 4, structured.reducedVariant !== undefined); if (structured.reducedVariant !== undefined) requireText('reducedVariant'); break;
+    case '1-2-4-all-all': requireText('synthesis'); requireTexts('minority'); requireTexts('uncertainty'); participantAccounts(structured.participantAccounts, 'structured.participantAccounts', context, 2, structured.reducedVariant !== undefined); if (structured.reducedVariant !== undefined) requireText('reducedVariant'); break;
+    case 'affinity-kj-collect': ideaRecords(structured.ideaIds, 'structured.ideaIds'); break;
+    case 'affinity-kj-group': {
+      const groups = records(structured.groups, 'structured.groups', ['id', 'members']);
+      const groupIds = groups.map((group, index) => identifier(group.id, `structured.groups[${index}].id`));
+      if (new Set(groupIds).size !== groupIds.length) throw new Error('Affinity groups may not repeat a group ID');
+      groups.forEach((group, index) => textItems(group.members, `structured.groups[${index}].members`));
+      textItems(structured.unassignedIdeaIds, 'structured.unassignedIdeaIds', true);
+      break;
+    }
+    case 'affinity-kj-name': records(structured.names, 'structured.names', ['id', 'name', 'members']).forEach((name, index) => { identifier(name.id, `structured.names[${index}].id`); short(name.name, `structured.names[${index}].name`); textItems(name.members, `structured.names[${index}].members`); }); requireTexts('uncertainty'); break;
+    case 'mind-map-root': requireTexts('questions'); break;
+    case 'mind-map-branches': records(structured.mapNodes, 'structured.mapNodes', ['id', 'type', 'label']).forEach((node, index) => { identifier(node.id, `structured.mapNodes[${index}].id`); if (!['question', 'alternative', 'constraint', 'evidence'].includes(short(node.type, `structured.mapNodes[${index}].type`))) throw new Error('Mind-map node type is invalid'); short(node.label, `structured.mapNodes[${index}].label`); }); break;
+    case 'mind-map-crosslinks': records(structured.mapEdges, 'structured.mapEdges', ['fromId', 'toId', 'reason']).forEach((edge, index) => { const from = identifier(edge.fromId, `structured.mapEdges[${index}].fromId`); const to = identifier(edge.toId, `structured.mapEdges[${index}].toId`); if (from === to) throw new Error('Mind-map edge endpoints must differ'); short(edge.reason, `structured.mapEdges[${index}].reason`); }); break;
+    case 'ngt-independent': ideaRecords(structured.ideaIds, 'structured.ideaIds'); break;
+    case 'ngt-roundrobin': ideaRecords(structured.ideaIds, 'structured.ideaIds'); if (account(structured.account, 'structured.account', context) !== context.accountId) throw new Error('NGT round-robin account must be the authenticated submitting account'); break;
+    case 'ngt-clarify': requireTexts('questions'); requireTexts('clarifications'); break;
+    case 'ngt-rank': validateBallot(structured.ballot, 'structured.ballot'); requireText('ranking'); requireText('reason'); break;
+    case 'dot-voting-freeze': records(structured.alternatives, 'structured.alternatives', ['id', 'label']).forEach((alternative, index) => { identifier(alternative.id, `structured.alternatives[${index}].id`); short(alternative.label, `structured.alternatives[${index}].label`); }); requireTexts('criteria'); break;
+    case 'dot-voting-vote': {
+      const frozen = frozenAlternativeIds(context.existingSubmissions);
+      if (!frozen.size) throw new Error('Dot voting requires frozen alternatives before any ballot');
+      for (const alternative of validateBallot(structured.ballot, 'structured.ballot')) if (!frozen.has(alternative)) throw new Error('Dot-voting ballot alternatives must come from the frozen alternatives');
+      requireText('ranking'); break;
+    }
+    case 'daci-roles': {
+      const roles = record(structured.roles, 'structured.roles', ['driver', 'approver', 'contributors', 'informed']);
+      account(roles.driver, 'structured.roles.driver', context); account(roles.approver, 'structured.roles.approver', context); participantAccounts(roles.contributors, 'structured.roles.contributors', context, 1, false); participantAccounts(roles.informed, 'structured.roles.informed', context, 1, false); break;
+    }
+    case 'daci-alternatives': records(structured.alternatives, 'structured.alternatives', ['id', 'label']).forEach((alternative, index) => { identifier(alternative.id, `structured.alternatives[${index}].id`); short(alternative.label, `structured.alternatives[${index}].label`); }); requireTexts('evidence'); break;
+    case 'daci-reason': requireText('reason'); requireTexts('uncertainty'); requireTexts('minority'); break;
+    case 'daci-review': requireTexts('reviewConditions'); requireText('revisit'); break;
+    case 'premortem-failure': requireText('failureScenario'); break;
+    case 'premortem-causes': requireTexts('causes'); requireTexts('evidence'); break;
+    case 'premortem-prioritize': validateBallot(structured.ranking, 'structured.ranking', 'riskId'); linkedRecords(structured.risks, 'structured.risks', 'riskId'); requireText('reason'); break;
+    case 'premortem-mitigate': requireText('mitigation'); requireText('earlySignal'); validateOwnerAction(structured.ownerAction, 'structured.ownerAction', context); break;
+    case 'retrospective-observe': {
+      const variant = short(structured.retrospectiveVariant, 'structured.retrospectiveVariant');
+      const expected = variant === 'start-stop-continue' ? ['start', 'stop', 'continue'] : variant === '4ls' ? ['liked', 'learned', 'lacked', 'longed-for'] : [];
+      if (!expected.length) throw new Error('Retrospective variant must be start-stop-continue or 4ls');
+      const categories = records(structured.observations, 'structured.observations', ['category', 'value']).map((item, index) => { const category = short(item.category, `structured.observations[${index}].category`); short(item.value, `structured.observations[${index}].value`); return category; });
+      if (expected.some(category => !categories.includes(category))) throw new Error('Retrospective observations must preserve every category in the chosen variant');
+      break;
+    }
+    case 'retrospective-experiment': requireText('experiment'); validateOwnerAction(structured.ownerAction, 'structured.ownerAction', context); requireTexts('reviewConditions'); break;
+    case 'blameless-postmortem-timeline': records(structured.timeline, 'structured.timeline', ['id', 'value']).forEach((item, index) => { identifier(item.id, `structured.timeline[${index}].id`); short(item.value, `structured.timeline[${index}].value`); }); requireText('impact'); break;
+    case 'blameless-postmortem-factors': requireTexts('contributingFactors'); requireTexts('helpfulResponse'); break;
+    case 'blameless-postmortem-prevention': requireText('prevention'); validateOwnerAction(structured.ownerAction, 'structured.ownerAction', context); requireTexts('reviewConditions'); break;
+    default: throw new Error(`No structured method contract is registered for ${stepId}`);
+  }
+}
+
+export function validateFacilitationCompletion(facilitation: WorkshopFacilitation, submissions: readonly FacilitationSubmission[]): FacilitationCompletion {
+  const step = currentStep(facilitation.methods, facilitation.currentStepId);
+  const current = submissions.filter(item => item.stepId === step.id && facilitation.participants.includes(item.accountId) && ((facilitation.brainwritingCycle??1)<=1||!step.id.startsWith('brainwriting-')||item.structured.cycle===facilitation.brainwritingCycle));
+  const unmet: string[] = [];
+  let minimumAccounts = step.minimumAccounts || 1;
+  if(step.id==='brainwriting-build'&&(facilitation.brainwritingCycle??1)>1)minimumAccounts=6;
+  if (step.id === 'brainwriting-independent') {
+    const variants = new Set(current.map(item => item.structured.variant));
+    if (variants.size !== 1) unmet.push('one honest brainwriting variant for the round');
+    if (variants.has('6-3-5')) minimumAccounts = 6;
+  }
+  if ((step.id === '1-2-4-all-two' || step.id === '1-2-4-all-four') && current.some(item => typeof item.structured.reducedVariant === 'string' && item.structured.reducedVariant.trim())) minimumAccounts = 1;
+  if (step.id === 'dot-voting-vote' && !frozenAlternativeIds(submissions).size) unmet.push('frozen alternatives');
+  const accounts = new Set(current.map(item => item.accountId));
+  if (accounts.size < minimumAccounts) unmet.push(`${minimumAccounts - accounts.size} additional actual participant account(s)`);
+  return { complete: unmet.length === 0, unmet, ...(minimumAccounts !== (step.minimumAccounts || 1) ? { minimumAccounts } : {}) };
+}
+
 export function validateFacilitationSubmission(facilitation: WorkshopFacilitation, params: {
-  accountId: string; stepId: string; workshopRevision: string; structured: unknown; existingSubmissions?: readonly FacilitationSubmission[];
-}): { structured: Record<string, unknown>; ballotAccountId?: string } {
+  accountId: string; stepId: string; workshopRevision: string; structured: unknown; existingSubmissions?: readonly FacilitationSubmission[]; prerequisiteCoverage?: readonly WorkshopLineagePrerequisiteCoverage[];
+}): { structured: Record<string, unknown>; ballotAccountId?: string; requiredPrerequisiteStepIds: readonly string[] } {
   const accountId = short(params.accountId, 'accountId');
   const stepId = short(params.stepId, 'stepId');
+  if(facilitation.waitingReason)throw new Error('Workshop is paused; explicit resume is required');
   if (!facilitation.participants.includes(accountId)) throw new Error('Only an explicitly configured participant account may submit to managed facilitation');
   if (!revisionPattern.test(params.workshopRevision)) throw new Error('workshopRevision must be the exact current SHA-256 revision');
   if (stepId !== facilitation.currentStepId) throw new Error('This submission targets a stale or different facilitation step');
   const step = currentStep(facilitation.methods, stepId);
   const structured = validateStructured(params.structured);
-  for (const field of step.requiredFields) {
-    if (typeof structured[field] === 'boolean') throw new Error(`This facilitation step requires typed ${field}, not a boolean`);
+  if(stepId.startsWith('brainwriting-')&&structured.variant==='6-3-5') {
+    if(facilitation.participants.length!==6)throw new Error('6-3-5 requires exactly six configured actual accounts; choose an honest adaptation otherwise');
+    if((params.existingSubmissions??[]).some(s=>s.accountId===accountId&&s.stepId===stepId&&s.structured.cycle===structured.cycle))throw new Error('One three-idea submission per actual account per method cycle');
   }
-  const missing = step.requiredFields.filter(field => {
-    const value = structured[field];
-    return value === undefined || value === null || (typeof value === 'string' && !value.trim()) || (Array.isArray(value) && value.length === 0)
-      || (typeof value === 'object' && !Array.isArray(value) && Object.keys(value as Record<string, unknown>).length === 0);
-  });
-  if (missing.length) throw new Error(`This facilitation step is missing required structured fields: ${missing.join(', ')}`);
+  validateStepContract(structured, { facilitation, accountId, step, ...(params.existingSubmissions && { existingSubmissions: params.existingSubmissions }) });
+  const lineage = validateWorkshopLineage({ stepId, structured, participants: facilitation.participants, ...(params.existingSubmissions&&{priorSubmissions:params.existingSubmissions}), ...(params.prerequisiteCoverage&&{prerequisiteCoverage:params.prerequisiteCoverage}) });
   if (structured.checks !== undefined) {
     if (!Array.isArray(structured.checks) || !structured.checks.length) throw new Error('This facilitation step requires typed checks');
     const ids = new Set<string>();
@@ -372,8 +666,6 @@ export function validateFacilitationSubmission(facilitation: WorkshopFacilitatio
       short(check.evidence, 'check.evidence');
     }
   }
-  if (step.id === 'crazy8s-eight' && (!Array.isArray(structured.ideaIds) || new Set(structured.ideaIds.map(String)).size !== 8)) throw new Error('Crazy 8s requires exactly eight distinct idea IDs');
-  if (step.id === 'brainwriting-independent' && structured.variant === '6-3-5' && (!Array.isArray(structured.ideaIds) || structured.ideaIds.length !== 3)) throw new Error('6-3-5 requires exactly three ideas from this account in the round');
   if (step.id === 'dot-voting-vote' || step.id === 'ngt-rank') {
     if (!Array.isArray(structured.ballot) || !structured.ballot.length) throw new Error('A ranking ballot is required');
     const alternatives = new Set<string>();
@@ -385,16 +677,20 @@ export function validateFacilitationSubmission(facilitation: WorkshopFacilitatio
       number(entry.rank, 'ballot.rank', 1, MAX_ARRAY_ITEMS);
     }
     if ((params.existingSubmissions || []).some(item => item.accountId === accountId && item.stepId === stepId)) throw new Error('Only one ballot per authenticated account is allowed for this step');
-    return { structured, ballotAccountId: accountId };
+    return { structured, ballotAccountId: accountId, ...lineage };
   }
-  return { structured };
+  return { structured, ...lineage };
 }
+
+/** The service must read only these chronological step slices before validation. */
+export { workshopLineagePrerequisites, type WorkshopLineagePrerequisiteCoverage };
 
 export function nextFacilitationAction(facilitation: WorkshopFacilitation, submissions: readonly FacilitationSubmission[]): {
   kind: 'submit' | 'wait' | 'advance' | 'record_output'; stepId: string; required: string[]; finishCondition: string; adaptation: string; resumeCondition?: string;
 } {
   const step = currentStep(facilitation.methods, facilitation.currentStepId);
-  const current = submissions.filter(item => item.stepId === step.id && facilitation.participants.includes(item.accountId));
+  if(facilitation.waitingReason)return {kind:'wait',stepId:step.id,required:[],finishCondition:step.finishCondition,adaptation:step.adaptation,resumeCondition:facilitation.resumeCondition||facilitation.waitingReason};
+  const current = submissions.filter(item => item.stepId === step.id && facilitation.participants.includes(item.accountId) && ((facilitation.brainwritingCycle??1)<=1||!step.id.startsWith('brainwriting-')||item.structured.cycle===facilitation.brainwritingCycle));
   // The service supplies chronological, validated submissions. A later explicit
   // report by the same account repairs its own item, never another account's.
   const latestChecks = new Map<string, unknown>();
@@ -408,20 +704,31 @@ export function nextFacilitationAction(facilitation: WorkshopFacilitation, submi
   const unresolved = [...latestChecks.values()].some(status => !['pass', 'not_applicable'].includes(String(status)));
   if (unresolved) return { kind: 'wait', stepId: step.id, required: step.required.slice(), finishCondition: step.finishCondition, adaptation: step.adaptation, resumeCondition: 'Resolve unknown/failed checklist items; their presence is not completion evidence.' };
   const accounts = new Set(current.map(item => item.accountId));
-  const minimum = step.minimumAccounts || 1;
+  const completion = validateFacilitationCompletion(facilitation, submissions);
+  const minimum = completion.minimumAccounts || step.minimumAccounts || 1;
   if (accounts.size < minimum) {
     if (accounts.size > 0 && minimum > 1) return {
       kind: 'wait', stepId: step.id, required: ['structured submission'], finishCondition: step.finishCondition, adaptation: step.adaptation,
-      resumeCondition: `${minimum - accounts.size} additional actual participant account(s), or an explicit reduced variant`,
+      resumeCondition: completion.unmet.join('; ') || `${minimum - accounts.size} additional actual participant account(s), or an explicit reduced variant`,
     };
     return { kind: 'submit', stepId: step.id, required: ['structured submission', ...step.required], finishCondition: step.finishCondition, adaptation: step.adaptation };
   }
-  const final = facilitation.methods.flatMap(method => method.steps).at(-1)?.id === step.id;
+  if (!completion.complete) return { kind: 'wait', stepId: step.id, required: step.required.slice(), finishCondition: step.finishCondition, adaptation: step.adaptation, resumeCondition: completion.unmet.join('; ') };
+  const cycling=step.id==='brainwriting-build'&&(facilitation.brainwritingCycle??1)>1&&facilitation.brainwritingCycle!<6;
+  const final = !cycling&&facilitation.methods.flatMap(method => method.steps).at(-1)?.id === step.id;
   return { kind: final ? 'record_output' : 'advance', stepId: step.id, required: step.required.slice(), finishCondition: step.finishCondition, adaptation: step.adaptation };
 }
 
-export function advanceFacilitation(facilitation: WorkshopFacilitation, reason: string): WorkshopFacilitation {
+export function advanceFacilitation(facilitation: WorkshopFacilitation, reason: string, submissions:readonly FacilitationSubmission[]=[]): WorkshopFacilitation {
   short(reason, 'reason');
+  if(facilitation.currentStepId==='brainwriting-independent'&&submissions.some(s=>s.stepId===facilitation.currentStepId&&s.structured.variant==='6-3-5')) {
+    if(!validateFacilitationCompletion(facilitation,submissions).complete)throw new Error('Six actual accounts must complete the cycle');
+    return {...facilitation,currentStepId:'brainwriting-build',brainwritingCycle:2};
+  }
+  if(facilitation.currentStepId==='brainwriting-build'&&(facilitation.brainwritingCycle??1)>1&&facilitation.brainwritingCycle!<6) {
+    if(!validateFacilitationCompletion(facilitation,submissions).complete)throw new Error('Six actual accounts must complete the cycle');
+    return {...facilitation,brainwritingCycle:facilitation.brainwritingCycle!+1};
+  }
   const all = facilitation.methods.flatMap(methodState => methodState.steps);
   const index = all.findIndex(step => step.id === facilitation.currentStepId);
   if (index < 0) throw new Error('currentStepId is unavailable');

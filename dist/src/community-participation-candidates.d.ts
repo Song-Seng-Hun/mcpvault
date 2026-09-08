@@ -14,6 +14,8 @@ interface CandidateContext {
     notificationPaths: string[];
     now: number;
 }
+/** Completed tasks remain readable for explicit result confirmation. */
+export declare function isParticipationTask(path: string, frontmatter: Record<string, unknown>): boolean;
 export declare function matchesParticipationTopic(frontmatter: Record<string, unknown>, topic: string): boolean;
 export declare function communityActivitySnapshot(fs: FileSystemService, access: ScopeAccessPolicy, principal: ScopePrincipal, rootPath: string): Promise<{
     activityRevision: string;

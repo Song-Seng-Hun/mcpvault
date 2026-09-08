@@ -11,6 +11,9 @@ export interface EconomyLedgerOptions {
 }
 export declare function assertEconomyConfigured(vaultPath: string, configured: boolean): Promise<void>;
 export declare function admitEconomyEventBytes(existing: number, proposed: number): void;
+/** Reject gaps before any pending intent can be published.  In particular, a
+ * count alone cannot establish that the next filename is unused. */
+export declare function assertContiguousEconomyJournalNames(entries: readonly string[]): string[];
 /** One writer for the canonical Vault, no lock stealing on timeout. A crash leaves
  * an explicit recovery condition; removing a live writer's lock is never safe.
  * Journal Markdown is authoritative. The external checkpoint only detects rollback. */
@@ -22,6 +25,7 @@ export declare class EconomyLedger {
     private readonly frontmatter;
     private readonly journal;
     private readonly checkpointPath;
+    private readonly preparedPath;
     private readonly lockPath;
     private lock;
     private queue;
@@ -31,6 +35,7 @@ export declare class EconomyLedger {
     static initialize(options: EconomyLedgerOptions): Promise<EconomyLedger>;
     static open(options: EconomyLedgerOptions): Promise<EconomyLedger>;
     private static acquire;
+    private assertNoRecovery;
     private assertLock;
     private releaseLock;
     private serialized;
@@ -40,6 +45,11 @@ export declare class EconomyLedger {
     private replay;
     private makeEvent;
     snapshot(): Promise<EconomyState>;
-    transact(command: EconomyCommand, revalidate?: () => Promise<void>): Promise<EconomyReceipt>;
+    walletSnapshot(account: string): Promise<{
+        state: EconomyState;
+        transactions: Record<string, unknown>[];
+        historyLimited: boolean;
+    }>;
+    transact(command: EconomyCommand, revalidate?: (state: EconomyState) => Promise<void>): Promise<EconomyReceipt>;
 }
 //# sourceMappingURL=economy-ledger.d.ts.map

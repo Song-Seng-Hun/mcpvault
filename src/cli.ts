@@ -6,6 +6,7 @@ export interface ParsedCliArgs {
   mcpHttpHost?: string;
   mcpHttpTlsCert?: string;
   mcpHttpTlsKey?: string;
+  economyConfig?: string;
   /** Dedicated HTTP process; omitted preserves legacy stdio behavior. */
   stdio?: false;
 }
@@ -24,9 +25,17 @@ export function parseCliArgs(args: string[]): ParsedCliArgs {
   let mcpHttpTlsCert: string | undefined;
   let mcpHttpTlsKey: string | undefined;
   let stdio: false | undefined;
+  let economyConfig:string|undefined;
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index]!;
+
+    if(arg==='--economy-config'||arg.startsWith('--economy-config=')) {
+      const value=arg==='--economy-config'?args[++index]:arg.slice('--economy-config='.length);
+      if(!value||value.startsWith('--'))throw new Error('--economy-config requires a private host file path');
+      if(economyConfig!==undefined)throw new Error('--economy-config may be supplied only once');
+      economyConfig=value;continue;
+    }
 
     if (arg === "--read-only") {
       const next = args[index + 1]?.toLowerCase();
@@ -144,5 +153,6 @@ export function parseCliArgs(args: string[]): ParsedCliArgs {
     ...(mcpHttpHost !== undefined && { mcpHttpHost }),
     ...(mcpHttpTlsCert !== undefined && { mcpHttpTlsCert }),
     ...(mcpHttpTlsKey !== undefined && { mcpHttpTlsKey }),
+    ...(economyConfig!==undefined && {economyConfig}),
   };
 }

@@ -6,8 +6,10 @@ import { isModerationHidden } from './moderation-policy.js';
 import { validateWorkshopReferences } from './workshop-reference-validation.js';
 import { buildMarkdownLiteralMask } from './backlinks.js';
 import { coordinate } from './work-model.js';
+import { WorkshopOutputService } from './workshop-output.js';
+import { workshopInputGuide } from './workshop-input-guide.js';
 import { attachPublicCreateRequest, preparePublicCreateRequest, runPublicCreate } from './community-public-retry.js';
-import { advanceFacilitation, createFacilitation, FACILITATION_METHODS, managedFacilitationMarkdown, nextFacilitationAction, validateFacilitationSubmission, } from './workshop-facilitation.js';
+import { advanceFacilitation, createFacilitation, FACILITATION_METHODS, managedFacilitationMarkdown, nextFacilitationAction, validateFacilitationSubmission, validateFacilitationSynthesis, workshopLineagePrerequisites, } from './workshop-facilitation.js';
 const IDEA_ROOT = 'Community/Ideas';
 const WORKSHOP_ROOT = 'Community/Workshops';
 /** Replace only the exact generated block, never an authored heading/suffix.
@@ -60,6 +62,13 @@ function managedFacilitation(note) {
         throw new Error(`Managed facilitation configuration is malformed: ${error instanceof Error ? error.message : 'invalid value'}`);
     }
 }
+function initialFacilitation(value) {
+    const state = createFacilitation(value);
+    if (state.currentStepId !== state.methods[0].steps[0].id || state.round !== 1 || (state.brainwritingCycle ?? 1) !== 1 || state.facilitatorGeneration !== 0
+        || state.ordinaryRedoCount !== 0 || state.outputs.length || state.checks.length)
+        throw new Error('Initial facilitation must start at its first step without forged progress or outputs');
+    return state;
+}
 function facilitationReceipts(note) {
     const value = note.frontmatter.facilitation_mutation_receipts;
     if (value === undefined)
@@ -101,8 +110,8 @@ function combineManagedGuards(...groups) {
             throw new Error('Managed workshop revision guards are inconsistent');
         guards.set(key, guard);
     }
-    if (guards.size > 9)
-        throw new Error('Managed workshop has too many related revision guards; reduce pinned sources or typed references');
+    if (guards.size > 128)
+        throw new Error('Managed workshop has too many related revision guards; reduce the step without dropping evidence');
     return [...guards.values()];
 }
 function text(value, field, maximum, required = false) {
@@ -181,10 +190,12 @@ function boundedProjection(value, maxChars) {
 export class IdeationService {
     fileSystem;
     references;
+    outputService;
     constructor(fileSystem, references) {
         this.fileSystem = fileSystem;
         this.references = references;
     }
+    attachOutputAdapter(adapter) { this.outputService = new WorkshopOutputService(this.fileSystem, adapter); }
     async createIdea(params) {
         const principal = requireLogin(params.principal);
         const title = text(params.title, 'title', 180, true);
@@ -447,13 +458,13 @@ export class IdeationService {
         const request = preparePublicCreateRequest({
             principal, requestId: params.requestId, action: 'workshop.create', generatedPrefix: 'workshop',
             ...(requestedWorkshopId && { requestedTargetId: requestedWorkshopId }),
-            payload: { workshopId: requestedWorkshopId, title, prompt, agenda, ideaIds, timeboxMinutes, maxContributionsPerAgent, references: params.references, researchWork },
+            payload: { workshopId: requestedWorkshopId, title, prompt, agenda, ideaIds, timeboxMinutes, maxContributionsPerAgent, references: params.references, researchWork, facilitation: params.facilitation },
         });
         const workshopId = request?.targetId || requestedWorkshopId || `workshop-${randomUUID().slice(0, 12)}`;
         const path = workshopPath(workshopId);
         let references = [];
         let guards = [];
-        let facilitation = params.facilitation === undefined ? undefined : createFacilitation(params.facilitation);
+        let facilitation = params.facilitation === undefined ? undefined : initialFacilitation(params.facilitation);
         if (facilitation && facilitation.facilitatorAccountId !== principal.accountId)
             throw new Error('facilitation.facilitatorAccountId must be the authenticated creator account');
         return runPublicCreate({
@@ -549,13 +560,22 @@ export class IdeationService {
         const selected = methodId === undefined ? undefined : FACILITATION_METHODS.find(method => method.methodId === methodId);
         if (methodId !== undefined && !selected)
             throw new Error('methodId is not a supported managed facilitation method');
+        if (params.stepId !== undefined) {
+            const step = selected?.steps.find(s => s.id === params.stepId);
+            if (!step)
+                throw new Error('stepId must belong to the selected methodId');
+            const response = { methodId: selected.methodId, stepId: step.id, required: step.required, finishCondition: step.finishCondition, ...workshopInputGuide(step.id), truncated: false };
+            if (Array.from(JSON.stringify(response)).length > maxChars)
+                throw new Error('Increase maxChars for the complete input guide (maximum 12000)');
+            return response;
+        }
         const start = selected || params.cursor === undefined ? 0 : Number(params.cursor);
         if (!Number.isSafeInteger(start) || start < 0 || start >= FACILITATION_METHODS.length)
             throw new Error('cursor must be a valid list_workshop_methods continuation');
         const source = selected ? [selected] : FACILITATION_METHODS.slice(start);
         const methods = source.map(method => ({ methodId: method.methodId, version: method.version, title: method.title,
             adaptation: method.adaptation, steps: method.steps.map(step => ({ id: step.id, title: step.title, required: step.required,
-                finishCondition: step.finishCondition, adaptation: step.adaptation, ...(step.minimumAccounts ? { minimumAccounts: step.minimumAccounts } : {}) })) }));
+                finishCondition: step.finishCondition, adaptation: step.adaptation, inputAction: { endpointId: 'workshop.methods', arguments: { methodId: method.methodId, stepId: step.id } }, ...(step.minimumAccounts ? { minimumAccounts: step.minimumAccounts } : {}) })) }));
         const bounded = boundItems(methods, maxChars - 240);
         if (!selected && bounded.items.length === 0) {
             if (maxChars >= 12000)
@@ -582,17 +602,65 @@ export class IdeationService {
      * query rows are advisory: deleted, hidden, cross-scope, malformed, stale,
      * revoked, duplicate-ballot, and wrong-workshop rows never reach a count or
      * page cursor. */
-    async managedWorkshopContributions(workshopId, facilitation, principal, after) {
+    async managedWorkshopContributions(workshopId, facilitation, principal, after, incoming, excludePath) {
         const configuredSteps = new Map(facilitation.methods.flatMap(method => method.steps).map(step => [step.id, step]));
         const currentIndex = [...configuredSteps.keys()].indexOf(facilitation.currentStepId);
+        const eligible = (item) => item.path !== excludePath && item.frontmatter.workshop_id === workshopId && !isModerationHidden(item.frontmatter)
+            && item.frontmatter.content_status !== 'deleted' && facilitation.participants.includes(item.frontmatter.account_id)
+            && (item.frontmatter.facilitation_round ?? 1) === facilitation.round;
+        const required = new Set([facilitation.currentStepId]);
+        const cycling = facilitation.currentStepId === 'brainwriting-build' && (facilitation.brainwritingCycle ?? 1) > 1;
+        const currentCycle = (fm) => !cycling || fm.structured?.cycle === facilitation.brainwritingCycle;
+        for (const step of required)
+            for (const dependency of workshopLineagePrerequisites(step))
+                if (configuredSteps.has(dependency) && [...configuredSteps.keys()].indexOf(dependency) <= currentIndex)
+                    required.add(dependency);
         const queried = await this.fileSystem.queryNotes({
             pathPrefix: `${WORKSHOP_ROOT}/${workshopId}/Contributions`, filters: { mcpvault_type: 'workshop_contribution' },
             sortBy: 'created_at', sortOrder: 'asc', limit: MAX_MANAGED_CONTRIBUTION_SCAN, ...(after ? { after } : {}), includeContent: false, includeTotal: true,
-        }, () => true, item => item.frontmatter.workshop_id === workshopId && !isModerationHidden(item.frontmatter)
-            && item.frontmatter.content_status !== 'deleted' && typeof item.frontmatter.account_id === 'string'
-            && facilitation.participants.includes(item.frontmatter.account_id) && typeof item.frontmatter.facilitation_step_id === 'string');
+        }, () => true, item => eligible(item) && item.frontmatter.facilitation_step_id === facilitation.currentStepId && currentCycle(item.frontmatter));
+        let incomplete = queried.truncated;
+        const candidates = [...queried.notes];
+        const ideaFilter = !cycling && (facilitation.currentStepId === 'brainwriting-build' || facilitation.currentStepId.startsWith('scamper-'));
+        const wanted = new Set();
+        const collectIds = (value) => { for (const id of Array.isArray(value?.parentIdeaIds) ? value.parentIdeaIds : [])
+            if (typeof id === 'string')
+                wanted.add(id); for (const idea of Array.isArray(value?.ideaIds) ? value.ideaIds : [])
+            for (const id of [idea?.ideaId, idea?.parentIdeaId])
+                if (typeof id === 'string')
+                    wanted.add(id); };
+        if (cycling) {
+            const previous = await this.fileSystem.queryNotes({ pathPrefix: `${WORKSHOP_ROOT}/${workshopId}/Contributions`, filters: { mcpvault_type: 'workshop_contribution' }, sortBy: 'created_at', sortOrder: 'asc', limit: 128, includeContent: false, includeTotal: true }, () => true, item => eligible(item) && item.frontmatter.facilitation_step_id === 'brainwriting-build' && Number(item.frontmatter.structured?.cycle) < facilitation.brainwritingCycle);
+            incomplete ||= previous.truncated;
+            candidates.push(...previous.notes);
+        }
+        for (const row of candidates)
+            collectIds(row.frontmatter.structured);
+        collectIds(incoming);
+        // Read only prerequisite stages; old unrelated transcript pages cannot
+        // starve current-step admission. Parent lookups use exact referenced IDs.
+        for (const step of [...required].reverse()) {
+            if (step === facilitation.currentStepId)
+                continue;
+            const prior = await this.fileSystem.queryNotes({ pathPrefix: `${WORKSHOP_ROOT}/${workshopId}/Contributions`, filters: { mcpvault_type: 'workshop_contribution' }, sortBy: 'created_at', sortOrder: 'asc', limit: 128, includeContent: false, includeTotal: true }, () => true, item => eligible(item) && item.frontmatter.facilitation_step_id === step && (!ideaFilter || (Array.isArray(item.frontmatter.structured?.ideaIds) && item.frontmatter.structured.ideaIds.some((i) => wanted.has(i.ideaId)))));
+            incomplete ||= prior.truncated;
+            candidates.push(...prior.notes);
+            for (const row of prior.notes)
+                collectIds(row.frontmatter.structured);
+            if (candidates.length > 256) {
+                incomplete = true;
+                break;
+            }
+        }
+        candidates.sort((a, b) => [...configuredSteps.keys()].indexOf(a.frontmatter.facilitation_step_id) - [...configuredSteps.keys()].indexOf(b.frontmatter.facilitation_step_id)
+            || (cycling ? Number(a.frontmatter.structured?.cycle ?? 1) - Number(b.frontmatter.structured?.cycle ?? 1) : 0)
+            || String(a.frontmatter.created_at || '').localeCompare(String(b.frontmatter.created_at || '')) || a.path.localeCompare(b.path));
         const accepted = [];
-        for (const candidate of queried.notes) {
+        for (const source of facilitation.sourceRevisions) {
+            const seedId = `source-${hashPayload(source.path).slice(0, 16)}`;
+            accepted.push({ note: { path: source.path, revision: source.revision, frontmatter: {} }, submission: { accountId: facilitation.facilitatorAccountId, stepId: 'source-origin', structured: { ideaIds: [{ ideaId: seedId, origin: 'Pinned public source' }] } }, guards: [{ path: source.path, expectedRevision: source.revision }] });
+        }
+        for (const candidate of candidates.slice(0, 256)) {
             try {
                 const note = await this.fileSystem.readNote(candidate.path);
                 if (note.frontmatter.mcpvault_type !== 'workshop_contribution' || note.frontmatter.workshop_id !== workshopId
@@ -602,14 +670,14 @@ export class IdeationService {
                 const stepId = typeof note.frontmatter.facilitation_step_id === 'string' ? note.frontmatter.facilitation_step_id : '';
                 const workshopRevision = typeof note.frontmatter.workshop_revision === 'string' ? note.frontmatter.workshop_revision : '';
                 const structured = note.frontmatter.structured;
-                if (!facilitation.participants.includes(accountId) || !stepId || !structured || typeof structured !== 'object' || Array.isArray(structured))
+                if (!eligible({ path: candidate.path, frontmatter: note.frontmatter }) || !stepId || !structured || typeof structured !== 'object' || Array.isArray(structured))
                     continue;
                 const stepIndex = [...configuredSteps.keys()].indexOf(stepId);
                 if (stepIndex < 0 || stepIndex > currentIndex)
                     continue;
                 const guards = await validateWorkshopReferences(this.fileSystem, this.references, { structured,
                     ...(note.frontmatter.references === undefined ? {} : { references: note.frontmatter.references }) }, candidate.path, principal);
-                const validation = validateFacilitationSubmission({ ...facilitation, currentStepId: stepId }, {
+                const validation = validateFacilitationSubmission({ ...facilitation, currentStepId: stepId, ...(cycling ? { brainwritingCycle: Number(structured.cycle ?? 1) } : {}) }, {
                     accountId, stepId, workshopRevision, structured,
                     existingSubmissions: accepted.map(item => item.submission),
                 });
@@ -620,7 +688,7 @@ export class IdeationService {
                 // impersonate a current participant. It is excluded before pagination.
             }
         }
-        return { rows: accepted, incomplete: queried.truncated };
+        return { rows: accepted, incomplete };
     }
     facilitationCursorOffset(rows, cursor) {
         if (!cursor)
@@ -647,11 +715,13 @@ export class IdeationService {
             return { workshopId, managed: true, revision: note.revision, blocked: true, facilitation: { version: facilitation.version, currentStepId: facilitation.currentStepId, round: facilitation.round }, submissions: [], submissionTotal: 0, nextAction: { kind: 'blocked', stepId: facilitation.currentStepId, message: 'Managed sources are unavailable or changed; refresh authorized sources before continuing.' }, truncated: false };
         }
         const aggregate = await this.managedWorkshopContributions(workshopId, facilitation, params.principal);
-        const page = after ? await this.managedWorkshopContributions(workshopId, facilitation, params.principal, after) : aggregate;
-        const rows = page.rows;
-        const offset = after ? 0 : this.facilitationCursorOffset(rows, after);
+        // Pagination is a view over a complete bounded current-step admission scan,
+        // so a continuation cannot forget frozen alternatives or count duplicates.
+        const page = aggregate;
+        const rows = page.rows.filter(row => row.submission.stepId === facilitation.currentStepId && ((facilitation.brainwritingCycle ?? 1) <= 1 || row.submission.structured.cycle === facilitation.brainwritingCycle));
+        const offset = this.facilitationCursorOffset(rows, after);
         const candidates = rows.slice(offset, offset + limit);
-        const action = aggregate.incomplete
+        const action = note.frontmatter.phase === 'closed' ? { kind: 'closed', message: 'Meeting closed. Review linked outputs; no execution permission is granted.' } : aggregate.incomplete
             ? { kind: 'blocked', stepId: facilitation.currentStepId, required: ['complete managed contribution scan'], finishCondition: 'A bounded scan must cover every eligible current-step contribution before completion is assessed.', adaptation: 'Read a narrower current source window or resolve the workshop backlog; no completion is inferred.' }
             : nextFacilitationAction(facilitation, aggregate.rows.map(row => row.submission));
         const project = (row) => ({ contributionId: row.note.frontmatter.contribution_id, accountId: row.submission.accountId,
@@ -660,8 +730,10 @@ export class IdeationService {
         const sourcePins = facilitation.sourceRevisions.slice(0, 2);
         const publicFacilitation = { version: facilitation.version, purpose: facilitation.purpose, scope: facilitation.scope,
             successCriteria: facilitation.successCriteria, currentStepId: facilitation.currentStepId, round: facilitation.round,
+            ...(facilitation.brainwritingCycle && { brainwritingCycle: facilitation.brainwritingCycle, cycleInstruction: '6-3-5: six actual accounts each submit three extensions of peers from the previous cycle; variant 6-3-5, cycle equals brainwritingCycle, cycleMinutes 5. Declared timing is not verified attendance.' }),
             facilitatorAccountId: facilitation.facilitatorAccountId, currentStep: { title: currentStep.title, required: currentStep.required,
-                finishCondition: currentStep.finishCondition, adaptation: currentStep.adaptation }, sourcePins,
+                finishCondition: currentStep.finishCondition, adaptation: currentStep.adaptation, input: workshopInputGuide(currentStep.id, params.principal?.accountId, sourcePins[0]) }, sourcePins,
+            sourceOrigins: sourcePins.map(source => ({ path: source.path, ideaId: `source-${hashPayload(source.path).slice(0, 16)}`, revision: source.revision })),
             sourcePinsTruncated: facilitation.sourceRevisions.length > sourcePins.length,
             ...(facilitation.sourceRevisions.length > sourcePins.length ? { sourceDetailAction: { endpointId: 'notes.read', arguments: { path: workshopPath(workshopId), expectedRevision: note.revision, maxChars: 4000 } } } : {}) };
         const outputAuthority = 'not_execution_authority';
@@ -671,7 +743,8 @@ export class IdeationService {
             const cursor = more && last ? { path: last.path,
                 ...(last.frontmatter.created_at === undefined ? { missing: true } : { value: last.frontmatter.created_at }) } : undefined;
             return { workshopId, managed: true, revision: note.revision, facilitation: publicFacilitation, outputAuthority, nextAction: action,
-                submissions: items.map(project), submissionTotal: aggregate.rows.length,
+                submissions: items.map(project), submissionTotal: rows.length,
+                ...(note.frontmatter.workshop_output_pending && { pendingOutput: { state: 'pending', guidance: 'Reread the same reserved output ID and payload to recover. If no output exists, the current facilitator may use cancel_output with outputId and reason; no created output is deleted.', nextAction: { endpointId: 'notes.read', arguments: { path: workshopPath(workshopId), expectedRevision: note.revision, maxChars: 4000 } } } }),
                 completionUnknown: aggregate.incomplete, ...(cursor ? { cursor } : {}), truncated: more };
         };
         let emitted = candidates;
@@ -688,7 +761,7 @@ export class IdeationService {
             const principal = requireLogin(params.principal);
             const workshopId = normalizeScopeId(params.workshopId, 'workshopId');
             const requestId = text(params.requestId, 'requestId', 128, true);
-            const operation = enumValue(params.operation, 'operation', ['configure', 'submit', 'advance', 'handoff', 'revoke', 'resume', 'synthesize', 'record_output'], 'configure');
+            const operation = enumValue(params.operation, 'operation', ['configure', 'submit', 'advance', 'handoff', 'revoke', 'pause', 'resume', 'redo', 'synthesize', 'record_output', 'delegate', 'execute_output', 'cancel_output', 'close'], 'configure');
             const path = workshopPath(workshopId);
             const note = await this.readTyped(path, 'workshop');
             const payloadHash = hashPayload({ operation, payload: params.payload, stepId: params.stepId, structured: params.structured, content: params.content, kind: params.kind, references: params.references });
@@ -698,12 +771,13 @@ export class IdeationService {
             const previousBlock = facilitation ? managedFacilitationMarkdown(facilitation) : undefined;
             const completionGuards = [];
             if (facilitation) {
-                facilitation = await this.validateFacilitationSources(facilitation, principal, path);
+                if (operation !== 'cancel_output')
+                    facilitation = await this.validateFacilitationSources(facilitation, principal, path);
                 if (operation === 'submit') {
                     if (!facilitation.participants.includes(principal.accountId))
                         throw new Error('Only an explicitly configured participant account may submit to managed facilitation');
                 }
-                else {
+                else if (operation !== 'execute_output') {
                     requireFacilitator(principal, facilitation);
                 }
             }
@@ -721,6 +795,36 @@ export class IdeationService {
                 await revalidateManagedActor(principal, params.revalidateActor);
                 return { success: true, workshopId, replayed: true, ...(prior.result && typeof prior.result === 'object' && !Array.isArray(prior.result) ? prior.result : {}), revision: note.revision };
             }
+            if (operation === 'cancel_output') {
+                if (!facilitation || !this.outputService)
+                    throw new Error('Managed output adapter is unavailable');
+                if (note.revision !== params.expectedRevision)
+                    throw new Error('Workshop revision changed; reread before cancellation');
+                return this.outputService.cancel(path, note, principal, params.payload, async () => { await revalidateManagedActor(principal, params.revalidateActor); }, { requestKey, payloadHash });
+            }
+            if (operation === 'execute_output') {
+                if (!facilitation || !this.outputService)
+                    throw new Error('Managed output adapter is unavailable');
+                if (note.revision !== params.expectedRevision)
+                    throw new Error('Workshop revision changed; reread before output');
+                if (facilitation.waitingReason)
+                    throw new Error('Workshop is paused; resume explicitly before producing outputs');
+                if (note.frontmatter.phase !== 'decide' || !facilitation.outputs.some(o => o.type === 'facilitation_synthesis' && (o.round ?? 1) === facilitation.round))
+                    throw new Error('Record the reviewed synthesis before delegated outputs');
+                const guards = combineManagedGuards(await validateWorkshopReferences(this.fileSystem, this.references, params.payload, path, principal), await validateWorkshopReferences(this.fileSystem, this.references, facilitation, path, principal));
+                return this.outputService.execute(path, note, principal, params.payload, async () => { await revalidateManagedActor(principal, params.revalidateActor); }, guards);
+            }
+            if (operation === 'delegate') {
+                if (!facilitation || !this.outputService)
+                    throw new Error('Managed output adapter is unavailable');
+                if (note.frontmatter.phase === 'closed')
+                    throw new Error('Workshop is closed');
+                if (note.revision !== params.expectedRevision)
+                    throw new Error('Workshop revision changed; reread before delegation');
+                return this.outputService.delegate(path, note, principal, params.payload, async () => { await revalidateManagedActor(principal, params.revalidateActor); }, { requestKey, payloadHash });
+            }
+            if (note.frontmatter.phase === 'closed')
+                throw new Error('Workshop is closed; create a linked follow-up instead of silently reopening');
             if (note.revision !== params.expectedRevision)
                 throw new Error('The workshop changed; reread it before this facilitation mutation');
             if (operation === 'submit') {
@@ -734,7 +838,7 @@ export class IdeationService {
             if (operation === 'configure') {
                 if (facilitation)
                     throw new Error('Managed facilitation is already configured; use a specific facilitation operation');
-                facilitation = createFacilitation(params.payload?.facilitation);
+                facilitation = initialFacilitation(params.payload?.facilitation);
                 if (facilitation.facilitatorAccountId !== principal.accountId)
                     throw new Error('facilitatorAccountId must be the current authenticated creator account');
                 facilitation = await this.validateFacilitationSources(facilitation, principal, path);
@@ -743,15 +847,40 @@ export class IdeationService {
                 if (!facilitation)
                     throw new Error('This workshop has no managed facilitation configuration');
                 const payload = params.payload === undefined ? {} : (params.payload && typeof params.payload === 'object' && !Array.isArray(params.payload) ? params.payload : (() => { throw new Error('payload must be an object'); })());
-                if (operation === 'advance') {
+                if (operation === 'redo') {
+                    if (note.frontmatter.workshop_output_pending)
+                        throw new Error('Recover the pending delegated output before re-discussion');
+                    if (facilitation.ordinaryRedoCount >= 1)
+                        throw new Error('Ordinary re-discussion is limited to once; create a linked follow-up');
+                    if ((note.frontmatter.workshop_outputs || []).length)
+                        throw new Error('Existing delegated outputs require a linked follow-up, not silent re-discussion');
+                    const currentMethod = facilitation.methods.find(m => m.steps.some(s => s.id === facilitation.currentStepId));
+                    facilitation = { ...facilitation, ordinaryRedoCount: 1, round: facilitation.round + 1, brainwritingCycle: 1, currentStepId: currentMethod.steps[0].id, resumeCondition: text(payload.reason, 'payload.reason', 500, true) };
+                    delete facilitation.waitingReason;
+                }
+                else if (operation === 'pause') {
+                    facilitation = { ...facilitation, waitingReason: text(payload.reason, 'payload.reason', 500, true), resumeCondition: text(payload.resumeCondition, 'payload.resumeCondition', 500, true) };
+                }
+                else if (operation === 'close') {
+                    if (note.frontmatter.workshop_output_pending)
+                        throw new Error('Recover the pending delegated output before closing');
+                    const submissions = await this.managedWorkshopContributions(workshopId, facilitation, principal);
+                    if (submissions.incomplete || nextFacilitationAction(facilitation, submissions.rows.map(r => r.submission)).kind !== 'record_output')
+                        throw new Error('Finish the final method step before closing');
+                    if (!facilitation.outputs.some(o => o.type === 'facilitation_synthesis' && (o.round ?? 1) === facilitation.round))
+                        throw new Error('Record synthesis with minority, uncertainty and revisit before closing');
+                    text(payload.reason, 'payload.reason', 500, true);
+                    completionGuards.push(...submissions.rows.flatMap(row => row.guards));
+                }
+                else if (operation === 'advance') {
                     const submissions = await this.managedWorkshopContributions(workshopId, facilitation, principal);
                     if (submissions.incomplete)
                         throw new Error('Managed contribution scan is incomplete; completion cannot be inferred');
-                    completionGuards.push(...submissions.rows.filter(row => row.submission.stepId === facilitation.currentStepId).flatMap(row => row.guards));
+                    completionGuards.push(...submissions.rows.flatMap(row => row.guards));
                     const action = nextFacilitationAction(facilitation, submissions.rows.map(item => item.submission));
                     if (action.kind !== 'advance')
                         throw new Error(`Facilitation step is incomplete: ${action.resumeCondition || action.finishCondition}`);
-                    facilitation = advanceFacilitation(facilitation, text(payload.reason, 'payload.reason', 500, true));
+                    facilitation = advanceFacilitation(facilitation, text(payload.reason, 'payload.reason', 500, true), submissions.rows.map(r => r.submission));
                 }
                 else if (operation === 'handoff') {
                     const nextAccountId = text(payload.facilitatorAccountId, 'payload.facilitatorAccountId', 160, true);
@@ -771,18 +900,19 @@ export class IdeationService {
                 else if (operation === 'resume') {
                     facilitation = { ...facilitation, ...(payload.waitingReason === undefined ? {} : { waitingReason: text(payload.waitingReason, 'payload.waitingReason', 500, true) }),
                         ...(payload.resumeCondition === undefined ? {} : { resumeCondition: text(payload.resumeCondition, 'payload.resumeCondition', 500, true) }) };
+                    if (payload.waitingReason === undefined)
+                        delete facilitation.waitingReason;
                 }
                 else if (operation === 'synthesize') {
                     const submissions = await this.managedWorkshopContributions(workshopId, facilitation, principal);
                     if (submissions.incomplete)
                         throw new Error('Managed contribution scan is incomplete; completion cannot be inferred');
-                    completionGuards.push(...submissions.rows.filter(row => row.submission.stepId === facilitation.currentStepId).flatMap(row => row.guards));
+                    completionGuards.push(...submissions.rows.flatMap(row => row.guards));
                     const action = nextFacilitationAction(facilitation, submissions.rows.map(item => item.submission));
-                    if (action.kind !== 'advance' && action.kind !== 'record_output')
-                        throw new Error(`Facilitation step is incomplete: ${action.resumeCondition || action.finishCondition}`);
+                    if (action.kind !== 'record_output')
+                        throw new Error(`Final facilitation step is incomplete: ${action.resumeCondition || action.finishCondition}`);
                     const synthesis = text(payload.synthesis, 'payload.synthesis', MAX_LONG_TEXT_CHARS, true);
-                    const structuredSynthesis = validateFacilitationSubmission(facilitation, { accountId: principal.accountId, stepId: facilitation.currentStepId,
-                        workshopRevision: params.expectedRevision, structured: payload.structured, existingSubmissions: [] }).structured;
+                    const structuredSynthesis = validateFacilitationSynthesis(payload.structured);
                     for (const field of ['adopted', 'rejected', 'minority', 'uncertainty', 'revisit']) {
                         if (!Object.hasOwn(structuredSynthesis, field) || typeof structuredSynthesis[field] === 'boolean')
                             throw new Error(`Managed synthesis requires explicit typed ${field}`);
@@ -792,7 +922,7 @@ export class IdeationService {
                     const synthesisReferences = await this.references.validateAndNormalize(params.references, path, principal, `${synthesis}\n${JSON.stringify(structuredSynthesis)}`, { strictBodyLinks: true });
                     if (facilitation.outputs.length >= 16)
                         throw new Error('Managed facilitation has reached its bounded output limit');
-                    facilitation = { ...facilitation, outputs: [...facilitation.outputs, { type: 'facilitation_synthesis', synthesis, structured: structuredSynthesis, references: synthesisReferences, status: 'proposed' }] };
+                    facilitation = { ...facilitation, outputs: [...facilitation.outputs, { type: 'facilitation_synthesis', round: facilitation.round, synthesis, structured: structuredSynthesis, references: synthesisReferences, status: 'proposed' }] };
                 }
                 else if (operation === 'record_output') {
                     const output = payload.output;
@@ -831,12 +961,13 @@ export class IdeationService {
                 uniqueGuards.set(key, guard);
             }
             const relatedGuards = [...uniqueGuards.values()].filter(guard => guard.path !== path);
-            if (relatedGuards.length > 9)
-                throw new Error('Completion requires more than nine source guards; narrow the step before advancing');
+            if (relatedGuards.length > 128)
+                throw new Error('Completion exceeds 128 revision guards; narrow this step without discarding its evidence');
             await revalidateManagedActor(principal, params.revalidateActor);
             await this.fileSystem.writeNoteWithRevisionGuardsAndReceipt({ path, content, frontmatter: { ...note.frontmatter, facilitation,
                     facilitator_account_id: facilitation.facilitatorAccountId, facilitator_generation: facilitation.facilitatorGeneration,
-                    facilitation_mutation_receipts: nextReceipts, ...(operation === 'synthesize' ? { synthesis_status: 'proposed', phase: 'decide', next_action: 'Review this bounded synthesis, then use wiki.decision_record or task generation through their normal authorization.' } : {}), updated_at: now(), }, expectedRevision: params.expectedRevision }, relatedGuards);
+                    facilitation_mutation_receipts: nextReceipts, ...(operation === 'synthesize' ? { synthesis_status: 'proposed', phase: 'decide', next_action: 'Review this bounded synthesis, then use wiki.decision_record or task generation through their normal authorization.' } : {}),
+                    ...(operation === 'close' ? { phase: 'closed', status: 'closed', facilitation_closed_at: now(), next_action: 'Meeting closed; outputs do not authorize external execution.' } : {}), updated_at: now(), }, expectedRevision: params.expectedRevision }, relatedGuards, { maxGuards: 128 });
             const updated = await this.fileSystem.readNote(path);
             return { success: true, workshopId, ...result, revision: updated.revision };
         });
@@ -879,16 +1010,16 @@ export class IdeationService {
                             throw new Error('Managed facilitation contributions require the exact current workshop revision');
                         if (!params.stepId)
                             throw new Error('Managed facilitation contributions require stepId');
-                        const existing = await this.managedWorkshopContributions(workshopId, facilitation, principal);
-                        if (existing.incomplete && ['dot-voting-vote', 'ngt-rank'].includes(facilitation.currentStepId))
-                            throw new Error('Managed ballot scan is incomplete; a duplicate ballot cannot be ruled out');
+                        const existing = await this.managedWorkshopContributions(workshopId, facilitation, principal, undefined, params.structured, path);
+                        if (existing.incomplete)
+                            throw new Error('Managed predecessor scan is incomplete; lineage or duplicate admission cannot be inferred');
                         structured = validateFacilitationSubmission(facilitation, {
                             accountId: principal.accountId, stepId: params.stepId, workshopRevision: params.expectedRevision, structured: params.structured,
                             existingSubmissions: existing.rows.map(item => item.submission),
                         }).structured;
-                        managedReferenceGuards = await validateWorkshopReferences(this.fileSystem, this.references, {
+                        managedReferenceGuards = combineManagedGuards(existing.rows.flatMap(row => row.guards), await validateWorkshopReferences(this.fileSystem, this.references, {
                             facilitation, structured, content, ...(params.references === undefined ? {} : { references: params.references }),
-                        }, path, principal);
+                        }, path, principal));
                     }
                     guards = [{ path: workshopPath(workshopId), expectedRevision: workshop.revision }];
                     if (ideaId) {
@@ -905,9 +1036,9 @@ export class IdeationService {
                     const frontmatter = attachPublicCreateRequest(request, {
                         mcpvault_type: 'workshop_contribution', contribution_id: contributionId, workshop_id: workshopId, phase, kind,
                         ...(ideaId && { idea_id: ideaId }), author: identity(principal), account_id: principal.accountId,
-                        ...(facilitation && { facilitation_step_id: facilitation.currentStepId, workshop_revision: params.expectedRevision, structured }), references, created_at: now(),
+                        ...(facilitation && { facilitation_step_id: facilitation.currentStepId, facilitation_round: facilitation.round, workshop_revision: params.expectedRevision, structured }), references, created_at: now(),
                     }, body);
-                    const receipt = await this.fileSystem.writeNoteWithRevisionGuardsAndReceipt({ path, content: body, frontmatter, expectedRevision: 'missing' }, combineManagedGuards(guards, managedReferenceGuards, participationGuard ? [participationGuard] : []));
+                    const receipt = await this.fileSystem.writeNoteWithRevisionGuardsAndReceipt({ path, content: body, frontmatter, expectedRevision: 'missing' }, combineManagedGuards(guards, managedReferenceGuards, participationGuard ? [participationGuard] : []), { maxGuards: 128 });
                     return { success: true, workshopId, contributionId, phase, kind, ...(facilitation && { stepId: facilitation.currentStepId }), path, revision: receipt.revision };
                 },
                 replay: note => {

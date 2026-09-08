@@ -11,6 +11,7 @@
     "global-sync-server.ts",
     "enterprise-server.ts",
     "enterprise-admin.ts",
+    "economy-host.ts",
     "public-federation-server.ts",
     "src/**/*"
   ],

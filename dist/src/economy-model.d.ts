@@ -16,6 +16,8 @@ export interface EconomyPolicy {
     dailySpend: number;
     dailyPosts: number;
     openContracts: number;
+    /** Host-approved rolling seven-day disbursement cap, not new supply. */
+    treasuryWeeklyBudget?: number;
 }
 export interface QuestArtifact {
     path: string;
@@ -71,9 +73,15 @@ export interface QuestContract {
     };
     revisionRequests: number;
     disputeReason?: string;
+    claimRecovery?: {
+        operator: string;
+        reason: string;
+        at: string;
+        requestId: string;
+    };
 }
 export interface EconomyCommand {
-    op: 'issue' | 'allocate' | 'draft' | 'fund' | 'claim' | 'submit' | 'cancel' | 'review' | 'dispute' | 'resolve';
+    op: 'issue' | 'allocate' | 'draft' | 'fund' | 'claim' | 'recover_claim' | 'submit' | 'cancel' | 'review' | 'dispute' | 'resolve';
     actor: string;
     requestId: string;
     contractId?: string;
@@ -106,6 +114,10 @@ export interface EconomyState {
         payload: string;
         result: EconomyReceipt;
     }>;
+    treasuryDisbursements?: {
+        at: string;
+        amount: number;
+    }[];
 }
 export declare const economyRevision: (value: unknown) => string;
 export declare const initialEconomy: () => EconomyState;
@@ -115,6 +127,12 @@ export declare function assertEconomyConservation(s: EconomyState): void;
  * Live permission, visible exact artifacts and trusted verifier checks belong to the
  * adapter immediately before this reducer, never to caller-authored receipts. */
 export declare function economyRetry(state: EconomyState, command: EconomyCommand): EconomyReceipt | undefined;
+/** Shared read-only owner/deadline/WIP gate. Projection callers compute busy
+ * once, without cloning/reducing the complete financial history per candidate. */
+export declare function questClaimAuthority(contract: QuestContract, worker: string, p: EconomyPolicy, at: string, busy: boolean, recovering?: boolean): {
+    workerOwner: string;
+    reviewer: string | undefined;
+};
 export declare function applyEconomyCommand(input: EconomyState, command: EconomyCommand, rawPolicy: EconomyPolicy, now: string): {
     state: EconomyState;
     receipt: EconomyReceipt;

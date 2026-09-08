@@ -769,8 +769,8 @@ export class FileSystemService {
     /** Revision of this serialized write, not a subsequent read/current-state guarantee. */
     async writeNoteWithReceipt(params, policy = {}) {
         const path = this.normalizePath(params.path);
-        const receipt = await this.withMutationLock(path, () => {
-            policy.assertAccess?.();
+        const receipt = await this.withMutationLock(path, async () => {
+            await policy.assertAccess?.();
             return this.writeNoteUnlocked({ ...params, path }, policy.maxBytes, policy.assertAccess);
         });
         return { revision: receipt.revision };
@@ -786,8 +786,11 @@ export class FileSystemService {
     /** Same related-note assertions/locks, with the target's own write revision. */
     async writeNoteWithRevisionGuardsAndReceipt(params, guards, policy = {}) {
         const path = this.normalizePath(params.path);
-        if (!Array.isArray(guards) || guards.length < 1 || guards.length > 9) {
-            throw new Error('A guarded note write requires between 1 and 9 related-note revision guards');
+        const maxGuards = policy.maxGuards ?? 9;
+        if (!Number.isInteger(maxGuards) || maxGuards < 1 || maxGuards > 128)
+            throw new Error('Invalid internal revision guard budget');
+        if (!Array.isArray(guards) || guards.length < 1 || guards.length > maxGuards) {
+            throw new Error(`A guarded note write requires between 1 and ${maxGuards} related-note revision guards`);
         }
         const targetIdentity = this.resolvePath(path).toLowerCase();
         const guardIdentities = new Set();
@@ -807,7 +810,7 @@ export class FileSystemService {
             return { path: guardPath, expectedRevision: guard.expectedRevision };
         });
         return this.withMutationLocks([path, ...normalizedGuards.map(guard => guard.path)], async () => {
-            policy.assertAccess?.();
+            await policy.assertAccess?.();
             for (const guard of normalizedGuards)
                 await this.assertExpectedRevision(guard.path, guard.expectedRevision, policy.maxBytes);
             const receipt = await this.writeNoteUnlocked({ ...params, path }, policy.maxBytes, policy.assertAccess);
@@ -960,7 +963,9 @@ export class FileSystemService {
             // The missing guard must survive another process creating the target
             // after our existence check. Exclusive creation never truncates it.
             // Recheck caller policy after all awaited preparation, at write dispatch.
-            assertAccess?.();
+            const accessCheck = assertAccess?.();
+            if (accessCheck)
+                await accessCheck;
             await writeFile(fullPath, finalContent, expectedRevision === 'missing'
                 ? { encoding: 'utf-8', flag: 'wx' } : 'utf-8');
             this.notifyNoteChanged(path, 'upsert');

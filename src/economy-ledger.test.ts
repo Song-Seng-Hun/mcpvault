@@ -1,7 +1,9 @@
 import { afterEach, expect, test } from 'vitest';
-import { mkdtemp, mkdir, readFile, readdir, rm, unlink } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, readdir, rm, unlink, writeFile } from 'node:fs/promises';
+import { spawn } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { EconomyLedger, admitEconomyEventBytes } from './economy-ledger.js';
 import type { EconomyPolicy } from './economy-model.js';
 
@@ -83,4 +85,74 @@ test('close stops new admission, drains accepted writes, and releases once',asyn
  release();await accepted;await Promise.all([closing,sameClose,refused]);
  const reopened=await EconomyLedger.open(o);
  try {expect((await reopened.snapshot()).issued).toBe(5000);}finally{await reopened.close();}
+});
+
+test('a prepared but not published transaction is recovered from exact host intent',async()=>{
+ const o=await fixture(),ledger=await EconomyLedger.initialize(o);
+ const command={op:'issue' as const,actor:'operator',requestId:'crash-prepare',amount:5000,reason:'approval'};
+ const receipt=await ledger.transact(command);await ledger.close();
+ const cpName=(await readdir(o.hostPath)).find(n=>n.endsWith('.checkpoint.json'))!;
+ const cpPath=join(o.hostPath,cpName),cp=JSON.parse(await readFile(cpPath,'utf8'));
+ const eventPath=join(o.vaultPath,'.mcpvault-economy/journal/0000000001.md');
+ await writeFile(join(o.hostPath,cpName.replace('.checkpoint.json','.prepared.md')),await readFile(eventPath));
+ await writeFile(cpPath,JSON.stringify({version:1,vault:cp.vault,sequence:0,hash:'0'.repeat(64),pending:{sequence:1,hash:cp.hash}}));
+ await unlink(eventPath);
+ const reopened=await EconomyLedger.open(o);
+ try{expect(await reopened.transact(command)).toEqual(receipt);expect((await reopened.snapshot()).issued).toBe(5000);}finally{await reopened.close();}
+});
+
+test('refuses a pending replay with a journal prefix gap before it can overwrite the pending path',async()=>{
+  const o=await fixture(),ledger=await EconomyLedger.initialize(o);
+  await ledger.transact({op:'issue',actor:'operator',requestId:'first',amount:5000,reason:'approval'});
+  await ledger.transact({op:'allocate',actor:'operator',requestId:'second',account:'alice',amount:200,reason:'budget'});
+  await ledger.close();
+  const cpName=(await readdir(o.hostPath)).find(n=>n.endsWith('.checkpoint.json'))!;
+  const cpPath=join(o.hostPath,cpName),journal=join(o.vaultPath,'.mcpvault-economy','journal');
+  const first=await readFile(join(journal,'0000000001.md'),'utf8');
+  const second=await readFile(join(journal,'0000000002.md'),'utf8');
+  const firstHash=/^hash: ([a-f0-9]{64})$/m.exec(first)![1]!;
+  const secondHash=/^hash: ([a-f0-9]{64})$/m.exec(second)![1]!;
+  await writeFile(join(o.hostPath,cpName.replace('.checkpoint.json','.prepared.md')),second);
+  await writeFile(cpPath,JSON.stringify({version:1,vault:o.vaultPath,sequence:1,hash:firstHash,pending:{sequence:2,hash:secondHash}}));
+  await unlink(join(journal,'0000000001.md'));
+  await writeFile(join(journal,'0000000002.md'),'sentinel: do-not-overwrite\n');
+  await expect(EconomyLedger.open(o)).rejects.toThrow(/sequence gap|fork/i);
+  expect(await readFile(join(journal,'0000000002.md'),'utf8')).toBe('sentinel: do-not-overwrite\n');
+});
+
+test('commit validation receives the replayed state without recursively snapshotting the ledger queue',async()=>{
+  const o=await fixture(),ledger=await EconomyLedger.initialize(o);
+  try {
+    await ledger.transact({op:'issue',actor:'operator',requestId:'validated',amount:5000,reason:'approval'},async state=>{
+      expect(state.sequence).toBe(0);
+      expect(state.issued).toBe(0);
+    });
+  } finally {await ledger.close();}
+});
+
+test('a real killed ledger process is recovered only after its writer lock is observed dead',async()=>{
+  const o=await fixture();
+  const initialized=await EconomyLedger.initialize(o);await initialized.close();
+  const module=pathToFileURL(join(process.cwd(),'src','economy-ledger.ts')).href;
+  const source=`import { EconomyLedger } from ${JSON.stringify(module)};\nconst options=${JSON.stringify(o)};\nconst ledger=await EconomyLedger.open(options);\nprocess.stdout.write('writer-ready\\n');\nawait new Promise(()=>{});\nvoid ledger;`;
+  const child=spawn(process.execPath,['--import','tsx','--input-type=module','--eval',source],{stdio:['ignore','pipe','pipe']});
+  try {
+    await new Promise<void>((resolve,reject)=>{
+      let output='';
+      child.stdout.on('data',chunk=>{output+=chunk; if(output.includes('writer-ready'))resolve();});
+      child.once('error',reject);child.once('exit',code=>reject(new Error(`writer exited before ready: ${code}`)));
+    });
+    process.kill(child.pid!,'SIGKILL');
+    await new Promise<void>(resolve=>child.once('exit',()=>resolve()));
+    const { inspectEconomyRecovery, recoverEconomyWriter }=await import('./economy-host.js');
+    const preview=await inspectEconomyRecovery(o);
+    await expect(recoverEconomyWriter(o,{expectedFingerprint:preview.fingerprint,reason:'test killed child writer'})).resolves.toMatchObject({recovered:true});
+    const reopened=await EconomyLedger.open(o);try{expect((await reopened.snapshot()).issued).toBe(0);}finally{await reopened.close();}
+  } finally {if(child.exitCode===null)child.kill('SIGKILL');}
+});
+
+test('recovery gate blocks a new writer even if the old lock has been retired',async()=>{
+ const o=await fixture(),ledger=await EconomyLedger.initialize(o);await ledger.close();
+ await writeFile(join(o.vaultPath,'.mcpvault-economy/recovery.lock'),'host recovery in progress');
+ await expect(EconomyLedger.open(o)).rejects.toThrow(/recovery/i);
 });

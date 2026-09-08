@@ -6,9 +6,12 @@ import { PathFilter } from './pathfilter.js';
 import { normalizeScopeId } from './scopes.js';
 import { isModerationHidden } from './moderation-policy.js';
 import { coordinate, fingerprint, page, type WorkPage } from './work-model.js';
-import { applyEconomyCommand, economyRetry, economyRevision, type EconomyCommand, type EconomyPolicy, type QuestArtifact, type QuestContract, type QuestWorkBinding } from './economy-model.js';
+import { applyEconomyCommand, questClaimAuthority, economyRetry, economyRevision, type EconomyCommand, type EconomyPolicy, type QuestArtifact, type QuestContract, type QuestWorkBinding } from './economy-model.js';
 import type { EconomyLedger } from './economy-ledger.js';
 import { validateMarkdownContract } from './quest-verifier.js';
+import {questAttention} from './economy-operations.js';
+import type { ParticipationCandidate, ParticipationEconomyContext, ParticipationEconomySnapshot } from './community-participation.js';
+import { matchesParticipationTopic, isParticipationTask } from './community-participation-candidates.js';
 
 export interface EconomyServiceOptions {
   assertActor: (principal: ScopePrincipal) => Promise<void>;
@@ -65,13 +68,91 @@ export class EconomyService {
     const state=await this.ledger.snapshot();
     if(Object.values(state.contracts).some(c=>c.terms.taskId===taskId && !['draft','settled','cancelled'].includes(c.status))) throw new Error('Paid task is controlled by quest.contract; free mutation would bypass escrow/claim rules');
   }
+  async workProjection(principal:ScopePrincipal|undefined,taskIds:string[]):Promise<Record<string,Record<string,unknown>>> {
+    if(!principal||!Object.hasOwn(this.policy.owners,principal.accountId))return {};
+    const actor=await this.actor(principal),ids=new Set(taskIds),state=await this.ledger.snapshot(),result:Record<string,Record<string,unknown>>={};
+    for(const c of Object.values(state.contracts)) {
+      if(!ids.has(c.terms.taskId)||['draft','cancelled'].includes(c.status))continue;
+      let current;try{current=await this.task(c,actor,false);}catch{continue;}
+      const old=result[c.terms.taskId];if(old&&old.status!=='settled')continue;
+      const divergence=c.workBinding&&current.revision!==c.workBinding.revision;
+      result[c.terms.taskId]={kind:'paidContract',contractId:c.id,status:c.status,reward:c.terms.reward,revision:economyRevision(c),generation:c.generation,
+        ...(divergence&&c.status!=='settled'?{warning:'paid_work_divergence',paymentHeld:true}:{}),
+        attention:questAttention(c,new Date().toISOString()),freeMutationBlocked:!['settled','cancelled'].includes(c.status),
+        nextAction:{endpointId:'quest.market',arguments:{contractId:c.id,maxChars:4000}},authority:'Budget is not external execution authority'};
+    }
+    await this.actor(actor);return result;
+  }
+  /** Read-only host projection for the opt-in participation pulse. Contracts
+   * remain ledger-private: this emits only a visible task, its current activity
+   * fingerprint, role-local reason, and the normal read-only market action. */
+  participationOptions(){
+    return {
+      economyCandidates:(principal:ScopePrincipal,context:ParticipationEconomyContext)=>!this.policy.enabled||!Object.hasOwn(this.policy.owners,principal.accountId)?Promise.resolve([]):this.participationCandidates(principal,context),
+      economyTargetSnapshot:(principal:ScopePrincipal,path:string,context:ParticipationEconomyContext)=>this.participationTargetSnapshot(principal,path,context),
+    };
+  }
+  async participationCandidates(principal:ScopePrincipal|undefined,context:ParticipationEconomyContext):Promise<ParticipationCandidate[]> {
+    const rows=await this.participationRows(principal,context);
+    return rows.slice(0,3).map(row=>row.candidate);
+  }
+  async participationTargetSnapshot(principal:ScopePrincipal,path:string,context:ParticipationEconomyContext):Promise<ParticipationEconomySnapshot>{
+    if(!/^Community\/Tasks\/[a-z0-9][a-z0-9._-]*\.md$/.test(path))throw new Error('Quest target unavailable');
+    const rows=await this.participationRows(principal,{...context,seen:[]},path);
+    if(rows.length!==1)throw new Error('Quest target unavailable; reread participation pulse');
+    const {candidate,frontmatter}=rows[0]!;
+    return {revision:candidate.revision,activityRevision:candidate.activityRevision!,frontmatter};
+  }
+  private async participationRows(principal:ScopePrincipal|undefined,context:ParticipationEconomyContext,targetPath?:string){
+    const actor=await this.actor(principal),state=await this.ledger.snapshot(),output:Array<{candidate:ParticipationCandidate;frontmatter:Record<string,unknown>}>=[];
+    const busy=Object.values(state.contracts).some(c=>c.workerOwner===this.policy.owners[actor.accountId]&&['claimed','submitted','changes_requested','disputed'].includes(c.status));
+    const words=(value:string)=>new Set(value.normalize('NFKC').toLowerCase().match(/[\p{L}\p{N}]+/gu)||[]);
+    const matchingGoal=(contract:QuestContract,path:string)=>context.goals.find(goal=>{
+      if(goal.links?.includes(path))return true;
+      const goalWords=words(goal.question),contractWords=words(`${contract.terms.title} ${contract.terms.criteria.join(' ')}`);
+      return [...goalWords].some(word=>contractWords.has(word));
+    });
+    const contracts=Object.values(state.contracts).sort((a,b)=>Number(a.status==='settled')-Number(b.status==='settled')||b.updatedAt.localeCompare(a.updatedAt)||a.id.localeCompare(b.id));
+    const currentTasks=new Set<string>();
+    for(const contract of contracts) {
+      if(['draft','cancelled'].includes(contract.status)||(targetPath&&taskPath(contract.terms.taskId)!==targetPath))continue;
+      if(currentTasks.has(contract.terms.taskId))continue;
+      currentTasks.add(contract.terms.taskId);
+      let task;try{task=await this.task(contract,actor);}catch{continue;}
+        if(task.frontmatter.content_status==='deleted'||!isParticipationTask(taskPath(contract.terms.taskId),task.frontmatter))continue;
+      const frontmatter={title:contract.terms.title,tags:Array.isArray(task.frontmatter.tags)?task.frontmatter.tags.filter((tag:unknown)=>typeof tag==='string'):[]};
+      if(!context.topics.some(topic=>matchesParticipationTopic(frontmatter,topic)))continue;
+      const path=taskPath(contract.terms.taskId),activityRevision=fingerprint({contract:economyRevision(contract),task:task.revision});
+      const seen=context.seen.find(item=>item.path===path);
+      const due=Boolean(seen?.deferUntil&&Date.parse(seen.deferUntil)<=context.now);
+      if(seen&&(seen.activityRevision||seen.revision)===(seen.activityRevision?activityRevision:task.revision)&&!due)continue;
+      const ownRequester=contract.requester===actor.accountId,ownWorker=contract.worker===actor.accountId,ownReviewer=contract.reviewer===actor.accountId;
+      const goal=matchingGoal(contract,path);
+      let reason:string|undefined,lane:ParticipationCandidate['lane']='follow_up';
+        if(contract.status==='settled'&&(ownRequester||ownWorker))reason='Your quest result is settled; confirm the result and plan any follow-up. No further work or payment is automatic.';
+        else if(ownRequester)reason=contract.status==='funded'?'Your commissioned quest is funded and awaiting an explicit acceptance.':'Your commissioned quest has a current work or review follow-up.';
+      else if(ownWorker)reason=contract.status==='submitted'?'Your submitted result is awaiting its assigned review.':'Your accepted quest has a current result follow-up.';
+      else if(ownReviewer)reason=contract.status==='submitted'?'Your assigned quest review is ready for an explicit review decision.':'Your assigned quest has a current review follow-up.';
+      else if(contract.status==='funded'&&goal){
+        if(actor.capabilities&&!actor.capabilities.includes('task'))continue;
+        if(task.revision!==contract.terms.taskRevision||task.frontmatter.assignee_account_id||!['proposed','accepted'].includes(String(task.frontmatter.status)))continue;
+        try{questClaimAuthority(contract,actor.accountId,this.policy,new Date(context.now).toISOString(),busy);}catch{continue;}
+        reason=`A funded quest matches your goal: ${goal.id}. Acceptance is manual and never starts work automatically.`;lane='interest';
+      }
+      if(!reason)continue;
+      output.push({frontmatter,candidate:{path,revision:task.revision!,activityRevision,lane,title:contract.terms.title,reason,changedAt:contract.updatedAt,
+        changes:[],nextAction:{endpointId:'quest.market',arguments:{contractId:contract.id,maxChars:2000}}}});
+    }
+    output.sort(({candidate:a},{candidate:b})=>Number(a.lane==='interest')-Number(b.lane==='interest')||b.changedAt.localeCompare(a.changedAt)||a.path.localeCompare(b.path));
+    await this.actor(actor);return output;
+  }
   async wallet(principal:ScopePrincipal|undefined,params:PageParams):Promise<WorkPage & {availableXp:number;escrowXp:number}> {
-    const actor=await this.actor(principal),s=await this.ledger.snapshot();
+    const actor=await this.actor(principal),{state:s,transactions,historyLimited}=await this.ledger.walletSnapshot(actor.accountId);
     const own=Object.values(s.contracts).filter(c=>c.requester===actor.accountId);
     const escrowXp=own.reduce((sum,c)=>sum+c.escrow,0), availableXp=s.balances[actor.accountId]||0;
-    const items=own.map(c=>({contractId:c.id,status:c.status,escrowXp:c.escrow,revision:economyRevision(c)}));
+    const items=[...transactions,...own.map(c=>({kind:'escrow',contractId:c.id,status:c.status,escrowXp:c.escrow,revision:economyRevision(c)}))];
     await this.actor(actor);
-    return page(items,{availableXp,escrowXp,reputation:'separate_nontransferable_signal',dataOnly:true},fingerprint({account:actor.accountId,sequence:s.sequence}),params,'economy.wallet') as WorkPage & {availableXp:number;escrowXp:number};
+    return page(items,{availableXp,escrowXp,historyLimited,reputation:'separate_nontransferable_signal',dataOnly:true},fingerprint({account:actor.accountId,sequence:s.sequence}),params,'economy.wallet') as WorkPage & {availableXp:number;escrowXp:number};
   }
   async market(principal:ScopePrincipal|undefined,params:PageParams & {contractId?:string}):Promise<WorkPage> {
     const actor=await this.actor(principal),s=await this.ledger.snapshot(),items:Array<Record<string,unknown>>=[];
@@ -80,7 +161,8 @@ export class EconomyService {
       if(c.status==='draft' && c.requester!==actor.accountId)continue;
       try {await this.task(c,actor,false);} catch {continue;}
       const role=c.worker===actor.accountId?'worker':c.requester===actor.accountId?'requester':c.reviewer===actor.accountId?'reviewer':'reader';
-      const warning=c.submission && Date.now()>Date.parse(c.submission.at)+48*3600000 && !['settled','cancelled'].includes(c.status)?'review_overdue_operator_attention':undefined;
+      const attention=questAttention(c,new Date().toISOString());
+      const warning=attention==='none'?undefined:attention;
       items.push({contractId:c.id,title:c.terms.title,status:c.status,reward:c.terms.reward,deadline:c.terms.deadline,
         task:taskPath(c.terms.taskId),revision:economyRevision(c),generation:c.generation,role,
         ...(warning && {warning}),

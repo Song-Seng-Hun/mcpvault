@@ -27,10 +27,11 @@ const TASK_EXTENSION_FIELDS = ['project_id', 'parent_task_id', 'depends_on', 'co
   'verification', 'author_account_id', 'claim_generation', 'started_at', 'last_progress_at', 'assignee_account_id',
   'work_review', 'work_reviews', 'work_handoff', 'work_changes'] as const;
 type Guard = { path: string; expectedRevision: string };
-type Intent = { kind: 'claim'; params: WorkClaimParams } | { kind: 'handoff'; params: WorkHandoffParams } | { kind: 'review'; params: WorkReviewParams };
+type Intent = { kind: 'claim'; params: WorkClaimParams; paidContractId?:string } | { kind: 'handoff'; params: WorkHandoffParams } | { kind: 'review'; params: WorkReviewParams };
 export interface WorkServiceOptions {
   assertActor?: (principal: ScopePrincipal) => Promise<void>;
   assertTaskMutation?: (taskId: string) => Promise<void>;
+  paidProjection?:(taskIds:string[],principal?:ScopePrincipal)=>Promise<Record<string,Properties>>;
 }
 
 /** Markdown is the sole durable state, including approvals and retry receipts.
@@ -38,6 +39,7 @@ export interface WorkServiceOptions {
 export class WorkService {
   private readonly access = new ScopeAccessPolicy();
   private readonly intents = new WeakMap<object, Intent>();
+  private readonly workshopCreates = new WeakMap<object, { guards:Guard[]; receipt:import('./workshop-output.js').WorkshopOutputReceipt; assertAccess:()=>Promise<void> }>();
   constructor(
     private readonly fileSystem: FileSystemService,
     private readonly references: ReferenceService,
@@ -57,6 +59,21 @@ export class WorkService {
     if (!this.auth.hasCapability(current, 'task') || !this.auth.hasCapability(principal, 'task')) throw new Error('Task capability is required');
     await this.options.assertActor?.(current);
     return current;
+  }
+
+  /** Server-owned adapter, not an agent-supplied authority or task field. */
+  async authorizeWorkshopProject(principal:ScopePrincipal,projectId:string,owner:boolean,delegate?:string,grantor?:string):Promise<Guard> {
+    const actor=await this.actor(principal),project=await this.projectNote(projectId);
+    this.member(project.frontmatter,actor);
+    if(owner && project.frontmatter.owner_account_id!==actor.accountId)throw new Error('Only project owner may delegate workshop outputs');
+    if(grantor && project.frontmatter.owner_account_id!==grantor)throw new Error('Project delegation owner changed');
+    if(delegate && (!project.frontmatter.participants.includes(delegate)||(await this.auth.listPrincipals()).every(p=>p.accountId!==delegate)))throw new Error('Delegate must be an existing project participant');
+    return {path:projectPath(projectId),expectedRevision:project.revision};
+  }
+
+  async createWorkshopTask(params:Parameters<AgentTaskService['create']>[0],guards:Guard[],receipt:import('./workshop-output.js').WorkshopOutputReceipt,assertAccess:()=>Promise<void>) {
+    this.workshopCreates.set(params,{guards:structuredClone(guards),receipt:structuredClone(receipt),assertAccess});
+    return this.tasks.create(params);
   }
 
   private async visible(path: string): Promise<ParsedNote> {
@@ -354,6 +371,7 @@ export class WorkService {
 
   private async runTask(action: 'create' | 'update', params: any, proceed: (context?: AgentTaskWriteContext, parameters?: any) => Promise<any>): Promise<any> {
     const intent = this.intents.get(params); this.intents.delete(params);
+    const workshopCreate=this.workshopCreates.get(params);this.workshopCreates.delete(params);
     params = { ...params };
     return coordinate(async () => {
       const prior = action === 'update' ? await this.visible(taskPath(params.taskId)) : undefined;
@@ -409,7 +427,7 @@ export class WorkService {
       // completion check. Validating a raw value then persisting a normalized
       // one would let alternate casing bypass those checks.
       if (params.status !== undefined) fm.status = taskStatus(params.status, taskStatus(fm.status));
-      const guards: Guard[] = [{ path: projectPath(projectId), expectedRevision: project.revision }];
+      const guards: Guard[] = [{ path: projectPath(projectId), expectedRevision: project.revision },...(workshopCreate?.guards||[])];
       if (params.discussionSlug !== undefined && fm.discussion_slug) {
         const discussion = await this.communityTarget('post', fm.discussion_slug);
         guards.push({ path: discussion.path, expectedRevision: discussion.note.revision });
@@ -461,13 +479,26 @@ export class WorkService {
           if (combined.some(g => unique.find(u => u.path.toLowerCase() === g.path.toLowerCase())?.expectedRevision !== g.expectedRevision)) throw new Error('Related revision changed during work mutation');
           // The existing filesystem supports nine locked related revisions.
           // Fail closed rather than drop guards from a larger mutation.
-          if (unique.length > 9) throw new Error('Work mutation exceeds nine related revision guards; split the dependency/artifact change');
+          if (unique.length > (workshopCreate?128:9)) throw new Error('Work mutation exceeds related revision guard budget; split the dependency/artifact change');
           result = { success: true, taskId: id, path: write.path, status: fm.status, generation: fm.claim_generation,
             claimGeneration: fm.claim_generation, ...(fm.assignee_account_id && { assigneeAccountId: fm.assignee_account_id }),
             artifactFingerprint: reviewBasis(fm), requestId: request.requestId,
             nextAction: { endpoint: 'work.packet', args: { taskId: id } } };
+          if(intent?.kind==='claim'&&intent.paidContractId) {
+            if(write.frontmatter!.economy_contract_id && write.frontmatter!.economy_contract_id!==intent.paidContractId)throw new Error('Paid contract marker conflict');
+            write.frontmatter!.economy_contract_id=intent.paidContractId;
+            write.frontmatter!.economy_claim_request_id=request.requestId;
+            write.frontmatter!.economy_claim_generation=fm.claim_generation;
+          }
           this.addReceipt(write.frontmatter!, write.content, request, result, prior);
-          const receipt = await this.fileSystem.writeNoteWithRevisionGuardsAndReceipt(write, unique);
+          if(workshopCreate) {
+            write.frontmatter!.workshop_output=workshopCreate.receipt;
+            write.frontmatter!.workshop_output_content_sha256=fingerprint(write.content);
+            // Include the trusted marker in the existing retry-state digest.
+            const stored=write.frontmatter!.work_receipts.at(-1);
+            stored.state=this.receiptState(write.frontmatter!,write.content);
+          }
+          const receipt = await this.fileSystem.writeNoteWithRevisionGuardsAndReceipt(write, unique, workshopCreate?{maxGuards:128,assertAccess:workshopCreate.assertAccess}:{});
           result = { ...result, revision: receipt.revision };
           await this.fileSystem.readNote(write.path);
           return receipt;
@@ -558,6 +589,11 @@ export class WorkService {
     if (!['claim', 'start', 'release'].includes(params.op)) throw new Error('Invalid claim operation');
     return this.mutate({ kind: 'claim', params });
   }
+  /** Internal paid lease still traverses every ordinary Work admission rule. */
+  async claimPaid(params:WorkClaimParams,contractId:string):Promise<Properties> {
+    if(params.op!=='start')throw new Error('Paid bridge only starts a claim');
+    return this.mutate({kind:'claim',params,paidContractId:normalizeScopeId(contractId,'contractId')});
+  }
   async handoff(params: WorkHandoffParams): Promise<Properties> {
     if (!['propose', 'accept'].includes(params.op)) throw new Error('Invalid handoff operation');
     return this.mutate({ kind: 'handoff', params });
@@ -616,9 +652,11 @@ export class WorkService {
     const linked = new Set(tasks.flatMap(n => (n.fm.references || []).filter((p: unknown) => typeof p === 'string')));
     const taskIds = new Set(tasks.map(n => n.fm.task_id));
     const selected = inventory.filter(n => n.fm.mcpvault_type === 'agent_task' || (!linked.has(n.path) && !taskIds.has(n.fm.task_id)));
+    const paid=await this.options.paidProjection?.(tasks.map(n=>n.fm.task_id),params.principal)||{};
     const rows = selected.map(n => ({ path: n.path, taskId: n.fm.task_id, title: String(n.fm.title || posix.basename(n.path)).slice(0, 180),
       status: n.fm.status || n.fm.task_status || 'open', kind: n.fm.mcpvault_type === 'agent_task' ? 'task' : 'knowledge',
       assigneeAccountId: n.fm.assignee_account_id, generation: n.fm.claim_generation,
+      ...(paid[n.fm.task_id]&&{paidContract:paid[n.fm.task_id]}),
       ...(this.blocker(n.fm) && { blockedReason: this.blocker(n.fm) }),
       ...(n.fm.work_review && { review: { decision: String(n.fm.work_review.decision || '').slice(0, 32),
         accountId: String(n.fm.work_review.account_id || '').slice(0, 64), reason: String(n.fm.work_review.reason || '').slice(0, 200),
@@ -631,7 +669,7 @@ export class WorkService {
       }) && { warning: 'Artifact/file overlap is advisory; coordinate with peers' }),
     }));
     const wip = await this.boardWip(project.frontmatter, tasks, params.principal);
-    const sig = fingerprint({ project: project.revision, inventory: selected, wip, ...(wip && { accountId: params.principal?.accountId }) });
+    const sig = fingerprint({ project: project.revision, inventory: selected, wip,paid, ...(wip && { accountId: params.principal?.accountId }) });
     return page(rows, { projectId: id, projectRevision: project.revision, fingerprint: sig, ...(wip && { wip }) }, sig, params, `board:${id}`);
   }
 
@@ -671,7 +709,8 @@ export class WorkService {
         } else locators.push({ kind: 'artifact', ...locator });
       } catch { /* Do not expose a now-private or moderated artifact locator. */ }
     }
-    const nextActions = await this.packetActions(id, n, project.frontmatter, params.principal);
+    const paid=(await this.options.paidProjection?.([id],params.principal))?.[id];
+    const nextActions = paid?.freeMutationBlocked?[paid]:await this.packetActions(id, n, project.frontmatter, params.principal);
     const items: Properties[] = [
       { kind: 'task', title: String(fm.title || id).slice(0, 180), status: fm.status, assigneeAccountId: fm.assignee_account_id,
         requesterAccountId: fm.requester_account_id, generation: fm.claim_generation, workKind: fm.work_kind },

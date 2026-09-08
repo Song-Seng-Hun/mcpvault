@@ -130,16 +130,16 @@ test('managed facilitation rejects inaccessible sources and stale steps, replays
     expect(stale.isError).toBe(true);
     const first = await json(client, 'contribute_workshop', {
       workshopId: 'managed-brainwriting', kind: 'idea', content: 'First independent alternative.', expectedRevision: state.value.revision,
-      stepId: 'brainwriting-independent', structured: { ideaIds: ['first-alternative'], origin: 'fac-owner' }, requestId: 'managed-first', accessToken: owner.value.accessToken,
+      stepId: 'brainwriting-independent', structured: { variant:'async', ideaIds: [{ideaId:'first-alternative',origin:'fac-owner'}] }, requestId: 'managed-first', accessToken: owner.value.accessToken,
     });
     const replay = await json(client, 'contribute_workshop', {
       workshopId: 'managed-brainwriting', kind: 'idea', content: 'First independent alternative.', expectedRevision: state.value.revision,
-      stepId: 'brainwriting-independent', structured: { ideaIds: ['first-alternative'], origin: 'fac-owner' }, requestId: 'managed-first', accessToken: owner.value.accessToken,
+      stepId: 'brainwriting-independent', structured: { variant:'async', ideaIds: [{ideaId:'first-alternative',origin:'fac-owner'}] }, requestId: 'managed-first', accessToken: owner.value.accessToken,
     });
     expect(replay.value.contributionId).toBe(first.value.contributionId);
     await json(client, 'contribute_workshop', {
       workshopId: 'managed-brainwriting', kind: 'idea', content: 'Second independent alternative.', expectedRevision: state.value.revision,
-      stepId: 'brainwriting-independent', structured: { ideaIds: ['second-alternative'], origin: 'fac-participant' }, requestId: 'managed-second', accessToken: participant.value.accessToken,
+      stepId: 'brainwriting-independent', structured: { variant:'async', ideaIds: [{ideaId:'second-alternative',origin:'fac-participant'}] }, requestId: 'managed-second', accessToken: participant.value.accessToken,
     });
     const advanced = await json(client, 'update_workshop_facilitation', {
       workshopId: 'managed-brainwriting', expectedRevision: state.value.revision, requestId: 'managed-advance', operation: 'advance',
@@ -171,8 +171,8 @@ test('managed facilitation persists handoff, revocation, concurrent advance, res
     };
     await json(active.client, 'create_workshop', { workshopId: 'managed-handoff', title: 'Managed handoff', prompt: 'Exercise handoff.', facilitation: config, accessToken: owner.value.accessToken });
     const initial = await json(active.client, 'read_workshop_facilitation', { workshopId: 'managed-handoff' });
-    await json(active.client, 'contribute_workshop', { workshopId: 'managed-handoff', kind: 'idea', content: 'Owner idea.', expectedRevision: initial.value.revision, stepId: 'brainwriting-independent', structured: { ideaIds: ['owner-idea'], origin: 'handoff-owner' }, requestId: 'handoff-owner-idea', accessToken: owner.value.accessToken });
-    await json(active.client, 'contribute_workshop', { workshopId: 'managed-handoff', kind: 'idea', content: 'Facilitator idea.', expectedRevision: initial.value.revision, stepId: 'brainwriting-independent', structured: { ideaIds: ['facilitator-idea'], origin: 'handoff-facilitator' }, requestId: 'handoff-facilitator-idea', accessToken: facilitator.value.accessToken });
+    await json(active.client, 'contribute_workshop', { workshopId: 'managed-handoff', kind: 'idea', content: 'Owner idea.', expectedRevision: initial.value.revision, stepId: 'brainwriting-independent', structured: { variant:'async',ideaIds: [{ideaId:'owner-idea',origin:'handoff-owner'}] }, requestId: 'handoff-owner-idea', accessToken: owner.value.accessToken });
+    await json(active.client, 'contribute_workshop', { workshopId: 'managed-handoff', kind: 'idea', content: 'Facilitator idea.', expectedRevision: initial.value.revision, stepId: 'brainwriting-independent', structured: { variant:'async',ideaIds: [{ideaId:'facilitator-idea',origin:'handoff-facilitator'}] }, requestId: 'handoff-facilitator-idea', accessToken: facilitator.value.accessToken });
     const handedOff = await json(active.client, 'update_workshop_facilitation', { workshopId: 'managed-handoff', expectedRevision: initial.value.revision, requestId: 'handoff-change', operation: 'handoff', payload: { facilitatorAccountId: 'handoff-facilitator' }, accessToken: owner.value.accessToken });
     expect(handedOff.value).toMatchObject({ facilitatorAccountId: 'handoff-facilitator' });
     const formerOwner = await active.client.callTool({ name: 'update_workshop_facilitation', arguments: { workshopId: 'managed-handoff', expectedRevision: handedOff.value.revision, requestId: 'handoff-former-owner', operation: 'resume', payload: { resumeCondition: 'Should reject.' }, accessToken: owner.value.accessToken } });
@@ -185,7 +185,7 @@ test('managed facilitation persists handoff, revocation, concurrent advance, res
     expect(advances.filter(result => !result.isError)).toHaveLength(1);
 
     for (let index = 0; index < 3; index++) {
-      await json(active.client, 'contribute_workshop', { workshopId: 'managed-handoff', kind: 'extension', content: `Bounded build ${index}.`, expectedRevision: advances.find(result => !result.isError) ? JSON.parse((advances.find(result => !result.isError)!.content as any)[0].text).revision : '', stepId: 'brainwriting-build', structured: { ideaIds: [`build-${index}`], extension: `Build ${index}.`, parentIdeaIds: ['owner-idea'] }, requestId: `handoff-build-${index}`, accessToken: facilitator.value.accessToken });
+      await json(active.client, 'contribute_workshop', { workshopId: 'managed-handoff', kind: 'extension', content: `Bounded build ${index}.`, expectedRevision: advances.find(result => !result.isError) ? JSON.parse((advances.find(result => !result.isError)!.content as any)[0].text).revision : '', stepId: 'brainwriting-build', structured: { ideaIds: [{ideaId:`build-${index}`,origin:'handoff-facilitator',parentIdeaId:'owner-idea',extension:`Build ${index}.`}], extension: `Build ${index}.`, parentIdeaIds: ['owner-idea'] }, requestId: `handoff-build-${index}`, accessToken: facilitator.value.accessToken });
     }
     await expect(json(active.client, 'read_workshop_facilitation', { workshopId: 'managed-handoff', limit: 1, maxChars: 512 })).rejects.toThrow(/maxChars.*too small/);
     const page = await json(active.client, 'read_workshop_facilitation', { workshopId: 'managed-handoff', limit: 1, maxChars: 6000 });
@@ -241,7 +241,7 @@ test('managed contribution scan overflow reports unknown completion and never ad
       await fs.writeNote({ path: `Community/Workshops/scan-overflow/Contributions/raw-${index}.md`, content: '# Raw contribution\n', frontmatter: {
         mcpvault_type: 'workshop_contribution', workshop_id: 'scan-overflow', contribution_id: `raw-${index}`, account_id: 'scan-owner', kind: 'idea', phase: 'diverge',
         facilitation_step_id: 'brainwriting-independent', workshop_revision: created.value.revision,
-        structured: { ideaIds: [`raw-${index}`], origin: 'scan-owner' }, created_at: `2026-09-08T00:00:${String(index).padStart(2, '0')}Z`,
+        structured: { variant:'async',ideaIds: [{ideaId:`raw-${index}`,origin:'scan-owner'}] }, created_at: `2026-09-08T00:00:${String(index).padStart(2, '0')}Z`,
       } });
     }
     const read = await json(client, 'read_workshop_facilitation', { workshopId: 'scan-overflow', limit: 1, maxChars: 12000, accessToken: owner.value.accessToken });

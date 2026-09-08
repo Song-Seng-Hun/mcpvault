@@ -3,6 +3,7 @@ import type { ScopePrincipal } from './scope-auth.js';
 import { type WorkPage } from './work-model.js';
 import { type EconomyCommand, type EconomyPolicy, type QuestArtifact, type QuestContract, type QuestWorkBinding } from './economy-model.js';
 import type { EconomyLedger } from './economy-ledger.js';
+import type { ParticipationCandidate, ParticipationEconomyContext, ParticipationEconomySnapshot } from './community-participation.js';
 export interface EconomyServiceOptions {
     assertActor: (principal: ScopePrincipal) => Promise<void>;
     claimTask?: (principal: ScopePrincipal, contract: QuestContract, requestId: string) => Promise<QuestWorkBinding>;
@@ -31,6 +32,17 @@ export declare class EconomyService {
     /** Called by EVERY free task mutation, not merely work.claim. A private lease
      * is only entered by this service when bridging a paid exclusive claim. */
     assertFreeTaskMutation(taskId: string): Promise<void>;
+    workProjection(principal: ScopePrincipal | undefined, taskIds: string[]): Promise<Record<string, Record<string, unknown>>>;
+    /** Read-only host projection for the opt-in participation pulse. Contracts
+     * remain ledger-private: this emits only a visible task, its current activity
+     * fingerprint, role-local reason, and the normal read-only market action. */
+    participationOptions(): {
+        economyCandidates: (principal: ScopePrincipal, context: ParticipationEconomyContext) => Promise<ParticipationCandidate[]>;
+        economyTargetSnapshot: (principal: ScopePrincipal, path: string, context: ParticipationEconomyContext) => Promise<ParticipationEconomySnapshot>;
+    };
+    participationCandidates(principal: ScopePrincipal | undefined, context: ParticipationEconomyContext): Promise<ParticipationCandidate[]>;
+    participationTargetSnapshot(principal: ScopePrincipal, path: string, context: ParticipationEconomyContext): Promise<ParticipationEconomySnapshot>;
+    private participationRows;
     wallet(principal: ScopePrincipal | undefined, params: PageParams): Promise<WorkPage & {
         availableXp: number;
         escrowXp: number;

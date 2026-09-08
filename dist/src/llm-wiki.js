@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
+import { fingerprint as workFingerprintForOutput } from './work-model.js';
 import { KnowledgeApplicationService } from './knowledge-applications.js';
 import { prepareKnowledgeSynthesis, inspectSynthesisBasis } from './knowledge-synthesis.js';
 import { normalizeKnowledgeSynthesis } from './knowledge-synthesis-model.js';
@@ -2435,6 +2436,7 @@ export class LlmWikiService {
                 ...(applications && { knowledge_applications: applications.records }),
                 ...(synthesis && { knowledge_synthesis: synthesis.synthesis }),
                 ...(investigation && { knowledge_investigation: investigation.investigation }),
+                ...(internal.workshopOutput && { workshop_output: internal.workshopOutput, workshop_output_content_sha256: workFingerprintForOutput(content) }),
                 updated_by: params.author,
                 updated_at: timestamp,
                 ...(!existing && { created_by: params.author, created_at: timestamp }),
@@ -2445,7 +2447,7 @@ export class LlmWikiService {
         const guards = [...new Map(allGuards.map(g => [g.path.toLowerCase(), g])).values()];
         if (allGuards.some(g => guards.find(u => u.path.toLowerCase() === g.path.toLowerCase())?.expectedRevision !== g.expectedRevision))
             throw new Error('Related revision changed during knowledge publication');
-        const assertAccess = () => {
+        const assertPaths = () => {
             synthesis?.assertAccess();
             investigation?.assertAccess();
             if (!this.access.canAccessPhysicalPath(params.path, params.principal) || guards.some(guard => !this.access.canAccessPhysicalPath(guard.path, params.principal) || !this.access.canReferenceFrom(params.path, guard.path)
@@ -2453,9 +2455,11 @@ export class LlmWikiService {
                 throw new Error('Related publication inputs unavailable or access changed');
             }
         };
-        assertAccess();
+        const assertAccess = () => internal.assertOutputAccess
+            ? internal.assertOutputAccess().then(assertPaths) : assertPaths();
+        await assertAccess();
         const updated = guards.length
-            ? await this.fileSystem.writeNoteWithRevisionGuardsAndReceipt(write, guards, { maxBytes: 8 * 1024 * 1024, assertAccess })
+            ? await this.fileSystem.writeNoteWithRevisionGuardsAndReceipt(write, guards, { maxBytes: 8 * 1024 * 1024, assertAccess, ...(internal.workshopOutput && { maxGuards: 128 }) })
             : await this.fileSystem.writeNoteWithReceipt(write);
         return {
             success: true,
@@ -14017,7 +14021,7 @@ export class LlmWikiService {
             truncated: candidates.length > items.length,
         };
     }
-    async publishDecisionRecord(params) {
+    async publishDecisionRecord(params, internal = {}) {
         const title = boundedText(params.title, 180);
         const context = boundedText(params.context, 4000);
         const decision = boundedText(params.decision, 4000);
@@ -14125,7 +14129,7 @@ export class LlmWikiService {
             ...(params.replacedBy && { replacedBy: params.replacedBy }),
             ...(params.reviewAt && { reviewAt: params.reviewAt }),
             expectedRevision: params.expectedRevision,
-        }, { allowRetiredLifecycle: true, ...(lineageRevisionGuards && { revisionGuards: lineageRevisionGuards }) });
+        }, { allowRetiredLifecycle: true, revisionGuards: [...(lineageRevisionGuards || []), ...(internal.revisionGuards || [])], ...(internal.workshopOutput && { workshopOutput: internal.workshopOutput }), ...(internal.assertOutputAccess && { assertOutputAccess: internal.assertOutputAccess }) });
         return { ...published, decisionStatus: status };
     }
     /**

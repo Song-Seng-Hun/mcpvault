@@ -29,6 +29,18 @@ export function admitEconomyEventBytes(existing, proposed) {
     if (!Number.isSafeInteger(existing) || existing < 0 || existing + proposed > 32 * 1024 * 1024)
         throw new Error('Economy replay byte budget exceeded; host maintenance required');
 }
+/** Reject gaps before any pending intent can be published.  In particular, a
+ * count alone cannot establish that the next filename is unused. */
+export function assertContiguousEconomyJournalNames(entries) {
+    const names = entries.filter(name => name.endsWith('.md')).sort();
+    if (names.length > MAX_EVENTS)
+        throw new Error('Economy journal limit reached; host maintenance required');
+    for (let index = 0; index < names.length; index++) {
+        if (names[index] !== `${String(index + 1).padStart(10, '0')}.md`)
+            throw new Error('Economy journal sequence gap or fork');
+    }
+    return names;
+}
 /** One writer for the canonical Vault, no lock stealing on timeout. A crash leaves
  * an explicit recovery condition; removing a live writer's lock is never safe.
  * Journal Markdown is authoritative. The external checkpoint only detects rollback. */
@@ -40,6 +52,7 @@ export class EconomyLedger {
     frontmatter = new FrontmatterHandler();
     journal;
     checkpointPath;
+    preparedPath;
     lockPath;
     lock;
     queue = Promise.resolve();
@@ -52,6 +65,7 @@ export class EconomyLedger {
         this.journal = join(vault, '.mcpvault-economy', 'journal');
         this.lockPath = join(vault, '.mcpvault-economy', 'writer.lock');
         this.checkpointPath = join(host, `economy-${economyRevision(vault.toLowerCase())}.checkpoint.json`);
+        this.preparedPath = this.checkpointPath.replace('.checkpoint.json', '.prepared.md');
     }
     static async initialize(options) { return this.acquire(options, true); }
     static async open(options) { return this.acquire(options, false); }
@@ -70,6 +84,7 @@ export class EconomyLedger {
             throw new Error('Trusted economy checkpoint must be outside Vault and source repository');
         const ledger = new EconomyLedger({ ...options, policy: structuredClone(options.policy) }, vault, host);
         await ensureFederationDirectory(vault, ledger.journal);
+        await ledger.assertNoRecovery();
         try {
             ledger.lock = await open(ledger.lockPath, 'wx', 0o600);
         }
@@ -100,9 +115,22 @@ export class EconomyLedger {
             throw e;
         }
     }
-    async assertLock() {
+    async assertNoRecovery() {
+        try {
+            await lstat(join(this.vault, '.mcpvault-economy', 'recovery.lock'));
+        }
+        catch (e) {
+            if (missing(e))
+                return;
+            throw e;
+        }
+        throw new Error('Economy host recovery is in progress; writer admission suspended');
+    }
+    async assertLock(checkRecovery = true) {
         if (this.closed || !this.lock)
             throw new Error('Economy writer closed');
+        if (checkRecovery)
+            await this.assertNoRecovery();
         const value = JSON.parse(await readFederationFile(this.vault, this.lockPath, { maxBytes: 1024 }));
         if (value.nonce !== this.nonce || value.pid !== process.pid || value.vault !== this.vault)
             throw new Error('Economy writer fencing failed');
@@ -112,7 +140,7 @@ export class EconomyLedger {
     }
     async releaseLock() {
         try {
-            await this.assertLock();
+            await this.assertLock(false);
             await this.lock.close();
             this.lock = undefined;
             await unlink(this.lockPath);
@@ -163,12 +191,29 @@ export class EconomyLedger {
         await this.assertLock();
         await writeFederationFileAtomic(this.host, this.checkpointPath, JSON.stringify(cp), { maxBytes: 2048 });
     }
-    async replay() {
+    async replay(onEvent) {
         await this.assertLock();
         const cp = await this.checkpoint();
-        const names = (await readdir(this.journal)).filter(n => n.endsWith('.md')).sort();
-        if (names.length > MAX_EVENTS)
-            throw new Error('Economy journal limit reached; host maintenance required');
+        let names = assertContiguousEconomyJournalNames(await readdir(this.journal));
+        if (cp.pending && names.length === cp.sequence) {
+            const prepared = await readFederationFile(this.host, this.preparedPath, { maxBytes: MAX_EVENT });
+            const event = this.frontmatter.parse(prepared).frontmatter;
+            const { hash, ...unsigned } = event;
+            if (hash !== cp.pending.hash || economyRevision(unsigned) !== hash || event.sequence !== cp.pending.sequence || event.previous !== cp.hash)
+                throw new Error('Prepared economy intent differs from trusted checkpoint; recovery stopped');
+            const name = `${String(event.sequence).padStart(10, '0')}.md`;
+            await this.assertLock();
+            try {
+                await lstat(join(this.journal, name));
+                throw new Error('Pending economy sequence already exists; recovery stopped');
+            }
+            catch (e) {
+                if (!missing(e))
+                    throw e;
+            }
+            await writeFederationFileAtomic(this.vault, join(this.journal, name), prepared, { maxBytes: MAX_EVENT });
+            names = assertContiguousEconomyJournalNames([...names, name]);
+        }
         if (names.length !== cp.sequence + (cp.pending ? 1 : 0))
             throw new Error('Economy checkpoint/rollback mismatch; settlement stopped');
         let state = initialEconomy(), previous = ZERO, bytes = 0;
@@ -191,6 +236,7 @@ export class EconomyLedger {
                 throw new Error('Economy postings or contract mismatch');
             state = applied.state;
             previous = hash;
+            onEvent?.(event, state);
             if (i + 1 === cp.sequence && hash !== cp.hash)
                 throw new Error('Economy trusted checkpoint differs from journal');
         }
@@ -222,6 +268,23 @@ export class EconomyLedger {
         return { ...unsigned, hash: economyRevision(unsigned) };
     }
     async snapshot() { return this.serialized(async () => structuredClone((await this.replay()).state)); }
+    async walletSnapshot(account) {
+        return this.serialized(async () => {
+            const transactions = [];
+            let total = 0;
+            const { state } = await this.replay((event, current) => {
+                const availableChange = event.postings[account] || 0;
+                const escrowChange = Object.entries(event.escrowPostings).reduce((sum, [id, delta]) => sum + (current.contracts[id]?.requester === account ? delta : 0), 0);
+                if (!availableChange && !escrowChange)
+                    return;
+                total++;
+                transactions.push({ kind: 'transaction', transactionId: event.receipt.transactionId, at: event.at, operation: event.command.op, availableChange, escrowChange });
+                if (transactions.length > 100)
+                    transactions.shift();
+            });
+            return { state: structuredClone(state), transactions: transactions.reverse(), historyLimited: total > 100 };
+        });
+    }
     async transact(command, revalidate) {
         command = structuredClone(command);
         return this.serialized(async () => {
@@ -229,7 +292,7 @@ export class EconomyLedger {
             const at = (this.options.now?.() || new Date()).toISOString();
             const applied = applyEconomyCommand(state, command, this.options.policy, at);
             // Repeat permission checks even on permanent response-loss retries.
-            await revalidate?.();
+            await revalidate?.(structuredClone(state));
             await this.assertLock();
             if (applied.state === state)
                 return applied.receipt;
@@ -249,6 +312,7 @@ export class EconomyLedger {
             }
             // A host-private prepare marker is durable BEFORE changing authoritative
             // Markdown. After a crash, only this exact event may complete the checkpoint.
+            await writeFederationFileAtomic(this.host, this.preparedPath, text, { maxBytes: MAX_EVENT });
             await this.saveCheckpoint({ ...checkpoint, pending: { sequence: event.sequence, hash: event.hash } });
             await writeFederationFileAtomic(this.vault, path, text, { maxBytes: MAX_EVENT });
             await this.saveCheckpoint({ version: 1, vault: this.vault, sequence: event.sequence, hash: event.hash });

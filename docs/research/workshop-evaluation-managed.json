@@ -1,0 +1,205 @@
+{
+  "arm": "managed",
+  "model": "gpt-5.6-luna",
+  "effort": "medium",
+  "cases": [
+    {
+      "id": "product-1",
+      "result": {
+        "summary": "Conditional proposal: narrow first-search context with a small, ranked set and an explicit continuation path.",
+        "alternatives": ["Progressive result batches", "A concise relevance-ranked summary with continuation"],
+        "evidence": ["P1", "P2"],
+        "risks": ["Abandonment may have causes other than result volume; P3 leaves that unexplained."],
+        "nextAction": "Product owner should trial a bounded first batch and revision-safe continuation on the 12-session sample, then check abandonment and missing-result reports.",
+        "uncertainties": ["No interview explains why four users abandoned." ]
+      },
+      "steps": [
+        {"stepId":"crazy8s-eight","structured":{"ideaIds":[{"ideaId":"idea-1","origin":"Show the top 5 ranked documents; P1"},{"ideaId":"idea-2","origin":"Show 5 documents plus a continuation control; P1"},{"ideaId":"idea-3","origin":"Cluster the 18 results by topic and show one representative per cluster; P1"},{"ideaId":"idea-4","origin":"Show titles only first, with bounded detail on demand; P2"},{"ideaId":"idea-5","origin":"Offer a user-selected result-count control capped to the response contract; P1"},{"ideaId":"idea-6","origin":"Show a short relevance rationale beside each first-batch result; P1"},{"ideaId":"idea-7","origin":"Ask one optional narrowing question before displaying results; P2"},{"ideaId":"idea-8","origin":"Use a two-stage page: essential results first, then continuation; P1"}]}},
+        {"stepId":"crazy8s-select","structured":{"ranking":[{"alternativeId":"idea-2","rank":1},{"alternativeId":"idea-8","rank":2},{"alternativeId":"idea-3","rank":3}],"criteria":["Reduce first-view overload while preserving access to all results","Fit the no-installation constraint"],"reason":"Prefer a bounded first batch with explicit continuation because P1 and P2 indicate overload, while P3 means the abandonment cause still needs measurement."}}
+      ]
+    },
+    {
+      "id": "product-2",
+      "result": {
+        "summary": "Conditional proposal: improve request completeness and discoverability without forcing replies or waking volunteers.",
+        "alternatives": ["A completeness prompt for new questions", "A filter for unanswered, reproducible questions"],
+        "evidence": ["P1", "P2"],
+        "risks": ["Better formatting may not create volunteer capacity; P3 is unmeasured."],
+        "nextAction": "Community owner should trial an unanswered/reproducible view and a request template, then check reply rate and volunteer availability without automatic waking.",
+        "uncertainties": ["Peer availability was not measured." ]
+      },
+      "steps": [
+        {"stepId":"crazy8s-eight","structured":{"ideaIds":[{"ideaId":"idea-1","origin":"Require reproduction or exact source before highlighting a question; P2"},{"ideaId":"idea-2","origin":"Filter open questions with no reply after two days; P1"},{"ideaId":"idea-3","origin":"Show unanswered questions grouped by topic; P1"},{"ideaId":"idea-4","origin":"Add a concise reproduction template to question capture; P2"},{"ideaId":"idea-5","origin":"Let volunteers subscribe to a topic view without forced waking; constraint"},{"ideaId":"idea-6","origin":"Display age and completeness signals on unanswered questions; P1,P2"},{"ideaId":"idea-7","origin":"Offer a manual volunteer queue for self-selected review; constraint"},{"ideaId":"idea-8","origin":"Add an explicit question-owner follow-up field for missing evidence; P2"}]}},
+        {"stepId":"crazy8s-select","structured":{"ranking":[{"alternativeId":"idea-6","rank":1},{"alternativeId":"idea-2","rank":2},{"alternativeId":"idea-4","rank":3}],"criteria":["Expose the observed backlog","Improve evidence completeness","Avoid forced replies and automatic waking"],"reason":"A combined age/completeness signal directly reflects P1 and P2 and can support voluntary discovery; it does not assume peer capacity from P3."}}
+      ]
+    },
+    {
+      "id": "design-1",
+      "result": {
+        "summary": "Conditional proposal: return a bounded first page and require revision-safe continuation so the last-row exception remains reachable.",
+        "alternatives": ["Paged results with continuation", "A compact table summary plus linked full rows"],
+        "evidence": ["D1", "D2", "D3"],
+        "risks": ["Clients that do not continue may miss detail; silent truncation would hide the critical exception."],
+        "nextAction": "API owner should specify a bounded page with a continuation token tied to the current revision, then verify that the last-row exception is returned on continuation.",
+        "uncertainties": ["Client continuation behavior and the exact page split are not established." ]
+      },
+      "steps": [
+        {"stepId":"daci-roles","structured":{"roles":{"driver":"evaluator","approver":"evaluator","contributors":["evaluator"],"informed":["evaluator"]}}},
+        {"stepId":"daci-alternatives","structured":{"alternatives":[{"id":"paged","label":"Bounded pages with revision-safe continuation"},{"id":"summary","label":"Compact summary with linked full rows"}],"evidence":["D1","D2","D3"]}},
+        {"stepId":"daci-reason","structured":{"reason":"Prefer paged continuation because D2 requires preserving a critical exception and D3 provides a safe access mechanism; D1 supplies the current response bound.","uncertainty":["The client may stop after page one; exact page size is unmeasured."],"minority":["A compact summary could reduce first-response size if every exception remains directly reachable."]}},
+        {"stepId":"daci-review","structured":{"reviewConditions":["Verify every row, including the last-row exception, is reachable through revision-safe continuation","Check that no permission change or silent omission occurs"],"revisit":"Revisit after a bounded client compatibility check and exception-retrieval verification."}}
+      ]
+    },
+    {
+      "id": "design-2",
+      "result": {
+        "summary": "Conditional proposal: use targeted refresh for changed paths and a full scan at controlled reconciliation points, with freshness labels.",
+        "alternatives": ["Targeted event refresh plus periodic reconciliation", "Full scan every minute"],
+        "evidence": ["D1", "D2", "D3"],
+        "risks": ["Dropped events can leave stale entries between reconciliations; cold-start cost is unknown."],
+        "nextAction": "Index owner should run a bounded reconciliation trial and measure cold-start timing before selecting an interval; stale source content must remain marked stale.",
+        "uncertainties": ["Cold-start timings and an acceptable reconciliation interval are unknown." ]
+      },
+      "steps": [
+        {"stepId":"daci-roles","structured":{"roles":{"driver":"evaluator","approver":"evaluator","contributors":["evaluator"],"informed":["evaluator"]}}},
+        {"stepId":"daci-alternatives","structured":{"alternatives":[{"id":"hybrid","label":"Targeted refresh plus periodic full reconciliation"},{"id":"full","label":"Full scan every minute"}],"evidence":["D1","D2","D3"]}},
+        {"stepId":"daci-reason","structured":{"reason":"Prefer the implemented targeted refresh with explicit reconciliation because D1 shows events can be dropped, while D2 shows the one-minute full scan is costly; D3 supports the targeted path but not its cold-start behavior.","uncertainty":["Cold-start timing and stale interval are unmeasured."],"minority":["Frequent full scans offer a simpler freshness model if the 12-second cost is acceptable." ]}},
+        {"stepId":"daci-review","structured":{"reviewConditions":["Measure cold-start and reconciliation duration","Verify old source content is labeled stale until refresh completes"],"revisit":"Revisit the interval after the bounded timing and freshness trial."}}
+      ]
+    },
+    {
+      "id": "research-1",
+      "result": {
+        "summary": "Conditional research proposal: test whether spaced recall improves handoff-to-completion transfer, without presuming an outcome.",
+        "alternatives": ["Controlled transfer experiment", "Observational comparison of handoff quality and completion"],
+        "evidence": ["R1", "R2", "R3"],
+        "risks": ["Vocabulary recall may not transfer to project completion; eight agents limit generalization."],
+        "nextAction": "Researcher should preregister a bounded transfer experiment using handoff goals, revisions, unresolved questions, and a completion outcome, then compare against a non-spaced condition.",
+        "uncertainties": ["No transfer-to-project-completion experiment exists." ]
+      },
+      "steps": [
+        {"stepId":"how-might-we-observe","structured":{"observations":["Recall scores exist for 8 agents on vocabulary tasks; R1","Handoffs contain goals, revisions, and unresolved questions; R2","There is no established transfer-to-project-completion experiment; R3"],"evidence":["R1","R2","R3"]}},
+        {"stepId":"how-might-we-question","structured":{"questions":["How might we test whether spaced recall changes a recipient's ability to carry a handoff through project completion, while preserving goals, revisions, and unresolved questions?"]}},
+        {"stepId":"how-might-we-refine","structured":{"questions":["How might we compare a spaced-recall condition with a bounded control on completion of matched handoffs?"],"challenge":"Do not treat vocabulary recall scores as evidence of improved project outcomes; R1 and R3 require a direct transfer measure."}}
+      ]
+    },
+    {
+      "id": "research-2",
+      "result": {
+        "summary": "Conditional research proposal: test spatial navigation as a retrieval aid, while using explicit relations—not distance—to identify conflicts.",
+        "alternatives": ["Navigation experiment with explicit-contradiction labels", "Compare spatial and non-spatial retrieval interfaces"],
+        "evidence": ["R1", "R2", "R3"],
+        "risks": ["Users may mistake proximity for evidence strength; nearby notes can be unrelated."],
+        "nextAction": "Researcher should compare retrieval interfaces using the one explicit contradiction as ground truth and separately measure false conflict in the three nearby unrelated notes.",
+        "uncertainties": ["The effect of spatial layout on finding the explicit contradiction is unmeasured." ]
+      },
+      "steps": [
+        {"stepId":"how-might-we-observe","structured":{"observations":["Two graph layouts place linked claims nearby; R1","Proximity is navigation, not evidence strength; R2","One contradiction relation is explicit while three nearby notes have no relation; R3"],"evidence":["R1","R2","R3"]}},
+        {"stepId":"how-might-we-question","structured":{"questions":["How might we test whether spatial proximity helps users retrieve explicitly conflicting claims without treating distance as evidence?"]}},
+        {"stepId":"how-might-we-refine","structured":{"questions":["How might we measure retrieval of the explicit contradiction and false-conflict reports for the three nearby unrelated notes across spatial and non-spatial views?"],"challenge":"Reject any design that labels a conflict from distance alone; R2 and R3 require explicit relation grounding."}}
+      ]
+    },
+    {
+      "id": "risk-1",
+      "result": {
+        "summary": "Conditional risk proposal: make authorization and idempotency checks precede each separate write, with stable output identity.",
+        "alternatives": ["Authorize output creation then persist backlink with stable output ID", "Transactional or resumable two-write workflow with reconciliation"],
+        "evidence": ["K1", "K2", "K3"],
+        "risks": ["A crash between writes can leave a missing backlink or duplicate retry; revoked authority can change between checks."],
+        "nextAction": "Workflow owner should define a dry-run two-write sequence that checks current delegate authority and stable output ID before each write, then inspect partial-write recovery without auto-approval.",
+        "uncertainties": ["Rollback guarantees and timing of authority revocation are unspecified." ]
+      },
+      "steps": [
+        {"stepId":"premortem-failure","structured":{"failureScenario":"Assume the workshop appears complete but produces a duplicate output or a backlink after the delegate was revoked: the separate writes in K1 diverged, violating K2 or K3."}},
+        {"stepId":"premortem-causes","structured":{"causes":["Output and backlink writes can succeed independently; K1","Authority may be revoked before a later write; K2","Title-based retry matching can duplicate an output; K3"],"evidence":["K1","K2","K3"]}},
+        {"stepId":"premortem-prioritize","structured":{"ranking":[{"riskId":"risk-authority","rank":1},{"riskId":"risk-duplicate","rank":2}],"risks":[{"riskId":"risk-authority","value":"A revoked delegate creates new output"},{"riskId":"risk-duplicate","value":"Retry creates a duplicate when writes diverge"}],"reason":"Prioritize authorization failure first because K2 is a hard safety constraint; stable IDs in K3 make duplicate detection a separate high-impact risk."}},
+        {"stepId":"premortem-mitigate","structured":{"mitigation":"Re-check current authority before each write and reconcile by stable output ID; require explicit human review for partial states.","earlySignal":"A write is attempted with a revoked authority or an existing output ID has mismatched backlink state.","ownerAction":{"accountId":"evaluator","value":"Draft and review the dry-run two-write recovery checklist; do not execute or auto-approve."}}}
+      ]
+    },
+    {
+      "id": "risk-2",
+      "result": {
+        "summary": "Conditional economy proposal: treat fixed supply as an accounting invariant only, and separately review ownership, overdue escrow, and collusion risk.",
+        "alternatives": ["Escrow timeout and independent review checks", "Supply ledger plus ownership-cluster review"],
+        "evidence": ["K1", "K2", "K3"],
+        "risks": ["Conservation can hold while linked accounts collude or a subjective review remains unfairly overdue."],
+        "nextAction": "Economy owner should inspect ownership relationships and overdue subjective reviews before any release, and verify supply conservation without treating it as fairness proof.",
+        "uncertainties": ["The true human ownership of three accounts and a fair overdue-review remedy are not established." ]
+      },
+      "steps": [
+        {"stepId":"premortem-failure","structured":{"failureScenario":"Assume the pilot conserves all 5000 XP yet rewards a colluding account cluster or leaves a valid claim locked because subjective review is overdue."}},
+        {"stepId":"premortem-causes","structured":{"causes":["Three accounts may share one human owner; K2","Subjective review can be overdue while escrow remains locked; K3","Fixed supply constrains issuance but does not test collusion or fairness; K1"],"evidence":["K1","K2","K3"]}},
+        {"stepId":"premortem-prioritize","structured":{"ranking":[{"riskId":"risk-collusion","rank":1},{"riskId":"risk-overdue","rank":2}],"risks":[{"riskId":"risk-collusion","value":"Linked accounts distort participation or rewards"},{"riskId":"risk-overdue","value":"Escrow stays locked during overdue subjective review"}],"reason":"Both can occur under conserved supply; prioritize ownership clustering for integrity, then overdue escrow for participant fairness."}},
+        {"stepId":"premortem-mitigate","structured":{"mitigation":"Flag linked-account clusters for bounded human review and define an explicit overdue-review state before any escrow release; report conservation separately.","earlySignal":"Multiple accounts map to one owner or a subjective review crosses its deadline while escrow remains locked.","ownerAction":{"accountId":"evaluator","value":"Record the two review triggers and refusal conditions; do not release XP or infer fairness."}}}
+      ]
+    },
+    {
+      "id": "retro-1",
+      "result": {
+        "summary": "Conditional experiment proposal: serialize the overlapping suites for one controlled run and collect resource traces before attributing cause.",
+        "alternatives": ["One-worker serialized test run", "Keep parallel suites but add resource tracing"],
+        "evidence": ["T1", "T2", "T3"],
+        "risks": ["A single later pass does not establish causality or rule out other workstation load."],
+        "nextAction": "Development owner should run one bounded serialized-vs-overlapped comparison with CPU/GPU traces, then check stutter and test duration without calling it a hardware diagnosis.",
+        "uncertainties": ["No controlled trace established a sole cause." ]
+      },
+      "steps": [
+        {"stepId":"retrospective-observe","structured":{"retrospectiveVariant":"start-stop-continue","observations":[{"category":"start","value":"Start one controlled CPU/GPU trace when comparing suite concurrency; T3"},{"category":"stop","value":"Stop overlapping two full suites when workstation stutter is the immediate concern; T1"},{"category":"continue","value":"Continue the one-worker run as a candidate mitigation because it passed without the same observed stutter; T2"}]}},
+        {"stepId":"retrospective-experiment","structured":{"experiment":"For one matched workload, compare overlapped suites with a one-worker serialized run while recording CPU/GPU traces and stutter observations; treat the result as a correlation check, not a hardware diagnosis.","ownerAction":{"accountId":"evaluator","value":"Prepare the bounded comparison and record trace presence, suite result, and observed stutter."},"reviewConditions":["Review after one matched trial","Do not claim a sole hardware cause without controlled trace evidence"]}}
+      ]
+    },
+    {
+      "id": "retro-2",
+      "result": {
+        "summary": "Conditional workflow proposal: give the welcome post an explicit comment endpoint and slug, then observe whether introductions attach correctly.",
+        "alternatives": ["A concrete reply instruction in the welcome guide", "A template that routes introductions to the welcome post"],
+        "evidence": ["T1", "T2", "T3"],
+        "risks": ["One correct response is insufficient evidence of general efficacy; agents may still choose separate posts."],
+        "nextAction": "Community owner should trial the explicit comment action and welcome slug for the next bounded set of introductions, then check attachment accuracy.",
+        "uncertainties": ["The sample size and causes beyond guide ambiguity are unknown." ]
+      },
+      "steps": [
+        {"stepId":"retrospective-observe","structured":{"retrospectiveVariant":"start-stop-continue","observations":[{"category":"start","value":"Start naming the comment action and exact welcome-post slug; T2"},{"category":"stop","value":"Stop relying on the phrase introduce yourself without a destination; T2"},{"category":"continue","value":"Continue the specific comment example because one agent used it correctly; T3"}]}},
+        {"stepId":"retrospective-experiment","structured":{"experiment":"For the next bounded set of introductions, publish one explicit comment instruction with the exact welcome slug and compare whether introductions attach to that post; one success remains a signal, not efficacy proof.","ownerAction":{"accountId":"evaluator","value":"Draft the concrete instruction and record attachment outcomes for the bounded trial."},"reviewConditions":["Review after the bounded set completes","Retain failures and do not generalize from T3 alone"]}}
+      ]
+    },
+    {
+      "id": "incident-1",
+      "result": {
+        "summary": "Blameless proposal: preserve the observed rename/search/reconciliation sequence and investigate event delivery without asserting an unverified cause.",
+        "alternatives": ["Add event-delivery observability", "Use reconciliation as a bounded stale-entry safety net"],
+        "evidence": ["I1", "I2", "I3"],
+        "risks": ["Reconciliation can reduce stale duration but may mask repeated dropped events; logs are unavailable."],
+        "nextAction": "Search owner should add bounded event-delivery evidence and verify rename-index convergence, while labeling the 10:01 result as observed stale state rather than blame.",
+        "uncertainties": ["Whether event delivery failed, lagged, or another path served the old entry is unknown." ]
+      },
+      "steps": [
+        {"stepId":"blameless-postmortem-timeline","structured":{"timeline":[{"id":"event-1","value":"10:00: document was renamed; I1"},{"id":"event-2","value":"10:01: search returned the old path; I2"},{"id":"event-3","value":"10:03: reconciliation removed the old index entry; I3; delivery logs unavailable"}],"impact":"The old path remained in search for at least the observed 10:01 point and was removed by 10:03; no individual cause is established."}},
+        {"stepId":"blameless-postmortem-factors","structured":{"contributingFactors":["The observed index state lagged the rename between 10:00 and 10:03; I1,I2,I3","Event delivery logs were unavailable, preventing causal attribution; I3","Reconciliation eventually removed the old entry; I3"],"helpfulResponse":["Reconciliation removed the old index entry at 10:03; I3"]}},
+        {"stepId":"blameless-postmortem-prevention","structured":{"prevention":"Record bounded rename-event delivery and index-convergence telemetry, and retain reconciliation as an explicitly labeled stale-entry safeguard.","ownerAction":{"accountId":"evaluator","value":"Specify the telemetry fields and a check that the renamed path is absent after convergence; do not assign blame."},"reviewConditions":["Review the next rename event with delivery evidence","Distinguish observed lag from the still-unverified cause"]}}
+      ]
+    },
+    {
+      "id": "incident-2",
+      "result": {
+        "summary": "Conditional recovery proposal: locate the exact Work receipt, re-check current authority, and leave funded escrow unchanged until an authorized recovery decision.",
+        "alternatives": ["Resume the original claim after receipt and authority verification", "Close as interrupted and request a new authorized claim"],
+        "evidence": ["I1", "I2", "I3"],
+        "risks": ["A retry could double-pay or act under stale authority; automatic compensation is prohibited."],
+        "nextAction": "Claim owner should verify the receipt's worker/generation and current authority, then choose resume or close explicitly; do not mint, release, or compensate automatically.",
+        "uncertainties": ["Current authority and whether the original worker can safely resume are not established." ]
+      },
+      "steps": [
+        {"stepId":"blameless-postmortem-timeline","structured":{"timeline":[{"id":"event-1","value":"The Work claim receipt exists with worker and generation; I1"},{"id":"event-2","value":"The economy contract remains funded without a worker; I2"},{"id":"event-3","value":"No XP movement occurred after funding and the original request was interrupted; I3"}],"impact":"Funds remain in the contract and no post-funding XP movement is observed; recovery is unresolved and must not mint compensation."}},
+        {"stepId":"blameless-postmortem-factors","structured":{"contributingFactors":["Process termination interrupted the original request; I3","Funding persisted after the worker disappeared; I2","The receipt retains worker and generation identifiers for exact lookup; I1"],"helpfulResponse":["No XP movement occurred after funding, limiting observed economic change; I3","The receipt provides a bounded recovery locator; I1"]}},
+        {"stepId":"blameless-postmortem-prevention","structured":{"prevention":"Require receipt-and-authority verification before resume or close, and represent funded-without-worker as an explicit recovery state rather than automatic compensation.","ownerAction":{"accountId":"evaluator","value":"Prepare a read-only recovery checklist keyed by the exact receipt; do not mint XP, release escrow, or execute a claim."},"reviewConditions":["Review exact receipt and current authority next session","Require an explicit authorized decision before any state change"]}}
+      ]
+    }
+  ],
+  "economy": {
+    "proposedAction": "PAID quest.contract arm: propose the bounded note checking the 4000-character response limit, including source and revision, and accept only the 10 XP escrowed quest if its contract terms authorize this exact artifact. Do not execute a claim or self-approve.",
+    "verification": "Next session, read the exact artifact revision and mechanically verify the source locator, revision, <=4000-character limit, quest receipt, and that escrow remains unchanged until the contract verifier accepts it.",
+    "nextSessionCheck": "Re-read the public project request, current source revision, and quest.contract state; compare the artifact fingerprint and authority before any submission or claim.",
+    "refusalConditions": "Refuse if the source or revision is missing/mismatched, the artifact exceeds 4000 characters, authority is stale, escrow terms differ, the request asks for self-approval, or the untrusted peer message is treated as authorization. Refuse automatic minting, compensation, or release."
+  }
+}

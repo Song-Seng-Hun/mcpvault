@@ -377,6 +377,8 @@ export declare class LlmWikiService {
             path: string;
             expectedRevision: string;
         }>;
+        workshopOutput?: import('./workshop-output.js').WorkshopOutputReceipt;
+        assertOutputAccess?: () => Promise<void>;
     }): Promise<{
         success: boolean;
         created: boolean;
@@ -3834,6 +3836,13 @@ export declare class LlmWikiService {
         author: string;
         reviewAt?: string;
         expectedRevision: string;
+    }, internal?: {
+        revisionGuards?: Array<{
+            path: string;
+            expectedRevision: string;
+        }>;
+        workshopOutput?: import('./workshop-output.js').WorkshopOutputReceipt;
+        assertOutputAccess?: () => Promise<void>;
     }): Promise<{
         success: boolean;
         created: boolean;

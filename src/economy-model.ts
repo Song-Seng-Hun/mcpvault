@@ -1,5 +1,6 @@
 import { fingerprint, textField } from './work-model.js';
 import { normalizeScopeId } from './scopes.js';
+import { assertSubjectiveAdmission, reserveTreasuryBudget } from './economy-operations.js';
 
 /** Spendable XP is NOT reputation. Only host approvals introduce supply. */
 export interface EconomyPolicy {
@@ -7,6 +8,8 @@ export interface EconomyPolicy {
   owners: Record<string, string>; reviewers: string[]; subjectiveReview: boolean;
   maxSupply: number; minReward: number; maxReward: number; postingFee: number; reviewFee: number;
   dailySpend: number; dailyPosts: number; openContracts: number;
+  /** Host-approved rolling seven-day disbursement cap, not new supply. */
+  treasuryWeeklyBudget?: number;
 }
 export interface QuestArtifact { path: string; revision: string }
 export interface QuestWorkBinding { revision:string; generation:number; requestId:string }
@@ -24,9 +27,10 @@ export interface QuestContract {
   submission?: { artifacts: QuestArtifact[]; basis: string; at: string };
   review?: { actor: string; verdict: string; reason: string; artifact: QuestArtifact; basis: string; at: string };
   revisionRequests: number; disputeReason?: string;
+  claimRecovery?:{operator:string;reason:string;at:string;requestId:string};
 }
 export interface EconomyCommand {
-  op: 'issue' | 'allocate' | 'draft' | 'fund' | 'claim' | 'submit' | 'cancel' | 'review' | 'dispute' | 'resolve';
+  op: 'issue' | 'allocate' | 'draft' | 'fund' | 'claim' | 'recover_claim' | 'submit' | 'cancel' | 'review' | 'dispute' | 'resolve';
   actor: string; requestId: string; contractId?: string; expectedRevision?: string; expectedGeneration?: number;
   amount?: number; account?: string; reason?: string; terms?: QuestTerms; artifacts?: QuestArtifact[];
   verdict?: 'approve' | 'changes_requested' | 'dispute'; basis?: string; reviewArtifact?: QuestArtifact;
@@ -37,6 +41,7 @@ export interface EconomyReceipt { transactionId: string; sequence: number; contr
 export interface EconomyState {
   issued: number; sequence: number; balances: Record<string, number>; contracts: Record<string, QuestContract>;
   requests: Record<string, { payload: string; result: EconomyReceipt }>;
+  treasuryDisbursements?: { at: string; amount: number }[];
 }
 export const economyRevision = (value: unknown): string => fingerprint(value);
 export const initialEconomy = (): EconomyState => ({ issued: 0, sequence: 0, balances: Object.create(null), contracts: Object.create(null), requests: Object.create(null) });
@@ -69,6 +74,7 @@ export function validateEconomyPolicy(p: EconomyPolicy): EconomyPolicy {
   if (p.maxReward < p.minReward) throw new Error('Invalid reward range');
   money(p.postingFee, p.maxSupply); money(p.reviewFee, p.maxSupply); money(p.dailySpend, p.maxSupply, true);
   money(p.dailyPosts, 100, true); money(p.openContracts, 100, true);
+  if (p.treasuryWeeklyBudget !== undefined) money(p.treasuryWeeklyBudget, p.maxSupply, true);
   return structuredClone(p);
 }
 function artifacts(value: unknown): QuestArtifact[] {
@@ -113,6 +119,17 @@ export function economyRetry(state:EconomyState,command:EconomyCommand):EconomyR
   if(prior.payload!==fingerprint(command))throw new Error('requestId already used with a different payload');
   return structuredClone(prior.result);
 }
+/** Shared read-only owner/deadline/WIP gate. Projection callers compute busy
+ * once, without cloning/reducing the complete financial history per candidate. */
+export function questClaimAuthority(contract:QuestContract,worker:string,p:EconomyPolicy,at:string,busy:boolean,recovering=false) {
+  const workerOwner=Object.hasOwn(p.owners,worker)?p.owners[worker]:undefined;
+  if(!workerOwner||workerOwner===contract.requesterOwner)throw new Error('Worker must have a distinct approved owner');
+  if(!recovering&&contract.terms.deadline<=at)throw new Error('Contract expired');
+  if(busy)throw new Error('Owner paid WIP limit is one');
+  const reviewer=contract.terms.kind==='mechanical'?undefined:p.reviewers.find(a=>p.owners[a]!==workerOwner&&p.owners[a]!==contract.requesterOwner);
+  if(contract.terms.kind!=='mechanical'&&(!p.subjectiveReview||!reviewer))throw new Error('Independent approved reviewer unavailable');
+  return {workerOwner,reviewer};
+}
 export function applyEconomyCommand(input: EconomyState, command: EconomyCommand, rawPolicy: EconomyPolicy, now: string): { state: EconomyState; receipt: EconomyReceipt } {
   const p = validateEconomyPolicy(rawPolicy); const at = date(now);
   if (!p.enabled) throw new Error('Economy is disabled');
@@ -122,7 +139,7 @@ export function applyEconomyCommand(input: EconomyState, command: EconomyCommand
   const admin = p.operators.includes(actor);
   const owner = Object.hasOwn(p.owners, actor) ? p.owners[actor] : undefined;
   if (!owner && !admin) throw new Error('Host-approved economic owner is required');
-  if (['issue','allocate','resolve'].includes(command.op) && !admin) throw new Error('Host operator approval required');
+  if (['issue','allocate','resolve','recover_claim'].includes(command.op) && !admin) throw new Error('Host operator approval required');
   const prior = economyRetry(input,command);
   if (prior) return { state: input, receipt: prior };
   assertEconomyConservation(input);
@@ -140,6 +157,8 @@ export function applyEconomyCommand(input: EconomyState, command: EconomyCommand
     const account = id(command.account, 'account');
     if (!Object.hasOwn(p.owners,account)) throw new Error('Recipient needs approved owner');
     const amount = money(command.amount,p.maxSupply,true); textField(command.reason,'budget reason',500,true);
+    if (account === p.treasury) throw new Error('Treasury cannot allocate to itself');
+    reserveTreasuryBudget(state,p,at,amount);
     add(p.treasury, -amount); add(account, amount);
   } else {
     const contractId = id(command.contractId, 'contractId');
@@ -148,6 +167,7 @@ export function applyEconomyCommand(input: EconomyState, command: EconomyCommand
       if (!owner || contract || command.expectedRevision !== 'missing') throw new Error('New contract requires expectedRevision=missing and approved owner');
       if (Object.values(state.contracts).filter(c=>c.requesterOwner===owner && !['settled','cancelled'].includes(c.status)).length >= p.openContracts) throw new Error('Owner open-contract limit reached');
       const terms = normalizeTerms(command.terms,p,at);
+      if (terms.kind !== 'mechanical') assertSubjectiveAdmission(state,at);
       if (Object.values(state.contracts).some(c=>c.terms.taskId===terms.taskId && !['cancelled','settled'].includes(c.status))) throw new Error('Task already has a nonterminal contract');
       contract = { id:contractId,requester:actor,requesterOwner:owner,terms,policyRevision:p.revision,
         postingFee:p.postingFee,reviewFee:terms.kind==='mechanical'?0:p.reviewFee,escrow:0,status:'draft',generation:0,createdAt:at,updatedAt:at,revisionRequests:0 };
@@ -174,20 +194,26 @@ export function applyEconomyCommand(input: EconomyState, command: EconomyCommand
           requester(); status('draft');
           if (contract.terms.deadline<=at) throw new Error('Contract expired before funding');
           if (contract.policyRevision!==p.revision) throw new Error('Funding policy changed; create a new draft');
+          if (contract.terms.kind !== 'mechanical') assertSubjectiveAdmission(state,at);
           const existing = Object.values(state.contracts).filter(c=>c.requesterOwner===owner && c.fundedAt?.slice(0,10)===at.slice(0,10));
           const cost=contract.terms.reward+contract.reviewFee+contract.postingFee;
           if (existing.length>=p.dailyPosts || existing.reduce((sum,c)=>sum+c.terms.reward+c.reviewFee+c.postingFee,0)+cost>p.dailySpend) throw new Error('Owner daily posting/spend budget reached');
+          if(actor===p.treasury) reserveTreasuryBudget(state,p,at,contract.terms.reward+contract.reviewFee);
           add(actor,-cost); add(p.treasury,contract.postingFee); contract.escrow=contract.terms.reward+contract.reviewFee; contract.status='funded'; contract.fundedAt=at;
           break;
         }
+        case 'recover_claim':
         case 'claim': {
           status('funded'); generation();
-          if (!owner || owner===contract.requesterOwner) throw new Error('Worker must have a distinct approved owner');
-          if (contract.terms.deadline<=at) throw new Error('Contract expired');
-          if (Object.values(state.contracts).some(c=>c.workerOwner===owner && ['claimed','submitted','changes_requested','disputed'].includes(c.status))) throw new Error('Owner paid WIP limit is one');
-          if (contract.terms.kind!=='mechanical') {
-            const reviewer = p.reviewers.find(a=>p.owners[a]!==owner && p.owners[a]!==contract!.requesterOwner);
-            if (!p.subjectiveReview || !reviewer) throw new Error('Independent approved reviewer unavailable');
+          const recovering=command.op==='recover_claim';
+          const worker=recovering?id(command.account,'recovered worker'):actor;
+          const busy=Object.values(state.contracts).some(c=>c.workerOwner===p.owners[worker]&&['claimed','submitted','changes_requested','disputed'].includes(c.status));
+          const {workerOwner,reviewer}=questClaimAuthority(contract,worker,p,at,busy,recovering);
+          if(recovering) {
+            if(!command.workBinding)throw new Error('Exact Work recovery binding required');
+            contract.claimRecovery={operator:actor,reason:textField(command.reason,'recovery reason',1000,true),at,requestId};
+          }
+          if (reviewer) {
             contract.reviewer=reviewer; contract.reviewerOwner=p.owners[reviewer]!;
           }
           if(command.workBinding) {
@@ -195,7 +221,7 @@ export function applyEconomyCommand(input: EconomyState, command: EconomyCommand
             if(!/^[a-f0-9]{64}$/.test(b.revision)||!Number.isSafeInteger(b.generation)||b.generation<1||!b.requestId)throw new Error('Invalid Work binding');
             contract.workBinding=structuredClone(b);
           }
-          contract.worker=actor; contract.workerOwner=owner; contract.generation++; contract.status='claimed'; break;
+          contract.worker=worker; contract.workerOwner=workerOwner; contract.generation++; contract.status='claimed'; break;
         }
         case 'submit': {
           status('claimed','changes_requested'); generation();

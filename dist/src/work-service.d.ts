@@ -4,9 +4,14 @@ import type { ScopeAuthService, ScopePrincipal } from './scope-auth.js';
 import { type AgentTaskService } from './agent-tasks.js';
 import { type Properties, type WorkBoardParams, type WorkClaimParams, type WorkHandoffParams, type WorkPacketParams, type WorkProjectParams, type WorkReviewParams } from './work-model.js';
 export type { WorkBaseParams, WorkBoardParams, WorkClaimParams, WorkHandoffParams, WorkPacketParams, WorkProjectParams, WorkReviewParams } from './work-model.js';
+type Guard = {
+    path: string;
+    expectedRevision: string;
+};
 export interface WorkServiceOptions {
     assertActor?: (principal: ScopePrincipal) => Promise<void>;
     assertTaskMutation?: (taskId: string) => Promise<void>;
+    paidProjection?: (taskIds: string[], principal?: ScopePrincipal) => Promise<Record<string, Properties>>;
 }
 /** Markdown is the sole durable state, including approvals and retry receipts.
  * No timer, worker token, external executor, or account creation lives here. */
@@ -18,8 +23,12 @@ export declare class WorkService {
     private readonly options;
     private readonly access;
     private readonly intents;
+    private readonly workshopCreates;
     constructor(fileSystem: FileSystemService, references: ReferenceService, auth: ScopeAuthService, tasks: AgentTaskService, options?: WorkServiceOptions);
     private actor;
+    /** Server-owned adapter, not an agent-supplied authority or task field. */
+    authorizeWorkshopProject(principal: ScopePrincipal, projectId: string, owner: boolean, delegate?: string, grantor?: string): Promise<Guard>;
+    createWorkshopTask(params: Parameters<AgentTaskService['create']>[0], guards: Guard[], receipt: import('./workshop-output.js').WorkshopOutputReceipt, assertAccess: () => Promise<void>): Promise<any>;
     private visible;
     private projectNote;
     private communityTarget;
@@ -44,6 +53,8 @@ export declare class WorkService {
     private applyIntent;
     private mutate;
     claim(params: WorkClaimParams): Promise<Properties>;
+    /** Internal paid lease still traverses every ordinary Work admission rule. */
+    claimPaid(params: WorkClaimParams, contractId: string): Promise<Properties>;
     handoff(params: WorkHandoffParams): Promise<Properties>;
     review(params: WorkReviewParams): Promise<Properties>;
     private blocker;

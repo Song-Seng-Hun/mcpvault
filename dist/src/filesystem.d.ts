@@ -72,7 +72,7 @@ export declare class FileSystemService {
     /** Revision of this serialized write, not a subsequent read/current-state guarantee. */
     writeNoteWithReceipt(params: NoteWriteParams, policy?: {
         maxBytes?: number;
-        assertAccess?: () => void;
+        assertAccess?: () => void | Promise<void>;
     }): Promise<{
         revision: string;
     }>;
@@ -91,7 +91,8 @@ export declare class FileSystemService {
         expectedRevision: string;
     }>, policy?: {
         maxBytes?: number;
-        assertAccess?: () => void;
+        assertAccess?: () => void | Promise<void>;
+        maxGuards?: number;
     }): Promise<{
         revision: string;
     }>;

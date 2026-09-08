@@ -1,5 +1,9 @@
 # Handoff implementation checkpoint
 
+Historical foundation checkpoint at `a4faaff9`. The subsequent implementation,
+evaluation and deployment status is tracked in the
+[completion checklist](implementation-completion-checklist.md).
+
 This checkpoint tracks the two approved plans without treating a catalog, a
 unit test or a recorded proposal as a completed product rollout.
 

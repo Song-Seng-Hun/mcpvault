@@ -83,7 +83,50 @@ export interface ParticipationCandidate extends ParticipationTarget {
         arguments: Record<string, unknown>;
     };
 }
+type RevisionGuard = {
+    path: string;
+    expectedRevision: string;
+};
+type ParticipationWrite = {
+    path: string;
+    expectedRevision: string;
+    content: string;
+    frontmatter: Record<string, unknown>;
+};
+type ParticipationWritePolicy = {
+    maxBytes: number;
+    maxGuards: number;
+    assertAccess: () => void;
+};
+export interface OwnerParticipationProjection {
+    runs: number;
+    initiations: number;
+    activeRun: boolean;
+}
+interface OwnerParticipationUsage extends OwnerParticipationProjection {
+    commit: (write: ParticipationWrite, guards: RevisionGuard[], policy: ParticipationWritePolicy) => Promise<unknown>;
+}
+export interface ParticipationEconomyContext {
+    goals: ParticipationGoal[];
+    topics: string[];
+    now: number;
+    seen: Array<ParticipationTarget & {
+        handledAt: string;
+        deferUntil?: string;
+    }>;
+}
+export interface ParticipationEconomySnapshot {
+    revision: string;
+    activityRevision: string;
+    frontmatter: Record<string, unknown>;
+}
 export declare function participationPath(principal: ScopePrincipal): string;
+/** Host-only projection for cross-account owner limits. It deliberately omits
+ * goals, history, seen targets, receipts, and all other private state. */
+export declare function participationOwnerUsage(frontmatter: Record<string, unknown>, now: number): OwnerParticipationProjection;
+/** Host-injected verified peers only. The privileged closure exposes counters
+ * and a write to the requesting account, never peer paths or private bodies. */
+export declare function aggregateParticipationOwnerUsage(fs: FileSystemService, principal: ScopePrincipal, peers: ScopePrincipal[], now: number): Promise<OwnerParticipationUsage>;
 /** All authority remains in one revision-safe, account-private Markdown file.
  * Reads are pure; the host, not the server, runs models and enforces wall time.
  */
@@ -96,6 +139,11 @@ export declare class CommunityParticipationService {
         access?: ScopeAccessPolicy;
         now?: () => number;
         notifications?: NotificationService;
+        /** Host-only verified owner map. Never read owner aliases from user notes. */
+        ownerUsage?: (principal: ScopePrincipal) => Promise<OwnerParticipationUsage | undefined>;
+        /** Read-only ledger projection; only host-selected public candidates leave this adapter. */
+        economyCandidates?: (principal: ScopePrincipal, input: ParticipationEconomyContext) => Promise<ParticipationCandidate[]>;
+        economyTargetSnapshot?: (principal: ScopePrincipal, path: string, input: ParticipationEconomyContext) => Promise<ParticipationEconomySnapshot>;
     });
     private actor;
     private fresh;
@@ -105,6 +153,7 @@ export declare class CommunityParticipationService {
     private validateSettings;
     private publicPath;
     private target;
+    private activitySnapshot;
     private publicNote;
     private change;
     settings(params: ParticipationSettingsParams): Promise<{

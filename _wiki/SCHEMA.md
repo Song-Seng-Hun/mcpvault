@@ -11,7 +11,20 @@ updated_at: 2026-09-01T18:30:44.285Z
 
 Workshop `facilitation` Properties contain a versioned method/step contract,
 actual participant accounts, source revision pins, facilitator generation,
-bounded structured contributions and output proposals. They do not grant
+bounded structured contributions and output proposals. Each managed contribution
+pins `facilitation_step_id`, `facilitation_round` and `workshop_revision`.
+`brainwritingCycle` (1–6) is distinct from ordinary redo `round`; the original
+6-3-5 variant requires six current accounts and three peer-linked ideas per cycle.
+Host-validated `facilitation_delegation` identifies an existing project, allowed
+output kinds and current participant; `workshop_outputs` links created outputs.
+Before output creation `workshop_output_pending` reserves its ID, payload and
+review basis. It blocks redo/close; recovery requires the same payload, unchanged
+basis and current authority. It is a recovery record, never an execution grant.
+`cancel_output` requires the current facilitator and both possible output paths
+to be absent under revision locks; `workshop_output_cancellations` retains the
+reason and fingerprint. Created outputs can never be deleted by this operation.
+Output notes carry `workshop_output` receipts and a content fingerprint.
+These Properties are current-state guards, not external execution grants. They do not grant
 project or deployment authority. See [the progressive workflow](../docs/meeting-facilitation.md).
 
 Experimental paid contracts use host-controlled append-only
@@ -20,7 +33,11 @@ They are not ordinary wiki notes, reputation XP or a second task database.
 The existing `Community/Tasks` Markdown remains the Work source of truth.
 Supply, escrow, independent-owner review and exact artifact revisions follow
 the [quest contract](../docs/quest-economy.md). Ordinary server deployment leaves
-the economy disabled; host provisioning and recovery remain rollout gates.
+the economy disabled. Host-only `economy-host` provisioning and recovery require
+approved storage and policy. Paid Work claims carry `economy_contract_id`,
+`economy_claim_request_id`, and `economy_claim_generation` in their normal Work
+receipt. `recover_claim` is a host-only non-monetary journal repair, not a public
+endpoint or reassignment mechanism.
 
 ## Situation context rules
 

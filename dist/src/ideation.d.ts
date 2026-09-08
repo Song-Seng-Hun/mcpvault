@@ -1,6 +1,7 @@
 import type { FileSystemService } from './filesystem.js';
 import type { ReferenceService } from './references.js';
 import type { ScopePrincipal } from './scope-auth.js';
+import { type WorkshopOutputAdapter } from './workshop-output.js';
 export declare const IDEA_STATUSES: readonly ['seed', 'exploring', 'challenging', 'evaluating', 'selected', 'rejected', 'parked', 'implemented', 'promoted'];
 export type IdeaStatus = typeof IDEA_STATUSES[number];
 export declare const IDEA_CONTRIBUTION_KINDS: readonly ['extension', 'challenge', 'counterexample', 'evidence', 'question', 'synthesis', 'outcome'];
@@ -19,7 +20,9 @@ export interface ResearchWorkshopWork {
 export declare class IdeationService {
     private readonly fileSystem;
     private readonly references;
+    private outputService?;
     constructor(fileSystem: FileSystemService, references: ReferenceService);
+    attachOutputAdapter(adapter: WorkshopOutputAdapter): void;
     createIdea(params: {
         principal?: ScopePrincipal;
         ideaId?: string;
@@ -181,9 +184,19 @@ export declare class IdeationService {
     }>;
     getWorkshopMethods(params?: {
         methodId?: unknown;
+        stepId?: unknown;
         cursor?: unknown;
         maxChars?: number;
     }): {
+        example: Record<string, unknown>;
+        inputSchema: Record<string, unknown>;
+        notice: string;
+        methodId: "1-2-4-all" | "affinity-kj" | "blameless-postmortem" | "brainwriting" | "checklist" | "crazy8s" | "daci" | "dot-voting" | "how-might-we" | "mind-map" | "ngt" | "page-led" | "premortem" | "retrospective" | "scamper" | "six-hats";
+        stepId: string;
+        required: readonly string[];
+        finishCondition: string;
+        truncated: boolean;
+    } | {
         methods: {
             methodId: "1-2-4-all" | "affinity-kj" | "blameless-postmortem" | "brainwriting" | "checklist" | "crazy8s" | "daci" | "dot-voting" | "how-might-we" | "mind-map" | "ngt" | "page-led" | "premortem" | "retrospective" | "scamper" | "six-hats";
             version: 1;
@@ -211,6 +224,13 @@ export declare class IdeationService {
                 required: readonly string[];
                 finishCondition: string;
                 adaptation: string;
+                inputAction: {
+                    endpointId: string;
+                    arguments: {
+                        methodId: "1-2-4-all" | "affinity-kj" | "blameless-postmortem" | "brainwriting" | "checklist" | "crazy8s" | "daci" | "dot-voting" | "how-might-we" | "mind-map" | "ngt" | "page-led" | "premortem" | "retrospective" | "scamper" | "six-hats";
+                        stepId: string;
+                    };
+                };
                 minimumAccounts?: number;
             }[];
         }[];
@@ -238,100 +258,7 @@ export declare class IdeationService {
         cursor?: unknown;
         limit?: number;
         maxChars?: number;
-    }): Promise<{
-        truncated?: never;
-        workshopId: string;
-        managed: boolean;
-        revision: string;
-        nextAction: {
-            kind: string;
-            message: string;
-            stepId?: never;
-        };
-        blocked?: never;
-        facilitation?: never;
-        submissions?: never;
-        submissionTotal?: never;
-    } | {
-        workshopId: string;
-        managed: boolean;
-        revision: string;
-        blocked: boolean;
-        facilitation: {
-            version: 1;
-            currentStepId: string;
-            round: number;
-        };
-        submissions: never[];
-        submissionTotal: number;
-        nextAction: {
-            kind: string;
-            stepId: string;
-            message: string;
-        };
-        truncated: boolean;
-    } | {
-        workshopId: string;
-        managed: boolean;
-        revision: string;
-        facilitation: {
-            version: 1;
-            purpose: string;
-            scope: string;
-            successCriteria: string[];
-            currentStepId: string;
-            round: number;
-            facilitatorAccountId: string;
-            currentStep: {
-                title: string;
-                required: readonly string[];
-                finishCondition: string;
-                adaptation: string;
-            };
-            sourcePins: import("./workshop-facilitation.js").FacilitationSourceRevision[];
-            sourcePinsTruncated: boolean;
-            sourceDetailAction?: {
-                endpointId: string;
-                arguments: {
-                    path: string;
-                    expectedRevision: string;
-                    maxChars: number;
-                };
-            };
-        };
-        outputAuthority: string;
-        nextAction: {
-            kind: 'submit' | 'wait' | 'advance' | 'record_output';
-            stepId: string;
-            required: string[];
-            finishCondition: string;
-            adaptation: string;
-            resumeCondition?: string;
-        } | {
-            kind: string;
-            stepId: string;
-            required: string[];
-            finishCondition: string;
-            adaptation: string;
-        };
-        submissions: {
-            contributionId: any;
-            accountId: string;
-            stepId: string;
-            structured: Record<string, unknown>;
-            createdAt: any;
-        }[];
-        submissionTotal: number;
-        completionUnknown: boolean;
-        cursor?: {
-            path: string;
-            missing: boolean;
-        } | {
-            path: string;
-            value: string | number | boolean | null;
-        };
-        truncated: boolean;
-    }>;
+    }): Promise<any>;
     updateWorkshopFacilitation(params: {
         principal?: ScopePrincipal;
         workshopId: string;

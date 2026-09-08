@@ -77,7 +77,7 @@ export function getIdeationTools() {
         {
             name: 'list_workshop_methods',
             description: 'List the fixed, versioned managed facilitation catalogue with executable steps, prerequisites, finish conditions, and asynchronous adaptations. It is read-only and makes no workshop changes.',
-            inputSchema: { type: 'object', properties: { methodId: { type: 'string', description: 'Return one exact supported method with all fixed steps when it fits the response bound.' }, cursor: { type: 'integer', minimum: 0, description: 'Continuation cursor returned by an earlier workshop.methods response.' }, maxChars: { type: 'integer', minimum: 512, maximum: 12000, default: 6000 }, prettyPrint } },
+            inputSchema: { type: 'object', properties: { methodId: { type: 'string', description: 'Return one exact supported method with all fixed steps when it fits the response bound.' }, stepId: { type: 'string', description: 'With methodId, retrieve the exact structured input schema and worked shape for one step; replace example values with evidence.' }, cursor: { type: 'integer', minimum: 0, description: 'Continuation cursor returned by an earlier workshop.methods response.' }, maxChars: { type: 'integer', minimum: 512, maximum: 12000, default: 6000 }, prettyPrint } },
         },
         {
             name: 'read_workshop_facilitation',
@@ -86,10 +86,10 @@ export function getIdeationTools() {
         },
         {
             name: 'update_workshop_facilitation',
-            description: 'Configure or advance an optional managed workshop through one revision-safe action. Configuration, handoff, revocation, resume, and output plans require the current authenticated facilitator account; submit records a bounded current-step contribution. Output plans do not create decisions, tasks, processes, or permissions.',
+            description: 'Manage one revision-safe workshop action. Facilitator/project owner can delegate exact project and decision/task kinds to an existing participant. execute_output uses that current delegation and a stable outputId to create a Decision Record or proposed Work task through existing services; retry the same outputId and identical payload after response loss. cancel_output with {outputId,reason} lets the current facilitator cancel a pending reservation only if both output paths remain absent; created outputs cannot be cancelled. record_output remains a proposal only. close requires final-step completion and recorded synthesis. No action grants shell/deployment permission.',
             inputSchema: { type: 'object', properties: {
                     workshopId: { type: 'string' }, expectedRevision: { type: 'string', pattern: '^[a-f0-9]{64}$' }, requestId: { type: 'string', minLength: 1, maxLength: 128 },
-                    operation: { type: 'string', enum: ['configure', 'submit', 'advance', 'handoff', 'revoke', 'resume', 'synthesize', 'record_output'] },
+                    operation: { type: 'string', enum: ['configure', 'submit', 'advance', 'handoff', 'revoke', 'pause', 'resume', 'redo', 'synthesize', 'record_output', 'delegate', 'execute_output', 'cancel_output', 'close'] },
                     payload: { type: 'object' }, stepId: { type: 'string', maxLength: 160 }, structured: { type: 'object' }, content: { type: 'string', maxLength: 280 },
                     kind: { type: 'string', enum: [...WORKSHOP_CONTRIBUTION_KINDS] }, references, accessToken, prettyPrint,
                 }, required: ['workshopId', 'expectedRevision', 'requestId', 'operation', 'accessToken'] },

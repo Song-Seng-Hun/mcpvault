@@ -5,6 +5,8 @@ import { createServerLifecycle } from "./src/server-lifecycle.js";
 import { parseCliArgs } from "./src/cli.js";
 import { startRestApi } from "./src/rest-api.js";
 import { startMcpHttpApi } from "./src/mcp-http.js";
+import { loadEconomyHostConfig, probeEconomyStorage } from './src/economy-host.js';
+import { EconomyLedger } from './src/economy-ledger.js';
 import { existsSync, readFileSync } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, join, resolve } from "path";
@@ -47,6 +49,9 @@ Options:
   --read-only     Expose read tools only and reject all vault mutations
                   May be passed alone, with true/false, or as --read-only=true
   --http[=PORT]   Also expose the optional localhost REST adapter (default 8787)
+  --economy-config FILE
+                  Optional host-private approved economy policy, default OFF.
+                  Run economy-host doctor/initialize first; never mints on start.
   --mcp-http[=PORT]
                   Expose MCP 2026 Stateless Streamable HTTP (default 8788)
   --mcp-http-only[=PORT]
@@ -70,13 +75,29 @@ Examples:
 }
 // Remove runtime options before joining trailing args, preserving support for
 // unquoted vault paths with spaces. When omitted, use the current directory.
-const { vaultPathArg, readOnly, restPort, mcpHttpPort, mcpHttpHost, mcpHttpTlsCert, mcpHttpTlsKey, stdio } = parseCliArgs(cliArgs);
+const { vaultPathArg, readOnly, restPort, mcpHttpPort, mcpHttpHost, mcpHttpTlsCert, mcpHttpTlsKey, stdio, economyConfig } = parseCliArgs(cliArgs);
 const vaultPath = resolve(vaultPathArg || process.cwd());
 if (mcpHttpPort === undefined && (mcpHttpHost || mcpHttpTlsCert || mcpHttpTlsKey)) {
     throw new Error('--mcp-http-host, --mcp-http-cert, and --mcp-http-key require --mcp-http');
 }
-const mcpServer = createServer(vaultPath, { version: VERSION, readOnly });
+const hostEconomy = economyConfig ? await loadEconomyHostConfig(resolve(economyConfig), vaultPath) : undefined;
+let economy;
+if (hostEconomy?.policy.enabled) {
+    for (const path of [hostEconomy.vaultPath, hostEconomy.hostPath])
+        await probeEconomyStorage(path);
+    economy = { policy: hostEconomy.policy, ledger: await EconomyLedger.open({ ...hostEconomy, storageVerified: true }) };
+}
+let mcpServer;
+try {
+    mcpServer = createServer(vaultPath, { version: VERSION, readOnly, ...(economy && { economy }) });
+}
+catch (error) {
+    await economy?.ledger.close();
+    throw error;
+}
 const lifecycle = createServerLifecycle(mcpServer);
+if (economy)
+    lifecycle.add(economy.ledger);
 const ownsNetwork = mcpHttpPort !== undefined || restPort !== undefined;
 let isShuttingDown = false;
 try {

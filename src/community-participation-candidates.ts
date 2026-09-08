@@ -11,6 +11,12 @@ interface CandidateContext {
   notificationPaths: string[]; now: number;
 }
 const words = (value: string) => value.normalize('NFKC').toLowerCase().match(/[\p{L}\p{N}]+/gu) || [];
+/** Completed tasks remain readable for explicit result confirmation. */
+export function isParticipationTask(path:string,frontmatter:Record<string,unknown>):boolean {
+  const id=/^Community\/Tasks\/([a-z0-9][a-z0-9._-]*)\.md$/.exec(path)?.[1];
+  return Boolean(id && frontmatter.mcpvault_type==='agent_task' && frontmatter.task_id===id
+    && ['proposed','accepted','in_progress','blocked','in_review','completed'].includes(String(frontmatter.status)));
+}
 export function matchesParticipationTopic(frontmatter: Record<string, unknown>, topic: string): boolean {
   const canonical = topic.normalize('NFKC').trim().toLowerCase();
   if (Array.isArray(frontmatter.tags) && frontmatter.tags.some(tag => typeof tag === 'string' && tag.normalize('NFKC').trim().toLowerCase() === canonical)) return true;
@@ -83,7 +89,7 @@ export async function communityCandidates(fs: FileSystemService, access: ScopeAc
     const nextAction = fm.mcpvault_type === 'blog_post'
       ? { endpointId: 'community.post_read', arguments: { slug: id, includeComments: true, commentLimit: 3, maxChars: 2000 } }
       : fm.mcpvault_type === 'workshop'
-        ? { endpointId: 'workshop.read', arguments: { workshopId: id, limit: 3, maxChars: 2000 } }
+        ? { endpointId: fm.facilitation ? 'workshop.facilitation':'workshop.read', arguments: { workshopId: id, limit: 1, maxChars: fm.facilitation?6000:2000 } }
         : fm.mcpvault_type === 'idea'
           ? { endpointId: 'idea.read', arguments: { ideaId: id, limit: 3, maxChars: 2000 } }
           : { endpointId: 'chat.room_read', arguments: { roomId: id, limit: 3, maxChars: 2000 } };

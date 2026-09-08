@@ -1,6 +1,12 @@
 import { describe, expect, test } from "vitest";
 import { parseCliArgs } from "./cli.js";
 
+test('parses private economy config separately from the vault path',()=>{
+  expect(parseCliArgs(['E:\\Vault','--economy-config=E:\\Private\\economy.json']).economyConfig).toBe('E:\\Private\\economy.json');
+  expect(parseCliArgs(['E:\\Vault','--economy-config','E:\\Private\\economy.json']).vaultPathArg).toBe('E:\\Vault');
+  expect(()=>parseCliArgs(['E:\\Vault','--economy-config'])).toThrow(/config/i);
+});
+
 describe("parseCliArgs", () => {
   test("starts a dedicated HTTP runtime without stdio using one option", () => {
     expect(parseCliArgs(['/My', 'Vault', '--mcp-http-only'])).toEqual({ vaultPathArg: '/My Vault', readOnly: false, mcpHttpPort: 8788, stdio: false });
