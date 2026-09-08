@@ -29,6 +29,7 @@ export declare class FileSystemService {
     private readonly graphIndex?;
     private readonly vaultIo;
     private readonly scopeAccess;
+    private readonly assertNoticeMutation;
     private frontmatterHandler;
     private pathFilter;
     private readonly mutationTails;
@@ -45,7 +46,7 @@ export declare class FileSystemService {
     private withMutationLockKey;
     /** Acquire several note locks in one stable order so reciprocal edits cannot deadlock. */
     private withMutationLocks;
-    constructor(vaultPath: string, pathFilter?: PathFilter, frontmatterHandler?: FrontmatterHandler, onNoteChanged?: ((path: string, kind: 'upsert' | 'delete') => void | Promise<void>) | undefined, metadataIndex?: VaultMetadataIndex | undefined, graphIndex?: VaultGraphIndex | undefined, vaultIo?: VaultIoCoordinator, scopeAccess?: ScopeAccessPolicy);
+    constructor(vaultPath: string, pathFilter?: PathFilter, frontmatterHandler?: FrontmatterHandler, onNoteChanged?: ((path: string, kind: 'upsert' | 'delete') => void | Promise<void>) | undefined, metadataIndex?: VaultMetadataIndex | undefined, graphIndex?: VaultGraphIndex | undefined, vaultIo?: VaultIoCoordinator, scopeAccess?: ScopeAccessPolicy, assertNoticeMutation?: (path: string) => void);
     /**
      * Normalize an incoming path to be vault-relative. Strips leading slashes
      * and the vault path prefix when a caller accidentally passes an absolute path
@@ -61,6 +62,10 @@ export declare class FileSystemService {
      * where a validated path is used as a mutation target.
      */
     private resolveWritablePath;
+    /** Recheck live host notice authority at dispatch, after awaited preparation. */
+    private writeProtectedFile;
+    private removeProtectedFile;
+    private renameProtectedFile;
     readNote(path: string, maxBytes?: number): Promise<ParsedNote>;
     /** Hash current decoded UTF-8 without parsing. Callers still enforce scope;
      * a revision is not an access grant or a fresh moderation classification. */

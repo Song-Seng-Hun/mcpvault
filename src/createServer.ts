@@ -53,6 +53,8 @@ import { AgentTaskService } from "./agent-tasks.js";
 import { AGENT_TASK_MUTATING_TOOLS, getAgentTaskTools } from "./agent-task-tools.js";
 import { getWorkTools, WORK_MUTATING_TOOLS, WORK_TASK_PROPERTIES } from './work-tools.js';
 import { getRoleplayTools, ROLEPLAY_MUTATING_TOOLS } from './roleplay-tools.js';
+import { getNoticeTools } from './notice-tools.js';
+import { NoticeRegistry, NoticeService } from './notices.js';
 import { RoleplayService } from './roleplay-service.js';
 import type { RoleplayStore } from './roleplay-store.js';
 import { roleplayRevision } from './roleplay-model.js';
@@ -212,6 +214,8 @@ function requestFairnessKey(args: Record<string, unknown>): string {
 }
 
 export interface CreateServerOptions {
+  /** Host-private notice registration/delegation file, reloaded before operations. */
+  noticeConfigPath?: string;
   /** Host-provisioned single world; no caller or Vault note can enable this. */
   roleplay?: RoleplayStore;
   /** Host-provisioned ledger only. Never initialized or funded from MCP. */
@@ -259,6 +263,7 @@ const MUTATING_TOOLS = new Set([
   ...AGENT_TASK_MUTATING_TOOLS,
   ...WORK_MUTATING_TOOLS,
   ...ROLEPLAY_MUTATING_TOOLS,
+  'revise_notice',
   ...PARTICIPATION_MUTATING_TOOLS,
   ...COMMUNITY_FEATURE_MUTATING_TOOLS,
   ...CONTINUITY_MUTATING_TOOLS,
@@ -327,6 +332,7 @@ const CAPABILITY_FOR_TOOL: Partial<Record<string, ScopeCapability>> = {
   create_agent_task: "task",
   manage_work_project: 'task',
   manage_roleplay_world: 'chat', manage_roleplay_character: 'chat', manage_roleplay_scene: 'chat',
+  revise_notice: 'write', preview_notice: 'write',
   submit_roleplay_action: 'chat', resolve_roleplay_action: 'chat', correct_roleplay_turn: 'chat',
   claim_work_task: 'task',
   handoff_work_task: 'task',
@@ -467,6 +473,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
   let notificationsCache: NotificationService | undefined;
   let communityFeaturesCache: CommunityFeaturesService | undefined;
   let llmWikiCache: LlmWikiService | undefined;
+  const noticeRegistry = new NoticeRegistry(resolvedVaultPath, options.noticeConfigPath || process.env.MCPVAULT_NOTICE_CONFIG);
   const fileSystem = new FileSystemService(
     resolvedVaultPath,
     pathFilter,
@@ -476,6 +483,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
     graphIndex,
     vaultIo,
     scopeAccess,
+    path => noticeRegistry.assertMutation(path),
   );
   const gitHistory = new GitHistoryService(resolvedVaultPath, pathFilter);
   const collaboration = new CollaborationService(fileSystem, searchService);
@@ -487,6 +495,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
   const sourceChange = new SourceChangeService(fileSystem, scopeAccess);
   const knowledgeApplications = new KnowledgeApplicationService(fileSystem, scopeAccess);
   const references = new ReferenceService(fileSystem, scopeAccess);
+  const notices = new NoticeService(noticeRegistry, fileSystem, scopeAccess, references);
   const llmWiki = new LlmWikiService(fileSystem, scopeAccess, references, semanticSearch);
   llmWikiCache = llmWiki;
   const moderation = new ModerationService(resolvedVaultPath, fileSystem, scopeAuth);
@@ -500,8 +509,11 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
   reputationCache = reputation;
   const notifications = new NotificationService(fileSystem, reputation, resolvedVaultPath, fileCatalog);
   notificationsCache = notifications;
-  const social = new SocialService(fileSystem, scopeAccess, references, reputation, notifications,
-    ...(enterpriseProfile?.mode === 'public' ? [{ communityRoot: 'PublicCommunity/Local', publicMode: true }] : []));
+  const social = new SocialService(fileSystem, scopeAccess, references, reputation, notifications, {
+    ...(enterpriseProfile?.mode === 'public' && { communityRoot: 'PublicCommunity/Local', publicMode: true }),
+    noticeFeedback: (id, revision, principal) => notices.feedback(id, revision, principal),
+    noticeFeedbackReview: (id, path, revision, principal) => notices.feedbackReview(id, path, revision, principal),
+  });
   const chat = new ChatService(fileSystem, references, reputation, options.roleplay ? async () => (await options.roleplay!.read()).records : undefined);
   const whispers = new WhisperService(fileSystem, references);
   const communityStatus = new CommunityStatusService(fileSystem, enterpriseProfile?.mode === 'public' ? { communityRoot: 'PublicCommunity/Local' } : {});
@@ -885,6 +897,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         ...getResearchBridgeTools(),
         ...getChatTools(),
         ...getRoleplayTools(),
+        ...getNoticeTools(),
         ...getReferenceTools(),
         ...getWhisperTools(),
         ...getCommunityStatusTools(),
@@ -1359,6 +1372,9 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         throw new Error('Keep drafts in this agent\'s private memory; publish to the public community only when ready');
       }
       const canAccessPath = (path: string) => scopeAccess.canAccessPhysicalPath(path, principal);
+      const assertNoticeActorFresh = () => {
+        if (principal && JSON.stringify(scopeAuth.authenticate(rawArgs.accessToken)) !== JSON.stringify(principal)) throw new Error('Notice authentication changed; login again');
+      };
       const revalidateActor = async (): Promise<ScopePrincipal> => {
         const authenticateActor = () => {
           const current = scopeAuth.authenticate(rawArgs.accessToken);
@@ -1394,6 +1410,9 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         }
 
         case "orient_wiki": {
+          const notice = await notices.priority({ topic: 'onboarding', maxChars: trimmedArgs.maxChars }, principal);
+          assertNoticeActorFresh();
+          if (notice) return jsonResult(notice, false);
           if (principal?.enterprise) return jsonResult({
             identity: { actorId: principal.actorId, authorLabel: principal.authorLabel, sessionId: principal.sessionId, sessionGeneration: principal.sessionGeneration },
             instanceMode: principal.enterprise.mode,
@@ -1435,6 +1454,13 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         }
 
         case "get_agent_pulse": {
+          // Receipts are caller context, never proof of obedience or a stored read ledger.
+          // Explicit busy status preserves active work over optional notice browsing.
+          if (!trimmedArgs.hostBusy) {
+            const notice = await notices.priority({ topic: trimmedArgs.noticeTopic ?? 'onboarding', knownRevisions: trimmedArgs.knownNoticeRevisions, maxChars: trimmedArgs.maxChars }, principal);
+            assertNoticeActorFresh();
+            if (notice) return jsonResult(notice, false);
+          }
           if (principal?.enterprise) {
             const posts = await social.listBlogPosts({ principal, limit: 3, maxChars: 1800, includeExcerpt: false });
             return jsonResult({ identity: { actorId: principal.actorId, authorLabel: principal.authorLabel, sessionId: principal.sessionId, generation: principal.sessionGeneration },
@@ -2225,6 +2251,15 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
 
         case "publish_blog_post": {
           return communityReceipt(await social.publishBlogPost({ ...trimmedArgs, principal }));
+        }
+
+        case 'list_notices': case 'read_notice': case 'preview_notice': case 'revise_notice': {
+          const result = toolName === 'list_notices' ? await notices.list(trimmedArgs, principal)
+            : toolName === 'read_notice' ? await notices.read(trimmedArgs, principal)
+            : toolName === 'preview_notice' ? await notices.preview(trimmedArgs, principal)
+            : await notices.revise(trimmedArgs, principal, revalidateActor, assertNoticeActorFresh);
+          if (principal && JSON.stringify(scopeAuth.authenticate(rawArgs.accessToken)) !== JSON.stringify(principal)) throw new Error('Notice authentication changed; login again');
+          return jsonResult(result, false);
         }
 
         case "delete_blog_post": {

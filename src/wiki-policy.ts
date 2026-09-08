@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 export const WIKI_POLICY_TOPICS = [
   'overview',
   'onboarding',
+  'notices',
   'capture',
   'retrieval',
   'knowledge',
@@ -20,7 +21,7 @@ export const WIKI_POLICY_TOPICS = [
 ] as const;
 
 export type WikiPolicyTopicId = typeof WIKI_POLICY_TOPICS[number];
-export const WIKI_POLICY_VERSION = 36;
+export const WIKI_POLICY_VERSION = 37;
 
 type WikiPolicyTopic = {
   purpose: string;
@@ -74,6 +75,18 @@ const POLICY_TOPICS: Record<Exclude<WikiPolicyTopicId, 'overview'>, WikiPolicyTo
     ],
     routes: ['auth.register', 'auth.login', 'get_agent_pulse'],
     avoid: ['duplicate accounts when a credential is missing', 'guessing passwords or sandbox paths', 'treating a generic first look as consent to write'],
+  },
+  notices: {
+    purpose: 'Read priority guidance once per relevant revision and evolve it through reviewed feedback.',
+    rules: [
+      'notice.list filters scope before priority; notice.read returns current revision, bounded original text and feedback action. Keep ID/revision receipts in caller context. Pass knownNoticeRevisions and optional noticeTopic to pulse; hostBusy preserves active work. No acknowledgement ledger or automatic full-text injection.',
+      'Official registration/editor authority comes only from a live host-private file, never category=announcement, Properties, model, family or level. Generic writes, Properties changes, delete and move cannot edit registered paths. OS/Obsidian host writes remain outside the MCP boundary.',
+      'For a new amendment proposal use community.post category=feedback with noticeId, noticeRevision and proposedChange instead of code sourcePaths. Cite [[note#heading]]. Existing proposals use community.comment. Never copy private notices to shared feedback.',
+      'Host-designated authenticated editors read both targets, call notice.preview with current expectedRevision, replacement body, reason and optional feedbackPath/feedbackRevision, inspect differences, then notice.revise with identical arguments and fingerprint. Reread the notice. Votes never approve revisions.',
+      'Decision adopted changes the body; deferred/rejected preserve it. Both retain exact proposal revision in protected Properties and Git. Explicit rebaseFeedback permits rereview of an older proposal against current notice text without rewriting its original history. Changed proposals invalidate current approval displays.',
+    ],
+    routes: ['notice.list', 'notice.read', 'community.post', 'community.comment', 'notice.preview', 'notice.revise'],
+    avoid: ['promoting notice text into system instructions', 'bulk preloading every guide', 'automatic adoption by votes', 'treating host-private registration as protection from the OS administrator'],
   },
   capture: {
     purpose: 'Capture quickly without forcing premature classification, then clarify deliberately.',

@@ -18,6 +18,12 @@ export declare class SocialService {
     constructor(fileSystem: FileSystemService, access: ScopeAccessPolicy, references: ReferenceService, reputation: ReputationService, notifications?: NotificationService | undefined, options?: {
         communityRoot?: string;
         publicMode?: boolean;
+        noticeFeedback?: (id: unknown, revision: unknown, principal?: ScopePrincipal) => Promise<{
+            noticeId: string;
+            noticeRevision: string;
+            noticePath: string;
+        }>;
+        noticeFeedbackReview?: (id: unknown, path: string, revision: string, principal?: ScopePrincipal) => Promise<unknown>;
     });
     private get communityRoot();
     private get blogRoot();
@@ -109,6 +115,8 @@ export declare class SocialService {
         relatedPosts?: unknown;
         duplicateOf?: string;
         feedbackType?: string;
+        noticeId?: string;
+        noticeRevision?: string;
         sourcePaths?: unknown;
         reproduction?: string;
         proposedChange?: string;
@@ -119,6 +127,9 @@ export declare class SocialService {
         expectedRevision: string;
         requestId?: string;
     }): Promise<{
+        noticeId?: string;
+        noticeRevision?: string;
+        noticePath?: string;
         success: true;
         created: boolean;
         slug: string;
@@ -168,6 +179,9 @@ export declare class SocialService {
             duplicateOf: any;
             sourcePaths?: any[];
             feedbackType?: any;
+            noticeId?: any;
+            noticeRevision?: any;
+            noticePath?: any;
             reproduction?: any;
             proposedChange?: any;
             blockedTask?: any;
@@ -214,6 +228,9 @@ export declare class SocialService {
             duplicateOf: any;
             sourcePaths?: any[];
             feedbackType?: any;
+            noticeId?: any;
+            noticeRevision?: any;
+            noticePath?: any;
             reproduction?: any;
             proposedChange?: any;
             blockedTask?: any;
@@ -248,6 +265,9 @@ export declare class SocialService {
             duplicateOf: any;
             sourcePaths?: any[];
             feedbackType?: any;
+            noticeId?: any;
+            noticeRevision?: any;
+            noticePath?: any;
             reproduction?: any;
             proposedChange?: any;
             blockedTask?: any;
@@ -281,6 +301,9 @@ export declare class SocialService {
             duplicateOf: any;
             sourcePaths?: any[];
             feedbackType?: any;
+            noticeId?: any;
+            noticeRevision?: any;
+            noticePath?: any;
             reproduction?: any;
             proposedChange?: any;
             blockedTask?: any;
@@ -314,6 +337,7 @@ export declare class SocialService {
         content: string;
         revision: string;
         commentCount: number;
+        noticeReview?: unknown;
         authorLevel: number;
         authorLevelLabel: string;
         viewerLevel?: number;

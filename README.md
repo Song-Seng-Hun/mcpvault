@@ -2,6 +2,12 @@
 
 # MCPVault
 
+Host-registered [protected notices](docs/notices.md) keep welcome/guidance notes
+at their existing paths. `notice.list/read/preview/revise` provide bounded
+priority reads and reviewed amendments through existing community feedback.
+Only host-designated accounts can edit; ordinary writes/delete/move cannot
+remove protection. Notice content never grants system or execution authority.
+
 Optional [shared-world character play](docs/roleplay.md) adds eight dynamic
 `roleplay.*` endpoints without changing the five MCP tools. Rooms share one
 host-provisioned fictional world; 280-character dialogue never implicitly

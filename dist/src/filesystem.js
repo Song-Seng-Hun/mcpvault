@@ -476,6 +476,7 @@ export class FileSystemService {
     graphIndex;
     vaultIo;
     scopeAccess;
+    assertNoticeMutation;
     frontmatterHandler;
     pathFilter;
     mutationTails = vaultMutationTails;
@@ -540,13 +541,14 @@ export class FileSystemService {
             : this.withMutationLockKey(ordered[index], () => acquire(index + 1));
         return acquire(0);
     }
-    constructor(vaultPath, pathFilter, frontmatterHandler, onNoteChanged, metadataIndex, graphIndex, vaultIo = new VaultIoCoordinator(), scopeAccess = new ScopeAccessPolicy()) {
+    constructor(vaultPath, pathFilter, frontmatterHandler, onNoteChanged, metadataIndex, graphIndex, vaultIo = new VaultIoCoordinator(), scopeAccess = new ScopeAccessPolicy(), assertNoticeMutation = () => { }) {
         this.vaultPath = vaultPath;
         this.onNoteChanged = onNoteChanged;
         this.metadataIndex = metadataIndex;
         this.graphIndex = graphIndex;
         this.vaultIo = vaultIo;
         this.scopeAccess = scopeAccess;
+        this.assertNoticeMutation = assertNoticeMutation;
         const resolved = resolve(vaultPath);
         try {
             this.vaultPath = realpathSync(resolved);
@@ -664,6 +666,7 @@ export class FileSystemService {
         const fullPath = this.resolvePath(relativePath);
         const relativePathToVault = relative(this.vaultPath, fullPath);
         assertRoleplayMutationBoundary(relativePathToVault);
+        this.assertNoticeMutation(relativePathToVault);
         assertEnterpriseStorageAccess(relativePathToVault, true);
         // Guard the canonical vault-relative destination for every service write,
         // including absolute input paths and indirectly rewritten backlinks. This
@@ -687,6 +690,20 @@ export class FileSystemService {
             }
         }
         return fullPath;
+    }
+    /** Recheck live host notice authority at dispatch, after awaited preparation. */
+    async writeProtectedFile(path, content, options = 'utf8') {
+        this.assertNoticeMutation(relative(this.vaultPath, path));
+        return writeFile(path, content, options);
+    }
+    async removeProtectedFile(path) {
+        this.assertNoticeMutation(relative(this.vaultPath, path));
+        return unlink(path);
+    }
+    async renameProtectedFile(from, to) {
+        this.assertNoticeMutation(relative(this.vaultPath, from));
+        this.assertNoticeMutation(relative(this.vaultPath, to));
+        return rename(from, to);
     }
     async readNote(path, maxBytes) {
         return this.withNoteRead(path, async (fullPath) => {
@@ -845,7 +862,7 @@ export class FileSystemService {
                 throw new Error(`Revision conflict for ${path}: expected ${params.expectedRevision}, current ${previousRevision}. Read the ${label} file again before replacing it.`);
             }
             await mkdir(dirname(fullPath), { recursive: true });
-            await writeFile(fullPath, content, 'utf-8');
+            await this.writeProtectedFile(fullPath, content, 'utf-8');
             return { path, previousRevision, revision: this.revision(content) };
         });
     }
@@ -968,7 +985,7 @@ export class FileSystemService {
             const accessCheck = assertAccess?.();
             if (accessCheck)
                 await accessCheck;
-            await writeFile(fullPath, finalContent, expectedRevision === 'missing'
+            await this.writeProtectedFile(fullPath, finalContent, expectedRevision === 'missing'
                 ? { encoding: 'utf-8', flag: 'wx' } : 'utf-8');
             this.notifyNoteChanged(path, 'upsert');
             return { revision: this.revision(finalContent), originalContent: finalContent };
@@ -1054,7 +1071,7 @@ export class FileSystemService {
             assertNoteContentSize(updatedContent, path);
             // Write the updated content
             const fullPath = this.resolveWritablePath(path);
-            await writeFile(fullPath, updatedContent, 'utf-8');
+            await this.writeProtectedFile(fullPath, updatedContent, 'utf-8');
             this.notifyNoteChanged(path, 'upsert');
             return {
                 success: true,
@@ -1166,7 +1183,7 @@ export class FileSystemService {
             const planned = this.planImprovedPatch(path, note, params);
             if (params.dryRun || planned.content === note.originalContent)
                 return planned.result;
-            await writeFile(this.resolveWritablePath(path), planned.content, 'utf-8');
+            await this.writeProtectedFile(this.resolveWritablePath(path), planned.content, 'utf-8');
             this.notifyNoteChanged(path, 'upsert');
             return planned.result;
         }
@@ -1368,7 +1385,7 @@ export class FileSystemService {
                             throw new Error(`Revision conflict for ${plan.path}: it changed before its individual write`);
                         }
                         attempted.push(plan);
-                        await writeFile(fullPath, plan.content, 'utf8');
+                        await this.writeProtectedFile(fullPath, plan.content, 'utf8');
                     }
                 }
                 catch (error) {
@@ -1385,7 +1402,7 @@ export class FileSystemService {
                                 rollbackFailures.push(`${plan.path}: content changed after our write; current content preserved`);
                                 continue;
                             }
-                            await writeFile(fullPath, plan.original, 'utf8');
+                            await this.writeProtectedFile(fullPath, plan.original, 'utf8');
                         }
                         catch {
                             rollbackFailures.push(`${plan.path}: could not safely read or restore the target; inspect its current state`);
@@ -1647,7 +1664,7 @@ export class FileSystemService {
         catch {
             // File does not exist in trash, no collision.
         }
-        await rename(fullPath, finalTrashPath);
+        await this.renameProtectedFile(fullPath, finalTrashPath);
     }
     async deleteNote(params, canAccessPath = () => true) {
         const path = this.normalizeReferenceMutationPath(params.path);
@@ -1714,6 +1731,7 @@ export class FileSystemService {
             }
             if (trashMode === 'system') {
                 try {
+                    this.assertNoticeMutation(path);
                     await trash(fullPath);
                     this.notifyNoteChanged(path, 'delete');
                     return {
@@ -1738,7 +1756,7 @@ export class FileSystemService {
                 }
             }
             // Perform the deletion using Node.js native API
-            await unlink(fullPath);
+            await this.removeProtectedFile(fullPath);
             this.notifyNoteChanged(path, 'delete');
             return {
                 success: true,
@@ -1875,7 +1893,7 @@ export class FileSystemService {
                     // Mark before write because writeFile may truncate and then fail.
                     // Rollback must cover both complete and partial writes.
                     backup.updated = true;
-                    await writeFile(this.resolveWritablePath(backup.path), backup.rewritten, 'utf-8');
+                    await this.writeProtectedFile(this.resolveWritablePath(backup.path), backup.rewritten, 'utf-8');
                     this.notifyNoteChanged(backup.path, 'upsert');
                 }
             }
@@ -1897,11 +1915,11 @@ export class FileSystemService {
                 // belongs to the pre-existing/racing writer and must not be removed.
                 destinationTouched = true;
                 if (overwrite) {
-                    await writeFile(newFullPath, content, 'utf-8');
+                    await this.writeProtectedFile(newFullPath, content, 'utf-8');
                 }
                 else {
                     // wx flag: write exclusive - fails if file exists
-                    await writeFile(newFullPath, content, { encoding: 'utf-8', flag: 'wx' });
+                    await this.writeProtectedFile(newFullPath, content, { encoding: 'utf-8', flag: 'wx' });
                 }
             }
             catch (error) {
@@ -1912,7 +1930,7 @@ export class FileSystemService {
                 throw error;
             }
             // Delete the source file
-            await unlink(oldFullPath);
+            await this.removeProtectedFile(oldFullPath);
             this.notifyNoteChanged(oldPath, 'delete');
             this.notifyNoteChanged(newPath, 'upsert');
             return {
@@ -1926,9 +1944,9 @@ export class FileSystemService {
             if (destinationTouched) {
                 try {
                     if (destinationBackup !== undefined)
-                        await writeFile(newFullPath, destinationBackup, 'utf-8');
+                        await this.writeProtectedFile(newFullPath, destinationBackup, 'utf-8');
                     else
-                        await unlink(newFullPath);
+                        await this.removeProtectedFile(newFullPath);
                     this.notifyNoteChanged(newPath, destinationBackup !== undefined ? 'upsert' : 'delete');
                 }
                 catch {
@@ -1937,7 +1955,7 @@ export class FileSystemService {
             }
             for (const backup of linkBackups.filter(item => item.updated).reverse()) {
                 try {
-                    await writeFile(this.resolveWritablePath(backup.path), backup.original, 'utf-8');
+                    await this.writeProtectedFile(this.resolveWritablePath(backup.path), backup.original, 'utf-8');
                     this.notifyNoteChanged(backup.path, 'upsert');
                 }
                 catch {
@@ -2057,7 +2075,7 @@ export class FileSystemService {
                             message: `Target path is a directory: ${newPath}. Please provide a file path.`
                         };
                     }
-                    await unlink(newFullPath);
+                    await this.removeProtectedFile(newFullPath);
                 }
                 catch (error) {
                     if (!(error instanceof Error) || !('code' in error) || error.code !== 'ENOENT') {
@@ -2066,12 +2084,14 @@ export class FileSystemService {
                 }
             }
             try {
-                await rename(oldFullPath, newFullPath);
+                await this.renameProtectedFile(oldFullPath, newFullPath);
             }
             catch (error) {
                 if (error instanceof Error && 'code' in error && error.code === 'EXDEV') {
+                    this.assertNoticeMutation(relative(this.vaultPath, oldFullPath));
+                    this.assertNoticeMutation(relative(this.vaultPath, newFullPath));
                     await copyFile(oldFullPath, newFullPath);
-                    await unlink(oldFullPath);
+                    await this.removeProtectedFile(oldFullPath);
                 }
                 else {
                     throw error;
@@ -2231,7 +2251,7 @@ export class FileSystemService {
             // Preserve raw formatting for unmodified fields
             const updatedContent = this.frontmatterHandler.preserveStringify(note.matter, frontmatter, note.content);
             assertNoteContentSize(updatedContent, path);
-            await writeFile(fullPath, updatedContent, 'utf-8');
+            await this.writeProtectedFile(fullPath, updatedContent, 'utf-8');
             // Frontmatter-only mutations bypass writeNoteUnlocked, so explicitly
             // invalidate the shared catalog/index read models before returning.
             this.notifyNoteChanged(path, 'upsert');
@@ -2371,7 +2391,7 @@ export class FileSystemService {
             // The lock serializes this service's writers. Also reject external edits
             // observed after deriving tags; this is a recheck, not filesystem CAS.
             await this.assertExpectedRevision(path, note.revision);
-            await writeFile(fullPath, updatedContent, 'utf-8');
+            await this.writeProtectedFile(fullPath, updatedContent, 'utf-8');
             this.notifyNoteChanged(path, 'upsert');
             return {
                 path,

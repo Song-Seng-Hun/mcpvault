@@ -53,6 +53,8 @@ import { AgentTaskService } from "./agent-tasks.js";
 import { AGENT_TASK_MUTATING_TOOLS, getAgentTaskTools } from "./agent-task-tools.js";
 import { getWorkTools, WORK_MUTATING_TOOLS, WORK_TASK_PROPERTIES } from './work-tools.js';
 import { getRoleplayTools, ROLEPLAY_MUTATING_TOOLS } from './roleplay-tools.js';
+import { getNoticeTools } from './notice-tools.js';
+import { NoticeRegistry, NoticeService } from './notices.js';
 import { RoleplayService } from './roleplay-service.js';
 import { roleplayRevision } from './roleplay-model.js';
 import { validateRoleplayQuestArtifact } from './roleplay-quest.js';
@@ -239,6 +241,7 @@ const MUTATING_TOOLS = new Set([
     ...AGENT_TASK_MUTATING_TOOLS,
     ...WORK_MUTATING_TOOLS,
     ...ROLEPLAY_MUTATING_TOOLS,
+    'revise_notice',
     ...PARTICIPATION_MUTATING_TOOLS,
     ...COMMUNITY_FEATURE_MUTATING_TOOLS,
     ...CONTINUITY_MUTATING_TOOLS,
@@ -306,6 +309,7 @@ const CAPABILITY_FOR_TOOL = {
     create_agent_task: "task",
     manage_work_project: 'task',
     manage_roleplay_world: 'chat', manage_roleplay_character: 'chat', manage_roleplay_scene: 'chat',
+    revise_notice: 'write', preview_notice: 'write',
     submit_roleplay_action: 'chat', resolve_roleplay_action: 'chat', correct_roleplay_turn: 'chat',
     claim_work_task: 'task',
     handoff_work_task: 'task',
@@ -428,7 +432,8 @@ export function createServer(vaultPath, options = {}) {
     let notificationsCache;
     let communityFeaturesCache;
     let llmWikiCache;
-    const fileSystem = new FileSystemService(resolvedVaultPath, pathFilter, frontmatterHandler, queueReadModelChange, metadataIndex, graphIndex, vaultIo, scopeAccess);
+    const noticeRegistry = new NoticeRegistry(resolvedVaultPath, options.noticeConfigPath || process.env.MCPVAULT_NOTICE_CONFIG);
+    const fileSystem = new FileSystemService(resolvedVaultPath, pathFilter, frontmatterHandler, queueReadModelChange, metadataIndex, graphIndex, vaultIo, scopeAccess, path => noticeRegistry.assertMutation(path));
     const gitHistory = new GitHistoryService(resolvedVaultPath, pathFilter);
     const collaboration = new CollaborationService(fileSystem, searchService);
     const retrieval = new RetrievalService(searchService, collaboration, semanticSearch, scopeAccess, fileSystem);
@@ -439,6 +444,7 @@ export function createServer(vaultPath, options = {}) {
     const sourceChange = new SourceChangeService(fileSystem, scopeAccess);
     const knowledgeApplications = new KnowledgeApplicationService(fileSystem, scopeAccess);
     const references = new ReferenceService(fileSystem, scopeAccess);
+    const notices = new NoticeService(noticeRegistry, fileSystem, scopeAccess, references);
     const llmWiki = new LlmWikiService(fileSystem, scopeAccess, references, semanticSearch);
     llmWikiCache = llmWiki;
     const moderation = new ModerationService(resolvedVaultPath, fileSystem, scopeAuth);
@@ -452,7 +458,11 @@ export function createServer(vaultPath, options = {}) {
     reputationCache = reputation;
     const notifications = new NotificationService(fileSystem, reputation, resolvedVaultPath, fileCatalog);
     notificationsCache = notifications;
-    const social = new SocialService(fileSystem, scopeAccess, references, reputation, notifications, ...(enterpriseProfile?.mode === 'public' ? [{ communityRoot: 'PublicCommunity/Local', publicMode: true }] : []));
+    const social = new SocialService(fileSystem, scopeAccess, references, reputation, notifications, {
+        ...(enterpriseProfile?.mode === 'public' && { communityRoot: 'PublicCommunity/Local', publicMode: true }),
+        noticeFeedback: (id, revision, principal) => notices.feedback(id, revision, principal),
+        noticeFeedbackReview: (id, path, revision, principal) => notices.feedbackReview(id, path, revision, principal),
+    });
     const chat = new ChatService(fileSystem, references, reputation, options.roleplay ? async () => (await options.roleplay.read()).records : undefined);
     const whispers = new WhisperService(fileSystem, references);
     const communityStatus = new CommunityStatusService(fileSystem, enterpriseProfile?.mode === 'public' ? { communityRoot: 'PublicCommunity/Local' } : {});
@@ -840,6 +850,7 @@ export function createServer(vaultPath, options = {}) {
         ...getResearchBridgeTools(),
         ...getChatTools(),
         ...getRoleplayTools(),
+        ...getNoticeTools(),
         ...getReferenceTools(),
         ...getWhisperTools(),
         ...getCommunityStatusTools(),
@@ -1314,6 +1325,10 @@ export function createServer(vaultPath, options = {}) {
                 throw new Error('Keep drafts in this agent\'s private memory; publish to the public community only when ready');
             }
             const canAccessPath = (path) => scopeAccess.canAccessPhysicalPath(path, principal);
+            const assertNoticeActorFresh = () => {
+                if (principal && JSON.stringify(scopeAuth.authenticate(rawArgs.accessToken)) !== JSON.stringify(principal))
+                    throw new Error('Notice authentication changed; login again');
+            };
             const revalidateActor = async () => {
                 const authenticateActor = () => {
                     const current = scopeAuth.authenticate(rawArgs.accessToken);
@@ -1353,6 +1368,10 @@ export function createServer(vaultPath, options = {}) {
                         return jsonResult(collaboration.getScopeContext(principal?.modelId, principal?.agentId, undefined, scopeAccess.getCommandCenterId()), trimmedArgs.prettyPrint);
                     }
                     case "orient_wiki": {
+                        const notice = await notices.priority({ topic: 'onboarding', maxChars: trimmedArgs.maxChars }, principal);
+                        assertNoticeActorFresh();
+                        if (notice)
+                            return jsonResult(notice, false);
                         if (principal?.enterprise)
                             return jsonResult({
                                 identity: { actorId: principal.actorId, authorLabel: principal.authorLabel, sessionId: principal.sessionId, sessionGeneration: principal.sessionGeneration },
@@ -1380,6 +1399,14 @@ export function createServer(vaultPath, options = {}) {
                         return jsonResult(result, trimmedArgs.prettyPrint);
                     }
                     case "get_agent_pulse": {
+                        // Receipts are caller context, never proof of obedience or a stored read ledger.
+                        // Explicit busy status preserves active work over optional notice browsing.
+                        if (!trimmedArgs.hostBusy) {
+                            const notice = await notices.priority({ topic: trimmedArgs.noticeTopic ?? 'onboarding', knownRevisions: trimmedArgs.knownNoticeRevisions, maxChars: trimmedArgs.maxChars }, principal);
+                            assertNoticeActorFresh();
+                            if (notice)
+                                return jsonResult(notice, false);
+                        }
                         if (principal?.enterprise) {
                             const posts = await social.listBlogPosts({ principal, limit: 3, maxChars: 1800, includeExcerpt: false });
                             return jsonResult({ identity: { actorId: principal.actorId, authorLabel: principal.authorLabel, sessionId: principal.sessionId, generation: principal.sessionGeneration },
@@ -2081,6 +2108,18 @@ export function createServer(vaultPath, options = {}) {
                     }
                     case "publish_blog_post": {
                         return communityReceipt(await social.publishBlogPost({ ...trimmedArgs, principal }));
+                    }
+                    case 'list_notices':
+                    case 'read_notice':
+                    case 'preview_notice':
+                    case 'revise_notice': {
+                        const result = toolName === 'list_notices' ? await notices.list(trimmedArgs, principal)
+                            : toolName === 'read_notice' ? await notices.read(trimmedArgs, principal)
+                                : toolName === 'preview_notice' ? await notices.preview(trimmedArgs, principal)
+                                    : await notices.revise(trimmedArgs, principal, revalidateActor, assertNoticeActorFresh);
+                        if (principal && JSON.stringify(scopeAuth.authenticate(rawArgs.accessToken)) !== JSON.stringify(principal))
+                            throw new Error('Notice authentication changed; login again');
+                        return jsonResult(result, false);
                     }
                     case "delete_blog_post": {
                         return communityReceipt(await social.deleteBlogPost({ ...trimmedArgs, principal }));

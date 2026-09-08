@@ -407,7 +407,20 @@ export class SocialService {
         const sourcePaths = params.sourcePaths === undefined
             ? cleanFeedbackSourcePaths(existing?.note.frontmatter.source_paths)
             : cleanFeedbackSourcePaths(params.sourcePaths);
-        if (category === 'feedback' && sourcePaths.length === 0) {
+        const noticeId = params.noticeId ?? existing?.note.frontmatter.notice_id;
+        const noticeRevision = params.noticeRevision ?? existing?.note.frontmatter.notice_revision;
+        let noticeTarget;
+        const validateNotice = async () => {
+            if (noticeId !== undefined || noticeRevision !== undefined) {
+                if (category !== 'feedback' || !this.options.noticeFeedback)
+                    throw new Error('Notice feedback is unavailable');
+                noticeTarget = await this.options.noticeFeedback(noticeId, noticeRevision, principal);
+                if (!String(params.proposedChange ?? existing?.note.frontmatter.proposed_change ?? '').trim())
+                    throw new Error('Notice feedback requires proposedChange');
+            }
+        };
+        await validateNotice();
+        if (category === 'feedback' && sourcePaths.length === 0 && !noticeTarget) {
             throw new Error('feedback posts must include sourcePaths with one or more repository-relative source code locations');
         }
         if (category === 'forum' && !String(params.blockedTask ?? existing?.note.frontmatter.blocked_task ?? '').trim()) {
@@ -422,6 +435,9 @@ export class SocialService {
         let guards = [];
         const validateRelated = async () => {
             const byPath = new Map();
+            await validateNotice();
+            if (noticeTarget)
+                byPath.set(noticeTarget.noticePath, { path: noticeTarget.noticePath, expectedRevision: noticeTarget.noticeRevision });
             for (const related of relatedPosts) {
                 const relatedNote = await this.fileSystem.readNote(String(related));
                 if (relatedNote.frontmatter.mcpvault_type !== 'blog_post' || isModerationHidden(relatedNote.frontmatter))
@@ -452,6 +468,7 @@ export class SocialService {
         const request = preparePublicCreateRequest({
             principal, requestId: params.requestId, action: 'community.post', generatedPrefix: 'post', requestedTargetId: slug,
             payload: { slug, title, content, status, tags, references: normalizedReferences, category, seriesId, seriesTitle, seriesOrder,
+                ...(noticeTarget && { noticeId, noticeRevision }),
                 relatedPosts, duplicateOf, feedbackType, sourcePaths, reproduction, proposedChange, blockedTask, attempted, helpWanted, environment },
         });
         const body = `${content}\n`;
@@ -467,15 +484,19 @@ export class SocialService {
             ...(category === 'forum' && { blocked_task: blockedTask, ...(attempted !== undefined && { attempted }),
                 ...(helpWanted !== undefined && { help_wanted: helpWanted }), ...(environment !== undefined && { environment }) }),
             references: normalizedReferences,
+            ...(noticeTarget && { notice_id: noticeTarget.noticeId, notice_revision: noticeTarget.noticeRevision, notice_path: noticeTarget.noticePath }),
             ...(existing ? { updated_at: timestamp } : { created_at: timestamp, updated_at: timestamp, workflow_status: 'open' }),
         });
         const resultFor = (revision, frontmatter, created) => ({
             success: true, created, slug, path, status, category,
             ...(category === 'feedback' && { sourcePaths }), ...(category === 'forum' && { blockedTask: frontmatter.blocked_task }), revision,
+            ...(noticeTarget && { ...noticeTarget }),
         });
         if (!request) {
             const frontmatter = makeFrontmatter(now());
-            const receipt = await this.fileSystem.writeNoteWithReceipt({ path, content: body, frontmatter, expectedRevision: params.expectedRevision });
+            const receipt = noticeTarget
+                ? await this.fileSystem.writeNoteWithRevisionGuardsAndReceipt({ path, content: body, frontmatter, expectedRevision: params.expectedRevision }, guards, { assertAccess: validateNotice, maxGuards: 32 })
+                : await this.fileSystem.writeNoteWithReceipt({ path, content: body, frontmatter, expectedRevision: params.expectedRevision });
             return resultFor(receipt.revision, frontmatter, !existing);
         }
         return runPublicCreate({
@@ -499,7 +520,7 @@ export class SocialService {
                 const frontmatter = attachPublicCreateRequest(request, makeFrontmatter(now()), body);
                 const allGuards = [...guards, ...(participationGuard ? [participationGuard] : [])];
                 const receipt = allGuards.length
-                    ? await this.fileSystem.writeNoteWithRevisionGuardsAndReceipt({ path, content: body, frontmatter, expectedRevision: 'missing' }, allGuards)
+                    ? await this.fileSystem.writeNoteWithRevisionGuardsAndReceipt({ path, content: body, frontmatter, expectedRevision: 'missing' }, allGuards, { assertAccess: validateNotice, maxGuards: 32 })
                     : await this.fileSystem.writeNoteWithReceipt({ path, content: body, frontmatter, expectedRevision: 'missing' });
                 return resultFor(receipt.revision, frontmatter, true);
             },
@@ -655,6 +676,7 @@ export class SocialService {
             ...(note.frontmatter.category === 'feedback' && {
                 sourcePaths: Array.isArray(note.frontmatter.source_paths) ? note.frontmatter.source_paths : [],
                 feedbackType: note.frontmatter.feedback_type,
+                ...(Boolean(note.frontmatter.notice_id) && { noticeId: note.frontmatter.notice_id, noticeRevision: note.frontmatter.notice_revision, noticePath: note.frontmatter.notice_path }),
                 reproduction: note.frontmatter.reproduction,
                 proposedChange: note.frontmatter.proposed_change,
             }),
@@ -688,6 +710,7 @@ export class SocialService {
         const authorReputation = (await this.reputation.getMany([String(note.frontmatter.author || '')])).get(String(note.frontmatter.author || '').toLowerCase());
         const viewerReputation = params.principal ? await this.reputation.getForPrincipal(params.principal) : undefined;
         return { path, fm: note.frontmatter, content: note.content, revision: note.revision, commentCount: comments.total,
+            ...(Boolean(note.frontmatter.notice_id) && this.options.noticeFeedbackReview && { noticeReview: await this.options.noticeFeedbackReview(note.frontmatter.notice_id, path, note.revision, params.principal) }),
             authorLevel: authorReputation?.level ?? 0,
             authorLevelLabel: authorReputation?.label ?? '뉴비',
             ...(viewerReputation && { viewerLevel: viewerReputation.level, viewerXp: viewerReputation.xp, viewerLevelLabel: viewerReputation.label }),

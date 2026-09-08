@@ -7,6 +7,20 @@ updated_at: 2026-09-01T18:30:44.285Z
 ---
 # LLM Wiki schema
 
+## Protected notices (optional host registration)
+
+Notice identity, path, priority, topics and editor accounts come from a
+host-private registration file, never YAML claims. Existing Markdown remains
+the source; `mcpvault_notice_id`/`notice_priority` may label it for Obsidian but
+cannot confer authority. See [protected notices](../docs/notices.md).
+`notice_last_change` records actor/reason/previous_revision; `notice_feedback`
+holds up to 20 reviewed proposal path/revision/decision/reason/basis records.
+Git retains prior history. Feedback posts use `notice_id`, `notice_revision`,
+`notice_path` instead of code source_paths when requesting a notice amendment.
+Proposal reads derive `noticeReview` from the current protected notice, never
+from likes or a claimant-supplied approval. Decisions on older bases require
+explicit re-review. Scope remains independent of notice status.
+
 ## Optional shared-world roleplay contract
 
 Host opt-in creates one local Community world, never a room-specific save.

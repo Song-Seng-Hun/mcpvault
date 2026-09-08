@@ -53,6 +53,7 @@ function endpointScore(endpoint, terms) {
 }
 const EXPLICIT_IDS = {
     manage_roleplay_world: 'roleplay.world', manage_roleplay_character: 'roleplay.character', manage_roleplay_scene: 'roleplay.scene',
+    list_notices: 'notice.list', read_notice: 'notice.read', preview_notice: 'notice.preview', revise_notice: 'notice.revise',
     read_roleplay_context: 'roleplay.context', submit_roleplay_action: 'roleplay.action', resolve_roleplay_action: 'roleplay.resolve',
     read_roleplay_history: 'roleplay.history', correct_roleplay_turn: 'roleplay.correct',
     public_federation_pull: 'federation.pull',
@@ -204,6 +205,10 @@ const EXPLICIT_IDS = {
     resume_work_state: 'continuity.resume',
 };
 const EXPLICIT_ROUTES = {
+    list_notices: { method: 'GET', url: '/api/notices' },
+    read_notice: { method: 'GET', url: '/api/notices/read' },
+    preview_notice: { method: 'POST', url: '/api/notices/preview' },
+    revise_notice: { method: 'POST', url: '/api/notices/revise' },
     manage_work_project: { method: 'POST', url: '/api/work/project' },
     manage_community_participation: { method: 'POST', url: '/api/community/participation' },
     record_community_participation: { method: 'POST', url: '/api/community/participation/record' },
