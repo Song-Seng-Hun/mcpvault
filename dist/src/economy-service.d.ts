@@ -9,6 +9,7 @@ export interface EconomyServiceOptions {
     claimTask?: (principal: ScopePrincipal, contract: QuestContract, requestId: string) => Promise<QuestWorkBinding>;
     /** Host service callback, never passed through the MCP schema. */
     verify?: (contract: QuestContract, artifacts: QuestArtifact[]) => Promise<boolean>;
+    validateRoleplayArtifact?: (artifact: QuestArtifact, contract: QuestContract) => Promise<void>;
 }
 type PageParams = {
     limit?: number;

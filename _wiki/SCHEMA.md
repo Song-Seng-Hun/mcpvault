@@ -7,6 +7,41 @@ updated_at: 2026-09-01T18:30:44.285Z
 ---
 # LLM Wiki schema
 
+## Optional shared-world roleplay contract
+
+Host opt-in creates one local Community world, never a room-specific save.
+`Community/Roleplay/Turns/NNNNNNNNNN.md` holds append-only canonical events:
+`fiction_domain: roleplay`, `roleplay_committed: true`, and `roleplay_event`
+with version, sequence, previous hash, authenticated command, applied receipt,
+timestamp and integrity hash. Scene turns have `mcpvault_type: chat_message`,
+`message_id: roleplay-turn-N`, `room_id`, actual `author`, and `character_id`;
+administrative turns use `mcpvault_type: roleplay_turn`. Both are the same
+authoritative journal, not replicated chat and game logs. Body <=280 Unicode
+characters. Host integrity checkpoints are outside the Vault and source Git.
+
+Character definition, location/inventory/stats/flags/relations, and cognition
+are separate fields. Controllers are exact account IDs plus generations;
+model/family/display names confer no control. Cognition kinds are `known`,
+`witnessed`, `heard`, `inferred`, each referencing a committed turn. They are
+fictional beliefs, not ACLs. Reusable lore uses `fiction_domain: roleplay` and
+existing literal `context_rules`; real-world answer/context and personal memory
+exclude fiction by default. Explicit note reads remain available under normal ACLs.
+
+Game state changes only through validated commands. Conditions are literal
+exists/equality/range/location/quantity checks; effects are flags, bounded
+numeric stats/relations, moves and conserved item transfers. No executable
+expressions or foreign card scripts. Pending creative actions require a current
+delegated scene GM. Corrections require host authority, current revision and
+preview fingerprint, append a compensating turn and reject downstream conflicts.
+
+Context/history use 20 items/4,000 characters by default, maximum 100/12,000,
+including metadata and continuation. World revisions guard state transitions;
+`noteRevision` pins the canonical Markdown artifact. Never interchange them.
+Quest references do not pay: an existing funded quest and independent review
+validate exact committed artifacts. Corrected evidence cannot silently retain
+approval. Production real economy remains OFF. See `wiki.policy` topic
+`roleplay` and [client/host workflow](../docs/roleplay.md).
+
 ## Optional managed workshop and quest contracts
 
 Workshop `facilitation` Properties contain a versioned method/step contract,

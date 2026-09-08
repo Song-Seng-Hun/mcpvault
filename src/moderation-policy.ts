@@ -33,6 +33,7 @@ export function isManagedCommunityPath(path: string): boolean {
     'community/comments',
     'community/chatrooms',
     'community/chatmessages',
+    'community/roleplay',
     'community/agents',
     'community/tasks',
     'community/projects',

@@ -25,6 +25,7 @@ async function setup() {
 
 async function json(client: Client, name: string, arguments_: Record<string, unknown>) {
   const result = await client.callTool({ name, arguments: arguments_ });
+  if (result.isError) throw new Error((result.content as any)[0].text);
   return { result, value: JSON.parse((result.content as any)[0].text) };
 }
 

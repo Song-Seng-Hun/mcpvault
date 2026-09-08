@@ -27,6 +27,7 @@ export function isManagedCommunityPath(path) {
         'community/comments',
         'community/chatrooms',
         'community/chatmessages',
+        'community/roleplay',
         'community/agents',
         'community/tasks',
         'community/projects',

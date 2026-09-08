@@ -266,3 +266,16 @@ test('standard search keeps its existing limit and body excerpt contract', async
   expect(result).toHaveLength(20);
   expect(result.every(hit => hit.ex.includes('standardneedle'))).toBe(true);
 });
+
+test('fiction admission reaches semantic search before its top-k window', async () => {
+  const fiction = Array.from({ length: 20 }, (_, i) => ({ p: `Fiction/${i}.md`, t: `Fiction ${i}`, ex: '', mc: 0 }));
+  for (const hit of fiction) await note(hit.p, '---\nfiction_domain: roleplay\n---\nUnrelated indexed text.');
+  await note('Knowledge/Real.md', 'Unrelated indexed text.');
+  const candidates = [...fiction, { p: 'Knowledge/Real.md', t: 'Real', ex: '', mc: 0 }];
+  vi.spyOn(semantic, 'search').mockImplementation(async params => {
+    const admitted = params.canAccessPath ? candidates.filter(hit => params.canAccessPath!(hit.p)) : candidates;
+    return { results: admitted.slice(0, 1), available: true, indexed: candidates.length, pending: 0 };
+  });
+  const result = await retrieval.retrieve({ query: 'semanticfictionneedle', semantic: true, fictionDomain: 'exclude', limit: 1 });
+  expect(result.results.map(hit => hit.p)).toEqual(['Knowledge/Real.md']);
+});

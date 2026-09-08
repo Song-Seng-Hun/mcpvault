@@ -7,6 +7,7 @@ import { isModerationHidden } from './moderation-policy.js';
 import { contextRuleState, type ContextIntent } from './context-rules.js';
 import { buildMarkdownLiteralMask } from './backlinks.js';
 import { selectContextPassages, type ContextPassageSelection } from './context-passages.js';
+import { isFictionDomain } from './fiction-domain.js';
 
 export interface SituationOptions { context: string; intent: ContextIntent; explain: boolean }
 export function isSituationMemory(fm: Record<string, any>): boolean {
@@ -25,7 +26,7 @@ export async function selectSituationCandidates(fs: FileSystemService, access: S
   let after: QueryNotesCursor | undefined; let examined = 0;
   do {
     const batch = await fs.queryNotes({ limit: 500, includeContent: false, includeTotal: false, sortBy: 'path', ...(after && { after }) }, canAccess,
-      n => !isModerationHidden(n.frontmatter) && !n.frontmatter.mcpvault_type && !isSituationMemory(n.frontmatter));
+      n => !isModerationHidden(n.frontmatter) && !isFictionDomain(n.frontmatter) && !n.frontmatter.mcpvault_type && !isSituationMemory(n.frontmatter));
     for (const n of batch.notes) {
       if (++examined > 10000) throw new Error('Situation metadata window exhausted');
       const state = contextRuleState(n.frontmatter.context_rules, `${query}\n${options.context}`, options.intent);

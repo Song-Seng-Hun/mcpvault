@@ -2,11 +2,27 @@ import type { FileSystemService } from './filesystem.js';
 import type { ScopePrincipal } from './scope-auth.js';
 import type { ReferenceService } from './references.js';
 import type { ReputationService } from './reputation.js';
+/** Shared reply validation for ordinary chat and pre-roleplay room history. */
+export declare function readChatReplyTarget(fileSystem: FileSystemService, roomId: string, messageId: string, options?: {
+    canAccessPath?: (path: string) => boolean;
+    ordinaryOnly?: boolean;
+}): Promise<{
+    path: string;
+    note: import("./types.js").ParsedNote;
+}>;
 export declare class ChatService {
     private readonly fileSystem;
     private readonly references;
     private readonly reputation;
-    constructor(fileSystem: FileSystemService, references: ReferenceService, reputation: ReputationService);
+    private readonly verifiedRoleplay?;
+    constructor(fileSystem: FileSystemService, references: ReferenceService, reputation: ReputationService, verifiedRoleplay?: (() => Promise<Array<{
+        path: string;
+        revision: string;
+        content: string;
+        frontmatter: Record<string, any>;
+    }>>) | undefined);
+    private verifiedTurns;
+    private verifiedMessage;
     createRoom(params: {
         principal?: ScopePrincipal;
         roomId: string;
@@ -124,7 +140,9 @@ export declare class ChatService {
         includeReferences?: boolean;
     }): Promise<{
         path: string;
-        fm: Record<string, any>;
+        fm: {
+            [x: string]: any;
+        };
         messageId: string;
         roomId: string;
         content: string;

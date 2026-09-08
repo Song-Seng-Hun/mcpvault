@@ -4,6 +4,7 @@ import { selectContextPassages } from './context-passages.js';
 import { endpointIdForTool } from './endpoint-registry.js';
 import { posix } from 'node:path';
 import { positiveSearchTerms, memoryCandidateLimit } from './search.js';
+import { isFictionDomain } from './fiction-domain.js';
 export const RETRIEVAL_NOTE_BYTES = 8 * 1024 * 1024;
 export function constrainedQuery(query) {
     return /["'\[\]:()]|(?:^|\s)-\S|(?:^|\s)OR(?:\s|$)/i.test(query);
@@ -49,6 +50,28 @@ export class RetrievalService {
         if (!this.access.canAccessPhysicalPath(path, principal))
             throw new Error('Search target is unavailable');
         return path;
+    }
+    /** Capture domain admission before index ranking/limits. This is content
+     * routing only; the caller's existing scope predicate remains authoritative. */
+    async fictionAdmission(params, admitted) {
+        if (!params.fictionDomain)
+            return admitted;
+        const accepted = new Set();
+        let after;
+        let count = 0;
+        const prefix = params.pathPrefix ? this.physical({ p: params.pathPrefix }, params.principal) : undefined;
+        do {
+            const batch = await this.fs.queryNotes({ limit: 500, includeContent: false, includeTotal: false, sortBy: 'path', ...(prefix && prefix !== '.' && { pathPrefix: prefix }), ...(after && { after }) }, admitted, note => (params.fictionDomain === 'only') === isFictionDomain(note.frontmatter));
+            for (const note of batch.notes) {
+                if (++count > 10000)
+                    throw new Error('Fiction-domain metadata window exhausted');
+                accepted.add(note.path);
+            }
+            after = batch.truncated ? batch.nextCursor : undefined;
+            if (batch.truncated && !after)
+                throw new Error('Fiction-domain metadata changed');
+        } while (after);
+        return (path) => admitted(path) && accepted.has(path);
     }
     /** Shared memory discovery only: up to 10,000 metadata hits, ex='', indexed
      * rv, no source hydration and no display/JSON cap. The caller owns bounded
@@ -133,7 +156,8 @@ export class RetrievalService {
         return { results: results.slice(0, limit), usedQuery, expanded, semantic, complete };
     }
     async retrieve(params, allowExpansion = false) {
-        const admitted = (path) => this.access.canAccessPhysicalPath(path, params.principal) && (!params.canAccessPath || params.canAccessPath(path));
+        const scopeAdmitted = (path) => this.access.canAccessPhysicalPath(path, params.principal) && (!params.canAccessPath || params.canAccessPath(path));
+        const admitted = await this.fictionAdmission(params, scopeAdmitted);
         // Runtime payloads are not typed: only the authenticated principal supplies identity.
         const safe = { query: params.query };
         for (const key of ['limit', 'maxChars', 'searchContent', 'searchFrontmatter', 'caseSensitive', 'includeRevisions', 'expandAuthority', 'excludePaths']) {
@@ -170,7 +194,7 @@ export class RetrievalService {
                 let outcome;
                 try {
                     outcome = await Promise.race([
-                        this.semantic.search({ ...safe, ...(params.canAccessPath && { canAccessPath: admitted }), ...(params.pathPrefix !== undefined && { pathPrefix: this.physical({ p: params.pathPrefix }, params.principal) }), ...(params.queryVector !== undefined && { queryVector: params.queryVector }), ...(params.principal && { principal: params.principal }) }),
+                        this.semantic.search({ ...safe, canAccessPath: admitted, ...(params.pathPrefix !== undefined && { pathPrefix: this.physical({ p: params.pathPrefix }, params.principal) }), ...(params.queryVector !== undefined && { queryVector: params.queryVector }), ...(params.principal && { principal: params.principal }) }),
                         new Promise(resolve => { timer = setTimeout(() => resolve(undefined), 2000); timer.unref?.(); }),
                     ]);
                 }

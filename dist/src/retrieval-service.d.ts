@@ -5,10 +5,12 @@ import type { SearchParams, SearchResult, ParsedNote, MemorySearchParams } from 
 import type { ScopePrincipal } from './scope-auth.js';
 import type { ScopeAccessPolicy } from './scope-access.js';
 import type { FileSystemService } from './filesystem.js';
+import { type FictionDomainSelection } from './fiction-domain.js';
 export declare const RETRIEVAL_NOTE_BYTES: number;
 export type RetrievalParams = SearchParams & {
     principal?: ScopePrincipal;
     excerptMode?: 'compact' | 'context';
+    fictionDomain?: FictionDomainSelection;
 };
 export type RetrievalHit = SearchResult & {
     physicalPath?: string;
@@ -53,6 +55,9 @@ export declare class RetrievalService {
     private readonly fs;
     constructor(search: SearchService, collaboration: CollaborationService, semantic: Pick<SemanticSearchService, 'search'> & Partial<Pick<SemanticSearchService, 'memoryCandidates'>>, access: ScopeAccessPolicy, fs: FileSystemService);
     physical(hit: RetrievalHit, principal?: ScopePrincipal): string;
+    /** Capture domain admission before index ranking/limits. This is content
+     * routing only; the caller's existing scope predicate remains authoritative. */
+    private fictionAdmission;
     /** Shared memory discovery only: up to 10,000 metadata hits, ex='', indexed
      * rv, no source hydration and no display/JSON cap. The caller owns bounded
      * current-revision body reads, exact matching and final response serialization.

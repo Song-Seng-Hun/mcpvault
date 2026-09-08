@@ -40,7 +40,7 @@ describe('progressive Wiki policy', () => {
   });
 
   test('teaches bounded authority shelves and distinct relation strengths progressively', () => {
-    expect(WIKI_POLICY_VERSION).toBe(35);
+    expect(WIKI_POLICY_VERSION).toBe(36);
     const retrieval = getWikiPolicyTopic('retrieval', 2000);
     const knowledge = getWikiPolicyTopic('knowledge', 2000);
     expect(retrieval.routes).toEqual(expect.arrayContaining(['wiki.authority_map']));

@@ -1,6 +1,13 @@
 import { describe, expect, test } from "vitest";
 import { parseCliArgs } from "./cli.js";
 
+test('parses host-only roleplay configuration without enabling economy or changing the vault', () => {
+  expect(parseCliArgs(['E:\\Vault', '--roleplay-config=E:\\Private\\roleplay.json'])).toMatchObject({ vaultPathArg: 'E:\\Vault', roleplayConfig: 'E:\\Private\\roleplay.json' });
+  expect(parseCliArgs(['E:\\Vault', '--roleplay-config', 'E:\\Private\\roleplay.json']).economyConfig).toBeUndefined();
+  expect(() => parseCliArgs(['E:\\Vault', '--roleplay-config'])).toThrow(/config/i);
+  expect(() => parseCliArgs(['E:\\Vault', '--roleplay-config=a', '--roleplay-config=b'])).toThrow();
+});
+
 test('parses private economy config separately from the vault path',()=>{
   expect(parseCliArgs(['E:\\Vault','--economy-config=E:\\Private\\economy.json']).economyConfig).toBe('E:\\Private\\economy.json');
   expect(parseCliArgs(['E:\\Vault','--economy-config','E:\\Private\\economy.json']).vaultPathArg).toBe('E:\\Vault');

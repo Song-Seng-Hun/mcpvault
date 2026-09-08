@@ -85,6 +85,9 @@ function endpointScore(endpoint: EndpointDescriptor, terms: string[]): number {
 }
 
 const EXPLICIT_IDS: Record<string, string> = {
+  manage_roleplay_world: 'roleplay.world', manage_roleplay_character: 'roleplay.character', manage_roleplay_scene: 'roleplay.scene',
+  read_roleplay_context: 'roleplay.context', submit_roleplay_action: 'roleplay.action', resolve_roleplay_action: 'roleplay.resolve',
+  read_roleplay_history: 'roleplay.history', correct_roleplay_turn: 'roleplay.correct',
   public_federation_pull: 'federation.pull',
   public_federation_retry: 'federation.retry',
   public_federation_get: 'federation.get',
@@ -693,6 +696,12 @@ export class EndpointRegistry {
           const write = { available, state, requires: item.requires, ...(reason && { reason }) };
           return { ...item, requires: [], available: true, state: 'ready' as const,
             operations: { read: { available: true, state: 'ready' as const, requires: [] }, create: write, update: write } };
+        }
+        if (['roleplay.world', 'roleplay.character', 'roleplay.scene'].includes(item.endpointId)) {
+          const write = { available, state, requires: item.requires, ...(reason && { reason }) };
+          const ops = (item.input.properties as Record<string, { enum?: string[] }> | undefined)?.op?.enum ?? [];
+          return { ...item, requires: [], available: true, state: 'ready' as const,
+            operations: Object.fromEntries((ops as string[]).map(op => [op, op === 'read' ? { available: true, state: 'ready' as const, requires: [] } : write])) };
         }
         if (item.endpointId === 'community.participation') {
           const write = { available, state, requires: item.requires, ...(reason && { reason }) };

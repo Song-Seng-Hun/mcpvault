@@ -8,6 +8,7 @@ export class PathFilter {
     static RESTRICTED_SEGMENTS = new Set([
         '.obsidian',
         '.git',
+        '.mcpvault-roleplay',
         'node_modules',
         '.ds_store',
         'thumbs.db',

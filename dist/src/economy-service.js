@@ -63,7 +63,7 @@ export class EconomyService {
             throw new Error('Explicit project membership is required');
         return note;
     }
-    async fixedArtifacts(items, p) {
+    async fixedArtifacts(items, p, contract) {
         if (!Array.isArray(items) || !items.length || items.length > 8)
             throw new Error('One to eight fixed artifacts required');
         for (const item of items) {
@@ -72,6 +72,11 @@ export class EconomyService {
             const note = await this.visible(item.path, p);
             if (note.revision !== item.revision)
                 throw new Error('Artifact revision changed; read current context');
+            if (note.frontmatter.fiction_domain || note.frontmatter.roleplay_committed) {
+                if (!note.frontmatter.roleplay_committed || !this.options.validateRoleplayArtifact || !contract)
+                    throw new Error('Fiction is not real-work evidence; explicit approved game quest review is required');
+                await this.options.validateRoleplayArtifact(item, contract);
+            }
         }
     }
     /** Called by EVERY free task mutation, not merely work.claim. A private lease
@@ -293,10 +298,10 @@ export class EconomyService {
                         validateMarkdownContract(target.terms.verifier, target.terms.criteria);
                 }
                 if (params.op === 'submit')
-                    await this.fixedArtifacts(params.artifacts, actor);
+                    await this.fixedArtifacts(params.artifacts, actor, target);
                 if (params.op === 'review') {
-                    await this.fixedArtifacts(target.submission?.artifacts, actor);
-                    await this.fixedArtifacts(params.reviewArtifact ? [params.reviewArtifact] : undefined, actor);
+                    await this.fixedArtifacts(target.submission?.artifacts, actor, target);
+                    await this.fixedArtifacts(params.reviewArtifact ? [params.reviewArtifact] : undefined, actor, target);
                 }
             };
             await validate();
@@ -327,7 +332,7 @@ export class EconomyService {
                         expectedRevision: economyRevision(updated), expectedGeneration: updated.generation, amount: updated.terms.reward, reason: `Trusted verifier ${updated.terms.verifier} passed exact contracted literals; not truth or quality approval` }, async () => {
                         await validate();
                         await validateBinding(updated.workBinding, updated.worker);
-                        await this.fixedArtifacts(updated.submission.artifacts, actor);
+                        await this.fixedArtifacts(updated.submission.artifacts, actor, updated);
                         if (!await this.options.verify(updated, updated.submission.artifacts))
                             throw new Error('Verifier no longer passes; payout held');
                     });

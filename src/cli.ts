@@ -7,6 +7,7 @@ export interface ParsedCliArgs {
   mcpHttpTlsCert?: string;
   mcpHttpTlsKey?: string;
   economyConfig?: string;
+  roleplayConfig?: string;
   /** Dedicated HTTP process; omitted preserves legacy stdio behavior. */
   stdio?: false;
 }
@@ -26,9 +27,15 @@ export function parseCliArgs(args: string[]): ParsedCliArgs {
   let mcpHttpTlsKey: string | undefined;
   let stdio: false | undefined;
   let economyConfig:string|undefined;
+  let roleplayConfig: string | undefined;
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index]!;
+    if (arg === '--roleplay-config' || arg.startsWith('--roleplay-config=')) {
+      const value = arg === '--roleplay-config' ? args[++index] : arg.slice('--roleplay-config='.length);
+      if (!value || value.startsWith('--') || roleplayConfig !== undefined) throw new Error('--roleplay-config requires one host configuration file');
+      roleplayConfig = value; continue;
+    }
 
     if(arg==='--economy-config'||arg.startsWith('--economy-config=')) {
       const value=arg==='--economy-config'?args[++index]:arg.slice('--economy-config='.length);
@@ -154,5 +161,6 @@ export function parseCliArgs(args: string[]): ParsedCliArgs {
     ...(mcpHttpTlsCert !== undefined && { mcpHttpTlsCert }),
     ...(mcpHttpTlsKey !== undefined && { mcpHttpTlsKey }),
     ...(economyConfig!==undefined && {economyConfig}),
+    ...(roleplayConfig !== undefined && { roleplayConfig }),
   };
 }

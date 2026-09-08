@@ -52,6 +52,11 @@ import { getAuditTools } from "./audit-tools.js";
 import { AgentTaskService } from "./agent-tasks.js";
 import { AGENT_TASK_MUTATING_TOOLS, getAgentTaskTools } from "./agent-task-tools.js";
 import { getWorkTools, WORK_MUTATING_TOOLS, WORK_TASK_PROPERTIES } from './work-tools.js';
+import { getRoleplayTools, ROLEPLAY_MUTATING_TOOLS } from './roleplay-tools.js';
+import { RoleplayService } from './roleplay-service.js';
+import type { RoleplayStore } from './roleplay-store.js';
+import { roleplayRevision } from './roleplay-model.js';
+import { validateRoleplayQuestArtifact } from './roleplay-quest.js';
 import { WorkService } from './work-service.js';
 import { CommunityFeaturesService } from "./community-features.js";
 import { COMMUNITY_FEATURE_MUTATING_TOOLS, getCommunityFeatureTools } from "./community-feature-tools.js";
@@ -207,6 +212,8 @@ function requestFairnessKey(args: Record<string, unknown>): string {
 }
 
 export interface CreateServerOptions {
+  /** Host-provisioned single world; no caller or Vault note can enable this. */
+  roleplay?: RoleplayStore;
   /** Host-provisioned ledger only. Never initialized or funded from MCP. */
   economy?: { ledger: EconomyLedger; policy: EconomyPolicy };
   /** Opt-in host-private enterprise registry. Never inferred from Vault content. */
@@ -251,6 +258,7 @@ const MUTATING_TOOLS = new Set([
   ...NOTIFICATION_MUTATING_TOOLS,
   ...AGENT_TASK_MUTATING_TOOLS,
   ...WORK_MUTATING_TOOLS,
+  ...ROLEPLAY_MUTATING_TOOLS,
   ...PARTICIPATION_MUTATING_TOOLS,
   ...COMMUNITY_FEATURE_MUTATING_TOOLS,
   ...CONTINUITY_MUTATING_TOOLS,
@@ -318,6 +326,8 @@ const CAPABILITY_FOR_TOOL: Partial<Record<string, ScopeCapability>> = {
   record_community_participation: "profile",
   create_agent_task: "task",
   manage_work_project: 'task',
+  manage_roleplay_world: 'chat', manage_roleplay_character: 'chat', manage_roleplay_scene: 'chat',
+  submit_roleplay_action: 'chat', resolve_roleplay_action: 'chat', correct_roleplay_turn: 'chat',
   claim_work_task: 'task',
   handoff_work_task: 'task',
   review_work_task: 'task',
@@ -492,7 +502,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
   notificationsCache = notifications;
   const social = new SocialService(fileSystem, scopeAccess, references, reputation, notifications,
     ...(enterpriseProfile?.mode === 'public' ? [{ communityRoot: 'PublicCommunity/Local', publicMode: true }] : []));
-  const chat = new ChatService(fileSystem, references, reputation);
+  const chat = new ChatService(fileSystem, references, reputation, options.roleplay ? async () => (await options.roleplay!.read()).records : undefined);
   const whispers = new WhisperService(fileSystem, references);
   const communityStatus = new CommunityStatusService(fileSystem, enterpriseProfile?.mode === 'public' ? { communityRoot: 'PublicCommunity/Local' } : {});
   const agentDirectory = new AgentDirectoryService(fileSystem, scopeAuth,
@@ -874,6 +884,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         ...getCommunityParticipationTools(),
         ...getResearchBridgeTools(),
         ...getChatTools(),
+        ...getRoleplayTools(),
         ...getReferenceTools(),
         ...getWhisperTools(),
         ...getCommunityStatusTools(),
@@ -1215,7 +1226,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
     const unavailable = new Set(enterpriseProfile ? [
       ...getWhisperTools().map(tool => tool.name),
       ...(enterpriseProfile.mode === 'public' ? [
-        ...getChatTools(), ...getNotificationTools(), ...getAgentTaskTools(),
+        ...getChatTools(), ...getRoleplayTools(), ...getNotificationTools(), ...getAgentTaskTools(),
         ...getCommunityFeatureTools(), ...getReputationTools(), ...getIdeationTools(), ...getEconomyTools(),
       ].map(tool => tool.name) : []),
     ] : []);
@@ -1285,6 +1296,8 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
 
       if (toolName === 'manage_wiki_moc_region' && rawArgs.operation === 'status') toolName = 'read_wiki_moc_region_status';
       if (toolName === 'manage_work_project' && (rawArgs.op === undefined || rawArgs.op === 'read')) toolName = 'read_work_project';
+      if (['manage_roleplay_world', 'manage_roleplay_character', 'manage_roleplay_scene'].includes(toolName) && (!rawArgs.op || rawArgs.op === 'read')) toolName = toolName.replace('manage_', 'read_');
+      if (toolName === 'correct_roleplay_turn' && rawArgs.op === 'preview') toolName = 'preview_roleplay_correction';
       if (toolName === 'manage_community_participation' && (rawArgs.op === undefined || rawArgs.op === 'read')) toolName = 'read_community_participation';
       if (readOnly && MUTATING_TOOLS.has(toolName)) {
         throw new Error(`Endpoint '${toolName}' is disabled because MCPVault is running in read-only mode.`);
@@ -2317,6 +2330,12 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         }
 
         case "send_chat_message": {
+          if (options.roleplay && (await options.roleplay.snapshot()).scenes[trimmedArgs.roomId]) {
+            const service = new RoleplayService(fileSystem, scopeAccess, references, options.roleplay, { assertActor: async () => { await revalidateActor(); }, changed: path => queueReadModelChange(path, 'upsert') });
+            const state = await options.roleplay.snapshot();
+            const receipt = await service.execute('action', { ...trimmedArgs, op: 'ooc', expectedRevision: trimmedArgs.expectedRevision ?? roleplayRevision(state) }, principal);
+            return jsonResult({ ...receipt, messageId: `roleplay-${receipt.id}`, roomId: trimmedArgs.roomId, note: 'Out-of-character chat only. Use roleplay.action with character/generation for in-character actions.' }, false);
+          }
           return jsonResult(await chat.sendMessage({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
         }
 
@@ -2416,6 +2435,26 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
           return jsonResult(await audit.list({ ...(principal && { principal }), limit: trimmedArgs.limit, includeErrors: trimmedArgs.includeErrors }), trimmedArgs.prettyPrint);
         }
 
+        case 'manage_roleplay_world': case 'read_roleplay_world':
+        case 'manage_roleplay_character': case 'read_roleplay_character':
+        case 'manage_roleplay_scene': case 'read_roleplay_scene':
+        case 'read_roleplay_context': case 'read_roleplay_history':
+        case 'submit_roleplay_action': case 'resolve_roleplay_action':
+        case 'correct_roleplay_turn': case 'preview_roleplay_correction': {
+          const endpoints: Record<string, string> = { manage_roleplay_world: 'world', read_roleplay_world: 'world', manage_roleplay_character: 'character', read_roleplay_character: 'character', manage_roleplay_scene: 'scene', read_roleplay_scene: 'scene', read_roleplay_context: 'context', read_roleplay_history: 'history', submit_roleplay_action: 'action', resolve_roleplay_action: 'resolve', correct_roleplay_turn: 'correct', preview_roleplay_correction: 'correct' };
+          const service = new RoleplayService(fileSystem, scopeAccess, references, options.roleplay, {
+            assertActor: async () => { await revalidateActor(); }, retrieval,
+            changed: path => queueReadModelChange(path, 'upsert'),
+            ...(options.economy && { validateQuestBinding: async (questId: string) => {
+              const state = await options.economy!.ledger.snapshot(); const contract = state.contracts[questId];
+              const policy = options.economy!.policy;
+              if (!policy.enabled || !policy.subjectiveReview || !contract || contract.status !== 'claimed' || !contract.escrow || !contract.worker || !contract.workerOwner || !contract.reviewer || !contract.reviewerOwner
+                || !policy.reviewers.includes(contract.reviewer) || policy.owners[contract.worker] !== contract.workerOwner || policy.owners[contract.reviewer] !== contract.reviewerOwner
+                || contract.reviewerOwner === contract.workerOwner || contract.reviewerOwner === contract.requesterOwner || contract.terms.kind === 'mechanical') throw new Error('Roleplay reward requires a funded, claimed quest with an assigned independent reviewer and approved owners');
+            } }),
+          });
+          return jsonResult(await service.execute(endpoints[toolName]!, trimmedArgs, principal), false);
+        }
         case 'manage_work_project':
         case 'read_work_project': return jsonResult(await work.project({ ...trimmedArgs, principal }), false);
         case 'read_work_board': return jsonResult(await work.board({ ...trimmedArgs, principal }), false);
@@ -2510,6 +2549,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         case 'read_economy_wallet': case 'read_quest_market': case 'manage_quest_contract': case 'review_quest_contract': {
           if (!options.economy) throw new Error('Economy is disabled; host-provisioned verified storage, owners and policy are required');
           const economy = new EconomyService(fileSystem, options.economy.ledger, options.economy.policy, {
+            validateRoleplayArtifact: (artifact, contract) => validateRoleplayQuestArtifact(options.roleplay, artifact, contract, options.economy!.policy),
             assertActor: async () => { await revalidateActor(); },
             verify: async (contract, artifacts) => {
               validateMarkdownContract(contract.terms.verifier, contract.terms.criteria);

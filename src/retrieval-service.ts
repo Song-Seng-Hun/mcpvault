@@ -1,7 +1,7 @@
 import type { SearchService } from './search.js';
 import type { CollaborationService } from './scopes.js';
 import type { SemanticSearchService, SemanticSearchOutcome, MemorySemanticSearchOutcome } from './semantic-search.js';
-import type { SearchParams, SearchResult, ParsedNote, MemorySearchParams } from './types.js';
+import type { SearchParams, SearchResult, ParsedNote, MemorySearchParams, QueryNotesCursor } from './types.js';
 import type { ScopePrincipal } from './scope-auth.js';
 import type { ScopeAccessPolicy } from './scope-access.js';
 import type { FileSystemService } from './filesystem.js';
@@ -11,9 +11,10 @@ import { selectContextPassages } from './context-passages.js';
 import { endpointIdForTool } from './endpoint-registry.js';
 import { posix } from 'node:path';
 import { positiveSearchTerms, memoryCandidateLimit } from './search.js';
+import { isFictionDomain, type FictionDomainSelection } from './fiction-domain.js';
 
 export const RETRIEVAL_NOTE_BYTES = 8 * 1024 * 1024;
-export type RetrievalParams = SearchParams & { principal?: ScopePrincipal; excerptMode?: 'compact' | 'context' };
+export type RetrievalParams = SearchParams & { principal?: ScopePrincipal; excerptMode?: 'compact' | 'context'; fictionDomain?: FictionDomainSelection };
 export type RetrievalHit = SearchResult & { physicalPath?: string; scope?: string; context?: unknown; nextAction?: unknown };
 export type RetrievalOutcome = { results: RetrievalHit[]; usedQuery: string; expanded: boolean; semantic: { state: 'disabled' | 'filtered' | 'available' | 'unavailable' } };
 export type MemoryCandidateParams = MemorySearchParams & { principal?: ScopePrincipal };
@@ -50,6 +51,25 @@ export class RetrievalService {
     if (path === '..' || path.startsWith('../')) throw new Error('Search target is unavailable');
     if (!this.access.canAccessPhysicalPath(path, principal)) throw new Error('Search target is unavailable');
     return path;
+  }
+
+  /** Capture domain admission before index ranking/limits. This is content
+   * routing only; the caller's existing scope predicate remains authoritative. */
+  private async fictionAdmission(params: RetrievalParams, admitted: (path: string) => boolean) {
+    if (!params.fictionDomain) return admitted;
+    const accepted = new Set<string>(); let after: QueryNotesCursor | undefined; let count = 0;
+    const prefix = params.pathPrefix ? this.physical({ p: params.pathPrefix } as RetrievalHit, params.principal) : undefined;
+    do {
+      const batch = await this.fs.queryNotes({ limit: 500, includeContent: false, includeTotal: false, sortBy: 'path', ...(prefix && prefix !== '.' && { pathPrefix: prefix }), ...(after && { after }) }, admitted,
+        note => (params.fictionDomain === 'only') === isFictionDomain(note.frontmatter));
+      for (const note of batch.notes) {
+        if (++count > 10000) throw new Error('Fiction-domain metadata window exhausted');
+        accepted.add(note.path);
+      }
+      after = batch.truncated ? batch.nextCursor : undefined;
+      if (batch.truncated && !after) throw new Error('Fiction-domain metadata changed');
+    } while (after);
+    return (path: string) => admitted(path) && accepted.has(path);
   }
 
   /** Shared memory discovery only: up to 10,000 metadata hits, ex='', indexed
@@ -117,7 +137,8 @@ export class RetrievalService {
   }
 
   async retrieve(params: RetrievalParams, allowExpansion = false): Promise<RetrievalOutcome> {
-    const admitted = (path: string) => this.access.canAccessPhysicalPath(path, params.principal) && (!params.canAccessPath || params.canAccessPath(path));
+    const scopeAdmitted = (path: string) => this.access.canAccessPhysicalPath(path, params.principal) && (!params.canAccessPath || params.canAccessPath(path));
+    const admitted = await this.fictionAdmission(params, scopeAdmitted);
     // Runtime payloads are not typed: only the authenticated principal supplies identity.
     const safe: SearchParams = { query: params.query };
     for (const key of ['limit', 'maxChars', 'searchContent', 'searchFrontmatter', 'caseSensitive', 'includeRevisions', 'expandAuthority', 'excludePaths'] as const) {
@@ -146,7 +167,7 @@ export class RetrievalService {
         let outcome: SemanticSearchOutcome | undefined;
         try {
           outcome = await Promise.race([
-            this.semantic.search({ ...safe, ...(params.canAccessPath && { canAccessPath: admitted }), ...(params.pathPrefix !== undefined && { pathPrefix: this.physical({ p: params.pathPrefix } as RetrievalHit, params.principal) }), ...(params.queryVector !== undefined && { queryVector: params.queryVector }), ...(params.principal && { principal: params.principal }) }),
+            this.semantic.search({ ...safe, canAccessPath: admitted, ...(params.pathPrefix !== undefined && { pathPrefix: this.physical({ p: params.pathPrefix } as RetrievalHit, params.principal) }), ...(params.queryVector !== undefined && { queryVector: params.queryVector }), ...(params.principal && { principal: params.principal }) }),
             new Promise<undefined>(resolve => { timer = setTimeout(() => resolve(undefined), 2000); timer.unref?.(); }),
           ]);
         } catch { /* Optional backend failures never erase lexical results. */ }

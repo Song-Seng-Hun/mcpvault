@@ -28,6 +28,27 @@ test('semantic failure preserves lexical matches and explicitly reports unavaila
   expect(r.sources[0].passages[0].text).toContain('only when safe');
 });
 
+test('ordinary question packets exclude fiction before the retrieval limit while keeping legacy notes', async () => {
+  for (let i = 0; i < 22; i++) await note(`Fiction/${String(i).padStart(2, '0')}.md`, `---\nfiction_domain: roleplay\n---\nworldneedle fictional experience ${i}`);
+  await note('Knowledge/Real.md', 'worldneedle verified operating condition.');
+  await note('Knowledge/Legacy.md', 'legacymarker remains available without fiction metadata.');
+  const real = await packet.read({ query: 'worldneedle', includeSemantic: false, maxChars: 12000 });
+  const legacy = await packet.read({ query: 'legacymarker', includeSemantic: false });
+  expect(real.sources.map((source: any) => source.path)).toContain('Knowledge/Real.md');
+  expect(JSON.stringify(real)).not.toContain('Fiction/');
+  expect(legacy.sources.map((source: any) => source.path)).toContain('Knowledge/Legacy.md');
+});
+
+test('an explicit fiction path remains readable but its linked fiction evidence is not admitted', async () => {
+  await note('Knowledge/Root.md', '---\nevidence_paths: ["[[Fiction/Evidence]]"]\n---\nrootneedle real claim.');
+  await note('Fiction/Evidence.md', '---\nfiction_domain: roleplay\n---\nFICTION_LINK_CANARY rootneedle invented evidence.');
+  const direct = await packet.read({ query: 'rootneedle', path: 'Fiction/Evidence.md', includeSemantic: false, maxChars: 12000 });
+  const linked = await packet.read({ query: 'rootneedle', path: 'Knowledge/Root.md', includeSemantic: false, maxChars: 12000 });
+  expect(direct.sources.map((source: any) => source.path)).toContain('Fiction/Evidence.md');
+  expect(linked.sources.map((source: any) => source.path)).toContain('Knowledge/Root.md');
+  expect(JSON.stringify(linked)).not.toContain('FICTION_LINK_CANARY');
+});
+
 test.each(['edit', 'delete', 'hide', 'revoke'] as const)('drops all collected text on intervening %s', async mode => {
   await note('Knowledge/A.md', '# Retry\n\nretry ORIGINALSECRET.');
   const read = fs.readNote.bind(fs);

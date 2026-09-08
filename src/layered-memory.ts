@@ -10,6 +10,7 @@ import { selectContextPassages } from './context-passages.js';
 import { projectNoteBlockLines } from './note-projections.js';
 import { positiveSearchTerms } from './search.js';
 import { assertMemoryContent, memoryDate, memoryEntries, memoryReferenceAllowed, memoryReferencePath, MEMORY_ROLES, type MemoryEntry } from './memory-contract.js';
+import { isFictionDomain } from './fiction-domain.js';
 
 export interface MemoryRequest {
   principal?: ScopePrincipal; scope?: 'personal' | 'user' | 'community' | 'global'; query?: string;
@@ -86,6 +87,7 @@ export class LayeredMemoryService {
     const prefix = params.pathPrefix ? this.retrieval.physical({ p: params.pathPrefix } as RetrievalHit, params.principal) : root;
     if (params.pathPrefix && !canAccess(prefix + '/probe.md')) throw new Error('Memory pathPrefix must remain in the selected scope');
     const visible = (note: QueryNote) => !isModerationHidden(note.frontmatter)
+      && !isFictionDomain(note.frontmatter)
       && !(note.frontmatter.mcpvault_type === 'blog_post' && note.frontmatter.status === 'draft')
       && records(note).some(e => e && MEMORY_ROLES.includes(e.role));
     // Read every metadata page before using negative facts such as "uncorrected".

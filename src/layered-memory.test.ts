@@ -67,6 +67,15 @@ test('question excerpts select the relevant later paragraph instead of the intro
   expect(reply.result.isError).not.toBe(true); expect(reply.text).toContain('not necessary unless');
 });
 
+test('ordinary memory recall excludes roleplay-domain experiences before candidate ranking', async () => {
+  await fs.writeNote({ path: 'Memory/Roleplay.md', content: 'memoryfictionneedle invented adventure.', frontmatter: { fiction_domain: 'roleplay', memory_role: 'episodic' } });
+  await fs.writeNote({ path: 'Memory/Real.md', content: 'memoryfictionneedle observed production condition.', frontmatter: { memory_role: 'episodic' } });
+  const reply = await call('memory.recall', { scope: 'global', query: 'memoryfictionneedle', semantic: false, maxChars: 12000 });
+  expect(reply.result.isError).not.toBe(true);
+  expect(reply.value.items.map((item: any) => item.path)).toContain('Memory/Real.md');
+  expect(JSON.stringify(reply)).not.toContain('Roleplay.md');
+});
+
 test('corrections are followed even when only the original matches the query', async () => {
   await fs.writeNote({ path: 'Memory/Old.md', content: 'Old zebracase hypothesis', frontmatter: { memory_role: 'episodic' } });
   await fs.writeNote({ path: 'Memory/New.md', content: 'Actual cause was a driver failure, not the assumed disk.', frontmatter: { memory_role: 'semantic', memory_corrects: [{ path: 'Memory/Old.md' }] } });

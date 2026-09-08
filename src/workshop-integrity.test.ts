@@ -86,4 +86,4 @@ test('persisted 6-3-5 resumes six distinct cycles without counting old-cycle sub
   expect(packet.submissionTotal).toBe(6);expect(packet.nextAction.kind).toBe(cycle<6?'advance':'record_output');
   if(cycle<6)await f.service.updateWorkshopFacilitation({principal:f.principal,workshopId:'cycles',expectedRevision:n.revision,operation:'advance',requestId:`cycle-${cycle}`,payload:{reason:'Actual submissions received; start next declared cycle'}});
  }
-},20000); // Six real file-backed cycles, not an in-memory timing benchmark.
+},60000); // Six real file-backed cycles, not a timing benchmark. Baseline measured 20.7s on the Windows host; keep assertions intact with I/O headroom.

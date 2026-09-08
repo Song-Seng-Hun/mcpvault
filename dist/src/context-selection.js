@@ -2,6 +2,7 @@ import { isModerationHidden } from './moderation-policy.js';
 import { contextRuleState } from './context-rules.js';
 import { buildMarkdownLiteralMask } from './backlinks.js';
 import { selectContextPassages } from './context-passages.js';
+import { isFictionDomain } from './fiction-domain.js';
 export function isSituationMemory(fm) {
     return Boolean(fm.memory_entries) || ['core', 'episodic'].includes(fm.memory_role)
         || ['diary', 'log', 'reflection'].includes(fm.note_kind)
@@ -18,7 +19,7 @@ export async function selectSituationCandidates(fs, access, retrieval, query, op
     let after;
     let examined = 0;
     do {
-        const batch = await fs.queryNotes({ limit: 500, includeContent: false, includeTotal: false, sortBy: 'path', ...(after && { after }) }, canAccess, n => !isModerationHidden(n.frontmatter) && !n.frontmatter.mcpvault_type && !isSituationMemory(n.frontmatter));
+        const batch = await fs.queryNotes({ limit: 500, includeContent: false, includeTotal: false, sortBy: 'path', ...(after && { after }) }, canAccess, n => !isModerationHidden(n.frontmatter) && !isFictionDomain(n.frontmatter) && !n.frontmatter.mcpvault_type && !isSituationMemory(n.frontmatter));
         for (const n of batch.notes) {
             if (++examined > 10000)
                 throw new Error('Situation metadata window exhausted');

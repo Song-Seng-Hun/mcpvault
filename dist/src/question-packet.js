@@ -11,6 +11,7 @@ import { traceSourceOrigins } from './source-provenance-model.js';
 import { sourceWorkIdentity } from './source-provenance.js';
 import { CONTEXT_INTENTS, contextRuleState } from './context-rules.js';
 import { isSituationMemory, selectSituationCandidates, situationPassages } from './context-selection.js';
+import { isFictionDomain } from './fiction-domain.js';
 const hash = (s) => createHash('sha256').update(s).digest('hex');
 const text = (v, max = 180) => typeof v === 'string' ? v.slice(0, max) : '';
 const identity = (v) => v.trim().toLocaleLowerCase();
@@ -49,12 +50,13 @@ export class QuestionPacketService {
         const principal = params.principal;
         const canAccess = (p) => this.access.canAccessPhysicalPath(p, principal);
         const publicPath = (p) => this.access.toPublicPath(p);
+        let explicitPath;
         const metadata = new Map();
         const sources = new Map();
         const gaps = new Set();
         const diagnostics = [];
         let examined = 0;
-        const getMetadata = async (path) => {
+        const getMetadata = async (path, allowFiction = false) => {
             if (!canAccess(path))
                 return;
             if (!metadata.has(path)) {
@@ -64,6 +66,7 @@ export class QuestionPacketService {
                 }
                 const value = (await this.fs.readNoteMetadata([path], canAccess, { fresh: true, strict: true, maxBytes: RETRIEVAL_NOTE_BYTES }))[0];
                 const allowed = value && !isModerationHidden(value.frontmatter)
+                    && (allowFiction || !isFictionDomain(value.frontmatter))
                     && !(situation && isSituationMemory(value.frontmatter))
                     && !(value.frontmatter.mcpvault_type === 'blog_post' && value.frontmatter.status !== 'published');
                 metadata.set(path, allowed ? value : undefined);
@@ -81,7 +84,7 @@ export class QuestionPacketService {
             if (!meta)
                 return;
             const value = await this.fs.readNote(path, RETRIEVAL_NOTE_BYTES);
-            if (!canAccess(path) || isModerationHidden(value.frontmatter) || value.revision !== meta.revision || (expectedRevision && value.revision !== expectedRevision))
+            if (!canAccess(path) || isModerationHidden(value.frontmatter) || (path !== explicitPath && isFictionDomain(value.frontmatter)) || value.revision !== meta.revision || (expectedRevision && value.revision !== expectedRevision))
                 throw new Error('Context changed; retry the question');
             sources.set(path, value);
             return value;
@@ -176,7 +179,8 @@ export class QuestionPacketService {
             let hits;
             if (params.path) {
                 const physical = this.retrieval.physical({ p: params.path }, principal);
-                const meta = await getMetadata(physical);
+                explicitPath = physical;
+                const meta = await getMetadata(physical, true);
                 if (!meta)
                     throw new Error('Selected context unavailable');
                 if (params.expectedRevision && meta.revision !== params.expectedRevision)
@@ -192,7 +196,7 @@ export class QuestionPacketService {
                 hits = outcome.results;
             }
             else {
-                const outcome = await this.retrieval.retrieve({ query, ...(principal && { principal }), limit: 20, maxChars: 12000, includeRevisions: true, semantic: params.includeSemantic !== false && query.length > 1 }, true);
+                const outcome = await this.retrieval.retrieve({ query, ...(principal && { principal }), limit: 20, maxChars: 12000, includeRevisions: true, semantic: params.includeSemantic !== false && query.length > 1, fictionDomain: 'exclude' }, true);
                 envelope.retrieval = { usedQuery: outcome.usedQuery, expanded: outcome.expanded, semantic: outcome.semantic };
                 hits = outcome.results.slice(0, 20);
             }

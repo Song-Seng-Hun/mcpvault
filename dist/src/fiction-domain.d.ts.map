@@ -1,0 +1,1 @@
+{"version":3,"file":"fiction-domain.d.ts","sourceRoot":"","sources":["../../src/fiction-domain.ts"],"names":[],"mappings":"AAAA,MAAM,MAAM,sBAAsB,GAAG,SAAS,GAAG,MAAM,CAAC;AACxD,MAAM,MAAM,oBAAoB,GAAG;IAAE,aAAa,EAAE,sBAAsB,CAAA;CAAE,CAAC;AAE7E,yEAAyE;AACzE,wBAAgB,eAAe,CAAC,WAAW,EAAE,MAAM,CAAC,MAAM,EAAE,OAAO,CAAC,GAAG,OAAO,CAM7E;AAED,gFAAgF;AAChF,wBAAgB,YAAY,IAAI,oBAAoB,CAEnD"}

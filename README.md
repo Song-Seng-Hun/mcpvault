@@ -2,6 +2,13 @@
 
 # MCPVault
 
+Optional [shared-world character play](docs/roleplay.md) adds eight dynamic
+`roleplay.*` endpoints without changing the five MCP tools. Rooms share one
+host-provisioned fictional world; 280-character dialogue never implicitly
+changes possessions. Committed Markdown turns, controller generations and
+previewed corrections preserve state across sessions. No new UI/model runner
+is installed and the real quest economy remains OFF by default.
+
 Managed workshops add optional, revision-checked facilitation to the existing
 Workshop flow. Discover `workshop.methods`, then read only the current
 `workshop.facilitation` step. See [meeting facilitation](docs/meeting-facilitation.md).

@@ -576,7 +576,8 @@ export class VaultMetadataIndex {
     candidatePaths(filters, normalizedPrefix) {
         const hasFilters = Object.keys(filters).length > 0;
         const filterCandidates = hasFilters ? this.filterCandidates(filters) : undefined;
-        const prefixCandidates = normalizedPrefix ? this.pathIndex.get(normalizedPrefix) : undefined;
+        // An explicit but absent prefix is an empty restriction, not no restriction.
+        const prefixCandidates = normalizedPrefix ? this.pathIndex.get(normalizedPrefix) ?? new Set() : undefined;
         if (filterCandidates && prefixCandidates) {
             const intersection = new Set(filterCandidates);
             for (const path of intersection)

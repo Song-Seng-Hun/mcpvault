@@ -18,6 +18,7 @@ export interface EconomyServiceOptions {
   claimTask?: (principal:ScopePrincipal, contract:QuestContract, requestId:string)=>Promise<QuestWorkBinding>;
   /** Host service callback, never passed through the MCP schema. */
   verify?: (contract:QuestContract, artifacts:QuestArtifact[])=>Promise<boolean>;
+  validateRoleplayArtifact?: (artifact: QuestArtifact, contract: QuestContract) => Promise<void>;
 }
 type PageParams={limit?:number;maxChars?:number;cursor?:string};
 const taskPath=(id:string)=>`Community/Tasks/${normalizeScopeId(id,'taskId')}.md`;
@@ -52,12 +53,16 @@ export class EconomyService {
     if(member && (!Array.isArray(project.frontmatter.participants) || !project.frontmatter.participants.includes(p.accountId))) throw new Error('Explicit project membership is required');
     return note;
   }
-  private async fixedArtifacts(items:QuestArtifact[]|undefined,p:ScopePrincipal):Promise<void> {
+  private async fixedArtifacts(items:QuestArtifact[]|undefined,p:ScopePrincipal,contract?:QuestContract):Promise<void> {
     if(!Array.isArray(items)||!items.length||items.length>8) throw new Error('One to eight fixed artifacts required');
     for(const item of items) {
       if(!item || typeof item.path!=='string' || !/^[a-f0-9]{64}$/.test(item.revision)) throw new Error('Exact artifact revision is required');
       const note=await this.visible(item.path,p);
       if(note.revision!==item.revision) throw new Error('Artifact revision changed; read current context');
+      if (note.frontmatter.fiction_domain || note.frontmatter.roleplay_committed) {
+        if (!note.frontmatter.roleplay_committed || !this.options.validateRoleplayArtifact || !contract) throw new Error('Fiction is not real-work evidence; explicit approved game quest review is required');
+        await this.options.validateRoleplayArtifact(item, contract);
+      }
     }
   }
   /** Called by EVERY free task mutation, not merely work.claim. A private lease
@@ -215,10 +220,10 @@ export class EconomyService {
           if(target!.terms.kind==='mechanical' && !this.options.verify)throw new Error('No trusted versioned verifier configured');
           if(target!.terms.kind==='mechanical')validateMarkdownContract(target!.terms.verifier,target!.terms.criteria);
         }
-        if(params.op==='submit')await this.fixedArtifacts(params.artifacts,actor);
+        if(params.op==='submit')await this.fixedArtifacts(params.artifacts,actor,target);
         if(params.op==='review') {
-          await this.fixedArtifacts(target!.submission?.artifacts,actor);
-          await this.fixedArtifacts(params.reviewArtifact?[params.reviewArtifact]:undefined,actor);
+          await this.fixedArtifacts(target!.submission?.artifacts,actor,target);
+          await this.fixedArtifacts(params.reviewArtifact?[params.reviewArtifact]:undefined,actor,target);
         }
       };
       await validate();
@@ -242,7 +247,7 @@ export class EconomyService {
           // not a user-submitted successful receipt or a Work completion flag.
           await this.ledger.transact({op:'resolve',actor:this.policy.operators[0]!,requestId:`verify-${fingerprint({actor:actor.accountId,requestId:params.requestId})}`,contractId:updated.id,
             expectedRevision:economyRevision(updated),expectedGeneration:updated.generation,amount:updated.terms.reward,reason:`Trusted verifier ${updated.terms.verifier} passed exact contracted literals; not truth or quality approval`},async()=>{
-              await validate(); await validateBinding(updated.workBinding,updated.worker); await this.fixedArtifacts(updated.submission!.artifacts,actor);
+              await validate(); await validateBinding(updated.workBinding,updated.worker); await this.fixedArtifacts(updated.submission!.artifacts,actor,updated);
               if(!await this.options.verify!(updated,updated.submission!.artifacts))throw new Error('Verifier no longer passes; payout held');
             });
         }

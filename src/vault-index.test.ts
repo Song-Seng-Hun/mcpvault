@@ -20,6 +20,25 @@ async function writeNote(path: string, content: string): Promise<void> {
 }
 
 describe('VaultMetadataIndex', () => {
+  test('a missing or emptied prefix never falls back to unrelated filter candidates or the entire vault', async () => {
+    vaultPath = await mkdtemp(join(tmpdir(), 'mcpvault-index-missing-prefix-'));
+    await writeNote('Community/ChatRooms/hall.md', '---\nroom_id: hall\n---\nOrdinary room');
+    const index = new VaultMetadataIndex(vaultPath, new PathFilter(), new FrontmatterHandler());
+    const pathPrefix = 'Community/Roleplay/Turns';
+    try {
+      for (const filters of [{}, { room_id: 'hall' }]) {
+        expect((await index.listSortedPage({ pathPrefix, filters, limit: 1 })).entries).toEqual([]);
+        expect(await index.count(filters, pathPrefix)).toBe(0);
+      }
+      await writeNote(`${pathPrefix}/one.md`, '---\nroom_id: hall\n---\nTurn');
+      index.invalidate(`${pathPrefix}/one.md`, 'upsert');
+      expect(await index.count({ room_id: 'hall' }, pathPrefix)).toBe(1);
+      await rm(join(vaultPath, pathPrefix, 'one.md'));
+      index.invalidate(`${pathPrefix}/one.md`, 'delete');
+      expect((await index.listSortedPage({ pathPrefix, limit: 1 })).entries).toEqual([]);
+      expect(await index.count({ room_id: 'hall' }, pathPrefix)).toBe(0);
+    } finally { await index.close(); }
+  });
   test('large-offset page selection applies request-local row visibility before counting skipped entries', async () => {
     vaultPath = await mkdtemp(join(tmpdir(), 'mcpvault-index-visible-offset-'));
     for (let start = 0; start < 1032; start += 32) {

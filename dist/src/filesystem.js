@@ -6,6 +6,7 @@ import { createHash } from 'node:crypto';
 import trash from 'trash';
 import { FrontmatterHandler } from './frontmatter.js';
 import { PathFilter } from './pathfilter.js';
+import { assertRoleplayMutationBoundary } from './roleplay-boundary.js';
 import { generateObsidianUri } from './uri.js';
 import { extractObsidianLinkOccurrences } from './backlinks.js';
 import { buildDailyNotePath, resolveDailyDate } from './daily.js';
@@ -662,6 +663,7 @@ export class FileSystemService {
     resolveWritablePath(relativePath) {
         const fullPath = this.resolvePath(relativePath);
         const relativePathToVault = relative(this.vaultPath, fullPath);
+        assertRoleplayMutationBoundary(relativePathToVault);
         assertEnterpriseStorageAccess(relativePathToVault, true);
         // Guard the canonical vault-relative destination for every service write,
         // including absolute input paths and indirectly rewritten backlinks. This

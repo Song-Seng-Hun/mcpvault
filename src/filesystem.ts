@@ -6,6 +6,7 @@ import { createHash } from 'node:crypto';
 import trash from 'trash';
 import { FrontmatterHandler } from './frontmatter.js';
 import { PathFilter } from './pathfilter.js';
+import { assertRoleplayMutationBoundary } from './roleplay-boundary.js';
 import { generateObsidianUri } from './uri.js';
 import type { ParsedNote, DirectoryListing, NoteWriteParams, DeleteNoteParams, DeleteResult, DeleteNotePreviewParams, DeleteNotePreviewResult, MoveNoteParams, MoveNotePreviewParams, MoveNotePreviewResult, MoveFileParams, MoveResult, BatchReadParams, BatchReadResult, UpdateFrontmatterParams, NoteInfo, TagManagementParams, TagManagementResult, PatchNoteParams, PatchNoteResult, PatchMultipleNotesParams, PatchMultipleNotesResult, NoteChangeSetResultItem, VaultStats, NoteHeading, ReadNoteLinesParams, BacklinksResult, OutlinksResult, UnresolvedLinksResult, OrphanNotesResult, DailyNoteResult, ListTasksParams, ListTasksResult, TaskItem, UpdateTaskParams, UpdateTaskResult, QueryNotesParams, QueryNotesResult, QueryNote, QueryNotesCursor, AuthorityShelfResult } from './types.js';
 import { extractObsidianLinkOccurrences } from './backlinks.js';
@@ -714,6 +715,7 @@ export class FileSystemService {
   private resolveWritablePath(relativePath: string): string {
     const fullPath = this.resolvePath(relativePath);
     const relativePathToVault = relative(this.vaultPath, fullPath);
+    assertRoleplayMutationBoundary(relativePathToVault);
     assertEnterpriseStorageAccess(relativePathToVault, true);
     // Guard the canonical vault-relative destination for every service write,
     // including absolute input paths and indirectly rewritten backlinks. This

@@ -5,6 +5,7 @@ import { selectContextPassages } from './context-passages.js';
 import { projectNoteBlockLines } from './note-projections.js';
 import { positiveSearchTerms } from './search.js';
 import { assertMemoryContent, memoryDate, memoryEntries, memoryReferenceAllowed, memoryReferencePath, MEMORY_ROLES } from './memory-contract.js';
+import { isFictionDomain } from './fiction-domain.js';
 function number(value, fallback, min, max) {
     const n = value ?? fallback;
     if (!Number.isInteger(n) || n < min || n > max)
@@ -98,6 +99,7 @@ export class LayeredMemoryService {
         if (params.pathPrefix && !canAccess(prefix + '/probe.md'))
             throw new Error('Memory pathPrefix must remain in the selected scope');
         const visible = (note) => !isModerationHidden(note.frontmatter)
+            && !isFictionDomain(note.frontmatter)
             && !(note.frontmatter.mcpvault_type === 'blog_post' && note.frontmatter.status === 'draft')
             && records(note).some(e => e && MEMORY_ROLES.includes(e.role));
         // Read every metadata page before using negative facts such as "uncorrected".

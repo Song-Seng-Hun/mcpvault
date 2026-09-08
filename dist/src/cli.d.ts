@@ -7,6 +7,7 @@ export interface ParsedCliArgs {
     mcpHttpTlsCert?: string;
     mcpHttpTlsKey?: string;
     economyConfig?: string;
+    roleplayConfig?: string;
     /** Dedicated HTTP process; omitted preserves legacy stdio behavior. */
     stdio?: false;
 }

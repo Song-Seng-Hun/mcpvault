@@ -294,6 +294,7 @@ function publicCollectionForPath(path: string): PublicCollection | undefined {
   if (normalized.startsWith('Community/Posts/')) return 'posts';
   if (normalized.startsWith('Community/Comments/')) return 'comments';
   if (normalized.startsWith('Community/ChatMessages/')) return 'messages';
+  if (normalized.startsWith('Community/Roleplay/Turns/')) return 'messages';
   if (normalized.startsWith('Community/ChatRooms/')) return 'rooms';
   return undefined;
 }
@@ -303,6 +304,7 @@ function isPublicRootNotePath(path: string): boolean {
   return normalized.startsWith('Community/Posts/')
     || normalized.startsWith('Community/Comments/')
     || normalized.startsWith('Community/ChatMessages/')
+    || normalized.startsWith('Community/Roleplay/Turns/')
     || normalized.startsWith('Community/ChatRooms/');
 }
 
