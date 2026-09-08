@@ -38,16 +38,16 @@ export function matchesWorkflowFilter(frontmatter: Record<string, any>, requeste
 }
 
 export class CommunityStatusService {
-  constructor(private readonly fileSystem: FileSystemService) {}
+  constructor(private readonly fileSystem: FileSystemService, private readonly options: { communityRoot?: string } = {}) {}
 
   private targetPath(params: { targetType: string; slug?: string; commentId?: string; roomId?: string; messageId?: string }): string {
     switch (params.targetType) {
       case 'post':
         if (!params.slug) throw new Error('slug is required for a post status');
-        return postPath(params.slug);
+        return postPath(params.slug).replace(/^Community\//, `${this.options.communityRoot || 'Community'}/`);
       case 'comment':
         if (!params.slug || !params.commentId) throw new Error('slug and commentId are required for a comment status');
-        return commentPath(params.slug, params.commentId);
+        return commentPath(params.slug, params.commentId).replace(/^Community\//, `${this.options.communityRoot || 'Community'}/`);
       case 'message':
         if (!params.roomId || !params.messageId) throw new Error('roomId and messageId are required for a message status');
         return messagePath(params.roomId, params.messageId);
@@ -85,7 +85,7 @@ export class CommunityStatusService {
       frontmatter: {
         ...note.frontmatter,
         workflow_status: status,
-        workflow_status_by: principal.agentId || principal.modelId,
+        workflow_status_by: principal.actorId || principal.agentId || principal.modelId,
         workflow_status_reason: reason,
         workflow_status_updated_at: timestamp,
       },

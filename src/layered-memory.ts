@@ -12,7 +12,7 @@ import { positiveSearchTerms } from './search.js';
 import { assertMemoryContent, memoryDate, memoryEntries, memoryReferenceAllowed, memoryReferencePath, MEMORY_ROLES, type MemoryEntry } from './memory-contract.js';
 
 export interface MemoryRequest {
-  principal?: ScopePrincipal; scope?: 'personal' | 'community' | 'global'; query?: string;
+  principal?: ScopePrincipal; scope?: 'personal' | 'user' | 'community' | 'global'; query?: string;
   role?: string; dateFrom?: string; dateTo?: string; pathPrefix?: string; includeHistory?: boolean;
   semantic?: boolean; cursor?: { snapshot: string; offset: number }; limit?: number; maxChars?: number;
 }
@@ -65,7 +65,9 @@ export class LayeredMemoryService {
 
   async read(mode: 'recall' | 'brief' | 'consolidate', params: MemoryRequest) {
     const scope = params.scope ?? 'personal';
-    if (!['personal', 'community', 'global'].includes(scope)) throw new Error('Invalid memory scope');
+    if (!['personal', 'user', 'community', 'global'].includes(scope)) throw new Error('Invalid memory scope');
+    const userRoot = this.access.userMemoryRoot(params.principal);
+    if (scope === 'user' && !userRoot) throw new Error('User shared memory requires an explicitly provisioned enterprise employee');
     if (scope === 'personal' && !params.principal?.agentId) throw new Error('Login with an agent account for personal memory; no public fallback');
     if (params.role !== undefined && !MEMORY_ROLES.includes(params.role as any)) throw new Error('Invalid memory role');
     memoryDate(params.dateFrom, 'dateFrom'); memoryDate(params.dateTo, 'dateTo');
@@ -73,7 +75,8 @@ export class LayeredMemoryService {
     const query = String(params.query ?? '').trim(); if (query.length > 1000) throw new Error('Memory query exceeds 1000 characters');
     const maxChars = number(params.maxChars, mode === 'brief' ? 2000 : 4000, 1000, mode === 'brief' ? 4000 : 12000);
     const limit = number(params.limit, 20, 1, 100);
-    const root = scope === 'personal' ? `_scopes/agents/${params.principal!.agentId}` : scope === 'community' ? 'Community' : '';
+    const root = scope === 'personal' ? `_scopes/agents/${params.principal!.agentId}`
+      : scope === 'user' ? userRoot! : scope === 'community' ? this.access.getCommunityRoot() : '';
     const canAccess = (path: string) => {
       if (!this.access.canAccessPhysicalPath(path, params.principal)) return false;
       const p = path.toLowerCase();

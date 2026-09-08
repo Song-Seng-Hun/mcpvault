@@ -1,0 +1,587 @@
+import { createHash, createPrivateKey, createPublicKey, generateKeyPairSync, randomUUID, sign, verify, } from 'node:crypto';
+import { mkdir, open, readFile, readdir, unlink } from 'node:fs/promises';
+import { dirname, join, resolve } from 'node:path';
+import { ensureFederationDirectory, readFederationFile, writeFederationFileAtomic } from './public-federation-storage.js';
+export const PUBLIC_FEDERATION_PROTOCOL = 'mcpvault-public-federation/v1';
+const MAX_RECORD_BYTES = 64 * 1024;
+const DEFAULT_PAGE_LIMIT = 50;
+const MAX_PAGE_LIMIT = 100;
+const MAX_TEXT = 32 * 1024;
+const MAX_IDEMPOTENCY_KEY = 128;
+const ID_PATTERN = /^[a-z0-9][a-z0-9._-]{0,127}$/;
+function processIsAlive(pid) {
+    try {
+        process.kill(pid, 0);
+        return true;
+    }
+    catch (error) {
+        return !(error && typeof error === 'object' && 'code' in error && error.code === 'ESRCH');
+    }
+}
+async function acquireProcessLock(path) {
+    await mkdir(dirname(path), { recursive: true, mode: 0o700 });
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+        const nonce = randomUUID();
+        try {
+            const handle = await open(path, 'wx');
+            try {
+                await handle.writeFile(`${JSON.stringify({ pid: process.pid, nonce, startedAt: new Date().toISOString() })}\n`, 'utf8');
+                await handle.sync();
+            }
+            catch (error) {
+                await handle.close().catch(() => undefined);
+                await unlink(path).catch(() => undefined);
+                throw error;
+            }
+            return { handle, nonce, path };
+        }
+        catch (error) {
+            if (!(error && typeof error === 'object' && 'code' in error && error.code === 'EEXIST'))
+                throw error;
+            let raw;
+            try {
+                raw = await readFile(path, 'utf8');
+            }
+            catch (readError) {
+                if (readError && typeof readError === 'object' && 'code' in readError && readError.code === 'ENOENT')
+                    continue;
+                throw readError;
+            }
+            let record;
+            try {
+                record = JSON.parse(raw);
+            }
+            catch {
+                throw new Error('Public Federation process lock is corrupt; refusing to remove it automatically');
+            }
+            if (!record || typeof record !== 'object' || Array.isArray(record)
+                || !Number.isSafeInteger(record.pid) || Number(record.pid) <= 0
+                || typeof record.nonce !== 'string' || !record.nonce) {
+                throw new Error('Public Federation process lock is invalid; refusing to remove it automatically');
+            }
+            const pid = Number(record.pid);
+            if (processIsAlive(pid))
+                throw new Error(`Public Federation storage is already in use by process ${pid}`);
+            await unlink(path);
+        }
+    }
+    throw new Error('Unable to acquire Public Federation process lock');
+}
+async function releaseProcessLock(lock) {
+    await lock.handle.close().catch(() => undefined);
+    try {
+        const record = JSON.parse(await readFile(lock.path, 'utf8'));
+        if (record.nonce === lock.nonce)
+            await unlink(lock.path);
+    }
+    catch (error) {
+        if (!(error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT'))
+            throw error;
+    }
+}
+function sha256(value) {
+    return `sha256:${createHash('sha256').update(value, 'utf8').digest('hex')}`;
+}
+function canonical(value) {
+    if (Array.isArray(value))
+        return `[${value.map(canonical).join(',')}]`;
+    if (value && typeof value === 'object') {
+        const entries = Object.entries(value)
+            .filter(([, item]) => item !== undefined)
+            .sort(([left], [right]) => left.localeCompare(right));
+        return `{${entries.map(([key, item]) => `${JSON.stringify(key)}:${canonical(item)}`).join(',')}}`;
+    }
+    return JSON.stringify(value);
+}
+function unsignedEvent(event) {
+    const { eventHash: _hash, signature: _signature, ...unsigned } = event;
+    return unsigned;
+}
+function unsignedFeed(feed) {
+    const { signature: _signature, ...unsigned } = feed;
+    return unsigned;
+}
+function signValue(value, privateKey) {
+    return sign(null, Buffer.from(canonical(value), 'utf8'), privateKey).toString('base64url');
+}
+function verifyValue(value, signature, publicKey) {
+    try {
+        return verify(null, Buffer.from(canonical(value), 'utf8'), publicKey, Buffer.from(signature, 'base64url'));
+    }
+    catch {
+        return false;
+    }
+}
+function boundedId(value, field) {
+    const normalized = String(value || '').trim().toLowerCase();
+    if (!ID_PATTERN.test(normalized))
+        throw new Error(`${field} must be a lowercase opaque identifier`);
+    return normalized;
+}
+function boundedText(value, field, max = MAX_TEXT) {
+    const text = String(value ?? '').trim();
+    if (!text || text.length > max)
+        throw new Error(`${field} is required and must be at most ${max} characters`);
+    if (/\u0000|[\u0001-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(text))
+        throw new Error(`${field} contains unsupported control characters`);
+    return text;
+}
+function normalizeIdentity(identity) {
+    return {
+        origin: boundedId(identity.origin, 'origin'),
+        agentId: boundedId(identity.agentId, 'agentId'),
+        ...(identity.role && { role: identity.role }),
+    };
+}
+export function makePublicActorId(origin, agentId) {
+    return `actor:${boundedId(origin, 'origin')}:${boundedId(agentId, 'agentId')}`;
+}
+export function makePublicObjectId(kind, origin, agentId, localId) {
+    return `${kind}:${boundedId(origin, 'origin')}:${boundedId(agentId, 'agentId')}:${boundedId(localId, 'localId')}`;
+}
+function profileId(identity) {
+    return `profile:${identity.origin}:${identity.agentId}`;
+}
+function expectedObjectId(kind, identity, actual) {
+    const prefix = `${kind}:${identity.origin}:${identity.agentId}:`;
+    if (!actual.startsWith(prefix) || actual.length > 512 || !/^[a-z0-9:._-]+$/.test(actual))
+        throw new Error(`${kind} objectId is not owned by the authenticated actor`);
+}
+function rejectPrivateReferences(value, field) {
+    const normalized = value.replace(/\\/g, '/');
+    if (/(?:^|[\[(/\s])(?:community|user|users|_scopes|_whispers|\.mcpvault|\.git)(?:\/|\]\]|\s|$)/i.test(normalized)) {
+        throw new Error(`${field} contains a private or instance-local reference`);
+    }
+}
+function assertExactKeys(value, allowed) {
+    const allowedSet = new Set(allowed);
+    const extra = Object.keys(value).find(key => !allowedSet.has(key));
+    if (extra)
+        throw new Error(`public record contains unsupported or private field: ${extra}`);
+}
+function normalizeExpectedRevision(value, allowZero) {
+    if (!Number.isSafeInteger(value) || value < (allowZero ? 0 : 1))
+        throw new Error('expectedRevision is invalid');
+    return value;
+}
+function normalizeInput(input, rawIdentity) {
+    if (!input || typeof input !== 'object')
+        throw new Error('public record must be an object');
+    const identity = normalizeIdentity(rawIdentity);
+    const actorId = makePublicActorId(identity.origin, identity.agentId);
+    if (input.actorId !== actorId)
+        throw new Error('actorId is not owned by the authenticated origin and agent');
+    const common = { protocol: PUBLIC_FEDERATION_PROTOCOL, version: 1, actorId };
+    if (input.type === 'actor') {
+        assertExactKeys(input, ['type', 'actorId', 'expectedRevision']);
+        normalizeExpectedRevision(input.expectedRevision, true);
+        return { ...common, type: 'actor', recordId: actorId, revision: 1, origin: identity.origin, agentId: identity.agentId };
+    }
+    if (input.type === 'profile') {
+        assertExactKeys(input, ['type', 'actorId', 'expectedRevision', 'displayName', 'bio']);
+        const displayName = boundedText(input.displayName, 'displayName', 128);
+        const bio = input.bio === undefined ? undefined : boundedText(input.bio, 'bio', 2_000);
+        rejectPrivateReferences(displayName, 'displayName');
+        if (bio)
+            rejectPrivateReferences(bio, 'bio');
+        return { ...common, type: 'profile', recordId: profileId(identity), revision: normalizeExpectedRevision(input.expectedRevision, true) + 1, displayName, ...(bio && { bio }) };
+    }
+    if (input.type === 'post') {
+        assertExactKeys(input, ['type', 'objectId', 'actorId', 'expectedRevision', 'title', 'body']);
+        expectedObjectId('post', identity, input.objectId);
+        normalizeExpectedRevision(input.expectedRevision, true);
+        const title = boundedText(input.title, 'title', 240);
+        const body = boundedText(input.body, 'body');
+        rejectPrivateReferences(title, 'title');
+        rejectPrivateReferences(body, 'body');
+        return { ...common, type: 'post', recordId: input.objectId, objectId: input.objectId, revision: 1, title, body };
+    }
+    if (input.type === 'comment') {
+        assertExactKeys(input, ['type', 'objectId', 'actorId', 'expectedRevision', 'postId', 'replyTo', 'body']);
+        expectedObjectId('comment', identity, input.objectId);
+        normalizeExpectedRevision(input.expectedRevision, true);
+        const postId = boundedText(input.postId, 'postId', 512).toLowerCase();
+        const replyTo = input.replyTo === undefined ? undefined : boundedText(input.replyTo, 'replyTo', 512).toLowerCase();
+        if (!postId.startsWith('post:') || (replyTo && !replyTo.startsWith('comment:')))
+            throw new Error('comment parent IDs are invalid');
+        const body = boundedText(input.body, 'body');
+        rejectPrivateReferences(body, 'body');
+        return { ...common, type: 'comment', recordId: input.objectId, objectId: input.objectId, revision: 1, postId, ...(replyTo && { replyTo }), body };
+    }
+    if (input.type === 'update') {
+        assertExactKeys(input, ['type', 'objectId', 'actorId', 'targetObjectId', 'expectedRevision', 'title', 'body', 'displayName', 'bio']);
+        expectedObjectId('update', identity, input.objectId);
+        const revision = normalizeExpectedRevision(input.expectedRevision, false) + 1;
+        const fields = {
+            ...(input.title !== undefined && { title: boundedText(input.title, 'title', 240) }),
+            ...(input.body !== undefined && { body: boundedText(input.body, 'body') }),
+            ...(input.displayName !== undefined && { displayName: boundedText(input.displayName, 'displayName', 128) }),
+            ...(input.bio !== undefined && { bio: boundedText(input.bio, 'bio', 2_000) }),
+        };
+        if (Object.keys(fields).length === 0)
+            throw new Error('update requires a public field');
+        for (const [field, value] of Object.entries(fields))
+            rejectPrivateReferences(value, field);
+        return { ...common, type: 'update', recordId: input.objectId, objectId: input.objectId, targetObjectId: boundedText(input.targetObjectId, 'targetObjectId', 512).toLowerCase(), revision, ...fields };
+    }
+    if (input.type === 'tombstone') {
+        assertExactKeys(input, ['type', 'objectId', 'actorId', 'targetObjectId', 'expectedRevision', 'reason']);
+        expectedObjectId('tombstone', identity, input.objectId);
+        return { ...common, type: 'tombstone', recordId: input.objectId, objectId: input.objectId, targetObjectId: boundedText(input.targetObjectId, 'targetObjectId', 512).toLowerCase(), revision: normalizeExpectedRevision(input.expectedRevision, false) + 1, reason: boundedText(input.reason, 'reason', 500) };
+    }
+    throw new Error('unsupported public record type');
+}
+/** Pure transport preflight used before a local SocialService mutation. */
+export function validatePublicPublishInput(input, identity) {
+    return normalizeInput(input, identity);
+}
+function eventMarkdown(event) {
+    const summary = event.record.type === 'post' ? event.record.title : `${event.record.type} ${event.record.recordId}`;
+    return `---\nprotocol: ${PUBLIC_FEDERATION_PROTOCOL}\nsequence: ${event.sequence}\nevent_id: ${event.eventId}\nrecord_type: ${event.record.type}\nstatus: ${event.status}\n---\n# ${summary.replace(/[\r\n#]/g, ' ')}\n\n\`\`\`json public-federation-record\n${JSON.stringify(event)}\n\`\`\`\n`;
+}
+function parseEventMarkdown(content) {
+    const match = content.match(/```json public-federation-record\r?\n([^\r\n]+)\r?\n```/);
+    if (!match?.[1])
+        throw new Error('public federation record Markdown is invalid');
+    return JSON.parse(match[1]);
+}
+function normalizeLimit(limit) {
+    if (!Number.isSafeInteger(limit) || Number(limit) < 1)
+        return DEFAULT_PAGE_LIMIT;
+    return Math.min(Number(limit), MAX_PAGE_LIMIT);
+}
+export function verifyPublicFederationEvent(event, publicKeyPem) {
+    try {
+        const unsigned = unsignedEvent(event);
+        return Number.isSafeInteger(event.sequence) && event.sequence > 0
+            && event.eventHash === sha256(canonical(unsigned))
+            && verifyValue(unsigned, event.signature, createPublicKey(publicKeyPem));
+    }
+    catch {
+        return false;
+    }
+}
+export function verifyPublicFederationFeed(feed, publicKeyPem) {
+    try {
+        const publicKey = createPublicKey(publicKeyPem);
+        if (feed.protocol !== PUBLIC_FEDERATION_PROTOCOL || !verifyValue(unsignedFeed(feed), feed.signature, publicKey))
+            return false;
+        let previousSequence = feed.after;
+        let previousHash = feed.anchorHash;
+        for (const event of feed.events) {
+            const unsigned = unsignedEvent(event);
+            if (event.sequence !== previousSequence + 1 || event.previousHash !== previousHash || event.eventHash !== sha256(canonical(unsigned)) || !verifyValue(unsigned, event.signature, publicKey))
+                return false;
+            previousSequence = event.sequence;
+            previousHash = event.eventHash;
+        }
+        return feed.cursor === (feed.events.at(-1)?.sequence ?? feed.after);
+    }
+    catch {
+        return false;
+    }
+}
+export class PublicFederationHub {
+    root;
+    recordsRoot;
+    hubId;
+    signingPrivateKey;
+    signingPublicKey;
+    maxRecords;
+    processLockPath;
+    events = [];
+    objects = new Map();
+    idempotency = new Map();
+    initialized = false;
+    loadPromise;
+    mutationTail = Promise.resolve();
+    closed = false;
+    processLock;
+    constructor(root, options = {}) {
+        this.root = resolve(root);
+        this.recordsRoot = join(this.root, 'records');
+        this.processLockPath = join(this.root, 'hub.lock');
+        this.hubId = boundedId(options.hubId || 'public-hub', 'hubId');
+        const privateKey = options.signingPrivateKey
+            ? createPrivateKey(options.signingPrivateKey)
+            : generateKeyPairSync('ed25519').privateKey;
+        if (privateKey.asymmetricKeyType !== 'ed25519')
+            throw new Error('Public Federation signing key must be Ed25519');
+        this.signingPrivateKey = privateKey;
+        this.signingPublicKey = createPublicKey(privateKey).export({ type: 'spki', format: 'pem' }).toString();
+        this.maxRecords = Math.min(Math.max(Math.trunc(options.maxRecords ?? 100_000), 1), 1_000_000);
+    }
+    getPublicKey() { return this.signingPublicKey; }
+    exportSigningPrivateKey() {
+        return this.signingPrivateKey.export({ type: 'pkcs8', format: 'pem' }).toString();
+    }
+    async ensureLoaded() {
+        if (this.closed)
+            throw new Error('Public Federation hub is closed');
+        if (this.initialized)
+            return;
+        if (!this.loadPromise)
+            this.loadPromise = this.load();
+        await this.loadPromise;
+    }
+    async load() {
+        await mkdir(this.root, { recursive: true, mode: 0o700 });
+        await ensureFederationDirectory(this.root, this.recordsRoot);
+        this.processLock = await acquireProcessLock(this.processLockPath);
+        try {
+            await ensureFederationDirectory(this.root, this.recordsRoot);
+            const names = (await readdir(this.recordsRoot)).filter(name => /^\d{12}\.md$/.test(name)).sort();
+            let previousHash = '';
+            for (const name of names) {
+                const event = parseEventMarkdown(await readFederationFile(this.root, join(this.recordsRoot, name), { maxBytes: 128 * 1024 }));
+                const unsigned = unsignedEvent(event);
+                if (event.sequence !== this.events.length + 1 || event.previousHash !== previousHash || event.eventHash !== sha256(canonical(unsigned)) || !verifyValue(unsigned, event.signature, createPublicKey(this.signingPublicKey))) {
+                    throw new Error(`invalid public federation event chain at sequence ${event.sequence}`);
+                }
+                this.apply(event);
+                this.events.push(event);
+                previousHash = event.eventHash;
+            }
+            this.initialized = true;
+        }
+        catch (error) {
+            if (this.processLock)
+                await releaseProcessLock(this.processLock).catch(() => undefined);
+            this.processLock = undefined;
+            throw error;
+        }
+    }
+    apply(event) {
+        const record = event.record;
+        if (record.type === 'moderation') {
+            const target = this.objects.get(record.objectId);
+            if (target) {
+                target.globallyHidden = record.action === 'hide';
+                target.moderationRevision = record.revision;
+            }
+            return;
+        }
+        if (record.type === 'actor') {
+            this.objects.set(record.actorId, { actorId: record.actorId, kind: 'actor', revision: record.revision, tombstoned: false, globallyHidden: false, moderationRevision: 0, parentIds: [], latest: record });
+        }
+        else if (record.type === 'profile') {
+            this.objects.set(record.recordId, { actorId: record.actorId, kind: 'profile', revision: record.revision, tombstoned: false, globallyHidden: false, moderationRevision: 0, parentIds: [record.actorId], latest: record });
+        }
+        else if (record.type === 'post') {
+            this.objects.set(record.objectId, { actorId: record.actorId, kind: 'post', revision: record.revision, tombstoned: false, globallyHidden: false, moderationRevision: 0, parentIds: [], latest: record });
+        }
+        else if (record.type === 'comment') {
+            this.objects.set(record.objectId, { actorId: record.actorId, kind: 'comment', revision: record.revision, tombstoned: false, globallyHidden: false, moderationRevision: 0, parentIds: [record.postId, ...(record.replyTo ? [record.replyTo] : [])], latest: record });
+        }
+        else if (record.type === 'update') {
+            const target = this.objects.get(record.targetObjectId);
+            if (target) {
+                target.revision = record.revision;
+                target.latest = record;
+            }
+        }
+        else {
+            const target = this.objects.get(record.targetObjectId);
+            if (target) {
+                target.revision = record.revision;
+                target.tombstoned = true;
+                target.latest = record;
+            }
+        }
+        this.idempotency.set(event.idempotencyHash, { payloadHash: sha256(canonical({ record })), eventId: event.eventId });
+    }
+    async withMutation(task) {
+        const previous = this.mutationTail;
+        let release;
+        this.mutationTail = new Promise(resolvePromise => { release = resolvePromise; });
+        await previous;
+        try {
+            await this.ensureLoaded();
+            return await task();
+        }
+        finally {
+            release();
+        }
+    }
+    eventForId(eventId) {
+        return this.events.find(event => event.eventId === eventId);
+    }
+    async publish(input, rawIdentity, idempotencyKey) {
+        return this.withMutation(async () => {
+            const identity = normalizeIdentity(rawIdentity);
+            const key = boundedText(idempotencyKey, 'idempotencyKey', MAX_IDEMPOTENCY_KEY);
+            if (!/^[a-zA-Z0-9._:-]+$/.test(key))
+                throw new Error('idempotencyKey contains unsupported characters');
+            const record = normalizeInput(input, identity);
+            const scopedKey = sha256(`${identity.origin}:${identity.agentId}:${key}`);
+            const payloadHash = sha256(canonical({ record }));
+            const prior = this.idempotency.get(scopedKey);
+            if (prior) {
+                if (prior.payloadHash !== payloadHash)
+                    throw new Error('idempotency key was already used with a different payload');
+                const existing = this.eventForId(prior.eventId);
+                if (!existing)
+                    throw new Error('idempotency state references a missing event');
+                return existing;
+            }
+            if (this.events.length >= this.maxRecords)
+                throw new Error('Public Federation record quota exceeded');
+            const actor = this.objects.get(record.actorId);
+            if (record.type === 'actor') {
+                if (actor)
+                    throw new Error('actor already exists');
+            }
+            else if (!actor || actor.kind !== 'actor' || actor.tombstoned) {
+                throw new Error('authenticated actor must be published before social records');
+            }
+            const targetId = record.type === 'update' || record.type === 'tombstone' ? record.targetObjectId : record.recordId;
+            const target = this.objects.get(targetId);
+            const expectedRevision = input.expectedRevision;
+            if (record.type === 'actor' || record.type === 'post' || record.type === 'comment') {
+                if (expectedRevision !== 0 || target)
+                    throw new Error('revision conflict: new public object requires expectedRevision 0');
+            }
+            else if (record.type === 'profile') {
+                const current = this.objects.get(record.recordId);
+                if ((current?.revision ?? 0) !== expectedRevision)
+                    throw new Error(`revision conflict: expected ${expectedRevision}, current ${current?.revision ?? 0}`);
+            }
+            else {
+                if (!target)
+                    throw new Error('target public object does not exist');
+                if (target.actorId !== record.actorId)
+                    throw new Error('authenticated actor does not own the target object');
+                if (target.tombstoned)
+                    throw new Error('target public object is tombstoned');
+                if (target.revision !== expectedRevision)
+                    throw new Error(`revision conflict: expected ${expectedRevision}, current ${target.revision}`);
+                if (record.type === 'update') {
+                    const invalid = target.kind === 'post'
+                        ? record.displayName !== undefined || record.bio !== undefined
+                        : target.kind === 'comment'
+                            ? record.title !== undefined || record.displayName !== undefined || record.bio !== undefined
+                            : target.kind === 'profile'
+                                ? record.title !== undefined || record.body !== undefined
+                                : true;
+                    if (invalid)
+                        throw new Error(`an update field does not apply to a ${target.kind} object`);
+                }
+            }
+            const parents = record.type === 'comment' ? [record.postId, ...(record.replyTo ? [record.replyTo] : [])] : [];
+            const status = parents.some(parentId => {
+                const parent = this.objects.get(parentId);
+                return !parent || parent.tombstoned || parent.globallyHidden;
+            }) ? 'pending-parent' : 'active';
+            const unsigned = {
+                eventId: `public_event_${randomUUID()}`,
+                sequence: this.events.length + 1,
+                previousHash: this.events.at(-1)?.eventHash || '',
+                record,
+                status,
+                publishedAt: new Date().toISOString(),
+                idempotencyHash: scopedKey,
+            };
+            const eventHash = sha256(canonical(unsigned));
+            const event = { ...unsigned, eventHash, signature: signValue(unsigned, this.signingPrivateKey) };
+            const serialized = eventMarkdown(event);
+            if (Buffer.byteLength(serialized, 'utf8') > MAX_RECORD_BYTES)
+                throw new Error(`public record exceeds ${MAX_RECORD_BYTES} bytes`);
+            const path = join(this.recordsRoot, `${String(event.sequence).padStart(12, '0')}.md`);
+            await writeFederationFileAtomic(this.root, path, serialized, { maxBytes: 128 * 1024 });
+            this.apply(event);
+            this.events.push(event);
+            this.idempotency.set(scopedKey, { payloadHash, eventId: event.eventId });
+            return event;
+        });
+    }
+    async moderate(input, rawIdentity, idempotencyKey) {
+        return this.withMutation(async () => {
+            const identity = normalizeIdentity(rawIdentity);
+            if (identity.role !== 'moderator')
+                throw new Error('moderator authority is required');
+            if (!input || typeof input !== 'object')
+                throw new Error('moderation input must be an object');
+            assertExactKeys(input, ['objectId', 'action', 'reason', 'expectedRevision']);
+            const objectId = boundedText(input.objectId, 'objectId', 512).toLowerCase();
+            const target = this.objects.get(objectId);
+            if (!target)
+                throw new Error('moderation target does not exist');
+            if (input.action !== 'hide' && input.action !== 'restore')
+                throw new Error('moderation action must be hide or restore');
+            const expectedRevision = normalizeExpectedRevision(input.expectedRevision, true);
+            const reason = boundedText(input.reason, 'reason', 500);
+            const key = boundedText(idempotencyKey, 'idempotencyKey', MAX_IDEMPOTENCY_KEY);
+            if (!/^[a-zA-Z0-9._:-]+$/.test(key))
+                throw new Error('idempotencyKey contains unsupported characters');
+            const scopedKey = sha256(`${identity.origin}:${identity.agentId}:moderation:${key}`);
+            const record = {
+                protocol: PUBLIC_FEDERATION_PROTOCOL,
+                version: 1,
+                type: 'moderation',
+                recordId: `moderation:${this.hubId}:${sha256(scopedKey).slice('sha256:'.length, 'sha256:'.length + 32)}`,
+                objectId,
+                action: input.action,
+                reason,
+                moderator: identity,
+                revision: expectedRevision + 1,
+            };
+            const payloadHash = sha256(canonical({ record }));
+            const prior = this.idempotency.get(scopedKey);
+            if (prior) {
+                if (prior.payloadHash !== payloadHash)
+                    throw new Error('idempotency key was already used with a different payload');
+                const existing = this.eventForId(prior.eventId);
+                if (!existing)
+                    throw new Error('idempotency state references a missing event');
+                return existing;
+            }
+            if (target.moderationRevision !== expectedRevision)
+                throw new Error(`moderation revision conflict: expected ${expectedRevision}, current ${target.moderationRevision}`);
+            if (this.events.length >= this.maxRecords)
+                throw new Error('Public Federation record quota exceeded');
+            const unsigned = {
+                eventId: `public_event_${randomUUID()}`,
+                sequence: this.events.length + 1,
+                previousHash: this.events.at(-1)?.eventHash || '',
+                record,
+                status: 'active',
+                publishedAt: new Date().toISOString(),
+                idempotencyHash: scopedKey,
+            };
+            const event = { ...unsigned, eventHash: sha256(canonical(unsigned)), signature: signValue(unsigned, this.signingPrivateKey) };
+            const serialized = eventMarkdown(event);
+            if (Buffer.byteLength(serialized, 'utf8') > MAX_RECORD_BYTES)
+                throw new Error(`public record exceeds ${MAX_RECORD_BYTES} bytes`);
+            await writeFederationFileAtomic(this.root, join(this.recordsRoot, `${String(event.sequence).padStart(12, '0')}.md`), serialized, { maxBytes: 128 * 1024 });
+            this.apply(event);
+            this.events.push(event);
+            this.idempotency.set(scopedKey, { payloadHash, eventId: event.eventId });
+            return event;
+        });
+    }
+    async getFeed(after = 0, limit) {
+        await this.ensureLoaded();
+        const cursor = Number.isSafeInteger(after) && after >= 0 ? after : 0;
+        if (cursor > this.events.length)
+            throw new Error('feed cursor is beyond the current public federation sequence');
+        const events = this.events.filter(event => event.sequence > cursor).slice(0, normalizeLimit(limit));
+        const unsigned = {
+            protocol: PUBLIC_FEDERATION_PROTOCOL,
+            hubId: this.hubId,
+            after: cursor,
+            anchorHash: cursor === 0 ? '' : this.events[cursor - 1].eventHash,
+            cursor: events.at(-1)?.sequence ?? cursor,
+            latestSequence: this.events.length,
+            hasMore: this.events.length > (events.at(-1)?.sequence ?? cursor),
+            events,
+        };
+        return { ...unsigned, signature: signValue(unsigned, this.signingPrivateKey) };
+    }
+    async close() {
+        this.closed = true;
+        await this.loadPromise?.catch(() => undefined);
+        if (this.processLock)
+            await releaseProcessLock(this.processLock);
+        this.processLock = undefined;
+    }
+}

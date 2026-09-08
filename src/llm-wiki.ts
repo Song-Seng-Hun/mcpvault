@@ -6092,7 +6092,7 @@ export class LlmWikiService {
       lifecycle: 'Knowledge lifecycle and task execution state are separate.',
     };
     const typed = {
-      purpose: 'MCP-managed Obsidian Properties contract; custom fields remain allowed.',
+      purpose: 'Managed Properties; custom fields remain allowed.',
       contractFingerprint,
       fields: fields.map(field => ({ name: field.name, type: field.type, ...(field.allowed && { allowed: field.allowed }), ...(field.appliesTo && { appliesTo: field.appliesTo }) })),
       relations: relations.map(relation => ({ field: relation.field, direction: relation.direction })),
@@ -6126,7 +6126,7 @@ export class LlmWikiService {
       totalRelations: relations.length,
       ...(selection && { selection }),
       truncated: true,
-      nextAction: nextAction || { endpointId: endpointIdForTool('get_wiki_property_contract'), arguments: { maxChars: 4000 } },
+      nextAction: nextAction || { endpointId: endpointIdForTool('get_wiki_property_contract'), arguments: { maxChars: boundedChars < 4000 ? 4000 : 12000 } },
     };
   }
 
@@ -15408,7 +15408,7 @@ export class LlmWikiService {
       actionBudget: {
         endpointCalls: 1,
         stopAfterAction: true,
-        instruction: 'Execute primaryAction; generic first looks stop there. For requested work, follow the user task, not unrelated pulse suggestions. Past experience: memory.brief; knowledge questions: wiki.answer_packet with query. Retain experiences via wiki.policy(topic=memory), personal by default. Shared edits require task authorization.',
+        instruction: 'Execute primaryAction; generic first looks stop there. For requested work, follow the user task, not unrelated pulse suggestions. Past experience: memory.brief; knowledge questions: wiki.answer_packet query; situation/conditions: wiki.context_pack query+context+intent. Retain experiences via wiki.policy(topic=memory), personal by default. Shared edits require task authorization.',
       },
       routing: 'For via=call_endpoint, pass primaryAction.endpointId and arguments to call_endpoint. For via=direct_mcp, call that fixed MCP tool directly. Do not search for an endpoint already named here.',
       participation: {

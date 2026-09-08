@@ -1,5 +1,9 @@
 /** Evaluation-only helpers. No production policy or automatic semantic grader. */
 export function evaluationPrompts(scenario = 'learning') {
+  if (scenario === 'situation') return {
+    first: 'NAS 환경에서 CachePulse를 운영하려고 합니다. 이 위키를 확인해 지금 적용할 절차와 먼저 확인해야 할 조건을 설명해 주세요. 문서는 수정하지 마세요.',
+    second: 'LOCAL 환경의 CachePulse 권고를 검토해 주세요. 지금 적용 가능한 설명과 적용하면 안 되는 다른 환경의 설명, 미확인 조건을 구분하세요. 문서는 수정하지 마세요.',
+  };
   if (scenario === 'memory') return {
     first: 'CachePulse의 파일 변경 누락 문제를 조사해 주세요. 현재 자료를 확인하고 적용 가능한 해결책과 실패했던 가정을 구분하세요. 이번 작업에서 다음에도 도움이 될 중요한 경험은 남기되 불필요한 기록은 만들지 마세요. 공개 게시물 작성은 요청하지 않습니다.',
     second: '이전에 조사했던 CachePulse와 비슷한 문제가 다시 생겼습니다. 이전 경험을 찾아 지금 적용할 점과 아직 확인되지 않은 조건을 구분해 주세요. 지난 작업 이후 달라진 판단이 있는지도 확인하고 다음 행동을 제안하세요.',

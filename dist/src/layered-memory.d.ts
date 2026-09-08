@@ -4,7 +4,7 @@ import type { ScopeAccessPolicy } from './scope-access.js';
 import type { ScopePrincipal } from './scope-auth.js';
 export interface MemoryRequest {
     principal?: ScopePrincipal;
-    scope?: 'personal' | 'community' | 'global';
+    scope?: 'personal' | 'user' | 'community' | 'global';
     query?: string;
     role?: string;
     dateFrom?: string;
@@ -26,7 +26,7 @@ export declare class LayeredMemoryService {
     private readonly access;
     constructor(fs: FileSystemService, retrieval: RetrievalService, access: ScopeAccessPolicy);
     read(mode: 'recall' | 'brief' | 'consolidate', params: MemoryRequest): Promise<{
-        scope: "community" | "global" | "personal";
+        scope: "community" | "global" | "personal" | "user";
         mode: "brief" | "consolidate" | "recall";
         interpretation: string;
         status: string;
@@ -45,7 +45,7 @@ export declare class LayeredMemoryService {
         warnings: string[];
         nextAction: any;
     } | {
-        scope: "community" | "global" | "personal";
+        scope: "community" | "global" | "personal" | "user";
         mode: "brief" | "consolidate" | "recall";
         status: string;
         items: never[];
@@ -56,7 +56,7 @@ export declare class LayeredMemoryService {
         };
         hint: string;
     } | {
-        scope: "community" | "global" | "personal";
+        scope: "community" | "global" | "personal" | "user";
         mode: "brief" | "consolidate" | "recall";
         status: string;
         items: never[];
@@ -65,7 +65,7 @@ export declare class LayeredMemoryService {
         nextAction: {
             endpointId: string;
             arguments: {
-                scope: "community" | "global" | "personal";
+                scope: "community" | "global" | "personal" | "user";
                 includeHistory: boolean;
                 limit: number;
                 maxChars: number;

@@ -25,6 +25,9 @@ export function getScopeAuthTools() {
                     modelId: { type: 'string', description: 'Stable lowercase owning model family, such as codex or claude. A self-registered model can claim this only once.' },
                     agentId: { type: 'string', description: 'Unique stable lowercase session-agent identity. Recommended for a first-time worker/sub-agent; omit only when you are claiming the durable model owner identity. An authenticated model owner may also use this to provision a child agent.' },
                     accessToken: { type: 'string', description: 'Optional for first-time self-registration; required to provision an agent on behalf of an already-owned model.' },
+                    invitationToken: { type: 'string', description: 'Enterprise only: administrator-issued one-use invitation recovered from the host secret store.' },
+                    sessionId: { type: 'string', description: 'Enterprise only: this execution session, distinct from the persistent agentId.' },
+                    expectedGeneration: { type: 'integer', minimum: 0, description: 'Explicit generation CAS when handing off an existing writer.' },
                     prettyPrint,
                 }, required: ['accountId', 'password', 'modelId', 'userId'] },
         },
@@ -32,7 +35,9 @@ export function getScopeAuthTools() {
             name: 'login_scope',
             description: 'Log in without restarting the server after registration. Use the exact accountId and password recovered from the host secret store or this agent\'s host-provided private sandbox; never search the vault, project workspace, arbitrary files, or another agent\'s sandbox for the password. Returns a short-lived accessToken for later private reads and attributed public participation. If this is a new session, call get_agent_pulse after login.',
             inputSchema: { type: 'object', properties: {
-                    accountId: { type: 'string' }, password: { type: 'string' }, prettyPrint,
+                    accountId: { type: 'string' }, password: { type: 'string' },
+                    sessionId: { type: 'string', description: 'Enterprise execution session ID.' },
+                    expectedGeneration: { type: 'integer', minimum: 0, description: 'Required to replace a different active session of the same persistent agent.' }, prettyPrint,
                 }, required: ['accountId', 'password'] },
         },
         {

@@ -1,0 +1,74 @@
+import type { FileSystemService } from './filesystem.js';
+import type { ScopeAccessPolicy } from './scope-access.js';
+import type { ScopePrincipal } from './scope-auth.js';
+import type { QueryNotesCursor } from './types.js';
+import type { RetrievalService, RetrievalHit } from './retrieval-service.js';
+import { isModerationHidden } from './moderation-policy.js';
+import { contextRuleState, type ContextIntent } from './context-rules.js';
+import { buildMarkdownLiteralMask } from './backlinks.js';
+import { selectContextPassages, type ContextPassageSelection } from './context-passages.js';
+
+export interface SituationOptions { context: string; intent: ContextIntent; explain: boolean }
+export function isSituationMemory(fm: Record<string, any>): boolean {
+  return Boolean(fm.memory_entries) || ['core', 'episodic'].includes(fm.memory_role)
+    || ['diary', 'log', 'reflection'].includes(fm.note_kind)
+    || ['diary', 'log', 'reflection', 'journal_entry'].includes(fm.mcpvault_type);
+}
+/** Metadata discovery reuses existing indexes. No prompt execution, body hydration,
+ * cross-request cache, or private-memory aggregation. Eligibility precedes top-k. */
+export async function selectSituationCandidates(fs: FileSystemService, access: ScopeAccessPolicy, retrieval: RetrievalService,
+  query: string, options: SituationOptions, principal?: ScopePrincipal, semantic = false) {
+  const allowed = new Set<string>(); const revisions = new Map<string, string>();
+  const activated: RetrievalHit[] = [];
+  const diagnostics: Array<{ physicalPath: string; revision: string; reason: string }> = [];
+  const canAccess = (p: string) => access.canAccessPhysicalPath(p, principal);
+  let after: QueryNotesCursor | undefined; let examined = 0;
+  do {
+    const batch = await fs.queryNotes({ limit: 500, includeContent: false, includeTotal: false, sortBy: 'path', ...(after && { after }) }, canAccess,
+      n => !isModerationHidden(n.frontmatter) && !n.frontmatter.mcpvault_type && !isSituationMemory(n.frontmatter));
+    for (const n of batch.notes) {
+      if (++examined > 10000) throw new Error('Situation metadata window exhausted');
+      const state = contextRuleState(n.frontmatter.context_rules, `${query}\n${options.context}`, options.intent);
+      if (state === 'invalid' || state === 'conditions_unmatched') {
+        if (options.explain && diagnostics.length < 8) diagnostics.push({ physicalPath: n.path, revision: n.revision!, reason: state === 'invalid' ? 'invalid_context_rules' : 'conditions_unmatched' });
+        continue;
+      }
+      allowed.add(n.path); if (n.revision) revisions.set(n.path, n.revision);
+      const rules = n.frontmatter.context_rules;
+      if (state === 'conditions_matched' && (rules.any?.length || rules.all?.length) && activated.length < 12)
+        activated.push({ p: n.path, physicalPath: n.path, t: '', ex: '', mc: 0, ...(n.revision && { rv: n.revision }), why: ['retrieval_cue_match'] });
+    }
+    after = batch.truncated ? batch.nextCursor : undefined;
+    if (batch.truncated && !after) throw new Error('Situation metadata changed');
+  } while (after);
+  // Reserve eight candidate slots for explicit safety/evidence relations.
+  const outcome = await retrieval.memoryCandidates({ query, limit: 12, ...(principal && { principal }), semantic, canAccessPath: p => allowed.has(p) && canAccess(p), candidateRevisions: revisions });
+  const hits = [...outcome.results];
+  for (const hit of activated) if (hits.length < 12 && !hits.some(h => h.p === hit.p)) hits.push(hit);
+  return { ...outcome, results: hits, diagnostics };
+}
+
+/** Keep source units intact. A clipped unit becomes an exact continuation rather
+ * than a sentence fragment that could hide a qualification. */
+export function situationPassages(content: string, startLine: number, selected: ContextPassageSelection) {
+  const lines = content.split('\n'); const mask = buildMarkdownLiteralMask(content); let offset = 0;
+  const warnings: number[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]!;
+    if (!mask[offset] && /^#{1,6}\s+(?:.*\b(?:warning|caution|condition|exception|prerequisite)\b|.*(?:주의|조건|예외|전제))/i.test(line)) warnings.push(startLine + i);
+    offset += line.length + 1;
+  }
+  const anchor = selected.passages[0]?.startLine ?? startLine;
+  warnings.sort((a, b) => Math.abs(a - anchor) - Math.abs(b - anchor));
+  const base = selected.passages.filter(p => !p.truncated);
+  if (warnings.length && !base.some(p => p.startLine <= warnings[0]! && p.endLine >= warnings[0]!)) {
+    const extra = selectContextPassages({ content, query: '', startLine, preferredLine: warnings[0]!, maxChars: 1200, maxPassages: 1 });
+    const warning = extra.passages.find(p => !p.truncated);
+    if (warning && !base.some(p => p.startLine <= warning.endLine && p.endLine >= warning.startLine)) {
+      if (base.length > 1) base.pop();
+      if (base.reduce((n, p) => n + p.text.length, 0) + warning.text.length <= 1200) base.push(warning);
+      else selected.truncated = true;
+    } else if (extra.truncated) selected.truncated = true;
+  }
+  return { passages: base, truncated: selected.truncated || base.length < selected.passages.length };
+}

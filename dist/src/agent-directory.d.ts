@@ -3,7 +3,13 @@ import { type ScopeAuthService, type ScopeCapability, type ScopePrincipal } from
 export declare class AgentDirectoryService {
     private readonly fileSystem;
     private readonly auth;
-    constructor(fileSystem: FileSystemService, auth: ScopeAuthService);
+    private readonly options;
+    constructor(fileSystem: FileSystemService, auth: ScopeAuthService, options?: {
+        communityRoot?: string;
+        publicMode?: boolean;
+    });
+    private get root();
+    private profilePath;
     private findPrincipal;
     private profileFor;
     private profileFrom;
@@ -13,6 +19,38 @@ export declare class AgentDirectoryService {
     }): Promise<{
         success: boolean;
         profile: {
+            identity: string;
+            role: "agent" | "model";
+            userId?: string;
+            familyId?: string;
+            modelId: string;
+            agentId?: string;
+            displayName: any;
+            bio: any;
+            interests: any[];
+            availability: any;
+            capabilities: ("chat" | "comment" | "journal" | "moderate" | "profile" | "publish" | "status" | "task" | "whisper" | "write")[];
+            path: string;
+            revision: string | undefined;
+            updatedAt: any;
+        } | {
+            actorId: string;
+            authorLabel: string;
+            identity: string;
+            role: "agent" | "model";
+            userId?: string;
+            familyId?: string;
+            modelId: string;
+            agentId?: string;
+            displayName: any;
+            bio: any;
+            interests: any[];
+            availability: any;
+            capabilities: ("chat" | "comment" | "journal" | "moderate" | "profile" | "publish" | "status" | "task" | "whisper" | "write")[];
+            path: string;
+            revision: string | undefined;
+            updatedAt: any;
+        } | {
             identity: string;
             role: "agent" | "model";
             userId?: string;
@@ -37,7 +75,39 @@ export declare class AgentDirectoryService {
         limit?: number;
         maxChars?: number;
     }): Promise<{
-        profiles: {
+        profiles: ({
+            identity: string;
+            role: "agent" | "model";
+            userId?: string;
+            familyId?: string;
+            modelId: string;
+            agentId?: string;
+            displayName: any;
+            bio: any;
+            interests: any[];
+            availability: any;
+            capabilities: ("chat" | "comment" | "journal" | "moderate" | "profile" | "publish" | "status" | "task" | "whisper" | "write")[];
+            path: string;
+            revision: string | undefined;
+            updatedAt: any;
+        } | {
+            actorId: string;
+            authorLabel: string;
+            identity: string;
+            role: "agent" | "model";
+            userId?: string;
+            familyId?: string;
+            modelId: string;
+            agentId?: string;
+            displayName: any;
+            bio: any;
+            interests: any[];
+            availability: any;
+            capabilities: ("chat" | "comment" | "journal" | "moderate" | "profile" | "publish" | "status" | "task" | "whisper" | "write")[];
+            path: string;
+            revision: string | undefined;
+            updatedAt: any;
+        } | {
             identity: string;
             role: "agent" | "model";
             userId?: string;
@@ -53,7 +123,7 @@ export declare class AgentDirectoryService {
             path: string;
             revision: string | undefined;
             updatedAt: any;
-        }[];
+        })[];
         total: number;
         truncated: boolean;
     }>;
@@ -67,6 +137,38 @@ export declare class AgentDirectoryService {
     }): Promise<{
         success: boolean;
         profile: {
+            identity: string;
+            role: "agent" | "model";
+            userId?: string;
+            familyId?: string;
+            modelId: string;
+            agentId?: string;
+            displayName: any;
+            bio: any;
+            interests: any[];
+            availability: any;
+            capabilities: ("chat" | "comment" | "journal" | "moderate" | "profile" | "publish" | "status" | "task" | "whisper" | "write")[];
+            path: string;
+            revision: string | undefined;
+            updatedAt: any;
+        } | {
+            actorId: string;
+            authorLabel: string;
+            identity: string;
+            role: "agent" | "model";
+            userId?: string;
+            familyId?: string;
+            modelId: string;
+            agentId?: string;
+            displayName: any;
+            bio: any;
+            interests: any[];
+            availability: any;
+            capabilities: ("chat" | "comment" | "journal" | "moderate" | "profile" | "publish" | "status" | "task" | "whisper" | "write")[];
+            path: string;
+            revision: string | undefined;
+            updatedAt: any;
+        } | {
             identity: string;
             role: "agent" | "model";
             userId?: string;

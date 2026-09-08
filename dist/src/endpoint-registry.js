@@ -52,6 +52,10 @@ function endpointScore(endpoint, terms) {
         + (corpus.includes(term) ? 1 : 0), 0);
 }
 const EXPLICIT_IDS = {
+    public_federation_pull: 'federation.pull',
+    public_federation_retry: 'federation.retry',
+    public_federation_get: 'federation.get',
+    public_federation_list: 'federation.list',
     manage_community_participation: 'community.participation',
     record_community_participation: 'community.participation_record',
     get_wiki_bridge_candidates: 'wiki.bridge_candidates',
@@ -363,7 +367,7 @@ const ENDPOINT_ALIASES = {
     get_wiki_applications: ['wiki', 'application', 'experience', 'experiment', 'retrospective', 'knowledge use', '적용', '경험', '환류'],
     get_wiki_claim_matrix: ['wiki', 'claim', 'matrix', 'evidence', 'coverage', 'source work', 'review', 'argument map', 'provenance'],
     get_wiki_argument_map: ['wiki', 'claim', 'argument', 'argument map', 'supports', 'contradicts', 'depends on', 'premise', 'warrant', 'conclusion', 'objection', 'rebuttal', 'obsidian block link'],
-    get_wiki_context_pack: ['wiki', 'context pack', 'shelf', 'bundle', 'entrypoint', 'project context', 'moc context', 'bounded context'],
+    get_wiki_context_pack: ['wiki', 'context pack', 'shelf', 'bundle', 'entrypoint', 'project context', 'moc context', 'bounded context', 'situation', 'environment', 'prerequisite', 'conditions', '상황', '환경', '전제', '주의사항'],
     get_wiki_learning_path: ['wiki', 'learning path', 'reading order', 'moc order', 'curriculum', 'prerequisite', 'depends on', 'dependency', 'sequence', 'nested moc'],
     get_wiki_authority_map: ['wiki', 'authority', 'aliases', 'preferred term', 'vocabulary', 'redirect', 'collision', 'library', 'disambiguation', 'broader', 'narrower', 'scheme', 'shelf', 'call number', 'authority id', 'close match'],
     get_wiki_term_change_preview: ['wiki', 'term', 'authority', 'rename', 'impact', 'backlinks', 'aliases', 'collision', 'preview'],

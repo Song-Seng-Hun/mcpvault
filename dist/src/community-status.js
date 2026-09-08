@@ -30,19 +30,21 @@ export function matchesWorkflowFilter(frontmatter, requested) {
 }
 export class CommunityStatusService {
     fileSystem;
-    constructor(fileSystem) {
+    options;
+    constructor(fileSystem, options = {}) {
         this.fileSystem = fileSystem;
+        this.options = options;
     }
     targetPath(params) {
         switch (params.targetType) {
             case 'post':
                 if (!params.slug)
                     throw new Error('slug is required for a post status');
-                return postPath(params.slug);
+                return postPath(params.slug).replace(/^Community\//, `${this.options.communityRoot || 'Community'}/`);
             case 'comment':
                 if (!params.slug || !params.commentId)
                     throw new Error('slug and commentId are required for a comment status');
-                return commentPath(params.slug, params.commentId);
+                return commentPath(params.slug, params.commentId).replace(/^Community\//, `${this.options.communityRoot || 'Community'}/`);
             case 'message':
                 if (!params.roomId || !params.messageId)
                     throw new Error('roomId and messageId are required for a message status');
@@ -72,7 +74,7 @@ export class CommunityStatusService {
             frontmatter: {
                 ...note.frontmatter,
                 workflow_status: status,
-                workflow_status_by: principal.agentId || principal.modelId,
+                workflow_status_by: principal.actorId || principal.agentId || principal.modelId,
                 workflow_status_reason: reason,
                 workflow_status_updated_at: timestamp,
             },

@@ -9,6 +9,9 @@
   "include": [
     "server.ts",
     "global-sync-server.ts",
+    "enterprise-server.ts",
+    "enterprise-admin.ts",
+    "public-federation-server.ts",
     "src/**/*"
   ],
   "exclude": [

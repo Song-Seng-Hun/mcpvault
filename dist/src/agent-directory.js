@@ -1,9 +1,8 @@
 import { normalizeScopeId } from './scopes.js';
 import { SCOPE_CAPABILITIES } from './scope-auth.js';
 import { boundItems } from './search-limits.js';
-const ROOT = 'Community/Agents';
+import { authorIdentity } from './enterprise-identity.js';
 const now = () => new Date().toISOString();
-const profilePath = (role, id) => `${ROOT}/${role}s/${normalizeScopeId(id, `${role}Id`)}.md`;
 function identityOf(principal) {
     return principal.agentId || principal.modelId;
 }
@@ -23,10 +22,14 @@ function normalizeList(value, field, maxItems, maxItemLength) {
 export class AgentDirectoryService {
     fileSystem;
     auth;
-    constructor(fileSystem, auth) {
+    options;
+    constructor(fileSystem, auth, options = {}) {
         this.fileSystem = fileSystem;
         this.auth = auth;
+        this.options = options;
     }
+    get root() { return `${this.options.communityRoot || 'Community'}/Agents`; }
+    profilePath(role, id) { return `${this.root}/${role}s/${normalizeScopeId(id, `${role}Id`)}.md`; }
     async findPrincipal(role, id) {
         const normalized = normalizeScopeId(id, `${role}Id`);
         const principal = (await this.auth.listPrincipals()).find(candidate => candidate.role === role && (role === 'agent' ? candidate.agentId === normalized : candidate.modelId === normalized));
@@ -37,7 +40,7 @@ export class AgentDirectoryService {
     async profileFor(principal) {
         const role = principal.role;
         const id = identityOf(principal);
-        const path = profilePath(role, id);
+        const path = this.profilePath(role, id);
         const note = await this.fileSystem.noteExists(path) ? await this.fileSystem.readNote(path) : undefined;
         return this.profileFrom(principal, path, note);
     }
@@ -47,13 +50,14 @@ export class AgentDirectoryService {
         if (note && note.frontmatter.mcpvault_type !== 'agent_profile') {
             throw new Error(`Profile path is reserved for the agent directory: ${path}`);
         }
+        const publicIdentity = this.options.publicMode ? { ...authorIdentity(principal), ...(principal.authorLabel && { authorLabel: principal.authorLabel }) } : undefined;
         return {
             identity: id,
             role,
-            ...(principal.userId && { userId: principal.userId, familyId: principal.userId }),
+            ...(!this.options.publicMode && principal.userId && { userId: principal.userId, familyId: principal.userId }),
             modelId: principal.modelId,
             ...(principal.agentId && { agentId: principal.agentId }),
-            commandCenterId: principal.commandCenterId || 'local',
+            ...(this.options.publicMode ? publicIdentity : { commandCenterId: principal.commandCenterId || 'local' }),
             displayName: note?.frontmatter.display_name || id,
             bio: note?.frontmatter.bio || '',
             interests: Array.isArray(note?.frontmatter.interests) ? note.frontmatter.interests : [],
@@ -78,11 +82,11 @@ export class AgentDirectoryService {
         const eligiblePrincipals = principals
             .filter(principal => !params.role || principal.role === params.role)
             .filter(principal => !params.capability || (principal.capabilities || []).includes(params.capability));
-        const eligibleProfilePaths = new Set(eligiblePrincipals.map(principal => profilePath(principal.role, identityOf(principal))));
+        const eligibleProfilePaths = new Set(eligiblePrincipals.map(principal => this.profilePath(principal.role, identityOf(principal))));
         const profileByPath = new Map();
         let profileAfter;
         while (eligiblePrincipals.length > 0) {
-            const page = await this.fileSystem.queryNotes({ pathPrefix: ROOT, filters: { mcpvault_type: 'agent_profile' }, limit: 500, includeTotal: false, ...(profileAfter ? { after: profileAfter } : {}) });
+            const page = await this.fileSystem.queryNotes({ pathPrefix: this.root, filters: { mcpvault_type: 'agent_profile' }, limit: 500, includeTotal: false, ...(profileAfter ? { after: profileAfter } : {}) });
             for (const note of page.notes) {
                 if (eligibleProfilePaths.has(note.path))
                     profileByPath.set(note.path, note);
@@ -92,7 +96,7 @@ export class AgentDirectoryService {
             profileAfter = page.nextCursor;
         }
         const profiles = eligiblePrincipals.map(principal => {
-            const path = profilePath(principal.role, identityOf(principal));
+            const path = this.profilePath(principal.role, identityOf(principal));
             return this.profileFrom(principal, path, profileByPath.get(path));
         });
         const filtered = params.availability ? profiles.filter(profile => profile.availability === params.availability) : profiles;
@@ -107,7 +111,7 @@ export class AgentDirectoryService {
             throw new Error("expectedRevision is required; use 'missing' for a new profile");
         const principal = params.principal;
         const id = identityOf(principal);
-        const path = profilePath(principal.role, id);
+        const path = this.profilePath(principal.role, id);
         const existing = await this.fileSystem.noteExists(path) ? await this.fileSystem.readNote(path) : undefined;
         if (existing && existing.frontmatter.mcpvault_type !== 'agent_profile') {
             throw new Error(`Profile path is reserved for the agent directory: ${path}`);
@@ -125,8 +129,7 @@ export class AgentDirectoryService {
             frontmatter: {
                 ...(existing?.frontmatter || {}), mcpvault_type: 'agent_profile', identity: id, role: principal.role,
                 model_id: principal.modelId, ...(principal.agentId && { agent_id: principal.agentId }), display_name: displayName,
-                ...(principal.userId && { user_id: principal.userId, family_id: principal.userId }),
-                command_center_id: principal.commandCenterId || 'local',
+                ...(this.options.publicMode ? { ...authorIdentity(principal), ...(principal.authorLabel && { authorLabel: principal.authorLabel }) } : { ...(principal.userId && { user_id: principal.userId, family_id: principal.userId }), command_center_id: principal.commandCenterId || 'local' }),
                 bio, interests, availability, capabilities: principal.capabilities || [], updated_at: timestamp,
                 ...(existing ? {} : { created_at: timestamp }),
             },
@@ -136,7 +139,7 @@ export class AgentDirectoryService {
         return { success: true, profile: await this.profileFor({ ...principal }), revision: updated.revision };
     }
     async syncCapabilities(agentId, capabilities) {
-        const path = profilePath('agent', agentId);
+        const path = this.profilePath('agent', agentId);
         if (!await this.fileSystem.noteExists(path))
             return;
         const note = await this.fileSystem.readNote(path);

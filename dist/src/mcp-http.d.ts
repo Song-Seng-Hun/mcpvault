@@ -9,6 +9,8 @@ export interface McpHttpOptions {
     allowedOrigins?: string[];
     allowedHosts?: string[];
     maxConnections?: number;
+    /** Require a CA-verified client certificate for every MCP request. */
+    requireClientCertificate?: boolean;
     tls?: {
         key: string | Buffer;
         cert: string | Buffer;

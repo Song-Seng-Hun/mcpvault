@@ -15,6 +15,7 @@ import { buildNoteReferenceIndex, markdownNotePath, noteReferenceDocument, resol
 import { validateJsonCanvasDocument } from './json-canvas.js';
 import { acceptsPlainReference, isReferenceSnapshotPath, propertyPathText } from './property-references.js';
 import { assertLegacyDiscussionMutationAllowed, ScopeAccessPolicy } from './scope-access.js';
+import { assertEnterpriseStorageAccess, assertEnterpriseStorageFresh, canReadEnterpriseStoragePath } from './enterprise-storage-context.js';
 import { expandScopePath, parseScopePath, scopeRoot } from './scopes.js';
 import { extractMarkdownTasks, iterateMarkdownTasks } from './markdown-tasks.js';
 import { extractInlineTags } from './markdown-tags.js';
@@ -24,6 +25,7 @@ import { isMissingVaultPath, QuerySnapshotChangedError, VaultReadUnavailableErro
 import { readBoundedSource, SourceReadLimitError } from './bounded-source-read.js';
 import { packQueryPage } from './query-page.js';
 import { assertMemoryContent } from './memory-contract.js';
+import { assertContextRulesContent } from './context-rules.js';
 /** Hard per-note write limit so stdio callers cannot exhaust the vault disk. */
 export const MAX_NOTE_CONTENT_BYTES = 8 * 1024 * 1024;
 /** Health scans never load arbitrarily large derived views into memory. */
@@ -34,6 +36,7 @@ function assertNoteContentSize(content, path) {
         throw new Error(`Note exceeds ${MAX_NOTE_CONTENT_BYTES} bytes: ${path}`);
     }
     assertMemoryContent(content, path);
+    assertContextRulesContent(content);
 }
 function getFrontmatterValue(frontmatter, key) {
     let current = frontmatter;
@@ -604,6 +607,11 @@ export class FileSystemService {
             if (realRelative.startsWith('..')) {
                 throw new Error(`Symlink target is outside vault: ${relativePath}. Symbolic links must resolve to a path within the vault directory.`);
             }
+            const canonicalRelative = realRelative.replace(/\\/g, '/');
+            if (!this.pathFilter.isAllowedForListing(canonicalRelative)) {
+                throw new Error(`Access denied: ${relativePath}. Its canonical target is restricted.`);
+            }
+            assertEnterpriseStorageAccess(canonicalRelative);
         }
         catch (err) {
             if (err instanceof Error && 'code' in err) {
@@ -616,6 +624,11 @@ export class FileSystemService {
                         if (parentRelative.startsWith('..')) {
                             throw new Error(`Symlink target is outside vault: ${relativePath}. Symbolic links must resolve to a path within the vault directory.`);
                         }
+                        const canonicalParent = parentRelative.replace(/\\/g, '/');
+                        if (!this.pathFilter.isAllowedForListing(canonicalParent)) {
+                            throw new Error(`Access denied: ${relativePath}. Its canonical parent is restricted.`);
+                        }
+                        assertEnterpriseStorageAccess(canonicalParent);
                     }
                     catch (parentErr) {
                         // Parent doesn't exist either (will be created by mkdir). Lexical check above is sufficient.
@@ -649,6 +662,7 @@ export class FileSystemService {
     resolveWritablePath(relativePath) {
         const fullPath = this.resolvePath(relativePath);
         const relativePathToVault = relative(this.vaultPath, fullPath);
+        assertEnterpriseStorageAccess(relativePathToVault, true);
         // Guard the canonical vault-relative destination for every service write,
         // including absolute input paths and indirectly rewritten backlinks. This
         // is legacy-only: immutable source ingestion still needs filesystem writes.
@@ -688,6 +702,7 @@ export class FileSystemService {
     async withNoteRead(path, read) {
         path = this.normalizePath(path);
         const fullPath = this.resolvePath(path);
+        assertEnterpriseStorageAccess(relative(this.vaultPath, fullPath));
         if (!this.pathFilter.isAllowed(path)) {
             throw new Error(`Access denied: ${path}. This path is restricted (system files like .obsidian, .git, and dotfiles are not accessible).`);
         }
@@ -698,6 +713,7 @@ export class FileSystemService {
             throw new Error(`Cannot read directory as file: ${path}. Use list_directory tool instead.`);
         }
         try {
+            assertEnterpriseStorageAccess(relative(this.vaultPath, fullPath));
             return await read(fullPath);
         }
         catch (error) {
@@ -718,6 +734,8 @@ export class FileSystemService {
     async noteExists(path) {
         path = this.normalizePath(path);
         if (!this.pathFilter.isAllowed(path))
+            return false;
+        if (!canReadEnterpriseStoragePath(path))
             return false;
         try {
             return (await stat(this.resolvePath(path))).isFile();
@@ -853,12 +871,14 @@ export class FileSystemService {
         if (!allowed.test(path) || !this.pathFilter.isAllowed(path))
             throw new Error('Canvas health reads are limited to one scope-local Views/*.canvas file');
         const fullPath = this.resolvePath(path);
+        assertEnterpriseStorageAccess(path);
         const info = await stat(fullPath);
         if (!info.isFile())
             throw new Error(`Canvas path is not a file: ${path}`);
         const boundedBytes = Math.min(Math.max(Number(maxBytes) || MAX_DERIVED_VIEW_READ_BYTES, 1024), MAX_DERIVED_VIEW_READ_BYTES);
         if (info.size > boundedBytes)
             throw new Error(`Canvas exceeds the ${boundedBytes}-byte health-read limit: ${path}`);
+        assertEnterpriseStorageAccess(path);
         const content = await readFile(fullPath, 'utf8');
         let document;
         try {
@@ -1381,7 +1401,9 @@ export class FileSystemService {
         // Normalize path: treat '.' as root directory, strip vault prefix
         const normalizedPath = path === '.' ? '' : this.normalizePath(path);
         const fullPath = this.resolvePath(normalizedPath);
+        assertEnterpriseStorageAccess(normalizedPath);
         try {
+            assertEnterpriseStorageFresh();
             const entries = await readdir(fullPath, { withFileTypes: true });
             const files = [];
             const directories = [];
@@ -1390,6 +1412,8 @@ export class FileSystemService {
                 if (!this.pathFilter.isAllowedForListing(entryPath)) {
                     continue;
                 }
+                if (!canReadEnterpriseStoragePath(entryPath))
+                    continue;
                 if (entry.isSymbolicLink()) {
                     // Follow symlinks that resolve inside the vault
                     try {
@@ -1399,6 +1423,10 @@ export class FileSystemService {
                         if (realRelative.startsWith('..')) {
                             continue; // Symlink target outside vault, skip silently
                         }
+                        const canonicalEntryPath = realRelative.replace(/\\/g, '/');
+                        if (!this.pathFilter.isAllowedForListing(canonicalEntryPath)
+                            || !canReadEnterpriseStoragePath(canonicalEntryPath))
+                            continue;
                         const targetStat = await stat(entryFullPath);
                         if (targetStat.isDirectory()) {
                             directories.push(entry.name);
@@ -1440,10 +1468,12 @@ export class FileSystemService {
     }
     async exists(path) {
         path = this.normalizePath(path);
-        const fullPath = this.resolvePath(path);
         if (!this.pathFilter.isAllowed(path)) {
             return false;
         }
+        if (!canReadEnterpriseStoragePath(path))
+            return false;
+        const fullPath = this.resolvePath(path);
         try {
             await access(fullPath, constants.F_OK);
             return true;
@@ -1454,10 +1484,12 @@ export class FileSystemService {
     }
     async isDirectory(path) {
         path = this.normalizePath(path);
-        const fullPath = this.resolvePath(path);
         if (!this.pathFilter.isAllowed(path)) {
             return false;
         }
+        if (!canReadEnterpriseStoragePath(path))
+            return false;
+        const fullPath = this.resolvePath(path);
         return this.isResolvedDirectory(fullPath);
     }
     /** Internal stat probe only; callers must validate the path and filter first. */
@@ -1469,6 +1501,17 @@ export class FileSystemService {
         catch {
             return false;
         }
+    }
+    /** Internal scans may cross only the structural ancestors of a readable
+     * enterprise scope. The ancestor itself is never returned to the caller. */
+    canTraverseEnterpriseReadPath(path) {
+        if (canReadEnterpriseStoragePath(path))
+            return true;
+        const normalized = path.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '').toLowerCase();
+        if (normalized === '_scopes' || normalized === '_scopes/users' || normalized === '_scopes/agents')
+            return true;
+        const employeeRoot = /^_scopes\/users\/[^/]+$/.exec(normalized);
+        return Boolean(employeeRoot && canReadEnterpriseStoragePath(`${path.replace(/\/$/, '')}/SharedMemory`));
     }
     /**
      * Build one visibility-safe move plan. Resolution uses every physical note
@@ -1484,6 +1527,7 @@ export class FileSystemService {
         for (let offset = 0; offset < physicalPaths.length; offset += readBatchSize) {
             const batch = await Promise.all(physicalPaths.slice(offset, offset + readBatchSize).map(async (sourcePath) => {
                 try {
+                    assertEnterpriseStorageAccess(sourcePath);
                     const sourceContent = await this.vaultIo.readUtf8(this.resolvePath(sourcePath));
                     const frontmatter = this.frontmatterHandler.parse(sourceContent).frontmatter || {};
                     return {
@@ -1944,6 +1988,7 @@ export class FileSystemService {
             try {
                 const source = await this.vaultIo.readUtf8Bounded(oldFullPath, MAX_NOTE_CONTENT_BYTES);
                 assertMemoryContent(source, newPath);
+                assertContextRulesContent(source);
             }
             catch (error) {
                 return { success: false, oldPath, newPath, message: `Move validation failed: ${error instanceof Error ? error.message : 'source unavailable'}` };
@@ -2201,6 +2246,7 @@ export class FileSystemService {
                 throw new Error(`Access denied: ${path}. This path is restricted (system files like .obsidian, .git, and dotfiles are not accessible).`);
             }
             const fullPath = this.resolvePath(path);
+            assertEnterpriseStorageAccess(path);
             let stats;
             try {
                 stats = await stat(fullPath);
@@ -2214,6 +2260,7 @@ export class FileSystemService {
             const size = stats.size;
             const lastModified = stats.mtime.getTime();
             // Quick check for frontmatter without reading full content
+            assertEnterpriseStorageAccess(path);
             const file = await readFile(fullPath, 'utf-8');
             const firstChunk = file.slice(0, 100);
             const hasFrontmatter = firstChunk.startsWith('---\n');
@@ -2225,6 +2272,7 @@ export class FileSystemService {
                 obsidianUri: generateObsidianUri(this.vaultPath, path)
             };
         }));
+        assertEnterpriseStorageFresh();
         // Return only successful results, filter out failed ones
         return results
             .filter((result) => result.status === 'fulfilled')
@@ -2417,6 +2465,8 @@ export class FileSystemService {
         const readBatchSize = 32;
         for (let offset = 0; offset < notePaths.length; offset += readBatchSize) {
             const batch = await Promise.all(notePaths.slice(offset, offset + readBatchSize).map(async (path) => {
+                if (!canReadEnterpriseStoragePath(path))
+                    return undefined;
                 try {
                     if (!this.pathFilter.isAllowed(path) || !canAccessPath(path))
                         return undefined;
@@ -2437,6 +2487,7 @@ export class FileSystemService {
                     return undefined;
                 }
             }));
+            assertEnterpriseStorageFresh();
             for (const entry of batch)
                 if (entry)
                     descriptors.push(entry);
@@ -2460,7 +2511,10 @@ export class FileSystemService {
         const target = this.normalizePath(path);
         if (!this.pathFilter.isAllowed(target) || !canAccessPath(target))
             throw new Error(`Access denied: ${target}`);
-        const targetNote = await this.readNote(target);
+        const targetNote = options.expectedRevision === undefined ? await this.readNote(target)
+            : (await this.readNoteMetadata([target], canAccessPath, { fresh: true, strict: true }))[0];
+        if (!targetNote || (options.expectedRevision !== undefined && targetNote.revision !== options.expectedRevision))
+            throw new Error('Backlink target revision changed');
         if (isModerationHidden(targetNote.frontmatter))
             throw new Error(`Access denied: ${target}`);
         return this.withGraphRead(graph => graph.withStableRead(canAccessPath, async () => {
@@ -2602,6 +2656,9 @@ export class FileSystemService {
     async collectVaultFiles() {
         const files = [];
         const scanDirectory = async (dirPath, relativePath = '') => {
+            assertEnterpriseStorageFresh();
+            if (relativePath && !this.canTraverseEnterpriseReadPath(relativePath))
+                return;
             const entries = await readdir(dirPath, { withFileTypes: true });
             for (const entry of entries) {
                 const entryRelativePath = relativePath ? `${relativePath}/${entry.name}` : entry.name;
@@ -2611,7 +2668,8 @@ export class FileSystemService {
                         await scanDirectory(fullEntryPath, entryRelativePath);
                     }
                 }
-                else if (entry.isFile() && this.pathFilter.isAllowedForListing(entryRelativePath)) {
+                else if (entry.isFile() && this.pathFilter.isAllowedForListing(entryRelativePath)
+                    && canReadEnterpriseStoragePath(entryRelativePath)) {
                     files.push(entryRelativePath);
                 }
             }
@@ -2625,6 +2683,7 @@ export class FileSystemService {
             throw new Error(`Access denied: ${path}. This path is restricted (system files like .obsidian, .git, and dotfiles are not accessible).`);
         }
         const fullPath = this.resolvePath(path);
+        assertEnterpriseStorageAccess(path);
         const raw = await readFile(fullPath, 'utf-8');
         return projectNoteOutline(raw);
     }
@@ -2634,6 +2693,7 @@ export class FileSystemService {
             throw new Error(`Access denied: ${path}. This path is restricted (system files like .obsidian, .git, and dotfiles are not accessible).`);
         }
         const fullPath = this.resolvePath(path);
+        assertEnterpriseStorageAccess(path);
         const raw = await readFile(fullPath, 'utf-8');
         return projectNoteLineWindow(raw, params);
     }
@@ -2650,8 +2710,11 @@ export class FileSystemService {
         const recentFiles = [];
         const scanDirectory = async (dirPath, relativePath = '') => {
             let entries;
+            assertEnterpriseStorageFresh();
+            if (relativePath && !this.canTraverseEnterpriseReadPath(relativePath))
+                return;
             try {
-                entries = await readdir(this.resolvePath(relativePath), { withFileTypes: true });
+                entries = await readdir(dirPath, { withFileTypes: true });
             }
             catch (error) {
                 if (relativePath && isMissingVaultPath(error))
@@ -2665,12 +2728,13 @@ export class FileSystemService {
                     if (!this.pathFilter.isAllowedForListing(entryRelativePath)) {
                         continue;
                     }
-                    if (canAccessPath(entryRelativePath))
+                    if (canAccessPath(entryRelativePath) && canReadEnterpriseStoragePath(entryRelativePath))
                         totalFolders++;
                     await scanDirectory(fullEntryPath, entryRelativePath);
                 }
                 else if (entry.isFile()) {
-                    if (!this.pathFilter.isAllowed(entryRelativePath) || !canAccessPath(entryRelativePath)) {
+                    if (!this.pathFilter.isAllowed(entryRelativePath) || !canAccessPath(entryRelativePath)
+                        || !canReadEnterpriseStoragePath(entryRelativePath)) {
                         continue;
                     }
                     let stats;
@@ -2686,6 +2750,7 @@ export class FileSystemService {
                         }
                     }
                     catch (error) {
+                        assertEnterpriseStorageFresh();
                         if (isMissingVaultPath(error))
                             continue;
                         if (error instanceof SourceReadLimitError)
@@ -2713,6 +2778,7 @@ export class FileSystemService {
             }
         };
         await scanDirectory(this.vaultPath);
+        assertEnterpriseStorageFresh();
         return {
             totalNotes,
             totalFolders,
@@ -2768,6 +2834,8 @@ export class FileSystemService {
             .filter(path => !pathPrefix || path === pathPrefix || path.startsWith(`${pathPrefix}/`))
             .sort();
         for (const path of notePaths) {
+            if (!canReadEnterpriseStoragePath(path))
+                continue;
             let content;
             try {
                 content = await this.vaultIo.readUtf8Bounded(this.resolvePath(path), MAX_NOTE_CONTENT_BYTES);
@@ -2791,6 +2859,7 @@ export class FileSystemService {
                 total++;
             }
         }
+        assertEnterpriseStorageFresh();
         const snapshotFingerprint = fingerprint.digest('hex');
         if (params.expectedSnapshot && params.expectedSnapshot !== snapshotFingerprint)
             throw new Error('Task listing changed; restart list_tasks at offset 0 without expectedSnapshot');
@@ -2867,11 +2936,14 @@ export class FileSystemService {
     /** Hydrate one admitted metadata row without mixing revisions or reading an unbounded source. */
     async readQueryNoteBody(note, canAccessPath, canReadNote) {
         const path = this.normalizePath(note.path);
-        if (!note.revision || !this.pathFilter.isAllowed(path) || !canAccessPath(path) || !canReadNote(note))
+        if (!note.revision || !this.pathFilter.isAllowed(path) || !canAccessPath(path)
+            || !canReadEnterpriseStoragePath(path) || !canReadNote(note))
             throw new QuerySnapshotChangedError();
         return this.hydrateQueryNote({ ...note, path }, canAccessPath, canReadNote, resolved => this.vaultIo.readUtf8Bounded(resolved, MAX_NOTE_CONTENT_BYTES));
     }
     async hydrateQueryNote(note, canAccessPath, canReadNote, read) {
+        if (!canReadEnterpriseStoragePath(note.path))
+            throw new QuerySnapshotChangedError();
         let raw;
         try {
             raw = await read(this.resolvePath(note.path));
@@ -2883,7 +2955,8 @@ export class FileSystemService {
                 throw new QuerySnapshotChangedError();
             throw new VaultReadUnavailableError();
         }
-        if (this.revision(raw) !== note.revision || !canAccessPath(note.path))
+        if (this.revision(raw) !== note.revision || !canAccessPath(note.path)
+            || !canReadEnterpriseStoragePath(note.path))
             throw new QuerySnapshotChangedError();
         const parsed = this.frontmatterHandler.parse(raw);
         const current = { path: note.path, revision: note.revision, frontmatter: parsed.frontmatter, content: parsed.content };
@@ -2963,7 +3036,7 @@ export class FileSystemService {
             return metadata;
         };
         const admitted = (note) => this.pathFilter.isAllowed(note.path)
-            && canAccessPath(note.path) && canReadNote(note);
+            && canAccessPath(note.path) && canReadEnterpriseStoragePath(note.path) && canReadNote(note);
         const captureMetadata = async () => (await this.metadataIndex.list())
             .map(entry => ({ path: this.normalizePath(entry.path), frontmatter: entry.frontmatter, revision: entry.revision }))
             .filter(admitted);
@@ -2972,6 +3045,8 @@ export class FileSystemService {
                 .filter(path => /\.(?:md|markdown|txt)$/i.test(path) && this.pathFilter.isAllowed(path) && canAccessPath(path));
             const notes = [];
             for (const path of paths) {
+                if (!canReadEnterpriseStoragePath(path))
+                    continue;
                 let raw;
                 try {
                     raw = await this.vaultIo.readUtf8Bounded(this.resolvePath(path), MAX_NOTE_CONTENT_BYTES);
@@ -3018,6 +3093,8 @@ export class FileSystemService {
         return notes.map(note => hydrated.get(note.path) || note);
     }
     async queryNotes(params = {}, canAccessPath = () => true, canReadNote = () => true) {
+        assertEnterpriseStorageFresh();
+        const effectiveCanAccessPath = (path) => canAccessPath(path) && canReadEnterpriseStoragePath(path);
         const requestedLimit = params.limit ?? 100;
         if (!Number.isInteger(requestedLimit) || requestedLimit < 1) {
             throw new Error('limit must be a positive integer');
@@ -3044,7 +3121,7 @@ export class FileSystemService {
         const sortBy = params.sortBy || 'path';
         const notes = [];
         const filters = params.filters || {};
-        const hydrate = (selected) => Promise.all(selected.map(note => this.hydrateQueryNote(note, canAccessPath, canReadNote, path => this.vaultIo.readUtf8(path))));
+        const hydrate = (selected) => Promise.all(selected.map(note => this.hydrateQueryNote(note, effectiveCanAccessPath, canReadNote, path => this.vaultIo.readUtf8(path))));
         if (this.metadataIndex && params.includeTotal === false) {
             const page = await this.metadataIndex.listSortedPage({
                 filters,
@@ -3054,7 +3131,7 @@ export class FileSystemService {
                 limit,
                 offset: requestedOffset,
                 ...(params.after && { after: params.after }),
-                canAccessPath,
+                canAccessPath: effectiveCanAccessPath,
                 canReadEntry: canReadNote,
             });
             const selected = page.entries.map(entry => ({ path: entry.path, frontmatter: entry.frontmatter, revision: entry.revision }));
@@ -3080,7 +3157,7 @@ export class FileSystemService {
         const indexedEntries = this.metadataIndex ? await this.metadataIndex.listSorted(filters, pathPrefix, sortBy, sortOrder) : undefined;
         if (indexedEntries) {
             for (const entry of indexedEntries) {
-                if (!this.pathFilter.isAllowed(entry.path) || !canAccessPath(entry.path))
+                if (!this.pathFilter.isAllowed(entry.path) || !effectiveCanAccessPath(entry.path))
                     continue;
                 if (pathPrefix && entry.path !== pathPrefix && !entry.path.startsWith(`${pathPrefix}/`))
                     continue;
@@ -3095,11 +3172,13 @@ export class FileSystemService {
         else {
             const notePaths = (await this.collectVaultFiles())
                 .filter(path => this.pathFilter.isAllowed(path))
-                .filter(canAccessPath)
+                .filter(effectiveCanAccessPath)
                 .filter(path => /\.(?:md|markdown|txt)$/i.test(path))
                 .filter(path => !pathPrefix || path === pathPrefix || path.startsWith(`${pathPrefix}/`))
                 .sort((a, b) => a.localeCompare(b));
             for (const path of notePaths) {
+                if (!canReadEnterpriseStoragePath(path))
+                    continue;
                 let raw;
                 try {
                     raw = await readFile(this.resolvePath(path), 'utf-8');
@@ -3147,7 +3226,8 @@ export class FileSystemService {
     async queryAuthorityShelf(params, canAccessPath = () => true) {
         if (!this.metadataIndex)
             throw new Error('Authority shelf queries require the metadata index');
-        return this.metadataIndex.queryAuthorityShelf(params, canAccessPath);
+        assertEnterpriseStorageFresh();
+        return this.metadataIndex.queryAuthorityShelf(params, path => canAccessPath(path) && canReadEnterpriseStoragePath(path));
     }
     /** Fresh bypasses indexes; strict preserves storage failures instead of treating them as missing notes. */
     async readNoteMetadata(paths, canAccessPath = () => true, options = {}) {
@@ -3161,20 +3241,22 @@ export class FileSystemService {
             if (!path || seen.has(key))
                 continue;
             seen.add(key);
-            if (!this.pathFilter.isAllowed(path) || !canAccessPath(path))
+            if (!this.pathFilter.isAllowed(path) || !canAccessPath(path) || !canReadEnterpriseStoragePath(path))
                 continue;
             normalizedPaths.push(path);
         }
         if (this.metadataIndex && !options.fresh && options.maxBytes === undefined) {
-            return (await this.metadataIndex.getMany(normalizedPaths, canAccessPath))
+            return (await this.metadataIndex.getMany(normalizedPaths, path => canAccessPath(path) && canReadEnterpriseStoragePath(path)))
                 .map(entry => ({ path: entry.path, frontmatter: entry.frontmatter, revision: entry.revision }));
         }
         const notes = [];
         for (const path of normalizedPaths) {
+            if (!canReadEnterpriseStoragePath(path))
+                continue;
             try {
                 const source = await this.vaultIo.readUtf8Metadata(this.resolvePath(path), options.maxBytes);
                 const parsed = this.frontmatterHandler.parse(source.header);
-                if (!canAccessPath(path))
+                if (!canAccessPath(path) || !canReadEnterpriseStoragePath(path))
                     continue;
                 notes.push({ path, frontmatter: parsed.frontmatter, revision: source.revision });
             }
@@ -3186,15 +3268,18 @@ export class FileSystemService {
                     throw error;
             }
         }
+        assertEnterpriseStorageFresh();
         return notes;
     }
     /** Count metadata rows without reading note bodies; used by bounded windows. */
     async countNotes(params = {}, canAccessPath = () => true, predicate = () => true) {
+        assertEnterpriseStorageFresh();
+        const effectiveCanAccessPath = (path) => canAccessPath(path) && canReadEnterpriseStoragePath(path);
         const pathPrefix = this.resolvePathPrefix(params.pathPrefix);
         if (this.metadataIndex) {
-            return this.metadataIndex.count(params.filters || {}, pathPrefix, canAccessPath, entry => predicate({ path: entry.path, frontmatter: entry.frontmatter, revision: entry.revision }));
+            return this.metadataIndex.count(params.filters || {}, pathPrefix, effectiveCanAccessPath, entry => predicate({ path: entry.path, frontmatter: entry.frontmatter, revision: entry.revision }));
         }
-        const result = await this.queryNotes({ ...params, limit: 1, includeContent: false, includeTotal: true }, canAccessPath);
+        const result = await this.queryNotes({ ...params, limit: 1, includeContent: false, includeTotal: true }, effectiveCanAccessPath);
         return result.total;
     }
 }

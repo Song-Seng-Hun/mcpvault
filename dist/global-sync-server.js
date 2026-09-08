@@ -54,6 +54,7 @@ const handle = await startGlobalSyncHub(root, {
     host: process.env.MCPVAULT_GLOBAL_SYNC_HOST || '127.0.0.1',
     port: Number(process.env.MCPVAULT_GLOBAL_SYNC_PORT || 0),
     authToken,
+    ...(process.env.MCPVAULT_GLOBAL_SYNC_READ_TOKEN && { readToken: process.env.MCPVAULT_GLOBAL_SYNC_READ_TOKEN }),
     reviewerToken,
     ...(adminToken && { adminToken }),
     ...(process.env.MCPVAULT_GLOBAL_SYNC_ADMIN_EXPIRES_AT && { adminTokenExpiresAt: process.env.MCPVAULT_GLOBAL_SYNC_ADMIN_EXPIRES_AT }),

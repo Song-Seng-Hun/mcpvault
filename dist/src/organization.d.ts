@@ -253,6 +253,7 @@ export interface OrganizationPropertyContractEntry {
     description: string;
     allowed?: readonly string[];
     appliesTo?: readonly string[];
+    schema?: Record<string, any>;
 }
 export declare const ORGANIZATION_PROPERTY_CONTRACT: readonly OrganizationPropertyContractEntry[];
 /**

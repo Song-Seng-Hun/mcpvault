@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { contextRulesSchema, validContextRules } from './context-rules.js';
 import { extractMarkdownTasks } from './markdown-tasks.js';
 import { extractObsidianLinkOccurrences } from './backlinks.js';
 import { normalizeKnowledgeApplications } from './knowledge-application-model.js';
@@ -179,9 +180,11 @@ export interface OrganizationPropertyContractEntry {
   description: string;
   allowed?: readonly string[];
   appliesTo?: readonly string[];
+  schema?: Record<string, any>;
 }
 
 export const ORGANIZATION_PROPERTY_CONTRACT: readonly OrganizationPropertyContractEntry[] = [
+  { name: 'context_rules', type: 'object', description: 'Optional bounded literal situation activation; not permissions or executable instructions', schema: contextRulesSchema() },
   { name: 'title', type: 'text', description: 'Optional human-readable note title; the file path remains authoritative' },
   { name: 'wiki_view', type: 'object', description: 'Versioned restricted saved metadata query; no JavaScript or DQL execution' },
   { name: 'note_kind', type: 'text', description: 'What the note is for', allowed: NOTE_KINDS },
@@ -1437,6 +1440,7 @@ function markdownSectionHasContent(content: string, names: readonly string[]): b
 
 export function organizationLintIssues(path: string, frontmatter: Record<string, any>, content: string, nowMs = Date.now()): OrganizationLintIssue[] {
   const issues: OrganizationLintIssue[] = [];
+  if (Object.hasOwn(frontmatter, 'context_rules') && !validContextRules(frontmatter.context_rules)) issues.push({ code: 'invalid_context_rules', detail: 'Use only bounded literal any/all/exclude/intents lists. Invalid rules are not activated.' });
   const type = String(frontmatter.llm_wiki_type || '').trim().toLowerCase();
   const kindValue = frontmatter.note_kind;
   const lifecycleValue = frontmatter.lifecycle;

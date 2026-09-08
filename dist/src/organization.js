@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { contextRulesSchema, validContextRules } from './context-rules.js';
 import { extractMarkdownTasks } from './markdown-tasks.js';
 import { extractObsidianLinkOccurrences } from './backlinks.js';
 import { normalizeKnowledgeApplications } from './knowledge-application-model.js';
@@ -158,6 +159,7 @@ export function needsAuthoredNextAction(frontmatter) {
         && !['waiting', 'blocked'].includes(authoredTaskStatus(frontmatter.task_status));
 }
 export const ORGANIZATION_PROPERTY_CONTRACT = [
+    { name: 'context_rules', type: 'object', description: 'Optional bounded literal situation activation; not permissions or executable instructions', schema: contextRulesSchema() },
     { name: 'title', type: 'text', description: 'Optional human-readable note title; the file path remains authoritative' },
     { name: 'wiki_view', type: 'object', description: 'Versioned restricted saved metadata query; no JavaScript or DQL execution' },
     { name: 'note_kind', type: 'text', description: 'What the note is for', allowed: NOTE_KINDS },
@@ -1271,6 +1273,8 @@ function markdownSectionHasContent(content, names) {
 }
 export function organizationLintIssues(path, frontmatter, content, nowMs = Date.now()) {
     const issues = [];
+    if (Object.hasOwn(frontmatter, 'context_rules') && !validContextRules(frontmatter.context_rules))
+        issues.push({ code: 'invalid_context_rules', detail: 'Use only bounded literal any/all/exclude/intents lists. Invalid rules are not activated.' });
     const type = String(frontmatter.llm_wiki_type || '').trim().toLowerCase();
     const kindValue = frontmatter.note_kind;
     const lifecycleValue = frontmatter.lifecycle;

@@ -145,6 +145,9 @@ export declare class FileSystemService {
     isDirectory(path: string): Promise<boolean>;
     /** Internal stat probe only; callers must validate the path and filter first. */
     private isResolvedDirectory;
+    /** Internal scans may cross only the structural ancestors of a readable
+     * enterprise scope. The ancestor itself is never returned to the caller. */
+    private canTraverseEnterpriseReadPath;
     /**
      * Build one visibility-safe move plan. Resolution uses every physical note
      * so an inaccessible same-name target cannot be mistaken for a unique one.
@@ -209,6 +212,7 @@ export declare class FileSystemService {
     getBacklinks(path: string, limit?: number, canAccessPath?: (path: string) => boolean, offset?: number, options?: {
         includeSourceRevision?: boolean;
         includeSnapshot?: boolean;
+        expectedRevision?: string;
     }): Promise<BacklinksResult>;
     private assertGraphReadRevision;
     private withGraphRead;

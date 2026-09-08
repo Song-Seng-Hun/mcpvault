@@ -1,8 +1,12 @@
 import { Server } from "@modelcontextprotocol/server";
 import { FrontmatterHandler } from "./frontmatter.js";
 import { PathFilter } from "./pathfilter.js";
+import { type PublicFederationHostConfig } from './enterprise-federation.js';
 import { EndpointRegistry } from "./endpoint-registry.js";
 export interface CreateServerOptions {
+    /** Opt-in host-private enterprise registry. Never inferred from Vault content. */
+    enterpriseRegistryPath?: string;
+    publicFederation?: PublicFederationHostConfig;
     name?: string;
     version?: string;
     pathFilter?: PathFilter;

@@ -1,0 +1,358 @@
+import { createPrivateKey, randomBytes, X509Certificate } from 'node:crypto';
+import { open, readFile, realpath, stat, unlink } from 'node:fs/promises';
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { ensureFederationDirectory } from './public-federation-storage.js';
+import { createServer } from './createServer.js';
+import { EnterpriseRegistry } from './enterprise-registry.js';
+import { GlobalSyncReadClient, GlobalSyncReplica } from './global-sync.js';
+import { startMcpHttpApi } from './mcp-http.js';
+import { normalizeScopeId } from './scopes.js';
+const LOCK_VERSION = 1;
+const MAX_LOCK_BYTES = 4_096;
+const MAX_FEDERATION_CONFIG_BYTES = 1_048_576;
+const MAX_FEDERATION_ACTORS = 4_096;
+const MAX_FEDERATION_TOKEN_LENGTH = 8_192;
+function isRecord(value) {
+    return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+function processIsAlive(pid) {
+    try {
+        process.kill(pid, 0);
+        return true;
+    }
+    catch (error) {
+        return !(isRecord(error) && error.code === 'ESRCH');
+    }
+}
+function absolute(path, label) {
+    if (!path || !isAbsolute(path))
+        throw new Error(`${label} must be an explicit absolute path`);
+    return resolve(path);
+}
+function pathIsInside(parent, child) {
+    const relation = relative(parent.toLowerCase(), child.toLowerCase());
+    return relation === '' || (!relation.startsWith('..') && !isAbsolute(relation));
+}
+async function canonicalFileOutsideVault(path, vaultPath, label) {
+    const canonical = await realpath(path);
+    const file = await stat(canonical);
+    if (!file.isFile())
+        throw new Error(`${label} must identify a file`);
+    const moduleRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+    const serviceRoot = moduleRoot.endsWith(`${process.platform === 'win32' ? '\\' : '/'}dist`) ? resolve(moduleRoot, '..') : moduleRoot;
+    if (pathIsInside(vaultPath, canonical) || pathIsInside(await realpath(serviceRoot), canonical))
+        throw new Error(`${label} must be outside the Vault and service checkout`);
+    return canonical;
+}
+async function readLock(path, canonicalVaultPath) {
+    const metadata = await stat(path);
+    if (!metadata.isFile() || metadata.size > MAX_LOCK_BYTES) {
+        throw new Error('Enterprise server lock is invalid; refusing to remove it automatically');
+    }
+    let value;
+    try {
+        value = JSON.parse(await readFile(path, 'utf8'));
+    }
+    catch (error) {
+        if (isRecord(error) && error.code === 'ENOENT')
+            throw error;
+        throw new Error('Enterprise server lock is corrupt; refusing to remove it automatically');
+    }
+    if (!isRecord(value)
+        || value.version !== LOCK_VERSION
+        || !Number.isSafeInteger(value.pid)
+        || Number(value.pid) <= 0
+        || typeof value.nonce !== 'string'
+        || !/^[a-f0-9]{32}$/.test(value.nonce)
+        || typeof value.vaultPath !== 'string'
+        || resolve(value.vaultPath).toLowerCase() !== canonicalVaultPath.toLowerCase()) {
+        throw new Error('Enterprise server lock is invalid; refusing to remove it automatically');
+    }
+    return value;
+}
+async function acquireVaultLock(vaultPath) {
+    const canonicalVaultPath = await realpath(vaultPath);
+    const directory = join(canonicalVaultPath, '.mcpvault');
+    const path = join(directory, 'enterprise-server.lock');
+    await ensureFederationDirectory(canonicalVaultPath, directory);
+    let lock;
+    for (let attempt = 0; attempt < 4 && !lock; attempt += 1) {
+        const record = {
+            version: LOCK_VERSION,
+            pid: process.pid,
+            nonce: randomBytes(16).toString('hex'),
+            vaultPath: canonicalVaultPath,
+        };
+        let handle;
+        try {
+            handle = await open(path, 'wx', 0o600);
+            await handle.writeFile(`${JSON.stringify(record)}\n`, 'utf8');
+            await handle.sync();
+            lock = { handle, path, record };
+        }
+        catch (error) {
+            await handle?.close().catch(() => undefined);
+            if (!(isRecord(error) && error.code === 'EEXIST')) {
+                if (handle)
+                    await unlink(path).catch(() => undefined);
+                throw error;
+            }
+            let existing;
+            try {
+                existing = await readLock(path, canonicalVaultPath);
+            }
+            catch (readError) {
+                if (isRecord(readError) && readError.code === 'ENOENT')
+                    continue;
+                throw readError;
+            }
+            if (processIsAlive(existing.pid)) {
+                throw new Error(`An enterprise server already owns this Vault (process ${existing.pid})`);
+            }
+            try {
+                await unlink(path);
+            }
+            catch (unlinkError) {
+                if (!(isRecord(unlinkError) && unlinkError.code === 'ENOENT'))
+                    throw unlinkError;
+            }
+        }
+    }
+    if (!lock)
+        throw new Error('Unable to acquire the enterprise server Vault lock');
+    let released = false;
+    return async () => {
+        if (released)
+            return;
+        released = true;
+        await lock.handle.close().catch(() => undefined);
+        try {
+            const current = await readLock(lock.path, canonicalVaultPath);
+            if (current.nonce === lock.record.nonce)
+                await unlink(lock.path);
+        }
+        catch (error) {
+            if (!(isRecord(error) && error.code === 'ENOENT'))
+                throw error;
+        }
+    };
+}
+function parseFederationConfig(value) {
+    if (!isRecord(value)
+        || Object.keys(value).some(key => !['baseUrl', 'trustedHubPublicKey', 'actors'].includes(key))
+        || typeof value.baseUrl !== 'string'
+        || !value.baseUrl
+        || typeof value.trustedHubPublicKey !== 'string'
+        || !value.trustedHubPublicKey
+        || !isRecord(value.actors)) {
+        throw new Error('Public federation configuration is invalid');
+    }
+    const url = new URL(value.baseUrl);
+    if (url.protocol !== 'https:' && !(url.protocol === 'http:' && ['127.0.0.1', 'localhost', '::1'].includes(url.hostname))) {
+        throw new Error('Public federation baseUrl must use HTTPS except on loopback');
+    }
+    const entries = Object.entries(value.actors);
+    if (entries.length > MAX_FEDERATION_ACTORS)
+        throw new Error('Public federation actor capacity exceeded');
+    const actors = Object.create(null);
+    for (const [agentIdInput, actor] of entries) {
+        const agentId = normalizeScopeId(agentIdInput, 'federation agentId');
+        if (agentId !== agentIdInput || !isRecord(actor) || Object.keys(actor).some(key => key !== 'authToken') || typeof actor.authToken !== 'string'
+            || !actor.authToken || actor.authToken.length > MAX_FEDERATION_TOKEN_LENGTH) {
+            throw new Error('Public federation actor configuration is invalid');
+        }
+        actors[agentId] = { authToken: actor.authToken };
+    }
+    return { baseUrl: url.href.replace(/\/$/, ''), trustedHubPublicKey: value.trustedHubPublicKey, actors };
+}
+async function loadFederationConfig(path, canonicalVaultPath) {
+    const canonicalPath = await canonicalFileOutsideVault(path, canonicalVaultPath, 'federationConfigPath');
+    if ((await stat(canonicalPath)).size > MAX_FEDERATION_CONFIG_BYTES) {
+        throw new Error('Public federation configuration is too large');
+    }
+    let parsed;
+    try {
+        parsed = JSON.parse(await readFile(canonicalPath, 'utf8'));
+    }
+    catch {
+        throw new Error('Public federation configuration is not valid JSON');
+    }
+    return parseFederationConfig(parsed);
+}
+function parseGlobalImportConfig(value) {
+    if (!isRecord(value)
+        || Object.keys(value).some(key => !['baseUrl', 'readToken', 'trustedPublicKey'].includes(key))
+        || typeof value.baseUrl !== 'string'
+        || !value.baseUrl
+        || typeof value.readToken !== 'string'
+        || !value.readToken
+        || value.readToken.length > MAX_FEDERATION_TOKEN_LENGTH
+        || typeof value.trustedPublicKey !== 'string'
+        || !value.trustedPublicKey) {
+        throw new Error('Global import configuration must contain only baseUrl, readToken, and trustedPublicKey');
+    }
+    return { baseUrl: value.baseUrl, readToken: value.readToken, trustedPublicKey: value.trustedPublicKey };
+}
+async function loadGlobalImportConfig(path, canonicalVaultPath) {
+    const canonicalPath = await canonicalFileOutsideVault(path, canonicalVaultPath, 'globalImportConfigPath');
+    if ((await stat(canonicalPath)).size > MAX_FEDERATION_CONFIG_BYTES)
+        throw new Error('Global import configuration is too large');
+    let parsed;
+    try {
+        parsed = JSON.parse(await readFile(canonicalPath, 'utf8'));
+    }
+    catch {
+        throw new Error('Global import configuration is not valid JSON');
+    }
+    return parseGlobalImportConfig(parsed);
+}
+function validateTls(cert, key, ca) {
+    let certificate;
+    try {
+        certificate = new X509Certificate(cert);
+    }
+    catch {
+        throw new Error('TLS certificate is not a valid X.509 certificate');
+    }
+    try {
+        if (!certificate.checkPrivateKey(createPrivateKey(key))) {
+            throw new Error('TLS private key does not match the server certificate');
+        }
+    }
+    catch (error) {
+        if (error instanceof Error && /does not match/.test(error.message))
+            throw error;
+        throw new Error('TLS private key is invalid or does not match the server certificate');
+    }
+    try {
+        new X509Certificate(ca);
+    }
+    catch {
+        throw new Error('TLS CA is not a valid X.509 certificate');
+    }
+}
+async function closeResources(http, runtime, release) {
+    http?.server.closeAllConnections();
+    const results = await Promise.allSettled([
+        ...(http ? [http.close()] : []),
+        ...(runtime ? [runtime.close()] : []),
+    ]);
+    try {
+        await release();
+    }
+    catch (error) {
+        results.push({ status: 'rejected', reason: error });
+    }
+    return results.filter(result => result.status === 'rejected').map(result => result.reason);
+}
+export async function startEnterpriseServer(config) {
+    const registryPath = absolute(config.registryPath, 'registryPath');
+    const certPath = absolute(config.certPath, 'certPath');
+    const keyPath = absolute(config.keyPath, 'keyPath');
+    const caPath = absolute(config.caPath, 'caPath');
+    const federationConfigPath = config.federationConfigPath === undefined
+        ? undefined
+        : absolute(config.federationConfigPath, 'federationConfigPath');
+    const globalImportConfigPath = config.globalImportConfigPath === undefined
+        ? undefined
+        : absolute(config.globalImportConfigPath, 'globalImportConfigPath');
+    const realmId = normalizeScopeId(config.realmId, 'realmId');
+    if (!config.host || typeof config.host !== 'string')
+        throw new Error('host is required');
+    if (!Number.isInteger(config.port) || config.port < 0 || config.port > 65_535)
+        throw new Error('port must be 0 through 65535');
+    let raw;
+    try {
+        raw = JSON.parse(await readFile(registryPath, 'utf8'));
+    }
+    catch {
+        throw new Error('Enterprise registry is missing or corrupt');
+    }
+    const policyVault = isRecord(raw) && isRecord(raw.profile) && typeof raw.profile.vaultPath === 'string' ? raw.profile.vaultPath : '';
+    if (!isAbsolute(policyVault))
+        throw new Error('Enterprise registry has no valid Vault path');
+    const verifiedRegistry = new EnterpriseRegistry({ registryPath, vaultPath: policyVault });
+    const profile = verifiedRegistry.getPolicy();
+    if (profile.realmId !== realmId)
+        throw new Error(`Enterprise registry realm '${profile.realmId}' does not match configured realm '${realmId}'`);
+    const canonicalVaultPath = await realpath(profile.vaultPath);
+    const [canonicalRegistryPath, canonicalCertPath, canonicalKeyPath, canonicalCaPath] = await Promise.all([
+        canonicalFileOutsideVault(registryPath, canonicalVaultPath, 'registryPath'),
+        canonicalFileOutsideVault(certPath, canonicalVaultPath, 'certPath'),
+        canonicalFileOutsideVault(keyPath, canonicalVaultPath, 'TLS private key'),
+        canonicalFileOutsideVault(caPath, canonicalVaultPath, 'TLS CA'),
+    ]);
+    const publicFederation = federationConfigPath === undefined
+        ? undefined
+        : profile.mode !== 'public'
+            ? (() => { throw new Error('Public federation configuration is forbidden for a company enterprise instance'); })()
+            : await loadFederationConfig(federationConfigPath, canonicalVaultPath);
+    const globalImportConfig = globalImportConfigPath === undefined
+        ? undefined
+        : profile.mode !== 'company'
+            ? (() => { throw new Error('Global import configuration is allowed only for a company enterprise instance'); })()
+            : await loadGlobalImportConfig(globalImportConfigPath, canonicalVaultPath);
+    const release = await acquireVaultLock(canonicalVaultPath);
+    let runtime;
+    let http;
+    try {
+        const globalImport = globalImportConfig
+            ? await new GlobalSyncReplica({
+                vaultPath: profile.vaultPath,
+                client: new GlobalSyncReadClient({ baseUrl: globalImportConfig.baseUrl, readToken: globalImportConfig.readToken }),
+                trustedPublicKey: globalImportConfig.trustedPublicKey,
+            }).pull(100)
+            : undefined;
+        const [cert, key, ca] = await Promise.all([
+            readFile(canonicalCertPath),
+            readFile(canonicalKeyPath),
+            readFile(canonicalCaPath),
+        ]);
+        validateTls(cert, key, ca);
+        runtime = createServer(profile.vaultPath, {
+            enterpriseRegistryPath: canonicalRegistryPath,
+            commandCenterId: profile.realmId,
+            ...(publicFederation && { publicFederation }),
+        });
+        http = await startMcpHttpApi(runtime, {
+            host: config.host,
+            port: config.port,
+            path: '/mcp',
+            requireClientCertificate: true,
+            tls: { cert, key, ca },
+        });
+        let closed = false;
+        return {
+            host: http.host,
+            port: http.port,
+            path: '/mcp',
+            protocol: 'https',
+            transport: 'mcp-http',
+            vaultPath: profile.vaultPath,
+            registryPath: canonicalRegistryPath,
+            realmId: profile.realmId,
+            mode: profile.mode,
+            ...(globalImport && { globalImport }),
+            close: async () => {
+                if (closed)
+                    return;
+                closed = true;
+                const failures = await closeResources(http, runtime, release);
+                if (failures.length > 0)
+                    throw failures[0];
+            },
+        };
+    }
+    catch (error) {
+        await closeResources(http, runtime, release);
+        throw error;
+    }
+}
+export function enterpriseServerHelp() {
+    return [
+        'Usage: mcpvault-enterprise --registry <absolute-path> --realm <realm-id> --host <loopback-or-private-ip> --port <port> --cert <absolute-path> --key <absolute-path> --ca <absolute-path> [--federation-config <absolute-path>] [--global-import-config <absolute-path>]',
+        '',
+        'Starts one mTLS-only MCP Streamable HTTP listener. It does not start stdio or REST transports.',
+    ].join('\n');
+}

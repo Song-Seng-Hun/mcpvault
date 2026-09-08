@@ -8,7 +8,10 @@ export type CommunityWorkflowFilter = 'all' | 'active' | CommunityWorkflowStatus
 export declare function matchesWorkflowFilter(frontmatter: Record<string, any>, requested?: string): boolean;
 export declare class CommunityStatusService {
     private readonly fileSystem;
-    constructor(fileSystem: FileSystemService);
+    private readonly options;
+    constructor(fileSystem: FileSystemService, options?: {
+        communityRoot?: string;
+    });
     private targetPath;
     update(params: {
         principal?: ScopePrincipal;

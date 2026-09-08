@@ -63,6 +63,7 @@ const POLICY_TOPICS = {
     retrieval: {
         purpose: 'Find the smallest sufficient, current, explainable context.',
         rules: [
+            'Situation first: wiki.context_pack query + optional context (2000 characters), path and intent selects applicable context_rules and one-hop prerequisites/counterpoints. any/all/exclude are literal Unicode-normalized phrases, not regex or natural-language reasoning; use_when stays prose. explain shows bounded visible exclusions. Default4000/max12000 characters. Unlike wiki.answer_packet (question evidence) and memory.brief (personal experience), this does not automatically mix private memories or edit prompts. Follow revision-safe continuations when incomplete.',
             'Question first: wiki.answer_packet query (optional path). Interpret source passages yourself; follow nextAction. wiki.search excerptMode=context preserves nearby conditions.',
             'Browse one classification with wiki.authority_map scheme plus optional aroundAuthorityId; shelf order is advisory. Re-read revisions before editing.',
             'A positive search ln is a one-based raw Markdown line, including Properties. If ln is zero or absent, use an outline or projection, not a guessed range. Always re-read the source and revision before editing.',

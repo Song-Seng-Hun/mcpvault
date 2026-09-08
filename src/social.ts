@@ -13,11 +13,10 @@ import { readNotesInBatches } from './batch-read.js';
 import type { NotificationService } from './notifications.js';
 import type { QueryNote } from './types.js';
 import { endpointIdForTool } from './endpoint-registry.js';
+import { authorIdentity, persistentActorId } from './enterprise-identity.js';
 import { attachPublicCreateRequest, preparePublicCreateRequest, runPublicCreate } from './community-public-retry.js';
 
 const JOURNAL_ROOT = '_journal/entries';
-const BLOG_ROOT = 'Community/Posts';
-const COMMENTS_ROOT = 'Community/Comments';
 const JOURNAL_KINDS = new Set(['diary', 'log', 'reflection']);
 const POST_STATUSES = new Set(['draft', 'published', 'archived']);
 export const COMMUNITY_POST_CATEGORIES = ['question', 'discussion', 'proposal', 'announcement', 'bug', 'research', 'showcase', 'agora', 'feedback', 'forum'] as const;
@@ -32,14 +31,14 @@ const MAX_JOURNAL_MAX_CHARS = 12_000;
 const now = () => new Date().toISOString();
 const today = () => now().slice(0, 10);
 const agentJournalRoot = (agentId: string) => `_scopes/agents/${normalizeScopeId(agentId, 'agentId')}/${JOURNAL_ROOT}`;
-const blogPath = (slug: string) => `${BLOG_ROOT}/${normalizeScopeId(slug, 'slug')}.md`;
-function publicPostReference(value: string): string {
+const blogPath = (root: string, slug: string) => `${root}/Posts/${normalizeScopeId(slug, 'slug')}.md`;
+function publicPostReference(root: string, value: string): string {
   const raw = String(value || '').trim().replace(/\\/g, '/');
-  const match = new RegExp(`^${BLOG_ROOT}/([^/]+)\\.md$`, 'i').exec(raw);
-  return match ? blogPath(match[1]!) : blogPath(raw);
+  const match = new RegExp(`^${root}/Posts/([^/]+)\\.md$`, 'i').exec(raw);
+  return match ? blogPath(root, match[1]!) : blogPath(root, raw);
 }
-const commentsRoot = (slug: string) => `${COMMENTS_ROOT}/${normalizeScopeId(slug, 'slug')}`;
-const commentPath = (slug: string, commentId: string) => `${commentsRoot(slug)}/${normalizeScopeId(commentId, 'commentId')}.md`;
+const commentsRoot = (root: string, slug: string) => `${root}/Comments/${normalizeScopeId(slug, 'slug')}`;
+const commentPath = (root: string, slug: string, commentId: string) => `${commentsRoot(root, slug)}/${normalizeScopeId(commentId, 'commentId')}.md`;
 
 function cleanTags(tags: unknown): string[] {
   if (!Array.isArray(tags)) return [];
@@ -57,7 +56,7 @@ function cleanFeedbackSourcePaths(value: unknown): string[] {
 
 export function extractMentions(content: string): string[] {
   const mentions = new Set<string>();
-  const pattern = /(^|[^\w])@([a-z0-9][a-z0-9._-]{0,63})\b/gi;
+  const pattern = /(^|[^\w])@(actor:[a-z0-9][a-z0-9._-]{0,63}:[a-z0-9][a-z0-9._-]{0,63}|[a-z0-9][a-z0-9._-]{0,63})\b/gi;
   for (const match of content.matchAll(pattern)) mentions.add(match[2]!.toLowerCase());
   return Array.from(mentions);
 }
@@ -141,10 +140,10 @@ function ownershipMetadata(principal: ScopePrincipal): Record<string, string> {
   };
 }
 
-async function* mergeMentionNotes(fileSystem: FileSystemService, targets: Set<string>, includeClosed: boolean): AsyncGenerator<QueryNote> {
+async function* mergeMentionNotes(fileSystem: FileSystemService, root: string, targets: Set<string>, includeClosed: boolean): AsyncGenerator<QueryNote> {
   const sources = [
-    iterateNotes(fileSystem, { pathPrefix: 'Community/Comments', filters: { mcpvault_type: 'blog_comment' }, sortBy: 'created_at', sortOrder: 'desc' }),
-    iterateNotes(fileSystem, { pathPrefix: 'Community/ChatMessages', filters: { mcpvault_type: 'chat_message' }, sortBy: 'created_at', sortOrder: 'desc' }),
+    iterateNotes(fileSystem, { pathPrefix: `${root}/Comments`, filters: { mcpvault_type: 'blog_comment' }, sortBy: 'created_at', sortOrder: 'desc' }),
+    iterateNotes(fileSystem, { pathPrefix: `${root}/ChatMessages`, filters: { mcpvault_type: 'chat_message' }, sortBy: 'created_at', sortOrder: 'desc' }),
   ];
   const nextMatching = async (source: AsyncIterator<QueryNote>): Promise<QueryNote | undefined> => {
     while (true) {
@@ -205,7 +204,20 @@ export class SocialService {
     private readonly references: ReferenceService,
     private readonly reputation: ReputationService,
     private readonly notifications?: NotificationService,
+    private readonly options: { communityRoot?: string; publicMode?: boolean } = {},
   ) {}
+
+  private get communityRoot() { return this.options.communityRoot || 'Community'; }
+  private get blogRoot() { return `${this.communityRoot}/Posts`; }
+  private blogPath(slug: string) { return blogPath(this.communityRoot, slug); }
+  private commentPath(slug: string, commentId: string) { return commentPath(this.communityRoot, slug, commentId); }
+  private author(principal: ScopePrincipal) { return this.options.publicMode ? persistentActorId(principal) : identity(principal); }
+  private ownership(principal: ScopePrincipal) { return this.options.publicMode ? { ...authorIdentity(principal), ...(principal.authorLabel && { authorLabel: principal.authorLabel }) } : ownershipMetadata(principal); }
+  private mentions(content: string, principal: ScopePrincipal): string[] {
+    const mentions = extractMentions(content);
+    if (principal.enterprise && mentions.some(mention => !mention.startsWith('actor:'))) throw new Error('Enterprise mentions require an exact @actor:realm:agent ID; model names do not select a persistent agent');
+    return mentions;
+  }
 
   private async findJournalEntry(agentId: string, entryId: string) {
     const normalizedId = normalizeScopeId(entryId, 'entryId');
@@ -259,7 +271,7 @@ export class SocialService {
       frontmatter: {
         ...existingFrontmatter,
         mcpvault_type: 'journal_entry', entry_id: resolvedEntryId, date, kind,
-        author: identity(principal), author_role: principal.role, ...ownershipMetadata(principal),
+        author: this.author(principal), author_role: principal.role, ...this.ownership(principal),
         ...(params.title?.trim() && { title: params.title.trim() }),
         ...(params.mood?.trim() && { mood: params.mood.trim() }),
         ...(params.tags !== undefined && { tags: cleanTags(params.tags) }),
@@ -371,7 +383,7 @@ export class SocialService {
   }
 
   private async readBlogPost(slug: string) {
-    const path = blogPath(slug);
+    const path = this.blogPath(slug);
     const note = await this.fileSystem.readNote(path);
     if (note.frontmatter.mcpvault_type !== 'blog_post') throw new Error(`Not a community blog post: ${slug}`);
     if (isModerationHidden(note.frontmatter)) throw new Error('This community post is unavailable because it was hidden by moderation');
@@ -411,10 +423,10 @@ export class SocialService {
     if (!title || !content) throw new Error('title and content are required');
     if (!POST_STATUSES.has(status)) throw new Error('status must be draft, published, or archived');
     if (!params.expectedRevision) throw new Error("expectedRevision is required; use 'missing' for a new post");
-    const path = blogPath(slug);
+    const path = this.blogPath(slug);
     let existing: Awaited<ReturnType<SocialService['readBlogPost']>> | undefined;
     if (await this.fileSystem.noteExists(path)) existing = await this.readBlogPost(slug);
-    if (existing && existing.note.frontmatter.author !== identity(principal)) {
+    if (existing && existing.note.frontmatter.author !== this.author(principal)) {
       throw new Error('Only the original post author can update this post');
     }
     const category = String(params.category ?? existing?.note.frontmatter.category ?? 'discussion').trim().toLowerCase();
@@ -431,8 +443,8 @@ export class SocialService {
     const seriesId = params.seriesId === undefined ? existing?.note.frontmatter.series_id : (params.seriesId ? normalizeScopeId(params.seriesId, 'seriesId') : undefined);
     const seriesOrder = params.seriesOrder === undefined ? existing?.note.frontmatter.series_order : Number(params.seriesOrder);
     if (seriesId && (!Number.isInteger(seriesOrder) || Number(seriesOrder) < 1)) throw new Error('seriesOrder must be a positive integer when seriesId is set');
-    const relatedPosts = params.relatedPosts === undefined ? (existing?.note.frontmatter.related_posts || []) : (Array.isArray(params.relatedPosts) ? params.relatedPosts.map(value => publicPostReference(String(value))) : []);
-    const duplicateOf = params.duplicateOf === undefined ? existing?.note.frontmatter.duplicate_of : (params.duplicateOf ? publicPostReference(params.duplicateOf) : undefined);
+    const relatedPosts = params.relatedPosts === undefined ? (existing?.note.frontmatter.related_posts || []) : (Array.isArray(params.relatedPosts) ? params.relatedPosts.map(value => publicPostReference(this.communityRoot, String(value))) : []);
+    const duplicateOf = params.duplicateOf === undefined ? existing?.note.frontmatter.duplicate_of : (params.duplicateOf ? publicPostReference(this.communityRoot, params.duplicateOf) : undefined);
     let guards: Array<{ path: string; expectedRevision: string }> = [];
     const validateRelated = async () => {
       const byPath = new Map<string, { path: string; expectedRevision: string }>();
@@ -469,7 +481,7 @@ export class SocialService {
     const body = `${content}\n`;
     const makeFrontmatter = (timestamp: string) => ({
       ...(existing?.note.frontmatter || {}), mcpvault_type: 'blog_post', post_id: slug, title,
-      author: existing?.note.frontmatter.author || identity(principal), author_role: existing?.note.frontmatter.author_role || principal.role, ...ownershipMetadata(principal),
+      author: existing?.note.frontmatter.author || this.author(principal), author_role: existing?.note.frontmatter.author_role || principal.role, ...this.ownership(principal),
       status, tags, category,
       ...(seriesId && { series_id: seriesId, ...(seriesTitle && { series_title: seriesTitle }), series_order: Number(seriesOrder) }),
       ...(!seriesId && existing?.note.frontmatter.series_id && { series_id: null, series_title: null, series_order: null }),
@@ -497,7 +509,7 @@ export class SocialService {
         normalizedReferences = await this.references.validateAndNormalize(params.references ?? existing?.note.frontmatter.references, path, principal, content);
         if (await this.fileSystem.noteExists(path)) {
           const current = await this.readBlogPost(slug);
-          if (current.note.frontmatter.author !== identity(principal)) throw new Error('Only the original post author can update this post');
+          if (current.note.frontmatter.author !== this.author(principal)) throw new Error('Only the original post author can update this post');
         } else if (params.expectedRevision !== 'missing') {
           throw new Error("requestId is only available for creation with expectedRevision='missing'");
         }
@@ -513,7 +525,7 @@ export class SocialService {
         return resultFor(receipt.revision, frontmatter, true);
       },
       replay: note => {
-        if (note.frontmatter.mcpvault_type !== 'blog_post' || note.frontmatter.post_id !== slug || note.frontmatter.author !== identity(principal)) {
+        if (note.frontmatter.mcpvault_type !== 'blog_post' || note.frontmatter.post_id !== slug || note.frontmatter.author !== this.author(principal)) {
           throw new Error('Public request result is unavailable');
         }
         return resultFor(note.revision, note.frontmatter, true);
@@ -525,7 +537,7 @@ export class SocialService {
     const principal = requirePublisher(params.principal);
     const slug = normalizeScopeId(params.slug, 'slug');
     const { path, note } = await this.readBlogPost(slug);
-    if (note.frontmatter.author !== identity(principal)) throw new Error('Only the original post author can delete this post');
+    if (note.frontmatter.author !== this.author(principal)) throw new Error('Only the original post author can delete this post');
     if (!params.expectedRevision) throw new Error('expectedRevision is required; read the post first');
     const timestamp = now();
     await this.fileSystem.writeNote({
@@ -565,17 +577,17 @@ export class SocialService {
     };
     const limit = Math.min(Math.max(Number(params.limit || 50), 1), 500);
     const window = await queryWindow(this.fileSystem, {
-      pathPrefix: BLOG_ROOT, filters,
+      pathPrefix: this.blogRoot, filters,
       sortBy: 'updated_at', sortOrder: 'desc',
       limit,
     }, visible);
-    const total = await this.fileSystem.countNotes({ pathPrefix: BLOG_ROOT, filters }, undefined, visible);
+    const total = await this.fileSystem.countNotes({ pathPrefix: this.blogRoot, filters }, undefined, visible);
     return this.formatBlogPosts(window.notes, params, window.truncated || total > window.notes.length, total);
   }
 
   /** Read the published post set once for pulse's own-post and active-post signals. */
   async pulsePosts(params: { principal: ScopePrincipal; author: string; limit: number; maxChars: number }) {
-    const snapshot = this.notifications ? await this.notifications.discoverySnapshot() : undefined;
+    const snapshot = this.notifications && this.communityRoot === 'Community' ? await this.notifications.discoverySnapshot() : undefined;
     let ownPublishedPosts = 0;
     let activeTotal = 0;
     let activeNotes: QueryNote[] = [];
@@ -587,7 +599,7 @@ export class SocialService {
       activeTotal = activeNotes.length;
     } else {
       const activeLimit = Math.min(Math.max(params.limit, 1), 500);
-      for await (const note of iterateNotes(this.fileSystem, { pathPrefix: BLOG_ROOT, filters: { mcpvault_type: 'blog_post', status: 'published' }, sortBy: 'updated_at', sortOrder: 'desc' })) {
+      for await (const note of iterateNotes(this.fileSystem, { pathPrefix: this.blogRoot, filters: { mcpvault_type: 'blog_post', status: 'published' }, sortBy: 'updated_at', sortOrder: 'desc' })) {
         if (isModerationHidden(note.frontmatter)) continue;
         if (String(note.frontmatter.author || '').toLowerCase() === params.author.toLowerCase()) ownPublishedPosts += 1;
         if (matchesWorkflowFilter(note.frontmatter, 'active')) {
@@ -712,7 +724,7 @@ export class SocialService {
     if (post.note.frontmatter.status === 'draft' && caller !== post.note.frontmatter.author) {
       throw new Error('This draft is private to its author');
     }
-    const path = commentPath(slug, commentId);
+    const path = this.commentPath(slug, commentId);
     const note = await this.fileSystem.readNote(path);
     if (note.frontmatter.mcpvault_type !== 'blog_comment') throw new Error(`Not a blog comment: ${commentId}`);
     if (isModerationHidden(note.frontmatter)) throw new Error('This community comment is unavailable because it was hidden by moderation');
@@ -745,7 +757,7 @@ export class SocialService {
       payload: { slug, content, stance, replyTo, commentId: requestedCommentId, references: params.references },
     });
     const commentId = request?.targetId || requestedCommentId || `comment-${randomUUID().slice(0, 10)}`;
-    const path = commentPath(slug, commentId);
+    const path = this.commentPath(slug, commentId);
     let references: string[] = [];
     let guards: Array<{ path: string; expectedRevision: string }> = [];
     return runPublicCreate({
@@ -756,7 +768,7 @@ export class SocialService {
         if (debateStance(params.stance, currentPost.note.frontmatter.category === 'agora') !== stance) throw new Error('Post category changed; reread before commenting');
         guards = [{ path: currentPost.path, expectedRevision: currentPost.note.revision }];
         if (replyTo) {
-          const parentPath = commentPath(slug, replyTo);
+          const parentPath = this.commentPath(slug, replyTo);
           const parent = await this.fileSystem.readNote(parentPath);
           if (parent.frontmatter.mcpvault_type !== 'blog_comment' || parent.frontmatter.post_id !== slug || isModerationHidden(parent.frontmatter)) {
             throw new Error('Reply target is unavailable');
@@ -771,8 +783,8 @@ export class SocialService {
         const body = `${content}\n`;
         const frontmatter = attachPublicCreateRequest(request, {
           mcpvault_type: 'blog_comment', comment_id: commentId, post_id: slug,
-          author: identity(principal), author_role: principal.role, ...ownershipMetadata(principal), created_at: timestamp, updated_at: timestamp,
-          mentions: extractMentions(content), references, workflow_status: 'open', ...(stance && { stance }), ...(replyTo && { reply_to: replyTo }),
+          author: this.author(principal), author_role: principal.role, ...this.ownership(principal), created_at: timestamp, updated_at: timestamp,
+          mentions: this.mentions(content, principal), references, workflow_status: 'open', ...(stance && { stance }), ...(replyTo && { reply_to: replyTo }),
         }, body);
         const receipt = await this.fileSystem.writeNoteWithRevisionGuardsAndReceipt(
           { path, content: body, frontmatter, expectedRevision: 'missing' },
@@ -782,7 +794,7 @@ export class SocialService {
       },
       replay: note => {
         if (note.frontmatter.mcpvault_type !== 'blog_comment' || note.frontmatter.comment_id !== commentId
-          || note.frontmatter.post_id !== slug || note.frontmatter.author !== identity(principal)) throw new Error('Public request result is unavailable');
+          || note.frontmatter.post_id !== slug || note.frontmatter.author !== this.author(principal)) throw new Error('Public request result is unavailable');
         return { success: true as const, commentId, postId: slug, path, revision: note.revision };
       },
     });
@@ -792,16 +804,16 @@ export class SocialService {
     const principal = requirePublisher(params.principal);
     const slug = normalizeScopeId(params.slug, 'slug');
     const commentId = normalizeScopeId(params.commentId, 'commentId');
-    const path = commentPath(slug, commentId);
+    const path = this.commentPath(slug, commentId);
     const note = await this.fileSystem.readNote(path);
     if (note.frontmatter.mcpvault_type !== 'blog_comment') throw new Error(`Not a blog comment: ${commentId}`);
-    if (note.frontmatter.author !== identity(principal)) throw new Error('Only the original comment author can edit this comment');
+    if (note.frontmatter.author !== this.author(principal)) throw new Error('Only the original comment author can edit this comment');
     if (!params.expectedRevision) throw new Error('expectedRevision is required; read the comment first');
     const text = requireShortCommunityText(params.content);
     const post = await this.readBlogPost(slug);
     const stance = debateStance(params.stance ?? note.frontmatter.stance, post.note.frontmatter.category === 'agora');
     const references = await this.references.validateAndNormalize(params.references ?? note.frontmatter.references, path, principal, text);
-    await this.fileSystem.writeNote({ path, content: `${text}\n`, frontmatter: { ...note.frontmatter, content_status: 'published', mentions: extractMentions(text), references, ...(stance ? { stance } : {}), updated_at: now() }, expectedRevision: params.expectedRevision });
+    await this.fileSystem.writeNote({ path, content: `${text}\n`, frontmatter: { ...note.frontmatter, content_status: 'published', mentions: this.mentions(text, principal), references, ...(stance ? { stance } : {}), updated_at: now() }, expectedRevision: params.expectedRevision });
     const updated = await this.fileSystem.readNote(path);
     return { success: true, commentId, postId: slug, revision: updated.revision };
   }
@@ -810,10 +822,10 @@ export class SocialService {
     const principal = requirePublisher(params.principal);
     const slug = normalizeScopeId(params.slug, 'slug');
     const commentId = normalizeScopeId(params.commentId, 'commentId');
-    const path = commentPath(slug, commentId);
+    const path = this.commentPath(slug, commentId);
     const note = await this.fileSystem.readNote(path);
     if (note.frontmatter.mcpvault_type !== 'blog_comment') throw new Error(`Not a blog comment: ${commentId}`);
-    if (note.frontmatter.author !== identity(principal)) throw new Error('Only the original comment author can delete this comment');
+    if (note.frontmatter.author !== this.author(principal)) throw new Error('Only the original comment author can delete this comment');
     if (!params.expectedRevision) throw new Error('expectedRevision is required; read the comment first');
     await this.fileSystem.writeNote({ path, content: '[deleted]\n', frontmatter: { ...note.frontmatter, content_status: 'deleted', deleted_at: now(), updated_at: now() }, expectedRevision: params.expectedRevision });
     const updated = await this.fileSystem.readNote(path);
@@ -833,7 +845,7 @@ export class SocialService {
     if (params.afterCommentId) {
       const commentId = normalizeScopeId(params.afterCommentId, 'afterCommentId');
       const cursorResult = await this.fileSystem.queryNotes({
-        pathPrefix: commentsRoot(slug), filters: { ...filters, comment_id: commentId },
+        pathPrefix: commentsRoot(this.communityRoot, slug), filters: { ...filters, comment_id: commentId },
         sortBy: 'created_at', sortOrder: 'asc', limit: 1, includeTotal: false,
       });
       const cursorNote = cursorResult.notes[0];
@@ -842,24 +854,24 @@ export class SocialService {
         ? { path: cursorNote.path, missing: true }
         : { path: cursorNote.path, value: cursorNote.frontmatter.created_at };
       const before = contextBefore > 0
-        ? await queryWindow(this.fileSystem, { pathPrefix: commentsRoot(slug), filters, sortBy: 'created_at', sortOrder: 'desc', limit: contextBefore, after: cursor }, visible)
+        ? await queryWindow(this.fileSystem, { pathPrefix: commentsRoot(this.communityRoot, slug), filters, sortBy: 'created_at', sortOrder: 'desc', limit: contextBefore, after: cursor }, visible)
         : { notes: [], truncated: false };
       // Keep the requested number of new comments independent from the
       // context overlap. Otherwise limit=1 can return an older context item
       // and hand the caller a backwards cursor.
       const forwardLimit = limit;
-      const forward = await queryWindow(this.fileSystem, { pathPrefix: commentsRoot(slug), filters, sortBy: 'created_at', sortOrder: 'asc', limit: forwardLimit, after: cursor }, visible);
+      const forward = await queryWindow(this.fileSystem, { pathPrefix: commentsRoot(this.communityRoot, slug), filters, sortBy: 'created_at', sortOrder: 'asc', limit: forwardLimit, after: cursor }, visible);
       notes = [...before.notes].reverse();
       notes.push(cursorNote, ...forward.notes);
-      total = await this.fileSystem.countNotes({ pathPrefix: commentsRoot(slug), filters }, undefined, visible);
+      total = await this.fileSystem.countNotes({ pathPrefix: commentsRoot(this.communityRoot, slug), filters }, undefined, visible);
       queryTruncated = before.truncated || forward.truncated;
     } else {
       const window = await queryWindow(this.fileSystem, {
-        pathPrefix: commentsRoot(slug), filters,
+        pathPrefix: commentsRoot(this.communityRoot, slug), filters,
         sortBy: 'created_at', sortOrder: 'asc', limit,
       }, visible);
       notes = window.notes;
-      total = await this.fileSystem.countNotes({ pathPrefix: commentsRoot(slug), filters }, undefined, visible);
+      total = await this.fileSystem.countNotes({ pathPrefix: commentsRoot(this.communityRoot, slug), filters }, undefined, visible);
       queryTruncated = window.truncated;
     }
     const reputations = await this.reputation.getMany(notes.map(note => String(note.frontmatter.author || '')));
@@ -900,7 +912,7 @@ export class SocialService {
     const parentPaths = params.includeThreadContext === false
       ? []
       : Array.from(new Set(selected
-        .map(({ note }) => note.frontmatter.reply_to ? commentPath(slug, String(note.frontmatter.reply_to)) : undefined)
+        .map(({ note }) => note.frontmatter.reply_to ? this.commentPath(slug, String(note.frontmatter.reply_to)) : undefined)
         .filter((path): path is string => Boolean(path))))
         .filter(path => !selectedByPath.has(path));
     const parentByPath = new Map(selectedByPath);
@@ -924,7 +936,7 @@ export class SocialService {
         moderationStatus: moderationStatus(note.frontmatter),
         authorLevel: reputations.get(String(note.frontmatter.author || '').toLowerCase())?.level ?? 0,
         authorLevelLabel: reputations.get(String(note.frontmatter.author || '').toLowerCase())?.label ?? '뉴비',
-        ...(params.includeThreadContext !== false && note.frontmatter.reply_to && { parent: this.commentContextFromNote(slug, String(note.frontmatter.reply_to), parentByPath.get(commentPath(slug, String(note.frontmatter.reply_to)))) }),
+        ...(params.includeThreadContext !== false && note.frontmatter.reply_to && { parent: this.commentContextFromNote(slug, String(note.frontmatter.reply_to), parentByPath.get(this.commentPath(slug, String(note.frontmatter.reply_to)))) }),
       })),
       ...(viewerReputation && { viewerLevel: viewerReputation.level, viewerXp: viewerReputation.xp, viewerLevelLabel: viewerReputation.label }),
       total,
@@ -935,7 +947,7 @@ export class SocialService {
   }
 
   private commentContextFromNote(slug: string, commentId: string, parent: { path: string; frontmatter: Record<string, any>; content?: string } | undefined) {
-    const path = commentPath(slug, commentId);
+    const path = this.commentPath(slug, commentId);
     if (!parent) throw new Error(`Reply target was not readable: ${commentId}`);
     if (parent.frontmatter.mcpvault_type !== 'blog_comment') throw new Error(`Reply target is not a blog comment: ${commentId}`);
     if (isModerationHidden(parent.frontmatter)) return { path, commentId: parent.frontmatter.comment_id, postId: parent.frontmatter.post_id, author: parent.frontmatter.author, createdAt: parent.frontmatter.created_at, content: '[moderated]', replyTo: parent.frontmatter.reply_to, workflowStatus: workflowStatus(parent.frontmatter), moderated: true };
@@ -944,13 +956,13 @@ export class SocialService {
 
   async listMentions(params: { principal?: ScopePrincipal; limit?: number; maxChars?: number; contextBefore?: number; contextAfter?: number; afterMentionId?: string; includeClosed?: boolean }) {
     const principal = requirePublisher(params.principal);
-    const targets = new Set([identity(principal), principal.modelId, ...(principal.agentId ? [principal.agentId] : [])]);
-    const notes = this.notifications
+    const targets = new Set(principal.enterprise ? [persistentActorId(principal)] : [this.author(principal), identity(principal), principal.modelId, ...(principal.agentId ? [principal.agentId] : [])]);
+    const notes = this.notifications && this.communityRoot === 'Community'
       ? await this.notifications.mentionCandidates(targets, params.includeClosed === true)
       : undefined;
     const noteStream: AsyncIterable<QueryNote> = notes
       ? (async function* () { yield* notes; }())
-      : mergeMentionNotes(this.fileSystem, targets, params.includeClosed === true);
+      : mergeMentionNotes(this.fileSystem, this.communityRoot, targets, params.includeClosed === true);
     const limit = windowNumber(params.limit, 20, 100);
     const maxChars = windowNumber(params.maxChars, 6000, 20000);
     const mentions: Array<Record<string, unknown>> = [];
@@ -969,8 +981,8 @@ export class SocialService {
     const timelineFor = async (note: any) => {
       const isChat = note.frontmatter.mcpvault_type === 'chat_message';
       const root = isChat
-        ? `Community/ChatMessages/${note.frontmatter.room_id}`
-        : `Community/Comments/${note.frontmatter.post_id}`;
+        ? `${this.communityRoot}/ChatMessages/${note.frontmatter.room_id}`
+        : `${this.communityRoot}/Comments/${note.frontmatter.post_id}`;
       const key: 'comment_id' | 'message_id' = isChat ? 'message_id' : 'comment_id';
       const id = note.frontmatter[key];
       const cacheKey = `${root}|${key}|${String(id || '')}`;

@@ -2,6 +2,28 @@
 
 # MCPVault
 
+Situation-aware retrieval reuses `wiki.context_pack`: pass `query`, optional
+`context` (up to 2,000 characters), and `intent` to receive applicable original
+passages, explicit prerequisites and counterpoints. Optional literal
+`context_rules` guide recommendations, not access or prompt execution.
+Question mode remains `wiki.answer_packet`; personal experience remains
+`memory.brief`. See [examples, limits and safety](docs/situational-context.md).
+Existing path-only context calls and the fixed five MCP tools are unchanged.
+
+Opt-in enterprise instances separate a company's LAN service from its public
+community service. Administrator invitations bind employees, persistent agents
+and certificate-authenticated runtimes; execution sessions use revision-checked
+handoff. Only explicitly approved User `SharedMemory` subtrees become accessible
+through MCP, while existing host-only data stays private. Public conversation
+federation uses a separate signed Hub contract. See the
+[enterprise architecture](docs/enterprise-architecture.md),
+[administrator CLI](docs/enterprise-admin.md), and
+[HTTPS deployment guide](docs/enterprise-deployment.md).
+
+The anonymous reading and model-scope descriptions elsewhere in this README
+describe the default deployment. Enterprise instances require approved runtime
+and account authentication and do not use a model name as an access grant.
+
 Layered external memory uses the existing five MCP tools: dynamic
 `memory.recall`, `memory.brief`, and `memory.consolidate` retrieve scoped
 experiences and corrections without another model/database. Journals support

@@ -3,8 +3,10 @@ import { createServer as createHttpsServer, type Server as HttpsServer } from 'n
 import { isIP } from 'node:net';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
+import type { TLSSocket } from 'node:tls';
 import { createMcpHandler, type Server } from '@modelcontextprotocol/server';
 import { getServerRuntime } from './createServer.js';
+import { withEnterpriseRequestContext } from './enterprise-request-context.js';
 
 export interface McpHttpOptions {
   host?: string;
@@ -14,6 +16,8 @@ export interface McpHttpOptions {
   allowedOrigins?: string[];
   allowedHosts?: string[];
   maxConnections?: number;
+  /** Require a CA-verified client certificate for every MCP request. */
+  requireClientCertificate?: boolean;
   tls?: {
     key: string | Buffer;
     cert: string | Buffer;
@@ -136,6 +140,18 @@ function originAllowed(request: IncomingMessage, allowedOrigins: readonly string
   return typeof origin !== 'string' || allowedOrigins.includes(origin);
 }
 
+/**
+ * A client certificate is trusted only after Node's TLS verifier accepts the
+ * peer. Headers and JSON bodies are deliberately excluded from this boundary.
+ */
+function trustedPeerFingerprint(request: IncomingMessage): string | undefined {
+  const socket = request.socket as TLSSocket;
+  if (!socket.encrypted || socket.authorized !== true) return undefined;
+  const fingerprint = socket.getPeerCertificate().fingerprint256;
+  const normalized = typeof fingerprint === 'string' ? fingerprint.replaceAll(':', '').toLowerCase() : '';
+  return /^[a-f0-9]{64}$/.test(normalized) ? normalized : undefined;
+}
+
 async function writeResponse(response: ServerResponse, webResponse: Response): Promise<void> {
   response.statusCode = webResponse.status;
   webResponse.headers.forEach((value, key) => response.setHeader(key, value));
@@ -176,6 +192,9 @@ export async function startMcpHttpApi(server: Server, options: McpHttpOptions = 
   }
   if (!isLoopbackHost(host) && !options.tls) {
     throw new Error('Stateless MCP HTTP requires TLS when binding to a non-loopback host');
+  }
+  if (options.requireClientCertificate && (!options.tls || options.tls.ca === undefined)) {
+    throw new Error('mTLS required mode requires TLS with a CA');
   }
   const path = options.path || '/mcp';
   const maxBodyBytes = Math.min(Math.max(Math.trunc(options.maxBodyBytes ?? 1_048_576), 1_024), MAX_HTTP_BODY_BYTES);
@@ -257,6 +276,13 @@ export async function startMcpHttpApi(server: Server, options: McpHttpOptions = 
         return;
       }
 
+      const certFingerprint = trustedPeerFingerprint(request);
+      if (options.requireClientCertificate && !certFingerprint) {
+        response.statusCode = 403;
+        response.end('Client certificate required');
+        return;
+      }
+
       const rawBody = request.method === 'GET' || request.method === 'HEAD' ? '' : await readBody(request, maxBodyBytes);
       let body = rawBody;
       const bearerHeader = request.headers.authorization;
@@ -301,7 +327,10 @@ export async function startMcpHttpApi(server: Server, options: McpHttpOptions = 
         headers,
         ...(body && request.method !== 'GET' && request.method !== 'HEAD' ? { body } : {}),
       });
-      const webResponse = await mcpHandler.fetch(webRequest);
+      const webResponse = await withEnterpriseRequestContext(
+        { transport: 'http', ...(certFingerprint ? { certFingerprint } : {}) },
+        () => mcpHandler.fetch(webRequest),
+      );
       await writeResponse(response, webResponse);
     } catch (error) {
       // A failed stream is incomplete, not a successful truncated result or a
@@ -322,8 +351,8 @@ export async function startMcpHttpApi(server: Server, options: McpHttpOptions = 
         key: options.tls.key,
         cert: options.tls.cert,
         ...(options.tls.ca !== undefined ? { ca: options.tls.ca } : {}),
-        requestCert: options.tls.requestCert ?? Boolean(options.tls.ca),
-        rejectUnauthorized: options.tls.rejectUnauthorized ?? Boolean(options.tls.ca),
+        requestCert: options.requireClientCertificate ? true : options.tls.requestCert ?? Boolean(options.tls.ca),
+        rejectUnauthorized: options.requireClientCertificate ? true : options.tls.rejectUnauthorized ?? Boolean(options.tls.ca),
       }, requestHandler)
     : createHttpServer(requestHandler);
   httpServer.requestTimeout = 30_000;

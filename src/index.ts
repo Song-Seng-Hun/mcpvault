@@ -15,7 +15,13 @@ export type { ScopeKind } from './scopes.js';
 export { ScopeAuthService } from './scope-auth.js';
 export type { ScopePrincipal } from './scope-auth.js';
 export { ScopeAccessPolicy } from './scope-access.js';
-export { GlobalSyncHub, GlobalSyncClient, GlobalSyncReplica, startGlobalSyncHub } from './global-sync.js';
+export { GlobalSyncHub, GlobalSyncClient, GlobalSyncReadClient, GlobalSyncReplica, startGlobalSyncHub } from './global-sync.js';
+export { EnterpriseRegistry } from './enterprise-registry.js';
+export { startEnterpriseServer } from './enterprise-server.js';
+export { PublicFederationHub } from './public-federation.js';
+export { PublicFederationClient, startPublicFederationHub } from './public-federation-http.js';
+export { PublicFederationReplica } from './public-federation-replica.js';
+export { previewMemoryMigration } from './enterprise-migration.js';
 export type {
   GlobalAuditResult,
   GlobalManifest,

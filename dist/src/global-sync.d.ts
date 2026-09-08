@@ -190,9 +190,21 @@ export declare class GlobalSyncClient {
         ok: true;
     }>;
 }
+/** Read-only client for company importers; it contains no publishing API. */
+export declare class GlobalSyncReadClient {
+    private readonly baseUrl;
+    private readonly readToken;
+    constructor(options: {
+        baseUrl: string;
+        readToken: string;
+    });
+    private read;
+    getManifest(after?: number, limit?: number): Promise<GlobalManifest>;
+    getRevision(revisionId: string): Promise<GlobalRevisionWithContent>;
+}
 export interface GlobalSyncReplicaOptions {
     vaultPath: string;
-    client: Pick<GlobalSyncClient, 'getManifest' | 'getRevision' | 'submitProposal'>;
+    client: Pick<GlobalSyncClient, 'getManifest' | 'getRevision'> & Partial<Pick<GlobalSyncClient, 'submitProposal'>>;
     trustedPublicKey: string;
     /** Reject every remote revision whose signed organization contract differs. */
     organizationFingerprint?: string;
@@ -237,6 +249,8 @@ export interface GlobalSyncHubHttpOptions {
     adminToken?: string;
     adminTokenExpiresAt?: string;
     authTokenExpiresAt?: string;
+    /** Independent read-only credential for approved manifest/revision imports. Rotate by replacing it and restarting. */
+    readToken?: string;
     reviewerTokenExpiresAt?: Record<string, string>;
     maxBodyBytes?: number;
     /** Conservative cumulative proposal-content quota for this event store. */

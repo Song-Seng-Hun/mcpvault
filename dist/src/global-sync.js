@@ -22,7 +22,7 @@ const MAX_HTTP_REQUESTS_PER_MINUTE = 300;
 const MAX_RATE_BUCKETS = 4_096;
 const DEFAULT_BATCH_LIMIT = 100;
 const MAX_BATCH_LIMIT = 200;
-const RESERVED_ROOTS = new Set(['.git', '.obsidian', '.mcpvault', '_scopes', '_whispers', 'community', 'node_modules']);
+const RESERVED_ROOTS = new Set(['.git', '.obsidian', '.mcpvault', '_scopes', '_whispers', 'community', 'publiccommunity', 'node_modules']);
 const GLOBAL_SPECIAL_ROOTS = new Set(['_sources']);
 function isLoopbackHost(host) {
     const normalized = host.trim().toLowerCase().replace(/^\[|\]$/g, '');
@@ -860,6 +860,48 @@ export class GlobalSyncClient {
         return this.request('/v1/global/credentials/revoke', { method: 'POST', body: JSON.stringify({ kind, ...(reviewerId && { reviewerId }) }) }, 'admin');
     }
 }
+/** Read-only client for company importers; it contains no publishing API. */
+export class GlobalSyncReadClient {
+    baseUrl;
+    readToken;
+    constructor(options) {
+        const url = new URL(options.baseUrl);
+        if (url.username || url.password || url.search || url.hash || (url.protocol !== 'https:' && !(url.protocol === 'http:' && isLoopbackHost(url.hostname))))
+            throw new Error('Global import requires HTTPS or loopback HTTP without URL credentials');
+        this.baseUrl = options.baseUrl.replace(/\/+$/, '');
+        this.readToken = boundedText(options.readToken, 'readToken', 4096);
+    }
+    async read(path) {
+        const response = await fetch(`${this.baseUrl}${path}`, { headers: { authorization: `Bearer ${this.readToken}` }, redirect: 'error', signal: AbortSignal.timeout(30000) });
+        if (!response.ok)
+            throw new Error(`Global import HTTP ${response.status}`);
+        const reader = response.body?.getReader();
+        if (!reader)
+            throw new Error('Global import response body is missing');
+        const chunks = [];
+        let bytes = 0;
+        try {
+            while (true) {
+                const chunk = await reader.read();
+                if (chunk.done)
+                    break;
+                bytes += chunk.value.byteLength;
+                if (bytes > 8 * MAX_DOCUMENT_BYTES)
+                    throw new Error('Global import response exceeds its bound');
+                chunks.push(chunk.value);
+            }
+        }
+        finally {
+            await reader.cancel().catch(() => undefined);
+        }
+        return JSON.parse(Buffer.concat(chunks).toString('utf8'));
+    }
+    getManifest(after = 0, limit) {
+        const query = new URLSearchParams({ after: String(after), limit: String(normalizeLimit(limit)) });
+        return this.read(`/v1/global/manifest?${query}`);
+    }
+    getRevision(revisionId) { return this.read(`/v1/global/revisions/${encodeURIComponent(revisionId)}`); }
+}
 /** Pull-only replica. Local edits are never overwritten; remote tombstones are recoverable moves. */
 export class GlobalSyncReplica {
     vaultPath;
@@ -1003,11 +1045,15 @@ export class GlobalSyncReplica {
         const current = await this.currentContent(this.localPath(normalized));
         if (!current.exists || current.content === undefined)
             throw new Error('local Global document does not exist');
+        if (!this.client.submitProposal)
+            throw new Error('This Global replica is read-only');
         return this.client.submitProposal({ documentId: normalized, ...(this.state.documents[normalized]?.revisionId && { parentRevision: this.state.documents[normalized].revisionId }), operation: 'upsert', content: current.content, author, reason, origin, ...(provenance && { provenance }), ...(idempotencyKey && { idempotencyKey }) });
     }
     async proposeTombstone(documentId, author, reason, origin) {
         await this.load();
         const normalized = normalizeId(documentId, 'documentId');
+        if (!this.client.submitProposal)
+            throw new Error('This Global replica is read-only');
         return this.client.submitProposal({ documentId: normalized, ...(this.state.documents[normalized]?.revisionId && { parentRevision: this.state.documents[normalized].revisionId }), operation: 'tombstone', author, reason, origin });
     }
 }
@@ -1218,6 +1264,8 @@ export async function startGlobalSyncHub(root, options) {
         return true;
     };
     const sameAsConfiguredCredential = (digest, exceptReviewerId) => {
+        if (readCredentialDigest && constantTimeDigestEqual(digest, readCredentialDigest))
+            return true;
         if (authCredential.digest && constantTimeDigestEqual(digest, authCredential.digest))
             return true;
         if (adminCredential?.digest && constantTimeDigestEqual(digest, adminCredential.digest))
@@ -1334,6 +1382,11 @@ export async function startGlobalSyncHub(root, options) {
             release();
         }
     };
+    const readCredentialDigest = options.readToken === undefined ? undefined : secretDigest(boundedText(options.readToken, 'readToken', 4096));
+    if (readCredentialDigest && [authCredential, adminCredential, ...reviewerTokens.values()].some(item => item?.digest && constantTimeDigestEqual(item.digest, readCredentialDigest))) {
+        await hub.close();
+        throw new Error('readToken must differ from every publishing, review and administrator credential');
+    }
     const requestHandler = async (request, response) => {
         try {
             const url = new URL(request.url || '/', `http://${host}`);
@@ -1355,7 +1408,9 @@ export async function startGlobalSyncHub(root, options) {
                 return;
             }
             const reviewerId = reviewerFor(token);
-            if (reviewerRoute ? !reviewerId : !token || !credentialActive(authCredential) || !authCredential.digest || !constantTimeDigestEqual(secretDigest(token), authCredential.digest)) {
+            const readRoute = request.method === 'GET' && (url.pathname === '/v1/global/manifest' || /^\/v1\/global\/revisions\/[^/]+$/.test(url.pathname));
+            const readerAllowed = Boolean(readRoute && readCredentialDigest && token && constantTimeDigestEqual(secretDigest(token), readCredentialDigest));
+            if (!readerAllowed && (reviewerRoute ? !reviewerId : !token || !credentialActive(authCredential) || !authCredential.digest || !constantTimeDigestEqual(secretDigest(token), authCredential.digest))) {
                 sendJson(response, 401, { error: 'Unauthorized' });
                 return;
             }

@@ -67,8 +67,11 @@ export class LayeredMemoryService {
     }
     async read(mode, params) {
         const scope = params.scope ?? 'personal';
-        if (!['personal', 'community', 'global'].includes(scope))
+        if (!['personal', 'user', 'community', 'global'].includes(scope))
             throw new Error('Invalid memory scope');
+        const userRoot = this.access.userMemoryRoot(params.principal);
+        if (scope === 'user' && !userRoot)
+            throw new Error('User shared memory requires an explicitly provisioned enterprise employee');
         if (scope === 'personal' && !params.principal?.agentId)
             throw new Error('Login with an agent account for personal memory; no public fallback');
         if (params.role !== undefined && !MEMORY_ROLES.includes(params.role))
@@ -82,7 +85,8 @@ export class LayeredMemoryService {
             throw new Error('Memory query exceeds 1000 characters');
         const maxChars = number(params.maxChars, mode === 'brief' ? 2000 : 4000, 1000, mode === 'brief' ? 4000 : 12000);
         const limit = number(params.limit, 20, 1, 100);
-        const root = scope === 'personal' ? `_scopes/agents/${params.principal.agentId}` : scope === 'community' ? 'Community' : '';
+        const root = scope === 'personal' ? `_scopes/agents/${params.principal.agentId}`
+            : scope === 'user' ? userRoot : scope === 'community' ? this.access.getCommunityRoot() : '';
         const canAccess = (path) => {
             if (!this.access.canAccessPhysicalPath(path, params.principal))
                 return false;

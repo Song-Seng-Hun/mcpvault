@@ -5,6 +5,7 @@ import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { createMcpHandler } from '@modelcontextprotocol/server';
 import { getServerRuntime } from './createServer.js';
+import { withEnterpriseRequestContext } from './enterprise-request-context.js';
 function headerValues(request) {
     const headers = new Headers();
     for (const [name, value] of Object.entries(request.headers)) {
@@ -108,6 +109,18 @@ function originAllowed(request, allowedOrigins) {
     const origin = request.headers.origin;
     return typeof origin !== 'string' || allowedOrigins.includes(origin);
 }
+/**
+ * A client certificate is trusted only after Node's TLS verifier accepts the
+ * peer. Headers and JSON bodies are deliberately excluded from this boundary.
+ */
+function trustedPeerFingerprint(request) {
+    const socket = request.socket;
+    if (!socket.encrypted || socket.authorized !== true)
+        return undefined;
+    const fingerprint = socket.getPeerCertificate().fingerprint256;
+    const normalized = typeof fingerprint === 'string' ? fingerprint.replaceAll(':', '').toLowerCase() : '';
+    return /^[a-f0-9]{64}$/.test(normalized) ? normalized : undefined;
+}
 async function writeResponse(response, webResponse) {
     response.statusCode = webResponse.status;
     webResponse.headers.forEach((value, key) => response.setHeader(key, value));
@@ -144,6 +157,9 @@ export async function startMcpHttpApi(server, options = {}) {
     }
     if (!isLoopbackHost(host) && !options.tls) {
         throw new Error('Stateless MCP HTTP requires TLS when binding to a non-loopback host');
+    }
+    if (options.requireClientCertificate && (!options.tls || options.tls.ca === undefined)) {
+        throw new Error('mTLS required mode requires TLS with a CA');
     }
     const path = options.path || '/mcp';
     const maxBodyBytes = Math.min(Math.max(Math.trunc(options.maxBodyBytes ?? 1_048_576), 1_024), MAX_HTTP_BODY_BYTES);
@@ -224,6 +240,12 @@ export async function startMcpHttpApi(server, options = {}) {
                 response.end();
                 return;
             }
+            const certFingerprint = trustedPeerFingerprint(request);
+            if (options.requireClientCertificate && !certFingerprint) {
+                response.statusCode = 403;
+                response.end('Client certificate required');
+                return;
+            }
             const rawBody = request.method === 'GET' || request.method === 'HEAD' ? '' : await readBody(request, maxBodyBytes);
             let body = rawBody;
             const bearerHeader = request.headers.authorization;
@@ -269,7 +291,7 @@ export async function startMcpHttpApi(server, options = {}) {
                 headers,
                 ...(body && request.method !== 'GET' && request.method !== 'HEAD' ? { body } : {}),
             });
-            const webResponse = await mcpHandler.fetch(webRequest);
+            const webResponse = await withEnterpriseRequestContext({ transport: 'http', ...(certFingerprint ? { certFingerprint } : {}) }, () => mcpHandler.fetch(webRequest));
             await writeResponse(response, webResponse);
         }
         catch (error) {
@@ -292,8 +314,8 @@ export async function startMcpHttpApi(server, options = {}) {
             key: options.tls.key,
             cert: options.tls.cert,
             ...(options.tls.ca !== undefined ? { ca: options.tls.ca } : {}),
-            requestCert: options.tls.requestCert ?? Boolean(options.tls.ca),
-            rejectUnauthorized: options.tls.rejectUnauthorized ?? Boolean(options.tls.ca),
+            requestCert: options.requireClientCertificate ? true : options.tls.requestCert ?? Boolean(options.tls.ca),
+            rejectUnauthorized: options.requireClientCertificate ? true : options.tls.rejectUnauthorized ?? Boolean(options.tls.ca),
         }, requestHandler)
         : createHttpServer(requestHandler);
     httpServer.requestTimeout = 30_000;

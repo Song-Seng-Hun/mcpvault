@@ -14,7 +14,18 @@ export declare class SocialService {
     private readonly references;
     private readonly reputation;
     private readonly notifications?;
-    constructor(fileSystem: FileSystemService, access: ScopeAccessPolicy, references: ReferenceService, reputation: ReputationService, notifications?: NotificationService | undefined);
+    private readonly options;
+    constructor(fileSystem: FileSystemService, access: ScopeAccessPolicy, references: ReferenceService, reputation: ReputationService, notifications?: NotificationService | undefined, options?: {
+        communityRoot?: string;
+        publicMode?: boolean;
+    });
+    private get communityRoot();
+    private get blogRoot();
+    private blogPath;
+    private commentPath;
+    private author;
+    private ownership;
+    private mentions;
     private findJournalEntry;
     writeJournalEntry(params: {
         principal?: ScopePrincipal;

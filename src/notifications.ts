@@ -5,6 +5,7 @@ import { promisify } from 'node:util';
 import type { FileSystemService } from './filesystem.js';
 import type { VaultFileCatalog } from './vault-catalog.js';
 import type { ScopePrincipal } from './scope-auth.js';
+import { persistentActorId } from './enterprise-identity.js';
 import { normalizeScopeId } from './scopes.js';
 import type { ReputationService } from './reputation.js';
 import type { QueryNote } from './types.js';
@@ -850,6 +851,7 @@ export class NotificationService {
     const snapshot = await this.cachedPublicSnapshot();
     const { messages, postsByPostId, postsBySeriesId, postsByAuthor, postsByTag, postsByMention, commentsByPostId, commentsByCommentId, commentsByAuthor, commentsByMention, commentsByReplyTo, messagesByMessageId, messagesByMention, messagesByReplyTo, postTitles, roomTitles } = snapshot;
     const targetKey = target.toLowerCase();
+    const mentionKey = principal.enterprise ? persistentActorId(principal).toLowerCase() : targetKey;
     const ownedPostIds = new Set((postsByAuthor.get(targetKey) || []).map(note => text(note.frontmatter.post_id)));
     const ownedCommentIds = new Set((commentsByAuthor.get(targetKey) || []).map(note => text(note.frontmatter.comment_id)));
     const ownedMessageIds = new Set(messages.filter(note => text(note.frontmatter.author).toLowerCase() === targetKey).map(note => text(note.frontmatter.message_id)));
@@ -873,21 +875,21 @@ export class NotificationService {
       return [...unique.values()];
     };
     const relevantPosts = uniqueNotes([
-      postsByMention.get(targetKey) || [],
+      postsByMention.get(mentionKey) || [],
       ...[...watchedPostIds].map(id => postsByPostId.get(id) || []),
       ...[...watchedSeriesIds].map(id => postsBySeriesId.get(id) || []),
       ...[...watchedAuthors].map(id => postsByAuthor.get(id) || []),
       ...[...watchedTags].map(id => postsByTag.get(id) || []),
     ]).filter(note => text(note.frontmatter.author).toLowerCase() !== targetKey);
     const relevantComments = uniqueNotes([
-      commentsByMention.get(targetKey) || [],
+      commentsByMention.get(mentionKey) || [],
       ...[...ownedCommentIds].map(id => commentsByReplyTo.get(id.toLowerCase()) || []),
       ...[...ownedPostIds].map(id => commentsByPostId.get(id.toLowerCase()) || []),
       ...[...watchedPostIds].map(id => commentsByPostId.get(id) || []),
       ...[...watchedAuthors].map(id => commentsByAuthor.get(id) || []),
     ]).filter(note => text(note.frontmatter.author).toLowerCase() !== targetKey);
     const relevantMessages = uniqueNotes([
-      messagesByMention.get(targetKey) || [],
+      messagesByMention.get(mentionKey) || [],
       ...[...ownedMessageIds].map(id => messagesByReplyTo.get(id.toLowerCase()) || []),
     ]).filter(note => text(note.frontmatter.author).toLowerCase() !== targetKey);
     const candidates: NotificationCandidate[] = [];
@@ -905,7 +907,7 @@ export class NotificationService {
       const author = text(note.frontmatter.author);
       if (!author || author === target) return;
       const mentions = Array.isArray(note.frontmatter.mentions) ? note.frontmatter.mentions.map(String).map(value => value.toLowerCase()) : [];
-      const isMention = mentions.includes(target.toLowerCase());
+      const isMention = mentions.includes(mentionKey);
       const replyTo = text(note.frontmatter.reply_to);
       const isReply = (note.frontmatter.mcpvault_type === 'blog_comment' && ownedCommentIds.has(replyTo))
         || (note.frontmatter.mcpvault_type === 'chat_message' && ownedMessageIds.has(replyTo));

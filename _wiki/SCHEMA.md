@@ -7,6 +7,52 @@ updated_at: 2026-09-01T18:30:44.285Z
 ---
 # LLM Wiki schema
 
+## Situation context rules
+
+Optional `context_rules` is an object containing only `any`, `all`, `exclude`
+and `intents`. Phrase lists permit at most eight nonblank strings of at most
+80 Unicode characters each. `intents` accepts only `capture`, `explore`,
+`decide`, `execute`, `review` (at most eight entries). Matching uses NFKC,
+lowercase, literal substrings of caller `query` plus `context`; no code,
+regular expressions, templates, conversation collection or body-triggered
+recursion. Empty lists impose no restriction. Invalid direct edits are reported
+and not activated. Existing `retrieval_cues` and prose `use_when` keep their roles.
+
+```yaml
+context_rules:
+  any: [NAS, network mount]
+  all: [watcher]
+  exclude: [local-only]
+  intents: [execute, review]
+```
+
+`wiki.context_pack` with `query` returns situation mode (default4,000/max12,000
+serialized characters,20 candidates including one-hop relations,8 distinct
+source bodies). Explicit path reads and ordinary search ignore activation
+conditions. Linked counterpoints/prerequisites are not hidden by mismatched
+rules; applicability is reported separately from truth. Private memories are
+not automatically merged. See [contract and examples](../docs/situational-context.md).
+
+## Opt-in enterprise identity and visibility
+
+Enterprise instances bind `userId`, `accountId`, persistent `agentId`, and
+`runtimeId` using administrator invitations. `sessionId` and its generation
+identify an execution lease; model names and display names do not grant access.
+The legacy host-only User invariant remains in force except for the explicitly
+approved `_scopes/users/<userId>/SharedMemory/` subtree. Personal recall does not
+implicitly include this shared subtree or another agent's memory.
+
+Company `Community/` remains instance-local. Public-mode community services use
+`PublicCommunity/Local/`; verified remote records are separate projections under
+`PublicCommunity/Imported/`. Neither tree is a Global document-sync allowlist.
+Public actor IDs use `actor:<realm>:<agentId>`. Public object revisions, Hub
+sequence, and filesystem revisions are distinct. Tombstones and moderation
+markers preserve their distinct authority. Credentials, employee ownership,
+private memory and drafts are excluded from the public activity contract.
+
+See [the enterprise contract](../docs/enterprise-architecture.md) for the
+runtime trust boundary, migration preview and deployment assumptions.
+
 ## Layered external memory
 
 `memory_role` optionally marks a whole note as `core`, `episodic`, `semantic`,

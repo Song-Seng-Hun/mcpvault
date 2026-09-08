@@ -1,9 +1,14 @@
 import { createHash, randomBytes, scrypt as scryptCallback, timingSafeEqual } from 'node:crypto';
 import { mkdir, readFile, rename, writeFile, chmod, open as openFile, unlink } from 'node:fs/promises';
 import type { FileHandle } from 'node:fs/promises';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, resolve, relative, isAbsolute, basename } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { realpathSync, existsSync } from 'node:fs';
 import { promisify } from 'node:util';
 import { normalizeScopeId } from './scopes.js';
+import type { EnterpriseRegistry, EnterpriseBinding } from './enterprise-registry.js';
+import { getEnterpriseRequestContext } from './enterprise-request-context.js';
+import { authorIdentity } from './enterprise-identity.js';
 
 const scrypt = promisify(scryptCallback);
 const AUTH_VERSION = 1;
@@ -38,12 +43,22 @@ export interface ScopePrincipal {
   commandCenterId?: string;
   role: 'model' | 'agent';
   capabilities?: ScopeCapability[];
+  /** Issued by enterprise authentication, never accepted from tool arguments. */
+  enterprise?: {
+    mode: 'public' | 'company'; realmId: string; runtimeId: string;
+    sharedMemoryEnabled: boolean;
+  };
+  sessionId?: string;
+  sessionGeneration?: number;
+  actorId?: string;
+  authorLabel?: string;
 }
 
 interface StoredAccount extends ScopePrincipal {
   salt: string;
   passwordHash: string;
   createdAt: string;
+  registrationId?: string;
 }
 
 interface AuthDatabase {
@@ -67,6 +82,7 @@ function isStoredAccount(value: unknown): value is StoredAccount {
   if (value.agentId !== undefined && typeof value.agentId !== 'string') return false;
   if (value.userId !== undefined && typeof value.userId !== 'string') return false;
   if (value.commandCenterId !== undefined && typeof value.commandCenterId !== 'string') return false;
+  if (value.registrationId !== undefined && typeof value.registrationId !== 'string') return false;
   if (typeof value.salt !== 'string' || typeof value.passwordHash !== 'string' || typeof value.createdAt !== 'string') return false;
   if (Buffer.from(value.salt, 'base64').byteLength !== 16 || Buffer.from(value.passwordHash, 'base64').byteLength !== 32) return false;
   if (!value.accountId || !value.modelId || !value.createdAt || (value.role === 'agent' && !value.agentId)) return false;
@@ -163,6 +179,7 @@ async function passwordDigest(password: string, salt: Buffer): Promise<Buffer> {
  * Passwords and raw session tokens are never written to disk.
  */
 export class ScopeAuthService {
+  private readonly enterpriseRegistry: EnterpriseRegistry | undefined;
   private readonly authPath: string;
   private readonly authLockPath: string;
   private readonly moderatorAccounts: Set<string>;
@@ -177,16 +194,34 @@ export class ScopeAuthService {
   private databaseInFlight: Promise<AuthDatabase> | undefined;
   private principalCache: { expiresAt: number; value: ScopePrincipal[] } | undefined;
 
-  constructor(vaultPath: string, options: { moderatorAccounts?: string[]; commandCenterId?: string } = {}) {
-    this.authPath = join(resolve(vaultPath), '.mcpvault', 'scope-auth.json');
-    this.authLockPath = join(resolve(vaultPath), '.mcpvault', 'scope-auth.lock');
+  constructor(vaultPath: string, options: { moderatorAccounts?: string[]; commandCenterId?: string; enterpriseRegistry?: EnterpriseRegistry; authPath?: string; protectedServicePaths?: string[] } = {}) {
+    this.enterpriseRegistry = options.enterpriseRegistry;
+    if (this.enterpriseRegistry && !options.authPath) throw new Error('Enterprise authentication requires an explicit host-private account store');
+    if (this.enterpriseRegistry && options.authPath) {
+      if (!isAbsolute(options.authPath)) throw new Error('Enterprise account store must use an absolute path');
+      const canonical = (path: string): string => {
+        if (existsSync(path)) return realpathSync(path);
+        const parent = dirname(path);
+        return parent === path ? path : join(canonical(parent), relative(parent, path));
+      };
+      const moduleRoot = dirname(dirname(fileURLToPath(import.meta.url)));
+      const packageRoot = basename(moduleRoot) === 'dist' ? dirname(moduleRoot) : moduleRoot;
+      for (const protectedPath of [vaultPath, packageRoot, ...(options.protectedServicePaths ?? [])]) {
+        const child = relative(canonical(resolve(protectedPath)).toLowerCase(), canonical(resolve(options.authPath)).toLowerCase());
+        if (!child || (!child.startsWith('..') && !isAbsolute(child))) throw new Error('Enterprise account store must be outside the Vault and protected service directories');
+      }
+    }
+    this.authPath = options.authPath ? resolve(options.authPath) : join(resolve(vaultPath), '.mcpvault', 'scope-auth.json');
+    this.authLockPath = this.enterpriseRegistry ? `${this.authPath}.lock` : join(resolve(vaultPath), '.mcpvault', 'scope-auth.lock');
     const configured = options.moderatorAccounts || String(process.env.MCPVAULT_MODERATOR_ACCOUNTS || '').split(',');
     this.moderatorAccounts = new Set(configured.map(value => String(value).trim().toLowerCase()).filter(Boolean));
     this.commandCenterId = normalizeScopeId(options.commandCenterId || process.env.MCPVAULT_COMMAND_CENTER_ID || 'local', 'commandCenterId');
   }
 
   private effectiveCapabilities(principal: ScopePrincipal): ScopeCapability[] {
-    const capabilities = Array.from(new Set(principal.capabilities || this.defaultCapabilities(principal.role)));
+    const mode = this.enterpriseRegistry?.getPolicy().mode;
+    const capabilities = Array.from(new Set(principal.capabilities || this.defaultCapabilities(principal.role)))
+      .filter(capability => !mode || (capability !== 'whisper' && (mode !== 'public' || capability !== 'chat')));
     if (this.moderatorAccounts.has(principal.accountId)) capabilities.push('moderate');
     return Array.from(new Set(capabilities));
   }
@@ -301,7 +336,10 @@ export class ScopeAuthService {
   }
 
   authenticate(accessToken: unknown): ScopePrincipal | undefined {
-    if (typeof accessToken !== 'string' || !accessToken) return undefined;
+    if (typeof accessToken !== 'string' || !accessToken) {
+      if (this.enterpriseRegistry) throw new Error('Enterprise authentication is required; use the administrator invitation or log in');
+      return undefined;
+    }
     const key = tokenDigest(accessToken);
     const session = this.sessions.get(key);
     if (!session) throw new Error('Invalid access token; call login_scope again');
@@ -309,7 +347,84 @@ export class ScopeAuthService {
       this.sessions.delete(key);
       throw new Error('Access token expired; call login_scope again');
     }
+    if (this.enterpriseRegistry) {
+      this.assertEnterprisePrincipal(session.principal);
+      this.enterpriseRegistry.assertSessionLease({ agentId: session.principal.agentId!, sessionId: session.principal.sessionId!, generation: session.principal.sessionGeneration! });
+    }
     return { ...session.principal, capabilities: this.effectiveCapabilities(session.principal) };
+  }
+
+  /** Called before auth endpoints as well, preventing REST/stdio from bypassing mTLS. */
+  requireEnterpriseRuntime() {
+    if (!this.enterpriseRegistry) return undefined;
+    const context = getEnterpriseRequestContext();
+    if (context?.transport !== 'http' || !context.certFingerprint) throw new Error('An authenticated runtime client certificate is required');
+    return this.enterpriseRegistry.resolveRequestCertificate(context.certFingerprint);
+  }
+
+  private assertEnterprisePrincipal(principal: ScopePrincipal) {
+    const registry = this.enterpriseRegistry!;
+    const runtime = this.requireEnterpriseRuntime()!;
+    const policy = registry.getPolicy();
+    const binding = registry.getBinding(principal.accountId);
+    if (!binding) throw new Error('No administrator-approved account binding');
+    return registry.assertBinding({ ...binding, accountId: principal.accountId, agentId: principal.agentId!, userId: principal.userId!, modelId: principal.modelId,
+      runtimeId: runtime.runtimeId, realmId: policy.realmId, mode: policy.mode, certFingerprint: getEnterpriseRequestContext()!.certFingerprint! });
+  }
+
+  private async enterpriseSession(principal: ScopePrincipal, params: { sessionId?: string; expectedGeneration?: number }) {
+    const registry = this.enterpriseRegistry!;
+    const verified = this.assertEnterprisePrincipal(principal);
+    const sessionId = normalizeScopeId(params.sessionId || '', 'sessionId');
+    const active = registry.getSessionLease(principal.agentId!);
+    if (active && Date.parse(active.expiresAt) > Date.now() && active.sessionId !== sessionId && params.expectedGeneration === undefined) {
+      throw new Error(`An active session holds this agent; explicit handoff expectedGeneration=${active.generation} is required`);
+    }
+    const expiresAt = Date.now() + SESSION_TTL_MS;
+    const lease = await registry.claimSessionLease({ agentId: principal.agentId!, sessionId,
+      expectedGeneration: params.expectedGeneration ?? registry.getSessionGeneration(principal.agentId!), expiresAt: new Date(expiresAt).toISOString() });
+    const identity = authorIdentity(principal, verified.binding.role || verified.binding.displayLabel, (await this.readDatabase()).accounts);
+    const next: ScopePrincipal = { ...principal, capabilities: this.effectiveCapabilities(principal), ...identity, sessionId, sessionGeneration: lease.generation,
+      enterprise: { mode: verified.policy.mode, realmId: verified.policy.realmId, runtimeId: verified.runtime.runtimeId, sharedMemoryEnabled: verified.employee.sharedMemoryEnabled } };
+    const accessToken = randomBytes(32).toString('base64url');
+    this.sessions.set(tokenDigest(accessToken), { principal: next, expiresAt });
+    return { success: true as const, accessToken, expiresAt: new Date(expiresAt).toISOString(), principal: next };
+  }
+
+  private async registerEnterprise(params: { accountId: string; password: string; modelId: string; agentId?: string; userId?: string; invitationToken?: string; sessionId?: string; expectedGeneration?: number }) {
+    const registry = this.enterpriseRegistry!;
+    const runtime = this.requireEnterpriseRuntime()!;
+    if (!params.invitationToken) throw new Error('An administrator invitation is required');
+    const password = validatePassword(params.password);
+    this.consumeRegistrationAttempt();
+    const policy = registry.getPolicy();
+    const reserved = await registry.reserveInvite({ secret: params.invitationToken, realmId: policy.realmId, mode: policy.mode,
+      runtimeId: runtime.runtimeId, certFingerprint: getEnterpriseRequestContext()!.certFingerprint! });
+    const binding: EnterpriseBinding = reserved.binding;
+    if (params.accountId !== binding.accountId || params.agentId !== binding.agentId || params.modelId !== binding.modelId
+      || (params.userId !== undefined && params.userId !== binding.userId)) throw new Error('Registration identity must match the administrator invitation binding');
+    const principal = await this.exclusive(async () => {
+      const database = await this.readDatabase();
+      const existing = database.accounts.find(account => account.accountId === binding.accountId);
+      if (existing) {
+        if (existing.registrationId !== reserved.registrationId || existing.userId !== binding.userId || existing.agentId !== binding.agentId
+          || existing.modelId !== binding.modelId || existing.commandCenterId !== policy.realmId) throw new Error('Account is already bound to a different registration');
+        const digest = await passwordDigest(password, Buffer.from(existing.salt, 'base64'));
+        if (!timingSafeEqual(digest, Buffer.from(existing.passwordHash, 'base64'))) throw new Error('Invalid registration credentials');
+        const { salt: _salt, passwordHash: _hash, createdAt: _created, registrationId: _registration, ...identity } = existing;
+        return identity;
+      }
+      if (database.accounts.length >= MAX_ACCOUNTS || database.accounts.some(account => account.agentId === binding.agentId)) throw new Error('Account capacity or agent identity conflict');
+      if (database.accounts.filter(account => account.userId === binding.userId).length >= MAX_ACCOUNTS_PER_USER) throw new Error('Employee account capacity reached');
+      const identity: ScopePrincipal = { accountId: binding.accountId, agentId: binding.agentId, modelId: binding.modelId,
+        userId: binding.userId, commandCenterId: policy.realmId, role: 'agent', capabilities: this.defaultCapabilities('agent') };
+      const salt = randomBytes(16); const digest = await passwordDigest(password, salt);
+      await this.writeDatabase({ ...database, accounts: [...database.accounts, { ...identity, salt: salt.toString('base64'), passwordHash: digest.toString('base64'),
+        registrationId: reserved.registrationId, createdAt: new Date().toISOString() }] });
+      return identity;
+    });
+    await registry.completeInvite({ registrationId: reserved.registrationId });
+    return { ...await this.enterpriseSession(principal, params), next: 'Keep this agent identity for the next session; use explicit generation handoff for a different active session.' };
   }
 
   async register(params: {
@@ -319,6 +434,9 @@ export class ScopeAuthService {
     agentId?: string;
     userId?: string;
     accessToken?: string;
+    invitationToken?: string;
+    sessionId?: string;
+    expectedGeneration?: number;
   }): Promise<{
     success: true;
     accessToken: string;
@@ -326,6 +444,7 @@ export class ScopeAuthService {
     principal: ScopePrincipal;
     next: string;
   }> {
+    if (this.enterpriseRegistry) return this.registerEnterprise(params);
     const accountId = normalizeScopeId(params.accountId, 'accountId');
     const modelId = normalizeScopeId(params.modelId, 'modelId');
     const agentId = params.agentId ? normalizeScopeId(params.agentId, 'agentId') : undefined;
@@ -408,12 +527,13 @@ export class ScopeAuthService {
     };
   }
 
-  async login(params: { accountId: string; password: string }): Promise<{
+  async login(params: { accountId: string; password: string; sessionId?: string; expectedGeneration?: number }): Promise<{
     success: true;
     accessToken: string;
     expiresAt: string;
     principal: ScopePrincipal;
   }> {
+    this.requireEnterpriseRuntime();
     const accountId = normalizeScopeId(params.accountId, 'accountId');
     const password = validatePassword(params.password);
     const failure = this.loginFailures.get(accountId);
@@ -451,11 +571,13 @@ export class ScopeAuthService {
           : this.defaultCapabilities(account.role),
       };
     const effectivePrincipal = { ...principal, capabilities: this.effectiveCapabilities(principal) };
+    if (this.enterpriseRegistry) return this.enterpriseSession(effectivePrincipal, params);
     this.sessions.set(tokenDigest(accessToken), { principal: effectivePrincipal, expiresAt });
     return { success: true, accessToken, expiresAt: new Date(expiresAt).toISOString(), principal: effectivePrincipal };
   }
 
   logout(accessToken: unknown): { success: true } {
+    if (this.enterpriseRegistry) this.authenticate(accessToken);
     if (typeof accessToken !== 'string' || !accessToken) throw new Error('accessToken is required');
     this.sessions.delete(tokenDigest(accessToken));
     return { success: true };
@@ -468,9 +590,29 @@ export class ScopeAuthService {
     };
   }
 
+  async endSession(accessToken: unknown) {
+    if (!this.enterpriseRegistry) return this.logout(accessToken);
+    const principal = this.authenticate(accessToken);
+    if (this.enterpriseRegistry && principal) await this.enterpriseRegistry.releaseSessionLease({
+      agentId: principal.agentId!, sessionId: principal.sessionId!, expectedGeneration: principal.sessionGeneration!,
+    });
+    if (typeof accessToken === 'string') this.sessions.delete(tokenDigest(accessToken));
+    return { success: true as const };
+  }
+
+  async handoffEnterpriseSession(accessToken: unknown, params: { agentId: string; fromSessionId?: string; toSessionId: string; expectedGeneration: number }) {
+    const principal = this.authenticate(accessToken);
+    if (!this.enterpriseRegistry || !principal?.enterprise || params.agentId !== principal.agentId
+      || (params.fromSessionId !== undefined && params.fromSessionId !== principal.sessionId)) throw new Error('Session handoff is not authorized');
+    const lease = await this.enterpriseRegistry.claimSessionLease({ agentId: principal.agentId, sessionId: normalizeScopeId(params.toSessionId, 'toSessionId'),
+      expectedGeneration: params.expectedGeneration, expiresAt: new Date(Date.now() + SESSION_TTL_MS).toISOString() });
+    return { success: true, agentId: principal.agentId, generation: lease.generation, currentSession: lease.sessionId,
+      nextAction: { tool: 'call_endpoint', arguments: { endpointId: 'auth.login', arguments: { accountId: principal.accountId, sessionId: lease.sessionId } } } };
+  }
+
   async listPrincipals(): Promise<ScopePrincipal[]> {
     const cached = this.principalCache;
-    if (cached && cached.expiresAt > Date.now()) {
+    if (!this.enterpriseRegistry && cached && cached.expiresAt > Date.now()) {
       return cached.value.map(principal => ({ ...principal, ...(principal.capabilities && { capabilities: [...principal.capabilities] }) }));
     }
     const database = await this.readDatabase();
@@ -495,6 +637,18 @@ export class ScopeAuthService {
           : this.defaultCapabilities(account.role),
       }),
       }));
+    if (this.enterpriseRegistry) {
+      const registry = this.enterpriseRegistry;
+      const policy = registry.getPolicy();
+      return value.flatMap(principal => {
+        const binding = registry.getBinding(principal.accountId);
+        const employee = binding && registry.getEmployee(binding.userId);
+        if (!binding || !employee?.active || binding.agentId !== principal.agentId || binding.userId !== principal.userId || binding.modelId !== principal.modelId) return [];
+        try { registry.assertRegisteredBinding(binding); } catch { return []; }
+        return [{ ...principal, ...authorIdentity(principal, binding.role || binding.displayLabel, value),
+          enterprise: { mode: policy.mode, realmId: policy.realmId, runtimeId: binding.runtimeId, sharedMemoryEnabled: employee.sharedMemoryEnabled } }];
+      });
+    }
     this.principalCache = { expiresAt: Date.now() + AUTH_DATABASE_CACHE_TTL_MS, value };
     return value.map(principal => ({ ...principal, ...(principal.capabilities && { capabilities: [...principal.capabilities] }) }));
   }
