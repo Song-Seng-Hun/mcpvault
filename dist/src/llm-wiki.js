@@ -8812,12 +8812,14 @@ export class LlmWikiService {
         if (isModerationHidden(source.frontmatter))
             throw new Error('The source note is unavailable');
         const requested = String(requestedMode || 'auto').trim().toLowerCase();
-        if (!['auto', 'moc', 'neighborhood'].includes(requested))
-            throw new Error("mode must be 'auto', 'moc', or 'neighborhood'");
+        if (!['auto', 'moc', 'neighborhood', 'workshop'].includes(requested))
+            throw new Error("mode must be 'auto', 'moc', 'neighborhood', or 'workshop'");
         const sourceKind = String(source.frontmatter.note_kind || '').trim().toLowerCase();
         const mode = requested === 'auto' ? (sourceKind === 'moc' ? 'moc' : 'neighborhood') : requested;
         if (mode === 'moc' && sourceKind !== 'moc')
             throw new Error("mode='moc' requires a visible note_kind: moc root");
+        if (mode === 'workshop' && source.frontmatter.mcpvault_type !== 'workshop')
+            throw new Error("mode='workshop' requires a visible mcpvault_type: workshop root");
         const mayInclude = (candidatePath) => canvasMayInclude(this.access, principal, sourcePath, candidatePath);
         const root = {
             path: sourcePath,
@@ -8832,6 +8834,7 @@ export class LlmWikiService {
         let totalCandidates = 1;
         let excludedCrossScope = 0;
         let upstreamTruncated = false;
+        let workshopMap;
         const resolvePublicPath = (value) => {
             if (typeof value !== 'string' || !value.trim())
                 return undefined;
@@ -8842,7 +8845,100 @@ export class LlmWikiService {
                 return undefined;
             }
         };
-        if (mode === 'moc') {
+        if (mode === 'workshop') {
+            const workshopId = String(source.frontmatter.workshop_id || '').trim();
+            if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/.test(workshopId))
+                throw new Error('Workshop Canvas root has an invalid workshop_id');
+            const contributionPrefix = `Community/Workshops/${workshopId}/Contributions`;
+            const candidates = await this.fileSystem.queryNotes({
+                pathPrefix: contributionPrefix, filters: { mcpvault_type: 'workshop_contribution' }, sortBy: 'created_at', sortOrder: 'asc',
+                limit: Math.max(1, boundedLimit - 1), includeContent: false, includeTotal: true,
+            }, mayInclude, note => !isModerationHidden(note.frontmatter));
+            totalCandidates = Math.max(1, Number(candidates.total || 0) + 1);
+            upstreamTruncated = candidates.truncated;
+            const mapNodes = [];
+            const pendingEdges = [];
+            const seenMapIds = new Set();
+            let mapTruncated = false;
+            const isMapRecord = (value) => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+            const requireMapId = (value, field) => {
+                if (typeof value !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/.test(value))
+                    throw new Error(`Workshop Canvas ${field} must be a bounded identifier`);
+                return value;
+            };
+            const requireMapText = (value, field, maximum) => {
+                if (typeof value !== 'string' || !value.trim() || value.length > maximum || /(?:scope:\/\/|_scopes\/|\[\[|\]\])/i.test(value)) {
+                    throw new Error(`Workshop Canvas ${field} contains an unsafe private reference or is out of bounds`);
+                }
+                return value.replace(/[\r\n]+/g, ' ').trim();
+            };
+            for (const candidate of candidates.notes) {
+                if (!mayInclude(candidate.path)) {
+                    excludedCrossScope += 1;
+                    continue;
+                }
+                const contribution = await this.fileSystem.readNote(candidate.path);
+                if (isModerationHidden(contribution.frontmatter)
+                    || contribution.frontmatter.mcpvault_type !== 'workshop_contribution'
+                    || contribution.frontmatter.workshop_id !== workshopId) {
+                    throw new Error('Workshop Canvas contribution metadata is invalid or unavailable');
+                }
+                if (notes.length >= boundedLimit) {
+                    upstreamTruncated = true;
+                    break;
+                }
+                notes.push({
+                    path: candidate.path, publicPath: this.access.toPublicPath(candidate.path), revision: contribution.revision,
+                    title: boundedText(contribution.frontmatter.contribution_id || candidate.path.split('/').at(-1), 160), role: 'neighbor',
+                });
+                const structured = contribution.frontmatter.structured;
+                if (structured === undefined)
+                    continue;
+                if (!isMapRecord(structured))
+                    throw new Error('Workshop Canvas contribution structured data must be an object');
+                const rawNodes = structured.mapNodes;
+                const rawEdges = structured.mapEdges;
+                if (rawNodes !== undefined && !Array.isArray(rawNodes))
+                    throw new Error('Workshop Canvas mapNodes must be an array');
+                if (rawEdges !== undefined && !Array.isArray(rawEdges))
+                    throw new Error('Workshop Canvas mapEdges must be an array');
+                if ((rawNodes?.length || 0) > 48 || (rawEdges?.length || 0) > 96)
+                    mapTruncated = true;
+                for (const item of (rawNodes || []).slice(0, 48)) {
+                    if (!isMapRecord(item))
+                        throw new Error('Workshop Canvas mapNodes items must be objects');
+                    const id = requireMapId(item.id, 'mapNodes.id');
+                    const label = requireMapText(item.label, 'mapNodes.label', 160);
+                    if (seenMapIds.has(id))
+                        throw new Error(`Workshop Canvas map node '${id}' is duplicated`);
+                    if (mapNodes.length >= 48) {
+                        mapTruncated = true;
+                        continue;
+                    }
+                    seenMapIds.add(id);
+                    mapNodes.push({ id, label, sourcePath: candidate.path });
+                }
+                for (const item of (rawEdges || []).slice(0, 96)) {
+                    if (!isMapRecord(item))
+                        throw new Error('Workshop Canvas mapEdges items must be objects');
+                    pendingEdges.push({
+                        fromId: requireMapId(item.fromId, 'mapEdges.fromId'), toId: requireMapId(item.toId, 'mapEdges.toId'),
+                        ...(item.label === undefined ? {} : { label: requireMapText(item.label, 'mapEdges.label', 64) }), sourcePath: candidate.path,
+                    });
+                }
+            }
+            const mapIds = new Set(mapNodes.map(node => node.id));
+            const mapEdges = pendingEdges.filter(edge => {
+                const accepted = mapIds.has(edge.fromId) && mapIds.has(edge.toId);
+                if (!accepted)
+                    mapTruncated = true;
+                return accepted;
+            }).slice(0, 96);
+            if (pendingEdges.length > mapEdges.length)
+                mapTruncated = true;
+            workshopMap = { nodes: mapNodes, edges: mapEdges, truncated: mapTruncated };
+        }
+        else if (mode === 'moc') {
             const learning = await this.learningPath(principal, sourcePath, boundedDepth, Math.max(1, boundedLimit - 1), 16000);
             const authored = Array.isArray(learning.authoredOrder) ? learning.authoredOrder : [];
             totalCandidates = Number(learning.summary?.entries || authored.length) + 1;
@@ -8935,6 +9031,7 @@ export class LlmWikiService {
             totalCandidates,
             excludedCrossScope,
             upstreamTruncated,
+            ...(workshopMap && { workshopMap }),
         };
     }
     async fitSpatialCanvasGraph(graph, maxChars, outputInternalPath = graph.suggestedInternalPath) {
@@ -8944,12 +9041,21 @@ export class LlmWikiService {
         while (true) {
             const included = new Set(notes.map(note => note.path.toLowerCase()));
             const edges = graph.edges.filter(edge => included.has(edge.fromPath.toLowerCase()) && included.has(edge.toPath.toLowerCase()));
-            const rendered = buildJsonCanvasProjection({ mode: graph.mode, notes, edges });
+            const workshopMap = graph.workshopMap && {
+                nodes: graph.workshopMap.nodes.filter(node => included.has(node.sourcePath.toLowerCase())),
+                edges: [],
+            };
+            if (workshopMap) {
+                const ids = new Set(workshopMap.nodes.map(node => node.id));
+                workshopMap.edges = graph.workshopMap.edges.filter(edge => included.has(edge.sourcePath.toLowerCase()) && ids.has(edge.fromId) && ids.has(edge.toId));
+            }
+            const rendered = buildJsonCanvasProjection({ mode: graph.mode, notes, edges, ...(workshopMap && { workshopMap }) });
             const publicCanvas = {
                 nodes: rendered.canvas.nodes.map(node => node.type === 'file' && node.file ? { ...node, file: this.access.toPublicPath(node.file) } : node),
                 edges: rendered.canvas.edges,
             };
-            const truncated = graph.upstreamTruncated || graph.excludedCrossScope > 0 || notes.length < graph.notes.length || graph.totalCandidates > notes.length;
+            const truncated = graph.upstreamTruncated || graph.excludedCrossScope > 0 || notes.length < graph.notes.length || graph.totalCandidates > notes.length
+                || Boolean(graph.workshopMap && (graph.workshopMap.truncated || workshopMap.nodes.length < graph.workshopMap.nodes.length));
             const response = {
                 mode: `${graph.mode}_canvas`,
                 standard: 'JSON Canvas 1.0',
@@ -8957,11 +9063,13 @@ export class LlmWikiService {
                 root: { path: graph.root.publicPath, revision: graph.root.revision, title: graph.root.title },
                 layout: graph.mode === 'moc'
                     ? 'Authored MOC order runs top-to-bottom; nested MOCs move right; orange edges show prerequisites.'
-                    : 'Direct links/backlinks stay closest to the root, shared provenance/context follows, and semantic or temporal discovery stays farthest away.',
+                    : graph.mode === 'workshop'
+                        ? 'Workshop file nodes retain source revision guards; only submitted structured map nodes and explicit map edges are projected.'
+                        : 'Direct links/backlinks stay closest to the root, shared provenance/context follows, and semantic or temporal discovery stays farthest away.',
                 canvas: publicCanvas,
                 sourceRevisions: notes.map(note => ({ path: note.publicPath, revision: note.revision, role: note.role, ...(note.reasons?.length && { reasons: note.reasons }) })),
                 snapshotFingerprint: rendered.snapshotFingerprint,
-                counts: { sourceCandidates: graph.totalCandidates, fileNodes: notes.length, canvasNodes: rendered.canvas.nodes.length, edges: rendered.canvas.edges.length, excludedCrossScope: graph.excludedCrossScope },
+                counts: { sourceCandidates: graph.totalCandidates, fileNodes: notes.length, mapNodes: workshopMap?.nodes.length || 0, canvasNodes: rendered.canvas.nodes.length, edges: rendered.canvas.edges.length, excludedCrossScope: graph.excludedCrossScope },
                 suggestedPath: this.access.toPublicPath(outputInternalPath),
                 outputRevision,
                 exportAction: {

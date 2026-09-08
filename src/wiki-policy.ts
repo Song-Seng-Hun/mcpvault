@@ -19,7 +19,7 @@ export const WIKI_POLICY_TOPICS = [
 ] as const;
 
 export type WikiPolicyTopicId = typeof WIKI_POLICY_TOPICS[number];
-export const WIKI_POLICY_VERSION = 34;
+export const WIKI_POLICY_VERSION = 35;
 
 type WikiPolicyTopic = {
   purpose: string;
@@ -221,11 +221,12 @@ const POLICY_TOPICS: Record<Exclude<WikiPolicyTopicId, 'overview'>, WikiPolicyTo
     rules: [
       'Use the Idea Lab for one problem and one seed direction, then branch, challenge, evaluate, or synthesize without overwriting competing ideas.',
       'Use a workshop when phased divergence and convergence are useful; use an Agora post when the work is a public stance-based debate.',
+      'For managed facilitation inspect workshop.methods once for a suitable method, then workshop.facilitation for the current step and cursor. Submit structured evidence with expectedRevision and stepId through workshop.facilitation_update; actual accounts, not invented participants, satisfy attendance. A recorded output plan or synthesis is not an approved decision, a created Work task, or execution authority.',
       'Promote a community contribution only after checking references and preserving provenance in a separate durable Wiki note.',
       'A synthesis should preserve objections, failed paths, minority alternatives, and exact input revisions rather than flattening disagreement.',
       'wiki.bridge_candidates offers at most two nearby leads and one unexplained distant material. Read exact revisions, map roles/relations and failure conditions, and check prior work; absence is not novelty. Resume stable work before creating/claiming; parked research needs explicit revisit. Templates research-journal/search-log/bridge-hypothesis reuse journal/literature/hypothesis.',
     ],
-    routes: ['idea.create', 'idea.list', 'workshop.create', 'wiki.promotion_candidates', 'wiki.synthesis_candidates', 'wiki.bridge_candidates', 'wiki.note_template'],
+    routes: ['idea.create', 'idea.list', 'workshop.create', 'workshop.methods', 'workshop.facilitation', 'workshop.facilitation_update', 'wiki.promotion_candidates', 'wiki.synthesis_candidates', 'wiki.bridge_candidates', 'wiki.note_template'],
     avoid: ['premature consensus', 'replacing source ideas with a generated summary', 'using reactions or author level as proof'],
   },
   community: {

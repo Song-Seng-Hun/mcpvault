@@ -3,7 +3,14 @@ import { FrontmatterHandler } from "./frontmatter.js";
 import { PathFilter } from "./pathfilter.js";
 import { type PublicFederationHostConfig } from './enterprise-federation.js';
 import { EndpointRegistry } from "./endpoint-registry.js";
+import { type EconomyLedger } from './economy-ledger.js';
+import type { EconomyPolicy } from './economy-model.js';
 export interface CreateServerOptions {
+    /** Host-provisioned ledger only. Never initialized or funded from MCP. */
+    economy?: {
+        ledger: EconomyLedger;
+        policy: EconomyPolicy;
+    };
     /** Opt-in host-private enterprise registry. Never inferred from Vault content. */
     enterpriseRegistryPath?: string;
     publicFederation?: PublicFederationHostConfig;

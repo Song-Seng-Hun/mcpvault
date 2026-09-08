@@ -141,8 +141,10 @@ export declare class IdeationService {
         timeboxMinutes?: number;
         maxContributionsPerAgent?: number;
         references?: unknown;
+        facilitation?: unknown;
         requestId?: string;
         researchWork?: ResearchWorkshopWork;
+        revalidateActor?: () => Promise<ScopePrincipal>;
     }): Promise<{
         success: true;
         workshopId: string;
@@ -177,6 +179,173 @@ export declare class IdeationService {
         contributionTotal: number;
         truncated: boolean;
     }>;
+    getWorkshopMethods(params?: {
+        methodId?: unknown;
+        cursor?: unknown;
+        maxChars?: number;
+    }): {
+        methods: {
+            methodId: "1-2-4-all" | "affinity-kj" | "blameless-postmortem" | "brainwriting" | "checklist" | "crazy8s" | "daci" | "dot-voting" | "how-might-we" | "mind-map" | "ngt" | "page-led" | "premortem" | "retrospective" | "scamper" | "six-hats";
+            version: 1;
+            title: string;
+            stepCount: number;
+        }[];
+        truncated: boolean;
+        nextAction: {
+            endpointId: string;
+            arguments: {
+                methodId: "1-2-4-all" | "affinity-kj" | "blameless-postmortem" | "brainwriting" | "checklist" | "crazy8s" | "daci" | "dot-voting" | "how-might-we" | "mind-map" | "ngt" | "page-led" | "premortem" | "retrospective" | "scamper" | "six-hats";
+                maxChars: number;
+                cursor?: never;
+            };
+        };
+    } | {
+        methods: {
+            methodId: "1-2-4-all" | "affinity-kj" | "blameless-postmortem" | "brainwriting" | "checklist" | "crazy8s" | "daci" | "dot-voting" | "how-might-we" | "mind-map" | "ngt" | "page-led" | "premortem" | "retrospective" | "scamper" | "six-hats";
+            version: 1;
+            title: string;
+            adaptation: string;
+            steps: {
+                id: string;
+                title: string;
+                required: readonly string[];
+                finishCondition: string;
+                adaptation: string;
+                minimumAccounts?: number;
+            }[];
+        }[];
+        truncated: boolean;
+        cursor?: number;
+        nextAction?: {
+            endpointId: string;
+            arguments: {
+                methodId?: never;
+                cursor: number;
+                maxChars: number;
+            };
+        };
+    };
+    private validateFacilitationSources;
+    /** Re-open every contribution before it affects a managed workflow. Raw
+     * query rows are advisory: deleted, hidden, cross-scope, malformed, stale,
+     * revoked, duplicate-ballot, and wrong-workshop rows never reach a count or
+     * page cursor. */
+    private managedWorkshopContributions;
+    private facilitationCursorOffset;
+    readWorkshopFacilitation(params: {
+        principal?: ScopePrincipal;
+        workshopId: string;
+        cursor?: unknown;
+        limit?: number;
+        maxChars?: number;
+    }): Promise<{
+        truncated?: never;
+        workshopId: string;
+        managed: boolean;
+        revision: string;
+        nextAction: {
+            kind: string;
+            message: string;
+            stepId?: never;
+        };
+        blocked?: never;
+        facilitation?: never;
+        submissions?: never;
+        submissionTotal?: never;
+    } | {
+        workshopId: string;
+        managed: boolean;
+        revision: string;
+        blocked: boolean;
+        facilitation: {
+            version: 1;
+            currentStepId: string;
+            round: number;
+        };
+        submissions: never[];
+        submissionTotal: number;
+        nextAction: {
+            kind: string;
+            stepId: string;
+            message: string;
+        };
+        truncated: boolean;
+    } | {
+        workshopId: string;
+        managed: boolean;
+        revision: string;
+        facilitation: {
+            version: 1;
+            purpose: string;
+            scope: string;
+            successCriteria: string[];
+            currentStepId: string;
+            round: number;
+            facilitatorAccountId: string;
+            currentStep: {
+                title: string;
+                required: readonly string[];
+                finishCondition: string;
+                adaptation: string;
+            };
+            sourcePins: import("./workshop-facilitation.js").FacilitationSourceRevision[];
+            sourcePinsTruncated: boolean;
+            sourceDetailAction?: {
+                endpointId: string;
+                arguments: {
+                    path: string;
+                    expectedRevision: string;
+                    maxChars: number;
+                };
+            };
+        };
+        outputAuthority: string;
+        nextAction: {
+            kind: 'submit' | 'wait' | 'advance' | 'record_output';
+            stepId: string;
+            required: string[];
+            finishCondition: string;
+            adaptation: string;
+            resumeCondition?: string;
+        } | {
+            kind: string;
+            stepId: string;
+            required: string[];
+            finishCondition: string;
+            adaptation: string;
+        };
+        submissions: {
+            contributionId: any;
+            accountId: string;
+            stepId: string;
+            structured: Record<string, unknown>;
+            createdAt: any;
+        }[];
+        submissionTotal: number;
+        completionUnknown: boolean;
+        cursor?: {
+            path: string;
+            missing: boolean;
+        } | {
+            path: string;
+            value: string | number | boolean | null;
+        };
+        truncated: boolean;
+    }>;
+    updateWorkshopFacilitation(params: {
+        principal?: ScopePrincipal;
+        workshopId: string;
+        expectedRevision: string;
+        requestId: string;
+        operation: string;
+        payload?: unknown;
+        stepId?: string;
+        structured?: unknown;
+        content?: string;
+        kind?: string;
+        references?: unknown;
+        revalidateActor?: () => Promise<ScopePrincipal>;
+    }): Promise<any>;
     contributeWorkshop(params: {
         principal?: ScopePrincipal;
         workshopId: string;
@@ -185,16 +354,12 @@ export declare class IdeationService {
         ideaId?: string;
         references?: unknown;
         expectedPhase?: string;
+        expectedRevision?: string;
+        stepId?: string;
+        structured?: unknown;
         requestId?: string;
-    }): Promise<{
-        success: true;
-        workshopId: string;
-        contributionId: string;
-        phase: "closed" | "cluster" | "critique" | "decide" | "diverge" | "evaluate" | "synthesize";
-        kind: "challenge" | "counterexample" | "decision" | "evaluation" | "extension" | "idea" | "synthesis";
-        path: string;
-        revision: string;
-    }>;
+        revalidateActor?: () => Promise<ScopePrincipal>;
+    }): Promise<any>;
     updateWorkshopPhase(params: {
         principal?: ScopePrincipal;
         workshopId: string;

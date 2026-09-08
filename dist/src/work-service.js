@@ -410,6 +410,8 @@ export class WorkService {
         params = { ...params };
         return coordinate(async () => {
             const prior = action === 'update' ? await this.visible(taskPath(params.taskId)) : undefined;
+            if (params.taskId)
+                await this.options.assertTaskMutation?.(normalizeScopeId(params.taskId, 'taskId'));
             const requestedProject = prior?.frontmatter.project_id || params.projectId;
             if (!requestedProject) {
                 if (intent)

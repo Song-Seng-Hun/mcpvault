@@ -1,11 +1,24 @@
 import { afterEach, beforeEach, expect, test } from 'vitest';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
 import { createServer } from './createServer.js';
+import { IdeationService } from './ideation.js';
+import { createFacilitation, managedFacilitationMarkdown } from './workshop-facilitation.js';
+import { FileSystemService } from './filesystem.js';
 
 let vault: string;
+
+test('a tiny method catalog budget increases the next read budget rather than repeating an empty page', () => {
+  const service = new IdeationService({} as any, {} as any);
+  const page = service.getWorkshopMethods({ maxChars: 512 });
+  expect(JSON.stringify(page).length).toBeLessThanOrEqual(512);
+  expect(page.truncated).toBe(true);
+  expect(page.nextAction?.arguments.maxChars).toBeGreaterThan(512);
+  const next = service.getWorkshopMethods(page.nextAction!.arguments);
+  expect(next.methods.length).toBeGreaterThan(0);
+});
 
 beforeEach(async () => {
   vault = await mkdtemp(join(tmpdir(), 'mcpvault-ideation-'));
@@ -25,6 +38,7 @@ async function setup() {
 
 async function json(client: Client, name: string, arguments_: Record<string, unknown>) {
   const result = await client.callTool({ name, arguments: arguments_ });
+  if (result.isError) throw new Error((result.content as any)[0].text);
   return { result, value: JSON.parse((result.content as any)[0].text) };
 }
 
@@ -75,6 +89,167 @@ test('Idea Lab preserves branches, bounded critiques, evaluations, and revision-
     expect(advanced.value.phase).toBe('critique');
     const synthesized = await json(client, 'synthesize_workshop', { workshopId: 'projection-workshop', synthesis: 'Use a bounded summary plus one unresolved objection and a link to the full thread.', references: ['IdeaEvidence.md'], expectedRevision: advanced.value.revision, accessToken });
     expect(synthesized.value).toMatchObject({ phase: 'decide', synthesisStatus: 'proposed' });
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
+test('managed facilitation rejects inaccessible sources and stale steps, replays requests, and advances only after actual participants submit', async () => {
+  const { server, client } = await setup();
+  try {
+    const owner = await json(client, 'register_scope_account', { accountId: 'fac-owner', modelId: 'codex', password: 'fac-owner-password-123' });
+    const participant = await json(client, 'register_scope_account', { accountId: 'fac-participant', modelId: 'codex', agentId: 'fac-participant-agent', password: 'fac-participant-password-123', accessToken: owner.value.accessToken });
+    const evidence = await json(client, 'write_note', { path: 'Facilitation evidence.md', content: 'A visible source for the managed workshop.', accessToken: owner.value.accessToken });
+    const config = {
+      version: 1, methods: [{ methodId: 'brainwriting' }], purpose: 'Generate bounded alternatives.', scope: 'Public workshop only.',
+      successCriteria: ['Two distinct independent ideas are recorded.'], sourceRevisions: [{ path: 'Facilitation evidence.md', revision: evidence.value.revision }],
+      facilitatorAccountId: 'fac-owner', participants: ['fac-owner', 'fac-participant'], decisionAuthority: { approverAccountId: 'fac-owner' },
+    };
+    const inaccessible = await client.callTool({ name: 'create_workshop', arguments: {
+      workshopId: 'managed-private-source', title: 'Private source must fail', prompt: 'Do not disclose a private source.',
+      facilitation: { ...config, sourceRevisions: [{ path: '_scopes/agents/secret/Hidden.md', revision: 'a'.repeat(64) }] }, accessToken: owner.value.accessToken,
+    } });
+    expect(inaccessible.isError).toBe(true);
+
+    const created = await json(client, 'create_workshop', { workshopId: 'managed-brainwriting', title: 'Managed brainwriting', prompt: 'Generate alternatives.', facilitation: config, accessToken: owner.value.accessToken });
+    const methods = await json(client, 'list_workshop_methods', { methodId: 'brainwriting', accessToken: owner.value.accessToken });
+    expect(methods.value.methods[0]).toMatchObject({ methodId: 'brainwriting', steps: expect.any(Array) });
+    const state = await json(client, 'read_workshop_facilitation', { workshopId: 'managed-brainwriting', accessToken: owner.value.accessToken });
+    expect(state.value).toMatchObject({ managed: true, revision: created.value.revision, nextAction: { stepId: 'brainwriting-independent' } });
+    const forgedOutput = await client.callTool({ name: 'update_workshop_facilitation', arguments: {
+      workshopId: 'managed-brainwriting', expectedRevision: state.value.revision, requestId: 'managed-forged-output', operation: 'record_output',
+      payload: { output: { type: 'facilitation_receipt', status: 'accepted' } }, accessToken: owner.value.accessToken,
+    } });
+    expect(forgedOutput.isError).toBe(true);
+
+    const stale = await client.callTool({ name: 'contribute_workshop', arguments: {
+      workshopId: 'managed-brainwriting', kind: 'idea', content: 'This must not land in a later step.', expectedRevision: state.value.revision,
+      stepId: 'brainwriting-build', structured: { extension: 'No stale step.' }, requestId: 'managed-stale-step', accessToken: owner.value.accessToken,
+    } });
+    expect(stale.isError).toBe(true);
+    const first = await json(client, 'contribute_workshop', {
+      workshopId: 'managed-brainwriting', kind: 'idea', content: 'First independent alternative.', expectedRevision: state.value.revision,
+      stepId: 'brainwriting-independent', structured: { ideaIds: ['first-alternative'], origin: 'fac-owner' }, requestId: 'managed-first', accessToken: owner.value.accessToken,
+    });
+    const replay = await json(client, 'contribute_workshop', {
+      workshopId: 'managed-brainwriting', kind: 'idea', content: 'First independent alternative.', expectedRevision: state.value.revision,
+      stepId: 'brainwriting-independent', structured: { ideaIds: ['first-alternative'], origin: 'fac-owner' }, requestId: 'managed-first', accessToken: owner.value.accessToken,
+    });
+    expect(replay.value.contributionId).toBe(first.value.contributionId);
+    await json(client, 'contribute_workshop', {
+      workshopId: 'managed-brainwriting', kind: 'idea', content: 'Second independent alternative.', expectedRevision: state.value.revision,
+      stepId: 'brainwriting-independent', structured: { ideaIds: ['second-alternative'], origin: 'fac-participant' }, requestId: 'managed-second', accessToken: participant.value.accessToken,
+    });
+    const advanced = await json(client, 'update_workshop_facilitation', {
+      workshopId: 'managed-brainwriting', expectedRevision: state.value.revision, requestId: 'managed-advance', operation: 'advance',
+      payload: { reason: 'Both configured accounts supplied independent ideas.' }, accessToken: owner.value.accessToken,
+    });
+    expect(advanced.value.currentStepId).toBe('brainwriting-build');
+    const staleAdvance = await client.callTool({ name: 'update_workshop_facilitation', arguments: {
+      workshopId: 'managed-brainwriting', expectedRevision: state.value.revision, requestId: 'managed-stale-advance', operation: 'advance',
+      payload: { reason: 'This revision is stale.' }, accessToken: owner.value.accessToken,
+    } });
+    expect(staleAdvance.isError).toBe(true);
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
+test('managed facilitation persists handoff, revocation, concurrent advance, restart, bounded cursors, and malformed-config rejection', async () => {
+  let active = await setup();
+  try {
+    const owner = await json(active.client, 'register_scope_account', { accountId: 'handoff-owner', modelId: 'codex', password: 'handoff-owner-password-123' });
+    const facilitator = await json(active.client, 'register_scope_account', { accountId: 'handoff-facilitator', modelId: 'codex', agentId: 'handoff-facilitator-agent', password: 'handoff-facilitator-password-123', accessToken: owner.value.accessToken });
+    const extra = await json(active.client, 'register_scope_account', { accountId: 'handoff-extra', modelId: 'codex', agentId: 'handoff-extra-agent', password: 'handoff-extra-password-123', accessToken: owner.value.accessToken });
+    const evidence = await json(active.client, 'write_note', { path: 'Handoff evidence.md', content: 'Visible managed-workshop basis.', accessToken: owner.value.accessToken });
+    const config = {
+      version: 1, methods: [{ methodId: 'brainwriting' }], purpose: 'Exercise durable managed state.', scope: 'Public workshop only.',
+      successCriteria: ['A handoff remains account-bound after restart.'], sourceRevisions: [{ path: 'Handoff evidence.md', revision: evidence.value.revision }],
+      facilitatorAccountId: 'handoff-owner', participants: ['handoff-owner', 'handoff-facilitator', 'handoff-extra'], decisionAuthority: { approverAccountId: 'handoff-owner' },
+    };
+    await json(active.client, 'create_workshop', { workshopId: 'managed-handoff', title: 'Managed handoff', prompt: 'Exercise handoff.', facilitation: config, accessToken: owner.value.accessToken });
+    const initial = await json(active.client, 'read_workshop_facilitation', { workshopId: 'managed-handoff' });
+    await json(active.client, 'contribute_workshop', { workshopId: 'managed-handoff', kind: 'idea', content: 'Owner idea.', expectedRevision: initial.value.revision, stepId: 'brainwriting-independent', structured: { ideaIds: ['owner-idea'], origin: 'handoff-owner' }, requestId: 'handoff-owner-idea', accessToken: owner.value.accessToken });
+    await json(active.client, 'contribute_workshop', { workshopId: 'managed-handoff', kind: 'idea', content: 'Facilitator idea.', expectedRevision: initial.value.revision, stepId: 'brainwriting-independent', structured: { ideaIds: ['facilitator-idea'], origin: 'handoff-facilitator' }, requestId: 'handoff-facilitator-idea', accessToken: facilitator.value.accessToken });
+    const handedOff = await json(active.client, 'update_workshop_facilitation', { workshopId: 'managed-handoff', expectedRevision: initial.value.revision, requestId: 'handoff-change', operation: 'handoff', payload: { facilitatorAccountId: 'handoff-facilitator' }, accessToken: owner.value.accessToken });
+    expect(handedOff.value).toMatchObject({ facilitatorAccountId: 'handoff-facilitator' });
+    const formerOwner = await active.client.callTool({ name: 'update_workshop_facilitation', arguments: { workshopId: 'managed-handoff', expectedRevision: handedOff.value.revision, requestId: 'handoff-former-owner', operation: 'resume', payload: { resumeCondition: 'Should reject.' }, accessToken: owner.value.accessToken } });
+    expect(formerOwner.isError).toBe(true);
+    const formerOwnerReplay = await active.client.callTool({ name: 'update_workshop_facilitation', arguments: { workshopId: 'managed-handoff', expectedRevision: initial.value.revision, requestId: 'handoff-change', operation: 'handoff', payload: { facilitatorAccountId: 'handoff-facilitator' }, accessToken: owner.value.accessToken } });
+    expect(formerOwnerReplay.isError).toBe(true);
+    const revoked = await json(active.client, 'update_workshop_facilitation', { workshopId: 'managed-handoff', expectedRevision: handedOff.value.revision, requestId: 'handoff-revoke', operation: 'revoke', payload: { accountId: 'handoff-extra' }, accessToken: facilitator.value.accessToken });
+    expect(revoked.value.facilitatorAccountId).toBe('handoff-facilitator');
+    const advances = await Promise.all(['handoff-advance-a', 'handoff-advance-b'].map(requestId => active.client.callTool({ name: 'update_workshop_facilitation', arguments: { workshopId: 'managed-handoff', expectedRevision: revoked.value.revision, requestId, operation: 'advance', payload: { reason: 'Both actual participants submitted.' }, accessToken: facilitator.value.accessToken } })));
+    expect(advances.filter(result => !result.isError)).toHaveLength(1);
+
+    for (let index = 0; index < 3; index++) {
+      await json(active.client, 'contribute_workshop', { workshopId: 'managed-handoff', kind: 'extension', content: `Bounded build ${index}.`, expectedRevision: advances.find(result => !result.isError) ? JSON.parse((advances.find(result => !result.isError)!.content as any)[0].text).revision : '', stepId: 'brainwriting-build', structured: { ideaIds: [`build-${index}`], extension: `Build ${index}.`, parentIdeaIds: ['owner-idea'] }, requestId: `handoff-build-${index}`, accessToken: facilitator.value.accessToken });
+    }
+    await expect(json(active.client, 'read_workshop_facilitation', { workshopId: 'managed-handoff', limit: 1, maxChars: 512 })).rejects.toThrow(/maxChars.*too small/);
+    const page = await json(active.client, 'read_workshop_facilitation', { workshopId: 'managed-handoff', limit: 1, maxChars: 6000 });
+    expect(page.value.truncated).toBe(true);
+    expect(page.value.cursor).toBeDefined();
+    expect(JSON.stringify(page.value).length).toBeLessThanOrEqual(6000);
+    const second = await json(active.client, 'read_workshop_facilitation', { workshopId: 'managed-handoff', limit: 1, maxChars: 6000, cursor: page.value.cursor });
+    expect(second.value.submissions[0].contributionId).not.toBe(page.value.submissions[0].contributionId);
+
+    await active.client.close();
+    await active.server.close();
+    active = await setup();
+    const restarted = await json(active.client, 'read_workshop_facilitation', { workshopId: 'managed-handoff' });
+    expect(restarted.value).toMatchObject({ managed: true, facilitation: { facilitatorAccountId: 'handoff-facilitator' } });
+    await writeFile(join(vault, 'Community', 'Workshops', 'managed-malformed.md'), '---\nmcpvault_type: workshop\nworkshop_id: managed-malformed\nfacilitation: malformed\n---\n# Malformed\n', 'utf8');
+    const malformed = await active.client.callTool({ name: 'read_workshop_facilitation', arguments: { workshopId: 'managed-malformed' } });
+    expect(malformed.isError).toBe(true);
+    await expect(readFile(join(vault, 'Community', 'Workshops', 'managed-malformed.md'), 'utf8')).resolves.toContain('facilitation: malformed');
+    expect(extra.value.accessToken).toEqual(expect.any(String));
+  } finally {
+    await active.client.close();
+    await active.server.close();
+  }
+});
+
+test('managed mutation stops before writing when final actor revalidation fails', async () => {
+  const revision = 'a'.repeat(64);
+  const facilitation = createFacilitation({
+    version: 1, methods: [{ methodId: 'brainwriting' }], purpose: 'Verify final actor.', scope: 'Test only.', successCriteria: ['No write after actor change.'],
+    sourceRevisions: [{ path: 'Evidence.md', revision }], facilitatorAccountId: 'callback-owner', participants: ['callback-owner'], decisionAuthority: {},
+  });
+  const note = { path: 'Community/Workshops/callback.md', revision, content: `# Callback\n\n${managedFacilitationMarkdown(facilitation)}\n`, frontmatter: { mcpvault_type: 'workshop', workshop_id: 'callback', facilitator_account_id: 'callback-owner', facilitation } };
+  let writes = 0;
+  const service = new IdeationService({ readNote: async () => note, writeNote: async () => { writes++; } } as any, {
+    validateAndNormalize: async (paths: unknown) => Array.isArray(paths) ? paths : [],
+  } as any);
+  await expect(service.updateWorkshopFacilitation({ principal: { accountId: 'callback-owner', modelId: 'codex', role: 'model' }, workshopId: 'callback', expectedRevision: revision, requestId: 'callback-resume', operation: 'resume', payload: { resumeCondition: 'A verified actor is required.' }, revalidateActor: async () => ({ accountId: 'other-account', modelId: 'codex', role: 'model' }) })).rejects.toThrow(/account changed/i);
+  expect(writes).toBe(0);
+});
+
+test('managed contribution scan overflow reports unknown completion and never advances', async () => {
+  const { server, client } = await setup();
+  try {
+    const owner = await json(client, 'register_scope_account', { accountId: 'scan-owner', modelId: 'codex', password: 'scan-owner-password-123' });
+    const evidence = await json(client, 'write_note', { path: 'Scan evidence.md', content: 'Current source.', accessToken: owner.value.accessToken });
+    const config = {
+      version: 1, methods: [{ methodId: 'brainwriting' }], purpose: 'Bounded scan.', scope: 'Public only.', successCriteria: ['Never infer from a partial scan.'],
+      sourceRevisions: [{ path: 'Scan evidence.md', revision: evidence.value.revision }], facilitatorAccountId: 'scan-owner', participants: ['scan-owner'], decisionAuthority: {},
+    };
+    const created = await json(client, 'create_workshop', { workshopId: 'scan-overflow', title: 'Scan overflow', prompt: 'Bound current-step aggregation.', facilitation: config, accessToken: owner.value.accessToken });
+    const fs = new FileSystemService(vault);
+    for (let index = 0; index < 129; index++) {
+      await fs.writeNote({ path: `Community/Workshops/scan-overflow/Contributions/raw-${index}.md`, content: '# Raw contribution\n', frontmatter: {
+        mcpvault_type: 'workshop_contribution', workshop_id: 'scan-overflow', contribution_id: `raw-${index}`, account_id: 'scan-owner', kind: 'idea', phase: 'diverge',
+        facilitation_step_id: 'brainwriting-independent', workshop_revision: created.value.revision,
+        structured: { ideaIds: [`raw-${index}`], origin: 'scan-owner' }, created_at: `2026-09-08T00:00:${String(index).padStart(2, '0')}Z`,
+      } });
+    }
+    const read = await json(client, 'read_workshop_facilitation', { workshopId: 'scan-overflow', limit: 1, maxChars: 12000, accessToken: owner.value.accessToken });
+    expect(read.value).toMatchObject({ completionUnknown: true, nextAction: { kind: 'blocked' } });
+    const advance = await client.callTool({ name: 'update_workshop_facilitation', arguments: {
+      workshopId: 'scan-overflow', expectedRevision: created.value.revision, requestId: 'scan-overflow-advance', operation: 'advance', payload: { reason: 'Must not advance.' }, accessToken: owner.value.accessToken,
+    } });
+    expect(advance.isError).toBe(true);
   } finally {
     await client.close();
     await server.close();

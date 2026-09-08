@@ -6,6 +6,7 @@ import { type Properties, type WorkBoardParams, type WorkClaimParams, type WorkH
 export type { WorkBaseParams, WorkBoardParams, WorkClaimParams, WorkHandoffParams, WorkPacketParams, WorkProjectParams, WorkReviewParams } from './work-model.js';
 export interface WorkServiceOptions {
     assertActor?: (principal: ScopePrincipal) => Promise<void>;
+    assertTaskMutation?: (taskId: string) => Promise<void>;
 }
 /** Markdown is the sole durable state, including approvals and retry receipts.
  * No timer, worker token, external executor, or account creation lives here. */

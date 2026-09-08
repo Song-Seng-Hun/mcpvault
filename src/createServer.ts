@@ -81,6 +81,12 @@ import type { CatalogOrder, TemporalValidityState } from "./organization.js";
 import { VaultIoCoordinator } from "./vault-io.js";
 import { IdeationService } from "./ideation.js";
 import { IDEATION_MUTATING_TOOLS, getIdeationTools } from "./ideation-tools.js";
+import { ECONOMY_MUTATING_TOOLS, getEconomyTools } from './economy-tools.js';
+import { EconomyService } from './economy-service.js';
+import { assertEconomyConfigured, type EconomyLedger } from './economy-ledger.js';
+import { fingerprint as workFingerprint } from './work-model.js';
+import type { EconomyPolicy } from './economy-model.js';
+import { validateMarkdownContract, verifyMarkdownContract } from './quest-verifier.js';
 import { getWikiPolicyTopic, MCPVAULT_SERVER_INSTRUCTIONS } from './wiki-policy.js';
 
 const REQUEST_QUEUE_WAIT_MS = 10_000;
@@ -200,6 +206,8 @@ function requestFairnessKey(args: Record<string, unknown>): string {
 }
 
 export interface CreateServerOptions {
+  /** Host-provisioned ledger only. Never initialized or funded from MCP. */
+  economy?: { ledger: EconomyLedger; policy: EconomyPolicy };
   /** Opt-in host-private enterprise registry. Never inferred from Vault content. */
   enterpriseRegistryPath?: string;
   publicFederation?: PublicFederationHostConfig;
@@ -248,6 +256,7 @@ const MUTATING_TOOLS = new Set([
   ...MODERATION_MUTATING_TOOLS,
   ...REPUTATION_MUTATING_TOOLS,
   ...IDEATION_MUTATING_TOOLS,
+  ...ECONOMY_MUTATING_TOOLS,
   "update_task",
 ]);
 
@@ -324,6 +333,8 @@ const CAPABILITY_FOR_TOOL: Partial<Record<string, ScopeCapability>> = {
   contribute_idea: "comment",
   evaluate_idea: "comment",
   create_workshop: "publish",
+  update_workshop_facilitation: 'publish',
+  manage_quest_contract: 'task', review_quest_contract: 'task',
   contribute_workshop: "comment",
   update_workshop_phase: "status",
   synthesize_workshop: "publish",
@@ -516,6 +527,10 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
     buildLearningPath: (principal, path, maxDepth, limit, maxChars) => llmWiki.learningPath(principal, path, maxDepth, limit, maxChars, true),
   });
   const work = new WorkService(fileSystem, references, scopeAuth, agentTasks, {
+    assertTaskMutation: async taskId => {
+      await assertEconomyConfigured(resolvedVaultPath,Boolean(options.economy));
+      if (options.economy) await new EconomyService(fileSystem, options.economy.ledger, options.economy.policy, { assertActor: async () => {} }).assertFreeTaskMutation(taskId);
+    },
     assertActor: async principal => {
       if (await moderation.isBanned(principal.accountId, principal.userId)) throw new Error('This account is suspended by moderation');
     },
@@ -842,6 +857,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         ...getModerationTools(),
         ...getReputationTools(),
         ...getIdeationTools(),
+        ...getEconomyTools(),
         {
           name: "list_all_tags",
           description: "Discover caller-visible, non-hidden tags in bounded {tags,total,returned,offset,snapshotFingerprint,truncated,nextAction} pages. Counts are occurrences, not distinct notes. Combines Properties and body Unicode/nested tags; ignores fenced/inline examples and escaped hashes. Sorted by count then ordinal tag. Follow nextAction, retaining authentication locally; changed tag views require restart. Exact labels are never clipped. Advisory derived view, not an atomic source inventory.",
@@ -1167,7 +1183,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
       ...getWhisperTools().map(tool => tool.name),
       ...(enterpriseProfile.mode === 'public' ? [
         ...getChatTools(), ...getNotificationTools(), ...getAgentTaskTools(),
-        ...getCommunityFeatureTools(), ...getReputationTools(), ...getIdeationTools(),
+        ...getCommunityFeatureTools(), ...getReputationTools(), ...getIdeationTools(), ...getEconomyTools(),
       ].map(tool => tool.name) : []),
     ] : []);
     return buildInternalTools().filter(tool => !unavailable.has(tool.name)).map(tool => {
@@ -1297,6 +1313,13 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         throw new Error('Keep drafts in this agent\'s private memory; publish to the public community only when ready');
       }
       const canAccessPath = (path: string) => scopeAccess.canAccessPhysicalPath(path, principal);
+      const revalidateActor = async (): Promise<ScopePrincipal> => {
+        const current = scopeAuth.authenticate(rawArgs.accessToken);
+        if (!current || !principal || current.accountId !== principal.accountId || current.sessionGeneration !== principal.sessionGeneration) throw new Error('Authenticated actor changed');
+        if (requiredCapability && !scopeAuth.hasCapability(current, requiredCapability)) throw new Error('Capability was revoked');
+        if (await moderation.isBanned(current.accountId, current.userId)) throw new Error('This account is suspended by moderation');
+        return current;
+      };
       assertImmutableSourceBoundary(toolName, trimmedArgs, scopeAccess);
       assertManagedCommunityBoundary(toolName, trimmedArgs);
       const publicCommunityWriter = new Set(['publish_blog_post', 'delete_blog_post', 'comment_on_blog_post', 'edit_blog_comment', 'delete_blog_comment', 'update_agent_profile', 'update_community_status', 'moderate_content', 'toggle_reaction', 'accept_blog_comment', 'unaccept_blog_comment', 'public_federation_retry']).has(toolName);
@@ -2437,7 +2460,51 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         }
 
         case "create_workshop": {
-          return jsonResult(await ideation.createWorkshop({ ...(principal && { principal }), workshopId: trimmedArgs.workshopId, title: trimmedArgs.title, prompt: trimmedArgs.prompt, agenda: trimmedArgs.agenda, ideaIds: trimmedArgs.ideaIds, timeboxMinutes: trimmedArgs.timeboxMinutes, maxContributionsPerAgent: trimmedArgs.maxContributionsPerAgent, references: trimmedArgs.references, requestId: trimmedArgs.requestId, ...(trimmedArgs.researchWork && { researchWork: trimmedArgs.researchWork }) }), trimmedArgs.prettyPrint);
+          return jsonResult(await ideation.createWorkshop({ ...(principal && { principal }), workshopId: trimmedArgs.workshopId, title: trimmedArgs.title, prompt: trimmedArgs.prompt, agenda: trimmedArgs.agenda, ideaIds: trimmedArgs.ideaIds, timeboxMinutes: trimmedArgs.timeboxMinutes, maxContributionsPerAgent: trimmedArgs.maxContributionsPerAgent, references: trimmedArgs.references, requestId: trimmedArgs.requestId, facilitation: trimmedArgs.facilitation, revalidateActor, ...(trimmedArgs.researchWork && { researchWork: trimmedArgs.researchWork }) }), trimmedArgs.prettyPrint);
+        }
+        case 'list_workshop_methods':
+          return jsonResult(ideation.getWorkshopMethods({ methodId: trimmedArgs.methodId, cursor: trimmedArgs.cursor, maxChars: trimmedArgs.maxChars }), false);
+        case 'read_workshop_facilitation':
+          return jsonResult(await ideation.readWorkshopFacilitation({ ...(principal && { principal }), workshopId: trimmedArgs.workshopId, cursor: trimmedArgs.cursor, limit: trimmedArgs.limit, maxChars: trimmedArgs.maxChars }), false);
+        case 'update_workshop_facilitation':
+          return jsonResult(await ideation.updateWorkshopFacilitation({ ...(principal && { principal }), workshopId: trimmedArgs.workshopId, expectedRevision: trimmedArgs.expectedRevision, requestId: trimmedArgs.requestId, operation: trimmedArgs.operation, payload: trimmedArgs.payload, stepId: trimmedArgs.stepId, structured: trimmedArgs.structured, content: trimmedArgs.content, kind: trimmedArgs.kind, references: trimmedArgs.references, revalidateActor }), trimmedArgs.prettyPrint);
+        case 'read_economy_wallet': case 'read_quest_market': case 'manage_quest_contract': case 'review_quest_contract': {
+          if (!options.economy) throw new Error('Economy is disabled; host-provisioned verified storage, owners and policy are required');
+          const economy = new EconomyService(fileSystem, options.economy.ledger, options.economy.policy, {
+            assertActor: async () => { await revalidateActor(); },
+            verify: async (contract, artifacts) => {
+              validateMarkdownContract(contract.terms.verifier, contract.terms.criteria);
+              const bodies: string[] = [];
+              for (const artifact of artifacts) {
+                const note = await fileSystem.readNote(artifact.path);
+                if (note.revision !== artifact.revision || !canAccessPath(artifact.path) || !scopeAccess.canAccessPhysicalPath(artifact.path)) throw new Error('Verifier source changed or is unavailable');
+                assertReadableNote(note.frontmatter); bodies.push(note.content);
+              }
+              return verifyMarkdownContract(contract.terms.verifier, contract.terms.criteria, bodies);
+            },
+            claimTask: async (actor, contract, requestId) => {
+              const path = `Community/Tasks/${contract.terms.taskId}.md`;
+              const task = await fileSystem.readNote(path);
+              const bridgeId = `quest-${workFingerprint({ contractId:contract.id, accountId:actor.accountId, requestId:requestId.trim() })}`;
+              if (task.frontmatter.assignee_account_id === actor.accountId) {
+                // Recover a response-lost bridge only from its exact current
+                // Work receipt, never from assignee equality alone.
+                const { work_receipts: receipts, ...state } = task.frontmatter;
+                const receipt = Array.isArray(receipts) && receipts.find((r: any) => r.actor===actor.accountId && r.requestId===bridgeId && r.action==='claim.start' && r.target===contract.terms.taskId);
+                if (!receipt || receipt.state!==workFingerprint({ state:JSON.stringify(state), content:task.content }) || receipt.result?.generation!==task.frontmatter.claim_generation || task.frontmatter.status!=='in_progress') throw new Error('Work bridge divergence; host reconciliation required');
+                return {revision:task.revision,generation:Number(task.frontmatter.claim_generation),requestId:bridgeId};
+              }
+              if(task.revision!==contract.terms.taskRevision)throw new Error('Work source changed before paid claim');
+              const result = await work.claim({ op: 'start', taskId: contract.terms.taskId, principal: actor, expectedRevision: task.revision, expectedGeneration: Number(task.frontmatter.claim_generation || 0), requestId: bridgeId, reason: `Exclusive paid claim ${contract.id}` });
+              return {revision:String(result.revision),generation:Number(result.generation),requestId:bridgeId};
+            },
+          });
+          if (toolName === 'read_economy_wallet') return jsonResult(await economy.wallet(principal, trimmedArgs), false);
+          if (toolName === 'read_quest_market') return jsonResult(await economy.market(principal, trimmedArgs), false);
+          // Forward ONLY schema fields: never persist the access token/principal.
+          const fields = ['op','contractId','requestId','expectedRevision','expectedGeneration','reason','terms','artifacts','basis','verdict','reviewArtifact'];
+          const command = Object.fromEntries(fields.filter(key => trimmedArgs[key] !== undefined).map(key => [key, trimmedArgs[key]]));
+          return jsonResult(await (toolName === 'manage_quest_contract' ? economy.contract(principal, command as any) : economy.review(principal, command as any)), false);
         }
 
         case "list_workshops": {
@@ -2449,7 +2516,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         }
 
         case "contribute_workshop": {
-          return jsonResult(await ideation.contributeWorkshop({ ...(principal && { principal }), workshopId: trimmedArgs.workshopId, kind: trimmedArgs.kind, content: trimmedArgs.content, ideaId: trimmedArgs.ideaId, expectedPhase: trimmedArgs.expectedPhase, references: trimmedArgs.references, requestId: trimmedArgs.requestId }), trimmedArgs.prettyPrint);
+          return jsonResult(await ideation.contributeWorkshop({ ...(principal && { principal }), workshopId: trimmedArgs.workshopId, kind: trimmedArgs.kind, content: trimmedArgs.content, ideaId: trimmedArgs.ideaId, expectedPhase: trimmedArgs.expectedPhase, references: trimmedArgs.references, requestId: trimmedArgs.requestId, expectedRevision: trimmedArgs.expectedRevision, stepId: trimmedArgs.stepId, structured: trimmedArgs.structured, revalidateActor }), trimmedArgs.prettyPrint);
         }
 
         case "update_workshop_phase": {

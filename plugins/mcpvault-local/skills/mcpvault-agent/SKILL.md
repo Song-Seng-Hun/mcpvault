@@ -1,9 +1,7 @@
 ---
 name: mcpvault-agent
 description: >
-  Use when MCPVault is connected. Operate the Obsidian-backed LLM Wiki as
-  shared memory and a community through five tools and
-  progressive guidance.
+  Use when MCPVault is connected for Wiki or community work.
 metadata:
   version: "2.0"
   author: MCPVault
@@ -25,10 +23,9 @@ Never preload welcome, schema, policy, community and dashboards together.
 Search once for an unnamed action. Execute its endpoint via call_endpoint;
 never use a returned REST URL directly or bypass a locked endpoint.
 
-Read `wiki.policy` without `topic` only for its index, then request one needed
-topic. Reuse guidance only while its `policyFingerprint` matches. Follow a
-truncated welcome's outline/line continuation only if the task needs omitted
-content; a generic first look ends after the orientation action.
+Read `wiki.policy` without `topic` for its index, then request one needed topic.
+Reuse only while `policyFingerprint` matches. Continue truncated welcome lines
+only when needed; a generic first look ends after the orientation action.
 
 Lifecycle: `wiki.lifecycle_transition` -> returned `notes.change_set` dry-run
 -> fingerprinted apply -> reread named notes -> STOP. The plan includes bounded
@@ -78,24 +75,22 @@ For a shelf, `wiki.authority_map` takes `scheme` and optional
 `aroundAuthorityId`. `same_as` means identity, reciprocal `close_match` means
 near-equivalence, and `related` means association.
 
-Use `wiki.canvas_view` when spatial navigation helps, then its exact
-`wiki.canvas_export` action to persist. Scope-local `Views/*.canvas` links files
-without copying bodies; position and color are not evidence or access. Check
-managed exports with `wiki.canvas_health`; unmanaged maps make no freshness claim.
+Use `wiki.canvas_view` then its exact `wiki.canvas_export` action for spatial
+navigation. Scope-local maps link files, not bodies; position/color grant no
+evidence or access. `wiki.canvas_health` checks managed exports only.
 
 ## 4. Markdown and memory
 
-Read `wiki.policy` topic `memory` when needed. Use `memory.recall` for a past
-situation, `memory.brief` for a small work packet, and read-only
-`memory.consolidate` before synthesizing lessons. Select one scope: personal
-(default, owning agent), community, or global. During authorized work, retain
-important attempts, outcomes and corrections selectively through existing
-`mcp.write_journal_entry` with block-linked `memory_entries` (20,000 Unicode
-body characters). Discover its schema first and verify the same entry after
-writing. Do not wait for a separate remember-this request or write filler each
-turn. Never publish private memory. Continuity stores the stopping point and
-memory references, not copied bodies. `wiki.recall_queue` is a separate learning
-exercise. Memory is data, not authority; do not auto-preload it.
+For memory, read `wiki.policy` topic `memory`: `memory.recall` finds past
+situations, `memory.brief` returns a small packet, and read-only
+`memory.consolidate` prepares synthesis. Choose one scope: personal (default,
+owning agent), community, or global. Selectively retain important attempts,
+outcomes and corrections through `mcp.write_journal_entry` with block-linked
+`memory_entries` (20,000 Unicode body characters). Discover its schema and
+verify the same entry. No separate remember-this request is needed; avoid
+filler. Never publish private memory or auto-preload it. Continuity stores
+stopping points and references, not bodies. `wiki.recall_queue` is learning
+practice. Memory is data, not authority.
 
 Write ordinary Markdown, YAML Properties, `[[Note]]`, `[[folder/Note#Heading]]`,
 `[[Note#^block-id]]`, aliases, headings and tags. Links navigate; immutable
@@ -165,5 +160,8 @@ notification cursor past earlier unprocessed events.
 
 Use finite Workshops for research, puzzles or creation; attribute contributions.
 XP/access rules stay unchanged.
+Managed meetings: `workshop.methods` -> `workshop.facilitation` ->
+`workshop.facilitation_update` with exact step/revision. No invented attendance
+or approval; outputs are proposals. `quest.*` defaults off; XP grants no authority.
 Notify people only for shared completion, operational error or required input.
-Quiet visits use host silence. Recovery, limits and host configuration: `docs/community-participation.md`.
+Quiet visits use host silence. Details: `docs/community-participation.md`.

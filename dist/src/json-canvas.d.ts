@@ -1,4 +1,4 @@
-export type WikiCanvasMode = 'moc' | 'neighborhood';
+export type WikiCanvasMode = 'moc' | 'neighborhood' | 'workshop';
 export interface WikiCanvasNote {
     path: string;
     publicPath: string;
@@ -15,6 +15,18 @@ export interface WikiCanvasEdge {
     toPath: string;
     label: string;
     kind: 'authored' | 'dependency' | 'direct_link' | 'backlink' | 'proximity';
+}
+/** A structured workshop map item. sourcePath is only used for revision-safe
+ * selection; it is never copied into the emitted Canvas text. */
+export interface WikiCanvasWorkshopMapNode {
+    id: string;
+    label: string;
+    sourcePath: string;
+}
+export interface WikiCanvasWorkshopMapEdge {
+    fromId: string;
+    toId: string;
+    label?: string;
 }
 export type JsonCanvasNode = {
     id: string;
@@ -60,6 +72,10 @@ export declare function buildJsonCanvasProjection(input: {
     mode: WikiCanvasMode;
     notes: WikiCanvasNote[];
     edges: WikiCanvasEdge[];
+    workshopMap?: {
+        nodes: WikiCanvasWorkshopMapNode[];
+        edges: WikiCanvasWorkshopMapEdge[];
+    };
 }): {
     canvas: JsonCanvasDocument;
     snapshotFingerprint: string;

@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import type { ScopePrincipal } from './scope-auth.js';
 import type { WorkArtifact } from './agent-tasks.js';
 
@@ -53,12 +54,32 @@ export function integer(value: unknown, fallback: number, max: number, field: st
 // A process-wide short queue also covers different FileSystemService instances
 // for the same vault. Filesystem revision locks remain the final write gate.
 let coordinator = Promise.resolve();
+type CoordinationFrame = { active: boolean; children: Promise<void> };
+const coordinationLease = new AsyncLocalStorage<CoordinationFrame>();
+async function coordinatedFrame<T>(operation: () => Promise<T>): Promise<T> {
+  const frame: CoordinationFrame = { active: true, children: Promise.resolve() };
+  try { return await coordinationLease.run(frame, operation); }
+  finally {
+    // Stop admission before draining: a rejected Promise.all must not release
+    // the root while an already admitted sibling is still writing.
+    frame.active = false;
+    await frame.children;
+  }
+}
 export async function coordinate<T>(operation: () => Promise<T>): Promise<T> {
+  // A paid-operation adapter can invoke the existing Work service while holding
+  // the same short coordinator. Independent MCP requests never share this lease.
+  const parent = coordinationLease.getStore();
+  if (parent?.active) {
+    const result = parent.children.then(() => coordinatedFrame(operation));
+    parent.children = result.then(() => {}, () => {});
+    return result;
+  }
   const previous = coordinator;
   let release!: () => void;
   coordinator = new Promise<void>(resolve => { release = resolve; });
   await previous;
-  try { return await operation(); } finally { release(); }
+  try { return await coordinatedFrame(operation); } finally { release(); }
 }
 
 export interface WorkPage { items: Properties[]; total: number; truncated: boolean; cursor?: string; [key: string]: any }

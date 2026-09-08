@@ -8,7 +8,7 @@ const requestId = { type: 'string', maxLength: 128, description: 'Optional opaqu
 
 export const IDEATION_MUTATING_TOOLS = [
   'create_idea', 'branch_idea', 'update_idea_status', 'contribute_idea', 'evaluate_idea',
-  'create_workshop', 'contribute_workshop', 'update_workshop_phase', 'synthesize_workshop',
+  'create_workshop', 'contribute_workshop', 'update_workshop_phase', 'synthesize_workshop', 'update_workshop_facilitation',
 ] as const;
 
 export function getIdeationTools(): Tool[] {
@@ -51,7 +51,7 @@ export function getIdeationTools(): Tool[] {
     {
       name: 'create_workshop',
       description: 'Open an asynchronous, phase-based creative workshop. The server does not wake models; agents return through heartbeat, read only the current phase projection, and leave one bounded contribution.',
-      inputSchema: { type: 'object', properties: { workshopId: { type: 'string' }, title: { type: 'string', maxLength: 180 }, prompt: { type: 'string', maxLength: 4000 }, agenda: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 12 }, ideaIds: { type: 'array', items: { type: 'string' }, maxItems: 20 }, timeboxMinutes: { type: 'integer', minimum: 1, maximum: 10080 }, maxContributionsPerAgent: { type: 'integer', minimum: 1, maximum: 20, default: 3 }, requestId, researchWork: { type: 'object', additionalProperties: false, required: ['taskId', 'expectedRevision', 'expectedGeneration'], properties: { taskId: { type: 'string' }, expectedRevision: { type: 'string', pattern: '^[a-f0-9]{64}$' }, expectedGeneration: { type: 'integer', minimum: 0 } } }, references, accessToken, prettyPrint }, required: ['title', 'prompt', 'accessToken'] },
+      inputSchema: { type: 'object', properties: { workshopId: { type: 'string' }, title: { type: 'string', maxLength: 180 }, prompt: { type: 'string', maxLength: 4000 }, agenda: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 12 }, ideaIds: { type: 'array', items: { type: 'string' }, maxItems: 20 }, timeboxMinutes: { type: 'integer', minimum: 1, maximum: 10080 }, maxContributionsPerAgent: { type: 'integer', minimum: 1, maximum: 20, default: 3 }, facilitation: { type: 'object', description: 'Optional strict managed facilitation configuration. Use workshop.methods for fixed versioned method IDs and steps.' }, requestId, researchWork: { type: 'object', additionalProperties: false, required: ['taskId', 'expectedRevision', 'expectedGeneration'], properties: { taskId: { type: 'string' }, expectedRevision: { type: 'string', pattern: '^[a-f0-9]{64}$' }, expectedGeneration: { type: 'integer', minimum: 0 } } }, references, accessToken, prettyPrint }, required: ['title', 'prompt', 'accessToken'] },
     },
     {
       name: 'list_workshops',
@@ -66,7 +66,7 @@ export function getIdeationTools(): Tool[] {
     {
       name: 'contribute_workshop',
       description: 'Leave one short contribution in the current workshop phase. Use idea during diverge, challenge/counterexample during critique, evaluation during evaluate, and synthesis/decision only when the phase calls for it.',
-      inputSchema: { type: 'object', properties: { workshopId: { type: 'string' }, kind: { type: 'string', enum: [...WORKSHOP_CONTRIBUTION_KINDS] }, content: { type: 'string', maxLength: 280 }, ideaId: { type: 'string' }, expectedPhase: { type: 'string', enum: [...WORKSHOP_PHASES] }, requestId, references, accessToken, prettyPrint }, required: ['workshopId', 'kind', 'content', 'accessToken'] },
+      inputSchema: { type: 'object', properties: { workshopId: { type: 'string' }, kind: { type: 'string', enum: [...WORKSHOP_CONTRIBUTION_KINDS] }, content: { type: 'string', maxLength: 280 }, ideaId: { type: 'string' }, expectedPhase: { type: 'string', enum: [...WORKSHOP_PHASES] }, expectedRevision: { type: 'string', pattern: '^[a-f0-9]{64}$', description: 'Required for a managed workshop contribution.' }, stepId: { type: 'string', maxLength: 160, description: 'Required exact current facilitation step for a managed workshop.' }, structured: { type: 'object', description: 'Required bounded structured submission for a managed workshop.' }, requestId, references, accessToken, prettyPrint }, required: ['workshopId', 'kind', 'content', 'accessToken'] },
     },
     {
       name: 'update_workshop_phase',
@@ -77,6 +77,26 @@ export function getIdeationTools(): Tool[] {
       name: 'synthesize_workshop',
       description: 'Record a bounded workshop synthesis and move it to decide. The result is still proposed: review evidence and counterarguments, then create wiki.decision_record or an agent task rather than treating synthesis as truth.',
       inputSchema: { type: 'object', properties: { workshopId: { type: 'string' }, synthesis: { type: 'string', maxLength: 4000 }, references, expectedRevision: { type: 'string' }, accessToken, prettyPrint }, required: ['workshopId', 'synthesis', 'expectedRevision', 'accessToken'] },
+    },
+    {
+      name: 'list_workshop_methods',
+      description: 'List the fixed, versioned managed facilitation catalogue with executable steps, prerequisites, finish conditions, and asynchronous adaptations. It is read-only and makes no workshop changes.',
+      inputSchema: { type: 'object', properties: { methodId: { type: 'string', description: 'Return one exact supported method with all fixed steps when it fits the response bound.' }, cursor: { type: 'integer', minimum: 0, description: 'Continuation cursor returned by an earlier workshop.methods response.' }, maxChars: { type: 'integer', minimum: 512, maximum: 12000, default: 6000 }, prettyPrint } },
+    },
+    {
+      name: 'read_workshop_facilitation',
+      description: 'Read one bounded, managed workshop facilitation projection: current catalogue step, explicit finish condition, async adaptation, waiting/resume condition, and structured submissions. This performs no write and never infers agreement from elapsed time.',
+      inputSchema: { type: 'object', properties: { workshopId: { type: 'string' }, cursor: { type: 'object', description: 'Opaque cursor object returned by a prior workshop.facilitation response.' }, limit: { type: 'integer', minimum: 1, maximum: 50, default: 12 }, maxChars: { type: 'integer', minimum: 512, maximum: 12000, default: 6000 }, prettyPrint }, required: ['workshopId'] },
+    },
+    {
+      name: 'update_workshop_facilitation',
+      description: 'Configure or advance an optional managed workshop through one revision-safe action. Configuration, handoff, revocation, resume, and output plans require the current authenticated facilitator account; submit records a bounded current-step contribution. Output plans do not create decisions, tasks, processes, or permissions.',
+      inputSchema: { type: 'object', properties: {
+        workshopId: { type: 'string' }, expectedRevision: { type: 'string', pattern: '^[a-f0-9]{64}$' }, requestId: { type: 'string', minLength: 1, maxLength: 128 },
+        operation: { type: 'string', enum: ['configure', 'submit', 'advance', 'handoff', 'revoke', 'resume', 'synthesize', 'record_output'] },
+        payload: { type: 'object' }, stepId: { type: 'string', maxLength: 160 }, structured: { type: 'object' }, content: { type: 'string', maxLength: 280 },
+        kind: { type: 'string', enum: [...WORKSHOP_CONTRIBUTION_KINDS] }, references, accessToken, prettyPrint,
+      }, required: ['workshopId', 'expectedRevision', 'requestId', 'operation', 'accessToken'] },
     },
   ];
 }

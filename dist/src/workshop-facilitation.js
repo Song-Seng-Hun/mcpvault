@@ -1,0 +1,447 @@
+/**
+ * Pure, persisted workshop facilitation catalogue. This module deliberately
+ * does not read files, authenticate callers, write notes, call models, or
+ * advance time. The IdeationService supplies those boundaries.
+ */
+export const FACILITATION_METHOD_IDS = [
+    'page-led', 'checklist', 'how-might-we', 'brainwriting', 'six-hats', 'scamper',
+    'crazy8s', '1-2-4-all', 'affinity-kj', 'mind-map', 'ngt', 'dot-voting', 'daci',
+    'premortem', 'retrospective', 'blameless-postmortem',
+];
+const method = (methodId, title, adaptation, steps) => ({
+    methodId, version: 1, title, adaptation,
+    steps: steps.map(({ key, ...step }) => ({ id: `${methodId}-${key}`, ...step })),
+});
+const fieldHints = [
+    [/source revisions?/i, 'sourceRevisions'], [/acknowledg/i, 'acknowledgement'], [/check/i, 'checks'], [/map nodes?/i, 'mapNodes'], [/map edges?|cross-links?/i, 'mapEdges'],
+    [/ballot/i, 'ballot'], [/groups?/i, 'groups'], [/names?/i, 'names'], [/\bideas?\b|alternatives?/i, 'ideaIds'], [/parent idea/i, 'parentIdeaIds'],
+    [/question/i, 'questions'], [/observed problem|observations?/i, 'observations'], [/evidence/i, 'evidence'], [/benefits?/i, 'benefits'], [/risks?/i, 'risks'],
+    [/uncertainty/i, 'uncertainty'], [/revisit|review conditions?/i, 'revisit'], [/synthesis|group synthesis/i, 'synthesis'], [/participant accounts?/i, 'participantAccounts'],
+    [/driver|approver|contributors|informed|roles?/i, 'roles'], [/mitigation/i, 'mitigation'], [/early signal/i, 'earlySignal'], [/owner action/i, 'ownerAction'],
+    [/timeline/i, 'timeline'], [/impact/i, 'impact'], [/contributing factors?/i, 'contributingFactors'], [/helpful response/i, 'helpfulResponse'], [/prevention/i, 'prevention'],
+    [/experiment/i, 'experiment'], [/failure scenario|assume failure/i, 'failureScenario'], [/ranking/i, 'ranking'], [/criteria/i, 'criteria'], [/reason/i, 'reason'],
+    [/start, stop|liked, learned|longed-for/i, 'observations'],
+];
+function fieldsFor(required) {
+    const combined = required.join(' ');
+    return Array.from(new Set(fieldHints.filter(([pattern]) => pattern.test(combined)).map(([, field]) => field)));
+}
+const submit = (required, finishCondition, adaptation, minimumAccounts) => ({ required, requiredFields: fieldsFor(required), finishCondition, adaptation, ...(minimumAccounts ? { minimumAccounts } : {}) });
+export const FACILITATION_METHODS = [
+    method('page-led', 'Page-led discussion', 'Async readers acknowledge a revision in text before discussion; no unread page is inferred as agreement.', [
+        { key: 'frame', title: 'Frame purpose, scope, outcome, and questions', ...submit(['purpose, scope, outcome, questions, source revisions'], 'Frame names a bounded outcome and current sources.', 'Use a short Markdown brief with revision pins.') },
+        { key: 'read', title: 'Read acknowledgement and questions', ...submit(['acknowledgement or question'], 'Each required reader explicitly acknowledges or asks a question.', 'Async readers may respond in any order.', 2) },
+        { key: 'discuss', title: 'Discuss current questions', ...submit(['observation, extension, or challenge'], 'Open questions are answered, retained, or explicitly deferred.', 'Threaded text discussion replaces a live meeting.') },
+    ]),
+    method('checklist', 'Checklist review', 'Unknown is a valid state; async actors record evidence, reason, and actor rather than guessing.', [
+        { key: 'prepare', title: 'Preparation checks', ...submit(['checks with unknown/pass/fail/not_applicable, evidence, reason, actor'], 'Every preparation item has an explicit state.', 'Share the checklist in Markdown.') },
+        { key: 'progress', title: 'Progress checks', ...submit(['checks with evidence and reason'], 'Open failures and unknowns have an owner or waiting reason.', 'Use a bounded status update instead of a meeting.') },
+        { key: 'close', title: 'Closing checks', ...submit(['checks and unresolved exceptions'], 'All closing checks are pass, not_applicable, or explicitly carried forward.', 'Do not convert unknown into pass.') },
+    ]),
+    method('how-might-we', 'How might we', 'Text-only workshops retain observed problems and open questions before refining wording.', [
+        { key: 'observe', title: 'Observe the problem', ...submit(['observed problem and evidence'], 'At least one observed problem is recorded without a solution.', 'Async contributors may add distinct observations.') },
+        { key: 'question', title: 'Open questions', ...submit(['open questions'], 'Questions are open-ended and tied to observed problems.', 'Use comments or short submissions.') },
+        { key: 'refine', title: 'Refine questions', ...submit(['refined questions and challenges'], 'Too-broad and solution-forcing questions are explicitly refined or rejected.', 'Keep rejected wording for provenance.') },
+    ]),
+    method('brainwriting', 'Brainwriting', 'For 6-3-5 use six actual accounts, three ideas each round, and an explicit five-minute cycle; async or small groups use a declared adaptation.', [
+        { key: 'independent', title: 'Independent ideas', ...submit(['idea IDs and origin'], 'Each participating account records independent ideas.', 'Generic brainwriting accepts independent text submissions.', 2) },
+        { key: 'build', title: 'Build on others', ...submit(['extension and parent idea IDs'], 'Each extension names an existing idea ID.', 'Async participants build in a later explicit round.', 2) },
+    ]),
+    method('six-hats', 'Six hats', 'This product default is setup, information, alternatives, benefits, risks, tentative intuition/preferences, then synthesis; it is not asserted as a universal official order.', [
+        { key: 'setup', title: 'Setup', ...submit(['question and constraints'], 'Question and constraints are explicit.', 'The same accounts take sequential views.') },
+        { key: 'information', title: 'Information', ...submit(['evidence and unknowns'], 'Information distinguishes evidence from unknowns.', 'Same agents continue; no new agents are invented.') },
+        { key: 'alternatives', title: 'Alternatives', ...submit(['idea IDs and origin'], 'Alternatives are distinct.', 'Use text alternatives.') },
+        { key: 'benefits', title: 'Benefits', ...submit(['benefits linked to alternatives'], 'Benefits name their alternative.', 'Async sequential view.') },
+        { key: 'risks', title: 'Risks', ...submit(['risks and challenges'], 'Risks are preserved for synthesis.', 'Async sequential view.') },
+        { key: 'intuition', title: 'Tentative intuition and preferences', ...submit(['tentative preferences and uncertainty'], 'Preferences are labeled tentative.', 'No preference becomes a decision.') },
+        { key: 'synthesis', title: 'Synthesis', ...submit(['adopted, rejected, minority, uncertainty, revisit'], 'Synthesis preserves dissent and revisit conditions.', 'A written synthesis ends the round.') },
+    ]),
+    method('scamper', 'SCAMPER', 'Async contributors may cover one prompt at a time, but each contribution keeps parent-idea links.', [
+        { key: 'substitute', title: 'Substitute', ...submit(['idea IDs and parent idea links'], 'Substitutions name their parent ideas.', 'Text prompt adaptation.') },
+        { key: 'combine', title: 'Combine', ...submit(['idea IDs and parent idea links'], 'Combinations preserve both parents.', 'Text prompt adaptation.') },
+        { key: 'adapt', title: 'Adapt', ...submit(['idea IDs and parent idea links'], 'Adaptations name their parent.', 'Text prompt adaptation.') },
+        { key: 'modify', title: 'Modify', ...submit(['idea IDs and parent idea links'], 'Modifications name their parent.', 'Text prompt adaptation.') },
+        { key: 'other-use', title: 'Put to other use', ...submit(['idea IDs and parent idea links'], 'Other uses name their parent.', 'Text prompt adaptation.') },
+        { key: 'eliminate', title: 'Eliminate', ...submit(['idea IDs and parent idea links'], 'Eliminations name their parent.', 'Text prompt adaptation.') },
+        { key: 'reverse', title: 'Reverse', ...submit(['idea IDs and parent idea links'], 'Reversals name their parent.', 'Text prompt adaptation.') },
+    ]),
+    method('crazy8s', 'Crazy 8s', 'Text and async adaptation requires eight distinct alternatives rather than eight drawings.', [
+        { key: 'eight', title: 'Eight distinct alternatives', ...submit(['eight distinct idea IDs'], 'Eight alternatives are distinct; duplicates are rejected.', 'Use eight short text alternatives.') },
+        { key: 'select', title: 'Selection', ...submit(['ranking and reason'], 'Selection names criteria and remains a proposal.', 'Async review replaces a gallery walk.') },
+    ]),
+    method('1-2-4-all', '1-2-4-All', 'If fewer actual accounts are available, wait or record an explicit reduced variant; never fabricate participants.', [
+        { key: 'one', title: 'Individual reflection', ...submit(['ideas and origin'], 'Actual participants provide individual input.', 'Async individual responses.', 2) },
+        { key: 'two', title: 'Pairs', ...submit(['extensions and participant accounts'], 'Pairs contain two actual accounts or a declared reduced variant.', 'Wait for a second account or select reduced variant.', 2) },
+        { key: 'four', title: 'Fours', ...submit(['group synthesis and participant accounts'], 'Groups contain four actual accounts or a declared reduced variant.', 'Wait for four accounts or select reduced variant.', 4) },
+        { key: 'all', title: 'All', ...submit(['synthesis, minority, uncertainty'], 'All current groups are represented without invented attendees.', 'Async all-hands summary.') },
+    ]),
+    method('affinity-kj', 'Affinity / KJ', 'Async grouping preserves ungrouped items and permits multiple memberships.', [
+        { key: 'collect', title: 'Collect', ...submit(['idea IDs and origin'], 'Original items remain addressable.', 'Collect short notes asynchronously.') },
+        { key: 'group', title: 'Group', ...submit(['groups preserving original IDs'], 'Ungrouped and multiple-membership items remain explicit.', 'Markdown groups replace sticky notes.') },
+        { key: 'name', title: 'Name groups', ...submit(['group names and uncertainty'], 'Names describe rather than erase disagreements.', 'Async labels are reviewable.') },
+    ]),
+    method('mind-map', 'Mind map', 'Markdown records explicit nodes and cross-links for a later Canvas projection; it does not create Canvas itself.', [
+        { key: 'root', title: 'Root question', ...submit(['root question'], 'One root question is explicit.', 'Markdown root node.') },
+        { key: 'branches', title: 'Branches', ...submit(['map nodes for questions, alternatives, constraints, evidence'], 'Every branch has a typed node.', 'Text tree adaptation.') },
+        { key: 'crosslinks', title: 'Explained cross-links', ...submit(['map edges with reasons'], 'Cross-links state a reason and endpoint IDs.', 'Markdown relations await later Canvas projection.') },
+    ]),
+    method('ngt', 'Nominal group technique', 'Ranking counts votes, not verbosity; async round-robin preserves one turn per actual account.', [
+        { key: 'independent', title: 'Independent ideas', ...submit(['idea IDs and origin'], 'Ideas are independent before discussion.', 'Async submissions.', 2) },
+        { key: 'roundrobin', title: 'Round-robin share', ...submit(['idea IDs and account'], 'Each actual account shares without a fabricated turn.', 'One bounded turn per account.', 2) },
+        { key: 'clarify', title: 'Clarify', ...submit(['questions and clarifications'], 'Clarification does not delete an original idea.', 'Threaded clarification.') },
+        { key: 'rank', title: 'Ranking', ...submit(['ballot and ranking reason'], 'Ranking is counted by ballot, not contribution length.', 'Async ballots.') },
+    ]),
+    method('dot-voting', 'Dot voting', 'Public workshops are not secret ballots; one authenticated account receives one ballot across sessions and roles.', [
+        { key: 'freeze', title: 'Freeze alternatives and criteria', ...submit(['alternatives and criteria'], 'Alternatives and criteria are fixed before any ballot.', 'Publish a Markdown freeze record.') },
+        { key: 'vote', title: 'Vote', ...submit(['one account ballot and ranking'], 'One ballot per authenticated account; ranking is neither truth nor approval.', 'Async public ballot.', 2) },
+    ]),
+    method('daci', 'DACI', 'Roles are explicit and account-based; delegated decision authority remains separate from facilitation.', [
+        { key: 'roles', title: 'Roles', ...submit(['driver, approver, contributors, informed'], 'Each role maps to authenticated accounts.', 'Markdown role table.') },
+        { key: 'alternatives', title: 'Alternatives', ...submit(['alternatives and evidence'], 'Alternatives retain their evidence.', 'Async proposals.') },
+        { key: 'reason', title: 'Reason', ...submit(['reason, uncertainty, minority'], 'Reason identifies authority and dissent.', 'No automatic approval.') },
+        { key: 'review', title: 'Review conditions', ...submit(['review conditions and revisit'], 'Review conditions are explicit.', 'Async review trigger.') },
+    ]),
+    method('premortem', 'Premortem', 'Assume a future failure without blaming people; async participants add independently before prioritization.', [
+        { key: 'failure', title: 'Assume failure', ...submit(['failure scenario'], 'A plausible failure is stated.', 'Text scenario.') },
+        { key: 'causes', title: 'Causes', ...submit(['causes and evidence'], 'Causes are not blame assertions.', 'Async independent causes.') },
+        { key: 'prioritize', title: 'Prioritized risks', ...submit(['ranking and risk rationale'], 'Risks have explicit priority rationale.', 'Async ranking.') },
+        { key: 'mitigate', title: 'Mitigation', ...submit(['mitigation, early signal, owner action'], 'Every selected risk has a mitigation, signal, and owner action.', 'Markdown action list.') },
+    ]),
+    method('retrospective', 'Retrospective', 'Use Start/Stop/Continue or 4Ls, then turn observations into one bounded improvement experiment.', [
+        { key: 'observe', title: 'Observations', ...submit(['start, stop, continue or liked, learned, lacked, longed-for'], 'Observations retain their chosen variant.', 'Async notes.') },
+        { key: 'experiment', title: 'Improvement experiment', ...submit(['next improvement experiment, owner, review'], 'One next experiment is testable and reviewable.', 'Markdown experiment card.') },
+    ]),
+    method('blameless-postmortem', 'Blameless postmortem', 'Record system conditions and helpful response without assertions of personal blame.', [
+        { key: 'timeline', title: 'Timeline and impact', ...submit(['timeline and impact'], 'Timeline separates observed facts from uncertainty.', 'Async evidence collection.') },
+        { key: 'factors', title: 'Contributing factors and helpful response', ...submit(['contributing factors and helpful response'], 'No blame assertion is accepted.', 'Text analysis.') },
+        { key: 'prevention', title: 'Prevention', ...submit(['prevention, owner action, review'], 'Prevention has an owner action and review condition.', 'Markdown follow-up.') },
+    ]),
+];
+const catalogue = new Map(FACILITATION_METHODS.map(value => [value.methodId, value]));
+const MAX_METHODS = 4;
+const MAX_STEPS = 32;
+const MAX_ARRAY_ITEMS = 16;
+const MAX_TEXT = 500;
+const revisionPattern = /^[a-f0-9]{64}$/i;
+function object(value, field) {
+    if (!value || typeof value !== 'object' || Array.isArray(value))
+        throw new Error(`${field} must be an object`);
+    return value;
+}
+function onlyKeys(value, field, allowed) {
+    const unknown = Object.keys(value).filter(key => !allowed.includes(key));
+    if (unknown.length)
+        throw new Error(`${field} contains unknown fields: ${unknown.join(', ')}`);
+}
+function short(value, field, required = true) {
+    if (typeof value !== 'string')
+        throw new Error(`${field} must be a string`);
+    const result = value.trim();
+    if (required && !result)
+        throw new Error(`${field} is required`);
+    if (Array.from(result).length > MAX_TEXT)
+        throw new Error(`${field} exceeds ${MAX_TEXT} characters`);
+    return result;
+}
+function strings(value, field, max = MAX_ARRAY_ITEMS) {
+    if (!Array.isArray(value) || value.length > max)
+        throw new Error(`${field} must be an array with at most ${max} items`);
+    return Array.from(new Set(value.map(item => short(item, field))));
+}
+function methodId(value) {
+    if (typeof value !== 'string' || !catalogue.has(value))
+        throw new Error(`methodId must be one of: ${FACILITATION_METHOD_IDS.join(', ')}`);
+    return value;
+}
+function currentStep(methods, stepId) {
+    for (const state of methods) {
+        const step = state.steps.find(candidate => candidate.id === stepId);
+        if (step)
+            return step;
+    }
+    throw new Error('currentStepId is not a catalogue step');
+}
+function exactSteps(id, value) {
+    const known = catalogue.get(id);
+    if (value === undefined)
+        return known.steps;
+    if (!Array.isArray(value) || value.length !== known.steps.length || value.some((step, index) => JSON.stringify(step) !== JSON.stringify(known.steps[index]))) {
+        throw new Error('Managed facilitation steps must match the current versioned catalogue');
+    }
+    return known.steps;
+}
+/** Validates user input as well as persisted Markdown frontmatter. */
+export function createFacilitation(value) {
+    const raw = object(value, 'facilitation');
+    onlyKeys(raw, 'facilitation', ['version', 'purpose', 'scope', 'successCriteria', 'sourceRevisions', 'methods', 'currentStepId', 'round', 'facilitatorAccountId', 'facilitatorGeneration', 'participants', 'decisionAuthority', 'checks', 'waitingReason', 'resumeCondition', 'outputs', 'ordinaryRedoCount']);
+    if (raw.version !== 1)
+        throw new Error('facilitation.version must be 1');
+    const rawMethods = raw.methods;
+    if (!Array.isArray(rawMethods) || rawMethods.length < 1 || rawMethods.length > MAX_METHODS)
+        throw new Error(`facilitation.methods must contain 1 to ${MAX_METHODS} methods`);
+    const methods = rawMethods.map((entry, index) => {
+        const item = typeof entry === 'string' ? { methodId: entry } : object(entry, `methods[${index}]`);
+        onlyKeys(item, `methods[${index}]`, ['methodId', 'version', 'steps']);
+        const id = methodId(item.methodId);
+        if (item.version !== undefined && item.version !== 1)
+            throw new Error('Only facilitation method version 1 is supported');
+        return { methodId: id, version: 1, steps: exactSteps(id, item.steps) };
+    });
+    if (new Set(methods.map(item => item.methodId)).size !== methods.length)
+        throw new Error('facilitation.methods may not repeat a method');
+    if (methods.reduce((total, item) => total + item.steps.length, 0) > MAX_STEPS)
+        throw new Error(`facilitation has more than ${MAX_STEPS} steps`);
+    const sourceRevisions = (raw.sourceRevisions === undefined ? [] : (() => {
+        if (!Array.isArray(raw.sourceRevisions) || raw.sourceRevisions.length > 8)
+            throw new Error('sourceRevisions must contain at most 8 guarded sources');
+        return raw.sourceRevisions.map((entry, index) => {
+            const source = object(entry, `sourceRevisions[${index}]`);
+            onlyKeys(source, `sourceRevisions[${index}]`, ['path', 'revision']);
+            const path = short(source.path, 'sourceRevisions.path');
+            const revision = short(source.revision, 'sourceRevisions.revision');
+            if (!revisionPattern.test(revision))
+                throw new Error('sourceRevisions.revision must be a SHA-256 revision');
+            return { path, revision };
+        });
+    })());
+    if (sourceRevisions.length < 1)
+        throw new Error('sourceRevisions must contain at least one current source path and revision');
+    const participants = strings(raw.participants ?? [], 'participants', 64);
+    const facilitatorAccountId = short(raw.facilitatorAccountId, 'facilitatorAccountId');
+    if (!participants.includes(facilitatorAccountId))
+        participants.unshift(facilitatorAccountId);
+    const authority = object(raw.decisionAuthority ?? {}, 'decisionAuthority');
+    onlyKeys(authority, 'decisionAuthority', ['approverAccountId', 'delegatedAccountId', 'delegationReason']);
+    const decisionAuthority = {
+        ...(authority.approverAccountId === undefined ? {} : { approverAccountId: short(authority.approverAccountId, 'decisionAuthority.approverAccountId') }),
+        ...(authority.delegatedAccountId === undefined ? {} : { delegatedAccountId: short(authority.delegatedAccountId, 'decisionAuthority.delegatedAccountId') }),
+        ...(authority.delegationReason === undefined ? {} : { delegationReason: short(authority.delegationReason, 'decisionAuthority.delegationReason') }),
+    };
+    const defaultStep = methods[0].steps[0].id;
+    const currentStepId = raw.currentStepId === undefined ? defaultStep : short(raw.currentStepId, 'currentStepId');
+    currentStep(methods, currentStepId);
+    const checks = raw.checks === undefined ? [] : arrayObjects(raw.checks, 'checks', ['itemId', 'status', 'evidence', 'reason', 'actor']);
+    for (const [index, check] of checks.entries()) {
+        for (const field of ['itemId', 'status', 'evidence', 'reason', 'actor'])
+            if (check[field] !== undefined)
+                validateNested(check[field], `checks[${index}].${field}`, 0);
+    }
+    const outputs = raw.outputs === undefined ? [] : arrayObjects(raw.outputs, 'outputs', ['type', 'status', 'synthesis', 'structured', 'references', 'alternatives', 'evidence', 'reason', 'reviewConditions', 'createdAt']);
+    for (const [index, output] of outputs.entries()) {
+        if (output.type !== undefined)
+            short(output.type, `outputs[${index}].type`);
+        if (output.status !== 'proposed' && output.status !== 'unverified') {
+            throw new Error(`outputs[${index}].status must be proposed or unverified until an authorized output bridge verifies it`);
+        }
+        if (output.synthesis !== undefined) {
+            if (typeof output.synthesis !== 'string' || !output.synthesis.trim() || Array.from(output.synthesis).length > 4000)
+                throw new Error(`outputs[${index}].synthesis must be non-empty text of at most 4000 characters`);
+        }
+        if (output.structured !== undefined)
+            validateStructured(output.structured);
+        for (const field of ['references', 'alternatives', 'evidence', 'reason', 'reviewConditions', 'createdAt'])
+            if (output[field] !== undefined)
+                validateNested(output[field], `outputs[${index}].${field}`, 0);
+    }
+    const round = raw.round === undefined ? 1 : number(raw.round, 'round', 1, 64);
+    const facilitatorGeneration = raw.facilitatorGeneration === undefined ? 0 : number(raw.facilitatorGeneration, 'facilitatorGeneration', 0, Number.MAX_SAFE_INTEGER);
+    const ordinaryRedoCount = raw.ordinaryRedoCount === undefined ? 0 : number(raw.ordinaryRedoCount, 'ordinaryRedoCount', 0, 1);
+    return {
+        version: 1, purpose: short(raw.purpose, 'purpose'), scope: short(raw.scope, 'scope'), successCriteria: strings(raw.successCriteria, 'successCriteria'),
+        sourceRevisions, methods, currentStepId, round, facilitatorAccountId, facilitatorGeneration, participants, decisionAuthority, checks, outputs, ordinaryRedoCount,
+        ...(raw.waitingReason === undefined ? {} : { waitingReason: short(raw.waitingReason, 'waitingReason') }),
+        ...(raw.resumeCondition === undefined ? {} : { resumeCondition: short(raw.resumeCondition, 'resumeCondition') }),
+    };
+}
+function arrayObjects(value, field, allowed) {
+    if (!Array.isArray(value) || value.length > MAX_ARRAY_ITEMS)
+        throw new Error(`${field} must be an array with at most ${MAX_ARRAY_ITEMS} items`);
+    return value.map((item, index) => {
+        const result = object(item, `${field}[${index}]`);
+        onlyKeys(result, `${field}[${index}]`, allowed);
+        return result;
+    });
+}
+function number(value, field, minimum, maximum) {
+    if (!Number.isSafeInteger(value) || Number(value) < minimum || Number(value) > maximum)
+        throw new Error(`${field} must be an integer from ${minimum} to ${maximum}`);
+    return Number(value);
+}
+const allowedSubmissionKeys = new Set([
+    'ideaIds', 'origin', 'extension', 'challenge', 'parentIdeaIds', 'observations', 'questions', 'acknowledgement', 'checks', 'groups', 'names',
+    'mapNodes', 'mapEdges', 'ballot', 'ranking', 'criteria', 'alternatives', 'evidence', 'risks', 'benefits', 'uncertainty', 'revisit',
+    'adopted', 'rejected', 'minority', 'synthesis', 'participantAccounts', 'roles', 'reason', 'reviewConditions', 'mitigation', 'earlySignal',
+    'ownerAction', 'timeline', 'impact', 'contributingFactors', 'helpfulResponse', 'prevention', 'experiment', 'variant', 'reducedVariant',
+    'purpose', 'scope', 'outcome', 'sourceRevisions', 'failureScenario',
+]);
+const allowedNestedKeys = new Set([
+    'id', 'ideaId', 'parentIdeaId', 'alternativeId', 'fromId', 'toId', 'itemId', 'accountId', 'rank', 'type', 'label', 'title', 'status',
+    'reason', 'evidence', 'actor', 'origin', 'extension', 'challenge', 'path', 'revision', 'ownerAction', 'earlySignal', 'participantAccounts',
+    'members', 'name', 'value', 'criteria', 'reviewCondition', 'revisit', 'uncertainty', 'impact', 'timeline', 'mitigation',
+]);
+function validateNested(value, field, depth) {
+    if (depth > 4)
+        throw new Error(`${field} exceeds the maximum nesting depth`);
+    if (typeof value === 'string') {
+        short(value, field);
+        return;
+    }
+    if (typeof value === 'number' || typeof value === 'boolean')
+        return;
+    if (Array.isArray(value)) {
+        if (value.length > MAX_ARRAY_ITEMS)
+            throw new Error(`${field} has too many items`);
+        value.forEach((item, index) => validateNested(item, `${field}[${index}]`, depth + 1));
+        return;
+    }
+    const record = object(value, field);
+    if (Object.keys(record).length > 12)
+        throw new Error(`${field} item is too large`);
+    for (const [key, item] of Object.entries(record)) {
+        if (!allowedNestedKeys.has(key))
+            throw new Error(`${field}.${key} is unknown`);
+        if (/^(?:id|.+Id)$/u.test(key) && typeof item === 'string' && !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/u.test(item))
+            throw new Error(`${field}.${key} must be a bounded identifier`);
+        validateNested(item, `${field}.${key}`, depth + 1);
+    }
+}
+function validateStructured(value) {
+    const structured = object(value, 'structured');
+    let serialized;
+    try {
+        serialized = JSON.stringify(structured);
+    }
+    catch {
+        throw new Error('structured must be JSON-serializable');
+    }
+    if (Array.from(serialized).length > 4000)
+        throw new Error('structured exceeds 4000 characters');
+    const keys = Object.keys(structured);
+    if (!keys.length)
+        throw new Error('structured must contain a bounded submission');
+    for (const key of keys) {
+        if (!allowedSubmissionKeys.has(key))
+            throw new Error(`structured.${key} is unknown`);
+        validateNested(structured[key], `structured.${key}`, 0);
+    }
+    return structured;
+}
+export function validateFacilitationSubmission(facilitation, params) {
+    const accountId = short(params.accountId, 'accountId');
+    const stepId = short(params.stepId, 'stepId');
+    if (!facilitation.participants.includes(accountId))
+        throw new Error('Only an explicitly configured participant account may submit to managed facilitation');
+    if (!revisionPattern.test(params.workshopRevision))
+        throw new Error('workshopRevision must be the exact current SHA-256 revision');
+    if (stepId !== facilitation.currentStepId)
+        throw new Error('This submission targets a stale or different facilitation step');
+    const step = currentStep(facilitation.methods, stepId);
+    const structured = validateStructured(params.structured);
+    for (const field of step.requiredFields) {
+        if (typeof structured[field] === 'boolean')
+            throw new Error(`This facilitation step requires typed ${field}, not a boolean`);
+    }
+    const missing = step.requiredFields.filter(field => {
+        const value = structured[field];
+        return value === undefined || value === null || (typeof value === 'string' && !value.trim()) || (Array.isArray(value) && value.length === 0)
+            || (typeof value === 'object' && !Array.isArray(value) && Object.keys(value).length === 0);
+    });
+    if (missing.length)
+        throw new Error(`This facilitation step is missing required structured fields: ${missing.join(', ')}`);
+    if (structured.checks !== undefined) {
+        if (!Array.isArray(structured.checks) || !structured.checks.length)
+            throw new Error('This facilitation step requires typed checks');
+        const ids = new Set();
+        for (const value of structured.checks) {
+            const check = object(value, 'check');
+            const itemId = short(check.itemId, 'check.itemId');
+            if (ids.has(itemId))
+                throw new Error('Duplicate checklist item');
+            ids.add(itemId);
+            if (!['unknown', 'pass', 'fail', 'not_applicable'].includes(String(check.status)))
+                throw new Error('Invalid checklist status');
+            if (check.actor !== accountId)
+                throw new Error('Checklist actor must be the authenticated submitting account');
+            short(check.reason, 'check.reason');
+            short(check.evidence, 'check.evidence');
+        }
+    }
+    if (step.id === 'crazy8s-eight' && (!Array.isArray(structured.ideaIds) || new Set(structured.ideaIds.map(String)).size !== 8))
+        throw new Error('Crazy 8s requires exactly eight distinct idea IDs');
+    if (step.id === 'brainwriting-independent' && structured.variant === '6-3-5' && (!Array.isArray(structured.ideaIds) || structured.ideaIds.length !== 3))
+        throw new Error('6-3-5 requires exactly three ideas from this account in the round');
+    if (step.id === 'dot-voting-vote' || step.id === 'ngt-rank') {
+        if (!Array.isArray(structured.ballot) || !structured.ballot.length)
+            throw new Error('A ranking ballot is required');
+        const alternatives = new Set();
+        for (const value of structured.ballot) {
+            const entry = object(value, 'ballot entry');
+            const alternative = short(entry.alternativeId, 'ballot.alternativeId');
+            if (alternatives.has(alternative))
+                throw new Error('Duplicate ballot alternative');
+            alternatives.add(alternative);
+            number(entry.rank, 'ballot.rank', 1, MAX_ARRAY_ITEMS);
+        }
+        if ((params.existingSubmissions || []).some(item => item.accountId === accountId && item.stepId === stepId))
+            throw new Error('Only one ballot per authenticated account is allowed for this step');
+        return { structured, ballotAccountId: accountId };
+    }
+    return { structured };
+}
+export function nextFacilitationAction(facilitation, submissions) {
+    const step = currentStep(facilitation.methods, facilitation.currentStepId);
+    const current = submissions.filter(item => item.stepId === step.id && facilitation.participants.includes(item.accountId));
+    // The service supplies chronological, validated submissions. A later explicit
+    // report by the same account repairs its own item, never another account's.
+    const latestChecks = new Map();
+    for (const item of current) {
+        if (!Array.isArray(item.structured.checks))
+            continue;
+        for (const check of item.structured.checks) {
+            const value = check && typeof check === 'object' ? check : {};
+            latestChecks.set(JSON.stringify([item.accountId, value.itemId]), value.status);
+        }
+    }
+    const unresolved = [...latestChecks.values()].some(status => !['pass', 'not_applicable'].includes(String(status)));
+    if (unresolved)
+        return { kind: 'wait', stepId: step.id, required: step.required.slice(), finishCondition: step.finishCondition, adaptation: step.adaptation, resumeCondition: 'Resolve unknown/failed checklist items; their presence is not completion evidence.' };
+    const accounts = new Set(current.map(item => item.accountId));
+    const minimum = step.minimumAccounts || 1;
+    if (accounts.size < minimum) {
+        if (accounts.size > 0 && minimum > 1)
+            return {
+                kind: 'wait', stepId: step.id, required: ['structured submission'], finishCondition: step.finishCondition, adaptation: step.adaptation,
+                resumeCondition: `${minimum - accounts.size} additional actual participant account(s), or an explicit reduced variant`,
+            };
+        return { kind: 'submit', stepId: step.id, required: ['structured submission', ...step.required], finishCondition: step.finishCondition, adaptation: step.adaptation };
+    }
+    const final = facilitation.methods.flatMap(method => method.steps).at(-1)?.id === step.id;
+    return { kind: final ? 'record_output' : 'advance', stepId: step.id, required: step.required.slice(), finishCondition: step.finishCondition, adaptation: step.adaptation };
+}
+export function advanceFacilitation(facilitation, reason) {
+    short(reason, 'reason');
+    const all = facilitation.methods.flatMap(methodState => methodState.steps);
+    const index = all.findIndex(step => step.id === facilitation.currentStepId);
+    if (index < 0)
+        throw new Error('currentStepId is unavailable');
+    const next = all[index + 1];
+    if (!next)
+        throw new Error('All facilitation steps are complete; record an output instead of advancing');
+    const resumed = { ...facilitation };
+    delete resumed.waitingReason;
+    delete resumed.resumeCondition;
+    return { ...resumed, currentStepId: next.id };
+}
+export function managedFacilitationMarkdown(facilitation) {
+    const current = currentStep(facilitation.methods, facilitation.currentStepId);
+    return [
+        '## Managed facilitation',
+        `- Purpose: ${facilitation.purpose}`,
+        `- Scope: ${facilitation.scope}`,
+        `- Current step: ${current.id} — ${current.title}`,
+        `- Finish condition: ${current.finishCondition}`,
+        `- Adaptation: ${current.adaptation}`,
+        ...(facilitation.waitingReason ? [`- Waiting: ${facilitation.waitingReason}`] : []),
+        ...(facilitation.resumeCondition ? [`- Resume when: ${facilitation.resumeCondition}`] : []),
+    ].join('\n');
+}

@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 
-export type WikiCanvasMode = 'moc' | 'neighborhood';
+export type WikiCanvasMode = 'moc' | 'neighborhood' | 'workshop';
 
 export interface WikiCanvasNote {
   path: string;
@@ -19,6 +19,20 @@ export interface WikiCanvasEdge {
   toPath: string;
   label: string;
   kind: 'authored' | 'dependency' | 'direct_link' | 'backlink' | 'proximity';
+}
+
+/** A structured workshop map item. sourcePath is only used for revision-safe
+ * selection; it is never copied into the emitted Canvas text. */
+export interface WikiCanvasWorkshopMapNode {
+  id: string;
+  label: string;
+  sourcePath: string;
+}
+
+export interface WikiCanvasWorkshopMapEdge {
+  fromId: string;
+  toId: string;
+  label?: string;
 }
 
 export type JsonCanvasNode = {
@@ -98,6 +112,7 @@ export function buildJsonCanvasProjection(input: {
   mode: WikiCanvasMode;
   notes: WikiCanvasNote[];
   edges: WikiCanvasEdge[];
+  workshopMap?: { nodes: WikiCanvasWorkshopMapNode[]; edges: WikiCanvasWorkshopMapEdge[] };
 }): { canvas: JsonCanvasDocument; snapshotFingerprint: string } {
   if (!input.notes.length || input.notes[0]!.role !== 'root') throw new Error('Canvas projection requires one root note first');
   const notes: WikiCanvasNote[] = [];
@@ -120,10 +135,33 @@ export function buildJsonCanvasProjection(input: {
     seenEdges.add(key);
     acceptedEdges.push({ ...edge, label: boundedLabel(edge.label) });
   }
+  const workshopNodes: WikiCanvasWorkshopMapNode[] = [];
+  const workshopNodeIds = new Map<string, string>();
+  if (input.mode === 'workshop') {
+    for (const node of input.workshopMap?.nodes || []) {
+      const id = String(node.id || '').trim();
+      const label = Array.from(String(node.label || '').replace(/[\r\n]+/g, ' ').trim()).slice(0, 160).join('');
+      if (!id || !label || workshopNodeIds.has(id)) continue;
+      workshopNodes.push({ id, label, sourcePath: String(node.sourcePath || '') });
+      workshopNodeIds.set(id, `workshop-${digest(id).slice(0, 24)}`);
+    }
+  }
+  const workshopEdges: WikiCanvasWorkshopMapEdge[] = [];
+  const seenWorkshopEdges = new Set<string>();
+  for (const edge of input.mode === 'workshop' ? (input.workshopMap?.edges || []) : []) {
+    const fromId = String(edge.fromId || '').trim(), toId = String(edge.toId || '').trim();
+    if (!fromId || !toId || fromId === toId || !workshopNodeIds.has(fromId) || !workshopNodeIds.has(toId)) continue;
+    const label = boundedLabel(edge.label || 'relates to');
+    const key = `${fromId}\u0000${toId}\u0000${label.toLowerCase()}`;
+    if (seenWorkshopEdges.has(key)) continue;
+    seenWorkshopEdges.add(key);
+    workshopEdges.push({ fromId, toId, label });
+  }
   const snapshotFingerprint = digest(JSON.stringify({
     mode: input.mode,
     notes: notes.map(note => ({ path: note.path, revision: note.revision, role: note.role, depth: note.depth, authoredPosition: note.authoredPosition, stage: note.stage, reasons: note.reasons })),
     edges: acceptedEdges,
+    ...(input.mode === 'workshop' && { workshopMap: workshopNodes.map(node => ({ id: node.id, label: node.label, sourcePath: node.sourcePath })), workshopEdges }),
   }));
   const snapshotMetadata: WikiCanvasSnapshotMetadata = {
     kind: 'mcpvault-derived-canvas',
@@ -144,6 +182,9 @@ export function buildJsonCanvasProjection(input: {
       const depth = Math.max(0, Number(note.depth) || 0);
       const position = Math.max(1, Number(note.authoredPosition) || index);
       return { id: nodeIds.get(note.path.toLowerCase())!, type: 'file', x: (depth + 1) * 500, y: (position - 1) * 260, width: 360, height: 220, ...(noteColor(note) && { color: noteColor(note) }), file: note.path };
+    }
+    if (input.mode === 'workshop') {
+      return { id: nodeIds.get(note.path.toLowerCase())!, type: 'file', x: 480, y: (index - 1) * 260, width: 360, height: 220, file: note.path };
     }
     const tier = neighborhoodTier(note.reasons || []);
     const row = rowsByTier.get(tier) || 0;
@@ -170,6 +211,10 @@ export function buildJsonCanvasProjection(input: {
       'Derived from current Markdown. Regenerate before relying on an old layout; the Canvas is navigation, not evidence or an access boundary.',
     ].join('\n'),
   };
+  const mapTextNodes: JsonCanvasNode[] = workshopNodes.map((node, index) => ({
+    id: workshopNodeIds.get(node.id)!, type: 'text', x: 980 + Math.floor(index / 8) * 340, y: (index % 8) * 150,
+    width: 280, height: 110, color: '4', text: node.label,
+  }));
   const canvasEdges: JsonCanvasEdge[] = acceptedEdges.map(edge => {
     const id = `edge-${digest(`${edge.fromPath}\u0000${edge.toPath}\u0000${edge.kind}\u0000${edge.label}`).slice(0, 16)}`;
     const reverse = edge.kind === 'backlink';
@@ -186,10 +231,17 @@ export function buildJsonCanvasProjection(input: {
       label: edge.label,
     };
   });
+  for (const edge of workshopEdges) {
+    canvasEdges.push({
+      id: `workshop-edge-${digest(`${edge.fromId}\u0000${edge.toId}\u0000${edge.label}`).slice(0, 16)}`,
+      fromNode: workshopNodeIds.get(edge.fromId)!, fromSide: 'right', fromEnd: 'none',
+      toNode: workshopNodeIds.get(edge.toId)!, toSide: 'left', toEnd: 'arrow', color: '4', ...(edge.label !== undefined && { label: edge.label }),
+    });
+  }
   // JSON Canvas uses array order as z-order: the legend is behind files and
   // the selected root is last/on top.
   const rootNode = fileNodes.shift()!;
-  const canvas = { nodes: [legend, ...fileNodes, rootNode], edges: canvasEdges };
+  const canvas = { nodes: [legend, ...mapTextNodes, ...fileNodes, rootNode], edges: canvasEdges };
   validateJsonCanvasDocument(canvas);
   return { canvas, snapshotFingerprint };
 }
@@ -218,7 +270,7 @@ export function readJsonCanvasMetadata(value: unknown): WikiCanvasSnapshotMetada
   try { parsed = JSON.parse(encoded); }
   catch { throw new Error('MCPVault Canvas metadata must contain valid JSON'); }
   if (!isRecord(parsed) || parsed.kind !== 'mcpvault-derived-canvas' || parsed.version !== 1) throw new Error('Unsupported MCPVault Canvas metadata');
-  if (!['moc', 'neighborhood'].includes(String(parsed.mode || ''))) throw new Error('MCPVault Canvas metadata has an invalid mode');
+  if (!['moc', 'neighborhood', 'workshop'].includes(String(parsed.mode || ''))) throw new Error('MCPVault Canvas metadata has an invalid mode');
   if (typeof parsed.rootNodeId !== 'string' || !parsed.rootNodeId || parsed.rootNodeId.length > 128) throw new Error('MCPVault Canvas metadata has an invalid root node');
   if (typeof parsed.snapshotFingerprint !== 'string' || !/^[a-f0-9]{64}$/.test(parsed.snapshotFingerprint)) throw new Error('MCPVault Canvas metadata has an invalid fingerprint');
   if (!isRecord(parsed.revisions)) throw new Error('MCPVault Canvas metadata must contain revision guards');

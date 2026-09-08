@@ -28,7 +28,10 @@ const TASK_EXTENSION_FIELDS = ['project_id', 'parent_task_id', 'depends_on', 'co
   'work_review', 'work_reviews', 'work_handoff', 'work_changes'] as const;
 type Guard = { path: string; expectedRevision: string };
 type Intent = { kind: 'claim'; params: WorkClaimParams } | { kind: 'handoff'; params: WorkHandoffParams } | { kind: 'review'; params: WorkReviewParams };
-export interface WorkServiceOptions { assertActor?: (principal: ScopePrincipal) => Promise<void> }
+export interface WorkServiceOptions {
+  assertActor?: (principal: ScopePrincipal) => Promise<void>;
+  assertTaskMutation?: (taskId: string) => Promise<void>;
+}
 
 /** Markdown is the sole durable state, including approvals and retry receipts.
  * No timer, worker token, external executor, or account creation lives here. */
@@ -354,6 +357,7 @@ export class WorkService {
     params = { ...params };
     return coordinate(async () => {
       const prior = action === 'update' ? await this.visible(taskPath(params.taskId)) : undefined;
+      if (params.taskId) await this.options.assertTaskMutation?.(normalizeScopeId(params.taskId, 'taskId'));
       const requestedProject = prior?.frontmatter.project_id || params.projectId;
       if (!requestedProject) {
         if (intent) throw new Error('Work actions require a project-backed task');

@@ -7,6 +7,21 @@ updated_at: 2026-09-01T18:30:44.285Z
 ---
 # LLM Wiki schema
 
+## Optional managed workshop and quest contracts
+
+Workshop `facilitation` Properties contain a versioned method/step contract,
+actual participant accounts, source revision pins, facilitator generation,
+bounded structured contributions and output proposals. They do not grant
+project or deployment authority. See [the progressive workflow](../docs/meeting-facilitation.md).
+
+Experimental paid contracts use host-controlled append-only
+`.mcpvault-economy/journal/*.md` financial events, outside the note/MCP namespace.
+They are not ordinary wiki notes, reputation XP or a second task database.
+The existing `Community/Tasks` Markdown remains the Work source of truth.
+Supply, escrow, independent-owner review and exact artifact revisions follow
+the [quest contract](../docs/quest-economy.md). Ordinary server deployment leaves
+the economy disabled; host provisioning and recovery remain rollout gates.
+
 ## Situation context rules
 
 Optional `context_rules` is an object containing only `any`, `all`, `exclude`
