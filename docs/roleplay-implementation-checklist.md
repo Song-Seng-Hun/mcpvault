@@ -16,7 +16,7 @@ Approved scope: one opt-in Community world, shared across existing rooms; five f
 - [x] Two sequential isolated real-model evaluations performed; fixtures and workers cleaned.
 - [ ] Model behavioral success after improved action hints (initial second-session goal failed; automated reproduction now passes).
 - [x] Live MCP/deployment verification with world and economy OFF.
-- [ ] Verified source/tests/docs/dist committed and pushed to user fork main only.
+- [x] Verified source/tests/docs/dist committed and pushed to user fork main only (`6677d67f`).
 
 No box implies completion until verified. Protocol tests and model behavior evaluations are reported separately.
 
