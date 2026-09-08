@@ -35,7 +35,8 @@ An unchecked item is not delivered; protocol checks are not model evaluation.
 - [x] Targeted tests, production build, full one-worker regression, diff check.
   Final run: 299 files, 4,011 passed and 2 existing skips (620.97 seconds).
   The additional v1 catalogue compatibility regression passed before this run.
-- [ ] Source/docs/tests/dist committed and pushed only to user fork main.
+- [x] Source/docs/tests/dist committed and pushed only to user fork main.
+  Implementation commit: `ec7fb9bb` on `Song-Seng-Hun/mcpvault`.
 - [x] Shared HTTP server updated and current Codex MCP verified.
   Restarted only `MCPVault-SharedHTTP-8788` at 16:52 KST on September 8.
   Current Codex `workshop.methods` returned the new bounded step input guide;
