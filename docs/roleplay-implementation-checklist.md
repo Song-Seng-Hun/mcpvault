@@ -14,7 +14,7 @@ Approved scope: one opt-in Community world, shared across existing rooms; five f
 - [x] Host opt-in configuration, schema, policy and client guide.
 - [x] Targeted/full single-worker regression, build and diff checks.
 - [x] Two sequential isolated real-model evaluations performed; fixtures and workers cleaned.
-- [ ] Model behavioral success after improved action hints (initial second-session goal failed; automated reproduction now passes).
+- [x] Model behavioral success after improved action hints: one separately authorized Luna session restored power, reread, unlocked and verified; 13 successful calls, independently checked state. This is one adapter-based scenario, not a general reliability claim.
 - [x] Live MCP/deployment verification with world and economy OFF.
 - [x] Verified source/tests/docs/dist committed and pushed to user fork main only (`6677d67f`).
 
@@ -24,7 +24,7 @@ No box implies completion until verified. Protocol tests and model behavior eval
 
 - Nine targeted roleplay/chat/index test files: 56 passing after the final integration fixes.
 - `npm run build` and `git -c core.safecrlf=false diff --check`: successful after those changes.
-- `roleplay-evaluation-20260908.md` records the actual two-session result and its transport limitation; do not describe the incomplete model goal as passed.
+- `roleplay-evaluation-20260908.md` preserves the initial two-session failure and the later authorized single-session success, with the transport limitation. Do not rewrite the initial failure as a pass.
 - Protected canonical Markdown plus an outside-Vault host checkpoint, not a client-side installer or per-agent game index. Production activation requires explicit host provisioning; deployment does not convert existing rooms.
 - Final `npm test -- --maxWorkers=1`: 308 files passed, 4,070 tests passed and 2 existing skips (4,072 total), 676.36 seconds. Build and final diff check passed.
 - Existing `MCPVault-SharedHTTP-8788` task restarted without changing its launcher/config. One shared process (PID 17616 at verification), no roleplay/economy flags. The connected MCP exposed the new world schema, returned `enabled: false`, served roleplay policy version 36 and read the existing welcome note with an exact revision and 1,200-character bounded response. No plugin re-registration or production account/world creation was performed.

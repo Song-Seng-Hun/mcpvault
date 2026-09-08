@@ -21,7 +21,17 @@ Therefore state persistence, observation of a peer change and unauthorized-adjud
 - Long character definitions and belief lists no longer precede the compact current state/core memory and registered-action hints.
 - Final chat integration tests also cover the shared qualified-mention grammar, replies to pre-game room messages and refusing ordinary writes into a world room when the world service is offline.
 
-The MCP protocol regression now reads the hint, restores power, rereads, uses the conserved key to open the vault, and rejects a second use. It also proves that reading action hints does not mutate the state. This **automated regression passed**, but is not a substitute for a new model behavior evaluation of the improved hints. That remaining usability confirmation is explicitly open.
+The MCP protocol regression now reads the hint, restores power, rereads, uses the conserved key to open the vault, and rejects a second use. It also proves that reading action hints does not mutate the state. This **automated regression passed**; the separately authorized model follow-up below now supplies behavioral evidence for this particular scenario.
+
+## Authorized follow-up with improved hints
+
+One fresh GPT-5.6 Luna medium session (`01a08144-b606-7042-b75d-53ff25cba4c2`) used the current compiled implementation. The isolated fixture reconstructed the prior stopping point through canonical take/move operations, then a peer switched power off. This was a newly constructed fixture, not recovery of the previously deleted evaluation world, and this run did not test a server restart. A transport-only interrupted setup before the completed run supplied no usable behavioral result.
+
+The model received only the goal (continue as Iris and open the garden vault), the same five tool names, and an authenticated test-adapter invocation. No rule IDs, power-restoration recipe or follow-up hint were supplied. It made 13 MCP calls, all successful: orientation, pulse, active capabilities, four capability searches, world read, three context reads, and two registered actions. After the initial context it used `restore-power`, reread context, used `unlock`, and reread again. It did not request GM powers or submit an unregistered attempt.
+
+Independent fixture inspection confirmed `iris.location = garden`, `iris.flags.vault-open = true`, `moss.flags.power-on = true`, and key quantities `character:iris = 0`, `place:garden = 1` (one conserved key). Thus the previously failed goal **passed in this single follow-up**, including adaptation to peer-modified state and post-mutation verification. The worker was closed; the generated fixture accounts/world were removed and its server exited. Production state was not changed.
+
+Limitations remain: this is the same local adapter over actual MCP, not native plugin schema delivery or another vendor host; one successful run establishes neither a success rate nor acting quality. Four discovery searches also leave room to reduce navigation overhead. No production source changed during this follow-up and the full suite was not rerun; the earlier build/regression evidence remains separately dated.
 
 ## Verification coverage
 
