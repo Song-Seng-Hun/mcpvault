@@ -2,6 +2,7 @@ import type { FileSystemService } from './filesystem.js';
 import type { ScopeAccessPolicy } from './scope-access.js';
 import type { ScopePrincipal } from './scope-auth.js';
 import type { ReferenceService } from './references.js';
+import type { GuidanceCatalog, GuidanceSettings } from './guidance-catalog.js';
 export interface NoticeEntry {
     id: string;
     path: string;
@@ -14,15 +15,18 @@ interface NoticeConfig {
     version: 1;
     vaultPath: string;
     notices: NoticeEntry[];
+    guidance?: GuidanceSettings;
 }
 /** Trusted host configuration only. Never derive editors or registration from Markdown. */
 export declare class NoticeRegistry {
     private readonly vaultPath;
     private readonly configPath?;
+    readonly guidance?: GuidanceCatalog | undefined;
     private readonly grant;
-    constructor(vaultPath: string, configPath?: string | undefined);
+    constructor(vaultPath: string, configPath?: string | undefined, guidance?: GuidanceCatalog | undefined);
     load(): NoticeConfig;
     assertMutation(path: string): void;
+    lookup(id: unknown): NoticeEntry | undefined;
     write<T>(path: string, fingerprint: string, operation: () => Promise<T>, assertFresh: () => void): Promise<T>;
     assertCanonical(path: string): void;
 }

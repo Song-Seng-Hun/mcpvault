@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 const textSchema = (maxLength) => ({ type: 'string', minLength: 1, maxLength, pattern: '\\S' });
 const revisionSchema = { type: 'string', pattern: '^[0-9a-fA-F]{64}$' };
 const pathPattern = '^(?!\\s)(?!.*\\s$)(?!.*[\\u0000-\\u001F\\u007F#^])(?!/)(?![A-Za-z]:)(?!.*(?:^|[/\\\\])\\.\\.?([/\\\\]|$))(?:(?:scope://(?:global|(?:model|agent|community)/[a-z0-9][a-z0-9._-]{0,63})/[^:]+)|(?:(?!.*:)[^/].*))$';
@@ -33,39 +34,39 @@ export const UNDERSTANDING_SCHEMA = {
 };
 function object(value, keys, name) {
     if (!value || typeof value !== 'object' || Array.isArray(value))
-        throw Error(`${name} must be an object`);
+        throw guidanceError(Error(`${name} must be an object`), 'guid-fb22bd2cde0b504a');
     const result = value;
     if (Object.keys(result).some(key => !keys.includes(key)))
-        throw Error(`${name} contains an unknown field`);
+        throw guidanceError(Error(`${name} contains an unknown field`), 'guid-b50ae71997c2280c');
     return result;
 }
 function boundedText(value, max, name) {
     if (typeof value !== 'string' || !value.trim() || value.length > max)
-        throw Error(`${name} must contain 1–${max} characters`);
+        throw guidanceError(Error(`${name} must contain 1–${max} characters`), 'guid-d11efbd7b2b079c4');
     return value.trim();
 }
 function boundedList(value, min, max, name) {
     if (!Array.isArray(value) || value.length < min || value.length > max)
-        throw Error(`${name} must contain ${min}–${max} entries`);
+        throw guidanceError(Error(`${name} must contain ${min}–${max} entries`), 'guid-b74bc9db03ee0ddc');
     return value;
 }
 function normalizeRevision(value, name) {
     if (typeof value !== 'string' || !/^[0-9a-f]{64}$/i.test(value))
-        throw Error(`${name} must be exactly 64 hexadecimal characters`);
+        throw guidanceError(Error(`${name} must be exactly 64 hexadecimal characters`), 'guid-81b75bc5c501bf9d');
     return value.toLowerCase();
 }
 function normalizePath(value, name) {
     if (typeof value !== 'string' || !value || value.trim() !== value || value.length > 500)
-        throw Error(`${name} must be an exact path string`);
+        throw guidanceError(Error(`${name} must be an exact path string`), 'guid-87b4d44122eb686a');
     const path = value.replace(/\\/g, '/');
     if (/^[\u0000-\u001f\u007f#^]/.test(path) || /[\u0000-\u001f\u007f#^]/.test(path) || path.startsWith('/') || /^[A-Za-z]:/.test(path) || path.includes(':') && !path.startsWith('scope://'))
-        throw Error(`${name} is unsafe`);
+        throw guidanceError(Error(`${name} is unsafe`), 'guid-23b4c1bcca00ce76');
     const scoped = /^scope:\/\/(global|(?:model|agent|community)\/[a-z0-9][a-z0-9._-]{0,63})\/(.+)$/.exec(path);
     if (path.startsWith('scope://') && !scoped)
-        throw Error(`${name} must use a supported scope URI`);
+        throw guidanceError(Error(`${name} must use a supported scope URI`), 'guid-1952a59a9dfb5c69');
     const relative = scoped?.[2] ?? path;
     if (!relative || relative.includes(':') || relative.split('/').some(part => !part || part === '.' || part === '..'))
-        throw Error(`${name} must not traverse or contain alternate streams`);
+        throw guidanceError(Error(`${name} must not traverse or contain alternate streams`), 'guid-fb42ef794bb5b5cd');
     return path;
 }
 function normalizeLocator(value, name, paths) {
@@ -75,13 +76,13 @@ function normalizeLocator(value, name, paths) {
     const hasStart = row.startLine !== undefined;
     const hasEnd = row.endLine !== undefined;
     if (hasStart !== hasEnd || (hasStart && (typeof row.startLine !== 'number' || !Number.isSafeInteger(row.startLine) || row.startLine < 1)) || (hasEnd && (typeof row.endLine !== 'number' || !Number.isSafeInteger(row.endLine) || row.endLine < 1)))
-        throw Error(`${name} line numbers must be a paired positive integer range`);
+        throw guidanceError(Error(`${name} line numbers must be a paired positive integer range`), 'guid-633af36952aca02f');
     if (hasStart && hasEnd && row.startLine > row.endLine)
-        throw Error(`${name} line range is reversed`);
+        throw guidanceError(Error(`${name} line range is reversed`), 'guid-4a8b52abbbee716d');
     const pathKey = path.toLowerCase();
     const previous = paths.get(pathKey);
     if (previous !== undefined && previous !== revision)
-        throw Error('conflicting revisions for the same path');
+        throw guidanceError(Error('conflicting revisions for the same path'), 'guid-082926dec9590b54');
     paths.set(pathKey, revision);
     return { path, revision, ...(hasStart ? { startLine: row.startLine } : {}), ...(hasEnd ? { endLine: row.endLine } : {}) };
 }
@@ -91,7 +92,7 @@ function normalizeLocatorList(value, min, max, name, paths) {
         const locator = normalizeLocator(entry, `${name}[${index}]`, paths);
         const key = `${locator.path.toLowerCase()}|${locator.revision}|${locator.startLine ?? ''}|${locator.endLine ?? ''}`;
         if (seen.has(key))
-            throw Error(`${name} contains a duplicate locator`);
+            throw guidanceError(Error(`${name} contains a duplicate locator`), 'guid-01dd5d54a738672d');
         seen.add(key);
         return locator;
     });
@@ -104,10 +105,10 @@ export function normalizeUnderstanding(value) {
         return json.length;
     }
     catch {
-        throw Error('understanding must be JSON serializable');
+        throw guidanceError(Error('understanding must be JSON serializable'), 'guid-af0eb24d589cb211');
     } })();
     if (rawSize > 10000)
-        throw Error('understanding exceeds 10000 JSON characters');
+        throw guidanceError(Error('understanding exceeds 10000 JSON characters'), 'guid-59c729af4bf0352b');
     const entries = boundedList(value, 0, 4, 'understanding');
     const paths = new Map();
     const result = entries.map((entry, index) => {
@@ -116,15 +117,15 @@ export function normalizeUnderstanding(value) {
         const checks = row.checks === undefined ? undefined : boundedList(row.checks, 0, 3, 'checks').map((check, checkIndex) => {
             const checkRow = object(check, ['kind', 'method', 'outcome', 'evidence'], `check[${checkIndex}]`);
             if (checkRow.kind !== 'self_check' && checkRow.kind !== 'peer_check_report')
-                throw Error('check kind is invalid');
+                throw guidanceError(Error('check kind is invalid'), 'guid-1d0de62154f53acf');
             if (checkRow.outcome !== 'passed' && checkRow.outcome !== 'failed' && checkRow.outcome !== 'inconclusive')
-                throw Error('check outcome is invalid');
+                throw guidanceError(Error('check outcome is invalid'), 'guid-848c822a12e95882');
             return { kind: checkRow.kind, method: boundedText(checkRow.method, 300, 'check method'), outcome: checkRow.outcome, evidence: normalizeLocatorList(checkRow.evidence, 1, 4, `check[${checkIndex}].evidence`, paths) };
         });
         const openQuestions = row.openQuestions === undefined ? undefined : boundedList(row.openQuestions, 0, 4, 'openQuestions').map((question, questionIndex) => boundedText(question, 300, `openQuestions[${questionIndex}]`));
         return { explanation: boundedText(row.explanation, 600, 'explanation'), supports, ...(checks === undefined ? {} : { checks }), ...(openQuestions === undefined ? {} : { openQuestions }), nextStep: boundedText(row.nextStep, 400, 'nextStep') };
     });
     if (paths.size > 8)
-        throw Error('understanding may reference at most 8 distinct paths');
+        throw guidanceError(Error('understanding may reference at most 8 distinct paths'), 'guid-f87851b5f70d74de');
     return result;
 }

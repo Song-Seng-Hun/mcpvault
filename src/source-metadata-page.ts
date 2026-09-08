@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import type { FileSystemService } from './filesystem.js';
 import type { QueryNote } from './types.js';
 import { isModerationHidden } from './moderation-policy.js';
@@ -15,7 +16,7 @@ export async function readSourceMetadataPage(fs: FileSystemService, canAccess: (
     observed.push(n);
     if (!isModerationHidden(n.frontmatter)) { lastVisible = n.path; if (predicate(n)) notes.push(n); }
     if (observed.length >= 60 || notes.length >= Math.max(1, Math.min(20, limit))) {
-      if (!lastVisible) throw Error('Bounded source metadata page unavailable; select an exact source or knowledge path');
+      if (!lastVisible) throw guidanceError(Error('Bounded source metadata page unavailable; select an exact source or knowledge path'), 'guid-e97e5a9a3999833d');
       return { notes, observed, truncated: true, afterPath: lastVisible };
     }
   }

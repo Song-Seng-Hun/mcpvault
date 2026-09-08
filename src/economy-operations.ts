@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import type { EconomyPolicy, EconomyState, QuestContract } from './economy-model.js';
 
 const DAY = 86_400_000;
@@ -14,7 +15,7 @@ export function questAttention(contract: QuestContract, at: string): 'none' | 'i
 }
 export function assertSubjectiveAdmission(state: EconomyState, at: string): void {
   if (Object.values(state.contracts).some(c => c.terms.kind !== 'mechanical' && questAttention(c,at) === 'operator_attention')) {
-    throw new Error('Operator attention overdue; new subjective contracts are suspended. Existing escrow is unchanged.');
+    throw guidanceError(new Error('Operator attention overdue; new subjective contracts are suspended. Existing escrow is unchanged.'), 'guid-6d4829026e573168');
   }
 }
 export function reserveTreasuryBudget(state: EconomyState, policy: EconomyPolicy, at: string, amount: number): void {
@@ -22,6 +23,6 @@ export function reserveTreasuryBudget(state: EconomyState, policy: EconomyPolicy
   if (policy.treasuryWeeklyBudget === undefined) return;
   const cutoff = Date.parse(at) - 7 * DAY;
   const entries = (state.treasuryDisbursements || []).filter(item => Date.parse(item.at) > cutoff);
-  if (entries.reduce((n,item) => n + item.amount,0) + amount > policy.treasuryWeeklyBudget) throw new Error('Treasury weekly budget exceeded');
+  if (entries.reduce((n,item) => n + item.amount,0) + amount > policy.treasuryWeeklyBudget) throw guidanceError(new Error('Treasury weekly budget exceeded'), 'guid-684bc38128468faf');
   state.treasuryDisbursements = [...entries,{at,amount}];
 }

@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { createHash } from 'node:crypto';
 import { posix } from 'node:path';
 import type { FileSystemService } from './filesystem.js';
@@ -39,7 +40,7 @@ export class SourceChangeService {
 
   async read(params: SourceChangeParams): Promise<Record<string, any>> {
     const budget = params.maxChars ?? 4000;
-    if (!Number.isSafeInteger(budget) || budget < 2000 || budget > 12000) throw Error('Selected source comparison maxChars must be 2000–12000');
+    if (!Number.isSafeInteger(budget) || budget < 2000 || budget > 12000) throw guidanceError(Error('Selected source comparison maxChars must be 2000–12000'), 'guid-58556cee5812240f');
     const canAccess = (p: string) => this.access.canAccessPhysicalPath(p, params.principal);
     const publicPath = (p: string) => this.access.toPublicPath(p);
     const observed = new Map<string, QueryNote>();

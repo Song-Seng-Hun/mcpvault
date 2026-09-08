@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { randomUUID } from 'node:crypto';
 import { open, rename, unlink } from 'node:fs/promises';
 import { Readable, Transform } from 'node:stream';
@@ -16,7 +17,7 @@ function byteLimit(maxBytes: number): Transform {
   return new Transform({
     transform(chunk: Buffer, _encoding, callback) {
       total += chunk.length;
-      if (total > maxBytes) callback(new Error('Snapshot size exceeded'));
+      if (total > maxBytes) callback(guidanceError(new Error('Snapshot size exceeded'), 'guid-6e3e9727eeb0d592'));
       else callback(null, chunk);
     },
   });
@@ -24,7 +25,7 @@ function byteLimit(maxBytes: number): Transform {
 
 /** Internal disposable cache paths only. Does not authorize source-document IO. */
 export async function writeGzipSnapshot(path: string, chunks: Iterable<string | Uint8Array>, limits: SnapshotWriteLimits): Promise<void> {
-  if (![limits.maxBytes, limits.maxDecodedBytes].every(value => Number.isSafeInteger(value) && value > 0 && value <= 0x7fffffff)) throw new TypeError('Invalid snapshot byte limit');
+  if (![limits.maxBytes, limits.maxDecodedBytes].every(value => Number.isSafeInteger(value) && value > 0 && value <= 0x7fffffff)) throw guidanceError(new TypeError('Invalid snapshot byte limit'), 'guid-0d65cfcdd8523b6d');
   const temporary = `${path}.${process.pid}.${randomUUID()}.tmp`;
   let owned = false;
   try {
@@ -50,7 +51,7 @@ export async function writeGzipSnapshot(path: string, chunks: Iterable<string | 
     }
     owned = false;
   } catch {
-    throw new Error('Snapshot write unavailable');
+    throw guidanceError(new Error('Snapshot write unavailable'), 'guid-804b7813782a984d');
   } finally {
     if (owned) await unlink(temporary).catch(() => undefined);
   }

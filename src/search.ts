@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { join, resolve } from 'path';
 import { watch, type FSWatcher } from 'node:fs';
 import { createHash } from 'node:crypto';
@@ -162,7 +163,7 @@ export function positiveSearchTerms(query: string): string[] { return parseSearc
 /** Separate from the standard search's 20-hit / JSON display limits. */
 export function memoryCandidateLimit(value?: number): number {
   const limit = value ?? 10_000;
-  if (!Number.isInteger(limit) || limit < 1) throw new Error('Memory candidate limit must be a positive integer');
+  if (!Number.isInteger(limit) || limit < 1) throw guidanceError(new Error('Memory candidate limit must be a positive integer'), 'guid-213efdaaff7e74f5');
   return Math.min(limit, 10_000);
 }
 
@@ -833,7 +834,7 @@ export class SearchService {
 
   recordFeedback(scopeKey: string, query: string, outcome: 'useful' | 'failed' | 'ambiguous', selectedPaths: string[] = [], note?: string): { success: true; tracked: boolean; query: string; searches: number; feedbackFailures: number; feedbackAmbiguous: number } {
     const normalized = query.trim().replace(/\s+/g, ' ').slice(0, 240);
-    if (!normalized) throw new Error('query is required');
+    if (!normalized) throw guidanceError(new Error('query is required'), 'guid-48ae18bb5cfe1ffe');
     const scope = this.usageByScope.get(scopeKey) || new Map<string, SearchUsageRecord>();
     const key = normalized.toLocaleLowerCase();
     const existing = scope.get(key) || { query: normalized, searches: 0, zeroResultSearches: 0, feedbackFailures: 0, feedbackAmbiguous: 0, usefulSelections: 0, lastResultCount: 0, lastAt: '' };
@@ -1019,7 +1020,7 @@ export class SearchService {
    * only the caller's revision-checked source read can establish an exact match. */
   async memoryCandidates(params: MemorySearchParams): Promise<MemorySearchOutcome> {
     const limit = memoryCandidateLimit(params.limit);
-    if (typeof params.canAccessPath !== 'function') throw new Error('Memory candidates require a visibility predicate');
+    if (typeof params.canAccessPath !== 'function') throw guidanceError(new Error('Memory candidates require a visibility predicate'), 'guid-829812a0c3932d67');
     if (memoryQueryNeedsSource(params.query) || params.caseSensitive) return { results: [], complete: false };
     await this.catalog?.flushPendingEvents();
     await this.ensureIndex();
@@ -1076,7 +1077,7 @@ export class SearchService {
     } = params;
 
     if (!query || query.trim().length === 0) {
-      throw new Error('Search query cannot be empty');
+      throw guidanceError(new Error('Search query cannot be empty'), 'guid-f8995a2f78a531a9');
     }
 
     const normalizedQuery = query.trim();
@@ -1148,7 +1149,7 @@ export class SearchService {
     const assertDocumentAccess = (document: IndexedDocument | undefined): void => {
       if (!hasAccessPredicate) return;
       if (!document || !params.canAccessPath!(document.relativePath)) {
-        throw new Error('Search access changed during search');
+        throw guidanceError(new Error('Search access changed during search'), 'guid-57a8ea8f2ff67484');
       }
     };
     const assertCorpusAccessUnchanged = (): void => {
@@ -1845,7 +1846,7 @@ export class SearchService {
     filterReasons: string[] = [],
   ): SearchResult {
     const document = this.documentsById.get(candidate.documentId);
-    if (!document) throw new Error(`Search document disappeared: ${candidate.documentId}`);
+    if (!document) throw guidanceError(new Error(`Search document disappeared: ${candidate.documentId}`), 'guid-2d39afa8df314fdc');
     let searchableText = '';
     if (searchContent && searchFrontmatter) searchableText = `${document.frontmatterText || ''}\n${document.body || ''}`;
     else if (searchContent) searchableText = document.body || '';

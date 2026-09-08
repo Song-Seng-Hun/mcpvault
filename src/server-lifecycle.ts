@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 interface Closeable {
   close(): void | Promise<void>;
 }
@@ -8,7 +9,7 @@ export function createServerLifecycle(root: Closeable) {
   let closing: Promise<unknown[]> | undefined;
   return {
     add(handle: Closeable): void {
-      if (closing) throw new Error('Server lifecycle is closing');
+      if (closing) throw guidanceError(new Error('Server lifecycle is closing'), 'guid-a72d7ee8c5c5c5a5');
       handles.push(handle);
     },
     close(): Promise<unknown[]> {

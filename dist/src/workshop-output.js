@@ -1,33 +1,34 @@
+import { guidanceError } from './guidance-runtime.js';
 import { normalizeScopeId } from './scopes.js';
 import { fingerprint } from './work-model.js';
 import { isModerationHidden } from './moderation-policy.js';
 export function workshopDecisionContext(input) {
     const context = [input.context, '## Minority views', ...input.minority, '## Uncertainty', ...input.uncertainty, '## Revisit conditions', ...input.revisit].join('\n');
     if (Array.from(context).length > 4000)
-        throw new Error('Decision context and caveats exceed 4000 characters; shorten without dropping conditions');
+        throw guidanceError(new Error('Decision context and caveats exceed 4000 characters; shorten without dropping conditions'), 'guid-dc72116623556fdf');
     return context;
 }
 function object(value) {
     if (!value || typeof value !== 'object' || Array.isArray(value))
-        throw new Error('Expected structured object');
+        throw guidanceError(new Error('Expected structured object'), 'guid-95bd017177342779');
     return value;
 }
 function text(value, field, max = 500) {
     if (typeof value !== 'string' || !value.trim() || Array.from(value).length > max)
-        throw new Error(`Invalid ${field}`);
+        throw guidanceError(new Error(`Invalid ${field}`), 'guid-972520f95c9d5dbd');
     return value.trim();
 }
 function list(value, field, required = false) {
     if (value === undefined && !required)
         return [];
     if (!Array.isArray(value) || value.length > 12 || (required && !value.length))
-        throw new Error(`Invalid ${field}`);
+        throw guidanceError(new Error(`Invalid ${field}`), 'guid-972520f95c9d5dbd');
     return [...new Set(value.map(v => text(v, field)))];
 }
 function delegation(value) {
     const v = object(value);
     if (v.revoked !== undefined && typeof v.revoked !== 'boolean')
-        throw new Error('revoked must be boolean');
+        throw guidanceError(new Error('revoked must be boolean'), 'guid-36a75840ea0b169c');
     return { projectId: normalizeScopeId(text(v.projectId, 'projectId'), 'projectId'), accountId: text(v.accountId, 'accountId', 64), grantor: text(v.grantor, 'grantor', 64),
         decisionKinds: list(v.decisionKinds, 'decisionKinds'), taskKinds: list(v.taskKinds, 'taskKinds'), scope: text(v.scope, 'scope'), reason: text(v.reason, 'reason'), revoked: v.revoked === true };
 }
@@ -43,20 +44,20 @@ export class WorkshopOutputService {
     }
     async cancel(path, note, actor, payload, revalidate, mutation) {
         if (note.frontmatter.facilitator_account_id !== actor.accountId)
-            throw new Error('Only current facilitator may cancel a pending output');
+            throw guidanceError(new Error('Only current facilitator may cancel a pending output'), 'guid-30244e88203ee24f');
         const v = object(payload), outputId = normalizeScopeId(text(v.outputId, 'outputId', 64), 'outputId'), reason = text(v.reason, 'reason');
         if (Object.keys(v).some(k => !['outputId', 'reason'].includes(k)))
-            throw new Error('Unknown cancellation field');
+            throw guidanceError(new Error('Unknown cancellation field'), 'guid-25f1110ba54a79cb');
         const pending = note.frontmatter.workshop_output_pending;
         if (!pending || pending.receipt?.outputId !== outputId || !['decision', 'task'].includes(pending.input?.type))
-            throw new Error('Pending output does not match');
+            throw guidanceError(new Error('Pending output does not match'), 'guid-cfd38985a0e95f2b');
         const id = `meeting-${fingerprint({ path, outputId }).slice(0, 32)}`;
         const decision = `Community/Knowledge/Decisions/${id}.md`, task = `Community/Tasks/${id}.md`;
         if (pending.input.path !== (pending.input.type === 'decision' ? decision : task))
-            throw new Error('Malformed pending output path');
+            throw guidanceError(new Error('Malformed pending output path'), 'guid-b3a79bdf2b6b0970');
         const prior = note.frontmatter.workshop_output_cancellations ?? [];
         if (!Array.isArray(prior) || prior.length >= 16)
-            throw new Error('Output cancellation history is full or malformed; inspect before further action');
+            throw guidanceError(new Error('Output cancellation history is full or malformed; inspect before further action'), 'guid-3d677b7c043b2974');
         await revalidate();
         await this.current(path, note);
         const frontmatter = { ...note.frontmatter, workshop_output_cancellations: [...prior, { outputId, payloadFingerprint: pending.receipt.payloadFingerprint, actor: actor.accountId, reason }] };
@@ -69,21 +70,21 @@ export class WorkshopOutputService {
     async current(path, note) {
         const current = await this.fs.readNote(path);
         if (current.revision !== note.revision || current.frontmatter.mcpvault_type !== 'workshop' || isModerationHidden(current.frontmatter))
-            throw new Error('Workshop revision or visibility changed');
+            throw guidanceError(new Error('Workshop revision or visibility changed'), 'guid-48844f46b5f07abc');
     }
     async delegate(path, note, actor, payload, revalidate, mutation) {
         if (note.frontmatter.facilitator_account_id !== actor.accountId)
-            throw new Error('Only current facilitator may set delegation');
+            throw guidanceError(new Error('Only current facilitator may set delegation'), 'guid-11fdcb6ffb7acb7d');
         const v = object(payload);
         if (Object.keys(v).some(k => !['projectId', 'accountId', 'decisionKinds', 'taskKinds', 'scope', 'reason', 'revoked'].includes(k)))
-            throw new Error('Unknown delegation field');
+            throw guidanceError(new Error('Unknown delegation field'), 'guid-686527e0e3da6ee6');
         const d = delegation({ ...v, grantor: actor.accountId });
         if (!note.frontmatter.facilitation?.participants?.includes(d.accountId))
-            throw new Error('Delegate must be a current workshop participant');
+            throw guidanceError(new Error('Delegate must be a current workshop participant'), 'guid-1457940799ce0e52');
         if (!d.decisionKinds.length && !d.taskKinds.length && !d.revoked)
-            throw new Error('Delegation requires exact allowed decision or task kinds');
+            throw guidanceError(new Error('Delegation requires exact allowed decision or task kinds'), 'guid-20f9491788250e52');
         if (d.taskKinds.some(k => !['general', 'security', 'permissions', 'shared_policy', 'destructive'].includes(k)))
-            throw new Error('Unknown task kind');
+            throw guidanceError(new Error('Unknown task kind'), 'guid-c723e3a89b00ca00');
         const project = await this.adapter.authorizeProject(actor, d.projectId, true, d.accountId);
         await revalidate();
         await this.current(path, note);
@@ -94,24 +95,24 @@ export class WorkshopOutputService {
     async execute(path, note, actor, payload, revalidate, sourceGuards = []) {
         const d = delegation(note.frontmatter.facilitation_delegation);
         if (d.revoked || d.accountId !== actor.accountId)
-            throw new Error('Current explicit output delegation is required');
+            throw guidanceError(new Error('Current explicit output delegation is required'), 'guid-49589e53a41252ce');
         if (!note.frontmatter.facilitation?.participants?.includes(actor.accountId))
-            throw new Error('Current workshop participant is required');
+            throw guidanceError(new Error('Current workshop participant is required'), 'guid-4907969d43110e9e');
         const v = object(payload);
         const allowed = ['outputId', 'type', 'kind', 'title', 'context', 'decision', 'description', 'alternatives', 'consequences', 'minority', 'uncertainty', 'revisit', 'evidencePaths', 'completionCriteria'];
         if (Object.keys(v).some(k => !allowed.includes(k)))
-            throw new Error('Unknown output field');
+            throw guidanceError(new Error('Unknown output field'), 'guid-31fa86eaf99ecb71');
         const outputId = normalizeScopeId(text(v.outputId, 'outputId', 64), 'outputId');
         if (v.type !== 'decision' && v.type !== 'task')
-            throw new Error('Output type must be decision or task');
+            throw guidanceError(new Error('Output type must be decision or task'), 'guid-8c87a802eb15a281');
         const kind = text(v.kind, 'kind', 64);
         if (!(v.type === 'decision' ? d.decisionKinds : d.taskKinds).includes(kind))
-            throw new Error('Output kind is outside delegation');
+            throw guidanceError(new Error('Output kind is outside delegation'), 'guid-e9bb4504a6efc608');
         const targetId = `meeting-${fingerprint({ path, outputId }).slice(0, 32)}`;
         const target = v.type === 'decision' ? `Community/Knowledge/Decisions/${targetId}.md` : `Community/Tasks/${targetId}.md`;
         const opposite = v.type === 'task' ? `Community/Knowledge/Decisions/${targetId}.md` : `Community/Tasks/${targetId}.md`;
         if (await this.fs.noteExists(opposite))
-            throw new Error('Output ID conflict: already used for a different type');
+            throw guidanceError(new Error('Output ID conflict: already used for a different type'), 'guid-ae96e537e91c04df');
         const input = { outputId, type: v.type, kind, path: target, title: text(v.title, 'title', 180),
             alternatives: list(v.alternatives, 'alternatives'), consequences: list(v.consequences, 'consequences'),
             minority: list(v.minority, 'minority', v.type === 'decision'), uncertainty: list(v.uncertainty, 'uncertainty', v.type === 'decision'), revisit: list(v.revisit, 'revisit', v.type === 'decision'),
@@ -128,17 +129,17 @@ export class WorkshopOutputService {
         await this.current(path, note);
         const records = note.frontmatter.workshop_outputs ?? [];
         if (!Array.isArray(records) || records.length > 16)
-            throw new Error('Malformed bounded workshop output receipts');
+            throw guidanceError(new Error('Malformed bounded workshop output receipts'), 'guid-bcedf071cbbe32ba');
         const linked = records.find((r) => r.outputId === outputId);
         if (linked && (linked.path !== target || linked.payloadFingerprint !== receipt.payloadFingerprint))
-            throw new Error('Output ID conflict in workshop receipt');
+            throw guidanceError(new Error('Output ID conflict in workshop receipt'), 'guid-1ecbb61ce380259d');
         if (!linked && records.length >= 16)
-            throw new Error('Workshop output limit reached');
+            throw guidanceError(new Error('Workshop output limit reached'), 'guid-2f9c301134e8ad2f');
         const guardMap = new Map();
         for (const guard of [{ path, expectedRevision: note.revision }, project, ...sourceGuards, { path: opposite, expectedRevision: 'missing' }]) {
             const key = guard.path.toLowerCase(), prior = guardMap.get(key);
             if (prior && prior.expectedRevision !== guard.expectedRevision)
-                throw new Error('Output source changed during validation');
+                throw guidanceError(new Error('Output source changed during validation'), 'guid-7744274e3ff31889');
             guardMap.set(key, guard);
         }
         const basisFingerprint = fingerprint({ delegation: d, facilitator: note.frontmatter.facilitator_account_id,
@@ -147,7 +148,7 @@ export class WorkshopOutputService {
             sourceGuards: sourceGuards.filter(g => g.path.toLowerCase() !== path.toLowerCase()).sort((a, b) => a.path.localeCompare(b.path)) });
         const pending = note.frontmatter.workshop_output_pending;
         if (pending && (linked || fingerprint(pending.receipt) !== fingerprint(receipt) || fingerprint(pending.input) !== fingerprint(input) || pending.basisFingerprint !== basisFingerprint)) {
-            throw new Error('Pending output conflict: recover the same payload and authority with its unchanged review basis');
+            throw guidanceError(new Error('Pending output conflict: recover the same payload and authority with its unchanged review basis'), 'guid-5ed18b803ee0bdea');
         }
         if (!linked && !pending) {
             // Reserve before either output service can create an accepted artifact.
@@ -158,7 +159,7 @@ export class WorkshopOutputService {
                 frontmatter: { ...note.frontmatter, workshop_output_pending: reservation }, expectedRevision: note.revision }, [...guardMap.values()].filter(g => g.path !== path).concat({ path: target, expectedRevision: 'missing' }), { maxGuards: 128, assertAccess });
             note = await this.fs.readNote(path);
             if (note.revision !== reserved.revision)
-                throw new Error('Workshop revision changed after output reservation; reread before recovery');
+                throw guidanceError(new Error('Workshop revision changed after output reservation; reread before recovery'), 'guid-5579a0209f75d7f1');
             guardMap.set(path.toLowerCase(), { path, expectedRevision: reserved.revision });
         }
         const link = async (revision) => {
@@ -177,13 +178,13 @@ export class WorkshopOutputService {
         if (await this.fs.noteExists(target)) {
             const existing = await this.fs.readNote(target);
             if (isModerationHidden(existing.frontmatter) || fingerprint(existing.frontmatter.workshop_output) !== fingerprint(receipt))
-                throw new Error('Output ID conflict or different payload; never overwrite it');
+                throw guidanceError(new Error('Output ID conflict or different payload; never overwrite it'), 'guid-99c4501a828d4c82');
             if (existing.frontmatter.workshop_output_content_sha256 && existing.frontmatter.workshop_output_content_sha256 !== fingerprint(existing.content))
-                throw new Error('Output content changed; inspect it before further action');
+                throw guidanceError(new Error('Output content changed; inspect it before further action'), 'guid-7d0c33d56e86a0bb');
             return { success: true, path: target, revision: existing.revision, workshopRevision: await link(existing.revision), replayed: true, outputId };
         }
         if (linked)
-            throw new Error('Linked output is missing; inspect it before further action');
+            throw guidanceError(new Error('Linked output is missing; inspect it before further action'), 'guid-b169fc1f9b0acea4');
         const result = await this.adapter.create(input, [...guardMap.values()], receipt, actor, d.projectId, assertAccess);
         return { success: true, path: target, revision: result.revision, workshopRevision: await link(result.revision), replayed: false, outputId };
     }

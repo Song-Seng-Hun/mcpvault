@@ -1,3 +1,4 @@
+import { guidanceError, guidanceText } from './guidance-runtime.js';
 /** The dashboard is a set of overlapping samples, not a disjoint task count. */
 export function packReviewDashboard(result, maxChars, prettyPrint = false) {
     const fits = (value) => JSON.stringify(value, null, prettyPrint ? 2 : undefined).length <= maxChars;
@@ -35,7 +36,7 @@ export function packReviewDashboard(result, maxChars, prettyPrint = false) {
     for (const concise of [false, true]) {
         for (const count of [2, 1]) {
             const value = {
-                purpose: 'Review samples only; read current sources before changing them.',
+                purpose: guidanceText('guid-0f21b2d8d0028f30', 'Review samples only; read current sources before changing them.'),
                 sections: {
                     ...Object.fromEntries(collectionKeys.map(key => [key, trim(sections[key], count, concise)])),
                     epistemic: Object.fromEntries(epistemicKeys.map(key => [key, trim(sections.epistemic[key], count, concise)])),
@@ -63,7 +64,7 @@ export function packReviewDashboard(result, maxChars, prettyPrint = false) {
     const focus = priority.find(([, collection]) => collection.total > 0 || collection.items.length > 0);
     if (!focus) {
         return { truncated: true, detailsOmitted: true,
-            message: 'No work-list sample selected. Graph details are omitted, not certified healthy.', nextAction: graphAction };
+            message: guidanceText('guid-a80931293ad5b970', 'No work-list sample selected. Graph details are omitted, not certified healthy.'), nextAction: graphAction };
     }
     const [section, collection, endpointId] = focus;
     const row = collection.items[0];
@@ -76,15 +77,15 @@ export function packReviewDashboard(result, maxChars, prettyPrint = false) {
     }
     else if (endpointId !== 'wiki.review_dashboard') {
         return { section, truncated: true, detailsOmitted: true,
-            message: 'This category has review work but no row fits its internal preview.',
+            message: guidanceText('guid-dc828482511f353d', 'This category has review work but no row fits its internal preview.'),
             nextAction: { endpointId, arguments: { limit: 1, maxChars: 8000 } } };
     }
     if (maxChars < 18000 || prettyPrint) {
-        const retry = { truncated: true, detailsOmitted: true, message: 'Retry the same review. No targets skipped.',
+        const retry = { truncated: true, detailsOmitted: true, message: guidanceText('guid-3e0de4bcd28ff34f', 'Retry the same review. No targets skipped.'),
             nextAction: { endpointId: 'wiki.review_dashboard', reuseOriginalArguments: true,
                 overrides: { limit: 1, maxChars: 18000, prettyPrint: false } } };
         if (fits(retry))
             return retry;
     }
-    throw new Error('Review target exceeds the response ceiling; no targets skipped. Inspect source paths directly.');
+    throw guidanceError(new Error('Review target exceeds the response ceiling; no targets skipped. Inspect source paths directly.'), 'guid-04ceed38829a948e');
 }

@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { watch, type FSWatcher } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { mkdir, readdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
@@ -310,7 +311,7 @@ export class VaultMetadataIndex {
    * visibility is applied before any entry leaves the disposable index.
    */
   async getMany(paths: readonly string[], canAccessPath: (path: string) => boolean = () => true): Promise<VaultIndexEntry[]> {
-    if (paths.length > 500) throw new Error('metadata lookup supports at most 500 paths');
+    if (paths.length > 500) throw guidanceError(new Error('metadata lookup supports at most 500 paths'), 'guid-26a948f4ac9da8dd');
     await this.ensureFresh();
     const selected: VaultIndexEntry[] = [];
     const seen = new Set<string>();
@@ -470,12 +471,12 @@ export class VaultMetadataIndex {
   }, canAccessPath: (path: string) => boolean = () => true): Promise<AuthorityShelfResult> {
     await this.ensureFresh();
     const scheme = normalizeAuthorityComponent(params.scheme);
-    if (!scheme) throw new Error('scheme cannot be empty');
+    if (!scheme) throw guidanceError(new Error('scheme cannot be empty'), 'guid-3c5eeb80fc7619f2');
     const requestedLimit = params.limit ?? 25;
-    if (!Number.isInteger(requestedLimit) || requestedLimit < 1) throw new Error('limit must be a positive integer');
+    if (!Number.isInteger(requestedLimit) || requestedLimit < 1) throw guidanceError(new Error('limit must be a positive integer'), 'guid-14abe8b02cfc3624');
     const limit = Math.min(requestedLimit, 100);
     const requestedAnchor = params.aroundAuthorityId?.trim();
-    if (params.aroundAuthorityId !== undefined && !requestedAnchor) throw new Error('aroundAuthorityId cannot be empty');
+    if (params.aroundAuthorityId !== undefined && !requestedAnchor) throw guidanceError(new Error('aroundAuthorityId cannot be empty'), 'guid-00b62fda7e5a22e3');
     const normalizedAnchor = normalizeAuthorityComponent(requestedAnchor);
 
     const visible = [...(this.authoritySchemeIndex.get(scheme) || [])]
@@ -584,7 +585,7 @@ export class VaultMetadataIndex {
       await this.catalog?.flushPendingEvents();
       if (!this.needsFullRefresh && this.dirty.size === 0 && !this.refreshPromise) return;
     }
-    throw new Error('Metadata changed during refresh; retry the request.');
+    throw guidanceError(new Error('Metadata changed during refresh; retry the request.'), 'guid-5c05301de7e9cbdf');
   }
 
   private candidatePaths(filters: Record<string, unknown>, normalizedPrefix: string): Iterable<string> | undefined {

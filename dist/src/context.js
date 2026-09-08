@@ -1,7 +1,8 @@
+import { guidanceError } from './guidance-runtime.js';
 function integer(value, fallback, maximum, allowZero = false) {
     const parsed = value === undefined ? fallback : Number(value);
     if (!Number.isInteger(parsed) || (allowZero ? parsed < 0 : parsed < 1))
-        throw new Error('context limits must be integers in range');
+        throw guidanceError(new Error('context limits must be integers in range'), 'guid-86fd581b90c0232b');
     return Math.min(parsed, maximum);
 }
 function compactNote(note, maxContent) {
@@ -37,7 +38,7 @@ export class ContextService {
     async read(params) {
         const targetType = String(params.targetType || '').trim().toLowerCase();
         if (!['post', 'comment', 'room', 'message'].includes(targetType))
-            throw new Error('targetType must be post, comment, room, or message');
+            throw guidanceError(new Error('targetType must be post, comment, room, or message'), 'guid-6ba57955603ee363');
         const before = integer(params.contextBefore, 2, 5, true);
         const after = integer(params.contextAfter, 2, 5, true);
         const maxChars = integer(params.maxChars, 8000, 20000);
@@ -48,13 +49,13 @@ export class ContextService {
         let parentChain = [];
         if (targetType === 'post') {
             if (!params.slug)
-                throw new Error('slug is required for a post context');
+                throw guidanceError(new Error('slug is required for a post context'), 'guid-8171832eaec72d25');
             root = await this.social.getBlogPost({ ...(params.principal && { principal: params.principal }), slug: params.slug, includeComments: false });
             target = root;
         }
         else if (targetType === 'comment') {
             if (!params.slug || !params.commentId)
-                throw new Error('slug and commentId are required for a comment context');
+                throw guidanceError(new Error('slug and commentId are required for a comment context'), 'guid-fde1c023c52f87f4');
             root = await this.social.getBlogPost({ ...(params.principal && { principal: params.principal }), slug: params.slug, includeComments: false });
             target = await this.social.getBlogComment({ ...(params.principal && { principal: params.principal }), slug: params.slug, commentId: params.commentId, includeReferences });
             const window = await this.social.listBlogComments({ slug: params.slug, afterCommentId: params.commentId, contextBefore: Math.max(1, before + 1), limit: Math.max(1, before + after + 1), maxChars: Math.min(maxChars, 12000), includeThreadContext: true, workflowStatus: 'all' });
@@ -70,7 +71,7 @@ export class ContextService {
         }
         else if (targetType === 'room') {
             if (!params.roomId)
-                throw new Error('roomId is required for a room context');
+                throw guidanceError(new Error('roomId is required for a room context'), 'guid-61708e59d689ea40');
             const room = await this.chat.readRoomWithMessages({ roomId: params.roomId, limit: 1, maxChars: Math.min(maxChars, 4000), includeThreadContext: false });
             root = room.room;
             target = root;
@@ -78,7 +79,7 @@ export class ContextService {
         }
         else {
             if (!params.roomId || !params.messageId)
-                throw new Error('roomId and messageId are required for a message context');
+                throw guidanceError(new Error('roomId and messageId are required for a message context'), 'guid-6be8190277132d43');
             const room = await this.chat.readRoomWithMessages({ roomId: params.roomId, afterMessageId: params.messageId, contextBefore: Math.max(1, before + 1), limit: Math.max(1, before + after + 1), maxChars: Math.min(maxChars, 12000), includeThreadContext: true });
             root = room.room;
             target = await this.chat.getMessage({ roomId: params.roomId, messageId: params.messageId, includeReferences });

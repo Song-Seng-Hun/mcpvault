@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 const MAX_INPUT_CHARS = 8 * 1024 * 1024;
 const MAX_EXACT_LINES = 400;
 const MAX_LCS_CELLS = 160_000;
@@ -132,7 +133,7 @@ function enclosingChange(before, after) {
 }
 export function compareSourceBodies(before, after, options) {
     if (before.length > MAX_INPUT_CHARS || after.length > MAX_INPUT_CHARS)
-        throw new RangeError('source body exceeds 8 MiB limit');
+        throw guidanceError(new RangeError('source body exceeds 8 MiB limit'), 'guid-6f688ebc5934c575');
     const oldBody = normalize(before);
     const newBody = normalize(after);
     const maxChars = bounded(options?.maxChars, 2000, 200, 4000);

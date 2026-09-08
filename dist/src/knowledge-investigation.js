@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { posix } from 'node:path';
 import { isModerationHidden } from './moderation-policy.js';
 import { ReferenceService } from './references.js';
@@ -43,19 +44,19 @@ export async function prepareKnowledgeInvestigation(fs, access, value, container
             }
     if (investigation.result) {
         if (!previous || JSON.stringify(plan(previous)) !== JSON.stringify(plan(investigation)))
-            throw Error('Save the investigation plan first; result submission cannot change agreed criteria. Use a separate linked experiment for a changed plan.');
+            throw guidanceError(Error('Save the investigation plan first; result submission cannot change agreed criteria. Use a separate linked experiment for a changed plan.'), 'guid-1820b8102bfa288d');
         const expected = previous.result?.planRevision ?? existing?.revision;
         if (investigation.result.planRevision !== expected)
-            throw Error('Result planRevision must identify the saved plan revision');
+            throw guidanceError(Error('Result planRevision must identify the saved plan revision'), 'guid-262914bbf2ddd747');
     }
     else if (previous?.result)
-        throw Error('Preserve the reported result; use a separate linked experiment for a new plan');
+        throw guidanceError(Error('Preserve the reported result; use a separate linked experiment for a new plan'), 'guid-ca82eae7ad1e5b34');
     const guards = new Map();
     const observe = async (path) => {
         if (!allowed(path) || path.toLowerCase() === owner.toLowerCase())
             throw Error(UNAVAILABLE);
         if (!guards.has(path.toLowerCase()) && guards.size >= 8)
-            throw Error('Investigation may reference at most eight distinct related notes, including prose links');
+            throw guidanceError(Error('Investigation may reference at most eight distinct related notes, including prose links'), 'guid-724e69325898fd7d');
         const meta = (await fs.readNoteMetadata([path], allowed, { fresh: true, strict: true, maxBytes: BYTES }))[0];
         if (!meta?.revision || isModerationHidden(meta.frontmatter))
             throw Error(UNAVAILABLE);

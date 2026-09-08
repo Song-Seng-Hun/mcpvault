@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { randomUUID } from 'node:crypto';
 import { normalizeScopeId } from './scopes.js';
 import { extractMentions, MAX_COMMUNITY_TEXT_LENGTH } from './social.js';
@@ -24,25 +25,25 @@ const messagePath = (roomId, messageId) => {
 export async function readChatReplyTarget(fileSystem, roomId, messageId, options = {}) {
     const path = messagePath(roomId, messageId);
     if ((options.ordinaryOnly && path.startsWith(`${ROLEPLAY_ROOT}/`)) || (options.canAccessPath && !options.canAccessPath(path)))
-        throw new Error('Reply target is unavailable');
+        throw guidanceError(new Error('Reply target is unavailable'), 'guid-ae6a4bae0abacc55');
     const note = await fileSystem.readNote(path);
     if (note.frontmatter.mcpvault_type !== 'chat_message' || note.frontmatter.room_id !== roomId || note.frontmatter.message_id !== messageId || isModerationHidden(note.frontmatter) || (options.ordinaryOnly && note.frontmatter.roleplay_committed))
-        throw new Error('Reply target is unavailable');
+        throw guidanceError(new Error('Reply target is unavailable'), 'guid-ae6a4bae0abacc55');
     return { path, note };
 }
 function shortMessage(content) {
     const normalized = String(content ?? '').trim();
     if (!normalized)
-        throw new Error('content is required');
+        throw guidanceError(new Error('content is required'), 'guid-75ac615305149ea7');
     const length = Array.from(normalized).length;
     if (length > MAX_COMMUNITY_TEXT_LENGTH)
-        throw new Error(`content must be ${MAX_COMMUNITY_TEXT_LENGTH} Unicode characters or fewer (received ${length})`);
+        throw guidanceError(new Error(`content must be ${MAX_COMMUNITY_TEXT_LENGTH} Unicode characters or fewer (received ${length})`), 'guid-7e817fa34f304598');
     return normalized;
 }
 function windowNumber(value, fallback, maximum) {
     const number = value === undefined ? fallback : Number(value);
     if (!Number.isInteger(number) || number < 1)
-        throw new Error('window limits must be positive integers');
+        throw guidanceError(new Error('window limits must be positive integers'), 'guid-65fd50992d5f8f0b');
     return Math.min(number, maximum);
 }
 function identity(principal) {
@@ -56,7 +57,7 @@ function ownershipMetadata(principal) {
 }
 function requireParticipant(principal) {
     if (!principal)
-        throw new Error('Login is required to create rooms or send chat messages');
+        throw guidanceError(new Error('Login is required to create rooms or send chat messages'), 'guid-8630174963b8ccde');
     return principal;
 }
 export class ChatService {
@@ -76,7 +77,7 @@ export class ChatService {
             return note;
         const verified = turns.get(note.path);
         if (!verified || verified.revision !== note.revision)
-            throw new Error('Roleplay turn verification failed; refresh or request host repair');
+            throw guidanceError(new Error('Roleplay turn verification failed; refresh or request host repair'), 'guid-47dd1b20df94bbba');
         // The validated store record contains full canonical Markdown; chat projects only its parsed body.
         return { ...note, content: note.content.trimEnd() };
     }
@@ -85,9 +86,9 @@ export class ChatService {
         const roomId = normalizeScopeId(params.roomId, 'roomId');
         const title = String(params.title || '').trim();
         if (!title)
-            throw new Error('title is required');
+            throw guidanceError(new Error('title is required'), 'guid-591eee2af1042334');
         if (!params.expectedRevision)
-            throw new Error("expectedRevision is required; use 'missing' for a new room");
+            throw guidanceError(new Error("expectedRevision is required; use 'missing' for a new room"), 'guid-9055cd67bbecf932');
         const path = roomPath(roomId);
         const timestamp = now();
         await this.fileSystem.writeNote({
@@ -106,7 +107,7 @@ export class ChatService {
     async listRooms(params) {
         const requestedStatus = String(params.status || 'open').trim().toLowerCase();
         if (requestedStatus !== 'all' && !ROOM_STATUSES.has(requestedStatus))
-            throw new Error('status must be open, archived, or all');
+            throw guidanceError(new Error('status must be open, archived, or all'), 'guid-9de66f6f73c28afb');
         const filters = { mcpvault_type: 'chat_room', ...(requestedStatus !== 'all' && { status: requestedStatus }) };
         const limit = Math.min(Math.max(Number(params.limit || 50), 1), 500);
         const window = await queryWindow(this.fileSystem, {
@@ -137,9 +138,9 @@ export class ChatService {
         const path = roomPath(roomId);
         const note = await this.fileSystem.readNote(path);
         if (note.frontmatter.mcpvault_type !== 'chat_room')
-            throw new Error(`Not a chat room: ${roomId}`);
+            throw guidanceError(new Error(`Not a chat room: ${roomId}`), 'guid-f2f46ab3364e0b9e');
         if (isModerationHidden(note.frontmatter))
-            throw new Error('Chat room is unavailable');
+            throw guidanceError(new Error('Chat room is unavailable'), 'guid-7a88f0ff30d97731');
         return { path, note };
     }
     async sendMessage(params) {
@@ -149,7 +150,7 @@ export class ChatService {
         const replyTo = params.replyTo ? normalizeScopeId(params.replyTo, 'replyTo') : undefined;
         const requestedMessageId = params.messageId ? normalizeScopeId(params.messageId, 'messageId') : undefined;
         if (requestedMessageId?.startsWith('roleplay-'))
-            throw new Error('Roleplay message IDs are reserved for committed world turns');
+            throw guidanceError(new Error('Roleplay message IDs are reserved for committed world turns'), 'guid-ea906c4c1993b31d');
         const request = preparePublicCreateRequest({
             principal, requestId: params.requestId, action: 'chat.message', generatedPrefix: 'message',
             ...(requestedMessageId && { requestedTargetId: requestedMessageId }),
@@ -164,10 +165,10 @@ export class ChatService {
             revalidate: async () => {
                 const room = await this.readRoom(roomId);
                 if (room.note.frontmatter.status !== 'open')
-                    throw new Error('Cannot send a message to an archived room');
+                    throw guidanceError(new Error('Cannot send a message to an archived room'), 'guid-5b1a660e8cd5f1b7');
                 const roleplayHistory = await this.fileSystem.queryNotes({ pathPrefix: ROLEPLAY_ROOT, filters: { room_id: roomId, roleplay_committed: true }, limit: 1, includeContent: false, includeTotal: false }, path => path.startsWith(`${ROLEPLAY_ROOT}/`));
                 if (roleplayHistory.notes.length)
-                    throw new Error('This room has roleplay history; use the active world service or ask the host to recover it. Ordinary chat cannot bypass world processing.');
+                    throw guidanceError(new Error('This room has roleplay history; use the active world service or ask the host to recover it. Ordinary chat cannot bypass world processing.'), 'guid-ee1a4653e99d6531');
                 guards = [{ path: room.path, expectedRevision: room.note.revision }];
                 if (replyTo) {
                     const { path: parentPath, note: parent } = await readChatReplyTarget(this.fileSystem, roomId, replyTo);
@@ -189,7 +190,7 @@ export class ChatService {
             },
             replay: note => {
                 if (note.frontmatter.mcpvault_type !== 'chat_message' || note.frontmatter.message_id !== messageId || note.frontmatter.room_id !== roomId) {
-                    throw new Error('Public request result is unavailable');
+                    throw guidanceError(new Error('Public request result is unavailable'), 'guid-503e43625954dd85');
                 }
                 return { success: true, messageId, roomId, path, revision: note.revision };
             },
@@ -202,11 +203,11 @@ export class ChatService {
         const path = messagePath(roomId, messageId);
         const note = await this.fileSystem.readNote(path);
         if (note.frontmatter.mcpvault_type !== 'chat_message')
-            throw new Error(`Not a chat message: ${messageId}`);
+            throw guidanceError(new Error(`Not a chat message: ${messageId}`), 'guid-3c78007eb1818314');
         if (note.frontmatter.author !== identity(principal))
-            throw new Error('Only the original message author can edit this message');
+            throw guidanceError(new Error('Only the original message author can edit this message'), 'guid-c7f15237f1748fe5');
         if (!params.expectedRevision)
-            throw new Error('expectedRevision is required; read the message first');
+            throw guidanceError(new Error('expectedRevision is required; read the message first'), 'guid-a7b4b7beb7732f20');
         const text = shortMessage(params.content);
         const references = await this.references.validateAndNormalize(params.references ?? note.frontmatter.references, path, principal, text);
         await this.fileSystem.writeNote({ path, content: `${text}\n`, frontmatter: { ...note.frontmatter, content_status: 'published', mentions: extractMentions(text), references, updated_at: now() }, expectedRevision: params.expectedRevision });
@@ -220,11 +221,11 @@ export class ChatService {
         const path = messagePath(roomId, messageId);
         const note = await this.fileSystem.readNote(path);
         if (note.frontmatter.mcpvault_type !== 'chat_message')
-            throw new Error(`Not a chat message: ${messageId}`);
+            throw guidanceError(new Error(`Not a chat message: ${messageId}`), 'guid-3c78007eb1818314');
         if (note.frontmatter.author !== identity(principal))
-            throw new Error('Only the original message author can delete this message');
+            throw guidanceError(new Error('Only the original message author can delete this message'), 'guid-c7a82741f6c8a679');
         if (!params.expectedRevision)
-            throw new Error('expectedRevision is required; read the message first');
+            throw guidanceError(new Error('expectedRevision is required; read the message first'), 'guid-a7b4b7beb7732f20');
         await this.fileSystem.writeNote({ path, content: '[deleted]\n', frontmatter: { ...note.frontmatter, content_status: 'deleted', deleted_at: now(), updated_at: now() }, expectedRevision: params.expectedRevision });
         const updated = await this.fileSystem.readNote(path);
         return { success: true, messageId, roomId, deleted: true, revision: updated.revision };
@@ -234,9 +235,9 @@ export class ChatService {
         const roomId = normalizeScopeId(params.roomId, 'roomId');
         const room = await this.readRoom(roomId);
         if (room.note.frontmatter.created_by !== identity(principal))
-            throw new Error('Only the room creator can archive this room');
+            throw guidanceError(new Error('Only the room creator can archive this room'), 'guid-1eca3f12d179274e');
         if (!params.expectedRevision)
-            throw new Error('expectedRevision is required; read the room first');
+            throw guidanceError(new Error('expectedRevision is required; read the room first'), 'guid-d44df7f0dbe34eee');
         await this.fileSystem.writeNote({ path: room.path, content: room.note.content, frontmatter: { ...room.note.frontmatter, status: 'archived', updated_at: now() }, expectedRevision: params.expectedRevision });
         const updated = await this.fileSystem.readNote(room.path);
         return { success: true, roomId, status: 'archived', revision: updated.revision };
@@ -261,7 +262,7 @@ export class ChatService {
             });
             const cursorNote = cursorResult.notes[0];
             if (!cursorNote || isModerationHidden(cursorNote.frontmatter))
-                throw new Error(`afterMessageId was not found in room: ${params.afterMessageId}`);
+                throw guidanceError(new Error(`afterMessageId was not found in room: ${params.afterMessageId}`), 'guid-7bdf22a6e37c1f5a');
             const cursor = cursorNote.frontmatter.created_at === undefined
                 ? { path: cursorNote.path, missing: true }
                 : { path: cursorNote.path, value: cursorNote.frontmatter.created_at };
@@ -292,7 +293,7 @@ export class ChatService {
             ? notes.findIndex(note => note.frontmatter.message_id === normalizeScopeId(params.afterMessageId, 'afterMessageId'))
             : -1;
         if (params.afterMessageId && cursorIndex < 0)
-            throw new Error(`afterMessageId was not found in room: ${params.afterMessageId}`);
+            throw guidanceError(new Error(`afterMessageId was not found in room: ${params.afterMessageId}`), 'guid-7bdf22a6e37c1f5a');
         const start = cursorIndex >= 0 ? Math.max(0, cursorIndex - contextBefore) : Math.max(0, notes.length - limit);
         const selected = [];
         const selectedLimit = cursorIndex >= 0 ? limit + contextBefore + 1 : limit;
@@ -341,7 +342,7 @@ export class ChatService {
         const viewerReputation = params.principal ? await this.reputation.getForPrincipal(params.principal) : undefined;
         const finalTurns = await this.verifiedTurns();
         if (roleplayHash([...finalTurns].map(([path, record]) => [path, record.revision])) !== turnFingerprint)
-            throw new Error('Roleplay history changed; refresh this room');
+            throw guidanceError(new Error('Roleplay history changed; refresh this room'), 'guid-a9f10cf94dbe92fb');
         return {
             room: { path: room.path, fm: room.note.frontmatter, content: room.note.content, revision: room.note.revision },
             ...(viewerReputation && { viewerLevel: viewerReputation.level, viewerXp: viewerReputation.xp, viewerLevelLabel: viewerReputation.label }),
@@ -381,14 +382,14 @@ export class ChatService {
         const path = messagePath(roomId, messageId);
         const note = this.verifiedMessage({ ...await this.fileSystem.readNote(path), path }, verifiedTurns);
         if (note.frontmatter.mcpvault_type !== 'chat_message' || note.frontmatter.room_id !== roomId)
-            throw new Error(`Not a chat message in this room: ${messageId}`);
+            throw guidanceError(new Error(`Not a chat message in this room: ${messageId}`), 'guid-e2f9d4211e38a467');
         if (isModerationHidden(note.frontmatter))
-            throw new Error('This chat message is unavailable because it was hidden by moderation');
+            throw guidanceError(new Error('This chat message is unavailable because it was hidden by moderation'), 'guid-6416c9de5e93c6e3');
         const authorReputation = (await this.reputation.getMany([String(note.frontmatter.author || '')])).get(String(note.frontmatter.author || '').toLowerCase());
         if (note.frontmatter.roleplay_committed) {
             const final = (await this.verifiedTurns()).get(path);
             if (!final || final.revision !== note.revision)
-                throw new Error('Roleplay turn changed; host repair required');
+                throw guidanceError(new Error('Roleplay turn changed; host repair required'), 'guid-1e46a9e1d525c04c');
         }
         const { roleplay_event: _managedEvent, ...publicMetadata } = note.frontmatter;
         return {
@@ -406,9 +407,9 @@ export class ChatService {
     messageContextFromNote(roomId, messageId, parent, reputations) {
         const path = messagePath(roomId, messageId);
         if (!parent)
-            throw new Error(`Reply target was not readable: ${messageId}`);
+            throw guidanceError(new Error(`Reply target was not readable: ${messageId}`), 'guid-299b757826101a70');
         if (parent.frontmatter.mcpvault_type !== 'chat_message')
-            throw new Error(`Reply target is not a chat message: ${messageId}`);
+            throw guidanceError(new Error(`Reply target is not a chat message: ${messageId}`), 'guid-ec33b1a9b0206049');
         const parentReputation = reputations.get(String(parent.frontmatter.author || '').toLowerCase());
         if (isModerationHidden(parent.frontmatter))
             return { path, messageId: parent.frontmatter.message_id, roomId: parent.frontmatter.room_id, author: parent.frontmatter.author, authorRole: parent.frontmatter.author_role, authorLevel: parentReputation?.level ?? 0, authorLevelLabel: parentReputation?.label ?? '뉴비', createdAt: parent.frontmatter.created_at, content: '[moderated]', replyTo: parent.frontmatter.reply_to, workflowStatus: workflowStatus(parent.frontmatter), moderated: true };

@@ -1,3 +1,4 @@
+import { guidanceError, guidanceText } from './guidance-runtime.js';
 import { lstat, opendir, realpath } from 'node:fs/promises';
 import { join, relative, resolve, sep } from 'node:path';
 import { normalizeScopeId } from './scopes.js';
@@ -5,13 +6,13 @@ import { normalizeScopeId } from './scopes.js';
 export async function previewMemoryMigration(options) {
     const limit = options.limit ?? 100;
     if (!Number.isSafeInteger(limit) || limit < 1 || limit > 500)
-        throw new Error('limit must be 1-500');
+        throw guidanceError(new Error('limit must be 1-500'), 'guid-4c553b97a2dde7c2');
     const owners = new Map();
     for (const binding of options.verifiedAgents ?? []) {
         const agent = normalizeScopeId(binding.agentId, 'agentId');
         const owner = normalizeScopeId(binding.userId, 'userId');
         if (owners.has(agent) && owners.get(agent) !== owner)
-            throw new Error('Agent owner mapping is ambiguous');
+            throw guidanceError(new Error('Agent owner mapping is ambiguous'), 'guid-308e8cf09c94c200');
         owners.set(agent, owner);
     }
     const vault = await realpath(resolve(options.vaultPath));
@@ -21,11 +22,11 @@ export async function previewMemoryMigration(options) {
         const root = join(vault, '_scopes', folder);
         try {
             if ((await lstat(root)).isSymbolicLink())
-                throw new Error('Migration inventory refuses linked scope roots');
+                throw guidanceError(new Error('Migration inventory refuses linked scope roots'), 'guid-8f6e68342fd88fa5');
             const canonical = await realpath(root);
             const rel = relative(vault, canonical);
             if (rel === '..' || rel.startsWith(`..${sep}`))
-                throw new Error('Migration scope escapes the Vault');
+                throw guidanceError(new Error('Migration scope escapes the Vault'), 'guid-c2b680c89157e5da');
             const directory = await opendir(root);
             for await (const item of directory) {
                 if (!item.isDirectory() || item.isSymbolicLink())
@@ -56,5 +57,5 @@ export async function previewMemoryMigration(options) {
             break;
     }
     return { automaticMigration: false, entries, shown: entries.length, truncated,
-        guidance: 'Legacy User files stay host-private. Re-enroll employees and runtimes, verify ownership, and explicitly review any copy into newly approved memory. Never infer owners from model names.' };
+        guidance: guidanceText('guid-3c704b2154864c90', 'Legacy User files stay host-private. Re-enroll employees and runtimes, verify ownership, and explicitly review any copy into newly approved memory. Never infer owners from model names.') };
 }

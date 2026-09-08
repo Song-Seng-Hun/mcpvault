@@ -2,6 +2,7 @@ import { Server } from "@modelcontextprotocol/server";
 import { FrontmatterHandler } from "./frontmatter.js";
 import { PathFilter } from "./pathfilter.js";
 import { type PublicFederationHostConfig } from './enterprise-federation.js';
+import type { GuidanceDefinition } from './guidance-catalog.js';
 import type { RoleplayStore } from './roleplay-store.js';
 import { EndpointRegistry } from "./endpoint-registry.js";
 import { type EconomyLedger } from './economy-ledger.js';
@@ -9,6 +10,7 @@ import type { EconomyPolicy } from './economy-model.js';
 export interface CreateServerOptions {
     /** Host-private notice registration/delegation file, reloaded before operations. */
     noticeConfigPath?: string;
+    guidanceDefinitions?: readonly GuidanceDefinition[];
     /** Host-provisioned single world; no caller or Vault note can enable this. */
     roleplay?: RoleplayStore;
     /** Host-provisioned ledger only. Never initialized or funded from MCP. */

@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { normalizeScopeId } from './scopes.js';
 import { isClosedWorkflowStatus, matchesWorkflowFilter, workflowStatus } from './community-status.js';
@@ -40,7 +41,7 @@ function cleanFeedbackSourcePaths(value) {
         return [];
     const paths = value.map(item => String(item).trim().replace(/\\/g, '/')).filter(Boolean);
     if (paths.some(path => /^(?:[a-z]:[\\/]|\\\\|\/|https?:)/i.test(path) || path.split('/').includes('..'))) {
-        throw new Error('sourcePaths must contain repository-relative paths and cannot contain absolute paths or .. segments');
+        throw guidanceError(new Error('sourcePaths must contain repository-relative paths and cannot contain absolute paths or .. segments'), 'guid-066ac38e99799b4c');
     }
     return Array.from(new Set(paths)).slice(0, 20);
 }
@@ -54,31 +55,31 @@ export function extractMentions(content) {
 function requireShortCommunityText(content) {
     const normalized = String(content ?? '').trim();
     if (!normalized)
-        throw new Error('content is required');
+        throw guidanceError(new Error('content is required'), 'guid-75ac615305149ea7');
     const length = Array.from(normalized).length;
     if (length > MAX_COMMUNITY_TEXT_LENGTH)
-        throw new Error(`content must be ${MAX_COMMUNITY_TEXT_LENGTH} Unicode characters or fewer (received ${length})`);
+        throw guidanceError(new Error(`content must be ${MAX_COMMUNITY_TEXT_LENGTH} Unicode characters or fewer (received ${length})`), 'guid-7e817fa34f304598');
     return normalized;
 }
 function requireJournalText(content) {
     const normalized = String(content ?? '').trim();
     if (!normalized)
-        throw new Error('content is required');
+        throw guidanceError(new Error('content is required'), 'guid-75ac615305149ea7');
     const length = Array.from(normalized).length;
     if (length > MAX_JOURNAL_TEXT_LENGTH)
-        throw new Error(`journal content must be ${MAX_JOURNAL_TEXT_LENGTH} Unicode characters or fewer (received ${length})`);
+        throw guidanceError(new Error(`journal content must be ${MAX_JOURNAL_TEXT_LENGTH} Unicode characters or fewer (received ${length})`), 'guid-004133c108491b1d');
     return normalized;
 }
 function journalWindowNumber(value, fallback, maximum) {
     const parsed = value === undefined ? fallback : Number(value);
     if (!Number.isInteger(parsed) || parsed < 1)
-        throw new Error('journal window limits must be positive integers');
+        throw guidanceError(new Error('journal window limits must be positive integers'), 'guid-4f4438163f5bf3b3');
     return Math.min(parsed, maximum);
 }
 function journalResponseBudget(value, fallback) {
     const parsed = value === undefined ? fallback : Number(value);
     if (!Number.isInteger(parsed) || parsed < 1_000)
-        throw new Error('journal maxChars must be an integer of at least 1000');
+        throw guidanceError(new Error('journal maxChars must be an integer of at least 1000'), 'guid-f096c2bfc3a2871f');
     return Math.min(parsed, MAX_JOURNAL_MAX_CHARS);
 }
 function journalCursorEncode(value) {
@@ -86,15 +87,15 @@ function journalCursorEncode(value) {
 }
 function journalCursorDecode(value) {
     if (typeof value !== 'string' || !value)
-        throw new Error('cursor must be a journal cursor returned by list_journal_entries');
+        throw guidanceError(new Error('cursor must be a journal cursor returned by list_journal_entries'), 'guid-0991f23a631f8169');
     try {
         const parsed = JSON.parse(Buffer.from(value, 'base64url').toString('utf8'));
         if (typeof parsed.fingerprint !== 'string' || typeof parsed.path !== 'string')
-            throw new Error('invalid cursor');
+            throw guidanceError(new Error('invalid cursor'), 'guid-bb9d3bd3e19cabc2');
         return { fingerprint: parsed.fingerprint, path: parsed.path };
     }
     catch {
-        throw new Error('cursor must be a journal cursor returned by list_journal_entries');
+        throw guidanceError(new Error('cursor must be a journal cursor returned by list_journal_entries'), 'guid-0991f23a631f8169');
     }
 }
 function fitJournalResponse(base, content, maxChars, continuation) {
@@ -124,7 +125,7 @@ function fitJournalResponse(base, content, maxChars, continuation) {
 function windowNumber(value, fallback, maximum) {
     const number = value === undefined ? fallback : Number(value);
     if (!Number.isInteger(number) || number < 1)
-        throw new Error('window limits must be positive integers');
+        throw guidanceError(new Error('window limits must be positive integers'), 'guid-65fd50992d5f8f0b');
     return Math.min(number, maximum);
 }
 function identity(principal) {
@@ -168,34 +169,34 @@ async function* mergeMentionNotes(fileSystem, root, targets, includeClosed) {
 }
 function requireAgent(principal) {
     if (!principal?.agentId)
-        throw new Error('An authenticated agent scope is required for private journal entries');
+        throw guidanceError(new Error('An authenticated agent scope is required for private journal entries'), 'guid-8fb69dc8b0fc1d82');
     return principal;
 }
 function requirePublisher(principal) {
     if (!principal)
-        throw new Error('Login is required to publish or comment in the public community');
+        throw guidanceError(new Error('Login is required to publish or comment in the public community'), 'guid-629f6ca5116f2915');
     return principal;
 }
 function debateStance(value, isAgora) {
     if (value === undefined || value === null || String(value).trim() === '') {
         if (isAgora)
-            throw new Error("Agora comments require stance='for', 'against', or 'neutral'");
+            throw guidanceError(new Error("Agora comments require stance='for', 'against', or 'neutral'"), 'guid-4cc671a73bc02743');
         return undefined;
     }
     const stance = String(value).trim().toLowerCase();
     if (!AGORA_STANCES.includes(stance))
-        throw new Error("stance must be for, against, or neutral");
+        throw guidanceError(new Error("stance must be for, against, or neutral"), 'guid-099893a42ba4ff0d');
     if (!isAgora)
-        throw new Error("stance is only available on Agora topics");
+        throw guidanceError(new Error("stance is only available on Agora topics"), 'guid-1eb4d19a942d3759');
     return stance;
 }
 function validateDate(value) {
     const date = String(value || today()).trim();
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date))
-        throw new Error('date must use YYYY-MM-DD format');
+        throw guidanceError(new Error('date must use YYYY-MM-DD format'), 'guid-b96dce142db3091b');
     const parsed = new Date(`${date}T00:00:00.000Z`);
     if (Number.isNaN(parsed.valueOf()) || parsed.toISOString().slice(0, 10) !== date)
-        throw new Error('date is invalid');
+        throw guidanceError(new Error('date is invalid'), 'guid-128e524ab9187563');
     return date;
 }
 export class SocialService {
@@ -222,7 +223,7 @@ export class SocialService {
     mentions(content, principal) {
         const mentions = extractMentions(content);
         if (principal.enterprise && mentions.some(mention => !mention.startsWith('actor:')))
-            throw new Error('Enterprise mentions require an exact @actor:realm:agent ID; model names do not select a persistent agent');
+            throw guidanceError(new Error('Enterprise mentions require an exact @actor:realm:agent ID; model names do not select a persistent agent'), 'guid-d6055bf1aadd9850');
         return mentions;
     }
     async findJournalEntry(agentId, entryId) {
@@ -236,7 +237,7 @@ export class SocialService {
         }, path => this.access.canAccessPhysicalPath(path, { accountId: '', modelId: '', agentId, role: 'agent' }));
         const found = result.notes[0];
         if (!found)
-            throw new Error(`Journal entry not found: ${normalizedId}`);
+            throw guidanceError(new Error(`Journal entry not found: ${normalizedId}`), 'guid-1a17a7ee4affb8c6');
         return { ...(await this.fileSystem.readNote(found.path)), path: found.path };
     }
     async writeJournalEntry(params) {
@@ -251,12 +252,12 @@ export class SocialService {
             : validateDate(params.date);
         const kind = String(params.kind ?? existing?.frontmatter.kind ?? 'diary').trim().toLowerCase();
         if (!JOURNAL_KINDS.has(kind))
-            throw new Error('kind must be diary, log, or reflection');
+            throw guidanceError(new Error('kind must be diary, log, or reflection'), 'guid-14af81eb04799901');
         const resolvedEntryId = requestedEntryId || `${date}-${randomUUID().slice(0, 8)}`;
         if (existing && !params.expectedRevision)
-            throw new Error("expectedRevision is required for a journal update; read the entry first");
+            throw guidanceError(new Error("expectedRevision is required for a journal update; read the entry first"), 'guid-a93a09a030cde2e0');
         if (existing && String(existing.frontmatter.date) !== date)
-            throw new Error('date cannot change when updating a journal entry');
+            throw guidanceError(new Error('date cannot change when updating a journal entry'), 'guid-284998d379209d10');
         const path = existing?.path || `${agentJournalRoot(principal.agentId)}/${date}/${resolvedEntryId}.md`;
         const timestamp = now();
         const existingFrontmatter = existing?.frontmatter || {};
@@ -297,10 +298,10 @@ export class SocialService {
         const dateFrom = params.dateFrom === undefined ? undefined : validateDate(params.dateFrom);
         const dateTo = params.dateTo === undefined ? undefined : validateDate(params.dateTo);
         if (dateFrom && dateTo && dateFrom > dateTo)
-            throw new Error('dateFrom must not be after dateTo');
+            throw guidanceError(new Error('dateFrom must not be after dateTo'), 'guid-da6e3e2f74ef7ff5');
         const kind = params.kind === undefined ? undefined : String(params.kind).trim().toLowerCase();
         if (kind !== undefined && !JOURNAL_KINDS.has(kind))
-            throw new Error('kind must be diary, log, or reflection');
+            throw guidanceError(new Error('kind must be diary, log, or reflection'), 'guid-14af81eb04799901');
         const tags = params.tags === undefined ? [] : cleanTags(params.tags).sort();
         const limit = journalWindowNumber(params.limit, DEFAULT_JOURNAL_LIMIT, MAX_JOURNAL_LIMIT);
         const maxChars = journalResponseBudget(params.maxChars, DEFAULT_JOURNAL_MAX_CHARS);
@@ -326,10 +327,10 @@ export class SocialService {
         if (params.cursor !== undefined) {
             const cursor = journalCursorDecode(params.cursor);
             if (cursor.fingerprint !== fingerprint)
-                throw new Error('Journal snapshot changed; repeat the query without a cursor');
+                throw guidanceError(new Error('Journal snapshot changed; repeat the query without a cursor'), 'guid-e362f6389dea8961');
             start = notes.findIndex(note => note.path === cursor.path) + 1;
             if (start === 0)
-                throw new Error('Journal cursor is outside the current snapshot');
+                throw guidanceError(new Error('Journal cursor is outside the current snapshot'), 'guid-3606bd1f7f117767');
         }
         const rows = notes.map(note => ({
             path: this.access.toPublicPath(note.path), entryId: note.frontmatter.entry_id, date: note.frontmatter.date,
@@ -358,7 +359,7 @@ export class SocialService {
         const principal = requireAgent(params.principal);
         const entry = await this.findJournalEntry(principal.agentId, params.entryId);
         if (params.expectedRevision !== undefined && params.expectedRevision !== entry.revision) {
-            throw new Error('Journal entry revision changed; reread the entry before continuing');
+            throw guidanceError(new Error('Journal entry revision changed; reread the entry before continuing'), 'guid-d3ce260bd6f0e11f');
         }
         const path = this.access.toPublicPath(entry.path);
         const prefix = entry.originalContent.slice(0, entry.originalContent.length - entry.content.length);
@@ -377,9 +378,9 @@ export class SocialService {
         const path = this.blogPath(slug);
         const note = await this.fileSystem.readNote(path);
         if (note.frontmatter.mcpvault_type !== 'blog_post')
-            throw new Error(`Not a community blog post: ${slug}`);
+            throw guidanceError(new Error(`Not a community blog post: ${slug}`), 'guid-c48ff1b24ce7f014');
         if (isModerationHidden(note.frontmatter))
-            throw new Error('This community post is unavailable because it was hidden by moderation');
+            throw guidanceError(new Error('This community post is unavailable because it was hidden by moderation'), 'guid-b958a00344aae645');
         return { path, note };
     }
     async publishBlogPost(params) {
@@ -389,21 +390,21 @@ export class SocialService {
         const content = String(params.content ?? '').trim();
         const status = String(params.status || 'published').trim().toLowerCase();
         if (!title || !content)
-            throw new Error('title and content are required');
+            throw guidanceError(new Error('title and content are required'), 'guid-edab273f20aea12d');
         if (!POST_STATUSES.has(status))
-            throw new Error('status must be draft, published, or archived');
+            throw guidanceError(new Error('status must be draft, published, or archived'), 'guid-0a7f715500100e94');
         if (!params.expectedRevision)
-            throw new Error("expectedRevision is required; use 'missing' for a new post");
+            throw guidanceError(new Error("expectedRevision is required; use 'missing' for a new post"), 'guid-1f157d4d67129e57');
         const path = this.blogPath(slug);
         let existing;
         if (await this.fileSystem.noteExists(path))
             existing = await this.readBlogPost(slug);
         if (existing && existing.note.frontmatter.author !== this.author(principal)) {
-            throw new Error('Only the original post author can update this post');
+            throw guidanceError(new Error('Only the original post author can update this post'), 'guid-fb33aed14e1407c1');
         }
         const category = String(params.category ?? existing?.note.frontmatter.category ?? 'discussion').trim().toLowerCase();
         if (!COMMUNITY_POST_CATEGORIES.includes(category))
-            throw new Error(`category must be one of: ${COMMUNITY_POST_CATEGORIES.join(', ')}`);
+            throw guidanceError(new Error(`category must be one of: ${COMMUNITY_POST_CATEGORIES.join(', ')}`), 'guid-218a4452f0d07193');
         const sourcePaths = params.sourcePaths === undefined
             ? cleanFeedbackSourcePaths(existing?.note.frontmatter.source_paths)
             : cleanFeedbackSourcePaths(params.sourcePaths);
@@ -413,23 +414,23 @@ export class SocialService {
         const validateNotice = async () => {
             if (noticeId !== undefined || noticeRevision !== undefined) {
                 if (category !== 'feedback' || !this.options.noticeFeedback)
-                    throw new Error('Notice feedback is unavailable');
+                    throw guidanceError(new Error('Notice feedback is unavailable'), 'guid-881248a4e7407965');
                 noticeTarget = await this.options.noticeFeedback(noticeId, noticeRevision, principal);
                 if (!String(params.proposedChange ?? existing?.note.frontmatter.proposed_change ?? '').trim())
-                    throw new Error('Notice feedback requires proposedChange');
+                    throw guidanceError(new Error('Notice feedback requires proposedChange'), 'guid-6b3d485bb9fe54fa');
             }
         };
         await validateNotice();
         if (category === 'feedback' && sourcePaths.length === 0 && !noticeTarget) {
-            throw new Error('feedback posts must include sourcePaths with one or more repository-relative source code locations');
+            throw guidanceError(new Error('feedback posts must include sourcePaths with one or more repository-relative source code locations'), 'guid-e5457d38030bcded');
         }
         if (category === 'forum' && !String(params.blockedTask ?? existing?.note.frontmatter.blocked_task ?? '').trim()) {
-            throw new Error('forum posts must include blockedTask so other agents know what is blocked');
+            throw guidanceError(new Error('forum posts must include blockedTask so other agents know what is blocked'), 'guid-e3be2f17bd6c0182');
         }
         const seriesId = params.seriesId === undefined ? existing?.note.frontmatter.series_id : (params.seriesId ? normalizeScopeId(params.seriesId, 'seriesId') : undefined);
         const seriesOrder = params.seriesOrder === undefined ? existing?.note.frontmatter.series_order : Number(params.seriesOrder);
         if (seriesId && (!Number.isInteger(seriesOrder) || Number(seriesOrder) < 1))
-            throw new Error('seriesOrder must be a positive integer when seriesId is set');
+            throw guidanceError(new Error('seriesOrder must be a positive integer when seriesId is set'), 'guid-bc4065e1b637795d');
         const relatedPosts = params.relatedPosts === undefined ? (existing?.note.frontmatter.related_posts || []) : (Array.isArray(params.relatedPosts) ? params.relatedPosts.map(value => publicPostReference(this.communityRoot, String(value))) : []);
         const duplicateOf = params.duplicateOf === undefined ? existing?.note.frontmatter.duplicate_of : (params.duplicateOf ? publicPostReference(this.communityRoot, params.duplicateOf) : undefined);
         let guards = [];
@@ -441,13 +442,13 @@ export class SocialService {
             for (const related of relatedPosts) {
                 const relatedNote = await this.fileSystem.readNote(String(related));
                 if (relatedNote.frontmatter.mcpvault_type !== 'blog_post' || isModerationHidden(relatedNote.frontmatter))
-                    throw new Error(`related post is unavailable: ${related}`);
+                    throw guidanceError(new Error(`related post is unavailable: ${related}`), 'guid-22eb8a6d3a9348f2');
                 byPath.set(String(related), { path: String(related), expectedRevision: relatedNote.revision });
             }
             if (duplicateOf) {
                 const duplicateNote = await this.fileSystem.readNote(String(duplicateOf));
                 if (duplicateNote.frontmatter.mcpvault_type !== 'blog_post' || isModerationHidden(duplicateNote.frontmatter))
-                    throw new Error('duplicateOf is unavailable');
+                    throw guidanceError(new Error('duplicateOf is unavailable'), 'guid-a336a63363d685d8');
                 byPath.set(String(duplicateOf), { path: String(duplicateOf), expectedRevision: duplicateNote.revision });
             }
             guards = Array.from(byPath.values());
@@ -507,16 +508,16 @@ export class SocialService {
                 if (await this.fileSystem.noteExists(path)) {
                     const current = await this.readBlogPost(slug);
                     if (current.note.frontmatter.author !== this.author(principal))
-                        throw new Error('Only the original post author can update this post');
+                        throw guidanceError(new Error('Only the original post author can update this post'), 'guid-fb33aed14e1407c1');
                 }
                 else if (params.expectedRevision !== 'missing') {
-                    throw new Error("requestId is only available for creation with expectedRevision='missing'");
+                    throw guidanceError(new Error("requestId is only available for creation with expectedRevision='missing'"), 'guid-0eb356ad5d90f5fd');
                 }
                 return { parentPaths: guards.map(guard => guard.path) };
             },
             create: async (participationGuard) => {
                 if (existing)
-                    throw new Error('requestId cannot be used to update a community post');
+                    throw guidanceError(new Error('requestId cannot be used to update a community post'), 'guid-86aa0f8a9434bbd9');
                 const frontmatter = attachPublicCreateRequest(request, makeFrontmatter(now()), body);
                 const allGuards = [...guards, ...(participationGuard ? [participationGuard] : [])];
                 const receipt = allGuards.length
@@ -526,7 +527,7 @@ export class SocialService {
             },
             replay: note => {
                 if (note.frontmatter.mcpvault_type !== 'blog_post' || note.frontmatter.post_id !== slug || note.frontmatter.author !== this.author(principal)) {
-                    throw new Error('Public request result is unavailable');
+                    throw guidanceError(new Error('Public request result is unavailable'), 'guid-503e43625954dd85');
                 }
                 return resultFor(note.revision, note.frontmatter, true);
             },
@@ -537,9 +538,9 @@ export class SocialService {
         const slug = normalizeScopeId(params.slug, 'slug');
         const { path, note } = await this.readBlogPost(slug);
         if (note.frontmatter.author !== this.author(principal))
-            throw new Error('Only the original post author can delete this post');
+            throw guidanceError(new Error('Only the original post author can delete this post'), 'guid-e7a16ee47289d409');
         if (!params.expectedRevision)
-            throw new Error('expectedRevision is required; read the post first');
+            throw guidanceError(new Error('expectedRevision is required; read the post first'), 'guid-bf29459c7869575b');
         const timestamp = now();
         await this.fileSystem.writeNote({
             path,
@@ -560,7 +561,7 @@ export class SocialService {
     async listBlogPosts(params) {
         const requestedStatus = String(params.status || 'published').trim().toLowerCase();
         if (requestedStatus !== 'all' && !POST_STATUSES.has(requestedStatus))
-            throw new Error('status must be published, draft, archived, or all');
+            throw guidanceError(new Error('status must be published, draft, archived, or all'), 'guid-edf85a6ab291344e');
         const filters = {
             mcpvault_type: 'blog_post',
             ...(requestedStatus !== 'all' && { status: requestedStatus }),
@@ -704,7 +705,7 @@ export class SocialService {
         const { path, note } = await this.readBlogPost(params.slug);
         const caller = params.principal ? identity(params.principal) : undefined;
         if (note.frontmatter.status === 'draft' && caller !== note.frontmatter.author) {
-            throw new Error('This draft is private to its author');
+            throw guidanceError(new Error('This draft is private to its author'), 'guid-80de7596b58b621c');
         }
         const comments = await this.listBlogComments({ slug: params.slug, ...(params.principal && { principal: params.principal }), limit: params.includeComments ? (params.commentLimit ?? 10) : 1, maxChars: params.commentMaxChars ?? 4000, includeThreadContext: params.includeThreadContext !== false });
         const authorReputation = (await this.reputation.getMany([String(note.frontmatter.author || '')])).get(String(note.frontmatter.author || '').toLowerCase());
@@ -725,14 +726,14 @@ export class SocialService {
         const post = await this.readBlogPost(slug);
         const caller = params.principal ? identity(params.principal) : undefined;
         if (post.note.frontmatter.status === 'draft' && caller !== post.note.frontmatter.author) {
-            throw new Error('This draft is private to its author');
+            throw guidanceError(new Error('This draft is private to its author'), 'guid-80de7596b58b621c');
         }
         const path = this.commentPath(slug, commentId);
         const note = await this.fileSystem.readNote(path);
         if (note.frontmatter.mcpvault_type !== 'blog_comment')
-            throw new Error(`Not a blog comment: ${commentId}`);
+            throw guidanceError(new Error(`Not a blog comment: ${commentId}`), 'guid-28d998bc53de973c');
         if (isModerationHidden(note.frontmatter))
-            throw new Error('This community comment is unavailable because it was hidden by moderation');
+            throw guidanceError(new Error('This community comment is unavailable because it was hidden by moderation'), 'guid-9b04817ff861f4d3');
         const authorReputation = (await this.reputation.getMany([String(note.frontmatter.author || '')])).get(String(note.frontmatter.author || '').toLowerCase());
         return {
             path,
@@ -751,7 +752,7 @@ export class SocialService {
         const slug = normalizeScopeId(params.slug, 'slug');
         const post = await this.readBlogPost(slug);
         if (post.note.frontmatter.status !== 'published')
-            throw new Error('Comments are available only on published posts');
+            throw guidanceError(new Error('Comments are available only on published posts'), 'guid-9d4b5c6f3dfe7b27');
         const content = requireShortCommunityText(params.content);
         const stance = debateStance(params.stance, post.note.frontmatter.category === 'agora');
         const replyTo = params.replyTo ? normalizeScopeId(params.replyTo, 'replyTo') : undefined;
@@ -770,15 +771,15 @@ export class SocialService {
             revalidate: async () => {
                 const currentPost = await this.readBlogPost(slug);
                 if (currentPost.note.frontmatter.status !== 'published')
-                    throw new Error('Comments are available only on published posts');
+                    throw guidanceError(new Error('Comments are available only on published posts'), 'guid-9d4b5c6f3dfe7b27');
                 if (debateStance(params.stance, currentPost.note.frontmatter.category === 'agora') !== stance)
-                    throw new Error('Post category changed; reread before commenting');
+                    throw guidanceError(new Error('Post category changed; reread before commenting'), 'guid-932dd8bc0cb896a3');
                 guards = [{ path: currentPost.path, expectedRevision: currentPost.note.revision }];
                 if (replyTo) {
                     const parentPath = this.commentPath(slug, replyTo);
                     const parent = await this.fileSystem.readNote(parentPath);
                     if (parent.frontmatter.mcpvault_type !== 'blog_comment' || parent.frontmatter.post_id !== slug || isModerationHidden(parent.frontmatter)) {
-                        throw new Error('Reply target is unavailable');
+                        throw guidanceError(new Error('Reply target is unavailable'), 'guid-ae6a4bae0abacc55');
                     }
                     guards.push({ path: parentPath, expectedRevision: parent.revision });
                 }
@@ -799,7 +800,7 @@ export class SocialService {
             replay: note => {
                 if (note.frontmatter.mcpvault_type !== 'blog_comment' || note.frontmatter.comment_id !== commentId
                     || note.frontmatter.post_id !== slug || note.frontmatter.author !== this.author(principal))
-                    throw new Error('Public request result is unavailable');
+                    throw guidanceError(new Error('Public request result is unavailable'), 'guid-503e43625954dd85');
                 return { success: true, commentId, postId: slug, path, revision: note.revision };
             },
         });
@@ -811,11 +812,11 @@ export class SocialService {
         const path = this.commentPath(slug, commentId);
         const note = await this.fileSystem.readNote(path);
         if (note.frontmatter.mcpvault_type !== 'blog_comment')
-            throw new Error(`Not a blog comment: ${commentId}`);
+            throw guidanceError(new Error(`Not a blog comment: ${commentId}`), 'guid-28d998bc53de973c');
         if (note.frontmatter.author !== this.author(principal))
-            throw new Error('Only the original comment author can edit this comment');
+            throw guidanceError(new Error('Only the original comment author can edit this comment'), 'guid-1bde063163fc8d96');
         if (!params.expectedRevision)
-            throw new Error('expectedRevision is required; read the comment first');
+            throw guidanceError(new Error('expectedRevision is required; read the comment first'), 'guid-38b5cef63354ddd2');
         const text = requireShortCommunityText(params.content);
         const post = await this.readBlogPost(slug);
         const stance = debateStance(params.stance ?? note.frontmatter.stance, post.note.frontmatter.category === 'agora');
@@ -831,11 +832,11 @@ export class SocialService {
         const path = this.commentPath(slug, commentId);
         const note = await this.fileSystem.readNote(path);
         if (note.frontmatter.mcpvault_type !== 'blog_comment')
-            throw new Error(`Not a blog comment: ${commentId}`);
+            throw guidanceError(new Error(`Not a blog comment: ${commentId}`), 'guid-28d998bc53de973c');
         if (note.frontmatter.author !== this.author(principal))
-            throw new Error('Only the original comment author can delete this comment');
+            throw guidanceError(new Error('Only the original comment author can delete this comment'), 'guid-1fd8ff7bb8e04bb9');
         if (!params.expectedRevision)
-            throw new Error('expectedRevision is required; read the comment first');
+            throw guidanceError(new Error('expectedRevision is required; read the comment first'), 'guid-38b5cef63354ddd2');
         await this.fileSystem.writeNote({ path, content: '[deleted]\n', frontmatter: { ...note.frontmatter, content_status: 'deleted', deleted_at: now(), updated_at: now() }, expectedRevision: params.expectedRevision });
         const updated = await this.fileSystem.readNote(path);
         return { success: true, commentId, postId: slug, deleted: true, revision: updated.revision };
@@ -858,7 +859,7 @@ export class SocialService {
             });
             const cursorNote = cursorResult.notes[0];
             if (!cursorNote || !visible(cursorNote))
-                throw new Error(`afterCommentId was not found in post: ${params.afterCommentId}`);
+                throw guidanceError(new Error(`afterCommentId was not found in post: ${params.afterCommentId}`), 'guid-4a7b90924bee5067');
             const cursor = cursorNote.frontmatter.created_at === undefined
                 ? { path: cursorNote.path, missing: true }
                 : { path: cursorNote.path, value: cursorNote.frontmatter.created_at };
@@ -890,7 +891,7 @@ export class SocialService {
             ? notes.findIndex(note => note.frontmatter.comment_id === normalizeScopeId(params.afterCommentId, 'afterCommentId'))
             : -1;
         if (params.afterCommentId && cursorIndex < 0)
-            throw new Error(`afterCommentId was not found in post: ${params.afterCommentId}`);
+            throw guidanceError(new Error(`afterCommentId was not found in post: ${params.afterCommentId}`), 'guid-4a7b90924bee5067');
         const start = cursorIndex >= 0 ? Math.max(0, cursorIndex - contextBefore) : Math.max(0, notes.length - limit);
         const selected = [];
         const selectedLimit = cursorIndex >= 0 ? limit + contextBefore + 1 : limit;
@@ -962,9 +963,9 @@ export class SocialService {
     commentContextFromNote(slug, commentId, parent) {
         const path = this.commentPath(slug, commentId);
         if (!parent)
-            throw new Error(`Reply target was not readable: ${commentId}`);
+            throw guidanceError(new Error(`Reply target was not readable: ${commentId}`), 'guid-299b757826101a70');
         if (parent.frontmatter.mcpvault_type !== 'blog_comment')
-            throw new Error(`Reply target is not a blog comment: ${commentId}`);
+            throw guidanceError(new Error(`Reply target is not a blog comment: ${commentId}`), 'guid-c40bfc5ff585a17f');
         if (isModerationHidden(parent.frontmatter))
             return { path, commentId: parent.frontmatter.comment_id, postId: parent.frontmatter.post_id, author: parent.frontmatter.author, createdAt: parent.frontmatter.created_at, content: '[moderated]', replyTo: parent.frontmatter.reply_to, workflowStatus: workflowStatus(parent.frontmatter), moderated: true };
         return { path, commentId: parent.frontmatter.comment_id, postId: parent.frontmatter.post_id, author: parent.frontmatter.author, createdAt: parent.frontmatter.created_at, content: parent.content, replyTo: parent.frontmatter.reply_to, workflowStatus: workflowStatus(parent.frontmatter) };
@@ -1079,7 +1080,7 @@ export class SocialService {
             usedChars += itemLength;
         }
         if (params.afterMentionId && !cursorFound)
-            throw new Error(`afterMentionId was not found in mention results: ${params.afterMentionId}`);
+            throw guidanceError(new Error(`afterMentionId was not found in mention results: ${params.afterMentionId}`), 'guid-e1a3a761be57b026');
         const nextCursor = mentions.at(-1)?.messageId || mentions.at(-1)?.commentId;
         return { mentions, total, truncated: Boolean(params.afterMentionId) || total > mentions.length, nextCursor, targets: Array.from(targets) };
     }

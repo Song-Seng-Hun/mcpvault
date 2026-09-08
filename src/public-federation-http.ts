@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { createServer as createHttpServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { createServer as createHttpsServer } from 'node:https';
@@ -41,12 +42,12 @@ async function jsonBody(request: IncomingMessage, maxBytes: number): Promise<Rec
   for await (const chunk of request) {
     const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
     total += buffer.byteLength;
-    if (total > maxBytes) throw new Error('request body exceeds the public federation limit');
+    if (total > maxBytes) throw guidanceError(new Error('request body exceeds the public federation limit'), 'guid-f7fd75c97fbaf7ef');
     chunks.push(buffer);
   }
   let value: unknown;
-  try { value = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}'); } catch { throw new Error('request body must be valid JSON'); }
-  if (!isRecord(value)) throw new Error('request body must be an object');
+  try { value = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}'); } catch { throw guidanceError(new Error('request body must be valid JSON'), 'guid-a6cf589688c92b94'); }
+  if (!isRecord(value)) throw guidanceError(new Error('request body must be an object'), 'guid-81f53b1b9e52229a');
   return value;
 }
 
@@ -74,16 +75,16 @@ export class PublicFederationClient {
 
   constructor(options: PublicFederationClientOptions) {
     const url = new URL(options.baseUrl);
-    if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new Error('baseUrl must use http or https');
-    if (url.protocol === 'http:' && !loopback(url.hostname)) throw new Error('Public Federation client requires HTTPS for non-loopback URLs');
-    if (url.username || url.password || url.search || url.hash) throw new Error('baseUrl must not contain credentials, query, or fragment');
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') throw guidanceError(new Error('baseUrl must use http or https'), 'guid-bd808ae65ce63381');
+    if (url.protocol === 'http:' && !loopback(url.hostname)) throw guidanceError(new Error('Public Federation client requires HTTPS for non-loopback URLs'), 'guid-1332cc581d0793c2');
+    if (url.username || url.password || url.search || url.hash) throw guidanceError(new Error('baseUrl must not contain credentials, query, or fragment'), 'guid-bfe0ad87424f415c');
     this.baseUrl = url.href.replace(/\/+$/, '');
     this.authToken = options.authToken ? String(options.authToken) : undefined;
-    if (this.authToken && this.authToken.length > 4096) throw new Error('authToken is too long');
+    if (this.authToken && this.authToken.length > 4096) throw guidanceError(new Error('authToken is too long'), 'guid-def0242b8c4b1da4');
   }
 
   private async request<T>(path: string, init: RequestInit = {}, requiresWriteCredential = false): Promise<T> {
-    if (requiresWriteCredential && !this.authToken) throw new Error('a write credential is required for this operation');
+    if (requiresWriteCredential && !this.authToken) throw guidanceError(new Error('a write credential is required for this operation'), 'guid-0ad49738f4b26286');
     const response = await fetch(`${this.baseUrl}${path}`, {
       ...init,
       redirect: 'error',
@@ -99,7 +100,7 @@ export class PublicFederationClient {
           const chunk = await reader.read();
           if (chunk.done) break;
           bytes += chunk.value.byteLength;
-          if (bytes > 8 * 1024 * 1024) throw new Error('Public Federation response exceeds its size limit');
+          if (bytes > 8 * 1024 * 1024) throw guidanceError(new Error('Public Federation response exceeds its size limit'), 'guid-48744e01a6f6e592');
           chunks.push(chunk.value);
         }
       } finally { await reader.cancel().catch(() => undefined); }
@@ -182,12 +183,12 @@ export async function startPublicFederationHub(root: string, options: PublicFede
   const host = options.host || '127.0.0.1';
   if (!loopback(host) && !options.tls) {
     await hub.close();
-    throw new Error('Public Federation HTTP requires TLS on non-loopback hosts');
+    throw guidanceError(new Error('Public Federation HTTP requires TLS on non-loopback hosts'), 'guid-d6b2cb1e22eeedae');
   }
   const credentialEntries = Object.entries(options.credentials);
   if (credentialEntries.length === 0 || credentialEntries.some(([token]) => !token || token.length > 4096)) {
     await hub.close();
-    throw new Error('at least one public federation credential is required');
+    throw guidanceError(new Error('at least one public federation credential is required'), 'guid-be0d346d3b8dd399');
   }
   const credentials = credentialEntries.map(([token, identity]) => ({ digest: tokenDigest(token), identity: { ...identity } }));
   const authenticate = (request: IncomingMessage): PublicFederationIdentity | undefined => {
@@ -209,14 +210,14 @@ export async function startPublicFederationHub(root: string, options: PublicFede
       if (request.method === 'POST' && url.pathname === '/v1/public/records') {
         const body = await jsonBody(request, maxBodyBytes);
         const extra = Object.keys(body).find(key => key !== 'input' && key !== 'idempotencyKey');
-        if (extra) throw new Error(`unsupported transport field: ${extra}`);
+        if (extra) throw guidanceError(new Error(`unsupported transport field: ${extra}`), 'guid-2c32d468cf9355bd');
         sendJson(response, 201, await hub.publish(body.input as PublicPublishInput, identity, String(body.idempotencyKey || '')));
         return;
       }
       if (request.method === 'POST' && url.pathname === '/v1/public/moderation') {
         const body = await jsonBody(request, maxBodyBytes);
         const extra = Object.keys(body).find(key => key !== 'input' && key !== 'idempotencyKey');
-        if (extra) throw new Error(`unsupported transport field: ${extra}`);
+        if (extra) throw guidanceError(new Error(`unsupported transport field: ${extra}`), 'guid-2c32d468cf9355bd');
         sendJson(response, 201, await hub.moderate(body.input as unknown as PublicModerationInput, identity, String(body.idempotencyKey || '')));
         return;
       }

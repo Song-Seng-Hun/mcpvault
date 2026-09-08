@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 const IDEA_ORIGIN_STEPS = [
     'brainwriting-independent', 'brainwriting-build', 'six-hats-alternatives',
     'scamper-substitute', 'scamper-combine', 'scamper-adapt', 'scamper-modify',
@@ -60,7 +61,7 @@ function requireActualContributions(currentStepId, contributionStepId, accounts,
     }
     for (const accountId of accounts)
         if (!contributors.has(accountId)) {
-            throw new Error(`${currentStepId} requires an actual ${contributionStepId} contribution from ${accountId}`);
+            throw guidanceError(new Error(`${currentStepId} requires an actual ${contributionStepId} contribution from ${accountId}`), 'guid-78cf7ab98c88f6cd');
         }
 }
 function validateIdeaLineage(structured, priorSubmissions) {
@@ -73,10 +74,10 @@ function validateIdeaLineage(structured, priorSubmissions) {
         if (!id)
             continue; // The structural contract produces the precise shape error.
         if (existing.has(id) || submitted.has(id))
-            throw new Error(`Idea ID ${id} already has an existing origin and may not be invented again`);
+            throw guidanceError(new Error(`Idea ID ${id} already has an existing origin and may not be invented again`), 'guid-e05639790fc28cec');
         submitted.add(id);
         if (idea.parentIdeaId !== undefined && (typeof idea.parentIdeaId !== 'string' || !existing.has(idea.parentIdeaId))) {
-            throw new Error(`Idea ${id} must link to an existing parent idea origin`);
+            throw guidanceError(new Error(`Idea ${id} must link to an existing parent idea origin`), 'guid-c33137f325ef06e2');
         }
         if (typeof idea.parentIdeaId === 'string')
             linkedParents.add(idea.parentIdeaId);
@@ -84,10 +85,10 @@ function validateIdeaLineage(structured, priorSubmissions) {
     if (structured.parentIdeaIds !== undefined) {
         const declaredParents = new Set(strings(structured.parentIdeaIds));
         if (!sameMembers([...declaredParents], [...linkedParents]))
-            throw new Error('Declared parent idea IDs must match the actual parent links');
+            throw guidanceError(new Error('Declared parent idea IDs must match the actual parent links'), 'guid-0fd13128d253ad29');
         for (const parentId of declaredParents) {
             if (!existing.has(parentId))
-                throw new Error(`Parent idea ${parentId} has no existing origin`);
+                throw guidanceError(new Error(`Parent idea ${parentId} has no existing origin`), 'guid-0e017f9a8d89c6df');
         }
     }
 }
@@ -97,19 +98,19 @@ function validateKjGroup(structured, priorSubmissions) {
     for (const group of records(structured.groups))
         for (const member of strings(group.members)) {
             if (!collected.has(member))
-                throw new Error(`Affinity member ${member} was not collected`);
+                throw guidanceError(new Error(`Affinity member ${member} was not collected`), 'guid-17266669b66c94ae');
             assigned.add(member); // Deliberately permits multi-membership across groups.
         }
     for (const member of strings(structured.unassignedIdeaIds)) {
         if (!collected.has(member))
-            throw new Error(`Unassigned affinity member ${member} was not collected`);
+            throw guidanceError(new Error(`Unassigned affinity member ${member} was not collected`), 'guid-d7aac7b1a6668e1e');
         if (assigned.has(member))
-            throw new Error(`Unassigned affinity member ${member} is already grouped`);
+            throw guidanceError(new Error(`Unassigned affinity member ${member} is already grouped`), 'guid-3eef70309003afb2');
         assigned.add(member);
     }
     for (const member of collected)
         if (!assigned.has(member))
-            throw new Error(`Affinity grouping must preserve collected member ${member} as grouped or unassigned`);
+            throw guidanceError(new Error(`Affinity grouping must preserve collected member ${member} as grouped or unassigned`), 'guid-441d78a963f33be3');
 }
 function validateKjNames(structured, priorSubmissions) {
     const groups = new Map();
@@ -121,7 +122,7 @@ function validateKjNames(structured, priorSubmissions) {
                 const members = strings(group.members);
                 const existing = groups.get(group.id);
                 if (existing && !sameMembers(existing, members))
-                    throw new Error(`Affinity group ${group.id} has conflicting preserved members`);
+                    throw guidanceError(new Error(`Affinity group ${group.id} has conflicting preserved members`), 'guid-6f6a42fe88bb117a');
                 groups.set(group.id, members);
             }
     const named = new Set();
@@ -130,12 +131,12 @@ function validateKjNames(structured, priorSubmissions) {
             continue;
         const expected = groups.get(name.id);
         if (!expected || !sameMembers(expected, strings(name.members)))
-            throw new Error(`Affinity group ${name.id} must retain its collected members when named`);
+            throw guidanceError(new Error(`Affinity group ${name.id} must retain its collected members when named`), 'guid-0ace3aa6ba1e0e98');
         named.add(name.id);
     }
     for (const groupId of groups.keys())
         if (!named.has(groupId))
-            throw new Error(`Affinity group ${groupId} must remain represented when named`);
+            throw guidanceError(new Error(`Affinity group ${groupId} must remain represented when named`), 'guid-b15cb295b98617e7');
 }
 function validateMindMapEdges(structured, priorSubmissions) {
     const nodes = new Set();
@@ -148,7 +149,7 @@ function validateMindMapEdges(structured, priorSubmissions) {
     for (const edge of records(structured.mapEdges))
         for (const endpoint of [edge.fromId, edge.toId]) {
             if (typeof endpoint === 'string' && !nodes.has(endpoint))
-                throw new Error(`Mind-map edge references unknown prior node ${endpoint}`);
+                throw guidanceError(new Error(`Mind-map edge references unknown prior node ${endpoint}`), 'guid-0c876e8df497ee2e');
         }
 }
 function freezeFingerprint(submission) {
@@ -168,16 +169,16 @@ function validateFrozenAlternatives(stepId, priorSubmissions) {
             fingerprints.add(fingerprint);
     }
     if (stepId === 'dot-voting-vote' && !fingerprints.size)
-        throw new Error('Dot voting requires one frozen alternative record');
+        throw guidanceError(new Error('Dot voting requires one frozen alternative record'), 'guid-6cb308d82ea6c97d');
     if (fingerprints.size > 1)
-        throw new Error('Frozen alternatives conflict and cannot be changed or unioned silently');
+        throw guidanceError(new Error('Frozen alternatives conflict and cannot be changed or unioned silently'), 'guid-3c767edba72d0c25');
 }
 export function validateWorkshopLineage(params) {
     const requiredPrerequisiteStepIds = workshopLineagePrerequisites(params.stepId);
     const bounded = new Set((params.prerequisiteCoverage || []).filter(item => !item.complete).map(item => item.stepId));
     const blocked = requiredPrerequisiteStepIds.filter(stepId => bounded.has(stepId));
     if (blocked.length)
-        throw new Error(`Workshop lineage is bounded; scan required predecessor step IDs before validation: ${blocked.join(', ')}`);
+        throw guidanceError(new Error(`Workshop lineage is bounded; scan required predecessor step IDs before validation: ${blocked.join(', ')}`), 'guid-7253693788b926a8');
     const priorSubmissions = params.priorSubmissions || [];
     if (params.stepId === 'brainwriting-independent' || params.stepId === 'brainwriting-build' || params.stepId.startsWith('scamper-')) {
         validateIdeaLineage(params.structured, priorSubmissions);

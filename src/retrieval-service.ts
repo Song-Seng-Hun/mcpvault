@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import type { SearchService } from './search.js';
 import type { CollaborationService } from './scopes.js';
 import type { SemanticSearchService, SemanticSearchOutcome, MemorySemanticSearchOutcome } from './semantic-search.js';
@@ -46,10 +47,10 @@ export class RetrievalService {
   physical(hit: RetrievalHit, principal?: ScopePrincipal): string {
     const raw = hit.physicalPath || hit.p;
     const expanded = raw.startsWith('scope://') ? this.access.resolveExternalPath(raw, principal) : raw.replace(/\\/g, '/');
-    if (posix.isAbsolute(expanded) || expanded.includes(':')) throw new Error('Search target is unavailable');
+    if (posix.isAbsolute(expanded) || expanded.includes(':')) throw guidanceError(new Error('Search target is unavailable'), 'guid-41fae17fff5e5a9b');
     const path = posix.normalize(expanded);
-    if (path === '..' || path.startsWith('../')) throw new Error('Search target is unavailable');
-    if (!this.access.canAccessPhysicalPath(path, principal)) throw new Error('Search target is unavailable');
+    if (path === '..' || path.startsWith('../')) throw guidanceError(new Error('Search target is unavailable'), 'guid-41fae17fff5e5a9b');
+    if (!this.access.canAccessPhysicalPath(path, principal)) throw guidanceError(new Error('Search target is unavailable'), 'guid-41fae17fff5e5a9b');
     return path;
   }
 
@@ -63,11 +64,11 @@ export class RetrievalService {
       const batch = await this.fs.queryNotes({ limit: 500, includeContent: false, includeTotal: false, sortBy: 'path', ...(prefix && prefix !== '.' && { pathPrefix: prefix }), ...(after && { after }) }, admitted,
         note => (params.fictionDomain === 'only') === isFictionDomain(note.frontmatter));
       for (const note of batch.notes) {
-        if (++count > 10000) throw new Error('Fiction-domain metadata window exhausted');
+        if (++count > 10000) throw guidanceError(new Error('Fiction-domain metadata window exhausted'), 'guid-4c9fde591525f971');
         accepted.add(note.path);
       }
       after = batch.truncated ? batch.nextCursor : undefined;
-      if (batch.truncated && !after) throw new Error('Fiction-domain metadata changed');
+      if (batch.truncated && !after) throw guidanceError(new Error('Fiction-domain metadata changed'), 'guid-8afbb59f1a2fac1f');
     } while (after);
     return (path: string) => admitted(path) && accepted.has(path);
   }
@@ -77,7 +78,7 @@ export class RetrievalService {
    * current-revision body reads, exact matching and final response serialization.
    * complete=false forbids treating this result window as a lossless inventory. */
   async memoryCandidates(params: MemoryCandidateParams): Promise<MemoryCandidateOutcome> {
-    if (typeof params.canAccessPath !== 'function') throw new Error('Memory candidates require a visibility predicate');
+    if (typeof params.canAccessPath !== 'function') throw guidanceError(new Error('Memory candidates require a visibility predicate'), 'guid-829812a0c3932d67');
     const limit = memoryCandidateLimit(params.limit);
     const admitted = (path: string) => this.access.canAccessPhysicalPath(path, params.principal) && params.canAccessPath(path);
     const prefix = params.pathPrefix ? this.physical({ p: params.pathPrefix } as RetrievalHit, params.principal) : '';
@@ -197,7 +198,7 @@ export class RetrievalService {
   }
 
   async searchNotes(params: RetrievalParams): Promise<RetrievalHit[]> {
-    if (params.excerptMode !== undefined && !['compact', 'context'].includes(params.excerptMode)) throw new Error('Invalid excerptMode');
+    if (params.excerptMode !== undefined && !['compact', 'context'].includes(params.excerptMode)) throw guidanceError(new Error('Invalid excerptMode'), 'guid-aeb6cd862871ecc0');
     const outcome = await this.retrieve(params);
     let results = outcome.results;
     if (params.excerptMode === 'context') {
@@ -208,10 +209,10 @@ export class RetrievalService {
         if (!metadata || isModerationHidden(metadata.frontmatter)) continue;
         const note = await this.fs.readNote(path, RETRIEVAL_NOTE_BYTES);
         if (isModerationHidden(note.frontmatter)) continue;
-        if (metadata.revision !== note.revision || (hit.rv && hit.rv !== note.revision)) throw new Error('Search context changed; repeat the same query');
+        if (metadata.revision !== note.revision || (hit.rv && hit.rv !== note.revision)) throw guidanceError(new Error('Search context changed; repeat the same query'), 'guid-2cb5da2fceb83adc');
         const chosen = selectContextPassages({ content: note.content, query: params.query, maxChars: 350, maxPassages: 1, startLine: bodyStartLine(note), ...(hit.ln && { preferredLine: hit.ln }) });
         const passage = chosen.passages[0];
-        if (!this.access.canAccessPhysicalPath(path, params.principal) || await this.fs.readNoteRevision(path, RETRIEVAL_NOTE_BYTES) !== note.revision) throw new Error('Search context changed; repeat the same query');
+        if (!this.access.canAccessPhysicalPath(path, params.principal) || await this.fs.readNoteRevision(path, RETRIEVAL_NOTE_BYTES) !== note.revision) throw guidanceError(new Error('Search context changed; repeat the same query'), 'guid-2cb5da2fceb83adc');
         const publicPath = this.access.toPublicPath(path);
         expanded.push({ ...hit, p: publicPath, rv: note.revision,
           ex: passage?.text || '', ln: passage?.startLine || 0,

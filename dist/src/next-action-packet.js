@@ -1,3 +1,4 @@
+import { guidanceError, guidanceText } from './guidance-runtime.js';
 /** Pack a ranked prefix, never substitute a lower-ranked cheap row for its head. */
 export function packNextActionPacket(result, maxChars, prettyPrint = false) {
     const fits = (value) => JSON.stringify(value, null, prettyPrint ? 2 : undefined).length <= maxChars;
@@ -53,12 +54,12 @@ export function packNextActionPacket(result, maxChars, prettyPrint = false) {
     }
     if (maxChars < 16000 || prettyPrint) {
         const retry = packet([], {
-            message: 'Retry the same request. No actions skipped.',
+            message: guidanceText('guid-551d312387c848f2', 'Retry the same request. No actions skipped.'),
             nextAction: { endpointId: 'wiki.next_actions', reuseOriginalArguments: true,
                 overrides: { maxChars: 16000, limit: 1, prettyPrint: false } },
         });
         if (fits(retry))
             return retry;
     }
-    throw new Error('Next-action identity exceeds the response ceiling; no actions skipped. Inspect source paths directly.');
+    throw guidanceError(new Error('Next-action identity exceeds the response ceiling; no actions skipped. Inspect source paths directly.'), 'guid-ca2b5b74f41d69ab');
 }

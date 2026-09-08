@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import type { NoteHeading, ReadNoteLinesParams } from './types.js';
 import { buildMarkdownLiteralMask } from './backlinks.js';
 
@@ -262,7 +263,7 @@ export function projectNoteOutline(raw: string): NoteHeading[] {
 
 /** Count every visible heading, retaining only the requested leading locators. */
 export function projectNoteHeadingSummary(raw: string, limit = 8): { headings: NoteHeading[]; headingCount: number; headingChars: number } {
-  if (!Number.isInteger(limit) || limit < 0) throw new Error('heading limit must be a non-negative integer');
+  if (!Number.isInteger(limit) || limit < 0) throw guidanceError(new Error('heading limit must be a non-negative integer'), 'guid-b6e319fa65f83fc8');
   const headings: NoteHeading[] = [];
   let headingCount = 0, headingChars = 0;
   for (const heading of noteHeadings(raw)) {
@@ -362,7 +363,7 @@ export function projectNoteBlockLines(raw: string, blockId: string): number[] {
 /** Prefer an exact heading; a partial match is useful only when unambiguous. */
 export function selectNoteHeading(headings: NoteHeading[], requested: string): NoteHeading {
   const query = requested.trim().replace(/^#+\s*/, '').trim().toLowerCase();
-  if (!query) throw new Error('A non-empty heading is required');
+  if (!query) throw guidanceError(new Error('A non-empty heading is required'), 'guid-2a19ba825aa8064c');
   const exact = headings.filter(heading => heading.text.trim().toLowerCase() === query);
   const parts = query.split('#').map(part => part.trim());
   const isQualified = parts.length > 1 && parts.every(Boolean);
@@ -375,8 +376,8 @@ export function selectNoteHeading(headings: NoteHeading[], requested: string): N
   } else if (!exact.length) {
     matches = headings.filter(heading => heading.text.trim().toLowerCase().includes(query));
   }
-  if (!matches.length) throw new Error('Section not found');
-  if (matches.length > 1) throw new Error('Section is ambiguous. Use mcp.get_note_outline, then mcp.read_note_lines with the selected range and expectedRevision.');
+  if (!matches.length) throw guidanceError(new Error('Section not found'), 'guid-dea7f9598e8284ab');
+  if (matches.length > 1) throw guidanceError(new Error('Section is ambiguous. Use mcp.get_note_outline, then mcp.read_note_lines with the selected range and expectedRevision.'), 'guid-ab9e970c13478a09');
   return matches[0]!;
 }
 

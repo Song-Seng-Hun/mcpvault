@@ -1,3 +1,4 @@
+import { guidanceError, guidanceText } from './guidance-runtime.js';
 import { execFile } from 'node:child_process';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { isAbsolute, join, relative, resolve } from 'node:path';
@@ -35,7 +36,7 @@ export class GitHistoryService {
                 const result = { stdout: stdout || '', stderr: stderr || '', exitCode };
                 if (error && !options.allowFailure) {
                     const detail = (stderr || stdout || error.message).trim();
-                    reject(new Error(`Git command failed: ${detail || 'unknown error'}`));
+                    reject(guidanceError(new Error(`Git command failed: ${detail || 'unknown error'}`), 'guid-3cbd9ee28b322122'));
                     return;
                 }
                 resolvePromise(result);
@@ -53,14 +54,14 @@ export class GitHistoryService {
             return null;
         const root = resolve(result.stdout.trim());
         if (!this.pathsEqual(root, this.vaultPath)) {
-            throw new Error(`Revision history requires the vault itself to be the Git repository root. Detected repository root: ${root}`);
+            throw guidanceError(new Error(`Revision history requires the vault itself to be the Git repository root. Detected repository root: ${root}`), 'guid-5b8365442c58d666');
         }
         return root;
     }
     async requireRepo() {
         const root = await this.repoRoot();
         if (!root) {
-            throw new Error('Revision history is not initialized for this vault. Call initialize_revision_history first.');
+            throw guidanceError(new Error('Revision history is not initialized for this vault. Call initialize_revision_history first.'), 'guid-f13966a6be65f35f');
         }
         return root;
     }
@@ -81,19 +82,19 @@ export class GitHistoryService {
     }
     normalizeVaultPath(input, noteOnly = false) {
         if (typeof input !== 'string' || !input.trim()) {
-            throw new Error('path is required and must be a non-empty string');
+            throw guidanceError(new Error('path is required and must be a non-empty string'), 'guid-238151b3f6039f41');
         }
         const normalizedInput = input.trim().replace(/\\/g, '/').replace(/^\/+/, '');
         const fullPath = resolve(this.vaultPath, normalizedInput);
         const relativePath = relative(this.vaultPath, fullPath).replace(/\\/g, '/');
         if (!relativePath || relativePath.startsWith('..') || isAbsolute(relativePath)) {
-            throw new Error(`Path traversal not allowed: ${input}. Paths must be within the vault directory.`);
+            throw guidanceError(new Error(`Path traversal not allowed: ${input}. Paths must be within the vault directory.`), 'guid-6eda287a313aac90');
         }
         const allowed = noteOnly
             ? this.pathFilter.isAllowed(relativePath)
             : this.pathFilter.isAllowedForListing(relativePath);
         if (!allowed) {
-            throw new Error(`Access denied: ${relativePath}. This path is restricted.`);
+            throw guidanceError(new Error(`Access denied: ${relativePath}. This path is restricted.`), 'guid-ae36e2a093b6711a');
         }
         return relativePath;
     }
@@ -155,16 +156,16 @@ export class GitHistoryService {
             return !standardLfs;
         });
         if (unsafe) {
-            throw new Error(`Refusing to commit because Git config contains executable filter '${unsafe.key}'. Remove or review it before using MCP revision commits.`);
+            throw guidanceError(new Error(`Refusing to commit because Git config contains executable filter '${unsafe.key}'. Remove or review it before using MCP revision commits.`), 'guid-94938dc750a00a65');
         }
     }
     validateRevision(input) {
         if (typeof input !== 'string' || !input.trim()) {
-            throw new Error('revision is required');
+            throw guidanceError(new Error('revision is required'), 'guid-14de03fdca3ef66a');
         }
         const revision = input.trim();
         if (revision.startsWith('-') || !/^[A-Za-z0-9._/@{}~^:+-]+$/.test(revision)) {
-            throw new Error(`Invalid revision: ${input}`);
+            throw guidanceError(new Error(`Invalid revision: ${input}`), 'guid-3c3bda55a6ad3814');
         }
         return revision;
     }
@@ -173,7 +174,7 @@ export class GitHistoryService {
         const revision = this.validateRevision(input);
         const result = await this.runGit(['rev-parse', '--verify', `${revision}^{commit}`], { allowFailure: true });
         if (result.exitCode !== 0 || !result.stdout.trim()) {
-            throw new Error(`Unknown revision: ${input}`);
+            throw guidanceError(new Error(`Unknown revision: ${input}`), 'guid-e40381f23e578136');
         }
         return result.stdout.trim();
     }
@@ -183,7 +184,7 @@ export class GitHistoryService {
     async initializeInternal() {
         const existingRoot = await this.repoRoot();
         if (existingRoot) {
-            return { success: true, initialized: false, message: 'Revision history is already initialized.' };
+            return { success: true, initialized: false, message: guidanceText('guid-be0e9027010d9b39', 'Revision history is already initialized.') };
         }
         const emptyTemplate = await mkdtemp(join(tmpdir(), 'mcpvault-git-template-'));
         try {
@@ -194,7 +195,7 @@ export class GitHistoryService {
         }
         await this.requireRepo();
         this.clearStatusCache();
-        return { success: true, initialized: true, message: 'Initialized Git revision history for the vault. Use commit_changes to create the first revision.' };
+        return { success: true, initialized: true, message: guidanceText('guid-b14e03896cc19f07', 'Initialized Git revision history for the vault. Use commit_changes to create the first revision.') };
     }
     async status() {
         const cached = this.statusCache;
@@ -220,7 +221,7 @@ export class GitHistoryService {
             return {
                 enabled: false,
                 pending: [],
-                message: 'Revision history is not initialized. Call initialize_revision_history to enable it.',
+                message: guidanceText('guid-186ec656b25b5afb', 'Revision history is not initialized. Call initialize_revision_history to enable it.'),
             };
         }
         const [branchResult, headResult, pending] = await Promise.all([
@@ -244,11 +245,11 @@ export class GitHistoryService {
         this.clearStatusCache();
         const reason = params.reason?.trim();
         if (!reason)
-            throw new Error('reason is required and must describe why the vault changed');
+            throw guidanceError(new Error('reason is required and must describe why the vault changed'), 'guid-61a332fa4e8949fd');
         let authorName = params.authorName?.trim();
         let authorEmail = params.authorEmail?.trim();
         if ((authorName && !authorEmail) || (!authorName && authorEmail)) {
-            throw new Error('authorName and authorEmail must be provided together');
+            throw guidanceError(new Error('authorName and authorEmail must be provided together'), 'guid-92cab18f4370b60e');
         }
         if (!authorName && !authorEmail) {
             const [nameResult, emailResult] = await Promise.all([
@@ -258,14 +259,14 @@ export class GitHistoryService {
             authorName = nameResult.stdout.trim();
             authorEmail = emailResult.stdout.trim();
             if (!authorName || !authorEmail) {
-                throw new Error('Git author identity is missing. Provide authorName and authorEmail, or configure user.name and user.email for the vault repository.');
+                throw guidanceError(new Error('Git author identity is missing. Provide authorName and authorEmail, or configure user.name and user.email for the vault repository.'), 'guid-1b26805d164cc90d');
             }
         }
         if (!authorName || !authorEmail) {
-            throw new Error('Git author identity is missing. Provide authorName and authorEmail, or configure user.name and user.email for the vault repository.');
+            throw guidanceError(new Error('Git author identity is missing. Provide authorName and authorEmail, or configure user.name and user.email for the vault repository.'), 'guid-1b26805d164cc90d');
         }
         if (/\r|\n/.test(authorName) || /\r|\n/.test(authorEmail)) {
-            throw new Error('Git author identity cannot contain line breaks');
+            throw guidanceError(new Error('Git author identity cannot contain line breaks'), 'guid-e279bc2337d1f542');
         }
         await this.rejectExecutableFilters();
         const pending = await this.pendingChanges();
@@ -274,7 +275,7 @@ export class GitHistoryService {
             ? Array.from(new Set(params.paths.map(path => this.normalizeVaultPath(path))))
             : pendingPaths;
         if (paths.length === 0) {
-            return { success: true, committed: false, paths: [], message: 'No safe vault changes are pending.' };
+            return { success: true, committed: false, paths: [], message: guidanceText('guid-2fde0b910e65374a', 'No safe vault changes are pending.') };
         }
         const pathspecs = paths.map(path => this.literalPathspec(path));
         const emptyHooks = await mkdtemp(join(tmpdir(), 'mcpvault-git-hooks-'));
@@ -289,7 +290,7 @@ export class GitHistoryService {
             await this.runGit([...safeGitArgs, 'add', '-A', '--', ...pathspecs], { env: identityEnv });
             const diffCheck = await this.runGit(['diff', '--cached', '--quiet', '--', ...pathspecs], { allowFailure: true });
             if (diffCheck.exitCode === 0) {
-                return { success: true, committed: false, paths, message: 'The selected paths have no changes to commit.' };
+                return { success: true, committed: false, paths, message: guidanceText('guid-005251cb7064e6c2', 'The selected paths have no changes to commit.') };
             }
             await this.runGit([...safeGitArgs, 'commit', '--only', '--no-verify', '-m', reason, '--', ...pathspecs], { env: identityEnv });
         }
@@ -303,14 +304,14 @@ export class GitHistoryService {
             committed: true,
             revision,
             paths,
-            message: `Created vault revision ${revision.slice(0, 12)}: ${reason}`,
+            message: guidanceText('guid-7af83ba2b399ec59', `Created vault revision ${revision.slice(0, 12)}: ${reason}`),
         };
     }
     async noteHistory(pathInput, limit = 20) {
         await this.requireRepo();
         const path = this.normalizeVaultPath(pathInput, true);
         if (!Number.isInteger(limit) || limit < 1)
-            throw new Error('limit must be a positive integer');
+            throw guidanceError(new Error('limit must be a positive integer'), 'guid-14abe8b02cfc3624');
         const maxLimit = Math.min(limit, 100);
         const format = '%H%x1f%an%x1f%ae%x1f%aI%x1f%s%x1e';
         const result = await this.runGit(['log', '--follow', `--max-count=${maxLimit}`, `--format=${format}`, '--', this.literalPathspec(path)]);
@@ -353,7 +354,7 @@ export class GitHistoryService {
         const revision = await this.resolveRevision(revisionInput);
         const result = await this.runGit(['show', `${revision}:${path}`], { allowFailure: true });
         if (result.exitCode !== 0) {
-            throw new Error(`Note '${path}' does not exist at revision ${revisionInput}.`);
+            throw guidanceError(new Error(`Note '${path}' does not exist at revision ${revisionInput}.`), 'guid-ba04f1c703434a42');
         }
         return { path, revision, content: result.stdout };
     }

@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { randomUUID } from 'node:crypto';
 import { extractMentions, MAX_COMMUNITY_TEXT_LENGTH } from './social.js';
 import { queryWindow } from './paged-query.js';
@@ -10,21 +11,21 @@ function identity(principal) {
 function recipient(value) {
     const normalized = String(value || '').trim().replace(/^@/, '').toLowerCase();
     if (!/^[a-z0-9][a-z0-9._-]{0,63}$/.test(normalized))
-        throw new Error('to must be a valid model or agent identity');
+        throw guidanceError(new Error('to must be a valid model or agent identity'), 'guid-860e019912309980');
     return normalized;
 }
 function content(value) {
     const normalized = String(value ?? '').trim();
     if (!normalized)
-        throw new Error('content is required');
+        throw guidanceError(new Error('content is required'), 'guid-75ac615305149ea7');
     const length = Array.from(normalized).length;
     if (length > MAX_COMMUNITY_TEXT_LENGTH)
-        throw new Error(`content must be ${MAX_COMMUNITY_TEXT_LENGTH} Unicode characters or fewer (received ${length})`);
+        throw guidanceError(new Error(`content must be ${MAX_COMMUNITY_TEXT_LENGTH} Unicode characters or fewer (received ${length})`), 'guid-7e817fa34f304598');
     return normalized;
 }
 function requirePrincipal(principal) {
     if (!principal)
-        throw new Error('Login is required to send or read whispers');
+        throw guidanceError(new Error('Login is required to send or read whispers'), 'guid-a11acb604c0df97b');
     return principal;
 }
 export class WhisperService {
@@ -64,7 +65,7 @@ export class WhisperService {
             ? (await this.fileSystem.queryNotes({ pathPrefix: WHISPER_ROOT, filters: { mcpvault_type: 'whisper', whisper_id: normalizeScopeId(params.afterWhisperId, 'afterWhisperId') }, limit: 1, includeTotal: false })).notes[0]
             : undefined;
         if (params.afterWhisperId && (!cursorNote || (cursorNote.frontmatter.from !== me && cursorNote.frontmatter.to !== me)))
-            throw new Error(`afterWhisperId was not found in whispers: ${params.afterWhisperId}`);
+            throw guidanceError(new Error(`afterWhisperId was not found in whispers: ${params.afterWhisperId}`), 'guid-a22cafa0ff56f5e0');
         const after = cursorNote ? { path: cursorNote.path, value: cursorNote.frontmatter.created_at } : undefined;
         const baseFilters = { pathPrefix: WHISPER_ROOT, sortBy: 'created_at', sortOrder: 'desc', limit, ...(after ? { after } : {}) };
         const [fromWindow, toWindow, fromTotal, toTotal, bothTotal] = await Promise.all([

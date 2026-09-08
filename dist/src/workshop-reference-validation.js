@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { isModerationHidden } from './moderation-policy.js';
 /** Structured Properties are not Markdown. Explicit path locators need the
  * same authorization as wikilinks; JSON.stringify alone cannot provide it. */
@@ -76,6 +77,6 @@ export async function validateWorkshopReferences(fs, references, value, containe
         return [...guards.values()];
     }
     catch {
-        throw new Error('Workshop reference unavailable or changed');
+        throw guidanceError(new Error('Workshop reference unavailable or changed'), 'guid-a5b455bae1611262');
     }
 }

@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 export type SourceDerivation = {
   path: string;
   revision: string;
@@ -28,37 +29,37 @@ const CONTROL = /[\u0000-\u001f\u007f]/;
 const CAUTION_LIMIT = 12;
 
 function canonicalPath(value: unknown): string {
-  if (typeof value !== 'string') throw new TypeError('invalid path');
-  if (value !== value.trim() || value.trim().length === 0) throw new TypeError('invalid path');
+  if (typeof value !== 'string') throw guidanceError(new TypeError('invalid path'), 'guid-4a17424f1909b9ae');
+  if (value !== value.trim() || value.trim().length === 0) throw guidanceError(new TypeError('invalid path'), 'guid-4a17424f1909b9ae');
   const path = value.replaceAll('\\', '/');
   if (path.length > MAX_PATH || CONTROL.test(path) || path.startsWith('/') || path.includes(':')) {
-    throw new TypeError('invalid path');
+    throw guidanceError(new TypeError('invalid path'), 'guid-4a17424f1909b9ae');
   }
   const parts = path.split('/');
-  if (parts.some(part => part.length === 0 || part === '.' || part === '..')) throw new TypeError('invalid path');
+  if (parts.some(part => part.length === 0 || part === '.' || part === '..')) throw guidanceError(new TypeError('invalid path'), 'guid-4a17424f1909b9ae');
   return path;
 }
 
 function record(value: unknown): Record<string, unknown> {
-  if (value === null || typeof value !== 'object' || Array.isArray(value)) throw new TypeError('invalid derivation');
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) throw guidanceError(new TypeError('invalid derivation'), 'guid-c5e64e50eedd8661');
   return value as Record<string, unknown>;
 }
 
 export function normalizeSourceDerivations(value: unknown): SourceDerivation[] {
   if (value === undefined) return [];
-  if (!Array.isArray(value)) throw new TypeError('derivations must be an array');
-  if (value.length > 8) throw new RangeError('too many derivations');
+  if (!Array.isArray(value)) throw guidanceError(new TypeError('derivations must be an array'), 'guid-6fd2105c8446c51d');
+  if (value.length > 8) throw guidanceError(new RangeError('too many derivations'), 'guid-2e6154e42040ea32');
   const paths = new Set<string>();
   return value.map(item => {
     const entry = record(item);
     const keys = Object.keys(entry);
-    if (keys.length !== 3 || !keys.every(key => key === 'path' || key === 'revision' || key === 'relation')) throw new TypeError('invalid derivation fields');
+    if (keys.length !== 3 || !keys.every(key => key === 'path' || key === 'revision' || key === 'relation')) throw guidanceError(new TypeError('invalid derivation fields'), 'guid-90e147a47abe726b');
     const path = canonicalPath(entry.path);
     const pathKey = path.toLocaleLowerCase('en-US');
-    if (paths.has(pathKey)) throw new TypeError('duplicate derivation path');
+    if (paths.has(pathKey)) throw guidanceError(new TypeError('duplicate derivation path'), 'guid-f60fdd7597ee6150');
     paths.add(pathKey);
-    if (typeof entry.revision !== 'string' || !REVISION.test(entry.revision)) throw new TypeError('invalid derivation revision');
-    if (typeof entry.relation !== 'string' || !RELATIONS.has(entry.relation)) throw new TypeError('invalid derivation relation');
+    if (typeof entry.revision !== 'string' || !REVISION.test(entry.revision)) throw guidanceError(new TypeError('invalid derivation revision'), 'guid-19ac652e91422a91');
+    if (typeof entry.relation !== 'string' || !RELATIONS.has(entry.relation)) throw guidanceError(new TypeError('invalid derivation relation'), 'guid-354c99a8cb978975');
     return { path, revision: entry.revision.toLowerCase(), relation: entry.relation as SourceDerivation['relation'] };
   });
 }
@@ -68,9 +69,9 @@ function validWorkId(value: unknown): value is string {
 }
 
 function nodeSnapshot(node: SourceOriginNode, requestedPath: string, expectedRevision?: string): { path: string; revision: string; workId?: string } {
-  if (node === null || typeof node !== 'object' || node.integrity !== true || typeof node.path !== 'string' || canonicalPath(node.path).toLocaleLowerCase('en-US') !== requestedPath.toLocaleLowerCase('en-US') || typeof node.revision !== 'string' || !REVISION.test(node.revision)) throw new TypeError('invalid node');
-  if (expectedRevision !== undefined && node.revision !== expectedRevision) throw new RangeError('stale revision');
-  if (Object.prototype.hasOwnProperty.call(node, 'workId') && node.workId !== undefined && !validWorkId(node.workId)) throw new TypeError('invalid work id');
+  if (node === null || typeof node !== 'object' || node.integrity !== true || typeof node.path !== 'string' || canonicalPath(node.path).toLocaleLowerCase('en-US') !== requestedPath.toLocaleLowerCase('en-US') || typeof node.revision !== 'string' || !REVISION.test(node.revision)) throw guidanceError(new TypeError('invalid node'), 'guid-e241479c248e24a2');
+  if (expectedRevision !== undefined && node.revision !== expectedRevision) throw guidanceError(new RangeError('stale revision'), 'guid-7291687700d499b4');
+  if (Object.prototype.hasOwnProperty.call(node, 'workId') && node.workId !== undefined && !validWorkId(node.workId)) throw guidanceError(new TypeError('invalid work id'), 'guid-73054aa5d2e82d51');
   const snapshot: { path: string; revision: string; workId?: string } = { path: requestedPath, revision: node.revision };
   if (validWorkId(node.workId)) snapshot.workId = node.workId;
   return snapshot;
@@ -124,7 +125,7 @@ export async function traceSourceOrigins(seedPaths: string[], load: (path: strin
     if (loaded === undefined) { unresolved = true; caution('ancestor_unavailable'); return undefined; }
     try {
       const snapshot = nodeSnapshot(loaded, path);
-      if (expectedRevision !== undefined && loaded.revision !== expectedRevision) throw new RangeError('stale revision');
+      if (expectedRevision !== undefined && loaded.revision !== expectedRevision) throw guidanceError(new RangeError('stale revision'), 'guid-7291687700d499b4');
       snapshots.set(key, snapshot);
       return loaded;
     } catch (error) {

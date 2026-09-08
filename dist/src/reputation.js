@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { isModerationHidden } from './moderation-policy.js';
 const POSTS = 'Community/Posts';
 const COMMENTS = 'Community/Comments';
@@ -74,10 +75,10 @@ export class ReputationService {
     async getPublic(identity) {
         const normalized = String(identity || '').trim().toLowerCase();
         if (!normalized)
-            throw new Error('identity is required');
+            throw guidanceError(new Error('identity is required'), 'guid-6488662bcf64c574');
         const principal = (await this.auth.listPrincipals()).find(item => identityOf(item) === normalized);
         if (!principal)
-            throw new Error(`No registered public identity found: ${normalized}`);
+            throw guidanceError(new Error(`No registered public identity found: ${normalized}`), 'guid-025c183d45ae1f80');
         return (await this.getMany([normalized])).get(normalized);
     }
     async getMany(identities) {

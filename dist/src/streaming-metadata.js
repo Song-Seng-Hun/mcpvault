@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { hashUtf8Source } from './streaming-revision.js';
 import { open } from 'node:fs/promises';
 import { StringDecoder } from 'node:string_decoder';
@@ -56,7 +57,7 @@ export async function readUtf8HeaderSource(path) {
     const handle = await open(path, 'r');
     try {
         if (!(await handle.stat()).isFile())
-            throw new Error('Source is not a regular file');
+            throw guidanceError(new Error('Source is not a regular file'), 'guid-872c3352ec3074e0');
         const collector = new HeaderCollector(), decoder = new StringDecoder('utf8');
         const buffer = Buffer.allocUnsafe(64 * 1024);
         while (!collector.complete) {

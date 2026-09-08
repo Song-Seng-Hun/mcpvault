@@ -1,3 +1,4 @@
+import { guidanceError, guidanceText } from './guidance-runtime.js';
 type Row = Record<string, any>;
 export type OrganizationQueuePacket = Row & { items: Row[]; total: number; truncated: boolean };
 
@@ -31,10 +32,10 @@ export function packOrganizationQueue(result: OrganizationQueuePacket, endpointI
     if (fits(value)) return value;
   }
   if (maxChars < ceiling || prettyPrint) {
-    const retry = packet([], { message: 'Retry the same queue. No items skipped.',
+    const retry = packet([], { message: guidanceText('guid-4ab863da22ec39d7', 'Retry the same queue. No items skipped.'),
       nextAction: { endpointId, reuseOriginalArguments: true,
         overrides: { maxChars: ceiling, limit: 1, prettyPrint: false } } });
     if (fits(retry)) return retry;
   }
-  throw new Error('Queue identity exceeds the response ceiling; no items skipped. Inspect source paths directly.');
+  throw guidanceError(new Error('Queue identity exceeds the response ceiling; no items skipped. Inspect source paths directly.'), 'guid-784ebe993b821f58');
 }

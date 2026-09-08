@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { assertEnterpriseStorageFresh } from './enterprise-storage-context.js';
 import { createHash } from 'node:crypto';
 import { readdir } from 'node:fs/promises';
@@ -142,7 +143,7 @@ function recordObjectId(record: PublicFederationRecord): string {
 
 function actorOrigin(actorId: string): string {
   const match = actorId.match(/^actor:([a-z0-9._-]+):[a-z0-9._-]+$/);
-  if (!match?.[1]) throw new Error('public actor ID is invalid');
+  if (!match?.[1]) throw guidanceError(new Error('public actor ID is invalid'), 'guid-d837747f3f39a8c2');
   return match[1];
 }
 
@@ -190,7 +191,7 @@ function outboxMarkdown(entry: OutboxEntry): string {
 
 function parseOutbox(content: string): OutboxEntry {
   const match = content.match(/```json public-federation-outbox\r?\n([^\r\n]+)\r?\n```/);
-  if (!match?.[1]) throw new Error('public federation outbox record is invalid');
+  if (!match?.[1]) throw guidanceError(new Error('public federation outbox record is invalid'), 'guid-1564888b702e54a0');
   return JSON.parse(match[1]) as OutboxEntry;
 }
 
@@ -220,7 +221,7 @@ export class PublicFederationReplica {
     this.vaultPath = resolve(options.vaultPath);
     this.publicRoot = join(this.vaultPath, 'PublicCommunity');
     const namespace = options.storageNamespace?.trim();
-    if (namespace && !/^[a-z0-9][a-z0-9._-]{0,127}$/i.test(namespace)) throw new Error('storageNamespace must be an opaque identifier');
+    if (namespace && !/^[a-z0-9][a-z0-9._-]{0,127}$/i.test(namespace)) throw guidanceError(new Error('storageNamespace must be an opaque identifier'), 'guid-b09d9d1fd19de99b');
     this.internalRoot = namespace
       ? join(this.vaultPath, '.mcpvault', 'public-federation', 'replicas', namespace.toLowerCase())
       : join(this.vaultPath, '.mcpvault', 'public-federation');
@@ -255,7 +256,7 @@ export class PublicFederationReplica {
           || recordObjectId(object.base) !== id || !Number.isSafeInteger(object.revision) || object.revision < 1
           || typeof object.tombstoned !== 'boolean' || typeof object.globallyHidden !== 'boolean'
           || !Number.isSafeInteger(object.moderationRevision) || !Array.isArray(object.parentIds) || object.parentIds.some(id => typeof id !== 'string'))) {
-        throw new Error('public federation replica state is invalid');
+        throw guidanceError(new Error('public federation replica state is invalid'), 'guid-e6a817109a1f4d8b');
       }
       this.state = value;
     } catch (error) {
@@ -293,7 +294,7 @@ export class PublicFederationReplica {
   private async queued(): Promise<Array<{ path: string; entry: OutboxEntry; bytes: number }>> {
     await ensureFederationDirectory(this.vaultPath, this.outboxRoot);
     const names = (await readdir(this.outboxRoot)).filter(name => name.endsWith('.md')).sort();
-    if (names.length > this.maxOutboxRecords) throw new Error('public federation outbox quota exceeded');
+    if (names.length > this.maxOutboxRecords) throw guidanceError(new Error('public federation outbox quota exceeded'), 'guid-c72305fb508bfebb');
     const rows = [];
     for (const name of names) {
       const path = join(this.outboxRoot, name);
@@ -301,7 +302,7 @@ export class PublicFederationReplica {
       const entry = parseOutbox(content);
       if (entry.version !== 1 || !Number.isSafeInteger(entry.queueSequence) || entry.queueSequence < 1
         || entry.identity.origin !== this.identity.origin || entry.identity.agentId !== this.identity.agentId
-        || path !== this.outboxPath(entry.idempotencyKey)) throw new Error('outbox identity or ordering is invalid');
+        || path !== this.outboxPath(entry.idempotencyKey)) throw guidanceError(new Error('outbox identity or ordering is invalid'), 'guid-27bac9ad399820d0');
       validatePublicPublishInput(entry.input, this.identity);
       rows.push({ path, entry, bytes: Buffer.byteLength(content, 'utf8') });
     }
@@ -312,7 +313,7 @@ export class PublicFederationReplica {
     if (!verifyPublicFederationEvent(event, this.trustedHubPublicKey)
       || event.idempotencyHash !== `sha256:${sha256(`${this.identity.origin}:${this.identity.agentId}:${entry.idempotencyKey}`)}`
       || canonical(event.record) !== canonical(validatePublicPublishInput(entry.input, this.identity))) {
-      throw new Error('public federation publish acknowledgement validation failed');
+      throw guidanceError(new Error('public federation publish acknowledgement validation failed'), 'guid-917d691d90a47da9');
     }
   }
 
@@ -333,16 +334,16 @@ export class PublicFederationReplica {
 
   async publish(input: PublicPublishInput, idempotencyKey: string): Promise<PublicReplicaPublishResult> {
     return this.withMutation(async () => {
-      if (!idempotencyKey || idempotencyKey.length > 128 || !/^[a-zA-Z0-9._:-]+$/.test(idempotencyKey)) throw new Error('idempotencyKey is required and contains only letters, numbers, dot, underscore, colon, or hyphen');
+      if (!idempotencyKey || idempotencyKey.length > 128 || !/^[a-zA-Z0-9._:-]+$/.test(idempotencyKey)) throw guidanceError(new Error('idempotencyKey is required and contains only letters, numbers, dot, underscore, colon, or hyphen'), 'guid-da5dd57649554246');
       validatePublicPublishInput(input, this.identity);
       const rows = await this.queued();
       const path = this.outboxPath(idempotencyKey);
       const existing = rows.find(row => row.path === path);
       const entry: OutboxEntry = existing?.entry || { version: 1, queueSequence: (rows.at(-1)?.entry.queueSequence || 0) + 1, identity: this.identity, idempotencyKey, input, queuedAt: new Date().toISOString() };
-      if (existing && canonical(entry.input) !== canonical(input)) throw new Error('idempotency key is already queued with a different payload');
+      if (existing && canonical(entry.input) !== canonical(input)) throw guidanceError(new Error('idempotency key is already queued with a different payload'), 'guid-1fe156a6c6a676b1');
       if (!existing) {
         const serialized = outboxMarkdown(entry);
-        if (rows.length >= this.maxOutboxRecords || rows.reduce((sum, row) => sum + row.bytes, 0) + Buffer.byteLength(serialized, 'utf8') > this.maxOutboxBytes) throw new Error('public federation outbox quota exceeded');
+        if (rows.length >= this.maxOutboxRecords || rows.reduce((sum, row) => sum + row.bytes, 0) + Buffer.byteLength(serialized, 'utf8') > this.maxOutboxBytes) throw guidanceError(new Error('public federation outbox quota exceeded'), 'guid-c72305fb508bfebb');
         await this.writeAtomic(path, serialized);
       }
       if (this.manageLocalProjection) await this.writeAtomic(this.localPath(input), markdownForLocal(input, 'pending'));
@@ -471,7 +472,7 @@ export class PublicFederationReplica {
         .filter(view => (!params.postId || (view.record.type === 'comment' && view.record.postId === params.postId)) && (!params.type || view.record.type === params.type) && (!origin || view.origin === origin) && (!requestedStatus || view.status === requestedStatus))
         .sort((left, right) => left.objectId.localeCompare(right.objectId));
       const start = params.after ? rows.findIndex(row => row.objectId === params.after) + 1 : 0;
-      if (params.after && start === 0) throw new Error('public federation list cursor is outside the current snapshot');
+      if (params.after && start === 0) throw guidanceError(new Error('public federation list cursor is outside the current snapshot'), 'guid-0cdd8fbf390013db');
       const objects = rows.slice(start, start + limit);
       const truncated = start + objects.length < rows.length;
       return { objects, truncated, ...(truncated && objects.length > 0 && { nextCursor: objects.at(-1)!.objectId }) };
@@ -510,9 +511,9 @@ export class PublicFederationReplica {
 
   async hideLocally(objectId: string, reason: string): Promise<void> {
     await this.withMutation(async () => {
-      if (!this.state.objects[objectId]) throw new Error('local hide target does not exist');
+      if (!this.state.objects[objectId]) throw guidanceError(new Error('local hide target does not exist'), 'guid-7e92e5c81a4724e9');
       const cleanReason = String(reason || '').trim();
-      if (!cleanReason || cleanReason.length > 500) throw new Error('local hide reason is required and bounded');
+      if (!cleanReason || cleanReason.length > 500) throw guidanceError(new Error('local hide reason is required and bounded'), 'guid-837e32002ad814b8');
       if (!this.state.localHidden.includes(objectId)) this.state.localHidden.push(objectId);
       const marker = `---\npublic_federation_local_hide: true\nobject_id: ${objectId}\n---\n# Local hide\n\n${cleanReason}\n`;
       await this.writeAtomic(join(this.internalRoot, 'local-hides', `${sha256(objectId)}.md`), marker);

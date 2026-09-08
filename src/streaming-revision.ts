@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { open } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { StringDecoder } from 'node:string_decoder';
@@ -9,12 +10,12 @@ import { SourceReadLimitError } from './bounded-source-read.js';
  * Paths/permissions remain the service caller's job. */
 export async function hashUtf8Source(path: string, maxBytes?: number, consume?: (text: string) => void): Promise<string> {
   if (maxBytes !== undefined && (!Number.isSafeInteger(maxBytes) || maxBytes < 1 || maxBytes > 0x7fffffff)) {
-    throw new TypeError('Invalid source byte limit');
+    throw guidanceError(new TypeError('Invalid source byte limit'), 'guid-c888784bdb4b6e35');
   }
   const handle = await open(path, 'r');
   try {
     const info = await handle.stat();
-    if (!info.isFile()) throw new Error('Source is not a regular file');
+    if (!info.isFile()) throw guidanceError(new Error('Source is not a regular file'), 'guid-872c3352ec3074e0');
     if (maxBytes !== undefined && info.size > maxBytes) throw new SourceReadLimitError();
     const buffer = Buffer.allocUnsafe(Math.min(64 * 1024, maxBytes === undefined ? Infinity : maxBytes + 1));
     const decoder = new StringDecoder('utf8'), hash = createHash('sha256');

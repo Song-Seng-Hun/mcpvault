@@ -1,3 +1,4 @@
+import { guidanceError, guidanceText } from './guidance-runtime.js';
 import { createHash, createPrivateKey, createPublicKey, generateKeyPairSync, randomUUID, sign, timingSafeEqual, verify, type KeyObject } from 'node:crypto';
 import { createServer as createHttpServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { createServer as createHttpsServer } from 'node:https';
@@ -202,35 +203,35 @@ function withoutRevisionContent(value: GlobalRevisionWithContent): Omit<GlobalRe
 function normalizeId(value: string, field: string): string {
   const normalized = String(value || '').trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
   if (!normalized || normalized.length > 240 || normalized.split('/').some(part => !part || part === '.' || part === '..')) {
-    throw new Error(`${field} must be a safe relative path`);
+    throw guidanceError(new Error(`${field} must be a safe relative path`), 'guid-b40dc13336c35638');
   }
   const first = normalized.split('/')[0]!.toLowerCase();
-  if (RESERVED_ROOTS.has(first) || (normalized.startsWith('_') && !GLOBAL_SPECIAL_ROOTS.has(first))) throw new Error(`${field} must identify a Global document or immutable _sources snapshot, not private or service state`);
-  if (!/\.(?:md|markdown|txt)$/i.test(normalized)) throw new Error(`${field} must be a Markdown or text document`);
+  if (RESERVED_ROOTS.has(first) || (normalized.startsWith('_') && !GLOBAL_SPECIAL_ROOTS.has(first))) throw guidanceError(new Error(`${field} must identify a Global document or immutable _sources snapshot, not private or service state`), 'guid-70e1ceab6fe878a3');
+  if (!/\.(?:md|markdown|txt)$/i.test(normalized)) throw guidanceError(new Error(`${field} must be a Markdown or text document`), 'guid-1e574f530ce3f359');
   return normalized;
 }
 
 function boundedText(value: string, field: string, max: number): string {
   const text = String(value || '').trim();
-  if (!text || text.length > max) throw new Error(`${field} is required and must be at most ${max} characters`);
-  if (/[\u0000-\u001f\u007f]/.test(text)) throw new Error(`${field} contains unsupported control characters`);
+  if (!text || text.length > max) throw guidanceError(new Error(`${field} is required and must be at most ${max} characters`), 'guid-600d6a2929171008');
+  if (/[\u0000-\u001f\u007f]/.test(text)) throw guidanceError(new Error(`${field} contains unsupported control characters`), 'guid-5e267e1e9c837924');
   return text;
 }
 
 function normalizeIdempotencyKey(value: string | undefined): string | undefined {
   if (value === undefined) return undefined;
   const key = boundedText(value, 'idempotencyKey', MAX_IDEMPOTENCY_KEY_LENGTH);
-  if (!/^[a-zA-Z0-9._:-]+$/.test(key)) throw new Error('idempotencyKey contains unsupported characters');
+  if (!/^[a-zA-Z0-9._:-]+$/.test(key)) throw guidanceError(new Error('idempotencyKey contains unsupported characters'), 'guid-fa172a62ac0530bc');
   return key;
 }
 
 function normalizeProvenance(value: unknown): GlobalProvenance | undefined {
   if (value === undefined) return undefined;
-  if (!isRecord(value)) throw new Error('provenance must be an object');
+  if (!isRecord(value)) throw guidanceError(new Error('provenance must be an object'), 'guid-39b9d71fda08bfb6');
   const list = (field: keyof GlobalProvenance): string[] | undefined => {
     const raw = value[field];
     if (raw === undefined) return undefined;
-    if (!Array.isArray(raw)) throw new Error(`provenance.${field} must be an array`);
+    if (!Array.isArray(raw)) throw guidanceError(new Error(`provenance.${field} must be an array`), 'guid-ffcfd5ee0bda1db1');
     return Array.from(new Set(raw.map(item => boundedText(String(item), `provenance.${field}`, MAX_PROVENANCE_VALUE_LENGTH)))).slice(0, MAX_PROVENANCE_ITEMS);
   };
   const evidencePaths = list('evidencePaths')?.map((path, index) => normalizeId(path, `provenance.evidencePaths[${index}]`));
@@ -238,21 +239,21 @@ function normalizeProvenance(value: unknown): GlobalProvenance | undefined {
   const references = list('references')?.map((path, index) => normalizeId(path, `provenance.references[${index}]`));
   let evidenceRevisions: Record<string, string> | undefined;
   if (value.evidenceRevisions !== undefined) {
-    if (!isRecord(value.evidenceRevisions)) throw new Error('provenance.evidenceRevisions must be an object');
+    if (!isRecord(value.evidenceRevisions)) throw guidanceError(new Error('provenance.evidenceRevisions must be an object'), 'guid-378be9f74c7846f8');
     const entries = Object.entries(value.evidenceRevisions);
-    if (entries.length > MAX_PROVENANCE_ITEMS) throw new Error(`provenance.evidenceRevisions must contain at most ${MAX_PROVENANCE_ITEMS} entries`);
+    if (entries.length > MAX_PROVENANCE_ITEMS) throw guidanceError(new Error(`provenance.evidenceRevisions must contain at most ${MAX_PROVENANCE_ITEMS} entries`), 'guid-fc627ab67082f784');
     evidenceRevisions = {};
     for (const [rawPath, rawRevision] of entries) {
       const path = normalizeId(rawPath, 'provenance.evidenceRevisions path');
       const revision = boundedText(String(rawRevision), `provenance.evidenceRevisions.${path}`, MAX_PROVENANCE_VALUE_LENGTH);
-      if (!/^rev_[a-zA-Z0-9-]{8,}$/.test(revision)) throw new Error(`provenance.evidenceRevisions.${path} must be a Hub revision ID`);
+      if (!/^rev_[a-zA-Z0-9-]{8,}$/.test(revision)) throw guidanceError(new Error(`provenance.evidenceRevisions.${path} must be a Hub revision ID`), 'guid-83d4413e35245de5');
       evidenceRevisions[path] = revision;
     }
   }
   let organizationFingerprint: string | undefined;
   if (value.organizationFingerprint !== undefined) {
     organizationFingerprint = String(value.organizationFingerprint).trim().toLowerCase();
-    if (!/^[a-f0-9]{64}$/.test(organizationFingerprint)) throw new Error('provenance.organizationFingerprint must be a 64-character SHA-256 hex fingerprint');
+    if (!/^[a-f0-9]{64}$/.test(organizationFingerprint)) throw guidanceError(new Error('provenance.organizationFingerprint must be a 64-character SHA-256 hex fingerprint'), 'guid-4ce64c4185a7eb63');
   }
   if (!evidencePaths?.length && !sourceIds?.length && !references?.length && !Object.keys(evidenceRevisions || {}).length && !organizationFingerprint) return undefined;
   return {
@@ -287,11 +288,11 @@ function serializeCredential(credential: CredentialState | undefined): Persisted
 }
 
 function deserializeCredential(value: unknown, field: string): CredentialState & { digest: Buffer } {
-  if (!isRecord(value) || typeof value.digest !== 'string') throw new Error(`${field} is invalid`);
+  if (!isRecord(value) || typeof value.digest !== 'string') throw guidanceError(new Error(`${field} is invalid`), 'guid-1a201ad7225de12d');
   const digest = Buffer.from(value.digest, 'base64url');
-  if (digest.byteLength !== 32) throw new Error(`${field}.digest is invalid`);
+  if (digest.byteLength !== 32) throw guidanceError(new Error(`${field}.digest is invalid`), 'guid-e58edaa6e0e42736');
   const expiresAt = value.expiresAt;
-  if (expiresAt !== undefined && (typeof expiresAt !== 'number' || !Number.isSafeInteger(expiresAt) || expiresAt <= 0)) throw new Error(`${field}.expiresAt is invalid`);
+  if (expiresAt !== undefined && (typeof expiresAt !== 'number' || !Number.isSafeInteger(expiresAt) || expiresAt <= 0)) throw guidanceError(new Error(`${field}.expiresAt is invalid`), 'guid-29865da17ae351e5');
   return { digest, ...(typeof expiresAt === 'number' && { expiresAt }) };
 }
 
@@ -309,10 +310,10 @@ function serializeCredentialStore(authCredential: CredentialState, reviewerToken
 async function loadCredentialStore(path: string): Promise<PersistedCredentialStore | undefined> {
   try {
     const parsed: unknown = JSON.parse(await readFile(path, 'utf8'));
-    if (!isRecord(parsed) || parsed.version !== 1 || !isRecord(parsed.reviewers)) throw new Error('credential state has an unsupported format');
+    if (!isRecord(parsed) || parsed.version !== 1 || !isRecord(parsed.reviewers)) throw guidanceError(new Error('credential state has an unsupported format'), 'guid-0e9308f4746e5ead');
     const reviewers: Record<string, PersistedCredentialState> = {};
     for (const [reviewerId, value] of Object.entries(parsed.reviewers)) {
-      if (!/^[a-z0-9][a-z0-9._-]{0,127}$/.test(reviewerId)) throw new Error('credential state contains an invalid reviewer id');
+      if (!/^[a-z0-9][a-z0-9._-]{0,127}$/.test(reviewerId)) throw guidanceError(new Error('credential state contains an invalid reviewer id'), 'guid-d2c943df00c4ae99');
       const credential = deserializeCredential(value, `reviewers.${reviewerId}`);
       reviewers[reviewerId] = serializeCredential(credential)!;
     }
@@ -327,9 +328,9 @@ async function loadCredentialStore(path: string): Promise<PersistedCredentialSto
 
 function normalizeExpiry(value: unknown, field: string): number | undefined {
   if (value === undefined || value === null || value === '') return undefined;
-  if (typeof value !== 'string') throw new Error(`${field} must be an ISO timestamp`);
+  if (typeof value !== 'string') throw guidanceError(new Error(`${field} must be an ISO timestamp`), 'guid-19e9477a9c3a1ba9');
   const timestamp = Date.parse(value);
-  if (!Number.isFinite(timestamp) || timestamp <= Date.now()) throw new Error(`${field} must be a future ISO timestamp`);
+  if (!Number.isFinite(timestamp) || timestamp <= Date.now()) throw guidanceError(new Error(`${field} must be a future ISO timestamp`), 'guid-35d4c7a1b8129f69');
   return timestamp;
 }
 
@@ -345,7 +346,7 @@ function normalizeLimit(value: number | undefined): number {
 
 function normalizeContentQuota(value: number | undefined): number {
   if (value === undefined) return DEFAULT_MAX_TOTAL_CONTENT_BYTES;
-  if (!Number.isSafeInteger(value) || value < 1) throw new Error('maxTotalContentBytes must be a positive safe integer');
+  if (!Number.isSafeInteger(value) || value < 1) throw guidanceError(new Error('maxTotalContentBytes must be a positive safe integer'), 'guid-0dc975174262caf3');
   return Math.min(value, MAX_CONFIGURED_TOTAL_CONTENT_BYTES);
 }
 
@@ -453,15 +454,15 @@ async function acquireProcessLock(path: string): Promise<ProcessLock> {
         throw readError;
       }
       let record: unknown;
-      try { record = JSON.parse(raw); } catch { throw new Error('Global Sync process lock is corrupt; refusing to remove it automatically'); }
+      try { record = JSON.parse(raw); } catch { throw guidanceError(new Error('Global Sync process lock is corrupt; refusing to remove it automatically'), 'guid-c6b8a5e2a736c52d'); }
       if (!isRecord(record) || typeof record.pid !== 'number' || !Number.isSafeInteger(record.pid) || record.pid <= 0 || typeof record.nonce !== 'string' || !record.nonce) {
-        throw new Error('Global Sync process lock is invalid; refusing to remove it automatically');
+        throw guidanceError(new Error('Global Sync process lock is invalid; refusing to remove it automatically'), 'guid-074b2d1e4bf2f3d4');
       }
-      if (processIsAlive(record.pid)) throw new Error(`Global Sync storage is already in use by process ${record.pid}`);
+      if (processIsAlive(record.pid)) throw guidanceError(new Error(`Global Sync storage is already in use by process ${record.pid}`), 'guid-8100a56fcfc01a79');
       await unlink(path);
     }
   }
-  throw new Error('Unable to acquire Global Sync process lock');
+  throw guidanceError(new Error('Unable to acquire Global Sync process lock'), 'guid-1f7b4f27f90f4c2c');
 }
 
 async function releaseProcessLock(lock: ProcessLock): Promise<void> {
@@ -507,9 +508,9 @@ export class GlobalSyncHub {
     this.objectRoot = join(this.root, 'objects');
     this.hubId = boundedText(options.hubId || 'global-hub', 'hubId', MAX_ORIGIN_LENGTH).toLowerCase();
     this.processLockPath = options.processLockPath ? resolve(options.processLockPath) : undefined;
-    if (!/^[a-z0-9][a-z0-9._-]{0,127}$/.test(this.hubId)) throw new Error('hubId must be a lowercase identifier');
+    if (!/^[a-z0-9][a-z0-9._-]{0,127}$/.test(this.hubId)) throw guidanceError(new Error('hubId must be a lowercase identifier'), 'guid-fd84656ae9994e4d');
     this.signingPrivateKey = options.signingPrivateKey ? createPrivateKey(options.signingPrivateKey) : createPrivateKey(generateGlobalSyncSigningKeyPair().privateKey);
-    if (this.signingPrivateKey.asymmetricKeyType !== 'ed25519') throw new Error('Global Sync signing key must be Ed25519');
+    if (this.signingPrivateKey.asymmetricKeyType !== 'ed25519') throw guidanceError(new Error('Global Sync signing key must be Ed25519'), 'guid-270d48ae1cad1dc7');
     this.signingPublicKey = createPublicKey(this.signingPrivateKey).export({ type: 'spki', format: 'pem' }).toString();
     this.approvalQuorum = 2;
     this.maxTotalContentBytes = normalizeContentQuota(options.maxTotalContentBytes);
@@ -523,7 +524,7 @@ export class GlobalSyncHub {
   }
 
   private ensureLoaded(): Promise<void> {
-    if (this.closed) return Promise.reject(new Error('Global Sync hub is closed'));
+    if (this.closed) return Promise.reject(guidanceError(new Error('Global Sync hub is closed'), 'guid-cbb7d6f4c80d8549'));
     if (this.initialized) return Promise.resolve();
     if (this.loadPromise) return this.loadPromise;
     const load = this.loadFromDisk();
@@ -550,13 +551,13 @@ export class GlobalSyncHub {
         for (const line of lines) {
           const event = JSON.parse(line) as HubEvent;
           const unsignedEvent = { sequence: event.sequence, type: event.type, payload: event.payload, previousHash: event.previousHash };
-          if (!Number.isSafeInteger(event.sequence) || event.sequence !== this.state.nextSequence + 1 || event.previousHash !== this.lastEventHash || event.eventHash !== eventHash(unsignedEvent) || !event.signature || !verifyPayload(unsignedEvent, event.signature, createPublicKey(this.signingPublicKey))) throw new Error(`invalid event chain at sequence ${event.sequence}`);
+          if (!Number.isSafeInteger(event.sequence) || event.sequence !== this.state.nextSequence + 1 || event.previousHash !== this.lastEventHash || event.eventHash !== eventHash(unsignedEvent) || !event.signature || !verifyPayload(unsignedEvent, event.signature, createPublicKey(this.signingPublicKey))) throw guidanceError(new Error(`invalid event chain at sequence ${event.sequence}`), 'guid-9fe647794231a39a');
           applyEvent(this.state, event);
           this.lastEventHash = event.eventHash;
         }
       } catch (error) {
         if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
-          if (snapshotExists) throw new Error('Global Sync event log is missing; refusing to trust the state snapshot');
+          if (snapshotExists) throw guidanceError(new Error('Global Sync event log is missing; refusing to trust the state snapshot'), 'guid-25f8d475da1070f1');
         } else {
           throw error;
         }
@@ -612,13 +613,13 @@ export class GlobalSyncHub {
   }
 
   private objectPath(contentHash: string): string {
-    if (!/^sha256:[a-f0-9]{64}$/.test(contentHash)) throw new Error('Invalid content hash');
+    if (!/^sha256:[a-f0-9]{64}$/.test(contentHash)) throw guidanceError(new Error('Invalid content hash'), 'guid-9d5492a2e4a1dace');
     return join(this.objectRoot, contentHash.slice('sha256:'.length));
   }
 
   private async storeContent(content: string): Promise<{ contentHash: string; byteLength: number }> {
     const byteLength = Buffer.byteLength(content, 'utf8');
-    if (byteLength > MAX_DOCUMENT_BYTES) throw new Error(`Global document exceeds ${MAX_DOCUMENT_BYTES} bytes`);
+    if (byteLength > MAX_DOCUMENT_BYTES) throw guidanceError(new Error(`Global document exceeds ${MAX_DOCUMENT_BYTES} bytes`), 'guid-5dbe501335607196');
     const contentHash = sha256(content);
     await writeObjectIfMissing(this.objectPath(contentHash), content);
     return { contentHash, byteLength };
@@ -626,12 +627,12 @@ export class GlobalSyncHub {
 
   private enforceProposalQuota(origin: string, byteLength: number): void {
     const proposals = Object.values(this.state.proposals);
-    if (proposals.length >= MAX_TOTAL_PROPOSALS) throw new Error('Global Sync proposal history quota exceeded');
-    if (this.totalProposalBytes > this.maxTotalContentBytes - byteLength) throw new Error('Global Sync total content quota exceeded');
+    if (proposals.length >= MAX_TOTAL_PROPOSALS) throw guidanceError(new Error('Global Sync proposal history quota exceeded'), 'guid-180a4cd292ec7156');
+    if (this.totalProposalBytes > this.maxTotalContentBytes - byteLength) throw guidanceError(new Error('Global Sync total content quota exceeded'), 'guid-3850497fe1418077');
     const pending = proposals.filter(proposal => proposal.status === 'pending');
-    if (pending.length >= MAX_PENDING_PROPOSALS) throw new Error('Global Sync pending proposal quota exceeded');
+    if (pending.length >= MAX_PENDING_PROPOSALS) throw guidanceError(new Error('Global Sync pending proposal quota exceeded'), 'guid-1db43b70916b0f44');
     const pendingBytes = pending.reduce((total, proposal) => total + proposal.byteLength, 0);
-    if (pendingBytes + byteLength > MAX_PENDING_BYTES) throw new Error('Global Sync pending content quota exceeded');
+    if (pendingBytes + byteLength > MAX_PENDING_BYTES) throw guidanceError(new Error('Global Sync pending content quota exceeded'), 'guid-fd8bcfd3fba4c84f');
     const now = Date.now();
     const window = this.originWindows.get(origin);
     if (!window || now - window.startedAt >= RATE_WINDOW_MS) {
@@ -641,11 +642,11 @@ export class GlobalSyncHub {
           if (this.originWindows.size < MAX_RATE_BUCKETS) break;
         }
       }
-      if (this.originWindows.size >= MAX_RATE_BUCKETS && !this.originWindows.has(origin)) throw new Error('Global Sync proposal rate limiter is at capacity');
+      if (this.originWindows.size >= MAX_RATE_BUCKETS && !this.originWindows.has(origin)) throw guidanceError(new Error('Global Sync proposal rate limiter is at capacity'), 'guid-163804fffdee6477');
       this.originWindows.set(origin, { startedAt: now, count: 1 });
       return;
     }
-    if (window.count >= MAX_PROPOSALS_PER_ORIGIN_PER_MINUTE) throw new Error('Global Sync proposal rate limit exceeded for origin');
+    if (window.count >= MAX_PROPOSALS_PER_ORIGIN_PER_MINUTE) throw guidanceError(new Error('Global Sync proposal rate limit exceeded for origin'), 'guid-6b903b8e2b1902f5');
     window.count += 1;
   }
 
@@ -658,7 +659,7 @@ export class GlobalSyncHub {
     return this.withMutation(async () => {
       const documentId = normalizeId(input.documentId, 'documentId');
       const operation = input.operation || 'upsert';
-      if (operation !== 'upsert' && operation !== 'tombstone') throw new Error('operation must be upsert or tombstone');
+      if (operation !== 'upsert' && operation !== 'tombstone') throw guidanceError(new Error('operation must be upsert or tombstone'), 'guid-949a9367d730b28f');
       const author = boundedText(input.author, 'author', MAX_AUTHOR_LENGTH);
       const reason = boundedText(input.reason, 'reason', MAX_REASON_LENGTH);
       const origin = boundedText(input.origin, 'origin', MAX_ORIGIN_LENGTH);
@@ -666,19 +667,19 @@ export class GlobalSyncHub {
       const idempotencyKey = normalizeIdempotencyKey(input.idempotencyKey);
       const current = this.currentRevision(documentId);
       const parentRevision = input.parentRevision || current?.revisionId;
-      if (parentRevision && (!this.state.revisions[parentRevision] || this.state.revisions[parentRevision]!.documentId !== documentId)) throw new Error('parentRevision is unknown or belongs to another document');
+      if (parentRevision && (!this.state.revisions[parentRevision] || this.state.revisions[parentRevision]!.documentId !== documentId)) throw guidanceError(new Error('parentRevision is unknown or belongs to another document'), 'guid-894dd12aebba8368');
       let contentHash: string | undefined;
       let byteLength = 0;
       if (operation === 'upsert') {
-        if (typeof input.content !== 'string') throw new Error('content is required for an upsert');
+        if (typeof input.content !== 'string') throw guidanceError(new Error('content is required for an upsert'), 'guid-064486309d207056');
         byteLength = Buffer.byteLength(input.content, 'utf8');
-        if (byteLength > MAX_DOCUMENT_BYTES) throw new Error(`Global document exceeds ${MAX_DOCUMENT_BYTES} bytes`);
+        if (byteLength > MAX_DOCUMENT_BYTES) throw guidanceError(new Error(`Global document exceeds ${MAX_DOCUMENT_BYTES} bytes`), 'guid-5dbe501335607196');
         contentHash = sha256(input.content);
       }
       if (idempotencyKey) {
         const existing = Object.values(this.state.proposals).find(candidate => candidate.origin === origin && candidate.idempotencyKey === idempotencyKey);
         if (existing) {
-          if (existing.documentId !== documentId || (input.parentRevision !== undefined && existing.parentRevision !== parentRevision) || existing.operation !== operation || existing.contentHash !== contentHash || existing.byteLength !== byteLength || existing.author !== author || existing.reason !== reason || JSON.stringify(existing.provenance) !== JSON.stringify(provenance)) throw new Error('idempotencyKey was already used for a different proposal');
+          if (existing.documentId !== documentId || (input.parentRevision !== undefined && existing.parentRevision !== parentRevision) || existing.operation !== operation || existing.contentHash !== contentHash || existing.byteLength !== byteLength || existing.author !== author || existing.reason !== reason || JSON.stringify(existing.provenance) !== JSON.stringify(provenance)) throw guidanceError(new Error('idempotencyKey was already used for a different proposal'), 'guid-0e2f9272ed0b00b7');
           return existing;
         }
       }
@@ -689,15 +690,15 @@ export class GlobalSyncHub {
         && candidate.contentHash === contentHash);
       if (duplicate) return duplicate;
       const isSourceSnapshot = documentId.toLowerCase().startsWith('_sources/');
-      if (isSourceSnapshot && current) throw new Error('Global _sources snapshots are immutable; ingest a new source path instead of updating or tombstoning an approved snapshot');
-      if (isSourceSnapshot && operation !== 'upsert') throw new Error('Global _sources snapshots cannot be tombstoned');
+      if (isSourceSnapshot && current) throw guidanceError(new Error('Global _sources snapshots are immutable; ingest a new source path instead of updating or tombstoning an approved snapshot'), 'guid-19a94626a2dacd11');
+      if (isSourceSnapshot && operation !== 'upsert') throw guidanceError(new Error('Global _sources snapshots cannot be tombstoned'), 'guid-7c8241a19283d418');
       for (const evidencePath of provenance?.evidencePaths || []) {
         if (!evidencePath.toLowerCase().startsWith('_sources/')) continue;
         const evidenceHead = this.currentRevision(evidencePath);
-        if (!evidenceHead || evidenceHead.operation !== 'upsert') throw new Error(`Global evidence must be approved before dependent knowledge: ${evidencePath}`);
+        if (!evidenceHead || evidenceHead.operation !== 'upsert') throw guidanceError(new Error(`Global evidence must be approved before dependent knowledge: ${evidencePath}`), 'guid-df9e42196176091e');
         const boundRevision = provenance?.evidenceRevisions?.[evidencePath];
-        if (!boundRevision) throw new Error(`provenance.evidenceRevisions must bind approved Global evidence: ${evidencePath}`);
-        if (boundRevision !== evidenceHead.revisionId) throw new Error(`Global evidence revision changed before proposal submission: ${evidencePath}`);
+        if (!boundRevision) throw guidanceError(new Error(`provenance.evidenceRevisions must bind approved Global evidence: ${evidencePath}`), 'guid-679c967dfc12b624');
+        if (boundRevision !== evidenceHead.revisionId) throw guidanceError(new Error(`Global evidence revision changed before proposal submission: ${evidencePath}`), 'guid-ba47d1cf86bbe1a8');
       }
       this.enforceProposalQuota(origin, byteLength);
       if (operation === 'upsert' && typeof input.content === 'string') await this.storeContent(input.content);
@@ -742,12 +743,12 @@ export class GlobalSyncHub {
   async getRevision(revisionId: string): Promise<GlobalRevisionWithContent> {
     await this.ensureLoaded();
     const revision = this.state.revisions[String(revisionId || '').trim()];
-    if (!revision) throw new Error('revision not found');
-    if (!revision.signature || !verifyPayload(withoutSignature(revision), revision.signature, createPublicKey(this.signingPublicKey))) throw new Error(`revision signature mismatch for ${revision.revisionId}`);
+    if (!revision) throw guidanceError(new Error('revision not found'), 'guid-b896bcd94bbb2a17');
+    if (!revision.signature || !verifyPayload(withoutSignature(revision), revision.signature, createPublicKey(this.signingPublicKey))) throw guidanceError(new Error(`revision signature mismatch for ${revision.revisionId}`), 'guid-9a50440a831b60cd');
     if (revision.operation === 'tombstone') return { ...revision };
-    if (!revision.contentHash) throw new Error('upsert revision has no content hash');
+    if (!revision.contentHash) throw guidanceError(new Error('upsert revision has no content hash'), 'guid-5f4a5e11e78cd9ca');
     const content = await readFile(this.objectPath(revision.contentHash), 'utf8');
-    if (sha256(content) !== revision.contentHash || Buffer.byteLength(content, 'utf8') !== revision.byteLength) throw new Error(`content validation failed for ${revision.revisionId}`);
+    if (sha256(content) !== revision.contentHash || Buffer.byteLength(content, 'utf8') !== revision.byteLength) throw guidanceError(new Error(`content validation failed for ${revision.revisionId}`), 'guid-99f740aa8ceb9943');
     return { ...revision, content };
   }
 
@@ -763,10 +764,10 @@ export class GlobalSyncHub {
   async approveProposal(proposalId: string, reviewer: string, reason: string): Promise<{ status: 'pending' | 'approved' | 'conflict'; proposal: GlobalProposal; revision?: GlobalRevision; currentRevision?: string }> {
     return this.withMutation(async () => {
       const proposal = this.state.proposals[String(proposalId || '').trim()];
-      if (!proposal) throw new Error('proposal not found');
-      if (proposal.status !== 'pending') throw new Error(`proposal is already ${proposal.status}`);
+      if (!proposal) throw guidanceError(new Error('proposal not found'), 'guid-89f3ea8879df891b');
+      if (proposal.status !== 'pending') throw guidanceError(new Error(`proposal is already ${proposal.status}`), 'guid-24cda5fd35e474f5');
       const reviewerId = boundedText(reviewer, 'reviewer', MAX_AUTHOR_LENGTH);
-      if (proposal.approvals?.includes(reviewerId)) throw new Error('reviewer has already approved this proposal');
+      if (proposal.approvals?.includes(reviewerId)) throw guidanceError(new Error('reviewer has already approved this proposal'), 'guid-aff3d819c0ffb419');
       await this.appendEvent('proposal.approval', { proposalId: proposal.proposalId, reviewer: reviewerId, decidedAt: new Date().toISOString() });
       const approvedProposal = this.state.proposals[proposal.proposalId]!;
       const requiredApprovals = this.approvalQuorum;
@@ -801,8 +802,8 @@ export class GlobalSyncHub {
   async rejectProposal(proposalId: string, reviewer: string, reason: string): Promise<GlobalProposal> {
     return this.withMutation(async () => {
       const proposal = this.state.proposals[String(proposalId || '').trim()];
-      if (!proposal) throw new Error('proposal not found');
-      if (proposal.status !== 'pending') throw new Error(`proposal is already ${proposal.status}`);
+      if (!proposal) throw guidanceError(new Error('proposal not found'), 'guid-89f3ea8879df891b');
+      if (proposal.status !== 'pending') throw guidanceError(new Error(`proposal is already ${proposal.status}`), 'guid-24cda5fd35e474f5');
       await this.appendEvent('proposal.rejected', { proposalId: proposal.proposalId, reason: boundedText(reason, 'reason', MAX_REASON_LENGTH), decidedAt: new Date().toISOString(), reviewer: boundedText(reviewer, 'reviewer', MAX_AUTHOR_LENGTH) });
       return this.state.proposals[proposal.proposalId]!;
     });
@@ -812,11 +813,11 @@ export class GlobalSyncHub {
     return this.withMutation(async () => {
       const documentId = normalizeId(documentIdInput, 'documentId');
       const target = this.state.revisions[String(targetRevisionId || '').trim()];
-      if (!target || target.documentId !== documentId || target.operation !== 'upsert' || !target.contentHash) throw new Error('targetRevisionId must identify an existing upsert of this document');
+      if (!target || target.documentId !== documentId || target.operation !== 'upsert' || !target.contentHash) throw guidanceError(new Error('targetRevisionId must identify an existing upsert of this document'), 'guid-f31839ea30cc3105');
       const targetContent = await readFile(this.objectPath(target.contentHash), 'utf8');
-      if (sha256(targetContent) !== target.contentHash || Buffer.byteLength(targetContent, 'utf8') !== target.byteLength) throw new Error('target revision object failed content validation');
+      if (sha256(targetContent) !== target.contentHash || Buffer.byteLength(targetContent, 'utf8') !== target.byteLength) throw guidanceError(new Error('target revision object failed content validation'), 'guid-d3314f7f947d3c19');
       const current = this.currentRevision(documentId);
-      if ((expectedCurrentRevision || undefined) !== current?.revisionId) throw new Error(`restore conflict: expected ${expectedCurrentRevision || 'none'}, current ${current?.revisionId || 'none'}`);
+      if ((expectedCurrentRevision || undefined) !== current?.revisionId) throw guidanceError(new Error(`restore conflict: expected ${expectedCurrentRevision || 'none'}, current ${current?.revisionId || 'none'}`), 'guid-d119bcf4d3711f50');
       const unsignedRevision = {
         revisionId: `rev_${randomUUID()}`,
         documentId,
@@ -845,13 +846,13 @@ export class GlobalSyncHub {
     for (const revision of revisions) {
       try {
         normalizeId(revision.documentId, 'documentId');
-        if (!revision.signature || !verifyPayload(withoutSignature(revision), revision.signature, createPublicKey(this.signingPublicKey))) throw new Error('signature mismatch');
+        if (!revision.signature || !verifyPayload(withoutSignature(revision), revision.signature, createPublicKey(this.signingPublicKey))) throw guidanceError(new Error('signature mismatch'), 'guid-42d5ee05edabc78b');
         if (revision.parentRevision) {
           const parent = this.state.revisions[revision.parentRevision];
           if (!parent || parent.documentId !== revision.documentId || parent.sequence >= revision.sequence) errors.push(`invalid parent chain at ${revision.revisionId}`);
         }
         if (revision.operation === 'upsert') {
-          if (!revision.contentHash) throw new Error('missing content hash');
+          if (!revision.contentHash) throw guidanceError(new Error('missing content hash'), 'guid-3d69bafd3c1a76e7');
           const content = await readFile(this.objectPath(revision.contentHash), 'utf8');
           checkedObjects += 1;
           if (sha256(content) !== revision.contentHash || Buffer.byteLength(content, 'utf8') !== revision.byteLength) errors.push(`content validation failed at ${revision.revisionId}`);
@@ -893,9 +894,9 @@ export class GlobalSyncClient {
 
   constructor(options: GlobalSyncClientOptions) {
     const parsed = new URL(options.baseUrl);
-    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') throw new Error('baseUrl must use http or https');
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') throw guidanceError(new Error('baseUrl must use http or https'), 'guid-bd808ae65ce63381');
     if (parsed.protocol === 'http:' && !isLoopbackHost(parsed.hostname)) {
-      throw new Error('Global Sync client requires HTTPS for non-loopback URLs');
+      throw guidanceError(new Error('Global Sync client requires HTTPS for non-loopback URLs'), 'guid-96fac806a238b3ca');
     }
     this.baseUrl = options.baseUrl.replace(/\/+$/, '');
     this.authToken = boundedText(options.authToken, 'authToken', 4096);
@@ -905,7 +906,7 @@ export class GlobalSyncClient {
 
   private async request<T>(path: string, init: RequestInit = {}, credential: 'proposer' | 'reviewer' | 'admin' = 'proposer'): Promise<T> {
     const token = credential === 'reviewer' ? this.reviewerToken : credential === 'admin' ? this.adminToken : this.authToken;
-    if (!token) throw new Error('reviewerToken is required for this operation');
+    if (!token) throw guidanceError(new Error('reviewerToken is required for this operation'), 'guid-f1001d835f6c7bb0');
     const response = await fetch(`${this.baseUrl}${path}`, { ...init, headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json', ...(init.headers || {}) } });
     const body = await response.text();
     let value: unknown;
@@ -960,21 +961,21 @@ export class GlobalSyncReadClient {
   private readonly readToken: string;
   constructor(options: { baseUrl: string; readToken: string }) {
     const url = new URL(options.baseUrl);
-    if (url.username || url.password || url.search || url.hash || (url.protocol !== 'https:' && !(url.protocol === 'http:' && isLoopbackHost(url.hostname)))) throw new Error('Global import requires HTTPS or loopback HTTP without URL credentials');
+    if (url.username || url.password || url.search || url.hash || (url.protocol !== 'https:' && !(url.protocol === 'http:' && isLoopbackHost(url.hostname)))) throw guidanceError(new Error('Global import requires HTTPS or loopback HTTP without URL credentials'), 'guid-53b9e5829391b125');
     this.baseUrl = options.baseUrl.replace(/\/+$/, '');
     this.readToken = boundedText(options.readToken, 'readToken', 4096);
   }
   private async read<T>(path: string): Promise<T> {
     const response = await fetch(`${this.baseUrl}${path}`, { headers: { authorization: `Bearer ${this.readToken}` }, redirect: 'error', signal: AbortSignal.timeout(30000) });
-    if (!response.ok) throw new Error(`Global import HTTP ${response.status}`);
+    if (!response.ok) throw guidanceError(new Error(`Global import HTTP ${response.status}`), 'guid-7c8fcae7e81444ac');
     const reader = response.body?.getReader();
-    if (!reader) throw new Error('Global import response body is missing');
+    if (!reader) throw guidanceError(new Error('Global import response body is missing'), 'guid-37b27e276fe71750');
     const chunks: Uint8Array[] = []; let bytes = 0;
     try {
       while (true) {
         const chunk = await reader.read(); if (chunk.done) break;
         bytes += chunk.value.byteLength;
-        if (bytes > 8 * MAX_DOCUMENT_BYTES) throw new Error('Global import response exceeds its bound');
+        if (bytes > 8 * MAX_DOCUMENT_BYTES) throw guidanceError(new Error('Global import response exceeds its bound'), 'guid-21a44ff2903e8001');
         chunks.push(chunk.value);
       }
     } finally { await reader.cancel().catch(() => undefined); }
@@ -1033,7 +1034,7 @@ export class GlobalSyncReplica {
     this.quarantineRoot = join(this.vaultPath, '.mcpvault', 'global-sync-quarantine');
     this.client = options.client;
     this.trustedPublicKey = createPublicKey(options.trustedPublicKey);
-    if (options.organizationFingerprint !== undefined && !/^[a-f0-9]{64}$/i.test(options.organizationFingerprint)) throw new Error('organizationFingerprint must be a 64-character SHA-256 hex fingerprint');
+    if (options.organizationFingerprint !== undefined && !/^[a-f0-9]{64}$/i.test(options.organizationFingerprint)) throw guidanceError(new Error('organizationFingerprint must be a 64-character SHA-256 hex fingerprint'), 'guid-c16ef7c1cf342c85');
     this.organizationFingerprint = options.organizationFingerprint?.toLowerCase();
   }
 
@@ -1056,7 +1057,7 @@ export class GlobalSyncReplica {
     const normalized = normalizeId(documentId, 'documentId');
     const path = resolve(this.vaultPath, normalized);
     const relativePath = relative(this.vaultPath, path).replace(/\\/g, '/');
-    if (!relativePath || relativePath.startsWith('..')) throw new Error('Global document escaped vault root');
+    if (!relativePath || relativePath.startsWith('..')) throw guidanceError(new Error('Global document escaped vault root'), 'guid-61d8ab6465ec2995');
     return path;
   }
 
@@ -1080,21 +1081,21 @@ export class GlobalSyncReplica {
     await this.load();
     const manifest = await this.client.getManifest(this.state.cursor, normalizeLimit(limit));
     if (manifest.protocol !== PROTOCOL || !Number.isSafeInteger(manifest.latestSequence) || manifest.latestSequence < this.state.cursor || !manifest.signature || !verifyPayload(withoutSignature(manifest), manifest.signature, this.trustedPublicKey)) {
-      return { applied: [], conflicts: [{ documentId: '', revisionId: '', reason: 'Remote manifest failed protocol or signature validation.' }], cursor: this.state.cursor, hasMore: true };
+      return { applied: [], conflicts: [{ documentId: '', revisionId: '', reason: guidanceText('guid-226d60cc86ea1ee5', 'Remote manifest failed protocol or signature validation.') }], cursor: this.state.cursor, hasMore: true };
     }
     if (manifest.entries.length > 0 && manifest.cursor !== manifest.entries.at(-1)!.sequence) {
-      return { applied: [], conflicts: [{ documentId: '', revisionId: '', reason: 'Remote manifest cursor does not match its final entry.' }], cursor: this.state.cursor, hasMore: true };
+      return { applied: [], conflicts: [{ documentId: '', revisionId: '', reason: guidanceText('guid-b3947584d5a1489e', 'Remote manifest cursor does not match its final entry.') }], cursor: this.state.cursor, hasMore: true };
     }
     let expectedSequence = this.state.cursor;
     const applied: string[] = [];
     const conflicts: GlobalPullResult['conflicts'] = [];
     for (const entry of manifest.entries) {
       if (!Number.isSafeInteger(entry.sequence) || entry.sequence <= expectedSequence) {
-        conflicts.push({ documentId: entry.documentId, revisionId: entry.revisionId, reason: 'Remote manifest sequence is not strictly increasing.' });
+        conflicts.push({ documentId: entry.documentId, revisionId: entry.revisionId, reason: guidanceText('guid-8e2081033c1e689c', 'Remote manifest sequence is not strictly increasing.') });
         break;
       }
       if (this.organizationFingerprint && entry.provenance?.organizationFingerprint !== this.organizationFingerprint) {
-        conflicts.push({ documentId: entry.documentId, revisionId: entry.revisionId, reason: 'Remote revision organization fingerprint is missing or incompatible.' });
+        conflicts.push({ documentId: entry.documentId, revisionId: entry.revisionId, reason: guidanceText('guid-c8f326c32c5095da', 'Remote revision organization fingerprint is missing or incompatible.') });
         break;
       }
       const path = this.localPath(entry.documentId);
@@ -1102,7 +1103,7 @@ export class GlobalSyncReplica {
       const current = await this.currentContent(path);
       if (previous?.revisionId === entry.revisionId) {
         if (entry.operation === 'upsert' && current.hash !== previous.contentHash) {
-          conflicts.push({ documentId: entry.documentId, revisionId: entry.revisionId, reason: 'Local document changed after its last synchronized revision.' });
+          conflicts.push({ documentId: entry.documentId, revisionId: entry.revisionId, reason: guidanceText('guid-95ae73e56a42b58d', 'Local document changed after its last synchronized revision.') });
           break;
         }
         this.state.cursor = entry.sequence;
@@ -1112,12 +1113,12 @@ export class GlobalSyncReplica {
       if (entry.operation === 'upsert') {
         const revision = await this.client.getRevision(entry.revisionId);
         if (!revision.signature || !verifyPayload(withoutRevisionContent(revision), revision.signature, this.trustedPublicKey) || revision.revisionId !== entry.revisionId || revision.documentId !== entry.documentId || revision.sequence !== entry.sequence || revision.parentRevision !== entry.parentRevision || (previous?.revisionId || undefined) !== (revision.parentRevision || undefined) || revision.operation !== 'upsert' || typeof revision.content !== 'string' || !revision.contentHash || revision.byteLength !== Buffer.byteLength(revision.content, 'utf8') || sha256(revision.content) !== revision.contentHash || revision.contentHash !== entry.contentHash) {
-          conflicts.push({ documentId: entry.documentId, revisionId: entry.revisionId, reason: 'Remote revision failed identity or content-hash validation.' });
+          conflicts.push({ documentId: entry.documentId, revisionId: entry.revisionId, reason: guidanceText('guid-360be1c52bc41fed', 'Remote revision failed identity or content-hash validation.') });
           break;
         }
         const localDirty = current.exists && (!previous || current.hash !== previous.contentHash) && current.hash !== revision.contentHash;
         if (localDirty) {
-          conflicts.push({ documentId: entry.documentId, revisionId: entry.revisionId, reason: 'Local document has unsubmitted changes; remote content was not applied.' });
+          conflicts.push({ documentId: entry.documentId, revisionId: entry.revisionId, reason: guidanceText('guid-f4afc63250acff34', 'Local document has unsubmitted changes; remote content was not applied.') });
           break;
         }
         if (current.exists && current.hash !== revision.contentHash) await this.backup(path, entry.documentId, entry.sequence);
@@ -1127,12 +1128,12 @@ export class GlobalSyncReplica {
       } else {
         const revision = await this.client.getRevision(entry.revisionId);
         if (!revision.signature || !verifyPayload(withoutRevisionContent(revision), revision.signature, this.trustedPublicKey) || revision.revisionId !== entry.revisionId || revision.documentId !== entry.documentId || revision.sequence !== entry.sequence || revision.parentRevision !== entry.parentRevision || (previous?.revisionId || undefined) !== (revision.parentRevision || undefined) || revision.operation !== 'tombstone' || revision.byteLength !== 0 || entry.contentHash !== undefined) {
-          conflicts.push({ documentId: entry.documentId, revisionId: entry.revisionId, reason: 'Remote tombstone failed identity, chain, or signature validation.' });
+          conflicts.push({ documentId: entry.documentId, revisionId: entry.revisionId, reason: guidanceText('guid-0c26336350882215', 'Remote tombstone failed identity, chain, or signature validation.') });
           break;
         }
         const localDirty = current.exists && (!previous || current.hash !== previous.contentHash);
         if (localDirty) {
-          conflicts.push({ documentId: entry.documentId, revisionId: entry.revisionId, reason: 'Local document has unsubmitted changes; remote tombstone was not applied.' });
+          conflicts.push({ documentId: entry.documentId, revisionId: entry.revisionId, reason: guidanceText('guid-78579220d78c905f', 'Local document has unsubmitted changes; remote tombstone was not applied.') });
           break;
         }
         if (current.exists) {
@@ -1154,15 +1155,15 @@ export class GlobalSyncReplica {
     await this.load();
     const normalized = normalizeId(documentId, 'documentId');
     const current = await this.currentContent(this.localPath(normalized));
-    if (!current.exists || current.content === undefined) throw new Error('local Global document does not exist');
-    if (!this.client.submitProposal) throw new Error('This Global replica is read-only');
+    if (!current.exists || current.content === undefined) throw guidanceError(new Error('local Global document does not exist'), 'guid-e5d25c871c517b8a');
+    if (!this.client.submitProposal) throw guidanceError(new Error('This Global replica is read-only'), 'guid-6f0501785e6489b8');
     return this.client.submitProposal({ documentId: normalized, ...(this.state.documents[normalized]?.revisionId && { parentRevision: this.state.documents[normalized]!.revisionId }), operation: 'upsert', content: current.content, author, reason, origin, ...(provenance && { provenance }), ...(idempotencyKey && { idempotencyKey }) });
   }
 
   async proposeTombstone(documentId: string, author: string, reason: string, origin: string): Promise<GlobalProposal> {
     await this.load();
     const normalized = normalizeId(documentId, 'documentId');
-    if (!this.client.submitProposal) throw new Error('This Global replica is read-only');
+    if (!this.client.submitProposal) throw guidanceError(new Error('This Global replica is read-only'), 'guid-6f0501785e6489b8');
     return this.client.submitProposal({ documentId: normalized, ...(this.state.documents[normalized]?.revisionId && { parentRevision: this.state.documents[normalized]!.revisionId }), operation: 'tombstone', author, reason, origin });
   }
 }
@@ -1236,12 +1237,12 @@ async function jsonBody(request: IncomingMessage, maxBytes: number): Promise<Rec
   for await (const chunk of request) {
     const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
     size += buffer.byteLength;
-    if (size > maxBytes) throw new Error(`request body exceeds ${maxBytes} bytes`);
+    if (size > maxBytes) throw guidanceError(new Error(`request body exceeds ${maxBytes} bytes`), 'guid-668226077e0f44fa');
     chunks.push(buffer);
   }
   if (!chunks.length) return {};
   const parsed: unknown = JSON.parse(Buffer.concat(chunks).toString('utf8'));
-  if (!isRecord(parsed)) throw new Error('request body must be a JSON object');
+  if (!isRecord(parsed)) throw guidanceError(new Error('request body must be a JSON object'), 'guid-cb8f7c49eade4be2');
   return parsed;
 }
 
@@ -1272,7 +1273,7 @@ function pathParam(pathname: string, prefix: string): string | undefined {
 export async function startGlobalSyncHub(root: string, options: GlobalSyncHubHttpOptions): Promise<GlobalSyncHubHttpHandle> {
   const authToken = boundedText(options.authToken, 'authToken', 4096);
   const reviewerToken = boundedText(options.reviewerToken, 'reviewerToken', 4096);
-  if (constantTimeEqual(authToken, reviewerToken)) throw new Error('authToken and reviewerToken must be different');
+  if (constantTimeEqual(authToken, reviewerToken)) throw guidanceError(new Error('authToken and reviewerToken must be different'), 'guid-2e7ada5bbee2ee82');
   const authCredential: CredentialState = { digest: secretDigest(authToken) };
   const authExpiry = normalizeExpiry(options.authTokenExpiresAt, 'authTokenExpiresAt');
   if (authExpiry !== undefined) authCredential.expiresAt = authExpiry;
@@ -1282,18 +1283,18 @@ export async function startGlobalSyncHub(root: string, options: GlobalSyncHubHtt
   let adminCredential: CredentialState | undefined;
   if (options.adminToken) {
     const adminToken = boundedText(options.adminToken, 'adminToken', 4096);
-    if (constantTimeEqual(authToken, adminToken) || constantTimeEqual(reviewerToken, adminToken)) throw new Error('adminToken must differ from other credentials');
+    if (constantTimeEqual(authToken, adminToken) || constantTimeEqual(reviewerToken, adminToken)) throw guidanceError(new Error('adminToken must differ from other credentials'), 'guid-51964939d6a2e743');
     adminCredential = { digest: secretDigest(adminToken) };
     const adminExpiry = normalizeExpiry(options.adminTokenExpiresAt, 'adminTokenExpiresAt');
     if (adminExpiry !== undefined) adminCredential.expiresAt = adminExpiry;
   }
   for (const [reviewerId, token] of Object.entries(options.reviewerTokens || {})) {
     const id = boundedText(reviewerId, 'reviewerId', MAX_AUTHOR_LENGTH);
-    if (!/^[a-z0-9][a-z0-9._-]{0,127}$/.test(id)) throw new Error('reviewerId must be a lowercase identifier');
+    if (!/^[a-z0-9][a-z0-9._-]{0,127}$/.test(id)) throw guidanceError(new Error('reviewerId must be a lowercase identifier'), 'guid-38836baf1b50bcdc');
     const normalizedToken = boundedText(token, `reviewerTokens.${id}`, 4096);
-    if (constantTimeEqual(authToken, normalizedToken)) throw new Error('reviewer tokens must differ from authToken');
+    if (constantTimeEqual(authToken, normalizedToken)) throw guidanceError(new Error('reviewer tokens must differ from authToken'), 'guid-e1c1565cd9274a03');
     const normalizedTokenDigest = secretDigest(normalizedToken);
-    if ([...reviewerTokens.values()].some(existing => existing.digest && constantTimeDigestEqual(existing.digest, normalizedTokenDigest))) throw new Error('reviewer tokens must be unique');
+    if ([...reviewerTokens.values()].some(existing => existing.digest && constantTimeDigestEqual(existing.digest, normalizedTokenDigest))) throw guidanceError(new Error('reviewer tokens must be unique'), 'guid-9d25cf5225975607');
     const expiry = normalizeExpiry(options.reviewerTokenExpiresAt?.[id], `reviewerTokenExpiresAt.${id}`);
     const credential: CredentialState = { digest: normalizedTokenDigest };
     if (expiry !== undefined) credential.expiresAt = expiry;
@@ -1334,7 +1335,7 @@ export async function startGlobalSyncHub(root: string, options: GlobalSyncHubHtt
     if (authCredential.digest) activeCredentialDigests.push(authCredential.digest);
     if (adminCredential?.digest) activeCredentialDigests.push(adminCredential.digest);
     for (const credential of reviewerTokens.values()) if (credential.digest) activeCredentialDigests.push(credential.digest);
-    if (new Set(activeCredentialDigests.map(digest => digest.toString('base64url'))).size !== activeCredentialDigests.length) throw new Error('credential state contains duplicate active credentials');
+    if (new Set(activeCredentialDigests.map(digest => digest.toString('base64url'))).size !== activeCredentialDigests.length) throw guidanceError(new Error('credential state contains duplicate active credentials'), 'guid-433c347861bd3681');
 
     try {
       signingPrivateKey = await readFile(signingKeyPath, 'utf8');
@@ -1359,7 +1360,7 @@ export async function startGlobalSyncHub(root: string, options: GlobalSyncHubHtt
   const host = options.host || '127.0.0.1';
   if (!isLoopbackHost(host) && !options.tls) {
     await hub.close();
-    throw new Error('Global Sync HTTP requires TLS when binding to a non-loopback host');
+    throw guidanceError(new Error('Global Sync HTTP requires TLS when binding to a non-loopback host'), 'guid-ec7af937a354e440');
   }
   const maxBodyBytes = Math.min(Math.max(Math.trunc(options.maxBodyBytes ?? 2 * 1024 * 1024), 1024), 2 * 1024 * 1024);
   const requestWindows = new Map<string, { startedAt: number; count: number }>();
@@ -1398,13 +1399,13 @@ export async function startGlobalSyncHub(root: string, options: GlobalSyncHubHtt
   };
   const rotateCredential = async (body: Record<string, unknown>): Promise<void> => {
     const kind = body.kind;
-    if (kind !== 'proposer' && kind !== 'reviewer' && kind !== 'admin') throw new Error('kind must be proposer, reviewer, or admin');
-    if (typeof body.token !== 'string') throw new Error('token is required');
+    if (kind !== 'proposer' && kind !== 'reviewer' && kind !== 'admin') throw guidanceError(new Error('kind must be proposer, reviewer, or admin'), 'guid-bf0740e31eb60494');
+    if (typeof body.token !== 'string') throw guidanceError(new Error('token is required'), 'guid-a3d7c1a8f30f3c47');
     const token = boundedText(body.token, 'token', 4096);
     const digest = secretDigest(token);
     const reviewerId = kind === 'reviewer' ? boundedText(String(body.reviewerId || ''), 'reviewerId', MAX_AUTHOR_LENGTH) : undefined;
-    if (reviewerId && !/^[a-z0-9][a-z0-9._-]{0,127}$/.test(reviewerId)) throw new Error('reviewerId must be a lowercase identifier');
-    if (sameAsConfiguredCredential(digest, reviewerId)) throw new Error('token must be unique across active credentials');
+    if (reviewerId && !/^[a-z0-9][a-z0-9._-]{0,127}$/.test(reviewerId)) throw guidanceError(new Error('reviewerId must be a lowercase identifier'), 'guid-38836baf1b50bcdc');
+    if (sameAsConfiguredCredential(digest, reviewerId)) throw guidanceError(new Error('token must be unique across active credentials'), 'guid-33e9f1270b28d10b');
     const expiresAt = normalizeExpiry(body.expiresAt, 'expiresAt');
     const previousAuthDigest = authCredential.digest;
     const previousAuthExpiry = authCredential.expiresAt;
@@ -1442,11 +1443,11 @@ export async function startGlobalSyncHub(root: string, options: GlobalSyncHubHtt
       delete authCredential.expiresAt;
     } else if (kind === 'reviewer') {
       reviewerId = boundedText(String(body.reviewerId || ''), 'reviewerId', MAX_AUTHOR_LENGTH);
-      if (!reviewerTokens.delete(reviewerId)) throw new Error('reviewer credential not found');
+      if (!reviewerTokens.delete(reviewerId)) throw guidanceError(new Error('reviewer credential not found'), 'guid-132b5c07cd77c919');
     } else if (kind === 'admin') {
       adminCredential = undefined;
     } else {
-      throw new Error('kind must be proposer, reviewer, or admin');
+      throw guidanceError(new Error('kind must be proposer, reviewer, or admin'), 'guid-bf0740e31eb60494');
     }
     try {
       await persistCredentialState();
@@ -1471,7 +1472,7 @@ export async function startGlobalSyncHub(root: string, options: GlobalSyncHubHtt
   const readCredentialDigest = options.readToken === undefined ? undefined : secretDigest(boundedText(options.readToken, 'readToken', 4096));
   if (readCredentialDigest && [authCredential, adminCredential, ...reviewerTokens.values()].some(item => item?.digest && constantTimeDigestEqual(item.digest, readCredentialDigest))) {
     await hub.close();
-    throw new Error('readToken must differ from every publishing, review and administrator credential');
+    throw guidanceError(new Error('readToken must differ from every publishing, review and administrator credential'), 'guid-345faf608cb98273');
   }
   const requestHandler = async (request: IncomingMessage, response: ServerResponse) => {
     try {

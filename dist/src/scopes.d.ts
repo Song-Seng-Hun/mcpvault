@@ -55,7 +55,7 @@ export declare class CollaborationService {
             identityPath: string;
         };
         access: string;
-        note: string;
+        note: "Global is the cross-command-center knowledge layer. Community is public only inside this command center. User storage is host-only and not exposed through MCP; model and agent namespaces provide private agent access.";
     };
     createAgentScope(params: {
         agentId: string;

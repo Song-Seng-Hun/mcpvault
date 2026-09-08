@@ -1,3 +1,4 @@
+import { projectGuidance } from './guidance-runtime.js';
 /** The bounded set of research notebook templates exposed by this module. */
 export const RESEARCH_TEMPLATE_IDS = ['research-journal', 'search-log', 'bridge-hypothesis'] as const;
 
@@ -144,5 +145,5 @@ What is the next action for running that test or narrowing the hypothesis?`,
 
 export function getResearchTemplate(id: string): ResearchTemplate | undefined {
   if (!Object.prototype.hasOwnProperty.call(RESEARCH_TEMPLATES, id)) return undefined;
-  return RESEARCH_TEMPLATES[id as ResearchTemplateId];
+  return projectGuidance(RESEARCH_TEMPLATES[id as ResearchTemplateId]);
 }

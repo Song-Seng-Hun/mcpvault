@@ -1,3 +1,4 @@
+import { guidanceError, guidanceText } from './guidance-runtime.js';
 import { PathFilter } from './pathfilter.js';
 import { isModerationHidden } from './moderation-policy.js';
 import { contextRuleState } from './context-rules.js';
@@ -42,9 +43,9 @@ export class RoleplayService {
     }
     async current(principal) {
         if (!this.store)
-            throw new Error('Roleplay is disabled; the host must provision its world administrators and durable checkpoint first');
+            throw guidanceError(new Error('Roleplay is disabled; the host must provision its world administrators and durable checkpoint first'), 'guid-eca09b766ce8a568');
         if (!this.visible(`${ROLEPLAY_ROOT}/0000000001.md`, principal))
-            throw new Error('Roleplay world unavailable in this scope');
+            throw guidanceError(new Error('Roleplay world unavailable in this scope'), 'guid-b0f64aafb4ae94de');
         if (principal)
             await this.options.assertActor(principal);
         return this.store.read();
@@ -52,30 +53,30 @@ export class RoleplayService {
     async assertRoom(roomId, principal) {
         const path = `Community/ChatRooms/${roleplayId(roomId)}.md`;
         if (!this.visible(path, principal))
-            throw new Error('Scene room unavailable');
+            throw guidanceError(new Error('Scene room unavailable'), 'guid-dfaa39e3ad00bbca');
         const note = await this.fs.readNote(path);
         if (note.frontmatter.mcpvault_type !== 'chat_room' || note.frontmatter.status !== 'open' || isModerationHidden(note.frontmatter))
-            throw new Error('Scene room unavailable');
+            throw guidanceError(new Error('Scene room unavailable'), 'guid-dfaa39e3ad00bbca');
     }
     async execute(endpoint, params, principal) {
         return coordinate(() => this.executeCoordinated(endpoint, params, principal));
     }
     async executeCoordinated(endpoint, params, principal) {
         if (!this.store && endpoint === 'world' && (!params.op || params.op === 'read'))
-            return { enabled: false, reason: 'Host-provisioned roleplay world is not configured', warning };
+            return { enabled: false, reason: guidanceText('guid-7072f7a56e0ad49f', 'Host-provisioned roleplay world is not configured'), warning };
         const read = ['context', 'history'].includes(endpoint) || (!params.op || params.op === 'read') && ['world', 'character', 'scene'].includes(endpoint);
         if (read)
             return this.read(endpoint, params, principal);
         if (!principal || !principal.capabilities?.includes('chat'))
-            throw new Error('Login and chat capability required');
+            throw guidanceError(new Error('Login and chat capability required'), 'guid-edb25890c8cf32d2');
         await this.options.assertActor(principal);
         const op = endpoint === 'resolve' ? 'resolve' : endpoint === 'correct' ? 'correct' : params.op;
         if (!operations[endpoint]?.includes(op))
-            throw new Error('Invalid roleplay operation for this endpoint');
+            throw guidanceError(new Error('Invalid roleplay operation for this endpoint'), 'guid-4f8b6a74c237b46c');
         const { state } = await this.current(principal);
         if (endpoint === 'correct' && params.op === 'preview') {
             if (!this.store.options.policy.administrators.includes(principal.accountId))
-                throw new Error('Host world administrator required');
+                throw guidanceError(new Error('Host world administrator required'), 'guid-0037cc09937b784e');
             const effects = validateEffects(params.effects), content = roleplayText(params.content), reason = roleplayText(params.reason);
             const previewFingerprint = roleplayHash({ revision: roleplayRevision(state), targetTurn: params.targetTurn, effects, content, reason });
             const command = { op: 'correct', actor: principal.accountId, requestId: `preview-${previewFingerprint.slice(0, 48)}`, expectedRevision: params.expectedRevision, data: { targetTurn: params.targetTurn, effects, content, reason, previewFingerprint } };
@@ -83,19 +84,19 @@ export class RoleplayService {
             return { preview: true, revision: roleplayRevision(state), previewFingerprint, targetTurn: params.targetTurn, effects, warning, nextAction: { endpointId: 'roleplay.correct', operation: 'apply', requires: ['requestId', 'expectedRevision', 'previewFingerprint'] } };
         }
         if (endpoint === 'correct' && params.op !== 'apply')
-            throw new Error('Correction requires preview then apply');
+            throw guidanceError(new Error('Correction requires preview then apply'), 'guid-f992450dae841bab');
         const data = Object.fromEntries(fields[op].filter(key => params[key] !== undefined).map(key => [key, params[key]]));
         // Credentials, arbitrary caller actor fields and protocol controls never enter canonical records.
         const command = { op, actor: principal.accountId, requestId: roleplayId(params.requestId, 'requestId'), expectedRevision: String(params.expectedRevision || ''), data };
         if (op === 'rule' && data.questId) {
             if (!this.options.validateQuestBinding)
-                throw new Error('Economy OFF; no quest reward binding is enabled');
+                throw guidanceError(new Error('Economy OFF; no quest reward binding is enabled'), 'guid-10d3dacec144be18');
             await this.options.validateQuestBinding(data.questId, principal);
         }
         const validate = async (current) => {
             await this.options.assertActor(principal);
             if (!this.visible(`${ROLEPLAY_ROOT}/0000000001.md`, principal))
-                throw new Error('World access revoked');
+                throw guidanceError(new Error('World access revoked'), 'guid-a6c90853ff1e1ec5');
             const roomId = data.roomId || (data.pendingId && current.pending[data.pendingId]?.roomId);
             if (roomId)
                 await this.assertRoom(roomId, principal);
@@ -103,7 +104,7 @@ export class RoleplayService {
                 const target = Object.values(current.requests).find(r => `roleplay-${r.receipt.id}` === data.replyTo)?.receipt;
                 if (target) {
                     if (target.roomId !== roomId)
-                        throw new Error('Roleplay reply target is unavailable in this room');
+                        throw guidanceError(new Error('Roleplay reply target is unavailable in this room'), 'guid-80a5bbca883e4811');
                 }
                 else {
                     await readChatReplyTarget(this.fs, roomId, data.replyTo, { ordinaryOnly: true, canAccessPath: path => this.visible(path, principal) });
@@ -116,24 +117,24 @@ export class RoleplayService {
                 }
                 if (data.lore) {
                     if (!Array.isArray(data.lore) || data.lore.length > 8)
-                        throw new Error('Invalid lore references');
+                        throw guidanceError(new Error('Invalid lore references'), 'guid-dc8b2591e21ee3fd');
                     data.lore = data.lore.map((path) => {
                         if (typeof path !== 'string' || path.length > 500 || /(?:^|[\\/])\.\.?(?:[\\/]|$)/.test(path))
-                            throw new Error('Use canonical lore references');
+                            throw guidanceError(new Error('Use canonical lore references'), 'guid-bc4b25c954501080');
                         if (/^!?\[\[/.test(path))
                             return path;
                         const normalized = posix.normalize(this.access.resolveExternalPath(path, principal).replace(/\\/g, '/'));
                         if (!this.visible(normalized, principal) || !this.access.canReferenceFrom(`${ROLEPLAY_ROOT}/next.md`, normalized))
-                            throw new Error('Lore unavailable');
+                            throw guidanceError(new Error('Lore unavailable'), 'guid-05a1273361e00690');
                         return normalized;
                     });
                     data.lore = await this.references.validateAndNormalize(data.lore, `${ROLEPLAY_ROOT}/next.md`, principal);
                     if (data.lore.some((path) => posix.normalize(path) !== path || !this.visible(path, principal) || !this.access.canReferenceFrom(`${ROLEPLAY_ROOT}/next.md`, path)))
-                        throw new Error('Lore unavailable');
+                        throw guidanceError(new Error('Lore unavailable'), 'guid-05a1273361e00690');
                 }
             }
             catch {
-                throw new Error('A roleplay reference is unavailable or cannot be shared in this Community scope');
+                throw guidanceError(new Error('A roleplay reference is unavailable or cannot be shared in this Community scope'), 'guid-75de11b62e6c5d55');
             }
             await this.options.assertActor(principal);
         };
@@ -173,11 +174,11 @@ export class RoleplayService {
         else if (endpoint === 'context') {
             const c = state.characters[roleplayId(params.characterId)];
             if (!c)
-                throw new Error('Character unavailable');
+                throw guidanceError(new Error('Character unavailable'), 'guid-b4e08b4c64221264');
             if (params.roomId && state.scenes[params.roomId]?.location !== c.location)
-                throw new Error('Character is not in this room location');
+                throw guidanceError(new Error('Character is not in this room location'), 'guid-c77bcfb24eefe6e6');
             if (params.roomId && !readableRooms.has(params.roomId))
-                throw new Error('Scene room unavailable');
+                throw guidanceError(new Error('Scene room unavailable'), 'guid-dfaa39e3ad00bbca');
             envelope.character = { id: c.id, name: c.name, controller: c.controller, generation: c.generation, location: c.location };
             const cognition = c.cognition.filter(m => availableTurns.has(m.turn));
             const known = new Set(cognition.map(m => m.turn));
@@ -212,24 +213,24 @@ export class RoleplayService {
                     const selection = selectContextPassages({ content: note.content, query, maxChars: 600, maxPassages: 1 });
                     items.push({ kind: 'lore', path, revision: note.revision, selection, ...(selection.truncated && { nextAction: { endpointId: endpointIdForTool('read_note_lines'), arguments: { path, expectedRevision: note.revision, startLine: selection.passages[0]?.startLine ?? 1, endLine: selection.passages[0]?.endLine ?? 1, maxChars: 2000 } } }) });
                     if (await this.fs.readNoteRevision(path) !== note.revision)
-                        throw new Error('Lore changed during read; refresh context');
+                        throw guidanceError(new Error('Lore changed during read; refresh context'), 'guid-87abcdfa7a54755e');
                 }
             }
-            envelope.nextAction = { endpointId: 'roleplay.action', requires: ['characterId', 'generation', 'roomId', 'expectedRevision', 'requestId', 'content'], hint: 'Check registered_action hints and use a matching rule before submitting an unregistered attempt to the GM. Condition matches are advisory, not guaranteed success. For more rules, read roleplay.world (op: read) with its cursor.' };
+            envelope.nextAction = { endpointId: 'roleplay.action', requires: ['characterId', 'generation', 'roomId', 'expectedRevision', 'requestId', 'content'], hint: guidanceText('guid-dee8d8908e987515', 'Check registered_action hints and use a matching rule before submitting an unregistered attempt to the GM. Condition matches are advisory, not guaranteed success. For more rules, read roleplay.world (op: read) with its cursor.') };
         }
         else
-            throw new Error('Unknown roleplay read');
+            throw guidanceError(new Error('Unknown roleplay read'), 'guid-d1a2e5dcf1f461fe');
         const result = page(items, envelope, roleplayHash({ revision, endpoint, characterId: params.characterId, roomId: params.roomId, turnId: params.turnId, id: params.id, query: params.query, roomFingerprint, loreRevisions: [...loreRevisions] }), params, `roleplay.${endpoint}`);
         if (principal)
             await this.options.assertActor(principal);
         for (const [path, expected] of loreRevisions)
             if (!this.visible(path, principal) || await this.fs.readNoteRevision(path) !== expected)
-                throw new Error('Lore changed or became unavailable; refresh context');
+                throw guidanceError(new Error('Lore changed or became unavailable; refresh context'), 'guid-e3a5febe0be39d9b');
         const finalRooms = await this.fs.readNoteMetadata(roomPaths, p => this.visible(p, principal), { fresh: true });
         if (roleplayHash(finalRooms.map(n => [n.path, n.revision])) !== roomFingerprint)
-            throw new Error('Room visibility changed; refresh context');
+            throw guidanceError(new Error('Room visibility changed; refresh context'), 'guid-07374536cef1606a');
         if (roleplayRevision(await this.store.snapshot()) !== revision)
-            throw new Error('World changed during read; refresh context');
+            throw guidanceError(new Error('World changed during read; refresh context'), 'guid-c20d424236bb50b1');
         return result;
     }
 }

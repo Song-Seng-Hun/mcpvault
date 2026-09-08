@@ -1,4 +1,6 @@
+import { guidanceError, guidanceText } from './guidance-runtime.js';
 import { boundSearchResults } from './search-limits.js';
+import { projectGuidance } from './guidance-runtime.js';
 const CONTROL_TOOLS = new Set(['orient_wiki', 'get_agent_pulse', 'list_active_capabilities', 'search_capabilities', 'call_endpoint']);
 const ENDPOINT_QUERY_STOP_WORDS = new Set([
     'a', 'an', 'and', 'are', 'as', 'at', 'be', 'by', 'can', 'could', 'do', 'for', 'from', 'get', 'give', 'i', 'in', 'into', 'is', 'it', 'me', 'of', 'on', 'or', 'please', 'show', 'that', 'the', 'to', 'use', 'want', 'with', 'would',
@@ -28,13 +30,13 @@ const LEGACY_EXACT_TOOL_BY_QUERY = new Map([
 function catalogLimit(value) {
     const parsed = value === undefined ? 20 : Number(value);
     if (!Number.isInteger(parsed) || parsed < 1)
-        throw new Error('limit must be a positive integer');
+        throw guidanceError(new Error('limit must be a positive integer'), 'guid-14abe8b02cfc3624');
     return Math.min(parsed, 100);
 }
 function catalogMaxChars(value) {
     const parsed = value === undefined ? 12000 : Number(value);
     if (!Number.isInteger(parsed) || parsed < 512)
-        throw new Error('maxChars must be an integer of at least 512');
+        throw guidanceError(new Error('maxChars must be an integer of at least 512'), 'guid-c32875d854241bff');
     return Math.min(parsed, 20000);
 }
 function endpointScore(endpoint, terms) {
@@ -52,6 +54,7 @@ function endpointScore(endpoint, terms) {
         + (corpus.includes(term) ? 1 : 0), 0);
 }
 const EXPLICIT_IDS = {
+    list_guidance_catalog: 'guidance.catalog',
     manage_roleplay_world: 'roleplay.world', manage_roleplay_character: 'roleplay.character', manage_roleplay_scene: 'roleplay.scene',
     list_notices: 'notice.list', read_notice: 'notice.read', preview_notice: 'notice.preview', revise_notice: 'notice.revise',
     read_roleplay_context: 'roleplay.context', submit_roleplay_action: 'roleplay.action', resolve_roleplay_action: 'roleplay.resolve',
@@ -559,7 +562,7 @@ function compactEndpointSchema(endpoint) {
         ...(endpoint.reason && { reason: endpoint.reason }),
         ...(endpoint.operations && { operations: endpoint.operations }),
         schemaCompacted: true,
-        hint: 'Schema prose was omitted to fit maxChars; field names, constraints, and required arguments remain callable.',
+        hint: guidanceText('guid-f8902c34a15fc23c', 'Schema prose was omitted to fit maxChars; field names, constraints, and required arguments remain callable.'),
     };
 }
 export class EndpointRegistry {
@@ -577,7 +580,7 @@ export class EndpointRegistry {
             if (!mutating && properties.maxChars === undefined) {
                 properties.maxChars = {
                     type: 'integer', minimum: 512, maximum: 20000, default: 12000,
-                    description: 'Hard total response budget. The server enforces this default even when omitted.',
+                    description: guidanceText('guid-ccb9dab833c4f364', 'Hard total response budget. The server enforces this default even when omitted.'),
                 };
             }
             this.descriptors.set(endpointIdForTool(tool.name), {
@@ -678,9 +681,9 @@ export class EndpointRegistry {
             }
             if (item.endpointId === 'community.participation') {
                 const write = { available, state, requires: item.requires, ...(reason && { reason }) };
-                const read = { available: context.authenticated, state: context.authenticated ? 'ready' : 'locked', requires: ['authentication'], ...(!context.authenticated && { reason: 'authentication required' }) };
+                const read = { available: context.authenticated, state: context.authenticated ? 'ready' : 'locked', requires: ['authentication'], ...(!context.authenticated && { reason: guidanceText('guid-d85901f74db50a43', 'authentication required') }) };
                 return { ...item, requires: ['authentication'], available: context.authenticated, state: read.state,
-                    operations: { read, update: write }, ...(!context.authenticated && { reason: 'authentication required' }) };
+                    operations: { read, update: write }, ...(!context.authenticated && { reason: guidanceText('guid-d85901f74db50a43', 'authentication required') }) };
             }
             return { ...item, available, state, ...(reason && { reason }) };
         })
@@ -689,12 +692,15 @@ export class EndpointRegistry {
         // truncated } envelope so the response-level compactor does not have to
         // discard an otherwise useful input schema.
         const endpointBudget = Math.max(2, maxChars - 96);
-        let bounded = boundSearchResults(endpoints, endpointBudget).slice(0, limit);
+        // Only selected code-owned descriptors are projected, before output budgeting.
+        // Never recursively translate arbitrary endpoint results or user documents.
+        const projected = endpoints.slice(0, limit).map(item => projectGuidance(item));
+        let bounded = boundSearchResults(projected, endpointBudget).slice(0, limit);
         if (bounded.length === 0 && endpoints.length > 0) {
-            bounded = boundSearchResults(endpoints.map(compactEndpointSchema), endpointBudget).slice(0, limit);
+            bounded = boundSearchResults(projected.map(compactEndpointSchema), endpointBudget).slice(0, limit);
         }
         if (bounded.length === 0 && endpoints.length > 0) {
-            bounded = boundSearchResults(endpoints.map(compactEndpoint), endpointBudget).slice(0, limit);
+            bounded = boundSearchResults(projected.map(compactEndpoint), endpointBudget).slice(0, limit);
         }
         return { endpoints: bounded, total: endpoints.length, truncated: bounded.length < endpoints.length };
     }

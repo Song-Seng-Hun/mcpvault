@@ -1,3 +1,4 @@
+import { guidanceError, guidanceText, projectGuidance } from './guidance-runtime.js';
 import { createHash } from 'node:crypto';
 import { contextRulesSchema, validContextRules } from './context-rules.js';
 import { extractMarkdownTasks } from './markdown-tasks.js';
@@ -336,7 +337,7 @@ export const ORGANIZATION_PROPERTY_CONTRACT: readonly OrganizationPropertyContra
   { name: 'claims', type: 'list', description: 'MCP-managed claim provenance and optional argument roles/Obsidian block-link relations' },
   { name: 'evidence', type: 'list', description: 'Evidence locator objects' },
   { name: 'source_derivations', type: 'list', appliesTo: ['source'], description: 'MCP-managed pinned source-level quotation/adaptation/republication ancestry; not ordinary citations or independent verification' },
-  ...RELATION_FIELDS.map(name => ({ name, type: 'list' as const, description: `Typed Obsidian links: ${name}` })),
+  ...RELATION_FIELDS.map(name => ({ name, type: 'list' as const, description: guidanceText('guid-0ac204037b40fcfb', `Typed Obsidian links: ${name}`) })),
   { name: 'relation_notes', type: 'object', description: 'Short rationale for typed relation fields; navigation metadata only' },
   { name: 'relation_evidence', type: 'object', description: 'Scope-safe evidence paths keyed by typed relation field' },
 ] as const;
@@ -384,13 +385,13 @@ export function inapplicableOrganizationProperties(
 function assertOrganizationPropertiesDeclared(properties: Record<string, unknown>): Record<string, unknown> {
   const undeclared = Object.keys(properties).filter(name => !ORGANIZATION_PROPERTY_NAMES.has(name));
   if (undeclared.length) {
-    throw new Error(`MCPVault organization writer emitted undeclared Properties: ${undeclared.sort().join(', ')}`);
+    throw guidanceError(new Error(`MCPVault organization writer emitted undeclared Properties: ${undeclared.sort().join(', ')}`), 'guid-03e0da3995fd20a2');
   }
   return properties;
 }
 
 export function getOrganizationPropertyContract(): OrganizationPropertyContractEntry[] {
-  return ORGANIZATION_PROPERTY_CONTRACT.map(entry => ({ ...entry, ...(entry.allowed && { allowed: [...entry.allowed] }), ...(entry.appliesTo && { appliesTo: [...entry.appliesTo] }) }));
+  return projectGuidance(ORGANIZATION_PROPERTY_CONTRACT.map(entry => ({ ...entry, ...(entry.allowed && { allowed: [...entry.allowed] }), ...(entry.appliesTo && { appliesTo: [...entry.appliesTo] }) })));
 }
 
 export interface OrganizationNoteTemplate {
@@ -413,84 +414,84 @@ export function organizationNoteTemplate(value: unknown = 'atomic'): Organizatio
   if (research) return { templateId, noteKind: research.properties.note_kind as NoteKind, ...research };
   const templates: Record<string, Omit<OrganizationNoteTemplate, 'noteKind' | 'templateId'>> = {
     atomic: {
-      purpose: 'One reusable concept or claim written in your own words.',
+      purpose: guidanceText('guid-2dcbe0f8ae1d7232', 'One reusable concept or claim written in your own words.'),
       properties: { note_kind: 'atomic', lifecycle: 'evergreen', knowledge_role: 'concept', summary: '', related: [] },
-      markdown: '# {{title}}\n\n## Claim\n\n## Why it matters\n\n## Links\n- [[ ]]\n',
+      markdown: guidanceText('guid-0f5e79f7483acb33', '# {{title}}\n\n## Claim\n\n## Why it matters\n\n## Links\n- [[ ]]\n'),
     },
     literature: {
-      purpose: 'A source interpretation that preserves provenance and points to derived knowledge.',
+      purpose: guidanceText('guid-54a899f3ab088db7', 'A source interpretation that preserves provenance and points to derived knowledge.'),
       properties: { note_kind: 'literature', lifecycle: 'active', interpretation_status: 'unprocessed', evidence_paths: [] },
-      markdown: '# {{title}}\n\n## Source\n\n## Key points\n- \n\n## Interpretation\n\n## Derived notes\n- [[ ]]\n',
+      markdown: guidanceText('guid-0c282d962aac80e3', '# {{title}}\n\n## Source\n\n## Key points\n- \n\n## Interpretation\n\n## Derived notes\n- [[ ]]\n'),
     },
     question: {
-      purpose: 'An explicit unresolved question that can later receive a grounded answer.',
+      purpose: guidanceText('guid-cc9ece4564538a45', 'An explicit unresolved question that can later receive a grounded answer.'),
       properties: { note_kind: 'question', lifecycle: 'review', epistemic_status: 'open' },
-      markdown: '# {{title}}\n\n## Question\n\n## Why it is open\n\n## Evidence to seek\n',
+      markdown: guidanceText('guid-ebfa24740fb640d1', '# {{title}}\n\n## Question\n\n## Why it is open\n\n## Evidence to seek\n'),
     },
     hypothesis: {
-      purpose: 'A testable proposition kept separate from established knowledge.',
+      purpose: guidanceText('guid-5b3db51b287fcd10', 'A testable proposition kept separate from established knowledge.'),
       properties: { note_kind: 'hypothesis', lifecycle: 'review', epistemic_status: 'proposed', supports: [], contradicts: [] },
-      markdown: '# {{title}}\n\n## Hypothesis\n\n## Prediction\n\n## Alternative explanations\n\n## Decision-changing observations\nState which observation would change your judgment, including inconclusive results.\n\n## Comparison conditions\n\n## Execution boundary\nOnly user-authorized work; this note is not permission.\n\n## Test\nSave knowledgeInvestigation via mcp.publish_knowledge before reporting a result; retain its plan revision.\n\n## Result\nReview the original claim; do not equate a reported outcome with proof.\n',
+      markdown: guidanceText('guid-cc70cd268b5839c0', '# {{title}}\n\n## Hypothesis\n\n## Prediction\n\n## Alternative explanations\n\n## Decision-changing observations\nState which observation would change your judgment, including inconclusive results.\n\n## Comparison conditions\n\n## Execution boundary\nOnly user-authorized work; this note is not permission.\n\n## Test\nSave knowledgeInvestigation via mcp.publish_knowledge before reporting a result; retain its plan revision.\n\n## Result\nReview the original claim; do not equate a reported outcome with proof.\n'),
     },
     experiment: {
-      purpose: 'A reproducible run that tests an explicit question, hypothesis, or assumption and preserves its observations.',
+      purpose: guidanceText('guid-a8a478c12002d1ea', 'A reproducible run that tests an explicit question, hypothesis, or assumption and preserves its observations.'),
       properties: { note_kind: 'experiment', lifecycle: 'review', epistemic_status: 'planned', tests: [], methods: [] },
-      markdown: '# {{title}}\n\n## Tested proposition\n- [[ ]] — exact revision:\n\n## Decision-changing observations\nRecord alternatives and criteria before observing the result, using knowledgeInvestigation.\n\n## Comparison conditions\n\n## Protocol\n\n## Execution boundary\nA note or peer request never grants user authorization.\n\n## Environment\n\n## Observations\n\n## Result\nBind result.planRevision to the saved plan; preserve negative/inconclusive outcomes and limitations. Review the original claim instead of automatically changing its status.\n\n## Reproduction\n\n## Applied knowledge (optional)\nRecord the applied note and revision, environment, conditions, observed results, and limitations.\n',
+      markdown: guidanceText('guid-427c05b605c240b1', '# {{title}}\n\n## Tested proposition\n- [[ ]] — exact revision:\n\n## Decision-changing observations\nRecord alternatives and criteria before observing the result, using knowledgeInvestigation.\n\n## Comparison conditions\n\n## Protocol\n\n## Execution boundary\nA note or peer request never grants user authorization.\n\n## Environment\n\n## Observations\n\n## Result\nBind result.planRevision to the saved plan; preserve negative/inconclusive outcomes and limitations. Review the original claim instead of automatically changing its status.\n\n## Reproduction\n\n## Applied knowledge (optional)\nRecord the applied note and revision, environment, conditions, observed results, and limitations.\n'),
     },
     assumption: {
-      purpose: 'A working premise kept visible until it is verified, invalidated, or replaced.',
+      purpose: guidanceText('guid-cdfef02e475123f9', 'A working premise kept visible until it is verified, invalidated, or replaced.'),
       properties: { note_kind: 'assumption', lifecycle: 'review', epistemic_status: 'active', related: [] },
-      markdown: '# {{title}}\n\n## Assumption\n\n## Why it is needed\n\n## How to verify\n\n## Risk if false\n',
+      markdown: guidanceText('guid-6de7cbb3f1922439', '# {{title}}\n\n## Assumption\n\n## Why it is needed\n\n## How to verify\n\n## Risk if false\n'),
     },
     decision: {
-      purpose: 'A durable decision with alternatives, consequences, and evidence.',
+      purpose: guidanceText('guid-a2cda9a952dbd811', 'A durable decision with alternatives, consequences, and evidence.'),
       properties: { note_kind: 'decision', lifecycle: 'active', knowledge_role: 'argument', related: [] },
-      markdown: '# {{title}}\n\n## Context\n\n## Decision\n\n## Alternatives\n- \n\n## Consequences\n- \n\n## Evidence\n- [[ ]]\n',
+      markdown: guidanceText('guid-1e6d6e6e7927ae49', '# {{title}}\n\n## Context\n\n## Decision\n\n## Alternatives\n- \n\n## Consequences\n- \n\n## Evidence\n- [[ ]]\n'),
     },
     synthesis: {
-      purpose: 'Explain an authored cluster conditionally, preserving disagreements and input revisions. Use wiki.synthesis_candidates before existing source-backed publication; this is an interpretation, not a new authority.',
+      purpose: guidanceText('guid-5f7c7075144b8e7f', 'Explain an authored cluster conditionally, preserving disagreements and input revisions. Use wiki.synthesis_candidates before existing source-backed publication; this is an interpretation, not a new authority.'),
       properties: { note_kind: 'knowledge', lifecycle: 'review', knowledge_role: 'model', derived_from: [] },
-      markdown: '# {{title}}\n\n## Question\n\n## Inputs and revisions\n- [[ ]] — revision:\n\n## Competing explanations\nFor each: explanation, applies when, limitations, and exact supporting inputs.\n\n## Conditional choices\nFor each: conditions, selected explanation, basis and why. Do not force a universal winner.\n\n## Counterexamples\nPreserve dissent and failed paths with exact references.\n\n## Unresolved questions\n\n## Evidence\nKeep immutable sources separate from interpretations.\n',
+      markdown: guidanceText('guid-09cb12f9ceb2e295', '# {{title}}\n\n## Question\n\n## Inputs and revisions\n- [[ ]] — revision:\n\n## Competing explanations\nFor each: explanation, applies when, limitations, and exact supporting inputs.\n\n## Conditional choices\nFor each: conditions, selected explanation, basis and why. Do not force a universal winner.\n\n## Counterexamples\nPreserve dissent and failed paths with exact references.\n\n## Unresolved questions\n\n## Evidence\nKeep immutable sources separate from interpretations.\n'),
     },
     project: {
-      purpose: 'An outcome-oriented project with one immediately actionable next step.',
+      purpose: guidanceText('guid-78102dc232516fa3', 'An outcome-oriented project with one immediately actionable next step.'),
       properties: { note_kind: 'project', lifecycle: 'active', task_status: 'open', desired_outcome: '', next_action: '', completion_criteria: [] },
-      markdown: '# {{title}}\n\n## Desired outcome\n\n## Completion criteria\n- [ ] \n\n## Next action\n\n## Support\n- [[ ]]\n',
+      markdown: guidanceText('guid-f370ae5b6d3fef83', '# {{title}}\n\n## Desired outcome\n\n## Completion criteria\n- [ ] \n\n## Next action\n\n## Support\n- [[ ]]\n'),
     },
     moc: {
-      purpose: 'A map of content that answers a bounded set of navigation questions.',
+      purpose: guidanceText('guid-483bf8ff5f940713', 'A map of content that answers a bounded set of navigation questions.'),
       properties: { note_kind: 'moc', lifecycle: 'active', moc_questions: [] },
-      markdown: '# {{title}}\n\n## Purpose\n\n## Questions this map answers\n- \n\n## Map\n- [[ ]]\n',
+      markdown: guidanceText('guid-4428021f806010fc', '# {{title}}\n\n## Purpose\n\n## Questions this map answers\n- \n\n## Map\n- [[ ]]\n'),
     },
     negative: {
-      purpose: 'A reusable record of a failed, rejected, or non-reproducible path.',
+      purpose: guidanceText('guid-aedbb550332e2445', 'A reusable record of a failed, rejected, or non-reproducible path.'),
       properties: { note_kind: 'knowledge', lifecycle: 'review', knowledge_polarity: 'negative', negative_type: 'failure' },
-      markdown: '# {{title}}\n\n## Attempted\n\n## Observed failure\n\n## Reproduction\n\n## Reusable lesson\n',
+      markdown: guidanceText('guid-51b8870e6993b839', '# {{title}}\n\n## Attempted\n\n## Observed failure\n\n## Reproduction\n\n## Reusable lesson\n'),
     },
     concept: {
-      purpose: 'A durable concept card with a clear boundary, examples, and nearby concepts.',
+      purpose: guidanceText('guid-68b4e88301815756', 'A durable concept card with a clear boundary, examples, and nearby concepts.'),
       properties: { note_kind: 'atomic', lifecycle: 'evergreen', knowledge_role: 'concept', summary: '', aliases: [], related: [] },
-      markdown: '# {{title}}\n\n## Definition\n\n## Key properties\n- \n\n## Examples\n- \n\n## Non-examples and boundaries\n- \n\n## Related concepts\n- [[ ]]\n',
+      markdown: guidanceText('guid-1cefdffda6b37391', '# {{title}}\n\n## Definition\n\n## Key properties\n- \n\n## Examples\n- \n\n## Non-examples and boundaries\n- \n\n## Related concepts\n- [[ ]]\n'),
     },
     argument: {
-      purpose: 'A reviewable argument that separates its claim, evidence, warrant, and objections.',
+      purpose: guidanceText('guid-427ea8cdfebba5d0', 'A reviewable argument that separates its claim, evidence, warrant, and objections.'),
       properties: { note_kind: 'atomic', lifecycle: 'review', knowledge_role: 'argument', summary: '', supports: [], contradicts: [], related: [] },
-      markdown: '# {{title}}\n\n## Claim\n\n## Grounds and evidence\n- [[ ]]\n\n## Warrant\n\n## Counterarguments\n- [[ ]]\n\n## Implications\n',
+      markdown: guidanceText('guid-79fd01b6d9f5ffda', '# {{title}}\n\n## Claim\n\n## Grounds and evidence\n- [[ ]]\n\n## Warrant\n\n## Counterarguments\n- [[ ]]\n\n## Implications\n'),
     },
     model: {
-      purpose: 'An explanatory model whose components, mechanism, assumptions, predictions, and limits remain inspectable.',
+      purpose: guidanceText('guid-448100a64361be5e', 'An explanatory model whose components, mechanism, assumptions, predictions, and limits remain inspectable.'),
       properties: { note_kind: 'knowledge', lifecycle: 'review', knowledge_role: 'model', summary: '', derived_from: [], related: [] },
-      markdown: '# {{title}}\n\n## Purpose and scope\n\n## Components\n- \n\n## Relationships and mechanism\n\n## Assumptions\n- \n\n## Predictions\n- \n\n## Limits and failure modes\n- \n\n## Related knowledge\n- [[ ]]\n',
+      markdown: guidanceText('guid-07ee87978bd897b7', '# {{title}}\n\n## Purpose and scope\n\n## Components\n- \n\n## Relationships and mechanism\n\n## Assumptions\n- \n\n## Predictions\n- \n\n## Limits and failure modes\n- \n\n## Related knowledge\n- [[ ]]\n'),
     },
     observation: {
-      purpose: 'A durable observation that keeps context and measurement separate from interpretation.',
+      purpose: guidanceText('guid-0607fad986f6ed0e', 'A durable observation that keeps context and measurement separate from interpretation.'),
       properties: { note_kind: 'atomic', lifecycle: 'review', knowledge_role: 'observation', summary: '', derived_from: [], related: [] },
-      markdown: '# {{title}}\n\n## Context\n\n## Observation\n\n## Method or measurement\n\n## Interpretation\n\n## Related evidence\n- [[ ]]\n',
+      markdown: guidanceText('guid-0e6dbe0aeeed7d97', '# {{title}}\n\n## Context\n\n## Observation\n\n## Method or measurement\n\n## Interpretation\n\n## Related evidence\n- [[ ]]\n'),
     },
     counterargument: {
-      purpose: 'A durable objection linked to the exact claim it challenges and the evidence that supports the objection.',
+      purpose: guidanceText('guid-7f8a2f2fb7903531', 'A durable objection linked to the exact claim it challenges and the evidence that supports the objection.'),
       properties: { note_kind: 'atomic', lifecycle: 'review', knowledge_role: 'counterargument', summary: '', contradicts: [], evidence_paths: [], related: [] },
-      markdown: '# {{title}}\n\n## Target claim\n- [[ ]]\n\n## Objection\n\n## Evidence\n- [[ ]]\n\n## What would change this objection\n\n## Implication\n',
+      markdown: guidanceText('guid-1b7c0a2786bbab48', '# {{title}}\n\n## Target claim\n- [[ ]]\n\n## Objection\n\n## Evidence\n- [[ ]]\n\n## What would change this objection\n\n## Implication\n'),
     },
   };
   const template = templates[templateId] || templates.atomic!;
@@ -537,11 +538,11 @@ const focusHorizonSet = new Set<string>(FOCUS_HORIZONS);
 
 function normalizedList(value: unknown, field: string, maximumItems: number, maximumChars: number): string[] | undefined {
   if (value === undefined || value === null || value === '') return undefined;
-  if (!Array.isArray(value)) throw new Error(`${field} must be an array of strings`);
+  if (!Array.isArray(value)) throw guidanceError(new Error(`${field} must be an array of strings`), 'guid-c49beaf7ea701a04');
   const result = value.map((item, index) => {
-    if (typeof item !== 'string' || !item.trim()) throw new Error(`${field}[${index}] must be a non-empty string`);
+    if (typeof item !== 'string' || !item.trim()) throw guidanceError(new Error(`${field}[${index}] must be a non-empty string`), 'guid-f92747a30151288c');
     const text = item.trim();
-    if (Array.from(text).length > maximumChars) throw new Error(`${field}[${index}] must be ${maximumChars} Unicode characters or fewer`);
+    if (Array.from(text).length > maximumChars) throw guidanceError(new Error(`${field}[${index}] must be ${maximumChars} Unicode characters or fewer`), 'guid-e45372cc8c1527c2');
     return text;
   });
   return Array.from(new Set(result)).slice(0, maximumItems);
@@ -549,10 +550,10 @@ function normalizedList(value: unknown, field: string, maximumItems: number, max
 
 function normalizedRelationMap(value: unknown): Record<string, string[]> | undefined {
   if (value === undefined || value === null) return undefined;
-  if (typeof value !== 'object' || Array.isArray(value)) throw new Error('relations must be an object of typed link arrays');
+  if (typeof value !== 'object' || Array.isArray(value)) throw guidanceError(new Error('relations must be an object of typed link arrays'), 'guid-00dfb94701139b00');
   const result: Record<string, string[]> = {};
   for (const [field, raw] of Object.entries(value as Record<string, unknown>)) {
-    if (!relationFieldSet.has(field)) throw new Error(`Unsupported relation field: ${field}`);
+    if (!relationFieldSet.has(field)) throw guidanceError(new Error(`Unsupported relation field: ${field}`), 'guid-bedbdf6215e36384');
     const normalized = normalizedList(raw, field, 30, 500);
     if (normalized?.length) result[field] = normalized;
   }
@@ -561,10 +562,10 @@ function normalizedRelationMap(value: unknown): Record<string, string[]> | undef
 
 function normalizedRelationNotes(value: unknown): Record<string, string> | undefined {
   if (value === undefined || value === null) return undefined;
-  if (typeof value !== 'object' || Array.isArray(value)) throw new Error('relationNotes must be an object keyed by relation field');
+  if (typeof value !== 'object' || Array.isArray(value)) throw guidanceError(new Error('relationNotes must be an object keyed by relation field'), 'guid-f123a32c826aa353');
   const result: Record<string, string> = {};
   for (const [field, raw] of Object.entries(value as Record<string, unknown>)) {
-    if (!relationFieldSet.has(field)) throw new Error(`Unsupported relation note field: ${field}`);
+    if (!relationFieldSet.has(field)) throw guidanceError(new Error(`Unsupported relation note field: ${field}`), 'guid-55b01a1ec94d5f3d');
     const text = optionalText(raw, `relationNotes.${field}`, 500);
     if (text) result[field] = text;
   }
@@ -573,10 +574,10 @@ function normalizedRelationNotes(value: unknown): Record<string, string> | undef
 
 function normalizedRelationEvidence(value: unknown): Record<string, string[]> | undefined {
   if (value === undefined || value === null) return undefined;
-  if (typeof value !== 'object' || Array.isArray(value)) throw new Error('relationEvidence must be an object keyed by relation field');
+  if (typeof value !== 'object' || Array.isArray(value)) throw guidanceError(new Error('relationEvidence must be an object keyed by relation field'), 'guid-452f8df4ea969ab4');
   const result: Record<string, string[]> = {};
   for (const [field, raw] of Object.entries(value as Record<string, unknown>)) {
-    if (!relationFieldSet.has(field)) throw new Error(`Unsupported relation evidence field: ${field}`);
+    if (!relationFieldSet.has(field)) throw guidanceError(new Error(`Unsupported relation evidence field: ${field}`), 'guid-8053bf80a25b749a');
     const paths = normalizedList(raw, `relationEvidence.${field}`, 8, 500);
     if (paths?.length) result[field] = paths;
   }
@@ -586,49 +587,49 @@ function normalizedRelationEvidence(value: unknown): Record<string, string[]> | 
 export function normalizeReviewChecks(value: unknown): string[] | undefined {
   const checks = normalizedList(value, 'reviewChecks', REVIEW_CHECKS.length, 40);
   if (!checks) return undefined;
-  for (const check of checks) if (!reviewCheckSet.has(check)) throw new Error(`reviewChecks must contain only: ${REVIEW_CHECKS.join(', ')}`);
+  for (const check of checks) if (!reviewCheckSet.has(check)) throw guidanceError(new Error(`reviewChecks must contain only: ${REVIEW_CHECKS.join(', ')}`), 'guid-7eca49c6d2f7f13b');
   return checks;
 }
 
 export function normalizeTaskStatus(value: unknown, fallback?: typeof TASK_STATUSES[number]): typeof TASK_STATUSES[number] | undefined {
   if (value === undefined || value === null || String(value).trim() === '') return fallback;
   const normalized = String(value).trim().toLowerCase();
-  if (!taskStatusSet.has(normalized)) throw new Error(`taskStatus must be one of: ${TASK_STATUSES.join(', ')}`);
+  if (!taskStatusSet.has(normalized)) throw guidanceError(new Error(`taskStatus must be one of: ${TASK_STATUSES.join(', ')}`), 'guid-57fa0628aa3e4524');
   return normalized as typeof TASK_STATUSES[number];
 }
 
 export function normalizeServiceClass(value: unknown, fallback?: typeof SERVICE_CLASSES[number]): typeof SERVICE_CLASSES[number] | undefined {
   if (value === undefined || value === null || String(value).trim() === '') return fallback;
   const normalized = String(value).trim().toLowerCase();
-  if (!serviceClassSet.has(normalized)) throw new Error(`serviceClass must be one of: ${SERVICE_CLASSES.join(', ')}`);
+  if (!serviceClassSet.has(normalized)) throw guidanceError(new Error(`serviceClass must be one of: ${SERVICE_CLASSES.join(', ')}`), 'guid-f9738a0382d62218');
   return normalized as typeof SERVICE_CLASSES[number];
 }
 
 export function normalizeReviewPolicy(value: unknown, fallback?: typeof REVIEW_POLICIES[number]): typeof REVIEW_POLICIES[number] | undefined {
   if (value === undefined || value === null || String(value).trim() === '') return fallback;
   const normalized = String(value).trim().toLowerCase();
-  if (!reviewPolicySet.has(normalized)) throw new Error(`reviewPolicy must be one of: ${REVIEW_POLICIES.join(', ')}`);
+  if (!reviewPolicySet.has(normalized)) throw guidanceError(new Error(`reviewPolicy must be one of: ${REVIEW_POLICIES.join(', ')}`), 'guid-4f04bf4991943632');
   return normalized as typeof REVIEW_POLICIES[number];
 }
 
 export function normalizeVolatilityClass(value: unknown, fallback?: typeof VOLATILITY_CLASSES[number]): typeof VOLATILITY_CLASSES[number] | undefined {
   if (value === undefined || value === null || String(value).trim() === '') return fallback;
   const normalized = String(value).trim().toLowerCase();
-  if (!volatilityClassSet.has(normalized)) throw new Error(`volatilityClass must be one of: ${VOLATILITY_CLASSES.join(', ')}`);
+  if (!volatilityClassSet.has(normalized)) throw guidanceError(new Error(`volatilityClass must be one of: ${VOLATILITY_CLASSES.join(', ')}`), 'guid-cd51a80d4b74b26e');
   return normalized as typeof VOLATILITY_CLASSES[number];
 }
 
 export function normalizeReviewOutcome(value: unknown, fallback?: typeof REVIEW_OUTCOMES[number]): typeof REVIEW_OUTCOMES[number] | undefined {
   if (value === undefined || value === null || String(value).trim() === '') return fallback;
   const normalized = String(value).trim().toLowerCase();
-  if (!reviewOutcomeSet.has(normalized)) throw new Error(`reviewOutcome must be one of: ${REVIEW_OUTCOMES.join(', ')}`);
+  if (!reviewOutcomeSet.has(normalized)) throw guidanceError(new Error(`reviewOutcome must be one of: ${REVIEW_OUTCOMES.join(', ')}`), 'guid-dd7df2166cc14f46');
   return normalized as typeof REVIEW_OUTCOMES[number];
 }
 
 export function normalizeInterpretationStatus(value: unknown, fallback?: typeof INTERPRETATION_STATUSES[number]): typeof INTERPRETATION_STATUSES[number] | undefined {
   if (value === undefined || value === null || String(value).trim() === '') return fallback;
   const normalized = String(value).trim().toLowerCase();
-  if (!interpretationStatusSet.has(normalized)) throw new Error(`interpretationStatus must be one of: ${INTERPRETATION_STATUSES.join(', ')}`);
+  if (!interpretationStatusSet.has(normalized)) throw guidanceError(new Error(`interpretationStatus must be one of: ${INTERPRETATION_STATUSES.join(', ')}`), 'guid-d8d3d1dec9a6ac75');
   return normalized as typeof INTERPRETATION_STATUSES[number];
 }
 
@@ -636,10 +637,10 @@ export function normalizeEpistemicStatus(value: unknown, noteKind: NoteKind, fal
   const supplied = value === undefined || value === null || String(value).trim() === '' ? fallback : String(value).trim().toLowerCase();
   if (!supplied) return undefined;
   const allowed = noteKind === 'question' ? questionStatusSet : noteKind === 'hypothesis' ? hypothesisStatusSet : noteKind === 'experiment' ? experimentStatusSet : noteKind === 'assumption' ? assumptionStatusSet : undefined;
-  if (!allowed) throw new Error('epistemicStatus is only valid for noteKind question, hypothesis, experiment, or assumption');
+  if (!allowed) throw guidanceError(new Error('epistemicStatus is only valid for noteKind question, hypothesis, experiment, or assumption'), 'guid-eb21792a2fa3b589');
   if (!allowed.has(supplied)) {
     const choices = noteKind === 'question' ? QUESTION_STATUSES : noteKind === 'hypothesis' ? HYPOTHESIS_STATUSES : noteKind === 'experiment' ? EXPERIMENT_STATUSES : ASSUMPTION_STATUSES;
-    throw new Error(`epistemicStatus for ${noteKind} must be one of: ${choices.join(', ')}`);
+    throw guidanceError(new Error(`epistemicStatus for ${noteKind} must be one of: ${choices.join(', ')}`), 'guid-3e6b7ca4870b9535');
   }
   return supplied;
 }
@@ -647,82 +648,82 @@ export function normalizeEpistemicStatus(value: unknown, noteKind: NoteKind, fal
 export function normalizeDecisionStatus(value: unknown, fallback?: typeof DECISION_STATUSES[number]): typeof DECISION_STATUSES[number] | undefined {
   if (value === undefined || value === null || String(value).trim() === '') return fallback;
   const normalized = String(value).trim().toLowerCase();
-  if (!decisionStatusSet.has(normalized)) throw new Error(`decisionStatus must be one of: ${DECISION_STATUSES.join(', ')}`);
+  if (!decisionStatusSet.has(normalized)) throw guidanceError(new Error(`decisionStatus must be one of: ${DECISION_STATUSES.join(', ')}`), 'guid-a72050ad4a2a7e05');
   return normalized as typeof DECISION_STATUSES[number];
 }
 
 export function normalizeKnowledgePolarity(value: unknown, fallback?: typeof KNOWLEDGE_POLARITIES[number]): typeof KNOWLEDGE_POLARITIES[number] | undefined {
   if (value === undefined || value === null || String(value).trim() === '') return fallback;
   const normalized = String(value).trim().toLowerCase();
-  if (!knowledgePolaritySet.has(normalized)) throw new Error(`polarity must be one of: ${KNOWLEDGE_POLARITIES.join(', ')}`);
+  if (!knowledgePolaritySet.has(normalized)) throw guidanceError(new Error(`polarity must be one of: ${KNOWLEDGE_POLARITIES.join(', ')}`), 'guid-3f1d5d1896e17cc6');
   return normalized as typeof KNOWLEDGE_POLARITIES[number];
 }
 
 export function normalizeNegativeKind(value: unknown, fallback?: typeof NEGATIVE_KINDS[number]): typeof NEGATIVE_KINDS[number] | undefined {
   if (value === undefined || value === null || String(value).trim() === '') return fallback;
   const normalized = String(value).trim().toLowerCase();
-  if (!negativeKindSet.has(normalized)) throw new Error(`negativeType must be one of: ${NEGATIVE_KINDS.join(', ')}`);
+  if (!negativeKindSet.has(normalized)) throw guidanceError(new Error(`negativeType must be one of: ${NEGATIVE_KINDS.join(', ')}`), 'guid-fa4befb52c40c783');
   return normalized as typeof NEGATIVE_KINDS[number];
 }
 
 export function normalizeClarifyDisposition(value: unknown, fallback?: typeof CLARIFY_DISPOSITIONS[number]): typeof CLARIFY_DISPOSITIONS[number] | undefined {
   if (value === undefined || value === null || String(value).trim() === '') return fallback;
   const normalized = String(value).trim().toLowerCase();
-  if (!clarifyDispositionSet.has(normalized)) throw new Error(`disposition must be one of: ${CLARIFY_DISPOSITIONS.join(', ')}`);
+  if (!clarifyDispositionSet.has(normalized)) throw guidanceError(new Error(`disposition must be one of: ${CLARIFY_DISPOSITIONS.join(', ')}`), 'guid-da3a62bed38ae813');
   return normalized as typeof CLARIFY_DISPOSITIONS[number];
 }
 
 export function normalizeNoteKind(value: unknown, fallback?: NoteKind): NoteKind | undefined {
   if (value === undefined || value === null || String(value).trim() === '') return fallback;
   const normalized = String(value).trim().toLowerCase();
-  if (!noteKindSet.has(normalized)) throw new Error(`noteKind must be one of: ${NOTE_KINDS.join(', ')}`);
+  if (!noteKindSet.has(normalized)) throw guidanceError(new Error(`noteKind must be one of: ${NOTE_KINDS.join(', ')}`), 'guid-3eb2b4aff3cff6f2');
   return normalized as NoteKind;
 }
 
 export function normalizeLifecycle(value: unknown, fallback?: Lifecycle): Lifecycle | undefined {
   if (value === undefined || value === null || String(value).trim() === '') return fallback;
   const normalized = String(value).trim().toLowerCase();
-  if (!lifecycleSet.has(normalized)) throw new Error(`lifecycle must be one of: ${LIFECYCLES.join(', ')}`);
+  if (!lifecycleSet.has(normalized)) throw guidanceError(new Error(`lifecycle must be one of: ${LIFECYCLES.join(', ')}`), 'guid-2c0ded8f20a601be');
   return normalized as Lifecycle;
 }
 
 export function normalizeFocusHorizon(value: unknown, fallback?: typeof FOCUS_HORIZONS[number]): typeof FOCUS_HORIZONS[number] | undefined {
   if (value === undefined || value === null || String(value).trim() === '') return fallback;
   const normalized = String(value).trim().toLowerCase();
-  if (!focusHorizonSet.has(normalized)) throw new Error(`focusHorizon must be one of: ${FOCUS_HORIZONS.join(', ')}`);
+  if (!focusHorizonSet.has(normalized)) throw guidanceError(new Error(`focusHorizon must be one of: ${FOCUS_HORIZONS.join(', ')}`), 'guid-b6d85b5f4f6c2044');
   return normalized as typeof FOCUS_HORIZONS[number];
 }
 
 export function normalizeTermStatus(value: unknown, fallback: typeof TERM_STATUSES[number] = 'preferred'): typeof TERM_STATUSES[number] {
   const normalized = String(value ?? fallback).trim().toLowerCase() || fallback;
-  if (!termStatusSet.has(normalized)) throw new Error(`termStatus must be one of: ${TERM_STATUSES.join(', ')}`);
+  if (!termStatusSet.has(normalized)) throw guidanceError(new Error(`termStatus must be one of: ${TERM_STATUSES.join(', ')}`), 'guid-6fa73d98991f45b6');
   return normalized as typeof TERM_STATUSES[number];
 }
 
 export function normalizeKnowledgeRole(value: unknown, fallback?: typeof KNOWLEDGE_ROLES[number]): typeof KNOWLEDGE_ROLES[number] | undefined {
   if (value === undefined || value === null || String(value).trim() === '') return fallback;
   const normalized = String(value).trim().toLowerCase();
-  if (!knowledgeRoleSet.has(normalized)) throw new Error(`knowledgeRole must be one of: ${KNOWLEDGE_ROLES.join(', ')}`);
+  if (!knowledgeRoleSet.has(normalized)) throw guidanceError(new Error(`knowledgeRole must be one of: ${KNOWLEDGE_ROLES.join(', ')}`), 'guid-0cfd597f0f8b8d85');
   return normalized as typeof KNOWLEDGE_ROLES[number];
 }
 
 export function normalizeRecallQuality(value: unknown, fallback: typeof RECALL_QUALITIES[number] = 'unseen'): typeof RECALL_QUALITIES[number] {
   const normalized = String(value ?? fallback).trim().toLowerCase() || fallback;
-  if (!recallQualitySet.has(normalized)) throw new Error(`recallQuality must be one of: ${RECALL_QUALITIES.join(', ')}`);
+  if (!recallQualitySet.has(normalized)) throw guidanceError(new Error(`recallQuality must be one of: ${RECALL_QUALITIES.join(', ')}`), 'guid-9da1e0acb943b880');
   return normalized as typeof RECALL_QUALITIES[number];
 }
 
 export function normalizeRetentionPolicy(value: unknown, fallback?: typeof RETENTION_POLICIES[number]): typeof RETENTION_POLICIES[number] | undefined {
   if (value === undefined || value === null || String(value).trim() === '') return fallback;
   const normalized = String(value).trim().toLowerCase();
-  if (!retentionPolicySet.has(normalized)) throw new Error(`retentionPolicy must be one of: ${RETENTION_POLICIES.join(', ')}`);
+  if (!retentionPolicySet.has(normalized)) throw guidanceError(new Error(`retentionPolicy must be one of: ${RETENTION_POLICIES.join(', ')}`), 'guid-db8f3b77cb1de71c');
   return normalized as typeof RETENTION_POLICIES[number];
 }
 
 export function normalizeRetentionEvent(value: unknown, fallback?: typeof RETENTION_EVENTS[number]): typeof RETENTION_EVENTS[number] | undefined {
   if (value === undefined || value === null || String(value).trim() === '') return fallback;
   const normalized = String(value).trim().toLowerCase();
-  if (!retentionEventSet.has(normalized)) throw new Error(`retentionEvent must be one of: ${RETENTION_EVENTS.join(', ')}`);
+  if (!retentionEventSet.has(normalized)) throw guidanceError(new Error(`retentionEvent must be one of: ${RETENTION_EVENTS.join(', ')}`), 'guid-68328eaf1a040c82');
   return normalized as typeof RETENTION_EVENTS[number];
 }
 
@@ -732,7 +733,7 @@ export function normalizeBoolean(value: unknown, field: string, fallback?: boole
   const normalized = String(value).trim().toLowerCase();
   if (normalized === 'true') return true;
   if (normalized === 'false') return false;
-  throw new Error(`${field} must be a boolean`);
+  throw guidanceError(new Error(`${field} must be a boolean`), 'guid-1c2438cf2877710d');
 }
 
 interface SummaryHighlight {
@@ -744,19 +745,19 @@ interface SummaryHighlight {
 
 function normalizedHighlights(value: unknown, field: string): SummaryHighlight[] | undefined {
   if (value === undefined || value === null || value === '') return undefined;
-  if (!Array.isArray(value)) throw new Error(`${field} must be an array of highlight objects`);
+  if (!Array.isArray(value)) throw guidanceError(new Error(`${field} must be an array of highlight objects`), 'guid-579bc987fbcb7adf');
   const result = value.slice(0, 12).map((item, index) => {
-    if (!item || typeof item !== 'object' || Array.isArray(item)) throw new Error(`${field}[${index}] must be an object`);
+    if (!item || typeof item !== 'object' || Array.isArray(item)) throw guidanceError(new Error(`${field}[${index}] must be an object`), 'guid-555be4e6988f5283');
     const raw = item as Record<string, unknown>;
     const text = optionalText(raw.text, `${field}[${index}].text`, 600);
-    if (!text) throw new Error(`${field}[${index}].text is required`);
+    if (!text) throw guidanceError(new Error(`${field}[${index}].text is required`), 'guid-1b87268a4d39b347');
     const startLine = raw.startLine === undefined ? undefined : Number(raw.startLine);
     const endLine = raw.endLine === undefined ? undefined : Number(raw.endLine);
-    if (startLine !== undefined && (!Number.isInteger(startLine) || startLine < 1)) throw new Error(`${field}[${index}].startLine must be a positive integer`);
-    if (endLine !== undefined && (!Number.isInteger(endLine) || endLine < 1)) throw new Error(`${field}[${index}].endLine must be a positive integer`);
-    if (startLine !== undefined && endLine !== undefined && endLine < startLine) throw new Error(`${field}[${index}].endLine must be greater than or equal to startLine`);
+    if (startLine !== undefined && (!Number.isInteger(startLine) || startLine < 1)) throw guidanceError(new Error(`${field}[${index}].startLine must be a positive integer`), 'guid-e1ec3d9515dbd8a8');
+    if (endLine !== undefined && (!Number.isInteger(endLine) || endLine < 1)) throw guidanceError(new Error(`${field}[${index}].endLine must be a positive integer`), 'guid-515f4e7fcf3eaaf3');
+    if (startLine !== undefined && endLine !== undefined && endLine < startLine) throw guidanceError(new Error(`${field}[${index}].endLine must be greater than or equal to startLine`), 'guid-5a946218d7900897');
     const quoteHash = raw.quoteHash === undefined ? undefined : optionalText(raw.quoteHash, `${field}[${index}].quoteHash`, 128);
-    if (quoteHash && !/^[a-f0-9]{64}$/i.test(quoteHash)) throw new Error(`${field}[${index}].quoteHash must be a SHA-256 hexadecimal digest`);
+    if (quoteHash && !/^[a-f0-9]{64}$/i.test(quoteHash)) throw guidanceError(new Error(`${field}[${index}].quoteHash must be a SHA-256 hexadecimal digest`), 'guid-f4d891be4a67aad9');
     return { text, ...(startLine !== undefined && { startLine }), ...(endLine !== undefined && { endLine }), ...(quoteHash && { quoteHash }) };
   });
   return result.length ? result : undefined;
@@ -774,7 +775,7 @@ export function lifecycleForKnowledgeStatus(status: string): Lifecycle {
 function optionalText(value: unknown, field: string, maximum: number): string | undefined {
   if (value === undefined || value === null || String(value).trim() === '') return undefined;
   const text = String(value).trim();
-  if (Array.from(text).length > maximum) throw new Error(`${field} must be ${maximum} Unicode characters or fewer`);
+  if (Array.from(text).length > maximum) throw guidanceError(new Error(`${field} must be ${maximum} Unicode characters or fewer`), 'guid-ece47846ed48d00b');
   return text;
 }
 
@@ -821,7 +822,7 @@ export function normalizeKnowledgeDisposition(input: KnowledgeDispositionInput, 
     500,
   );
   if (input.noReusableKnowledge !== undefined && typeof input.noReusableKnowledge !== 'boolean') {
-    throw new Error('noReusableKnowledge must be a boolean');
+    throw guidanceError(new Error('noReusableKnowledge must be a boolean'), 'guid-8bc7b2dcf4fba5f0');
   }
   const priorDispositions = Array.isArray(existing.knowledge_dispositions)
     ? existing.knowledge_dispositions.map(value => String(value).trim().toLowerCase())
@@ -845,13 +846,13 @@ export function normalizeKnowledgeDisposition(input: KnowledgeDispositionInput, 
     ...(noReusableKnowledge ? ['no_reusable_knowledge'] : []),
   ];
   if (noReusableKnowledge && !knowledgeDispositionReason) {
-    throw new Error('knowledgeDispositionReason is required when noReusableKnowledge=true');
+    throw guidanceError(new Error('knowledgeDispositionReason is required when noReusableKnowledge=true'), 'guid-84643e7e0f892937');
   }
   if (knowledgeDispositionReason && !noReusableKnowledge) {
-    throw new Error('knowledgeDispositionReason is only valid when noReusableKnowledge=true');
+    throw guidanceError(new Error('knowledgeDispositionReason is only valid when noReusableKnowledge=true'), 'guid-07091559974647e3');
   }
   if (noReusableKnowledge && knowledgeDispositions.some(value => value !== 'no_reusable_knowledge')) {
-    throw new Error('noReusableKnowledge cannot be combined with retrospective or knowledge note artifacts');
+    throw guidanceError(new Error('noReusableKnowledge cannot be combined with retrospective or knowledge note artifacts'), 'guid-a9d807291d9287fb');
   }
   return {
     ...(knowledgeNotes !== undefined && { knowledgeNotes }),
@@ -870,15 +871,15 @@ export function normalizeReviewAt(value: unknown): string | undefined {
 export function normalizeReviewIntervalDays(value: unknown, fallback?: number): number | undefined {
   if (value === undefined || value === null || String(value).trim() === '') return fallback;
   const days = Number(value);
-  if (!Number.isInteger(days) || days < 1 || days > 3650) throw new Error('reviewIntervalDays must be an integer from 1 to 3650');
+  if (!Number.isInteger(days) || days < 1 || days > 3650) throw guidanceError(new Error('reviewIntervalDays must be an integer from 1 to 3650'), 'guid-e84d436844225bcc');
   return days;
 }
 
 export function normalizeNavOrder(value: unknown, fallback?: number): number | undefined {
   if (value === undefined || value === null || String(value).trim() === '') return fallback;
-  if (typeof value !== 'number' && typeof value !== 'string') throw new Error('navOrder must be an integer from 0 to 1000000');
+  if (typeof value !== 'number' && typeof value !== 'string') throw guidanceError(new Error('navOrder must be an integer from 0 to 1000000'), 'guid-a726222b98723175');
   const order = Number(value);
-  if (!Number.isInteger(order) || order < 0 || order > 1_000_000) throw new Error('navOrder must be an integer from 0 to 1000000');
+  if (!Number.isInteger(order) || order < 0 || order > 1_000_000) throw guidanceError(new Error('navOrder must be an integer from 0 to 1000000'), 'guid-a726222b98723175');
   return order;
 }
 
@@ -922,10 +923,10 @@ export function workDateState(frontmatter: Record<string, unknown>, asOfMs = Dat
 }
 
 export function normalizeIsoDate(value: unknown, field: string): string | undefined {
-  if (value !== undefined && value !== null && typeof value !== 'string') throw new Error(`${field} must be an ISO date or date-time`);
+  if (value !== undefined && value !== null && typeof value !== 'string') throw guidanceError(new Error(`${field} must be an ISO date or date-time`), 'guid-0be1432d906a603c');
   const date = optionalText(value, field, 40);
   if (!date) return undefined;
-  if (!isIsoDateText(date)) throw new Error(`${field} must be an ISO date or date-time`);
+  if (!isIsoDateText(date)) throw guidanceError(new Error(`${field} must be an ISO date or date-time`), 'guid-0be1432d906a603c');
   return date;
 }
 
@@ -1133,7 +1134,7 @@ function assertKnowledgeInputApplicability(input: KnowledgeOrganizationInput, ki
     const readableTargets = targets.length <= 1
       ? targets.join('')
       : `${targets.slice(0, -1).join(', ')}, or ${targets.at(-1)}`;
-    throw new Error(`${inputName} is only valid for noteKind ${readableTargets}`);
+    throw guidanceError(new Error(`${inputName} is only valid for noteKind ${readableTargets}`), 'guid-1cc05e4518aea615');
   }
 }
 
@@ -1142,13 +1143,13 @@ export function knowledgeOrganization(input: KnowledgeOrganizationInput): Record
   const executionHints: Record<string, unknown> = {};
   if (input.tags !== undefined) executionHints.tags = normalizedList(input.tags, 'tags', 30, 100) || [];
   if (input.timeEstimateMinutes !== undefined) {
-    if (typeof input.timeEstimateMinutes !== 'number' || !Number.isInteger(input.timeEstimateMinutes) || input.timeEstimateMinutes < 1 || input.timeEstimateMinutes > 1440) throw new Error('timeEstimateMinutes must be an integer from 1 to 1440');
+    if (typeof input.timeEstimateMinutes !== 'number' || !Number.isInteger(input.timeEstimateMinutes) || input.timeEstimateMinutes < 1 || input.timeEstimateMinutes > 1440) throw guidanceError(new Error('timeEstimateMinutes must be an integer from 1 to 1440'), 'guid-3ed8c4717daf5942');
     executionHints.time_estimate_minutes = input.timeEstimateMinutes;
   }
   for (const field of ['energy', 'effort'] as const) {
     if (input[field] === undefined) continue;
     const value = String(input[field]).trim().toLowerCase();
-    if (!(EXECUTION_LEVELS as readonly string[]).includes(value)) throw new Error(`${field} must be low, medium, or high`);
+    if (!(EXECUTION_LEVELS as readonly string[]).includes(value)) throw guidanceError(new Error(`${field} must be low, medium, or high`), 'guid-aa504ace76fd8475');
     executionHints[field] = value;
   }
   const existingKind = normalizeNoteKind(existing.note_kind);
@@ -1188,7 +1189,7 @@ export function knowledgeOrganization(input: KnowledgeOrganizationInput): Record
   const summaryLayer = input.summaryLayer === undefined
     ? (existing.summary_layer === undefined ? undefined : Number(existing.summary_layer))
     : Number(input.summaryLayer);
-  if (summaryLayer !== undefined && (!Number.isInteger(summaryLayer) || summaryLayer < 0 || summaryLayer > 4)) throw new Error('summaryLayer must be an integer from 0 to 4');
+  if (summaryLayer !== undefined && (!Number.isInteger(summaryLayer) || summaryLayer < 0 || summaryLayer > 4)) throw guidanceError(new Error('summaryLayer must be an integer from 0 to 4'), 'guid-1c214ef7a09fd4ff');
   const summaryHighlights = input.summaryHighlights === undefined ? normalizedHighlights(existing.summary_highlights, 'summaryHighlights') : normalizedHighlights(input.summaryHighlights, 'summaryHighlights');
   const knowledgeApplications = input.knowledgeApplications === undefined
     ? normalizeKnowledgeApplications(existing.knowledge_applications)
@@ -1210,9 +1211,9 @@ export function knowledgeOrganization(input: KnowledgeOrganizationInput): Record
   const waitingSince = input.waitingSince === undefined ? normalizeIsoDate(existing.waiting_since, 'waitingSince') : normalizeIsoDate(input.waitingSince, 'waitingSince');
   const completedAt = input.completedAt === undefined ? normalizeIsoDate(existing.completed_at, 'completedAt') : normalizeIsoDate(input.completedAt, 'completedAt');
   const stableId = input.stableId === undefined ? optionalText(existing.stable_id, 'stable_id', 80) : optionalText(input.stableId, 'stable_id', 80);
-  if (stableId && !/^[a-z0-9][a-z0-9._-]*$/i.test(stableId)) throw new Error('stableId may contain only letters, numbers, dots, underscores, and hyphens');
+  if (stableId && !/^[a-z0-9][a-z0-9._-]*$/i.test(stableId)) throw guidanceError(new Error('stableId may contain only letters, numbers, dots, underscores, and hyphens'), 'guid-f98c35d2ae8f5fc5');
   const canonicalPath = input.canonicalPath === undefined ? optionalText(existing.canonical_path, 'canonicalPath', 500) : optionalText(input.canonicalPath, 'canonicalPath', 500);
-  if (canonicalPath && (/^(?:[A-Za-z]:[\\/]|\\\\|\/)/.test(canonicalPath) || canonicalPath.split(/[\\/]/).includes('..'))) throw new Error('canonicalPath must be a scope-safe vault-relative path');
+  if (canonicalPath && (/^(?:[A-Za-z]:[\\/]|\\\\|\/)/.test(canonicalPath) || canonicalPath.split(/[\\/]/).includes('..'))) throw guidanceError(new Error('canonicalPath must be a scope-safe vault-relative path'), 'guid-c7b043f0971f7a99');
   const termStatus = input.termStatus === undefined ? normalizeTermStatus(existing.term_status) : normalizeTermStatus(input.termStatus);
   const termReplacedBy = input.termReplacedBy === undefined ? optionalText(existing.term_replaced_by, 'termReplacedBy', 500) : optionalText(input.termReplacedBy, 'termReplacedBy', 500);
   const termScopeNote = input.termScopeNote === undefined ? optionalText(existing.term_scope_note, 'termScopeNote', 1000) : optionalText(input.termScopeNote, 'termScopeNote', 1000);
@@ -1233,7 +1234,7 @@ export function knowledgeOrganization(input: KnowledgeOrganizationInput): Record
   const validUntil = input.validUntil === undefined ? normalizeIsoDate(existing.valid_until, 'validUntil') : normalizeIsoDate(input.validUntil, 'validUntil');
   const observedAt = input.observedAt === undefined ? normalizeIsoDate(existing.observed_at, 'observedAt') : normalizeIsoDate(input.observedAt, 'observedAt');
   const temporalScope = input.temporalScope === undefined ? optionalText(existing.temporal_scope, 'temporalScope', 1000) : optionalText(input.temporalScope, 'temporalScope', 1000);
-  if (validFrom && validUntil && Date.parse(validUntil) <= Date.parse(validFrom)) throw new Error('validUntil must be later than validFrom; validFrom is inclusive and validUntil is exclusive');
+  if (validFrom && validUntil && Date.parse(validUntil) <= Date.parse(validFrom)) throw guidanceError(new Error('validUntil must be later than validFrom; validFrom is inclusive and validUntil is exclusive'), 'guid-acfd1e0917cbf700');
   const knowledgeRole = input.knowledgeRole === undefined ? normalizeKnowledgeRole(existing.knowledge_role) : normalizeKnowledgeRole(input.knowledgeRole);
   const seeAlso = input.seeAlso === undefined ? normalizedList(existing.see_also, 'seeAlso', 20, 500) : normalizedList(input.seeAlso, 'seeAlso', 20, 500);
   const relationsInput = input.relations === undefined
@@ -1284,8 +1285,8 @@ export function knowledgeOrganization(input: KnowledgeOrganizationInput): Record
   const focusHorizon = input.focusHorizon === undefined ? normalizeFocusHorizon(existing.focus_horizon) : normalizeFocusHorizon(input.focusHorizon);
   const focusParent = input.focusParent === undefined ? optionalText(existing.focus_parent, 'focusParent', 500) : optionalText(input.focusParent, 'focusParent', 500);
   const focusSupports = input.focusSupports === undefined ? normalizedList(existing.focus_supports, 'focusSupports', 20, 500) : normalizedList(input.focusSupports, 'focusSupports', 20, 500);
-  if (negativeType && polarity !== 'negative') throw new Error('negativeType requires polarity=negative');
-  if (polarity === 'negative' && !negativeType) throw new Error('polarity=negative requires negativeType');
+  if (negativeType && polarity !== 'negative') throw guidanceError(new Error('negativeType requires polarity=negative'), 'guid-69cff2b80c3c3cf0');
+  if (polarity === 'negative' && !negativeType) throw guidanceError(new Error('polarity=negative requires negativeType'), 'guid-2eb27e6f6ccde747');
   const summaryFieldsPresent = Boolean(summary || keyPoints?.length || openQuestions?.length || summaryLayer !== undefined || summaryHighlights?.length);
   // Filing/review edits must never certify an inherited stale summary.
   const projectionRewritten = [input.summary, input.keyPoints, input.openQuestions, input.summaryHighlights].some(value => value !== undefined);

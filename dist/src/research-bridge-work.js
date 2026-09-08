@@ -1,8 +1,10 @@
+import { guidanceError } from './guidance-runtime.js';
+import { guidanceText } from './guidance-runtime.js';
 import { isModerationHidden } from './moderation-policy.js';
 import { endpointIdForTool } from './endpoint-registry.js';
 export function researchWorkIds(researchKey) {
     if (!/^[a-f0-9]{64}$/.test(researchKey))
-        throw Error('Invalid research key');
+        throw guidanceError(Error('Invalid research key'), 'guid-a53b6ad54c950b88');
     const taskId = `research-${researchKey.slice(0, 48)}`;
     return { taskId, taskPath: `Community/Tasks/${taskId}.md`, workshopId: taskId, workshopPath: `Community/Workshops/${taskId}.md` };
 }
@@ -17,9 +19,9 @@ export async function researchWorkPacket(fs, access, params) {
 async function readResearchWorkPacket(fs, access, params) {
     const ids = researchWorkIds(params.researchKey);
     if (!params.inputs.length || params.inputs.length > 4 || params.query.length > 1000)
-        throw Error('Invalid research inputs');
+        throw guidanceError(Error('Invalid research inputs'), 'guid-b3d6a170358ce71b');
     if (params.publicRequestId !== undefined && !/^[a-zA-Z0-9_-]{1,128}$/.test(params.publicRequestId))
-        throw Error('Invalid public retry key');
+        throw guidanceError(Error('Invalid public retry key'), 'guid-e44c7f53c364ee1c');
     for (const input of params.inputs) {
         try {
             const p = access.resolveExternalPath(input.path, params.principal);
@@ -67,10 +69,10 @@ async function readResearchWorkPacket(fs, access, params) {
     if (!params.projectId || !params.principal)
         return { state: 'needs_project' };
     if (!/^[a-z0-9][a-z0-9_-]{0,63}$/.test(params.projectId))
-        throw Error('Invalid research project');
+        throw guidanceError(Error('Invalid research project'), 'guid-1f140a965cfe06c8');
     return { state: 'proposed', taskId: ids.taskId, createAction: { endpointId: endpointIdForTool('create_agent_task'), arguments: {
                 taskId: ids.taskId, projectId: params.projectId, expectedRevision: 'missing', requestId: ids.taskId,
-                title: 'Investigate a cross-domain connection', description: `Research key: ${params.researchKey}\nQuestion: ${params.query}\nInputs:\n${params.inputs.map(i => `[[${i.path}]] revision ${i.revision}`).join('\n')}\nPreserve mapping, counterexamples, prior-work search and minimum test. Web unavailable means verification pending.`,
+                title: 'Investigate a cross-domain connection', description: guidanceText('guid-739318e23d105dce', `Research key: ${params.researchKey}\nQuestion: ${params.query}\nInputs:\n${params.inputs.map(i => `[[${i.path}]] revision ${i.revision}`).join('\n')}\nPreserve mapping, counterexamples, prior-work search and minimum test. Web unavailable means verification pending.`),
                 completionCriteria: ['Record mapping, assumptions and counterexamples', 'Record prior-work status and exact search coverage', 'Preserve test criteria, results and next question'],
             } } };
 }

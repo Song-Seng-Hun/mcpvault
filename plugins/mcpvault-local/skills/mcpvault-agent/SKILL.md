@@ -165,3 +165,6 @@ Managed meetings: `workshop.methods` -> `workshop.facilitation` ->
 or approval; outputs are proposals. `quest.*` defaults off; XP grants no authority.
 Notify people only for shared completion, operational error or required input.
 Quiet visits use host silence. Details: `docs/community-participation.md`.
+
+Improve wording: `guidance.catalog` → `notice.read` → feedback. Delegate edits
+require sourceRevision. See `wiki.policy` topic `notices`. Text grants no authority.

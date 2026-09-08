@@ -1,3 +1,4 @@
+import { guidanceError, guidanceText } from './guidance-runtime.js';
 import { createHash } from 'node:crypto';
 import type { FileSystemService } from './filesystem.js';
 import { ScopeAccessPolicy } from './scope-access.js';
@@ -16,20 +17,20 @@ function ownerPath(principal: ScopePrincipal): string {
 }
 
 function requiredPrincipal(principal?: ScopePrincipal): ScopePrincipal {
-  if (!principal) throw new Error('Login is required to save or resume private work state');
+  if (!principal) throw guidanceError(new Error('Login is required to save or resume private work state'), 'guid-92b2d0df72da1698');
   return principal;
 }
 
 function short(value: unknown, field: string, required = false): string | undefined {
   const result = String(value ?? '').trim();
-  if (required && !result) throw new Error(`${field} is required`);
-  if (result.length > MAX_TEXT) throw new Error(`${field} must be ${MAX_TEXT} characters or fewer`);
+  if (required && !result) throw guidanceError(new Error(`${field} is required`), 'guid-0c6fd33ea1895f5e');
+  if (result.length > MAX_TEXT) throw guidanceError(new Error(`${field} must be ${MAX_TEXT} characters or fewer`), 'guid-14159076104d2d61');
   return result || undefined;
 }
 
 function list(value: unknown, field: string): string[] | undefined {
   if (value === undefined) return undefined;
-  if (!Array.isArray(value)) throw new Error(`${field} must be an array of strings`);
+  if (!Array.isArray(value)) throw guidanceError(new Error(`${field} must be an array of strings`), 'guid-c49beaf7ea701a04');
   return Array.from(new Set(value.map(item => String(item).trim()).filter(Boolean))).slice(0, 20).map(item => item.slice(0, 500));
 }
 
@@ -105,7 +106,7 @@ function packResumeState(full: ResumeState, maxChars: number, prettyPrint: boole
     result.understanding = { state: result.understanding.state, canResume: false, detailsOmitted: true };
     result.nextAction = { endpointId: 'continuity.resume', arguments: { maxChars: 12000 } };
   }
-  if (!fits(result)) throw new Error('Resume identity and safety state exceed maxChars; retry continuity.resume with maxChars=12000 and prettyPrint=false.');
+  if (!fits(result)) throw guidanceError(new Error('Resume identity and safety state exceed maxChars; retry continuity.resume with maxChars=12000 and prettyPrint=false.'), 'guid-03ff3c9c7205c93a');
 
   const fitBody = (length: number) => {
     let low = 0, high = length;
@@ -149,19 +150,19 @@ function packResumeState(full: ResumeState, maxChars: number, prettyPrint: boole
 
 function pendingEdits(value: unknown): PendingEdit[] | undefined {
   if (value === undefined) return undefined;
-  if (!Array.isArray(value)) throw new Error('pendingEdits must be an array');
+  if (!Array.isArray(value)) throw guidanceError(new Error('pendingEdits must be an array'), 'guid-a80da8953b8ffbb7');
   const result: PendingEdit[] = [];
   for (const raw of value.slice(0, 20)) {
-    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('Each pendingEdit must be an object');
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw guidanceError(new Error('Each pendingEdit must be an object'), 'guid-ecc01251f2a70457');
     const item = raw as Record<string, unknown>;
     const path = String(item.path ?? '').trim().replace(/\\/g, '/');
     const expectedRevision = String(item.expectedRevision ?? '').trim();
     const endpointId = String(item.endpointId ?? '').trim().toLowerCase();
     const purpose = String(item.purpose ?? '').trim().replace(/\s+/g, ' ');
-    if (!path || path.length > 500 || path.split('/').includes('..')) throw new Error('pendingEdit.path must be a safe note path or scope URI of 500 characters or fewer');
-    if (!expectedRevision || expectedRevision.length > 200) throw new Error('pendingEdit.expectedRevision is required and must be 200 characters or fewer');
-    if (!/^[a-z0-9][a-z0-9._-]{0,119}$/.test(endpointId)) throw new Error('pendingEdit.endpointId must be a valid endpoint id');
-    if (purpose.length > 500) throw new Error('pendingEdit.purpose must be 500 characters or fewer');
+    if (!path || path.length > 500 || path.split('/').includes('..')) throw guidanceError(new Error('pendingEdit.path must be a safe note path or scope URI of 500 characters or fewer'), 'guid-9e3187d5f871bd1a');
+    if (!expectedRevision || expectedRevision.length > 200) throw guidanceError(new Error('pendingEdit.expectedRevision is required and must be 200 characters or fewer'), 'guid-cf01bbc9f2254190');
+    if (!/^[a-z0-9][a-z0-9._-]{0,119}$/.test(endpointId)) throw guidanceError(new Error('pendingEdit.endpointId must be a valid endpoint id'), 'guid-031fc3b30efc890f');
+    if (purpose.length > 500) throw guidanceError(new Error('pendingEdit.purpose must be 500 characters or fewer'), 'guid-bf4eac346e08ba25');
     const normalized = { path, expectedRevision, endpointId, ...(purpose && { purpose }) };
     if (!result.some(existing => existing.path === path && existing.endpointId === endpointId)) result.push(normalized);
   }
@@ -170,19 +171,19 @@ function pendingEdits(value: unknown): PendingEdit[] | undefined {
 
 function researchTrail(value: unknown): ResearchTrailItem[] | undefined {
   if (value === undefined) return undefined;
-  if (!Array.isArray(value)) throw new Error('researchTrail must be an array');
+  if (!Array.isArray(value)) throw guidanceError(new Error('researchTrail must be an array'), 'guid-f9024625898ca217');
   const result: ResearchTrailItem[] = [];
   for (const raw of value.slice(0, 20)) {
-    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('Each researchTrail item must be an object');
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw guidanceError(new Error('Each researchTrail item must be an object'), 'guid-5981c36a9d489e8e');
     const item = raw as Record<string, unknown>;
     const kind = String(item.kind ?? '').trim().toLowerCase() as ResearchTrailItem['kind'];
     const summary = String(item.summary ?? '').trim().replace(/\s+/g, ' ');
     const path = String(item.path ?? '').trim().replace(/\\/g, '/');
     const revision = String(item.revision ?? '').trim();
-    if (!['query', 'read', 'finding', 'decision'].includes(kind)) throw new Error('researchTrail.kind must be query, read, finding, or decision');
-    if (!summary || summary.length > 500) throw new Error('researchTrail.summary is required and must be 500 characters or fewer');
-    if (path && (path.length > 500 || path.split('/').includes('..'))) throw new Error('researchTrail.path must be a safe note path or scope URI of 500 characters or fewer');
-    if (revision.length > 200) throw new Error('researchTrail.revision must be 200 characters or fewer');
+    if (!['query', 'read', 'finding', 'decision'].includes(kind)) throw guidanceError(new Error('researchTrail.kind must be query, read, finding, or decision'), 'guid-9373d38e4481d9e8');
+    if (!summary || summary.length > 500) throw guidanceError(new Error('researchTrail.summary is required and must be 500 characters or fewer'), 'guid-8804a19ce913f059');
+    if (path && (path.length > 500 || path.split('/').includes('..'))) throw guidanceError(new Error('researchTrail.path must be a safe note path or scope URI of 500 characters or fewer'), 'guid-de4b63ed723c8e4b');
+    if (revision.length > 200) throw guidanceError(new Error('researchTrail.revision must be 200 characters or fewer'), 'guid-12a3373d788b2e04');
     const normalized = { kind, summary, ...(path && { path }), ...(revision && { revision }) };
     if (!result.some(existing => existing.kind === kind && existing.summary === summary && existing.path === path)) result.push(normalized);
   }
@@ -232,10 +233,10 @@ export class ContinuityService {
 
   private physicalLearningPath(value: unknown, field: string, principal: ScopePrincipal): string {
     const raw = String(value ?? '').trim();
-    if (!raw || raw.length > 500) throw new Error(`${field} is required and must be 500 characters or fewer`);
+    if (!raw || raw.length > 500) throw guidanceError(new Error(`${field} is required and must be 500 characters or fewer`), 'guid-5471d8b0a2aabefe');
     const path = this.access.resolveExternalPath(raw, principal).replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
     if (!path || path.split('/').some(part => part === '.' || part === '..') || !this.access.canAccessPhysicalPath(path, principal)) {
-      throw new Error(`${field} must be a visible, safe note path`);
+      throw guidanceError(new Error(`${field} must be a visible, safe note path`), 'guid-405b63ed8188e1ae');
     }
     return path;
   }
@@ -243,18 +244,18 @@ export class ContinuityService {
   private async prepareLearningProgress(principal: ScopePrincipal, value: unknown): Promise<LearningProgress | undefined> {
     if (value === undefined) return undefined;
     const input = record(value);
-    if (!input) throw new Error('learningProgress must be an object');
-    if (!this.buildLearningPath) throw new Error('Learning-path checkpoints are unavailable on this server');
+    if (!input) throw guidanceError(new Error('learningProgress must be an object'), 'guid-ca0bd48aa887b743');
+    if (!this.buildLearningPath) throw guidanceError(new Error('Learning-path checkpoints are unavailable on this server'), 'guid-b076df246b2c0795');
     const rootPath = this.physicalLearningPath(input.rootPath, 'learningProgress.rootPath', principal);
     const order = String(input.order || 'authored').trim().toLowerCase() as LearningOrder;
-    if (!['authored', 'recommended'].includes(order)) throw new Error('learningProgress.order must be authored or recommended');
+    if (!['authored', 'recommended'].includes(order)) throw guidanceError(new Error('learningProgress.order must be authored or recommended'), 'guid-9faaf41144dc6bc2');
     const maxDepth = input.maxDepth === undefined ? 2 : Number(input.maxDepth);
-    if (!Number.isInteger(maxDepth) || maxDepth < 0 || maxDepth > 6) throw new Error('learningProgress.maxDepth must be an integer from 0 to 6');
+    if (!Number.isInteger(maxDepth) || maxDepth < 0 || maxDepth > 6) throw guidanceError(new Error('learningProgress.maxDepth must be an integer from 0 to 6'), 'guid-d5955d23f0f07f85');
 
     const projection = await this.buildLearningPath(principal, rootPath, maxDepth, MAX_LEARNING_ENTRIES, 16_000);
     const root = record(projection.root);
     const rootRevision = String(root?.revision || '').toLowerCase();
-    if (!REVISION_PATTERN.test(rootRevision)) throw new Error('The learning path did not return a valid root revision');
+    if (!REVISION_PATTERN.test(rootRevision)) throw guidanceError(new Error('The learning path did not return a valid root revision'), 'guid-833b0f17ce8cdae2');
     const authored = Array.isArray(projection.authoredOrder) ? projection.authoredOrder : [];
     const authoredEntries: LearningEntry[] = [];
     for (const raw of authored.slice(0, MAX_LEARNING_ENTRIES)) {
@@ -262,19 +263,19 @@ export class ContinuityService {
       if (!item) continue;
       const physical = this.physicalLearningPath(item.path, 'learningProgress entry path', principal);
       const revision = String(item.revision || '').toLowerCase();
-      if (!REVISION_PATTERN.test(revision)) throw new Error(`Learning-path entry '${item.path}' has no valid revision`);
+      if (!REVISION_PATTERN.test(revision)) throw guidanceError(new Error(`Learning-path entry '${item.path}' has no valid revision`), 'guid-2c0d2b6c10c758fc');
       const path = this.access.toPublicPath(physical);
       if (!authoredEntries.some(existing => existing.path === path)) authoredEntries.push({ path, revision });
     }
     const omitted = Number(record(projection.summary)?.omittedEntries || 0);
     if (omitted > 0 || authored.length > MAX_LEARNING_ENTRIES) {
-      throw new Error(`Learning progress is limited to ${MAX_LEARNING_ENTRIES} entries; split this oversized MOC into nested maps before checkpointing it`);
+      throw guidanceError(new Error(`Learning progress is limited to ${MAX_LEARNING_ENTRIES} entries; split this oversized MOC into nested maps before checkpointing it`), 'guid-5c306c03a7870d4b');
     }
     if (projection.truncated === true) {
-      throw new Error('The learning path scan is truncated or incomplete; simplify the MOC or checkpoint a smaller nested map before saving progress');
+      throw guidanceError(new Error('The learning path scan is truncated or incomplete; simplify the MOC or checkpoint a smaller nested map before saving progress'), 'guid-dbc6bd326e4d8d08');
     }
     if (projection.navigationComplete === false) {
-      throw new Error('The authored MOC route contains unresolved, ambiguous, inaccessible entries, or missing heading/block locators; inspect wiki.learning_path and repair the links, or save ordinary work state without learningProgress');
+      throw guidanceError(new Error('The authored MOC route contains unresolved, ambiguous, inaccessible entries, or missing heading/block locators; inspect wiki.learning_path and repair the links, or save ordinary work state without learningProgress'), 'guid-0cd32f9ebd181b9c');
     }
     const byPath = new Map(authoredEntries.map(item => [item.path, item]));
     const entries = order === 'authored'
@@ -283,22 +284,22 @@ export class ContinuityService {
         const physical = this.physicalLearningPath(rawPath, 'recommended learning path', principal);
         const path = this.access.toPublicPath(physical);
         const item = byPath.get(path);
-        if (!item) throw new Error(`Recommended learning entry is missing a revision snapshot: ${path}`);
+        if (!item) throw guidanceError(new Error(`Recommended learning entry is missing a revision snapshot: ${path}`), 'guid-3bc27f48ea56b912');
         return item;
       });
     if (order === 'recommended' && authoredEntries.length > 0 && entries.length !== authoredEntries.length) {
-      throw new Error('The recommended path omits cyclic or blocked entries; use authored order or repair the MOC before saving progress');
+      throw guidanceError(new Error('The recommended path omits cyclic or blocked entries; use authored order or repair the MOC before saving progress'), 'guid-6c425c5b4ff44aab');
     }
     const sourceRevisionFingerprint = typeof projection.sourceRevisionFingerprint === 'string' ? projection.sourceRevisionFingerprint.toLowerCase() : '';
     if (!REVISION_PATTERN.test(sourceRevisionFingerprint)) {
-      throw new Error('The learning path did not return a valid source revision fingerprint; rebuild it before saving progress');
+      throw guidanceError(new Error('The learning path did not return a valid source revision fingerprint; rebuild it before saving progress'), 'guid-6d261f677cc51b26');
     }
 
     let completedThrough: string | undefined;
     if (input.completedThrough !== undefined && String(input.completedThrough).trim()) {
       const physical = this.physicalLearningPath(input.completedThrough, 'learningProgress.completedThrough', principal);
       completedThrough = this.access.toPublicPath(physical);
-      if (!entries.some(item => item.path === completedThrough)) throw new Error('learningProgress.completedThrough must be one entry in the selected learning path');
+      if (!entries.some(item => item.path === completedThrough)) throw guidanceError(new Error('learningProgress.completedThrough must be one entry in the selected learning path'), 'guid-d4b2ae79ac21a3cf');
     }
     const publicRoot = this.access.toPublicPath(rootPath);
     const savedAt = new Date().toISOString();
@@ -366,7 +367,7 @@ export class ContinuityService {
       } satisfies LearningProgress
       : undefined;
     if (!stored || (stored.completed_through !== undefined && !stored.entries.some(item => item.path === stored.completed_through))) {
-      return { state: 'invalid_checkpoint', canResume: false, reason: 'Stored learning progress is malformed; regenerate it with continuity.save.' };
+      return { state: 'invalid_checkpoint', canResume: false, reason: guidanceText('guid-560636f338fb6f21', 'Stored learning progress is malformed; regenerate it with continuity.save.') };
     }
     if (!validate) return this.compactLearningProgress(stored, 'saved_unchecked');
     try {
@@ -376,7 +377,7 @@ export class ContinuityService {
         maxDepth: stored.max_depth,
         ...(stored.completed_through && { completedThrough: stored.completed_through }),
       });
-      if (!current) throw new Error('Learning path could not be rebuilt');
+      if (!current) throw guidanceError(new Error('Learning path could not be rebuilt'), 'guid-bee1ead1a6c2dda9');
       const previousByPath = new Map<string, string>(stored.entries.map(item => [item.path, item.revision]));
       const currentByPath = new Map<string, string>(current.entries.map(item => [item.path, item.revision]));
       const changedEntries = [...new Set([...previousByPath.keys(), ...currentByPath.keys()])].flatMap(path => {
@@ -422,14 +423,14 @@ export class ContinuityService {
     const pending = pendingEdits(params.pendingEdits);
     const trail = researchTrail(params.researchTrail);
     const learningProgress = await this.prepareLearningProgress(principal, params.learningProgress);
-    if (params.cursors !== undefined && (!params.cursors || typeof params.cursors !== 'object' || Array.isArray(params.cursors))) throw new Error('cursors must be an object');
+    if (params.cursors !== undefined && (!params.cursors || typeof params.cursors !== 'object' || Array.isArray(params.cursors))) throw guidanceError(new Error('cursors must be an object'), 'guid-ae5e94f342fcaafc');
     const path = ownerPath(principal);
     if (!this.access.canAccessPhysicalPath(path, principal)) throw Error(UNDERSTANDING_UNAVAILABLE);
     const existing = await this.fileSystem.noteExists(path) ? await this.fileSystem.readNote(path, UNDERSTANDING_READ_BYTES) : undefined;
     if (existing && isModerationHidden(existing.frontmatter)) throw Error(UNDERSTANDING_UNAVAILABLE);
     if (existing?.frontmatter.owner_account_id !== undefined && existing.frontmatter.owner_account_id !== principal.accountId) throw Error(UNDERSTANDING_UNAVAILABLE);
     const previousUnderstanding = existing?.frontmatter.learning_understanding;
-    if (existing && (params.understanding !== undefined || previousUnderstanding !== undefined) && !params.expectedRevision) throw Error('expectedRevision is required for an understanding checkpoint update; resume first.');
+    if (existing && (params.understanding !== undefined || previousUnderstanding !== undefined) && !params.expectedRevision) throw guidanceError(Error('expectedRevision is required for an understanding checkpoint update; resume first.'), 'guid-efd363f9f27d6246');
     const prepared = params.understanding === undefined ? undefined : await prepareUnderstanding(this.fileSystem, this.access, principal, path, params.understanding);
     const understanding = prepared?.entries ?? previousUnderstanding;
     const expectedRevision = params.expectedRevision || existing?.revision || 'missing';

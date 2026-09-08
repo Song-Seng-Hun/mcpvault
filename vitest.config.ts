@@ -5,7 +5,7 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
-    include: ['src/**/*.test.ts', 'scripts/obsidian-host-plugins.test.ts'],
+    include: ['src/**/*.test.ts', 'scripts/obsidian-host-plugins.test.ts', 'scripts/guidance-source.test.ts'],
     // Each integration worker has its own Vault, watchers and native IO pool.
     // CPU-count parallelism oversubscribes filesystem-heavy tests on Windows.
     // Keep their assertions/timeouts intact; CLI --maxWorkers can override.

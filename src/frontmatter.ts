@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import matter from 'gray-matter';
 import { parse, stringify, parseDocument } from 'yaml';
 import type { ParsedNoteContent, FrontmatterValidationResult } from './types.js';
@@ -16,8 +17,8 @@ const yamlEngine = {
 
 const jsonEngine = { parse: JSON.parse, stringify: (data: any) => JSON.stringify(data, null, 2) };
 const blockedCodeEngine = {
-  parse: () => { throw new Error('Executable frontmatter engines are disabled'); },
-  stringify: () => { throw new Error('Executable frontmatter engines are disabled'); },
+  parse: () => { throw guidanceError(new Error('Executable frontmatter engines are disabled'), 'guid-7dbba8f3a2b832a6'); },
+  stringify: () => { throw guidanceError(new Error('Executable frontmatter engines are disabled'), 'guid-7dbba8f3a2b832a6'); },
 };
 
 function withYamlEngine(options: Record<string, any> = {}): Record<string, any> {
@@ -47,9 +48,9 @@ export function parseFrontmatter(value: any): Record<string, any> | undefined {
     } catch {
       // not valid JSON
     }
-    throw new Error('frontmatter must be a JSON object, got a string that is not valid JSON');
+    throw guidanceError(new Error('frontmatter must be a JSON object, got a string that is not valid JSON'), 'guid-d1abdebfe700a57b');
   }
-  throw new Error(`frontmatter must be a JSON object, got ${typeof value}`);
+  throw guidanceError(new Error(`frontmatter must be a JSON object, got ${typeof value}`), 'guid-2dc8704313f9aae4');
 }
 
 export class FrontmatterHandler {
@@ -99,7 +100,7 @@ export class FrontmatterHandler {
       // a string here would import body examples into Properties or drop them.
       return matter.stringify({ content }, frontmatterData, withYamlEngine());
     } catch (error) {
-      throw new Error(`Failed to stringify frontmatter: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw guidanceError(new Error(`Failed to stringify frontmatter: ${error instanceof Error ? error.message : 'Unknown error'}`), 'guid-51b8d8713099fbee');
     }
   }
 
@@ -196,7 +197,7 @@ export class FrontmatterHandler {
       const yamlContent = doc.toString();
       return `---\n${yamlContent}---\n${content}`;
     } catch (error) {
-      throw new Error(`Failed to stringify frontmatter: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw guidanceError(new Error(`Failed to stringify frontmatter: ${error instanceof Error ? error.message : 'Unknown error'}`), 'guid-51b8d8713099fbee');
     }
   }
 
@@ -211,7 +212,7 @@ export class FrontmatterHandler {
 
     const validation = this.validate(updatedFrontmatter);
     if (!validation.isValid) {
-      throw new Error(`Invalid frontmatter: ${validation.errors.join(', ')}`);
+      throw guidanceError(new Error(`Invalid frontmatter: ${validation.errors.join(', ')}`), 'guid-bbacd231de0f80bb');
     }
 
     return this.preserveStringify(parsed.matter || '', updates, parsed.content);

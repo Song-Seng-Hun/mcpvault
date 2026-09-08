@@ -1,3 +1,4 @@
+import { guidanceError, guidanceText } from './guidance-runtime.js';
 import { createHash, randomBytes, scrypt as scryptCallback, timingSafeEqual } from 'node:crypto';
 import { mkdir, readFile, rename, writeFile, chmod, open as openFile, unlink } from 'node:fs/promises';
 import type { FileHandle } from 'node:fs/promises';
@@ -137,15 +138,15 @@ async function acquireAuthFileLock(path: string): Promise<AuthFileLock> {
         throw readError;
       }
       let record: unknown;
-      try { record = JSON.parse(raw); } catch { throw new Error('Scope authentication lock is corrupt; refusing to remove it automatically'); }
+      try { record = JSON.parse(raw); } catch { throw guidanceError(new Error('Scope authentication lock is corrupt; refusing to remove it automatically'), 'guid-9566cc25881bfa49'); }
       if (!isRecord(record) || typeof record.pid !== 'number' || !Number.isSafeInteger(record.pid) || record.pid <= 0 || typeof record.nonce !== 'string' || !record.nonce) {
-        throw new Error('Scope authentication lock is invalid; refusing to remove it automatically');
+        throw guidanceError(new Error('Scope authentication lock is invalid; refusing to remove it automatically'), 'guid-0c3f17fa63a7abed');
       }
-      if (processIsAlive(record.pid)) throw new Error(`Scope authentication database is already in use by process ${record.pid}`);
+      if (processIsAlive(record.pid)) throw guidanceError(new Error(`Scope authentication database is already in use by process ${record.pid}`), 'guid-4d0e1d42ebd8e25e');
       await unlink(path);
     }
   }
-  throw new Error('Unable to acquire scope authentication database lock');
+  throw guidanceError(new Error('Unable to acquire scope authentication database lock'), 'guid-31d4049410295b1f');
 }
 
 async function releaseAuthFileLock(lock: AuthFileLock): Promise<void> {
@@ -164,9 +165,9 @@ function tokenDigest(token: string): string {
 
 function validatePassword(password: unknown): string {
   if (typeof password !== 'string' || password.length < PASSWORD_MIN_LENGTH) {
-    throw new Error(`password must be at least ${PASSWORD_MIN_LENGTH} characters`);
+    throw guidanceError(new Error(`password must be at least ${PASSWORD_MIN_LENGTH} characters`), 'guid-c4efdaab0980464f');
   }
-  if (password.length > 1024) throw new Error('password is too long');
+  if (password.length > 1024) throw guidanceError(new Error('password is too long'), 'guid-43926910ec5451ff');
   return password;
 }
 
@@ -196,9 +197,9 @@ export class ScopeAuthService {
 
   constructor(vaultPath: string, options: { moderatorAccounts?: string[]; commandCenterId?: string; enterpriseRegistry?: EnterpriseRegistry; authPath?: string; protectedServicePaths?: string[] } = {}) {
     this.enterpriseRegistry = options.enterpriseRegistry;
-    if (this.enterpriseRegistry && !options.authPath) throw new Error('Enterprise authentication requires an explicit host-private account store');
+    if (this.enterpriseRegistry && !options.authPath) throw guidanceError(new Error('Enterprise authentication requires an explicit host-private account store'), 'guid-5684d8bebbaf600d');
     if (this.enterpriseRegistry && options.authPath) {
-      if (!isAbsolute(options.authPath)) throw new Error('Enterprise account store must use an absolute path');
+      if (!isAbsolute(options.authPath)) throw guidanceError(new Error('Enterprise account store must use an absolute path'), 'guid-f863721fba805398');
       const canonical = (path: string): string => {
         if (existsSync(path)) return realpathSync(path);
         const parent = dirname(path);
@@ -208,7 +209,7 @@ export class ScopeAuthService {
       const packageRoot = basename(moduleRoot) === 'dist' ? dirname(moduleRoot) : moduleRoot;
       for (const protectedPath of [vaultPath, packageRoot, ...(options.protectedServicePaths ?? [])]) {
         const child = relative(canonical(resolve(protectedPath)).toLowerCase(), canonical(resolve(options.authPath)).toLowerCase());
-        if (!child || (!child.startsWith('..') && !isAbsolute(child))) throw new Error('Enterprise account store must be outside the Vault and protected service directories');
+        if (!child || (!child.startsWith('..') && !isAbsolute(child))) throw guidanceError(new Error('Enterprise account store must be outside the Vault and protected service directories'), 'guid-f6ded6094e327fe8');
       }
     }
     this.authPath = options.authPath ? resolve(options.authPath) : join(resolve(vaultPath), '.mcpvault', 'scope-auth.json');
@@ -234,14 +235,14 @@ export class ScopeAuthService {
       try {
         const parsed = JSON.parse(await readFile(this.authPath, 'utf8')) as Partial<AuthDatabase>;
         if (parsed.version !== AUTH_VERSION || !Array.isArray(parsed.accounts)) {
-          throw new Error('Unsupported or corrupt scope authentication database');
+          throw guidanceError(new Error('Unsupported or corrupt scope authentication database'), 'guid-ff0f1da51d90dfd7');
         }
-        if (!parsed.accounts.every(isStoredAccount)) throw new Error('Unsupported or corrupt scope authentication database');
+        if (!parsed.accounts.every(isStoredAccount)) throw guidanceError(new Error('Unsupported or corrupt scope authentication database'), 'guid-ff0f1da51d90dfd7');
         const accountIds = new Set<string>();
         const agentIds = new Set<string>();
         for (const account of parsed.accounts) {
           if (accountIds.has(account.accountId) || (account.agentId && agentIds.has(account.agentId))) {
-            throw new Error('Unsupported or corrupt scope authentication database');
+            throw guidanceError(new Error('Unsupported or corrupt scope authentication database'), 'guid-ff0f1da51d90dfd7');
           }
           accountIds.add(account.accountId);
           if (account.agentId) agentIds.add(account.agentId);
@@ -304,7 +305,7 @@ export class ScopeAuthService {
     const now = Date.now();
     if (now - this.loginWindow.startedAt >= LOGIN_WINDOW_MS) this.loginWindow = { startedAt: now, count: 0 };
     if (this.loginWindow.count >= MAX_LOGIN_ATTEMPTS_PER_WINDOW) {
-      throw new Error('Too many login attempts; try again later');
+      throw guidanceError(new Error('Too many login attempts; try again later'), 'guid-d92cd92d632ce5a6');
     }
     this.loginWindow.count += 1;
     for (const [accountId, failure] of this.loginFailures) {
@@ -318,7 +319,7 @@ export class ScopeAuthService {
       this.registrationWindow = { startedAt: now, count: 0 };
     }
     if (this.registrationWindow.count >= MAX_REGISTRATION_ATTEMPTS_PER_WINDOW) {
-      throw new Error('Too many registration attempts; try again later');
+      throw guidanceError(new Error('Too many registration attempts; try again later'), 'guid-93c307ec5aadc4f1');
     }
     this.registrationWindow.count += 1;
   }
@@ -337,15 +338,15 @@ export class ScopeAuthService {
 
   authenticate(accessToken: unknown): ScopePrincipal | undefined {
     if (typeof accessToken !== 'string' || !accessToken) {
-      if (this.enterpriseRegistry) throw new Error('Enterprise authentication is required; use the administrator invitation or log in');
+      if (this.enterpriseRegistry) throw guidanceError(new Error('Enterprise authentication is required; use the administrator invitation or log in'), 'guid-7571c6963333e20b');
       return undefined;
     }
     const key = tokenDigest(accessToken);
     const session = this.sessions.get(key);
-    if (!session) throw new Error('Invalid access token; call login_scope again');
+    if (!session) throw guidanceError(new Error('Invalid access token; call login_scope again'), 'guid-61fb9739883ff60c');
     if (session.expiresAt <= Date.now()) {
       this.sessions.delete(key);
-      throw new Error('Access token expired; call login_scope again');
+      throw guidanceError(new Error('Access token expired; call login_scope again'), 'guid-c7bcb3b8d59984a9');
     }
     if (this.enterpriseRegistry) {
       this.assertEnterprisePrincipal(session.principal);
@@ -358,7 +359,7 @@ export class ScopeAuthService {
   requireEnterpriseRuntime() {
     if (!this.enterpriseRegistry) return undefined;
     const context = getEnterpriseRequestContext();
-    if (context?.transport !== 'http' || !context.certFingerprint) throw new Error('An authenticated runtime client certificate is required');
+    if (context?.transport !== 'http' || !context.certFingerprint) throw guidanceError(new Error('An authenticated runtime client certificate is required'), 'guid-852ad1ae20b64785');
     return this.enterpriseRegistry.resolveRequestCertificate(context.certFingerprint);
   }
 
@@ -367,7 +368,7 @@ export class ScopeAuthService {
     const runtime = this.requireEnterpriseRuntime()!;
     const policy = registry.getPolicy();
     const binding = registry.getBinding(principal.accountId);
-    if (!binding) throw new Error('No administrator-approved account binding');
+    if (!binding) throw guidanceError(new Error('No administrator-approved account binding'), 'guid-c114a811f3229f7a');
     return registry.assertBinding({ ...binding, accountId: principal.accountId, agentId: principal.agentId!, userId: principal.userId!, modelId: principal.modelId,
       runtimeId: runtime.runtimeId, realmId: policy.realmId, mode: policy.mode, certFingerprint: getEnterpriseRequestContext()!.certFingerprint! });
   }
@@ -378,7 +379,7 @@ export class ScopeAuthService {
     const sessionId = normalizeScopeId(params.sessionId || '', 'sessionId');
     const active = registry.getSessionLease(principal.agentId!);
     if (active && Date.parse(active.expiresAt) > Date.now() && active.sessionId !== sessionId && params.expectedGeneration === undefined) {
-      throw new Error(`An active session holds this agent; explicit handoff expectedGeneration=${active.generation} is required`);
+      throw guidanceError(new Error(`An active session holds this agent; explicit handoff expectedGeneration=${active.generation} is required`), 'guid-5fa3568695bfd16a');
     }
     const expiresAt = Date.now() + SESSION_TTL_MS;
     const lease = await registry.claimSessionLease({ agentId: principal.agentId!, sessionId,
@@ -394,7 +395,7 @@ export class ScopeAuthService {
   private async registerEnterprise(params: { accountId: string; password: string; modelId: string; agentId?: string; userId?: string; invitationToken?: string; sessionId?: string; expectedGeneration?: number }) {
     const registry = this.enterpriseRegistry!;
     const runtime = this.requireEnterpriseRuntime()!;
-    if (!params.invitationToken) throw new Error('An administrator invitation is required');
+    if (!params.invitationToken) throw guidanceError(new Error('An administrator invitation is required'), 'guid-86665d30dfbde3b7');
     const password = validatePassword(params.password);
     this.consumeRegistrationAttempt();
     const policy = registry.getPolicy();
@@ -402,20 +403,20 @@ export class ScopeAuthService {
       runtimeId: runtime.runtimeId, certFingerprint: getEnterpriseRequestContext()!.certFingerprint! });
     const binding: EnterpriseBinding = reserved.binding;
     if (params.accountId !== binding.accountId || params.agentId !== binding.agentId || params.modelId !== binding.modelId
-      || (params.userId !== undefined && params.userId !== binding.userId)) throw new Error('Registration identity must match the administrator invitation binding');
+      || (params.userId !== undefined && params.userId !== binding.userId)) throw guidanceError(new Error('Registration identity must match the administrator invitation binding'), 'guid-259e7e4be2592911');
     const principal = await this.exclusive(async () => {
       const database = await this.readDatabase();
       const existing = database.accounts.find(account => account.accountId === binding.accountId);
       if (existing) {
         if (existing.registrationId !== reserved.registrationId || existing.userId !== binding.userId || existing.agentId !== binding.agentId
-          || existing.modelId !== binding.modelId || existing.commandCenterId !== policy.realmId) throw new Error('Account is already bound to a different registration');
+          || existing.modelId !== binding.modelId || existing.commandCenterId !== policy.realmId) throw guidanceError(new Error('Account is already bound to a different registration'), 'guid-e0ca904616a8250d');
         const digest = await passwordDigest(password, Buffer.from(existing.salt, 'base64'));
-        if (!timingSafeEqual(digest, Buffer.from(existing.passwordHash, 'base64'))) throw new Error('Invalid registration credentials');
+        if (!timingSafeEqual(digest, Buffer.from(existing.passwordHash, 'base64'))) throw guidanceError(new Error('Invalid registration credentials'), 'guid-d8e9967c80dd93d3');
         const { salt: _salt, passwordHash: _hash, createdAt: _created, registrationId: _registration, ...identity } = existing;
         return identity;
       }
-      if (database.accounts.length >= MAX_ACCOUNTS || database.accounts.some(account => account.agentId === binding.agentId)) throw new Error('Account capacity or agent identity conflict');
-      if (database.accounts.filter(account => account.userId === binding.userId).length >= MAX_ACCOUNTS_PER_USER) throw new Error('Employee account capacity reached');
+      if (database.accounts.length >= MAX_ACCOUNTS || database.accounts.some(account => account.agentId === binding.agentId)) throw guidanceError(new Error('Account capacity or agent identity conflict'), 'guid-480202c7a519fbbe');
+      if (database.accounts.filter(account => account.userId === binding.userId).length >= MAX_ACCOUNTS_PER_USER) throw guidanceError(new Error('Employee account capacity reached'), 'guid-2ba21a8f88c5bcc3');
       const identity: ScopePrincipal = { accountId: binding.accountId, agentId: binding.agentId, modelId: binding.modelId,
         userId: binding.userId, commandCenterId: policy.realmId, role: 'agent', capabilities: this.defaultCapabilities('agent') };
       const salt = randomBytes(16); const digest = await passwordDigest(password, salt);
@@ -454,19 +455,19 @@ export class ScopeAuthService {
     const userId = requestedUserId || sponsor?.userId || accountId;
 
     if (sponsor?.userId && requestedUserId && sponsor.userId !== requestedUserId) {
-      throw new Error('An agent must use the sponsoring model owner\'s userId; different users cannot share a family scope');
+      throw guidanceError(new Error('An agent must use the sponsoring model owner\'s userId; different users cannot share a family scope'), 'guid-ff05e0ff40a1adaa');
     }
 
     if (agentId) {
       if (sponsor && (sponsor.role !== 'model' || sponsor.modelId !== modelId)) {
-        throw new Error('Only an authenticated owner of this model scope may register an agent account under it');
+        throw guidanceError(new Error('Only an authenticated owner of this model scope may register an agent account under it'), 'guid-80e4bf87b4671766');
       }
       // A first-time session may claim its own agent identity. This keeps
       // model-level ownership meaningful while allowing multiple sessions of
       // the same model family (for example, several Codex workers) to sign up
       // independently with distinct agentIds.
     } else if (sponsor) {
-      throw new Error('A model account is self-registered only while its model scope is unclaimed');
+      throw guidanceError(new Error('A model account is self-registered only while its model scope is unclaimed'), 'guid-49d1ff3caec4c152');
     }
 
     this.consumeRegistrationAttempt();
@@ -474,20 +475,20 @@ export class ScopeAuthService {
     const principal = await this.exclusive(async () => {
       const database = await this.readDatabase();
       if (database.accounts.length >= MAX_ACCOUNTS) {
-        throw new Error(`Account capacity reached (${MAX_ACCOUNTS}); ask the server operator to remove inactive accounts`);
+        throw guidanceError(new Error(`Account capacity reached (${MAX_ACCOUNTS}); ask the server operator to remove inactive accounts`), 'guid-055a9a2cf6523359');
       }
       const accountsForUser = database.accounts.filter(account => (account.userId || account.accountId) === userId).length;
       if (accountsForUser >= MAX_ACCOUNTS_PER_USER) {
-        throw new Error(`User family account capacity reached (${MAX_ACCOUNTS_PER_USER})`);
+        throw guidanceError(new Error(`User family account capacity reached (${MAX_ACCOUNTS_PER_USER})`), 'guid-2216cb60f6c936e8');
       }
       if (database.accounts.some(account => account.accountId === accountId)) {
-        throw new Error(`Account already exists: ${accountId}`);
+        throw guidanceError(new Error(`Account already exists: ${accountId}`), 'guid-4a88d23ca4350a2a');
       }
       if (!agentId && database.accounts.some(account => account.role === 'model' && account.modelId === modelId)) {
-        throw new Error(`Model scope is already claimed: ${modelId}`);
+        throw guidanceError(new Error(`Model scope is already claimed: ${modelId}`), 'guid-06962a47f16b1fac');
       }
       if (agentId && database.accounts.some(account => account.agentId === agentId)) {
-        throw new Error(`Agent scope is already claimed: ${agentId}`);
+        throw guidanceError(new Error(`Agent scope is already claimed: ${agentId}`), 'guid-a353fff6febcd84a');
       }
 
       const salt = randomBytes(16);
@@ -538,7 +539,7 @@ export class ScopeAuthService {
     const password = validatePassword(params.password);
     const failure = this.loginFailures.get(accountId);
     if (failure?.blockedUntil && failure.blockedUntil > Date.now()) {
-      throw new Error('Too many failed login attempts; try again later');
+      throw guidanceError(new Error('Too many failed login attempts; try again later'), 'guid-4eabe69c34114732');
     }
     this.consumeLoginAttempt();
     const database = await this.readDatabase();
@@ -550,10 +551,10 @@ export class ScopeAuthService {
     const expected = account ? Buffer.from(account.passwordHash, 'base64') : Buffer.alloc(actual.length);
     if (!account || actual.length !== expected.length || !timingSafeEqual(actual, expected)) {
       this.rememberLoginFailure(accountId, failure);
-      throw new Error('Invalid account or password');
+      throw guidanceError(new Error('Invalid account or password'), 'guid-41cc828259f82ace');
     }
     if (account.commandCenterId && account.commandCenterId !== this.commandCenterId) {
-      throw new Error('This account belongs to a different command center');
+      throw guidanceError(new Error('This account belongs to a different command center'), 'guid-a628d4af94fccb87');
     }
     this.loginFailures.delete(accountId);
 
@@ -578,7 +579,7 @@ export class ScopeAuthService {
 
   logout(accessToken: unknown): { success: true } {
     if (this.enterpriseRegistry) this.authenticate(accessToken);
-    if (typeof accessToken !== 'string' || !accessToken) throw new Error('accessToken is required');
+    if (typeof accessToken !== 'string' || !accessToken) throw guidanceError(new Error('accessToken is required'), 'guid-f562b6c2bcf192b1');
     this.sessions.delete(tokenDigest(accessToken));
     return { success: true };
   }
@@ -586,7 +587,7 @@ export class ScopeAuthService {
   whoami(accessToken: unknown): ScopePrincipal | { role: 'global'; note: string } {
     return this.authenticate(accessToken) || {
       role: 'global',
-      note: 'No access token supplied. Only the public global scope is accessible.',
+      note: guidanceText('guid-6685dc6096206864', 'No access token supplied. Only the public global scope is accessible.'),
     };
   }
 
@@ -603,7 +604,7 @@ export class ScopeAuthService {
   async handoffEnterpriseSession(accessToken: unknown, params: { agentId: string; fromSessionId?: string; toSessionId: string; expectedGeneration: number }) {
     const principal = this.authenticate(accessToken);
     if (!this.enterpriseRegistry || !principal?.enterprise || params.agentId !== principal.agentId
-      || (params.fromSessionId !== undefined && params.fromSessionId !== principal.sessionId)) throw new Error('Session handoff is not authorized');
+      || (params.fromSessionId !== undefined && params.fromSessionId !== principal.sessionId)) throw guidanceError(new Error('Session handoff is not authorized'), 'guid-14f0345c872c9367');
     const lease = await this.enterpriseRegistry.claimSessionLease({ agentId: principal.agentId, sessionId: normalizeScopeId(params.toSessionId, 'toSessionId'),
       expectedGeneration: params.expectedGeneration, expiresAt: new Date(Date.now() + SESSION_TTL_MS).toISOString() });
     return { success: true, agentId: principal.agentId, generation: lease.generation, currentSession: lease.sessionId,
@@ -655,19 +656,19 @@ export class ScopeAuthService {
 
   async updateAgentCapabilities(params: { accessToken: string; agentId: string; capabilities: unknown }): Promise<{ success: true; agentId: string; capabilities: ScopeCapability[] }> {
     const sponsor = this.authenticate(params.accessToken);
-    if (!sponsor || sponsor.role !== 'model') throw new Error('Only an authenticated model owner can change agent capabilities');
+    if (!sponsor || sponsor.role !== 'model') throw guidanceError(new Error('Only an authenticated model owner can change agent capabilities'), 'guid-5d25b2ec92a12894');
     const agentId = normalizeScopeId(params.agentId, 'agentId');
-    if (!Array.isArray(params.capabilities) || params.capabilities.length === 0) throw new Error('capabilities must be a non-empty array');
+    if (!Array.isArray(params.capabilities) || params.capabilities.length === 0) throw guidanceError(new Error('capabilities must be a non-empty array'), 'guid-b607dd35e595d945');
     const capabilities = Array.from(new Set(params.capabilities.map(String))) as ScopeCapability[];
     if (capabilities.some(capability => !(SCOPE_CAPABILITIES as readonly string[]).includes(capability))) {
-      throw new Error(`capabilities must be chosen from: ${SCOPE_CAPABILITIES.join(', ')}`);
+      throw guidanceError(new Error(`capabilities must be chosen from: ${SCOPE_CAPABILITIES.join(', ')}`), 'guid-5df485ae2f8a5865');
     }
-    if (capabilities.includes('moderate')) throw new Error('moderate capability is reserved for accounts configured by the server operator');
+    if (capabilities.includes('moderate')) throw guidanceError(new Error('moderate capability is reserved for accounts configured by the server operator'), 'guid-0820e356b2033c7f');
     return await this.exclusive(async () => {
       const database = await this.readDatabase();
       const account = database.accounts.find(candidate => candidate.agentId === agentId);
       if (!account || account.modelId !== sponsor.modelId || (sponsor.userId && (account.userId || account.accountId) !== sponsor.userId)) {
-        throw new Error(`Agent account '${agentId}' does not belong to this model/user scope`);
+        throw guidanceError(new Error(`Agent account '${agentId}' does not belong to this model/user scope`), 'guid-dcc78dd6bca1a8bb');
       }
       await this.writeDatabase({
         ...database,
@@ -686,18 +687,18 @@ export class ScopeAuthService {
 
   async changePassword(params: { accessToken: string; currentPassword: string; newPassword: string }): Promise<{ success: true }> {
     const principal = this.authenticate(params.accessToken);
-    if (!principal) throw new Error('accessToken is required');
+    if (!principal) throw guidanceError(new Error('accessToken is required'), 'guid-f562b6c2bcf192b1');
     const currentPassword = validatePassword(params.currentPassword);
     const newPassword = validatePassword(params.newPassword);
 
     await this.exclusive(async () => {
       const database = await this.readDatabase();
       const account = database.accounts.find(candidate => candidate.accountId === principal.accountId);
-      if (!account) throw new Error('Account no longer exists');
+      if (!account) throw guidanceError(new Error('Account no longer exists'), 'guid-7759a3091578ea45');
       const current = await passwordDigest(currentPassword, Buffer.from(account.salt, 'base64'));
       const expected = Buffer.from(account.passwordHash, 'base64');
       if (current.length !== expected.length || !timingSafeEqual(current, expected)) {
-        throw new Error('Current password is incorrect');
+        throw guidanceError(new Error('Current password is incorrect'), 'guid-c5a8dd67d69eb5e2');
       }
       const salt = randomBytes(16);
       const passwordHash = (await passwordDigest(newPassword, salt)).toString('base64');

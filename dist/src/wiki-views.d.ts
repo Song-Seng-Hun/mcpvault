@@ -51,7 +51,7 @@ export declare class WikiViewService {
         };
         yaml: string;
         permissionBoundary: boolean;
-        warning: string;
+        warning: "Host-only projection: Bases sees the host vault, not MCP account permissions.";
     }>;
 }
 //# sourceMappingURL=wiki-views.d.ts.map

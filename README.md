@@ -2,6 +2,13 @@
 
 # MCPVault
 
+[Vault-backed MCP guidance](docs/vault-guidance.md) makes reusable interface
+prose editable through protected notices and reviewed feedback. Templates live
+under `_wiki/Interface`; dynamic descriptions/responses read validated revisions
+without logging arguments or credentials. Code still owns permissions, schemas,
+error classification and budgets. `guidance.catalog` provides bounded discovery
+and source-default reads; host sync preserves local edits and reports conflicts.
+
 Host-registered [protected notices](docs/notices.md) keep welcome/guidance notes
 at their existing paths. `notice.list/read/preview/revise` provide bounded
 priority reads and reviewed amendments through existing community feedback.

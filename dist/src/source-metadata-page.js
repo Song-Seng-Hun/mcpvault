@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { isModerationHidden } from './moderation-policy.js';
 import { RETRIEVAL_NOTE_BYTES } from './retrieval-service.js';
 /** Fresh bounded discovery without queryNotes' no-index body hydration.
@@ -16,7 +17,7 @@ export async function readSourceMetadataPage(fs, canAccess, predicate, afterPath
         }
         if (observed.length >= 60 || notes.length >= Math.max(1, Math.min(20, limit))) {
             if (!lastVisible)
-                throw Error('Bounded source metadata page unavailable; select an exact source or knowledge path');
+                throw guidanceError(Error('Bounded source metadata page unavailable; select an exact source or knowledge path'), 'guid-e97e5a9a3999833d');
             return { notes, observed, truncated: true, afterPath: lastVisible };
         }
     }

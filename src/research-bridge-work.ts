@@ -1,3 +1,5 @@
+import { guidanceError } from './guidance-runtime.js';
+import { guidanceText } from './guidance-runtime.js';
 import type { FileSystemService } from './filesystem.js';
 import type { ScopeAccessPolicy } from './scope-access.js';
 import type { ScopePrincipal } from './scope-auth.js';
@@ -9,7 +11,7 @@ export interface ResearchWorkPacket {
   state: string; taskId?: string; revision?: string; nextAction?: Action; createAction?: Action; workshopAction?: Action;
 }
 export function researchWorkIds(researchKey: string) {
-  if (!/^[a-f0-9]{64}$/.test(researchKey)) throw Error('Invalid research key');
+  if (!/^[a-f0-9]{64}$/.test(researchKey)) throw guidanceError(Error('Invalid research key'), 'guid-a53b6ad54c950b88');
   const taskId = `research-${researchKey.slice(0, 48)}`;
   return { taskId, taskPath: `Community/Tasks/${taskId}.md`, workshopId: taskId, workshopPath: `Community/Workshops/${taskId}.md` };
 }
@@ -24,8 +26,8 @@ export async function researchWorkPacket(fs: FileSystemService, access: ScopeAcc
 }
 async function readResearchWorkPacket(fs: FileSystemService, access: ScopeAccessPolicy, params: ResearchWorkRequest): Promise<ResearchWorkPacket> {
   const ids = researchWorkIds(params.researchKey);
-  if (!params.inputs.length || params.inputs.length > 4 || params.query.length > 1000) throw Error('Invalid research inputs');
-  if (params.publicRequestId !== undefined && !/^[a-zA-Z0-9_-]{1,128}$/.test(params.publicRequestId)) throw Error('Invalid public retry key');
+  if (!params.inputs.length || params.inputs.length > 4 || params.query.length > 1000) throw guidanceError(Error('Invalid research inputs'), 'guid-b3d6a170358ce71b');
+  if (params.publicRequestId !== undefined && !/^[a-zA-Z0-9_-]{1,128}$/.test(params.publicRequestId)) throw guidanceError(Error('Invalid public retry key'), 'guid-e44c7f53c364ee1c');
   for (const input of params.inputs) {
     try {
       const p = access.resolveExternalPath(input.path, params.principal);
@@ -63,10 +65,10 @@ async function readResearchWorkPacket(fs: FileSystemService, access: ScopeAccess
     return packet;
   }
   if (!params.projectId || !params.principal) return { state: 'needs_project' };
-  if (!/^[a-z0-9][a-z0-9_-]{0,63}$/.test(params.projectId)) throw Error('Invalid research project');
+  if (!/^[a-z0-9][a-z0-9_-]{0,63}$/.test(params.projectId)) throw guidanceError(Error('Invalid research project'), 'guid-1f140a965cfe06c8');
   return { state: 'proposed', taskId: ids.taskId, createAction: { endpointId: endpointIdForTool('create_agent_task'), arguments: {
     taskId: ids.taskId, projectId: params.projectId, expectedRevision: 'missing', requestId: ids.taskId,
-    title: 'Investigate a cross-domain connection', description: `Research key: ${params.researchKey}\nQuestion: ${params.query}\nInputs:\n${params.inputs.map(i => `[[${i.path}]] revision ${i.revision}`).join('\n')}\nPreserve mapping, counterexamples, prior-work search and minimum test. Web unavailable means verification pending.`,
+    title: 'Investigate a cross-domain connection', description: guidanceText('guid-739318e23d105dce', `Research key: ${params.researchKey}\nQuestion: ${params.query}\nInputs:\n${params.inputs.map(i => `[[${i.path}]] revision ${i.revision}`).join('\n')}\nPreserve mapping, counterexamples, prior-work search and minimum test. Web unavailable means verification pending.`),
     completionCriteria: ['Record mapping, assumptions and counterexamples', 'Record prior-work status and exact search coverage', 'Preserve test criteria, results and next question'],
   } } };
 }

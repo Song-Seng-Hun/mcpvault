@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { randomUUID } from 'node:crypto';
 import { KnowledgeApplicationService } from './knowledge-applications.js';
 import { ScopeAccessPolicy } from './scope-access.js';
@@ -15,20 +16,20 @@ const ASSIGNED_OPEN_STATUS_ORDER = ['in_progress', 'accepted', 'proposed', 'bloc
 function shortText(value, field, maximum, required = false) {
     const text = String(value ?? '').trim();
     if (required && !text)
-        throw new Error(`${field} is required`);
+        throw guidanceError(new Error(`${field} is required`), 'guid-0c6fd33ea1895f5e');
     if (Array.from(text).length > maximum)
-        throw new Error(`${field} must be ${maximum} Unicode characters or fewer`);
+        throw guidanceError(new Error(`${field} must be ${maximum} Unicode characters or fewer`), 'guid-ece47846ed48d00b');
     return text;
 }
 export function taskStatus(value, fallback = 'proposed') {
     const status = String(value || fallback).trim().toLowerCase();
     if (!AGENT_TASK_STATUSES.includes(status))
-        throw new Error(`status must be one of: ${AGENT_TASK_STATUSES.join(', ')}`);
+        throw guidanceError(new Error(`status must be one of: ${AGENT_TASK_STATUSES.join(', ')}`), 'guid-1db866eb6c05257d');
     return status;
 }
 function requireLogin(principal) {
     if (!principal)
-        throw new Error('Login is required for agent tasks');
+        throw guidanceError(new Error('Login is required for agent tasks'), 'guid-85ae8df66c1ceb2b');
     return principal;
 }
 export class AgentTaskService {
@@ -54,14 +55,14 @@ export class AgentTaskService {
                 const isKnowledge = String(note.frontmatter.llm_wiki_type || '').trim().toLowerCase() === 'knowledge';
                 const isNegative = String(note.frontmatter.knowledge_polarity || '').trim().toLowerCase() === 'negative';
                 if (!isKnowledge || isModerationHidden(note.frontmatter) || (expected === 'negative' ? !isNegative : isNegative)) {
-                    throw new Error('wrong knowledge role');
+                    throw guidanceError(new Error('wrong knowledge role'), 'guid-ba8286bb47c4a293');
                 }
             }
             return paths;
         }
         catch {
             const label = expected === 'negative' ? 'negativeKnowledgeNotes' : 'knowledgeNotes';
-            throw new Error(`All ${label} must identify visible public ${expected === 'negative' ? 'negative ' : ''}knowledge notes`);
+            throw guidanceError(new Error(`All ${label} must identify visible public ${expected === 'negative' ? 'negative ' : ''}knowledge notes`), 'guid-b8b3bf794bab8f42');
         }
     }
     async assignee(value) {
@@ -70,7 +71,7 @@ export class AgentTaskService {
         const id = normalizeScopeId(String(value), 'assignee');
         const found = (await this.auth.listPrincipals()).some(principal => (principal.agentId || principal.modelId) === id);
         if (!found)
-            throw new Error(`No registered model or agent identity found for assignee: ${id}`);
+            throw guidanceError(new Error(`No registered model or agent identity found for assignee: ${id}`), 'guid-ac79dc79359982bf');
         return id;
     }
     async assigneeAccount(assignee) {
@@ -78,7 +79,7 @@ export class AgentTaskService {
             return undefined;
         const matches = (await this.auth.listPrincipals()).filter(p => identity(p) === assignee);
         if (matches.length !== 1)
-            throw new Error('Assignee must resolve to exactly one registered account');
+            throw guidanceError(new Error('Assignee must resolve to exactly one registered account'), 'guid-5e48eef7d2ff7f31');
         return matches[0].accountId;
     }
     async create(params) {
@@ -88,14 +89,14 @@ export class AgentTaskService {
     }
     async createCore(params, context) {
         if (params.projectId && !context)
-            throw new Error('Project guard requires WorkService');
+            throw guidanceError(new Error('Project guard requires WorkService'), 'guid-27a23b6c2e345129');
         const principal = requireLogin(params.principal);
         const title = shortText(params.title, 'title', 180, true);
         const description = shortText(params.description, 'description', 4000, true);
         const taskId = params.taskId ? normalizeScopeId(params.taskId, 'taskId') : `task-${randomUUID().slice(0, 12)}`;
         const path = taskPath(taskId);
         if (params.expectedRevision && params.expectedRevision !== 'missing')
-            throw new Error('A new task must use expectedRevision=missing');
+            throw guidanceError(new Error('A new task must use expectedRevision=missing'), 'guid-b2965916398ac861');
         const assignee = await this.assignee(params.assignee);
         const assigneeAccount = await this.assigneeAccount(assignee);
         const refs = await this.references.validateAndNormalize(params.references, path, principal, params.description);
@@ -121,9 +122,9 @@ export class AgentTaskService {
         const path = taskPath(taskId);
         const note = await this.fileSystem.readNote(path);
         if (note.frontmatter.mcpvault_type !== 'agent_task')
-            throw new Error(`Not an agent task: ${taskId}`);
+            throw guidanceError(new Error(`Not an agent task: ${taskId}`), 'guid-9ad8c35d257ae412');
         if (isModerationHidden(note.frontmatter))
-            throw new Error('Task is unavailable because moderation has hidden it');
+            throw guidanceError(new Error('Task is unavailable because moderation has hidden it'), 'guid-0869b6b64a63118b');
         return {
             path, fm: note.frontmatter, revision: note.revision,
             ...(typeof note.frontmatter.project_id === 'string' && note.frontmatter.project_id.length <= 64 && {
@@ -223,16 +224,16 @@ export class AgentTaskService {
     async updateCore(params, context) {
         const principal = requireLogin(params.principal);
         if (!params.expectedRevision)
-            throw new Error('expectedRevision is required; read the task first');
+            throw guidanceError(new Error('expectedRevision is required; read the task first'), 'guid-eaca62caf85d0a39');
         const taskId = normalizeScopeId(params.taskId, 'taskId');
         const path = taskPath(taskId);
         const note = await this.fileSystem.readNote(path);
         if (note.frontmatter.mcpvault_type !== 'agent_task')
-            throw new Error(`Not an agent task: ${taskId}`);
+            throw guidanceError(new Error(`Not an agent task: ${taskId}`), 'guid-9ad8c35d257ae412');
         if (isModerationHidden(note.frontmatter))
-            throw new Error('Task is unavailable because moderation has hidden it');
+            throw guidanceError(new Error('Task is unavailable because moderation has hidden it'), 'guid-0869b6b64a63118b');
         if ((note.frontmatter.project_id || params.projectId) && !context)
-            throw new Error('Project guard requires WorkService');
+            throw guidanceError(new Error('Project guard requires WorkService'), 'guid-27a23b6c2e345129');
         const actor = identity(principal);
         const requester = String(note.frontmatter.requester || '');
         const currentAssignee = String(note.frontmatter.assignee || '');
@@ -244,13 +245,13 @@ export class AgentTaskService {
                 || (!currentAssignee && requestedAccount === principal.accountId)
             : actor === requester || actor === currentAssignee || (!currentAssignee && requestedAssignee === actor);
         if (!context?.authorize && !authorized) {
-            throw new Error('Only the task requester or assignee can update this task');
+            throw guidanceError(new Error('Only the task requester or assignee can update this task'), 'guid-f0e19158b99e5645');
         }
         const status = taskStatus(params.status, taskStatus(note.frontmatter.status));
         const previousStatus = taskStatus(note.frontmatter.status);
         const reason = shortText(params.reason, 'reason', 500);
         if (status !== previousStatus && !reason)
-            throw new Error('reason is required when changing task status');
+            throw guidanceError(new Error('reason is required when changing task status'), 'guid-b73002c9786be949');
         const description = params.description === undefined ? String(note.frontmatter.description || note.content).trim() : shortText(params.description, 'description', 4000, true);
         const refs = await this.references.validateAndNormalize(params.references ?? note.frontmatter.references, path, principal, params.description);
         const knowledgeNotes = await this.validatedKnowledgeNotes(params.knowledgeNotes === undefined ? note.frontmatter.knowledge_notes : params.knowledgeNotes, path, principal, 'durable');
@@ -268,7 +269,7 @@ export class AgentTaskService {
         const applications = params.knowledgeApplications === undefined ? undefined
             : await new KnowledgeApplicationService(this.fileSystem, this.access).prepare(params.knowledgeApplications, path, principal);
         if (applications?.records.length && disposition.noReusableKnowledge)
-            throw new Error('An application experience cannot be combined with noReusableKnowledge');
+            throw guidanceError(new Error('An application experience cannot be combined with noReusableKnowledge'), 'guid-59fe623d4c051bc7');
         const timestamp = now();
         const frontmatter = {
             ...note.frontmatter, description,

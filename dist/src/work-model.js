@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { createHash } from 'node:crypto';
 import { AsyncLocalStorage } from 'node:async_hooks';
 export const WORK_KINDS = ['general', 'security', 'permissions', 'shared_policy', 'destructive'];
@@ -17,27 +18,27 @@ export const fingerprint = (value) => createHash('sha256').update(canonical(valu
 export const reviewBasis = (fm) => fingerprint({ description: fm.description, completionCriteria: fm.completion_criteria || [], artifacts: fm.artifacts || [], workKind: fm.work_kind, verification: fm.verification || '' });
 export function textField(value, field, max = 500, required = false) {
     if (value !== undefined && typeof value !== 'string')
-        throw new Error(`${field} must be a string`);
+        throw guidanceError(new Error(`${field} must be a string`), 'guid-9a47fff07b9e2cc5');
     const text = String(value ?? '').trim();
     if (required && !text)
-        throw new Error(`${field} is required`);
+        throw guidanceError(new Error(`${field} is required`), 'guid-0c6fd33ea1895f5e');
     if (text.length > max)
-        throw new Error(`${field} exceeds ${max} characters`);
+        throw guidanceError(new Error(`${field} exceeds ${max} characters`), 'guid-73eabe6107db8274');
     return text;
 }
 export function listField(value, field, max = 20, required = false) {
     if (!Array.isArray(value) || value.length > max)
-        throw new Error(`${field} must be an array of at most ${max} strings`);
+        throw guidanceError(new Error(`${field} must be an array of at most ${max} strings`), 'guid-364a5d1dbc625eea');
     const list = [...new Set(value.map(v => textField(v, field, 500, true)))];
     if (required && !list.length)
-        throw new Error(`${field} is required`);
+        throw guidanceError(new Error(`${field} is required`), 'guid-0c6fd33ea1895f5e');
     return list;
 }
 export function integer(value, fallback, max, field) {
     if (value === undefined)
         return fallback;
     if (!Number.isSafeInteger(value) || Number(value) < 1 || Number(value) > max)
-        throw new Error(`${field} must be an integer from 1 to ${max}`);
+        throw guidanceError(new Error(`${field} must be an integer from 1 to ${max}`), 'guid-d14af5448638c158');
     return Number(value);
 }
 // A process-wide short queue also covers different FileSystemService instances
@@ -91,7 +92,7 @@ export function page(items, context, signature, params, kind) {
             offset = decoded.o;
         }
         catch {
-            throw new Error('Cursor invalidated by changed inventory or context; restart the read');
+            throw guidanceError(new Error('Cursor invalidated by changed inventory or context; restart the read'), 'guid-2fa8d6cb0792c6be');
         }
     }
     const result = { ...context, items: [], total: items.length, truncated: offset < items.length };
@@ -104,7 +105,7 @@ export function page(items, context, signature, params, kind) {
     };
     setCursor();
     if (JSON.stringify(result).length > maxChars)
-        throw new Error('maxChars is too small for the response envelope');
+        throw guidanceError(new Error('maxChars is too small for the response envelope'), 'guid-e7e900d75fb8abff');
     for (const item of items.slice(offset, offset + limit)) {
         result.items.push(item);
         setCursor();
@@ -115,6 +116,6 @@ export function page(items, context, signature, params, kind) {
         }
     }
     if (!result.items.length && result.truncated)
-        throw new Error('maxChars is too small for the next metadata item; increase maxChars');
+        throw guidanceError(new Error('maxChars is too small for the next metadata item; increase maxChars'), 'guid-4bcc61a19eced6f4');
     return result;
 }

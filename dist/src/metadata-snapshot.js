@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 /** Unchanged v1 binary payload; snapshots are disposable restart acceleration. */
 const MAGIC = Buffer.from('MCPVMETA', 'ascii');
 const VERSION = 1;
@@ -11,22 +12,22 @@ export function encodeMetadataSnapshot(entries, limits = {}) {
     const maxEntries = limits.maxEntries === undefined ? METADATA_SNAPSHOT_MAX_ENTRIES : limits.maxEntries;
     if (!Number.isSafeInteger(maxBytes) || maxBytes < 16 || maxBytes > METADATA_SNAPSHOT_MAX_BYTES
         || !Number.isSafeInteger(maxEntries) || maxEntries < 0 || maxEntries > METADATA_SNAPSHOT_MAX_ENTRIES) {
-        throw new TypeError('Invalid metadata snapshot limit');
+        throw guidanceError(new TypeError('Invalid metadata snapshot limit'), 'guid-48523e99292287cb');
     }
     const count = entries.length;
     if (count > maxEntries)
-        throw new Error('Metadata snapshot entry limit exceeded');
+        throw guidanceError(new Error('Metadata snapshot entry limit exceeded'), 'guid-e13e8b44295dddd3');
     const prepared = [];
     let total = 16;
     for (const entry of entries) {
         const path = entry.path, revision = entry.revision;
         const frontmatter = JSON.stringify(entry.frontmatter);
         if (frontmatter === undefined)
-            throw new Error('frontmatter is not serializable');
+            throw guidanceError(new Error('frontmatter is not serializable'), 'guid-ef1125cc807bbf95');
         const lengths = [Buffer.byteLength(path), Buffer.byteLength(revision), Buffer.byteLength(frontmatter)];
         total += 28 + lengths[0] + lengths[1] + lengths[2];
         if (total > maxBytes)
-            throw new Error('Metadata snapshot size exceeded');
+            throw guidanceError(new Error('Metadata snapshot size exceeded'), 'guid-f15b46c1a305aead');
         prepared.push({ path, revision, frontmatter, size: entry.size, mtimeMs: entry.mtimeMs, lengths });
     }
     const output = Buffer.allocUnsafe(total);

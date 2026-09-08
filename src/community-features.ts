@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, readFile, readdir, rename, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -51,13 +52,13 @@ const ownershipMetadata = (p: ScopePrincipal): Record<string, string> => ({
 });
 const shortText = (value: unknown, field = 'content', max = MAX_COMMUNITY_TEXT_LENGTH) => {
   const text = String(value ?? '').trim();
-  if (!text) throw new Error(`${field} is required`);
-  if (Array.from(text).length > max) throw new Error(`${field} must be ${max} Unicode characters or fewer`);
+  if (!text) throw guidanceError(new Error(`${field} is required`), 'guid-0c6fd33ea1895f5e');
+  if (Array.from(text).length > max) throw guidanceError(new Error(`${field} must be ${max} Unicode characters or fewer`), 'guid-ece47846ed48d00b');
   return text;
 };
 const positive = (value: unknown, fallback: number, max: number) => {
   const parsed = value === undefined ? fallback : Number(value);
-  if (!Number.isInteger(parsed) || parsed < 1) throw new Error('limit must be a positive integer');
+  if (!Number.isInteger(parsed) || parsed < 1) throw guidanceError(new Error('limit must be a positive integer'), 'guid-14abe8b02cfc3624');
   return Math.min(parsed, max);
 };
 const publicPostPath = (slug: string) => `${POSTS}/${normalizeScopeId(slug, 'slug')}.md`;
@@ -74,11 +75,11 @@ function encodeSnapshotString(value: string): Buffer {
 }
 
 function decodeSnapshotString(buffer: Buffer, offset: number): { value: string; offset: number } {
-  if (offset + 4 > buffer.length) throw new Error('invalid reaction snapshot');
+  if (offset + 4 > buffer.length) throw guidanceError(new Error('invalid reaction snapshot'), 'guid-ac518dc862640c77');
   const length = buffer.readUInt32LE(offset);
   const start = offset + 4;
   const end = start + length;
-  if (end > buffer.length) throw new Error('invalid reaction snapshot');
+  if (end > buffer.length) throw guidanceError(new Error('invalid reaction snapshot'), 'guid-ac518dc862640c77');
   return { value: buffer.subarray(start, end).toString('utf8'), offset: end };
 }
 
@@ -109,17 +110,17 @@ function encodeReactionSnapshot(snapshot: ReactionSnapshot): Buffer {
 
 function decodeReactionSnapshot(buffer: Buffer): ReactionSnapshot {
   if (buffer.length < 16 || buffer.readUInt32LE(0) !== 0x4d435052 || buffer.readUInt32LE(4) !== REACTION_SNAPSHOT_VERSION) {
-    throw new Error('unsupported reaction snapshot');
+    throw guidanceError(new Error('unsupported reaction snapshot'), 'guid-13fb82e7daf91f74');
   }
   const entryCount = buffer.readUInt32LE(8);
   const countCount = buffer.readUInt32LE(12);
-  if (entryCount > MAX_REACTION_SNAPSHOT_ENTRIES || countCount > MAX_REACTION_SNAPSHOT_ENTRIES) throw new Error('reaction snapshot is too large');
+  if (entryCount > MAX_REACTION_SNAPSHOT_ENTRIES || countCount > MAX_REACTION_SNAPSHOT_ENTRIES) throw guidanceError(new Error('reaction snapshot is too large'), 'guid-2de80ef579fa380a');
   const entries: ReactionSnapshotEntry[] = [];
   let offset = 16;
   for (let index = 0; index < entryCount; index += 1) {
     const path = decodeSnapshotString(buffer, offset);
     offset = path.offset;
-    if (offset + 16 > buffer.length) throw new Error('invalid reaction snapshot');
+    if (offset + 16 > buffer.length) throw guidanceError(new Error('invalid reaction snapshot'), 'guid-ac518dc862640c77');
     entries.push({ path: path.value, size: buffer.readDoubleLE(offset), mtimeMs: buffer.readDoubleLE(offset + 8) });
     offset += 16;
   }
@@ -127,7 +128,7 @@ function decodeReactionSnapshot(buffer: Buffer): ReactionSnapshot {
   for (let index = 0; index < countCount; index += 1) {
     const postId = decodeSnapshotString(buffer, offset);
     offset = postId.offset;
-    if (offset + 8 > buffer.length) throw new Error('invalid reaction snapshot');
+    if (offset + 8 > buffer.length) throw guidanceError(new Error('invalid reaction snapshot'), 'guid-ac518dc862640c77');
     counts.push([postId.value, buffer.readUInt32LE(offset), buffer.readUInt32LE(offset + 4)]);
     offset += 8;
   }
@@ -161,7 +162,7 @@ export class CommunityFeaturesService {
 
   private async assertKnownIdentity(value: string): Promise<void> {
     const identities = await this.auth.listPrincipals();
-    if (!identities.some(principal => identity(principal) === value)) throw new Error(`Unknown public identity: ${value}`);
+    if (!identities.some(principal => identity(principal) === value)) throw guidanceError(new Error(`Unknown public identity: ${value}`), 'guid-c2efd45672d0fb04');
   }
 
   async listSeries(params: { seriesId?: string; limit?: number; chapterLimit?: number; maxChars?: number; includeExcerpts?: boolean; excerptMaxChars?: number }) {
@@ -279,15 +280,15 @@ export class CommunityFeaturesService {
     if (targetType === 'post') {
       const path = publicPostPath(targetId);
       const note = await this.fileSystem.readNote(path);
-      if (note.frontmatter.mcpvault_type !== 'blog_post') throw new Error('target post was not found');
-      if (isModerationHidden(note.frontmatter)) throw new Error('This community item is unavailable because moderation has hidden it');
+      if (note.frontmatter.mcpvault_type !== 'blog_post') throw guidanceError(new Error('target post was not found'), 'guid-0bb58acfba3bf51d');
+      if (isModerationHidden(note.frontmatter)) throw guidanceError(new Error('This community item is unavailable because moderation has hidden it'), 'guid-b3335048567c04dd');
       return path;
     }
-    if (!postId) throw new Error('postId is required for a comment target');
+    if (!postId) throw guidanceError(new Error('postId is required for a comment target'), 'guid-7b5593a5e1ecf527');
     const path = publicCommentPath(postId, targetId);
       const note = await this.fileSystem.readNote(path);
-      if (note.frontmatter.mcpvault_type !== 'blog_comment') throw new Error('target comment was not found');
-      if (isModerationHidden(note.frontmatter)) throw new Error('This community item is unavailable because moderation has hidden it');
+      if (note.frontmatter.mcpvault_type !== 'blog_comment') throw guidanceError(new Error('target comment was not found'), 'guid-fedc6036762c75f1');
+      if (isModerationHidden(note.frontmatter)) throw guidanceError(new Error('This community item is unavailable because moderation has hidden it'), 'guid-b3335048567c04dd');
       return path;
   }
 
@@ -528,9 +529,9 @@ export class CommunityFeaturesService {
   }
 
   async toggleReaction(params: { principal?: ScopePrincipal; targetType: TargetType; targetId: string; postId?: string; reaction?: string; active?: boolean }) {
-    if (!params.principal) throw new Error('Login is required to react');
+    if (!params.principal) throw guidanceError(new Error('Login is required to react'), 'guid-4c5d0cbb537ee28d');
     const reaction = normalizeScopeId(params.reaction || 'like', 'reaction');
-    if (reaction !== 'like' && reaction !== 'dislike') throw new Error("reaction must be 'like' or 'dislike'");
+    if (reaction !== 'like' && reaction !== 'dislike') throw guidanceError(new Error("reaction must be 'like' or 'dislike'"), 'guid-ee2bccc64261b764');
     await this.targetPath(params.targetType, params.targetId, params.postId);
     const actor = actorPath(identity(params.principal), 'actor');
     const path = `${this.reactionRoot(params.targetType, params.targetId)}/${actor}.md`;
@@ -597,14 +598,14 @@ export class CommunityFeaturesService {
   }
 
   async acceptComment(params: { principal?: ScopePrincipal; slug: string; commentId: string; accepted?: boolean; expectedRevision: string }) {
-    if (!params.principal) throw new Error('Login is required');
+    if (!params.principal) throw guidanceError(new Error('Login is required'), 'guid-fa8ad09d662849bf');
     const postPath = publicPostPath(params.slug);
     const post = await this.fileSystem.readNote(postPath);
-    if (post.frontmatter.author !== identity(params.principal)) throw new Error('Only the post author can accept an answer');
+    if (post.frontmatter.author !== identity(params.principal)) throw guidanceError(new Error('Only the post author can accept an answer'), 'guid-178430d6d88ffcda');
     const commentPath = publicCommentPath(params.slug, params.commentId);
     const comment = await this.fileSystem.readNote(commentPath);
-    if (comment.frontmatter.mcpvault_type !== 'blog_comment' || comment.frontmatter.post_id !== normalizeScopeId(params.slug, 'slug') || comment.frontmatter.content_status === 'deleted') throw new Error('comment was not found');
-    if (!params.expectedRevision) throw new Error('expectedRevision is required; read the post first');
+    if (comment.frontmatter.mcpvault_type !== 'blog_comment' || comment.frontmatter.post_id !== normalizeScopeId(params.slug, 'slug') || comment.frontmatter.content_status === 'deleted') throw guidanceError(new Error('comment was not found'), 'guid-277e10757dfc0c6d');
+    if (!params.expectedRevision) throw guidanceError(new Error('expectedRevision is required; read the post first'), 'guid-bf29459c7869575b');
     const accepted = params.accepted !== false;
     const fm = { ...post.frontmatter };
     if (accepted) Object.assign(fm, { accepted_comment_id: comment.frontmatter.comment_id, accepted_by: identity(params.principal), accepted_at: now() });
@@ -618,15 +619,15 @@ export class CommunityFeaturesService {
     await this.assertKnownIdentity(owner);
     const pathRoot = `${GUESTBOOKS}/${owner}`;
     if (params.deleteEntry) {
-      if (!params.principal) throw new Error('Login is required');
+      if (!params.principal) throw guidanceError(new Error('Login is required'), 'guid-fa8ad09d662849bf');
       const path = `${pathRoot}/${normalizeScopeId(params.entryId || '', 'entryId')}.md`;
       const note = await this.fileSystem.readNote(path);
-      if (note.frontmatter.author !== identity(params.principal) && owner !== identity(params.principal)) throw new Error('Only the entry author or guestbook owner can delete an entry');
+      if (note.frontmatter.author !== identity(params.principal) && owner !== identity(params.principal)) throw guidanceError(new Error('Only the entry author or guestbook owner can delete an entry'), 'guid-f39271104e7fe550');
       await this.fileSystem.writeNote({ path, content: '[deleted]\n', frontmatter: { ...note.frontmatter, content_status: 'deleted', updated_at: now() }, expectedRevision: params.expectedRevision || note.revision });
       return { success: true, deleted: true, entryId: params.entryId };
     }
     if (params.content !== undefined) {
-      if (!params.principal) throw new Error('Login is required to write a guestbook entry');
+      if (!params.principal) throw guidanceError(new Error('Login is required to write a guestbook entry'), 'guid-960fc129692b0e4a');
       const content = shortText(params.content);
       const entryId = params.entryId ? normalizeScopeId(params.entryId, 'entryId') : `entry-${randomUUID().slice(0, 10)}`;
       const path = `${pathRoot}/${entryId}.md`;
@@ -642,7 +643,7 @@ export class CommunityFeaturesService {
     if (params.afterEntryId) {
       const afterEntryId = normalizeScopeId(params.afterEntryId, 'afterEntryId');
       const cursorNote = await this.fileSystem.readNote(`${pathRoot}/${afterEntryId}.md`).catch(() => undefined);
-      if (!cursorNote || cursorNote.frontmatter.entry_id !== afterEntryId) throw new Error('afterEntryId was not found');
+      if (!cursorNote || cursorNote.frontmatter.entry_id !== afterEntryId) throw guidanceError(new Error('afterEntryId was not found'), 'guid-7d6e52b70d72fafc');
       const window = await queryWindow(this.fileSystem, { pathPrefix: pathRoot, filters, sortBy: 'created_at', sortOrder: 'asc', limit, after: { path: `${pathRoot}/${afterEntryId}.md`, value: cursorNote.frontmatter.created_at } });
       selected = window.notes;
       windowTruncated = window.truncated;
@@ -671,9 +672,9 @@ export class CommunityFeaturesService {
   }
 
   async watch(params: { principal?: ScopePrincipal; targetType: 'post' | 'series' | 'author' | 'tag'; targetId: string; active?: boolean }) {
-    if (!params.principal) throw new Error('Login is required to manage watches');
+    if (!params.principal) throw guidanceError(new Error('Login is required to manage watches'), 'guid-aa6a207336df7892');
     const targetId = params.targetType === 'tag' ? String(params.targetId).trim().toLowerCase() : normalizeScopeId(params.targetId, 'targetId');
-    if (!targetId) throw new Error('targetId is required');
+    if (!targetId) throw guidanceError(new Error('targetId is required'), 'guid-d047a77f28718f29');
     if (params.targetType === 'post') await this.fileSystem.readNote(publicPostPath(targetId));
     const path = `${this.ownerRoot(params.principal, 'subscriptions')}/${params.targetType}-${stableKey(targetId)}.md`;
     const active = params.active !== false;
@@ -689,7 +690,7 @@ export class CommunityFeaturesService {
   }
 
   async listWatches(principal?: ScopePrincipal, maxChars?: number) {
-    if (!principal) throw new Error('Login is required');
+    if (!principal) throw guidanceError(new Error('Login is required'), 'guid-fa8ad09d662849bf');
     const query = { pathPrefix: this.ownerRoot(principal, 'subscriptions'), filters: { mcpvault_type: 'subscription', active: true }, sortBy: 'updated_at' as const, sortOrder: 'desc' as const };
     const [window, total] = await Promise.all([
       queryWindow(this.fileSystem, { ...query, limit: 500 }),
@@ -700,14 +701,14 @@ export class CommunityFeaturesService {
   }
 
   async save(params: { principal?: ScopePrincipal; targetPath: string; note?: string; active?: boolean }) {
-    if (!params.principal) throw new Error('Login is required to manage saves');
+    if (!params.principal) throw guidanceError(new Error('Login is required to manage saves'), 'guid-2040f39753c1ca2c');
     // Keep old clients that bookmark a public physical Community path working,
     // while all note/search path APIs require an explicit command-center URI.
     const legacyPublicTarget = String(params.targetPath || '').trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
     const target = /^Community\//i.test(legacyPublicTarget) && !legacyPublicTarget.split('/').some(part => part === '.' || part === '..')
       ? legacyPublicTarget
       : this.access.resolveExternalPath(params.targetPath, params.principal);
-    if (!await this.fileSystem.noteExists(target)) throw new Error(`Saved target was not found: ${target}`);
+    if (!await this.fileSystem.noteExists(target)) throw guidanceError(new Error(`Saved target was not found: ${target}`), 'guid-79382d52880542e3');
     const key = stableKey(target);
     const path = `${this.ownerRoot(params.principal, 'saves')}/${key}.md`;
     const active = params.active !== false;
@@ -722,7 +723,7 @@ export class CommunityFeaturesService {
   }
 
   async listSaves(principal?: ScopePrincipal, maxChars?: number) {
-    if (!principal) throw new Error('Login is required');
+    if (!principal) throw guidanceError(new Error('Login is required'), 'guid-fa8ad09d662849bf');
     const query = { pathPrefix: this.ownerRoot(principal, 'saves'), filters: { mcpvault_type: 'saved_item', active: true }, sortBy: 'updated_at' as const, sortOrder: 'desc' as const };
     const [window, total] = await Promise.all([
       queryWindow(this.fileSystem, { ...query, limit: 500 }),

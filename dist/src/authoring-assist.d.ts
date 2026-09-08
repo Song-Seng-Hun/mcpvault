@@ -19,7 +19,7 @@ export declare function authoringAssist(noteKind: string, context?: AuthoringCon
     normalization: {
         mechanical: string[];
         semantic: string[];
-        instruction: string;
+        instruction: "Do not refresh evidence or summary fingerprints merely to remove lint warnings. Review exact notes.change_set dry-run before applying formatting.";
     };
 };
 export declare function hostPluginBundle(): {

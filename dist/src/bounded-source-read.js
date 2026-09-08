@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { open } from 'node:fs/promises';
 export class SourceReadLimitError extends Error {
     constructor() { super('Source exceeds query read budget'); this.name = 'SourceReadLimitError'; }
@@ -5,12 +6,12 @@ export class SourceReadLimitError extends Error {
 /** Read a complete UTF-8 source or reject; never pass partial Markdown to a parser. */
 export async function readBoundedSource(path, maxBytes) {
     if (!Number.isSafeInteger(maxBytes) || maxBytes < 1 || maxBytes > 0x7fffffff)
-        throw new TypeError('Invalid source byte limit');
+        throw guidanceError(new TypeError('Invalid source byte limit'), 'guid-c888784bdb4b6e35');
     const handle = await open(path, 'r');
     try {
         const info = await handle.stat();
         if (!info.isFile())
-            throw new Error('Source is not a regular file');
+            throw guidanceError(new Error('Source is not a regular file'), 'guid-872c3352ec3074e0');
         if (info.size > maxBytes)
             throw new SourceReadLimitError();
         const chunks = [];

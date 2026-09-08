@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import type { FileSystemService } from './filesystem.js';
 import type { ScopeAccessPolicy } from './scope-access.js';
 import type { ScopePrincipal } from './scope-auth.js';
@@ -28,7 +29,7 @@ export async function selectSituationCandidates(fs: FileSystemService, access: S
     const batch = await fs.queryNotes({ limit: 500, includeContent: false, includeTotal: false, sortBy: 'path', ...(after && { after }) }, canAccess,
       n => !isModerationHidden(n.frontmatter) && !isFictionDomain(n.frontmatter) && !n.frontmatter.mcpvault_type && !isSituationMemory(n.frontmatter));
     for (const n of batch.notes) {
-      if (++examined > 10000) throw new Error('Situation metadata window exhausted');
+      if (++examined > 10000) throw guidanceError(new Error('Situation metadata window exhausted'), 'guid-cb08ef637cea601e');
       const state = contextRuleState(n.frontmatter.context_rules, `${query}\n${options.context}`, options.intent);
       if (state === 'invalid' || state === 'conditions_unmatched') {
         if (options.explain && diagnostics.length < 8) diagnostics.push({ physicalPath: n.path, revision: n.revision!, reason: state === 'invalid' ? 'invalid_context_rules' : 'conditions_unmatched' });
@@ -40,7 +41,7 @@ export async function selectSituationCandidates(fs: FileSystemService, access: S
         activated.push({ p: n.path, physicalPath: n.path, t: '', ex: '', mc: 0, ...(n.revision && { rv: n.revision }), why: ['retrieval_cue_match'] });
     }
     after = batch.truncated ? batch.nextCursor : undefined;
-    if (batch.truncated && !after) throw new Error('Situation metadata changed');
+    if (batch.truncated && !after) throw guidanceError(new Error('Situation metadata changed'), 'guid-cb0beec6f8a0e1c5');
   } while (after);
   // Reserve eight candidate slots for explicit safety/evidence relations.
   const outcome = await retrieval.memoryCandidates({ query, limit: 12, ...(principal && { principal }), semantic, canAccessPath: p => allowed.has(p) && canAccess(p), candidateRevisions: revisions });

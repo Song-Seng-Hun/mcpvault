@@ -1,8 +1,9 @@
+import { guidanceError } from './guidance-runtime.js';
 /** Preserve a contiguous delivery prefix and never derive a cursor from clipped Properties. */
 export async function packQueryPage(page, options) {
     const { maxChars } = options;
     if (!Number.isInteger(maxChars) || maxChars < 512 || maxChars > 20000)
-        throw new Error('maxChars must be an integer between 512 and 20000');
+        throw guidanceError(new Error('maxChars must be an integer between 512 and 20000'), 'guid-cc408e854eb4b949');
     const delivered = [];
     const envelope = (notes, index) => {
         const more = index < page.notes.length - 1 || page.truncated;

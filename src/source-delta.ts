@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 export type SourceDeltaGranularity = 'line_hunks' | 'enclosing_range';
 
 export interface SourceDeltaSide {
@@ -151,7 +152,7 @@ function enclosingChange(before: string, after: string): LineChange {
 }
 
 export function compareSourceBodies(before: string, after: string, options?: Options): SourceDelta {
-  if (before.length > MAX_INPUT_CHARS || after.length > MAX_INPUT_CHARS) throw new RangeError('source body exceeds 8 MiB limit');
+  if (before.length > MAX_INPUT_CHARS || after.length > MAX_INPUT_CHARS) throw guidanceError(new RangeError('source body exceeds 8 MiB limit'), 'guid-6f688ebc5934c575');
   const oldBody = normalize(before);
   const newBody = normalize(after);
   const maxChars = bounded(options?.maxChars, 2000, 200, 4000);

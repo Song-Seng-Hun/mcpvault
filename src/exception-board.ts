@@ -1,3 +1,4 @@
+import { guidanceText } from './guidance-runtime.js';
 /** A narrow projection contract; no child-view metadata is spread into output. */
 export interface ExceptionBoardItem {
   path: string;
@@ -45,7 +46,7 @@ export function packExceptionBoard(candidates: ExceptionBoardItem[], limit: numb
   const base = { counts, total: ranked.length, countScope: 'validated_candidates' as const, coverage: 'partial' as const, advisory: true as const,
     truncated: sourceTruncated || ranked.length > selected.length };
   const full = { ...base, items: selected,
-    note: 'Candidate signals, not an exhaustive healthy/unhealthy verdict. Source revision matches do not verify every dependency. Follow one returned read action before revision-safe repair.' };
+    note: guidanceText('guid-d5981419b398421e', 'Candidate signals, not an exhaustive healthy/unhealthy verdict. Source revision matches do not verify every dependency. Follow one returned read action before revision-safe repair.') };
   if (JSON.stringify(full).length <= maxChars) return full;
   // Preserve identity, provenance and the exact action. Drop prose before work.
   const items = selected.map(({ detail: _detail, suggestedAction: _suggestion, state: _state, category: _category, ...item }) => item);

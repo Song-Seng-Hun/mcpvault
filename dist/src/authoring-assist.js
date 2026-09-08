@@ -1,3 +1,4 @@
+import { guidanceError, guidanceText } from './guidance-runtime.js';
 import { createHash } from 'node:crypto';
 import { stringify } from 'yaml';
 import { getOrganizationPropertyContract, getOrganizationRelationContract, organizationNoteTemplate } from './organization.js';
@@ -8,9 +9,9 @@ export function authoringAssist(noteKind, context = {}) {
     const template = organizationNoteTemplate(noteKind);
     const intent = context.intent ?? 'knowledge';
     if (!['knowledge', 'capture', 'reply', 'new_topic'].includes(intent))
-        throw new Error('Unsupported authoring intent');
+        throw guidanceError(new Error('Unsupported authoring intent'), 'guid-d22b89bb4b87fa2f');
     if (context.slug !== undefined && !/^[a-z0-9][a-z0-9-]{0,119}$/.test(context.slug))
-        throw new Error('Invalid post slug');
+        throw guidanceError(new Error('Invalid post slug'), 'guid-233dce3fd1380775');
     const provided = context.provided ?? {};
     const required = intent === 'reply' ? ['slug', 'content'] : intent === 'new_topic' ? ['slug', 'title', 'content'] : intent === 'capture' ? ['content'] : ['title', 'content', ...(noteKind === 'project' ? ['desired_outcome', 'next_action'] : [])];
     const contracts = getOrganizationPropertyContract();
@@ -21,7 +22,7 @@ export function authoringAssist(noteKind, context = {}) {
         nextAction: { endpointId: intent === 'reply' ? 'community.comment' : intent === 'new_topic' ? 'community.post' : intent === 'capture' ? 'wiki.capture' : 'wiki.preflight',
             arguments: { ...(context.slug && { slug: context.slug }) },
             instruction: intent === 'knowledge' ? 'Search existing knowledge first. Write the draft via revision-checked notes.write, then preflight its returned path and revision before publication.' : 'Supply the missing inputs using the endpoint schema. This scaffold performs no writes; verify the returned target after execution.' },
-        normalization: { mechanical: ['CRLF to LF in a revision-checked preview'], semantic: ['scope', 'evidence', 'summary freshness', 'lifecycle', 'relations'], instruction: 'Do not refresh evidence or summary fingerprints merely to remove lint warnings. Review exact notes.change_set dry-run before applying formatting.' },
+        normalization: { mechanical: ['CRLF to LF in a revision-checked preview'], semantic: ['scope', 'evidence', 'summary freshness', 'lifecycle', 'relations'], instruction: guidanceText('guid-89e05614c6c06783', 'Do not refresh evidence or summary fingerprints merely to remove lint warnings. Review exact notes.change_set dry-run before applying formatting.') },
     };
 }
 export function hostPluginBundle() {

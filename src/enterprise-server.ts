@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { createPrivateKey, randomBytes, X509Certificate } from 'node:crypto';
 import { open, readFile, realpath, stat, unlink } from 'node:fs/promises';
 import type { FileHandle } from 'node:fs/promises';
@@ -76,7 +77,7 @@ function processIsAlive(pid: number): boolean {
 }
 
 function absolute(path: string, label: string): string {
-  if (!path || !isAbsolute(path)) throw new Error(`${label} must be an explicit absolute path`);
+  if (!path || !isAbsolute(path)) throw guidanceError(new Error(`${label} must be an explicit absolute path`), 'guid-622ae60cd2274500');
   return resolve(path);
 }
 
@@ -88,24 +89,24 @@ function pathIsInside(parent: string, child: string): boolean {
 async function canonicalFileOutsideVault(path: string, vaultPath: string, label: string): Promise<string> {
   const canonical = await realpath(path);
   const file = await stat(canonical);
-  if (!file.isFile()) throw new Error(`${label} must identify a file`);
+  if (!file.isFile()) throw guidanceError(new Error(`${label} must identify a file`), 'guid-76f303e2b093def0');
   const moduleRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
   const serviceRoot = moduleRoot.endsWith(`${process.platform === 'win32' ? '\\' : '/'}dist`) ? resolve(moduleRoot, '..') : moduleRoot;
-  if (pathIsInside(vaultPath, canonical) || pathIsInside(await realpath(serviceRoot), canonical)) throw new Error(`${label} must be outside the Vault and service checkout`);
+  if (pathIsInside(vaultPath, canonical) || pathIsInside(await realpath(serviceRoot), canonical)) throw guidanceError(new Error(`${label} must be outside the Vault and service checkout`), 'guid-63507b893e3d6cfc');
   return canonical;
 }
 
 async function readLock(path: string, canonicalVaultPath: string): Promise<VaultLockRecord> {
   const metadata = await stat(path);
   if (!metadata.isFile() || metadata.size > MAX_LOCK_BYTES) {
-    throw new Error('Enterprise server lock is invalid; refusing to remove it automatically');
+    throw guidanceError(new Error('Enterprise server lock is invalid; refusing to remove it automatically'), 'guid-7c4ad3cbf894d11d');
   }
   let value: unknown;
   try {
     value = JSON.parse(await readFile(path, 'utf8'));
   } catch (error) {
     if (isRecord(error) && error.code === 'ENOENT') throw error;
-    throw new Error('Enterprise server lock is corrupt; refusing to remove it automatically');
+    throw guidanceError(new Error('Enterprise server lock is corrupt; refusing to remove it automatically'), 'guid-592f2b080b57effe');
   }
   if (!isRecord(value)
     || value.version !== LOCK_VERSION
@@ -115,7 +116,7 @@ async function readLock(path: string, canonicalVaultPath: string): Promise<Vault
     || !/^[a-f0-9]{32}$/.test(value.nonce)
     || typeof value.vaultPath !== 'string'
     || resolve(value.vaultPath).toLowerCase() !== canonicalVaultPath.toLowerCase()) {
-    throw new Error('Enterprise server lock is invalid; refusing to remove it automatically');
+    throw guidanceError(new Error('Enterprise server lock is invalid; refusing to remove it automatically'), 'guid-7c4ad3cbf894d11d');
   }
   return value as unknown as VaultLockRecord;
 }
@@ -154,7 +155,7 @@ async function acquireVaultLock(vaultPath: string): Promise<() => Promise<void>>
         throw readError;
       }
       if (processIsAlive(existing.pid)) {
-        throw new Error(`An enterprise server already owns this Vault (process ${existing.pid})`);
+        throw guidanceError(new Error(`An enterprise server already owns this Vault (process ${existing.pid})`), 'guid-256a71d2ccfca7be');
       }
       try {
         await unlink(path);
@@ -163,7 +164,7 @@ async function acquireVaultLock(vaultPath: string): Promise<() => Promise<void>>
       }
     }
   }
-  if (!lock) throw new Error('Unable to acquire the enterprise server Vault lock');
+  if (!lock) throw guidanceError(new Error('Unable to acquire the enterprise server Vault lock'), 'guid-95bd571f6b93b603');
 
   let released = false;
   return async () => {
@@ -187,20 +188,20 @@ function parseFederationConfig(value: unknown): PublicFederationHostConfig {
     || typeof value.trustedHubPublicKey !== 'string'
     || !value.trustedHubPublicKey
     || !isRecord(value.actors)) {
-    throw new Error('Public federation configuration is invalid');
+    throw guidanceError(new Error('Public federation configuration is invalid'), 'guid-ab8c844cc79b3994');
   }
   const url = new URL(value.baseUrl);
   if (url.protocol !== 'https:' && !(url.protocol === 'http:' && ['127.0.0.1', 'localhost', '::1'].includes(url.hostname))) {
-    throw new Error('Public federation baseUrl must use HTTPS except on loopback');
+    throw guidanceError(new Error('Public federation baseUrl must use HTTPS except on loopback'), 'guid-0ad4e7dc35f92d37');
   }
   const entries = Object.entries(value.actors);
-  if (entries.length > MAX_FEDERATION_ACTORS) throw new Error('Public federation actor capacity exceeded');
+  if (entries.length > MAX_FEDERATION_ACTORS) throw guidanceError(new Error('Public federation actor capacity exceeded'), 'guid-bcebacbf89ad3ce5');
   const actors: Record<string, { authToken: string }> = Object.create(null) as Record<string, { authToken: string }>;
   for (const [agentIdInput, actor] of entries) {
     const agentId = normalizeScopeId(agentIdInput, 'federation agentId');
     if (agentId !== agentIdInput || !isRecord(actor) || Object.keys(actor).some(key => key !== 'authToken') || typeof actor.authToken !== 'string'
       || !actor.authToken || actor.authToken.length > MAX_FEDERATION_TOKEN_LENGTH) {
-      throw new Error('Public federation actor configuration is invalid');
+      throw guidanceError(new Error('Public federation actor configuration is invalid'), 'guid-22fa77d70746cec9');
     }
     actors[agentId] = { authToken: actor.authToken };
   }
@@ -210,13 +211,13 @@ function parseFederationConfig(value: unknown): PublicFederationHostConfig {
 async function loadFederationConfig(path: string, canonicalVaultPath: string): Promise<PublicFederationHostConfig> {
   const canonicalPath = await canonicalFileOutsideVault(path, canonicalVaultPath, 'federationConfigPath');
   if ((await stat(canonicalPath)).size > MAX_FEDERATION_CONFIG_BYTES) {
-    throw new Error('Public federation configuration is too large');
+    throw guidanceError(new Error('Public federation configuration is too large'), 'guid-d1121a2956add89b');
   }
   let parsed: unknown;
   try {
     parsed = JSON.parse(await readFile(canonicalPath, 'utf8'));
   } catch {
-    throw new Error('Public federation configuration is not valid JSON');
+    throw guidanceError(new Error('Public federation configuration is not valid JSON'), 'guid-71a076b24ddc8030');
   }
   return parseFederationConfig(parsed);
 }
@@ -231,19 +232,19 @@ function parseGlobalImportConfig(value: unknown): GlobalImportHostConfig {
     || value.readToken.length > MAX_FEDERATION_TOKEN_LENGTH
     || typeof value.trustedPublicKey !== 'string'
     || !value.trustedPublicKey) {
-    throw new Error('Global import configuration must contain only baseUrl, readToken, and trustedPublicKey');
+    throw guidanceError(new Error('Global import configuration must contain only baseUrl, readToken, and trustedPublicKey'), 'guid-5b55bae8ba50b098');
   }
   return { baseUrl: value.baseUrl, readToken: value.readToken, trustedPublicKey: value.trustedPublicKey };
 }
 
 async function loadGlobalImportConfig(path: string, canonicalVaultPath: string): Promise<GlobalImportHostConfig> {
   const canonicalPath = await canonicalFileOutsideVault(path, canonicalVaultPath, 'globalImportConfigPath');
-  if ((await stat(canonicalPath)).size > MAX_FEDERATION_CONFIG_BYTES) throw new Error('Global import configuration is too large');
+  if ((await stat(canonicalPath)).size > MAX_FEDERATION_CONFIG_BYTES) throw guidanceError(new Error('Global import configuration is too large'), 'guid-e7cc434be06a087b');
   let parsed: unknown;
   try {
     parsed = JSON.parse(await readFile(canonicalPath, 'utf8'));
   } catch {
-    throw new Error('Global import configuration is not valid JSON');
+    throw guidanceError(new Error('Global import configuration is not valid JSON'), 'guid-8d050893320611a6');
   }
   return parseGlobalImportConfig(parsed);
 }
@@ -253,20 +254,20 @@ function validateTls(cert: Buffer, key: Buffer, ca: Buffer): void {
   try {
     certificate = new X509Certificate(cert);
   } catch {
-    throw new Error('TLS certificate is not a valid X.509 certificate');
+    throw guidanceError(new Error('TLS certificate is not a valid X.509 certificate'), 'guid-11bc6b224e0da208');
   }
   try {
     if (!certificate.checkPrivateKey(createPrivateKey(key))) {
-      throw new Error('TLS private key does not match the server certificate');
+      throw guidanceError(new Error('TLS private key does not match the server certificate'), 'guid-c0075d6c5e08e0ec');
     }
   } catch (error) {
     if (error instanceof Error && /does not match/.test(error.message)) throw error;
-    throw new Error('TLS private key is invalid or does not match the server certificate');
+    throw guidanceError(new Error('TLS private key is invalid or does not match the server certificate'), 'guid-2a55c9c7eeeec3be');
   }
   try {
     new X509Certificate(ca);
   } catch {
-    throw new Error('TLS CA is not a valid X.509 certificate');
+    throw guidanceError(new Error('TLS CA is not a valid X.509 certificate'), 'guid-f6d2c26865fb5574');
   }
 }
 
@@ -296,20 +297,20 @@ export async function startEnterpriseServer(config: EnterpriseServerConfig): Pro
     ? undefined
     : absolute(config.globalImportConfigPath, 'globalImportConfigPath');
   const realmId = normalizeScopeId(config.realmId, 'realmId');
-  if (!config.host || typeof config.host !== 'string') throw new Error('host is required');
-  if (!Number.isInteger(config.port) || config.port < 0 || config.port > 65_535) throw new Error('port must be 0 through 65535');
+  if (!config.host || typeof config.host !== 'string') throw guidanceError(new Error('host is required'), 'guid-2ef65809cfe9cfe7');
+  if (!Number.isInteger(config.port) || config.port < 0 || config.port > 65_535) throw guidanceError(new Error('port must be 0 through 65535'), 'guid-a430320c01788f07');
 
   let raw: unknown;
   try {
     raw = JSON.parse(await readFile(registryPath, 'utf8'));
   } catch {
-    throw new Error('Enterprise registry is missing or corrupt');
+    throw guidanceError(new Error('Enterprise registry is missing or corrupt'), 'guid-412eab1c897c6890');
   }
   const policyVault = isRecord(raw) && isRecord(raw.profile) && typeof raw.profile.vaultPath === 'string' ? raw.profile.vaultPath : '';
-  if (!isAbsolute(policyVault)) throw new Error('Enterprise registry has no valid Vault path');
+  if (!isAbsolute(policyVault)) throw guidanceError(new Error('Enterprise registry has no valid Vault path'), 'guid-5b05b94e1cbd131e');
   const verifiedRegistry = new EnterpriseRegistry({ registryPath, vaultPath: policyVault });
   const profile = verifiedRegistry.getPolicy();
-  if (profile.realmId !== realmId) throw new Error(`Enterprise registry realm '${profile.realmId}' does not match configured realm '${realmId}'`);
+  if (profile.realmId !== realmId) throw guidanceError(new Error(`Enterprise registry realm '${profile.realmId}' does not match configured realm '${realmId}'`), 'guid-df09bbabd6aee122');
 
   const canonicalVaultPath = await realpath(profile.vaultPath);
   const [canonicalRegistryPath, canonicalCertPath, canonicalKeyPath, canonicalCaPath] = await Promise.all([
@@ -321,12 +322,12 @@ export async function startEnterpriseServer(config: EnterpriseServerConfig): Pro
   const publicFederation = federationConfigPath === undefined
     ? undefined
     : profile.mode !== 'public'
-      ? (() => { throw new Error('Public federation configuration is forbidden for a company enterprise instance'); })()
+      ? (() => { throw guidanceError(new Error('Public federation configuration is forbidden for a company enterprise instance'), 'guid-2ee24fa850bba9fc'); })()
       : await loadFederationConfig(federationConfigPath, canonicalVaultPath);
   const globalImportConfig = globalImportConfigPath === undefined
     ? undefined
     : profile.mode !== 'company'
-      ? (() => { throw new Error('Global import configuration is allowed only for a company enterprise instance'); })()
+      ? (() => { throw guidanceError(new Error('Global import configuration is allowed only for a company enterprise instance'), 'guid-571a728ef2780d41'); })()
       : await loadGlobalImportConfig(globalImportConfigPath, canonicalVaultPath);
 
   const release = await acquireVaultLock(canonicalVaultPath);

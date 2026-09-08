@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { randomUUID, createHash } from 'node:crypto';
 import { lstat, open, readdir, realpath, unlink } from 'node:fs/promises';
 import { basename, dirname, isAbsolute, join, relative, sep } from 'node:path';
@@ -18,18 +19,18 @@ const inside = (root, path) => { const r = relative(root, path); return !r || (r
 const revision = (text) => createHash('sha256').update(text).digest('hex');
 export function assertRoleplayReplayAdmission(existingBytes, candidateBytes) {
     if (!Number.isSafeInteger(existingBytes) || !Number.isSafeInteger(candidateBytes) || existingBytes < 0 || candidateBytes < 0 || existingBytes > ROLEPLAY_REPLAY_MAX_BYTES - candidateBytes) {
-        throw new Error('Roleplay replay capacity reached; host maintenance required');
+        throw guidanceError(new Error('Roleplay replay capacity reached; host maintenance required'), 'guid-6f034b696b4fa383');
     }
 }
 export async function canonicalTurnNames(dir) {
     const names = (await readdir(dir)).sort();
     const temporary = names.filter(name => TEMPORARY_TURN.test(name));
     if (temporary.length > MAX_TEMPORARY_TURNS)
-        throw new Error('Roleplay temporary turn limit reached; host repair required');
+        throw guidanceError(new Error('Roleplay temporary turn limit reached; host repair required'), 'guid-e190edd51a4a9536');
     for (const name of temporary) {
         const stat = await lstat(join(dir, name));
         if (!stat.isFile() || stat.size > MAX_BYTES)
-            throw new Error('Roleplay temporary turn integrity failure; host repair required');
+            throw guidanceError(new Error('Roleplay temporary turn integrity failure; host repair required'), 'guid-4eef613a39b7673b');
     }
     return names.filter(name => !TEMPORARY_TURN.test(name));
 }
@@ -52,13 +53,13 @@ export class RoleplayStore {
     get preparedPath() { return this.checkpointPath.replace('.checkpoint.json', '.prepared.md'); }
     static async open(options) {
         if (!isAbsolute(options.vaultPath) || !isAbsolute(options.hostPath))
-            throw new Error('Roleplay needs absolute host-provisioned storage paths');
+            throw guidanceError(new Error('Roleplay needs absolute host-provisioned storage paths'), 'guid-7f8b4247ac44e921');
         const vaultPath = await realpath(options.vaultPath), hostPath = await realpath(options.hostPath);
         const compiled = dirname(dirname(fileURLToPath(import.meta.url))), source = basename(compiled) === 'dist' ? dirname(compiled) : compiled;
         if (inside(vaultPath, hostPath) || inside(source, hostPath) || /^\\\\|^\/\//.test(vaultPath) || /^\\\\|^\/\//.test(hostPath))
-            throw new Error('Roleplay checkpoint must be local and outside Vault/source');
+            throw guidanceError(new Error('Roleplay checkpoint must be local and outside Vault/source'), 'guid-febc054cac933e9e');
         if (!Array.isArray(options.policy.administrators) || !options.policy.administrators.length || options.policy.administrators.length > 20)
-            throw new Error('Explicit host administrators required');
+            throw guidanceError(new Error('Explicit host administrators required'), 'guid-f83ee70da08f1adb');
         const store = new RoleplayStore({ vaultPath, hostPath, policy: structuredClone(options.policy) });
         await ensureFederationDirectory(vaultPath, join(vaultPath, ROLEPLAY_ROOT));
         await ensureFederationDirectory(vaultPath, join(vaultPath, '.mcpvault-roleplay'));
@@ -67,7 +68,7 @@ export class RoleplayStore {
             store.lock = await open(store.lockPath, 'wx', 0o600);
         }
         catch {
-            throw new Error('Roleplay writer already exists or crash lock needs explicit host recovery');
+            throw guidanceError(new Error('Roleplay writer already exists or crash lock needs explicit host recovery'), 'guid-2e39a35b0d753bdc');
         }
         try {
             await store.lock.writeFile(JSON.stringify({ pid: process.pid, nonce: store.nonce, vault: vaultPath }));
@@ -80,7 +81,7 @@ export class RoleplayStore {
                 if (!missing(e))
                     throw e;
                 if ((await canonicalTurnNames(join(vaultPath, ROLEPLAY_ROOT))).length)
-                    throw new Error('Roleplay checkpoint missing for existing records; host repair required');
+                    throw guidanceError(new Error('Roleplay checkpoint missing for existing records; host repair required'), 'guid-e5da252a4f3e7ef4');
                 await store.saveCheckpoint({ version: 1, vault: vaultPath, sequence: 0, hash: ZERO });
             }
             await store.replay();
@@ -100,17 +101,17 @@ export class RoleplayStore {
                 return;
             throw e;
         }
-        throw new Error('Roleplay host recovery is in progress; writer admission suspended');
+        throw guidanceError(new Error('Roleplay host recovery is in progress; writer admission suspended'), 'guid-97a0c3a60e48db26');
     }
     async assertWriter(checkRecovery = true) {
         if (!this.lock)
-            throw new Error('Roleplay writer is closed');
+            throw guidanceError(new Error('Roleplay writer is closed'), 'guid-c35f7bcfd1ae8506');
         if (checkRecovery)
             await this.assertNoRecovery();
         const current = JSON.parse(await readFederationFile(this.options.vaultPath, this.lockPath, { maxBytes: 2048 }));
         const held = await this.lock.stat(), disk = await lstat(this.lockPath);
         if (disk.isSymbolicLink() || current.nonce !== this.nonce || current.pid !== process.pid || current.vault !== this.options.vaultPath || held.ino !== disk.ino || held.dev !== disk.dev)
-            throw new Error('Roleplay writer fencing failed');
+            throw guidanceError(new Error('Roleplay writer fencing failed'), 'guid-50547e1c3f6a6645');
     }
     async release() {
         try {
@@ -126,7 +127,7 @@ export class RoleplayStore {
     }
     async serial(fn) {
         if (this.closing)
-            throw new Error('Roleplay writer closing');
+            throw guidanceError(new Error('Roleplay writer closing'), 'guid-0990ec0e413e95f9');
         const prior = this.queue;
         let release;
         this.queue = new Promise(r => { release = r; });
@@ -153,34 +154,34 @@ export class RoleplayStore {
     async replay() {
         const cp = JSON.parse(await readFederationFile(this.options.hostPath, this.checkpointPath, { maxBytes: 2048 }));
         if (cp.version !== 1 || cp.vault !== this.options.vaultPath || !Number.isSafeInteger(cp.sequence) || cp.sequence < 0 || cp.sequence > 10000 || !/^[a-f0-9]{64}$/.test(cp.hash))
-            throw new Error('Roleplay checkpoint invalid; host repair required');
+            throw guidanceError(new Error('Roleplay checkpoint invalid; host repair required'), 'guid-5b9f82430fb8c51a');
         const dir = join(this.options.vaultPath, ROLEPLAY_ROOT);
         let names = await canonicalTurnNames(dir);
         if (names.length < cp.sequence || names.length > cp.sequence + (cp.pending ? 1 : 0))
-            throw new Error('Roleplay checkpoint/record mismatch; host repair required');
+            throw guidanceError(new Error('Roleplay checkpoint/record mismatch; host repair required'), 'guid-d5cbf65c3b751ac9');
         let existingBytes = 0;
         const texts = [];
         for (let i = 0; i < names.length; i++) {
             const path = roleplayTurnPath(i + 1);
             if (names[i] !== basename(path) || !new PathFilter().isAllowed(path))
-                throw new Error('Roleplay record path integrity failure');
+                throw guidanceError(new Error('Roleplay record path integrity failure'), 'guid-7d08ac8ebe3c8f67');
             const text = await readFederationFile(this.options.vaultPath, path, { maxBytes: MAX_BYTES });
             texts.push(text);
             const cached = this.verified?.records[i];
             if (cached && cached.revision !== revision(text))
-                throw new Error('Roleplay record tampered; host repair required');
+                throw guidanceError(new Error('Roleplay record tampered; host repair required'), 'guid-dd796f5ee3b41059');
             existingBytes += Buffer.byteLength(text);
             assertRoleplayReplayAdmission(existingBytes, 0);
         }
         if (cp.pending) {
             if (cp.pending.sequence !== cp.sequence + 1 || !/^[a-f0-9]{64}$/.test(cp.pending.hash))
-                throw new Error('Invalid pending roleplay checkpoint');
+                throw guidanceError(new Error('Invalid pending roleplay checkpoint'), 'guid-744365638887a240');
             const path = roleplayTurnPath(cp.pending.sequence), name = basename(path);
             if (!names.includes(name)) {
                 const text = await readFederationFile(this.options.hostPath, this.preparedPath, { maxBytes: MAX_BYTES });
                 const event = this.fm.parse(text).frontmatter.roleplay_event;
                 if (event?.hash !== cp.pending.hash || event.sequence !== cp.pending.sequence)
-                    throw new Error('Prepared turn integrity failure; host repair required');
+                    throw guidanceError(new Error('Prepared turn integrity failure; host repair required'), 'guid-0f5dea998152a464');
                 assertRoleplayReplayAdmission(existingBytes, Buffer.byteLength(text));
                 await this.assertWriter();
                 await writeFederationFileAtomic(this.options.vaultPath, path, text, { maxBytes: MAX_BYTES });
@@ -189,38 +190,38 @@ export class RoleplayStore {
             }
         }
         if (names.length !== cp.sequence + (cp.pending ? 1 : 0))
-            throw new Error('Roleplay checkpoint/record mismatch; host repair required');
+            throw guidanceError(new Error('Roleplay checkpoint/record mismatch; host repair required'), 'guid-d5cbf65c3b751ac9');
         const cached = this.verified;
         if (cached && cached.state.sequence > cp.sequence)
-            throw new Error('Roleplay checkpoint moved backwards; host repair required');
+            throw guidanceError(new Error('Roleplay checkpoint moved backwards; host repair required'), 'guid-8846f141c67aa2ff');
         let state = cached?.state ?? initialRoleplay(), previous = cached?.checkpoint.hash ?? ZERO, bytes = cached?.bytes ?? 0;
         const records = [...(cached?.records ?? [])];
         if (cached?.state.sequence === cp.sequence && cached.checkpoint.hash !== cp.hash)
-            throw new Error('Roleplay trusted checkpoint mismatch');
+            throw guidanceError(new Error('Roleplay trusted checkpoint mismatch'), 'guid-7185f9e9a309eae7');
         for (let i = records.length; i < names.length; i++) {
             const path = roleplayTurnPath(i + 1);
             if (names[i] !== basename(path) || !new PathFilter().isAllowed(path))
-                throw new Error('Roleplay record path integrity failure');
+                throw guidanceError(new Error('Roleplay record path integrity failure'), 'guid-7d08ac8ebe3c8f67');
             const text = texts[i];
             bytes += Buffer.byteLength(text);
             assertRoleplayReplayAdmission(bytes, 0);
             const parsed = this.fm.parse(text), event = parsed.frontmatter.roleplay_event;
             if (!event || event.version !== 1 || event.sequence !== i + 1 || event.previous !== previous)
-                throw new Error('Roleplay record integrity failed; host repair required');
+                throw guidanceError(new Error('Roleplay record integrity failed; host repair required'), 'guid-b5cfa5b0c8e17c30');
             const { hash, ...unsigned } = event;
             if (roleplayHash(unsigned) !== hash || this.encode(event) !== text)
-                throw new Error('Roleplay record tampered; host repair required');
+                throw guidanceError(new Error('Roleplay record tampered; host repair required'), 'guid-dd796f5ee3b41059');
             const applied = applyRoleplayCommand(state, event.command, event.policy);
             if (roleplayHash(applied.receipt) !== roleplayHash(event.receipt) || applied.state === state)
-                throw new Error('Roleplay transition integrity failed');
+                throw guidanceError(new Error('Roleplay transition integrity failed'), 'guid-cc1e2494212fc2d5');
             state = applied.state;
             previous = hash;
             records.push({ path, revision: revision(text), event, content: text, frontmatter: parsed.frontmatter });
             if (i + 1 === cp.sequence && hash !== cp.hash)
-                throw new Error('Roleplay trusted checkpoint mismatch');
+                throw guidanceError(new Error('Roleplay trusted checkpoint mismatch'), 'guid-7185f9e9a309eae7');
         }
         if (previous !== (cp.pending?.hash ?? cp.hash))
-            throw new Error('Roleplay checkpoint integrity failure');
+            throw guidanceError(new Error('Roleplay checkpoint integrity failure'), 'guid-9528a308dcb17f4e');
         const checkpoint = { version: 1, vault: cp.vault, sequence: state.sequence, hash: previous };
         if (cp.pending)
             await this.saveCheckpoint(checkpoint);
@@ -243,7 +244,7 @@ export class RoleplayStore {
             const unsigned = { version: 1, sequence: applied.state.sequence, previous: checkpoint.hash, command, policy: this.options.policy, receipt: applied.receipt, at: new Date().toISOString() };
             const event = { ...unsigned, hash: roleplayHash(unsigned) }, text = this.encode(event), path = roleplayTurnPath(event.sequence);
             if (Buffer.byteLength(text) > MAX_BYTES)
-                throw new Error('Roleplay turn exceeds storage budget');
+                throw guidanceError(new Error('Roleplay turn exceeds storage budget'), 'guid-8bfb189437191955');
             assertRoleplayReplayAdmission(bytes, Buffer.byteLength(text));
             await writeFederationFileAtomic(this.options.hostPath, this.preparedPath, text, { maxBytes: MAX_BYTES });
             await this.saveCheckpoint({ ...checkpoint, pending: { sequence: event.sequence, hash: event.hash } });

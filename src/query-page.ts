@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import type { QueryNote, QueryNotesCursor, QueryNotesResult } from './types.js';
 
 interface QueryPageOptions {
@@ -14,7 +15,7 @@ export interface PackedQueryPage { text: string; isError?: true }
 /** Preserve a contiguous delivery prefix and never derive a cursor from clipped Properties. */
 export async function packQueryPage(page: QueryNotesResult, options: QueryPageOptions): Promise<PackedQueryPage> {
   const { maxChars } = options;
-  if (!Number.isInteger(maxChars) || maxChars < 512 || maxChars > 20000) throw new Error('maxChars must be an integer between 512 and 20000');
+  if (!Number.isInteger(maxChars) || maxChars < 512 || maxChars > 20000) throw guidanceError(new Error('maxChars must be an integer between 512 and 20000'), 'guid-cc408e854eb4b949');
   const delivered: Record<string, unknown>[] = [];
   const envelope = (notes: Record<string, unknown>[], index: number) => {
     const more = index < page.notes.length - 1 || page.truncated;

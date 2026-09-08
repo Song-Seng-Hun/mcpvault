@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 export interface KnowledgeSynthesis {
   question: string;
   inputs: Array<{ id: string; path: string; revision: string; role?: 'premise' | 'historical_context' }>;
@@ -24,30 +25,30 @@ export const KNOWLEDGE_SYNTHESIS_SCHEMA = {
 };
 
 function record(value: unknown, keys: string[], name: string): Record<string, unknown> {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) throw Error(`${name} must be an object`);
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw guidanceError(Error(`${name} must be an object`), 'guid-fb22bd2cde0b504a');
   const result = value as Record<string, unknown>;
-  if (Object.keys(result).some(key => !keys.includes(key))) throw Error(`${name} contains an unknown field`);
+  if (Object.keys(result).some(key => !keys.includes(key))) throw guidanceError(Error(`${name} contains an unknown field`), 'guid-b50ae71997c2280c');
   return result;
 }
 function text(value: unknown, max: number, name: string): string {
-  if (typeof value !== 'string' || !value.trim() || value.length > max) throw Error(`${name} must contain 1–${max} characters`);
+  if (typeof value !== 'string' || !value.trim() || value.length > max) throw guidanceError(Error(`${name} must contain 1–${max} characters`), 'guid-d11efbd7b2b079c4');
   return value.trim();
 }
 function array(value: unknown, min: number, max: number, name: string): unknown[] {
-  if (!Array.isArray(value) || value.length < min || value.length > max) throw Error(`${name} must contain ${min}–${max} entries`);
+  if (!Array.isArray(value) || value.length < min || value.length > max) throw guidanceError(Error(`${name} must contain ${min}–${max} entries`), 'guid-b74bc9db03ee0ddc');
   return value;
 }
 function id(value: unknown, name: string): string {
-  if (typeof value !== 'string' || !/^[a-z0-9][a-z0-9._-]{0,63}$/.test(value)) throw Error(`${name} must be a lowercase ID`);
+  if (typeof value !== 'string' || !/^[a-z0-9][a-z0-9._-]{0,63}$/.test(value)) throw guidanceError(Error(`${name} must be a lowercase ID`), 'guid-afe5c7caab33457e');
   return value;
 }
 function exactPath(value: unknown): string {
   const path = text(value, 500, 'input.path');
-  if (path !== value || /[\u0000-\u001f\u007f#^]/.test(path) || path.includes('[[') || path.includes(']]')) throw Error('input.path must be exact');
+  if (path !== value || /[\u0000-\u001f\u007f#^]/.test(path) || path.includes('[[') || path.includes(']]')) throw guidanceError(Error('input.path must be exact'), 'guid-7999bdf7a733abae');
   const normalized = path.replace(/\\/g, '/');
   const scope = /^scope:\/\/(?:global\/|(?:model|agent|community)\/[a-z0-9][a-z0-9._-]{0,63}\/)(.+)$/.exec(normalized);
   const relative = scope ? scope[1]! : normalized;
-  if (relative.startsWith('/') || relative.includes(':') || relative.split('/').some(part => !part || part === '.' || part === '..')) throw Error('input.path must be a relative note path or supported scope URI');
+  if (relative.startsWith('/') || relative.includes(':') || relative.split('/').some(part => !part || part === '.' || part === '..')) throw guidanceError(Error('input.path must be a relative note path or supported scope URI'), 'guid-4dbbeb227065df67');
   return normalized;
 }
 
@@ -55,34 +56,34 @@ function exactPath(value: unknown): string {
 export function normalizeKnowledgeSynthesis(value: unknown): KnowledgeSynthesis {
   const root = record(value, ['question', 'inputs', 'explanations', 'choices', 'counterexamples', 'unresolvedQuestions'], 'knowledge synthesis');
   let size: number;
-  try { size = JSON.stringify(root).length; } catch { throw Error('knowledge synthesis must be JSON serializable'); }
-  if (size > 12000) throw Error('knowledge synthesis exceeds 12000 JSON characters');
+  try { size = JSON.stringify(root).length; } catch { throw guidanceError(Error('knowledge synthesis must be JSON serializable'), 'guid-1c849863777d6fba'); }
+  if (size > 12000) throw guidanceError(Error('knowledge synthesis exceeds 12000 JSON characters'), 'guid-5dec969ce4d3dad6');
   const inputIds = new Set<string>(), paths = new Set<string>(), explanationIds = new Set<string>();
   const inputs = array(root.inputs, 2, 8, 'inputs').map(entry => {
     const row = record(entry, ['id', 'path', 'revision', 'role'], 'input');
     const inputId = id(row.id, 'input.id'), path = exactPath(row.path);
-    if (inputIds.has(inputId) || paths.has(path.toLowerCase())) throw Error('duplicate input ID or path');
+    if (inputIds.has(inputId) || paths.has(path.toLowerCase())) throw guidanceError(Error('duplicate input ID or path'), 'guid-8be863afa52788c1');
     inputIds.add(inputId); paths.add(path.toLowerCase());
-    if (typeof row.revision !== 'string' || !/^[a-f0-9]{64}$/i.test(row.revision)) throw Error('input.revision must be exactly 64 hexadecimal characters');
-    if (row.role !== undefined && row.role !== 'premise' && row.role !== 'historical_context') throw Error('input.role must be premise or historical_context');
+    if (typeof row.revision !== 'string' || !/^[a-f0-9]{64}$/i.test(row.revision)) throw guidanceError(Error('input.revision must be exactly 64 hexadecimal characters'), 'guid-746adc5e831b2d8e');
+    if (row.role !== undefined && row.role !== 'premise' && row.role !== 'historical_context') throw guidanceError(Error('input.role must be premise or historical_context'), 'guid-af472f70aa4b1833');
     return { id: inputId, path, revision: row.revision.toLowerCase(), ...(row.role !== undefined && { role: row.role as 'premise' | 'historical_context' }) };
   });
   const basis = (value: unknown): string[] => {
     const ids = array(value, 1, 8, 'basis').map(item => id(item, 'basis ID'));
-    if (new Set(ids).size !== ids.length || ids.some(key => !inputIds.has(key))) throw Error('basis must contain unique known input IDs');
+    if (new Set(ids).size !== ids.length || ids.some(key => !inputIds.has(key))) throw guidanceError(Error('basis must contain unique known input IDs'), 'guid-3321082807e334e5');
     return ids;
   };
   const explanations = array(root.explanations, 2, 4, 'explanations').map(entry => {
     const row = record(entry, ['id', 'explanation', 'appliesWhen', 'limitations', 'basis'], 'explanation');
     const explanationId = id(row.id, 'explanation.id');
-    if (explanationIds.has(explanationId)) throw Error('duplicate explanation ID');
+    if (explanationIds.has(explanationId)) throw guidanceError(Error('duplicate explanation ID'), 'guid-8c61b1d25d8b125a');
     explanationIds.add(explanationId);
     return { id: explanationId, explanation: text(row.explanation, 600, 'explanation'), appliesWhen: text(row.appliesWhen, 500, 'appliesWhen'), limitations: text(row.limitations, 500, 'limitations'), basis: basis(row.basis) };
   });
   const choices = array(root.choices, 0, 6, 'choices').map(entry => {
     const row = record(entry, ['when', 'explanationId', 'basis', 'reason'], 'choice');
     const explanationId = id(row.explanationId, 'choice.explanationId');
-    if (!explanationIds.has(explanationId)) throw Error('choice must reference a known explanation');
+    if (!explanationIds.has(explanationId)) throw guidanceError(Error('choice must reference a known explanation'), 'guid-2658ec0e01f2ddd0');
     return { when: text(row.when, 500, 'choice.when'), explanationId, basis: basis(row.basis), reason: text(row.reason, 600, 'choice.reason') };
   });
   const counterexamples = array(root.counterexamples, 0, 6, 'counterexamples').map(entry => {
@@ -90,6 +91,6 @@ export function normalizeKnowledgeSynthesis(value: unknown): KnowledgeSynthesis 
     return { description: text(row.description, 600, 'counterexample.description'), basis: basis(row.basis) };
   });
   const unresolvedQuestions = array(root.unresolvedQuestions, 0, 6, 'unresolvedQuestions').map(value => text(value, 500, 'unresolved question'));
-  if (!choices.length && !unresolvedQuestions.length) throw Error('Record at least one conditional choice or an unresolved question');
+  if (!choices.length && !unresolvedQuestions.length) throw guidanceError(Error('Record at least one conditional choice or an unresolved question'), 'guid-05f50e4a8846ba12');
   return { question: text(root.question, 500, 'question'), inputs, explanations, choices, counterexamples, unresolvedQuestions };
 }

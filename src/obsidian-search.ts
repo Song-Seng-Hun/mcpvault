@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { execFile } from 'node:child_process';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
@@ -30,14 +31,14 @@ interface ObsidianSearchCacheEntry {
 function cleanRelativePath(value: string): string {
   const normalized = value.trim().replace(/\\/g, '/').replace(/^\.\//, '');
   if (!normalized || normalized.startsWith('/') || /^[a-z]:\//i.test(normalized) || normalized.split('/').includes('..')) {
-    throw new Error('pathPrefix must be a relative vault folder without parent traversal');
+    throw guidanceError(new Error('pathPrefix must be a relative vault folder without parent traversal'), 'guid-688e9e693258b97c');
   }
   return normalized.replace(/^\/|\/$/g, '');
 }
 
 function limitNumber(value: unknown): number {
   const parsed = value === undefined ? 20 : Number(value);
-  if (!Number.isInteger(parsed) || parsed < 1) throw new Error('limit must be a positive integer');
+  if (!Number.isInteger(parsed) || parsed < 1) throw guidanceError(new Error('limit must be a positive integer'), 'guid-14abe8b02cfc3624');
   return Math.min(parsed, 50);
 }
 
@@ -90,7 +91,7 @@ export class ObsidianSearchService {
     // Enforce the public-only boundary before consulting the cache. Otherwise
     // an anonymous cached result could be returned to an authenticated caller
     // without reaching the same guard in searchUncached().
-    if (params.principal) throw new Error('search_obsidian is limited to the public global scope; use search_scoped_notes for authenticated private-scope search');
+    if (params.principal) throw guidanceError(new Error('search_obsidian is limited to the public global scope; use search_scoped_notes for authenticated private-scope search'), 'guid-621c609b35582657');
     const cacheKey = JSON.stringify({
       query: params.query,
       pathPrefix: params.pathPrefix || '',
@@ -129,14 +130,14 @@ export class ObsidianSearchService {
     // Obsidian's index has no concept of MCPVault model/agent scopes. Never
     // run it for an authenticated caller, because its output could reveal a
     // private file before the MCP scope layer gets a chance to filter it.
-    if (params.principal) throw new Error('search_obsidian is limited to the public global scope; use search_scoped_notes for authenticated private-scope search');
+    if (params.principal) throw guidanceError(new Error('search_obsidian is limited to the public global scope; use search_scoped_notes for authenticated private-scope search'), 'guid-621c609b35582657');
     const query = String(params.query || '').trim();
-    if (!query) throw new Error('query is required');
-    if (query.length > 500) throw new Error('query is too long');
+    if (!query) throw guidanceError(new Error('query is required'), 'guid-48ae18bb5cfe1ffe');
+    if (query.length > 500) throw guidanceError(new Error('query is too long'), 'guid-dd27fd21712ac81c');
     const limit = limitNumber(params.limit);
     const maxChars = normalizeSearchMaxChars(params.maxChars);
     const pathPrefix = params.pathPrefix ? cleanRelativePath(params.pathPrefix) : undefined;
-    if (pathPrefix && !this.pathFilter.isAllowed(pathPrefix)) throw new Error('pathPrefix is restricted');
+    if (pathPrefix && !this.pathFilter.isAllowed(pathPrefix)) throw guidanceError(new Error('pathPrefix is restricted'), 'guid-ca435d07b2efa637');
     const command = params.context ? 'search:context' : 'search';
     const cliLimit = Math.min(Math.max(limit * 4, limit), 50);
     const args = [`query=${query}`, `limit=${cliLimit}`, 'format=json', ...(pathPrefix ? [`path=${pathPrefix}`] : []), ...(params.caseSensitive ? ['case'] : [])];
@@ -145,7 +146,7 @@ export class ObsidianSearchService {
       ({ stdout } = await execFileAsync('obsidian', [command, ...args], { cwd: this.vaultPath, windowsHide: true, timeout: 15_000, maxBuffer: 2 * 1024 * 1024 }));
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      throw new Error(`Obsidian CLI search failed. Make sure Obsidian is running and CLI is enabled: ${message}`);
+      throw guidanceError(new Error(`Obsidian CLI search failed. Make sure Obsidian is running and CLI is enabled: ${message}`), 'guid-e051f066f8b1e6eb');
     }
     let entries: Array<{ path: string; line?: number; text?: string }>;
     let parserTruncated = false;

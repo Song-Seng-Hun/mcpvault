@@ -18,6 +18,6 @@ export declare function previewMemoryMigration(options: {
     entries: MemoryMigrationEntry[];
     shown: number;
     truncated: boolean;
-    guidance: string;
+    guidance: "Legacy User files stay host-private. Re-enroll employees and runtimes, verify ownership, and explicitly review any copy into newly approved memory. Never infer owners from model names.";
 }>;
 //# sourceMappingURL=enterprise-migration.d.ts.map

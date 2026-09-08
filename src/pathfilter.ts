@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import type { PathFilterConfig } from "./types.js";
 
 export class PathFilter {
@@ -83,7 +84,7 @@ export class PathFilter {
 
   isAllowed(path: string): boolean {
     if (typeof path !== "string") {
-      throw new Error("path is required and must be a string");
+      throw guidanceError(new Error("path is required and must be a string"), 'guid-71cc567794e5cb10');
     }
 
     // Normalize path separators
@@ -113,7 +114,7 @@ export class PathFilter {
 
   isAllowedForListing(path: string): boolean {
     if (typeof path !== "string") {
-      throw new Error("path is required and must be a string");
+      throw guidanceError(new Error("path is required and must be a string"), 'guid-71cc567794e5cb10');
     }
 
     // Normalize path separators

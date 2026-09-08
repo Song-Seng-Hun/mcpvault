@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { watch, type FSWatcher } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { join, posix, relative, resolve } from 'node:path';
@@ -239,7 +240,7 @@ export class VaultGraphIndex {
     const visible = this.visibilityContext(canAccessPath);
     const result = await read();
     if (this.changeGeneration !== generation || this.visibilityContext(canAccessPath) !== visible) {
-      throw new Error('Graph changed or visibility changed during validation; retry the query. No stable graph view was returned.');
+      throw guidanceError(new Error('Graph changed or visibility changed during validation; retry the query. No stable graph view was returned.'), 'guid-20d7ae30ca95bf74');
     }
     return result;
   }
@@ -256,8 +257,8 @@ export class VaultGraphIndex {
         break;
       }
     }
-    if (!targetEntry) throw new Error(`File not found: ${target}`);
-    if (!canAccessPath(targetEntry.path) || targetEntry.moderationHidden) throw new Error(`Access denied: ${target}`);
+    if (!targetEntry) throw guidanceError(new Error(`File not found: ${target}`), 'guid-1d1a89434322658c');
+    if (!canAccessPath(targetEntry.path) || targetEntry.moderationHidden) throw guidanceError(new Error(`Access denied: ${target}`), 'guid-26a1bd21fd48991f');
     const snapshot = includeSnapshot ? new NavigationViewFingerprint(['backlinks', targetEntry.path, targetEntry.revision]) : undefined;
     const visible = this.visibilityContext(canAccessPath);
     const allResolver = buildResolver([...this.allPaths], this.entries);
@@ -327,7 +328,7 @@ export class VaultGraphIndex {
       await validateTargets(targets);
     }
     if (this.changeGeneration !== startGeneration || this.visibilityContext(canAccessPath) !== visible) {
-      throw new Error('Graph changed or visibility changed during navigation; retry the query. No stable navigation view was returned.');
+      throw guidanceError(new Error('Graph changed or visibility changed during navigation; retry the query. No stable navigation view was returned.'), 'guid-bf4980aa26485245');
     }
     const page = backlinks.values().slice(offset, offset + limit).map(({ link }) => project(sourceEntries.get(link.path)!, link));
     return { target, ...(includeSourceRevision && { targetRevision: targetEntry.revision }), ...(snapshot && { snapshotFingerprint: snapshot.finish() }), backlinks: page, total, truncated: total > offset + page.length };
@@ -338,8 +339,8 @@ export class VaultGraphIndex {
     const startGeneration = this.changeGeneration;
     const source = normalizePath(path);
     const entry = this.entries.get(source);
-    if (!entry) throw new Error(`File not found: ${source}`);
-    if (!canAccessPath(source) || entry.moderationHidden) throw new Error(`Access denied: ${source}`);
+    if (!entry) throw guidanceError(new Error(`File not found: ${source}`), 'guid-1d1a89434322658c');
+    if (!canAccessPath(source) || entry.moderationHidden) throw guidanceError(new Error(`Access denied: ${source}`), 'guid-26a1bd21fd48991f');
 
     const visible = this.visibilityContext(canAccessPath);
     const allResolver = buildResolver([...this.allPaths], this.entries);
@@ -368,7 +369,7 @@ export class VaultGraphIndex {
     }
     if (validateTargets) await validateTargets(targetRevisions);
     if (this.changeGeneration !== startGeneration || this.visibilityContext(canAccessPath) !== visible) {
-      throw new Error('Graph changed or visibility changed during navigation; retry the query. No stable navigation view was returned.');
+      throw guidanceError(new Error('Graph changed or visibility changed during navigation; retry the query. No stable navigation view was returned.'), 'guid-bf4980aa26485245');
     }
     return {
       source,
@@ -477,7 +478,7 @@ export class VaultGraphIndex {
       await this.catalog?.flushPendingEvents();
       if (this.initialized && !this.needsFullRefresh && this.dirty.size === 0) return;
     }
-    throw new Error('Graph changed during refresh; retry the query. No stable graph view was returned.');
+    throw guidanceError(new Error('Graph changed during refresh; retry the query. No stable graph view was returned.'), 'guid-5a50e92128726e60');
   }
 
   /** Caller-local excerpts; never mutate shared source edges or headings. */
@@ -765,7 +766,7 @@ export class VaultGraphIndex {
       return { path: normalized, moderationHidden: isModerationHidden(parsed.frontmatter), revision, size: info.size, mtimeMs: info.mtimeMs, ctimeMs: info.ctimeMs, links, tags, identityTerms };
     } catch (error) {
       if (isMissingVaultPath(error)) return undefined;
-      if (error instanceof SourceReadLimitError) throw new Error('Graph source exceeds the 8 MiB read limit; split oversized notes before retrying. No partial graph view was returned.');
+      if (error instanceof SourceReadLimitError) throw guidanceError(new Error('Graph source exceeds the 8 MiB read limit; split oversized notes before retrying. No partial graph view was returned.'), 'guid-794e7ce31c709591');
       throw new VaultReadUnavailableError();
     }
   }

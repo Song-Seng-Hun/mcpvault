@@ -1,3 +1,4 @@
+import { guidanceError, guidanceText } from './guidance-runtime.js';
 import { stringify } from 'yaml';
 import type { FileSystemService } from './filesystem.js';
 import type { ScopeAccessPolicy } from './scope-access.js';
@@ -14,27 +15,27 @@ export interface ViewReadOptions {
   limit?: number; maxChars?: number; prettyPrint?: boolean;
 }
 function field(value: unknown): string {
-  if (typeof value !== 'string' || !/^[a-zA-Z_][a-zA-Z0-9_]{0,63}$/.test(value) || ['constructor', '__proto__', 'prototype'].includes(value)) throw new Error('Unsupported view Property');
+  if (typeof value !== 'string' || !/^[a-zA-Z_][a-zA-Z0-9_]{0,63}$/.test(value) || ['constructor', '__proto__', 'prototype'].includes(value)) throw guidanceError(new Error('Unsupported view Property'), 'guid-59cef4910e04fd77');
   return value;
 }
 export function parseSavedView(value: unknown): SavedView {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('wiki_view must be a mapping');
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw guidanceError(new Error('wiki_view must be a mapping'), 'guid-aa474dc3d389578e');
   const v = value as Record<string, any>;
-  if (v.version !== 1 || Object.keys(v).some(key => !['version', 'filters', 'columns', 'pathPrefix', 'sortBy', 'sortOrder', 'limit'].includes(key))) throw new Error('Unsupported wiki_view definition; scripts and expressions are not supported');
+  if (v.version !== 1 || Object.keys(v).some(key => !['version', 'filters', 'columns', 'pathPrefix', 'sortBy', 'sortOrder', 'limit'].includes(key))) throw guidanceError(new Error('Unsupported wiki_view definition; scripts and expressions are not supported'), 'guid-ac4e7b66a849b921');
   const filters: SavedView['filters'] = {};
   if (v.filters !== undefined) {
-    if (!v.filters || typeof v.filters !== 'object' || Array.isArray(v.filters) || Object.keys(v.filters).length > 12) throw new Error('View filters must have at most 12 exact scalar conditions');
+    if (!v.filters || typeof v.filters !== 'object' || Array.isArray(v.filters) || Object.keys(v.filters).length > 12) throw guidanceError(new Error('View filters must have at most 12 exact scalar conditions'), 'guid-ee676d3cc3dbe20e');
     for (const [key, scalar] of Object.entries(v.filters)) {
       field(key);
-      if (!['string', 'number', 'boolean'].includes(typeof scalar) || (typeof scalar === 'string' && scalar.length > 300) || (typeof scalar === 'number' && !Number.isFinite(scalar))) throw new Error('View filters support only bounded scalar values');
+      if (!['string', 'number', 'boolean'].includes(typeof scalar) || (typeof scalar === 'string' && scalar.length > 300) || (typeof scalar === 'number' && !Number.isFinite(scalar))) throw guidanceError(new Error('View filters support only bounded scalar values'), 'guid-e8af20c525ab2239');
       filters[key] = scalar as string | number | boolean;
     }
   }
   const columns = v.columns ?? ['title', 'note_kind', 'lifecycle'];
-  if (!Array.isArray(columns) || columns.length > 8 || columns.length < 1) throw new Error('View columns must contain 1..8 Properties');
-  if (v.pathPrefix !== undefined && (typeof v.pathPrefix !== 'string' || v.pathPrefix.length > 500)) throw new Error('Invalid view pathPrefix');
-  if (v.sortOrder !== undefined && !['asc', 'desc'].includes(v.sortOrder)) throw new Error('Invalid view sortOrder');
-  if (v.limit !== undefined && (!Number.isInteger(v.limit) || v.limit < 1 || v.limit > 100)) throw new Error('View limit must be 1..100');
+  if (!Array.isArray(columns) || columns.length > 8 || columns.length < 1) throw guidanceError(new Error('View columns must contain 1..8 Properties'), 'guid-acf397b0e5c88820');
+  if (v.pathPrefix !== undefined && (typeof v.pathPrefix !== 'string' || v.pathPrefix.length > 500)) throw guidanceError(new Error('Invalid view pathPrefix'), 'guid-021460a01cc95a97');
+  if (v.sortOrder !== undefined && !['asc', 'desc'].includes(v.sortOrder)) throw guidanceError(new Error('Invalid view sortOrder'), 'guid-2fb2d8fd5be3515f');
+  if (v.limit !== undefined && (!Number.isInteger(v.limit) || v.limit < 1 || v.limit > 100)) throw guidanceError(new Error('View limit must be 1..100'), 'guid-48a90a1d875d322e');
   return { version: 1, filters, columns: [...new Set(columns.map(field))], ...(v.pathPrefix !== undefined && { pathPrefix: v.pathPrefix }), sortBy: field(v.sortBy ?? 'path'), sortOrder: v.sortOrder ?? 'asc', limit: v.limit ?? 20 };
 }
 const clip = (value: unknown): unknown => typeof value === 'string' ? value.slice(0, 160)
@@ -47,8 +48,8 @@ export class WikiViewService {
   private async definition(principal: ScopePrincipal | undefined, options: ViewReadOptions) {
     const path = this.access.resolveExternalPath(this.access.toPublicPath(options.path), principal);
     const note = await this.fs.readNote(path);
-    if (isModerationHidden(note.frontmatter)) throw new Error('View unavailable');
-    if (options.expectedRevision && options.expectedRevision !== note.revision) throw new Error('View revision changed; re-read the definition');
+    if (isModerationHidden(note.frontmatter)) throw guidanceError(new Error('View unavailable'), 'guid-c6a31dde914be26b');
+    if (options.expectedRevision && options.expectedRevision !== note.revision) throw guidanceError(new Error('View revision changed; re-read the definition'), 'guid-bf03d20dd8b6b79b');
     const definition = parseSavedView(note.frontmatter.wiki_view);
     if (definition.pathPrefix !== undefined) definition.pathPrefix = this.access.resolveExternalPath(definition.pathPrefix, principal);
     return { path, note, definition };
@@ -57,7 +58,7 @@ export class WikiViewService {
     const { path, note, definition } = await this.definition(principal, options);
     const maxChars = options.maxChars ?? 4000;
     const limit = options.limit ?? definition.limit;
-    if (!Number.isInteger(maxChars) || maxChars < 512 || maxChars > 12000 || !Number.isInteger(limit) || limit < 1 || limit > 100) throw new Error('View requires limit 1..100 and maxChars 512..12000');
+    if (!Number.isInteger(maxChars) || maxChars < 512 || maxChars > 12000 || !Number.isInteger(limit) || limit < 1 || limit > 100) throw guidanceError(new Error('View requires limit 1..100 and maxChars 512..12000'), 'guid-89bc4e2f8804c8f3');
     const page = await this.fs.queryNotes({ ...definition, limit: Math.min(limit, definition.limit), ...(options.after && { after: options.after }), includeContent: false, includeTotal: false },
       candidate => this.access.canAccessPhysicalPath(candidate, principal), candidate => !isModerationHidden(candidate.frontmatter));
     const items: Array<{ path: string; revision?: string; properties: Record<string, unknown>; propertiesTruncated?: boolean }> = [];
@@ -80,11 +81,11 @@ export class WikiViewService {
       if (result.truncated) result.nextAction = continuation(index); else delete result.nextAction;
       if (JSON.stringify(result, null, options.prettyPrint ? 2 : undefined).length > maxChars) {
         items.pop();
-        if (!items.length) throw new Error('maxChars too small for a view row and its cursor; increase maxChars or sort by path');
+        if (!items.length) throw guidanceError(new Error('maxChars too small for a view row and its cursor; increase maxChars or sort by path'), 'guid-9ce3a59af197f5e2');
         result.truncated = true; result.nextAction = continuation(index - 1); break;
       }
     }
-    if ((await this.fs.readNote(path)).revision !== note.revision) throw new Error('View revision changed during query');
+    if ((await this.fs.readNote(path)).revision !== note.revision) throw guidanceError(new Error('View revision changed during query'), 'guid-72f0eefc0a029b4b');
     return result;
   }
   async bases(principal: ScopePrincipal | undefined, options: ViewReadOptions) {
@@ -95,8 +96,8 @@ export class WikiViewService {
       conditions.push(`(file.path == ${JSON.stringify(prefix)} || file.path.startsWith(${JSON.stringify(`${prefix}/`)}))`);
     }
     const yaml = stringify({ filters: { and: conditions }, views: [{ type: 'table', name: 'Saved Wiki view', order: ['file.name', ...v.columns.map(key => `note.${key}`)], sort: [{ property: v.sortBy === 'path' ? 'file.path' : `note.${v.sortBy}`, direction: v.sortOrder.toUpperCase() }], limit: v.limit }] });
-    const result = { definition: { path, revision: note.revision }, yaml, permissionBoundary: false, warning: 'Host-only projection: Bases sees the host vault, not MCP account permissions.' };
-    if (JSON.stringify(result, null, options.prettyPrint ? 2 : undefined).length > (options.maxChars ?? 12000)) throw new Error('Increase maxChars to preserve the complete Bases definition');
+    const result = { definition: { path, revision: note.revision }, yaml, permissionBoundary: false, warning: guidanceText('guid-451ac05481b8be1f', 'Host-only projection: Bases sees the host vault, not MCP account permissions.') };
+    if (JSON.stringify(result, null, options.prettyPrint ? 2 : undefined).length > (options.maxChars ?? 12000)) throw guidanceError(new Error('Increase maxChars to preserve the complete Bases definition'), 'guid-88a4767c65d69451');
     return result;
   }
 }

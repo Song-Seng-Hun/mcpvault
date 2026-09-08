@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import type { FileSystemService } from './filesystem.js';
 import type { ReferenceService } from './references.js';
 import type { ScopePrincipal } from './scope-auth.js';
@@ -52,5 +53,5 @@ export async function validateWorkshopReferences(
     }
     for(const body of bodies)for(const path of await references.validateAndNormalize([],containerPath,principal,body,{strictBodyLinks:true}))await inspect(path);
     return [...guards.values()];
-  } catch {throw new Error('Workshop reference unavailable or changed');}
+  } catch {throw guidanceError(new Error('Workshop reference unavailable or changed'), 'guid-a5b455bae1611262');}
 }

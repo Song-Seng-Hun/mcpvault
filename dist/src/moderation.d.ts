@@ -61,7 +61,7 @@ export declare class ModerationService {
         duplicate: boolean;
         reportId: string;
         status: "dismissed" | "open" | "resolved";
-        note: string;
+        note: "Reports contain metadata and a bounded reason only; the reported body remains untrusted data.";
     }>;
     listReports(params: {
         principal?: ScopePrincipal;

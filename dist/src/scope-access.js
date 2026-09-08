@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { expandScopePath, parseScopePath } from './scopes.js';
 import { posix } from 'node:path';
 const PRIVATE_ROOT = '_scopes';
@@ -17,7 +18,7 @@ export function isLegacyDiscussionPath(path, includeAncestors = false) {
 }
 export function assertLegacyDiscussionMutationAllowed(path, operation, includeAncestors = false) {
     if (isLegacyDiscussionPath(path, includeAncestors)) {
-        throw new Error(`${operation} cannot mutate _collaboration/discussions: historical read-only content. Use community.post, community.comment, or community.status for current discussions; use notes.read for bounded historical reads.`);
+        throw guidanceError(new Error(`${operation} cannot mutate _collaboration/discussions: historical read-only content. Use community.post, community.comment, or community.status for current discussions; use notes.read for bounded historical reads.`), 'guid-d9781b35425d9430');
     }
 }
 function normalizePhysicalPath(value) {
@@ -45,7 +46,7 @@ export class ScopeAccessPolicy {
     constructor(options = {}) {
         const configured = options.commandCenterId || process.env.MCPVAULT_COMMAND_CENTER_ID || 'local';
         if (!/^[a-z0-9][a-z0-9._-]{0,63}$/i.test(configured))
-            throw new Error('commandCenterId must be a lowercase scope id');
+            throw guidanceError(new Error('commandCenterId must be a lowercase scope id'), 'guid-4ca281d9c34ac799');
         this.commandCenterId = configured.trim().toLowerCase();
         this.enterprise = options.enterprise;
     }
@@ -118,44 +119,44 @@ export class ScopeAccessPolicy {
     resolveExternalPath(value, principal) {
         const raw = String(value || '').trim();
         if (/^(?:[a-z]:|[/\\]|~(?:[/\\]|$))/i.test(raw))
-            throw new Error('Access denied: use a Vault-relative path or authorized scope:// URI, not a host-absolute path');
+            throw guidanceError(new Error('Access denied: use a Vault-relative path or authorized scope:// URI, not a host-absolute path'), 'guid-412bd7a9b2e65617');
         const parsed = parseScopePath(raw);
         if (parsed) {
             if (parsed.kind === 'community' && parsed.id !== this.commandCenterId) {
-                throw new Error(`Access denied: community scope '${parsed.id}' belongs to another command center`);
+                throw guidanceError(new Error(`Access denied: community scope '${parsed.id}' belongs to another command center`), 'guid-2cb71ae980f3f838');
             }
             if (parsed.kind !== 'global' && principal?.commandCenterId && principal.commandCenterId !== this.commandCenterId) {
-                throw new Error('Access denied: this identity belongs to another command center');
+                throw guidanceError(new Error('Access denied: this identity belongs to another command center'), 'guid-76aed71db34ad3ea');
             }
             if (parsed.kind === 'user' && !this.enterprise)
-                throw new Error('User scope is host-only and is not available through MCP; use the server host\'s local Obsidian/filesystem access.');
+                throw guidanceError(new Error('User scope is host-only and is not available through MCP; use the server host\'s local Obsidian/filesystem access.'), 'guid-14f1321fb9fd1f6b');
             if (parsed.kind === 'model' && principal?.modelId !== parsed.id) {
-                throw new Error(`Access denied: model scope '${parsed.id}' is private`);
+                throw guidanceError(new Error(`Access denied: model scope '${parsed.id}' is private`), 'guid-e86ecd7742fca045');
             }
             if (parsed.kind === 'agent' && principal?.agentId !== parsed.id) {
-                throw new Error(`Access denied: agent scope '${parsed.id}' is private`);
+                throw guidanceError(new Error(`Access denied: agent scope '${parsed.id}' is private`), 'guid-e37fa78085e218bc');
             }
             const physical = expandScopePath(raw);
             const expanded = parsed.kind === 'community' && this.enterprise?.mode === 'public'
                 ? physical.replace(/^Community(?=\/|$)/, 'PublicCommunity') : physical;
             if (parsed.kind === 'global' && this.isPrivateServicePath(expanded)) {
-                throw new Error('Private and service paths are not addressable through the global scope');
+                throw guidanceError(new Error('Private and service paths are not addressable through the global scope'), 'guid-6a8a2febbf81a85f');
             }
             if (!this.canAccessPhysicalPath(expanded, principal))
-                throw new Error('Access denied: private checkpoint or scope is unavailable');
+                throw guidanceError(new Error('Access denied: private checkpoint or scope is unavailable'), 'guid-728e4d408fedf2cf');
             return expanded;
         }
         const normalized = normalizePhysicalPath(raw);
         if (this.enterprise && !this.canAccessPhysicalPath(normalized, principal))
-            throw new Error('Access denied: this path is unavailable in the current enterprise realm');
+            throw guidanceError(new Error('Access denied: this path is unavailable in the current enterprise realm'), 'guid-72b3279bd0003606');
         if (modelCheckpoint(raw) || this.isPrivateServicePath(posix.normalize(normalized))) {
-            throw new Error('Access denied: direct private paths require an authorized scope:// URI');
+            throw guidanceError(new Error('Access denied: direct private paths require an authorized scope:// URI'), 'guid-ab3ab07cda368052');
         }
         if (this.isPrivateServicePath(normalized)) {
             if (normalized.toLowerCase() === WHISPER_ROOT || normalized.toLowerCase().startsWith(`${WHISPER_ROOT}/`)) {
-                throw new Error('Direct _whispers paths are private; use list_whispers');
+                throw guidanceError(new Error('Direct _whispers paths are private; use list_whispers'), 'guid-f6111d98d54c81a6');
             }
-            throw new Error('Direct _scopes paths are private; use an authorized scope:// URI');
+            throw guidanceError(new Error('Direct _scopes paths are private; use an authorized scope:// URI'), 'guid-96ad59057b9089ce');
         }
         // Legacy clients still pass physical Community paths to reference/bookmark
         // APIs. Managed community mutations are blocked separately; the canonical
@@ -175,7 +176,7 @@ export class ScopeAccessPolicy {
         const isGlobalSource = normalized === SOURCE_SEGMENT || normalized.startsWith(`${SOURCE_SEGMENT}/`);
         const isPrivateSource = /^_scopes\/(?:models|agents)\/[^/]+\/_sources(?:\/|$)/.test(normalized);
         if (isGlobalSource || isPrivateSource) {
-            throw new Error(`${operation} cannot mutate immutable LLM Wiki sources; use ingest_source to add a new source snapshot`);
+            throw guidanceError(new Error(`${operation} cannot mutate immutable LLM Wiki sources; use ingest_source to add a new source snapshot`), 'guid-bb37db8ee3892af1');
         }
         this.assertLegacyDiscussionMutationAllowed(path, operation);
     }

@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { watch } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { mkdir, readdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
@@ -296,7 +297,7 @@ export class VaultMetadataIndex {
      */
     async getMany(paths, canAccessPath = () => true) {
         if (paths.length > 500)
-            throw new Error('metadata lookup supports at most 500 paths');
+            throw guidanceError(new Error('metadata lookup supports at most 500 paths'), 'guid-26a948f4ac9da8dd');
         await this.ensureFresh();
         const selected = [];
         const seen = new Set();
@@ -452,14 +453,14 @@ export class VaultMetadataIndex {
         await this.ensureFresh();
         const scheme = normalizeAuthorityComponent(params.scheme);
         if (!scheme)
-            throw new Error('scheme cannot be empty');
+            throw guidanceError(new Error('scheme cannot be empty'), 'guid-3c5eeb80fc7619f2');
         const requestedLimit = params.limit ?? 25;
         if (!Number.isInteger(requestedLimit) || requestedLimit < 1)
-            throw new Error('limit must be a positive integer');
+            throw guidanceError(new Error('limit must be a positive integer'), 'guid-14abe8b02cfc3624');
         const limit = Math.min(requestedLimit, 100);
         const requestedAnchor = params.aroundAuthorityId?.trim();
         if (params.aroundAuthorityId !== undefined && !requestedAnchor)
-            throw new Error('aroundAuthorityId cannot be empty');
+            throw guidanceError(new Error('aroundAuthorityId cannot be empty'), 'guid-00b62fda7e5a22e3');
         const normalizedAnchor = normalizeAuthorityComponent(requestedAnchor);
         const visible = [...(this.authoritySchemeIndex.get(scheme) || [])]
             .map(path => this.entries.get(path))
@@ -571,7 +572,7 @@ export class VaultMetadataIndex {
             if (!this.needsFullRefresh && this.dirty.size === 0 && !this.refreshPromise)
                 return;
         }
-        throw new Error('Metadata changed during refresh; retry the request.');
+        throw guidanceError(new Error('Metadata changed during refresh; retry the request.'), 'guid-5c05301de7e9cbdf');
     }
     candidatePaths(filters, normalizedPrefix) {
         const hasFilters = Object.keys(filters).length > 0;

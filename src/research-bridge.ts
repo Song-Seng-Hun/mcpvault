@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { createHash } from 'node:crypto';
 import { posix } from 'node:path';
 import type { FileSystemService } from './filesystem.js';
@@ -31,7 +32,7 @@ const words = (value: string) => [...new Set(value.toLowerCase().match(/[\p{L}\p
 const overlap = (a: string[], b: string[]) => a.some(v => b.includes(v));
 function bound(value: number | undefined, fallback: number, min: number, max: number): number {
   const n = value ?? fallback;
-  if (!Number.isInteger(n) || n < min || n > max) throw Error(`Research bounds must be integers from ${min} to ${max}`);
+  if (!Number.isInteger(n) || n < min || n > max) throw guidanceError(Error(`Research bounds must be integers from ${min} to ${max}`), 'guid-1bcca26efc6657e1');
   return n;
 }
 function audience(path: string): string {
@@ -58,7 +59,7 @@ export class ResearchBridgeService {
 
   private async discover(params: ResearchBridgeRequest) {
     const limit = bound(params.limit, 3, 1, 3), maxChars = bound(params.maxChars, 6000, 1200, 12000);
-    if (params.query !== undefined && (typeof params.query !== 'string' || params.query.length > 1000)) throw Error('Research query must be at most 1000 characters');
+    if (params.query !== undefined && (typeof params.query !== 'string' || params.query.length > 1000)) throw guidanceError(Error('Research query must be at most 1000 characters'), 'guid-3344fc552c8763f7');
     const query = (params.query || '').trim();
     const physical = (raw: string) => {
       try {
@@ -71,7 +72,7 @@ export class ResearchBridgeService {
       } catch { throw Error(UNAVAILABLE); }
     };
     const focusPath = physical(params.focusPath), comparePath = params.comparePath === undefined ? undefined : physical(params.comparePath);
-    if (comparePath && key(comparePath) === key(focusPath)) throw Error('Choose two distinct research inputs');
+    if (comparePath && key(comparePath) === key(focusPath)) throw guidanceError(Error('Choose two distinct research inputs'), 'guid-0ab0b4d8ab795865');
     const scope = audience(focusPath);
     const admitted = (p: string) => this.access.canAccessPhysicalPath(p, params.principal)
       && this.access.canReferenceFrom(focusPath, p)

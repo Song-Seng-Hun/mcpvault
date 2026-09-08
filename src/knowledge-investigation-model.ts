@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 export interface KnowledgeInvestigation {
   question: string;
   targets: Array<{ path: string; revision: string }>;
@@ -44,43 +45,43 @@ export const KNOWLEDGE_INVESTIGATION_SCHEMA = {
 };
 
 function record(value: unknown, keys: string[], name: string): Record<string, unknown> {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) throw Error(`${name} must be an object`);
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw guidanceError(Error(`${name} must be an object`), 'guid-fb22bd2cde0b504a');
   const result = value as Record<string, unknown>;
-  if (Object.keys(result).some(key => !keys.includes(key))) throw Error(`${name} contains an unknown field`);
+  if (Object.keys(result).some(key => !keys.includes(key))) throw guidanceError(Error(`${name} contains an unknown field`), 'guid-b50ae71997c2280c');
   return result;
 }
 
 function text(value: unknown, max: number, name: string): string {
-  if (typeof value !== 'string' || !value.trim() || value.length > max) throw Error(`${name} must contain 1–${max} characters`);
+  if (typeof value !== 'string' || !value.trim() || value.length > max) throw guidanceError(Error(`${name} must contain 1–${max} characters`), 'guid-d11efbd7b2b079c4');
   return value.trim();
 }
 
 function list(value: unknown, min: number, max: number, name: string): unknown[] {
-  if (!Array.isArray(value) || value.length < min || value.length > max) throw Error(`${name} must contain ${min}–${max} entries`);
+  if (!Array.isArray(value) || value.length < min || value.length > max) throw guidanceError(Error(`${name} must contain ${min}–${max} entries`), 'guid-b74bc9db03ee0ddc');
   return value;
 }
 
 function revision(value: unknown, name: string): string {
-  if (typeof value !== 'string' || !/^[0-9a-f]{64}$/i.test(value)) throw Error(`${name} must be exactly 64 hexadecimal characters`);
+  if (typeof value !== 'string' || !/^[0-9a-f]{64}$/i.test(value)) throw guidanceError(Error(`${name} must be exactly 64 hexadecimal characters`), 'guid-81b75bc5c501bf9d');
   return value.toLowerCase();
 }
 
 function exactPath(value: unknown, name: string): string {
   const original = text(value, 500, name);
-  if (original !== value || /[\u0000-\u001f\u007f#^]/.test(original) || original.includes('[[') || original.includes(']]')) throw Error(`${name} must be exact`);
+  if (original !== value || /[\u0000-\u001f\u007f#^]/.test(original) || original.includes('[[') || original.includes(']]')) throw guidanceError(Error(`${name} must be exact`), 'guid-95f9f3823b7d1166');
   const path = original.replace(/\\/g, '/');
   const scoped = /^scope:\/\/(?:global\/|(?:model|agent|community)\/[a-z0-9][a-z0-9._-]{0,63}\/)(.+)$/.exec(path);
   const relative = scoped ? scoped[1]! : path;
-  if (relative.startsWith('/') || relative.includes(':') || relative.split('/').some(part => !part || part === '.' || part === '..')) throw Error(`${name} must be a relative note path or supported scope URI`);
-  if (scoped === null && path.startsWith('scope://')) throw Error(`${name} must use a supported scope URI`);
+  if (relative.startsWith('/') || relative.includes(':') || relative.split('/').some(part => !part || part === '.' || part === '..')) throw guidanceError(Error(`${name} must be a relative note path or supported scope URI`), 'guid-4f6933800e6c1170');
+  if (scoped === null && path.startsWith('scope://')) throw guidanceError(Error(`${name} must use a supported scope URI`), 'guid-1952a59a9dfb5c69');
   return path;
 }
 
 export function normalizeKnowledgeInvestigation(value: unknown): KnowledgeInvestigation {
   const root = record(value, ['question', 'targets', 'conditions', 'alternatives', 'decisionRules', 'executionBoundary', 'result'], 'knowledge investigation');
   let rawSize: number;
-  try { rawSize = JSON.stringify(root).length; } catch { throw Error('knowledge investigation must be JSON serializable'); }
-  if (rawSize > 12000) throw Error('knowledge investigation exceeds 12000 JSON characters');
+  try { rawSize = JSON.stringify(root).length; } catch { throw guidanceError(Error('knowledge investigation must be JSON serializable'), 'guid-3eaa84c8ae65e335'); }
+  if (rawSize > 12000) throw guidanceError(Error('knowledge investigation exceeds 12000 JSON characters'), 'guid-2b508b55c926719d');
 
   const references = (value: unknown, min: number, max: number, name: string) => {
     const paths = new Set<string>();
@@ -88,7 +89,7 @@ export function normalizeKnowledgeInvestigation(value: unknown): KnowledgeInvest
       const row = record(entry, ['path', 'revision'], name.slice(0, -1));
       const path = exactPath(row.path, `${name}.path`);
       const key = path.toLowerCase();
-      if (paths.has(key)) throw Error('duplicate normalized path');
+      if (paths.has(key)) throw guidanceError(Error('duplicate normalized path'), 'guid-75ed936e94659138');
       paths.add(key);
       return { path, revision: revision(row.revision, `${name}.revision`) };
     });
@@ -96,17 +97,17 @@ export function normalizeKnowledgeInvestigation(value: unknown): KnowledgeInvest
 
   const targets = references(root.targets, 1, 4, 'targets');
   const alternatives = list(root.alternatives, 2, 4, 'alternatives').map(value => text(value, 500, 'alternative'));
-  if (new Set(alternatives).size !== alternatives.length) throw Error('alternatives must be distinct');
+  if (new Set(alternatives).size !== alternatives.length) throw guidanceError(Error('alternatives must be distinct'), 'guid-37e17464f53a55f7');
   const decisionRules: KnowledgeInvestigation['decisionRules'] = list(root.decisionRules, 1, 4, 'decisionRules').map(entry => {
     const row = record(entry, ['observation', 'interpretation', 'consequence'], 'decision rule');
-    if (row.interpretation !== 'supports' && row.interpretation !== 'challenges' && row.interpretation !== 'inconclusive') throw Error('decision rule interpretation is invalid');
+    if (row.interpretation !== 'supports' && row.interpretation !== 'challenges' && row.interpretation !== 'inconclusive') throw guidanceError(Error('decision rule interpretation is invalid'), 'guid-9a33b7d237cf1509');
     return { observation: text(row.observation, 600, 'decision rule observation'), interpretation: row.interpretation, consequence: text(row.consequence, 600, 'decision rule consequence') };
   });
-  if (decisionRules.every(rule => rule.interpretation === 'supports')) throw Error('decision rules must permit changing judgment');
+  if (decisionRules.every(rule => rule.interpretation === 'supports')) throw guidanceError(Error('decision rules must permit changing judgment'), 'guid-c70ba933e73f8135');
 
   const result: KnowledgeInvestigation['result'] = root.result === undefined ? undefined : (() => {
     const row = record(root.result, ['planRevision', 'observed', 'outcome', 'interpretation', 'limitations', 'evidence'], 'result');
-    if (row.outcome !== 'supports' && row.outcome !== 'challenges' && row.outcome !== 'inconclusive') throw Error('result outcome is invalid');
+    if (row.outcome !== 'supports' && row.outcome !== 'challenges' && row.outcome !== 'inconclusive') throw guidanceError(Error('result outcome is invalid'), 'guid-846f2663ecfd9756');
     const evidence = references(row.evidence, 1, 4, 'evidence');
     return { planRevision: revision(row.planRevision, 'result.planRevision'), observed: text(row.observed, 1000, 'result.observed'), outcome: row.outcome, interpretation: text(row.interpretation, 1000, 'result.interpretation'), limitations: text(row.limitations, 600, 'result.limitations'), evidence };
   })();

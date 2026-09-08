@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 /** CLI owns transports and the root runtime, regardless of protocol handshakes. */
 export function createServerLifecycle(root) {
     const handles = [];
@@ -5,7 +6,7 @@ export function createServerLifecycle(root) {
     return {
         add(handle) {
             if (closing)
-                throw new Error('Server lifecycle is closing');
+                throw guidanceError(new Error('Server lifecycle is closing'), 'guid-a72d7ee8c5c5c5a5');
             handles.push(handle);
         },
         close() {

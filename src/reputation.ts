@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import type { FileSystemService } from './filesystem.js';
 import type { ModerationService } from './moderation.js';
 import type { ScopeAuthService, ScopePrincipal } from './scope-auth.js';
@@ -129,9 +130,9 @@ export class ReputationService {
 
   async getPublic(identity: string): Promise<ReputationSnapshot> {
     const normalized = String(identity || '').trim().toLowerCase();
-    if (!normalized) throw new Error('identity is required');
+    if (!normalized) throw guidanceError(new Error('identity is required'), 'guid-6488662bcf64c574');
     const principal = (await this.auth.listPrincipals()).find(item => identityOf(item) === normalized);
-    if (!principal) throw new Error(`No registered public identity found: ${normalized}`);
+    if (!principal) throw guidanceError(new Error(`No registered public identity found: ${normalized}`), 'guid-025c183d45ae1f80');
     return (await this.getMany([normalized])).get(normalized)!;
   }
 

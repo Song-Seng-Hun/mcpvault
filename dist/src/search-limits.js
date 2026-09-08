@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 export const DEFAULT_SEARCH_LIMIT = 5;
 export const MAX_SEARCH_LIMIT = 20;
 export const DEFAULT_SEARCH_MAX_CHARS = 4000;
@@ -5,13 +6,13 @@ export const MAX_SEARCH_MAX_CHARS = 12000;
 export function normalizeSearchLimit(value, defaultValue = DEFAULT_SEARCH_LIMIT) {
     const parsed = value === undefined ? defaultValue : Number(value);
     if (!Number.isInteger(parsed) || parsed < 1)
-        throw new Error('limit must be a positive integer');
+        throw guidanceError(new Error('limit must be a positive integer'), 'guid-14abe8b02cfc3624');
     return Math.min(parsed, MAX_SEARCH_LIMIT);
 }
 export function normalizeSearchMaxChars(value, defaultValue = DEFAULT_SEARCH_MAX_CHARS) {
     const parsed = value === undefined ? defaultValue : Number(value);
     if (!Number.isInteger(parsed) || parsed < 512)
-        throw new Error('maxChars must be an integer of at least 512');
+        throw guidanceError(new Error('maxChars must be an integer of at least 512'), 'guid-c32875d854241bff');
     return Math.min(parsed, MAX_SEARCH_MAX_CHARS);
 }
 function serializedArrayItemLength(item) {
@@ -69,7 +70,7 @@ export function boundedTopK(items, limit, compare) {
 /** Incremental top-K selection for asynchronous scans; snapshots never expose the heap. */
 export function createBoundedTopK(limit, compare) {
     if (!Number.isInteger(limit) || limit < 1)
-        throw new Error('limit must be a positive integer');
+        throw guidanceError(new Error('limit must be a positive integer'), 'guid-14abe8b02cfc3624');
     const heap = [];
     const worseThan = (a, b) => compare(a, b) > 0;
     const swap = (a, b) => {

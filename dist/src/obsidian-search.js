@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { execFile } from 'node:child_process';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
@@ -13,14 +14,14 @@ const OBSIDIAN_VERIFY_BATCH_SIZE = 8;
 function cleanRelativePath(value) {
     const normalized = value.trim().replace(/\\/g, '/').replace(/^\.\//, '');
     if (!normalized || normalized.startsWith('/') || /^[a-z]:\//i.test(normalized) || normalized.split('/').includes('..')) {
-        throw new Error('pathPrefix must be a relative vault folder without parent traversal');
+        throw guidanceError(new Error('pathPrefix must be a relative vault folder without parent traversal'), 'guid-688e9e693258b97c');
     }
     return normalized.replace(/^\/|\/$/g, '');
 }
 function limitNumber(value) {
     const parsed = value === undefined ? 20 : Number(value);
     if (!Number.isInteger(parsed) || parsed < 1)
-        throw new Error('limit must be a positive integer');
+        throw guidanceError(new Error('limit must be a positive integer'), 'guid-14abe8b02cfc3624');
     return Math.min(parsed, 50);
 }
 function extractEntries(value, maxEntries = OBSIDIAN_MAX_CLI_ENTRIES) {
@@ -78,7 +79,7 @@ export class ObsidianSearchService {
         // an anonymous cached result could be returned to an authenticated caller
         // without reaching the same guard in searchUncached().
         if (params.principal)
-            throw new Error('search_obsidian is limited to the public global scope; use search_scoped_notes for authenticated private-scope search');
+            throw guidanceError(new Error('search_obsidian is limited to the public global scope; use search_scoped_notes for authenticated private-scope search'), 'guid-621c609b35582657');
         const cacheKey = JSON.stringify({
             query: params.query,
             pathPrefix: params.pathPrefix || '',
@@ -123,17 +124,17 @@ export class ObsidianSearchService {
         // run it for an authenticated caller, because its output could reveal a
         // private file before the MCP scope layer gets a chance to filter it.
         if (params.principal)
-            throw new Error('search_obsidian is limited to the public global scope; use search_scoped_notes for authenticated private-scope search');
+            throw guidanceError(new Error('search_obsidian is limited to the public global scope; use search_scoped_notes for authenticated private-scope search'), 'guid-621c609b35582657');
         const query = String(params.query || '').trim();
         if (!query)
-            throw new Error('query is required');
+            throw guidanceError(new Error('query is required'), 'guid-48ae18bb5cfe1ffe');
         if (query.length > 500)
-            throw new Error('query is too long');
+            throw guidanceError(new Error('query is too long'), 'guid-dd27fd21712ac81c');
         const limit = limitNumber(params.limit);
         const maxChars = normalizeSearchMaxChars(params.maxChars);
         const pathPrefix = params.pathPrefix ? cleanRelativePath(params.pathPrefix) : undefined;
         if (pathPrefix && !this.pathFilter.isAllowed(pathPrefix))
-            throw new Error('pathPrefix is restricted');
+            throw guidanceError(new Error('pathPrefix is restricted'), 'guid-ca435d07b2efa637');
         const command = params.context ? 'search:context' : 'search';
         const cliLimit = Math.min(Math.max(limit * 4, limit), 50);
         const args = [`query=${query}`, `limit=${cliLimit}`, 'format=json', ...(pathPrefix ? [`path=${pathPrefix}`] : []), ...(params.caseSensitive ? ['case'] : [])];
@@ -143,7 +144,7 @@ export class ObsidianSearchService {
         }
         catch (error) {
             const message = error instanceof Error ? error.message : String(error);
-            throw new Error(`Obsidian CLI search failed. Make sure Obsidian is running and CLI is enabled: ${message}`);
+            throw guidanceError(new Error(`Obsidian CLI search failed. Make sure Obsidian is running and CLI is enabled: ${message}`), 'guid-e051f066f8b1e6eb');
         }
         let entries;
         let parserTruncated = false;

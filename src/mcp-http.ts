@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { createServer as createHttpServer, type IncomingMessage, type Server as HttpServer, type ServerResponse } from 'node:http';
 import { createServer as createHttpsServer, type Server as HttpsServer } from 'node:https';
 import { isIP } from 'node:net';
@@ -50,7 +51,7 @@ async function readBody(request: IncomingMessage, maxBytes: number): Promise<str
   for await (const chunk of request) {
     const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
     size += buffer.byteLength;
-    if (size > maxBytes) throw new Error(`request body exceeds ${maxBytes} bytes`);
+    if (size > maxBytes) throw guidanceError(new Error(`request body exceeds ${maxBytes} bytes`), 'guid-668226077e0f44fa');
     chunks.push(buffer);
   }
   return Buffer.concat(chunks).toString('utf8');
@@ -184,17 +185,17 @@ function addCorsHeaders(response: ServerResponse, request: IncomingMessage, allo
  */
 export async function startMcpHttpApi(server: Server, options: McpHttpOptions = {}): Promise<McpHttpHandle> {
   const runtime = getServerRuntime(server);
-  if (!runtime) throw new Error('The supplied MCP server has no MCPVault runtime');
+  if (!runtime) throw guidanceError(new Error('The supplied MCP server has no MCPVault runtime'), 'guid-f9ffb2364fcd3a70');
 
   const host = options.host || '127.0.0.1';
   if (!isPrivateLanHost(host)) {
-    throw new Error('Stateless MCP HTTP may bind only to localhost or a concrete private LAN address');
+    throw guidanceError(new Error('Stateless MCP HTTP may bind only to localhost or a concrete private LAN address'), 'guid-6da5c4e4055efe78');
   }
   if (!isLoopbackHost(host) && !options.tls) {
-    throw new Error('Stateless MCP HTTP requires TLS when binding to a non-loopback host');
+    throw guidanceError(new Error('Stateless MCP HTTP requires TLS when binding to a non-loopback host'), 'guid-d2588f6b956bf72d');
   }
   if (options.requireClientCertificate && (!options.tls || options.tls.ca === undefined)) {
-    throw new Error('mTLS required mode requires TLS with a CA');
+    throw guidanceError(new Error('mTLS required mode requires TLS with a CA'), 'guid-85a675d6f739522a');
   }
   const path = options.path || '/mcp';
   const maxBodyBytes = Math.min(Math.max(Math.trunc(options.maxBodyBytes ?? 1_048_576), 1_024), MAX_HTTP_BODY_BYTES);

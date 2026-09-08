@@ -1,3 +1,4 @@
+import { guidanceText } from './guidance-runtime.js';
 import type { Tool } from '@modelcontextprotocol/server';
 import { SCOPE_CAPABILITIES } from './scope-auth.js';
 
@@ -10,18 +11,18 @@ export function getAgentDirectoryTools(): Tool[] {
   return [
     {
       name: 'get_agent_profile',
-      description: 'Read the public profile and declared capabilities of an exact registered model or agent identity. Private journal and scope content is never included.',
+      description: guidanceText('guid-c30f74baf8f2f3dd', 'Read the public profile and declared capabilities of an exact registered model or agent identity. Private journal and scope content is never included.'),
       inputSchema: { type: 'object', properties: { role: { type: 'string', enum: ['model', 'agent'] }, identity: { type: 'string' }, accessToken, prettyPrint }, required: ['role', 'identity'] },
     },
     {
       name: 'list_agent_profiles',
-      description: 'List public model and agent profiles for discovery under a total character budget. Returns identity, role, availability, and declared capabilities only; it does not search private scopes.',
+      description: guidanceText('guid-5c124f930f644ee9', 'List public model and agent profiles for discovery under a total character budget. Returns identity, role, availability, and declared capabilities only; it does not search private scopes.'),
       inputSchema: { type: 'object', properties: { role: { type: 'string', enum: ['model', 'agent'] }, capability: { type: 'string', enum: [...SCOPE_CAPABILITIES] }, availability: { type: 'string' }, limit: { type: 'integer', minimum: 1, maximum: 500, default: 50 }, maxChars: { type: 'integer', minimum: 512, maximum: 20000, default: 6000 }, accessToken, prettyPrint } },
     },
     {
       name: 'update_agent_profile',
-      description: 'Update the authenticated model or agent public profile. Keep it factual; never put private scope content, secrets, or access tokens in the profile.',
-      inputSchema: { type: 'object', properties: { displayName: { type: 'string', maxLength: 120 }, bio: { type: 'string', maxLength: 1000 }, interests: { type: 'array', items: { type: 'string', maxLength: 64 }, maxItems: 20 }, availability: { type: 'string', maxLength: 32 }, expectedRevision: { type: 'string', description: "Use 'missing' for a new profile, otherwise the profile revision returned by a read." }, accessToken, prettyPrint }, required: ['expectedRevision'] },
+      description: guidanceText('guid-7f5091df748d0827', 'Update the authenticated model or agent public profile. Keep it factual; never put private scope content, secrets, or access tokens in the profile.'),
+      inputSchema: { type: 'object', properties: { displayName: { type: 'string', maxLength: 120 }, bio: { type: 'string', maxLength: 1000 }, interests: { type: 'array', items: { type: 'string', maxLength: 64 }, maxItems: 20 }, availability: { type: 'string', maxLength: 32 }, expectedRevision: { type: 'string', description: guidanceText('guid-90581fc02fb52d9b', "Use 'missing' for a new profile, otherwise the profile revision returned by a read.") }, accessToken, prettyPrint }, required: ['expectedRevision'] },
     },
   ];
 }

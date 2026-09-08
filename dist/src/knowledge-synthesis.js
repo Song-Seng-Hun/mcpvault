@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { posix } from 'node:path';
 import { isModerationHidden } from './moderation-policy.js';
 import { ReferenceService } from './references.js';
@@ -67,7 +68,7 @@ export async function prepareKnowledgeSynthesis(fs, access, value, container, pr
             throw Error(UNAVAILABLE);
         const key = path.toLowerCase();
         if (!guards.has(key) && guards.size >= 8)
-            throw Error('Synthesis may reference at most eight distinct related notes, including prose links');
+            throw guidanceError(Error('Synthesis may reference at most eight distinct related notes, including prose links'), 'guid-95b66b165911313c');
         const meta = (await fs.readNoteMetadata([path], allowed, { fresh: true, strict: true, maxBytes: BYTES }))[0];
         if (!meta?.revision || isModerationHidden(meta.frontmatter))
             throw Error(UNAVAILABLE);
@@ -80,21 +81,21 @@ export async function prepareKnowledgeSynthesis(fs, access, value, container, pr
     for (const input of synthesis.inputs) {
         const path = physical(input.path), key = path.toLowerCase();
         if (inputIdentities.has(key))
-            throw Error('Duplicate synthesis input identity');
+            throw guidanceError(Error('Duplicate synthesis input identity'), 'guid-3f4bf4f1fba39e6b');
         inputIdentities.add(key);
         const meta = await observe(path);
         if (meta.revision !== input.revision || meta.frontmatter.llm_wiki_type !== 'knowledge'
             || !INPUT_KINDS.has(String(meta.frontmatter.note_kind || 'knowledge')))
             throw Error(UNAVAILABLE);
         if (historicalInput(meta.frontmatter) && input.role !== 'historical_context')
-            throw Error('Retired or disputed synthesis input requires explicit historical_context role; preserve failed paths without treating them as current premises');
+            throw guidanceError(Error('Retired or disputed synthesis input requires explicit historical_context role; preserve failed paths without treating them as current premises'), 'guid-fe25dc9e24292858');
         input.path = access.toPublicPath(path);
     }
     const fields = [synthesis.question, ...synthesis.explanations.flatMap(e => [e.explanation, e.appliesWhen, e.limitations]),
         ...synthesis.choices.flatMap(c => [c.when, c.reason]), ...synthesis.counterexamples.map(c => c.description), ...synthesis.unresolvedQuestions];
     const links = fields.flatMap(field => extractObsidianLinkOccurrences(field));
     if (links.length > 16)
-        throw Error('Synthesis prose supports at most sixteen links; put long analysis in a linked note');
+        throw guidanceError(Error('Synthesis prose supports at most sixteen links; put long analysis in a linked note'), 'guid-92462cc3d797c2a0');
     const refs = new ReferenceService(fs, access);
     try {
         for (const link of links) {

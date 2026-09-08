@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 export const MOC_BEGIN = '%% MCPVault MOC BEGIN %%';
 export const MOC_END = '%% MCPVault MOC END %%';
 /** Exact offsets; markers in matching code fences are inert examples. */
@@ -20,17 +21,17 @@ export function managedNavigationRegion(content) {
         }
         else if (!fence && line === MOC_BEGIN) {
             if (start !== -1)
-                throw new Error('Duplicate managed MOC markers');
+                throw guidanceError(new Error('Duplicate managed MOC markers'), 'guid-ee679af8f2829a7b');
             start = offset;
         }
         else if (!fence && line === MOC_END) {
             if (start === -1 || end !== -1)
-                throw new Error('Malformed managed MOC markers');
+                throw guidanceError(new Error('Malformed managed MOC markers'), 'guid-d3b9ab188db464c5');
             end = offset + raw.length;
         }
         offset += raw.length;
     }
     if ((start === -1) !== (end === -1))
-        throw new Error('Unclosed managed MOC region');
+        throw guidanceError(new Error('Unclosed managed MOC region'), 'guid-8d259a7a0d2e4a99');
     return start < 0 ? undefined : { start, end, text: content.slice(start, end) };
 }

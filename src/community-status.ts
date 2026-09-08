@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import type { FileSystemService } from './filesystem.js';
 import type { ScopePrincipal } from './scope-auth.js';
 import { normalizeScopeId } from './scopes.js';
@@ -11,7 +12,7 @@ const commentPath = (slug: string, commentId: string) => `Community/Comments/${n
 const messagePath = (roomId: string, messageId: string) => `Community/ChatMessages/${normalizeScopeId(roomId, 'roomId')}/${normalizeScopeId(messageId, 'messageId')}.md`;
 
 function requireParticipant(principal?: ScopePrincipal): ScopePrincipal {
-  if (!principal) throw new Error('Login is required to change community workflow status');
+  if (!principal) throw guidanceError(new Error('Login is required to change community workflow status'), 'guid-8f9506d67d78714d');
   return principal;
 }
 
@@ -32,7 +33,7 @@ export function matchesWorkflowFilter(frontmatter: Record<string, any>, requeste
   const current = workflowStatus(frontmatter);
   if (filter === 'active') return !isClosedWorkflowStatus(current);
   if (!(COMMUNITY_WORKFLOW_STATUSES as readonly string[]).includes(filter)) {
-    throw new Error(`workflowStatus must be active, all, or one of: ${COMMUNITY_WORKFLOW_STATUSES.join(', ')}`);
+    throw guidanceError(new Error(`workflowStatus must be active, all, or one of: ${COMMUNITY_WORKFLOW_STATUSES.join(', ')}`), 'guid-4673c07d39c59c60');
   }
   return current === filter;
 }
@@ -43,16 +44,16 @@ export class CommunityStatusService {
   private targetPath(params: { targetType: string; slug?: string; commentId?: string; roomId?: string; messageId?: string }): string {
     switch (params.targetType) {
       case 'post':
-        if (!params.slug) throw new Error('slug is required for a post status');
+        if (!params.slug) throw guidanceError(new Error('slug is required for a post status'), 'guid-94471ee7808e25b9');
         return postPath(params.slug).replace(/^Community\//, `${this.options.communityRoot || 'Community'}/`);
       case 'comment':
-        if (!params.slug || !params.commentId) throw new Error('slug and commentId are required for a comment status');
+        if (!params.slug || !params.commentId) throw guidanceError(new Error('slug and commentId are required for a comment status'), 'guid-01e619159414032f');
         return commentPath(params.slug, params.commentId).replace(/^Community\//, `${this.options.communityRoot || 'Community'}/`);
       case 'message':
-        if (!params.roomId || !params.messageId) throw new Error('roomId and messageId are required for a message status');
+        if (!params.roomId || !params.messageId) throw guidanceError(new Error('roomId and messageId are required for a message status'), 'guid-23bdc7570b23b764');
         return messagePath(params.roomId, params.messageId);
       default:
-        throw new Error('targetType must be post, comment, or message');
+        throw guidanceError(new Error('targetType must be post, comment, or message'), 'guid-4ba8db0d74b66ca0');
     }
   }
 
@@ -70,13 +71,13 @@ export class CommunityStatusService {
     const principal = requireParticipant(params.principal);
     const status = String(params.workflowStatus || '').trim().toLowerCase() as CommunityWorkflowStatus;
     if (!(COMMUNITY_WORKFLOW_STATUSES as readonly string[]).includes(status)) {
-      throw new Error(`workflowStatus must be one of: ${COMMUNITY_WORKFLOW_STATUSES.join(', ')}`);
+      throw guidanceError(new Error(`workflowStatus must be one of: ${COMMUNITY_WORKFLOW_STATUSES.join(', ')}`), 'guid-309f2f6be138c3be');
     }
-    if (!params.expectedRevision) throw new Error('expectedRevision is required; read the item first');
+    if (!params.expectedRevision) throw guidanceError(new Error('expectedRevision is required; read the item first'), 'guid-de4fc2c1cd79ff57');
     const path = this.targetPath(params);
     const note = await this.fileSystem.readNote(path);
     const expectedType = params.targetType === 'post' ? 'blog_post' : params.targetType === 'comment' ? 'blog_comment' : 'chat_message';
-    if (note.frontmatter.mcpvault_type !== expectedType) throw new Error(`Target is not a community ${params.targetType}`);
+    if (note.frontmatter.mcpvault_type !== expectedType) throw guidanceError(new Error(`Target is not a community ${params.targetType}`), 'guid-009adee78ca51687');
     const timestamp = new Date().toISOString();
     const reason = String(params.reason || '').trim();
     await this.fileSystem.writeNote({

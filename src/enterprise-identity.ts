@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { createHash } from 'node:crypto';
 import type { ScopePrincipal } from './scope-auth.js';
 import { normalizeScopeId } from './scopes.js';
@@ -24,6 +25,6 @@ export function resolveActorMention(value: string, visible: ScopePrincipal[]): s
   const exact = visible.find(p => persistentActorId(p) === mention);
   if (exact) return persistentActorId(exact);
   const candidates = visible.filter(p => p.agentId === mention || p.modelId === mention);
-  if (candidates.length !== 1) throw new Error('Mention is ambiguous or unavailable; use an exact actor ID from the visible directory');
+  if (candidates.length !== 1) throw guidanceError(new Error('Mention is ambiguous or unavailable; use an exact actor ID from the visible directory'), 'guid-15fb27dae9b23f27');
   return persistentActorId(candidates[0]!);
 }

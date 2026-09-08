@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { join, resolve } from 'path';
 import { watch } from 'node:fs';
 import { createHash } from 'node:crypto';
@@ -48,7 +49,7 @@ export function positiveSearchTerms(query) { return parseSearchQuery(query).term
 export function memoryCandidateLimit(value) {
     const limit = value ?? 10_000;
     if (!Number.isInteger(limit) || limit < 1)
-        throw new Error('Memory candidate limit must be a positive integer');
+        throw guidanceError(new Error('Memory candidate limit must be a positive integer'), 'guid-213efdaaff7e74f5');
     return Math.min(limit, 10_000);
 }
 /** Such queries require exact source/region verification. Never approximate
@@ -765,7 +766,7 @@ export class SearchService {
     recordFeedback(scopeKey, query, outcome, selectedPaths = [], note) {
         const normalized = query.trim().replace(/\s+/g, ' ').slice(0, 240);
         if (!normalized)
-            throw new Error('query is required');
+            throw guidanceError(new Error('query is required'), 'guid-48ae18bb5cfe1ffe');
         const scope = this.usageByScope.get(scopeKey) || new Map();
         const key = normalized.toLocaleLowerCase();
         const existing = scope.get(key) || { query: normalized, searches: 0, zeroResultSearches: 0, feedbackFailures: 0, feedbackAmbiguous: 0, usefulSelections: 0, lastResultCount: 0, lastAt: '' };
@@ -974,7 +975,7 @@ export class SearchService {
     async memoryCandidates(params) {
         const limit = memoryCandidateLimit(params.limit);
         if (typeof params.canAccessPath !== 'function')
-            throw new Error('Memory candidates require a visibility predicate');
+            throw guidanceError(new Error('Memory candidates require a visibility predicate'), 'guid-829812a0c3932d67');
         if (memoryQueryNeedsSource(params.query) || params.caseSensitive)
             return { results: [], complete: false };
         await this.catalog?.flushPendingEvents();
@@ -1030,7 +1031,7 @@ export class SearchService {
     async search(params) {
         const { query, limit = 5, searchContent = true, searchFrontmatter = false, caseSensitive = false, pathPrefix, excludePaths } = params;
         if (!query || query.trim().length === 0) {
-            throw new Error('Search query cannot be empty');
+            throw guidanceError(new Error('Search query cannot be empty'), 'guid-f8995a2f78a531a9');
         }
         const normalizedQuery = query.trim();
         const parsedQuery = parseSearchQuery(normalizedQuery);
@@ -1098,7 +1099,7 @@ export class SearchService {
                 if (!hasAccessPredicate)
                     return;
                 if (!document || !params.canAccessPath(document.relativePath)) {
-                    throw new Error('Search access changed during search');
+                    throw guidanceError(new Error('Search access changed during search'), 'guid-57a8ea8f2ff67484');
                 }
             };
             const assertCorpusAccessUnchanged = () => {
@@ -1808,7 +1809,7 @@ export class SearchService {
     materializeResult(candidate, terms, scoringTerms, searchContent, searchFrontmatter, caseSensitive, includeRevision, filterReasons = []) {
         const document = this.documentsById.get(candidate.documentId);
         if (!document)
-            throw new Error(`Search document disappeared: ${candidate.documentId}`);
+            throw guidanceError(new Error(`Search document disappeared: ${candidate.documentId}`), 'guid-2d39afa8df314fdc');
         let searchableText = '';
         if (searchContent && searchFrontmatter)
             searchableText = `${document.frontmatterText || ''}\n${document.body || ''}`;

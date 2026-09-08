@@ -1,3 +1,4 @@
+import { guidanceError, guidanceText } from './guidance-runtime.js';
 import { applyEconomyCommand, assertEconomyConservation, economyRevision, initialEconomy } from './economy-model.js';
 const policy = {
     version: 1, revision: 'deterministic-pilot', enabled: true, treasury: 'treasury', operators: ['operator'],
@@ -12,7 +13,7 @@ const terms = (taskId, reward = 100, kind = 'research') => ({ taskId, taskRevisi
  * never an operating forecast or permission to enable the economy. */
 export function runDeterministicEconomyPilotSimulation(options) {
     if (!Number.isSafeInteger(options.runs) || options.runs !== 1000)
-        throw new Error('Pilot simulation requires exactly 1,000 deterministic runs');
+        throw guidanceError(new Error('Pilot simulation requires exactly 1,000 deterministic runs'), 'guid-2ee0e8cc56664a44');
     let unapprovedAdmissions = 0, sybilRejections = 0, sameOwnerClaims = 0, selfReviews = 0, violations = 0, completedCircles = 0, minRewardSettlements = 0, inactiveEscrow = 0, concentrationRejections = 0, absentRequesterPayments = 0, absentWorkerPayments = 0, absentReviewerPayments = 0;
     let ending;
     for (let run = 0; run < options.runs; run++) {
@@ -27,9 +28,9 @@ export function runDeterministicEconomyPilotSimulation(options) {
         } };
         const command = (contractId, op, actor, extra = {}) => ({ op, actor, requestId: `${contractId}-${op}-${actor}`, contractId, expectedRevision: state.contracts[contractId] ? economyRevision(state.contracts[contractId]) : 'missing', expectedGeneration: state.contracts[contractId]?.generation ?? 0, ...extra });
         const draftAndFund = (contractId, requester, questTerms) => { apply(command(contractId, 'draft', requester, { terms: questTerms })); apply(command(contractId, 'fund', requester)); };
-        apply({ op: 'issue', actor: 'operator', requestId: 'issue', amount: 5000, reason: 'approved fixed supply' });
+        apply({ op: 'issue', actor: 'operator', requestId: 'issue', amount: 5000, reason: guidanceText('guid-cd921f2af78aded0', 'approved fixed supply') });
         for (const account of ['alice', 'bob', 'carol'])
-            apply({ op: 'allocate', actor: 'operator', requestId: `allocate-${account}`, account, amount: 200, reason: 'approved pilot budget' });
+            apply({ op: 'allocate', actor: 'operator', requestId: `allocate-${account}`, account, amount: 200, reason: guidanceText('guid-e940f63bbcba522e', 'approved pilot budget') });
         if (accepted(command(`sybil-${run}`, 'draft', `newcomer-${run}`, { terms: terms(`sybil-task-${run}`) })))
             unapprovedAdmissions++;
         else
@@ -44,9 +45,9 @@ export function runDeterministicEconomyPilotSimulation(options) {
                 apply(command(contractId, 'claim', worker));
                 apply(command(contractId, 'submit', worker, { artifacts: [{ path: `Knowledge/result-${run}-${index}.md`, revision: 'b'.repeat(64) }] }));
                 const basis = state.contracts[contractId].submission.basis;
-                if (accepted(command(contractId, 'review', worker, { verdict: 'approve', basis, reason: 'self review attempt', reviewArtifact: { path: `Knowledge/review-${run}-${index}.md`, revision: 'c'.repeat(64) } })))
+                if (accepted(command(contractId, 'review', worker, { verdict: 'approve', basis, reason: guidanceText('guid-ed9116786b830430', 'self review attempt'), reviewArtifact: { path: `Knowledge/review-${run}-${index}.md`, revision: 'c'.repeat(64) } })))
                     selfReviews++;
-                apply(command(contractId, 'review', reviewer, { verdict: 'approve', basis, reason: 'independent fixed review', reviewArtifact: { path: `Knowledge/review-${run}-${index}.md`, revision: 'c'.repeat(64) } }));
+                apply(command(contractId, 'review', reviewer, { verdict: 'approve', basis, reason: guidanceText('guid-83ab30b1e0b6285b', 'independent fixed review'), reviewArtifact: { path: `Knowledge/review-${run}-${index}.md`, revision: 'c'.repeat(64) } }));
             }
             completedCircles++;
         }
@@ -64,23 +65,23 @@ export function runDeterministicEconomyPilotSimulation(options) {
         }
         else {
             if (accepted(command(`below-minimum-${run}`, 'draft', 'alice', { terms: terms(`below-minimum-task-${run}`, 9) })))
-                throw new Error('Minimum reward rejection unexpectedly changed state');
+                throw guidanceError(new Error('Minimum reward rejection unexpectedly changed state'), 'guid-056e92e1aebf22ac');
             const min = `minimum-${run}`;
             draftAndFund(min, 'alice', terms(`minimum-task-${run}`, 10, 'mechanical'));
             apply(command(min, 'claim', 'bob'));
             apply(command(min, 'submit', 'bob', { artifacts: [{ path: `Knowledge/minimum-${run}.md`, revision: 'b'.repeat(64) }] }));
-            apply(command(min, 'resolve', 'operator', { amount: 10, reason: 'explicit operator settlement' }));
+            apply(command(min, 'resolve', 'operator', { amount: 10, reason: guidanceText('guid-e8034eeaa77d1de9', 'explicit operator settlement') }));
             minRewardSettlements++;
             if (accepted(command(`missing-${run}`, 'fund', 'bob')))
                 absentRequesterPayments++;
             const absent = `absent-${run}`;
             draftAndFund(absent, 'bob', terms(`absent-task-${run}`, 10, 'mechanical'));
-            if (accepted(command(absent, 'resolve', 'operator', { amount: 0, reason: 'worker absent' })))
+            if (accepted(command(absent, 'resolve', 'operator', { amount: 0, reason: guidanceText('guid-2960cd2821cb60bd', 'worker absent') })))
                 absentWorkerPayments++;
             apply(command(absent, 'claim', 'carol'));
             apply(command(absent, 'submit', 'carol', { artifacts: [{ path: `Knowledge/absent-${run}.md`, revision: 'b'.repeat(64) }] }));
             const basis = state.contracts[absent].submission.basis;
-            if (accepted(command(absent, 'review', 'alice', { verdict: 'approve', basis, reason: 'no assigned reviewer', reviewArtifact: { path: `Knowledge/absent-review-${run}.md`, revision: 'c'.repeat(64) } })))
+            if (accepted(command(absent, 'review', 'alice', { verdict: 'approve', basis, reason: guidanceText('guid-ef5005a84d7356ed', 'no assigned reviewer'), reviewArtifact: { path: `Knowledge/absent-review-${run}.md`, revision: 'c'.repeat(64) } })))
                 absentReviewerPayments++;
         }
         try {

@@ -1,3 +1,4 @@
+import { guidanceError, guidanceText } from './guidance-runtime.js';
 import { createHash } from 'node:crypto';
 import { readdir } from 'node:fs/promises';
 import { federationStorageName, ensureFederationDirectory, readFederationFile, writeFederationFileAtomic, removeFederationFile } from './public-federation-storage.js';
@@ -59,7 +60,7 @@ function sha256(value: string): string {
 
 function text(value: unknown, field: string): string {
   const normalized = String(value ?? '').trim();
-  if (!normalized) throw new Error(`${field} is required`);
+  if (!normalized) throw guidanceError(new Error(`${field} is required`), 'guid-0c6fd33ea1895f5e');
   return normalized;
 }
 
@@ -72,14 +73,14 @@ function allowArgs(args: Record<string, unknown>, keys: readonly string[]): Reco
 function assertExactKeys(value: Record<string, unknown>, keys: readonly string[], field: string): void {
   const allowed = new Set(keys);
   const extra = Object.keys(value).find(key => !allowed.has(key));
-  if (extra) throw new Error(`${field} contains unsupported field: ${extra}`);
+  if (extra) throw guidanceError(new Error(`${field} contains unsupported field: ${extra}`), 'guid-62a6867d518c2c23');
 }
 
 function assertEnterpriseMentions(content: string): void {
   const pattern = /(^|[^\w])@([a-z0-9][a-z0-9._:-]{0,191})\b/gi;
   for (const match of content.matchAll(pattern)) {
     if (!/^actor:[a-z0-9][a-z0-9._-]{0,127}:[a-z0-9][a-z0-9._-]{0,127}$/i.test(match[2]!)) {
-      throw new Error('Enterprise mentions require an exact @actor:realm:agent ID; model names do not select a persistent agent');
+      throw guidanceError(new Error('Enterprise mentions require an exact @actor:realm:agent ID; model names do not select a persistent agent'), 'guid-d6055bf1aadd9850');
     }
   }
 }
@@ -100,7 +101,7 @@ function boundedRows<T>(rows: T[], limitValue: unknown, maxCharsValue: unknown):
 
 function actorParts(actorId: string): { origin: string; agentId: string } {
   const match = actorId.match(/^actor:([a-z0-9][a-z0-9._-]{0,127}):([a-z0-9][a-z0-9._-]{0,127})$/);
-  if (!match?.[1] || !match[2]) throw new Error('a canonical public actor ID is required');
+  if (!match?.[1] || !match[2]) throw guidanceError(new Error('a canonical public actor ID is required'), 'guid-05db64321958a5a2');
   return { origin: match[1], agentId: match[2] };
 }
 
@@ -114,20 +115,20 @@ function intentMarkdown(intent: BridgeIntent): string {
 }
 
 function parseIntent(content: string): BridgeIntent {
-  if (Buffer.byteLength(content, 'utf8') > 128 * 1024) throw new Error('enterprise federation intent exceeds its size limit');
+  if (Buffer.byteLength(content, 'utf8') > 128 * 1024) throw guidanceError(new Error('enterprise federation intent exceeds its size limit'), 'guid-5933be44d9f3a2ed');
   const match = content.match(/```json enterprise-federation-intent\r?\n([^\r\n]+)\r?\n```/);
-  if (!match?.[1]) throw new Error('enterprise federation intent is invalid');
+  if (!match?.[1]) throw guidanceError(new Error('enterprise federation intent is invalid'), 'guid-1200bd663a1a3c7d');
   const value: unknown = JSON.parse(match[1]);
   if (!isRecord(value) || value.version !== 1 || (value.stage !== 'prepared' && value.stage !== 'committed')
     || !['profile', 'post', 'delete-post', 'comment', 'edit-comment', 'delete-comment'].includes(String(value.operation)) || typeof value.id !== 'string' || value.id.length > 1024
     || typeof value.actorId !== 'string' || !isRecord(value.identity) || !isRecord(value.input)
     || typeof value.idempotencyKey !== 'string' || !/^[a-f0-9]{64}$/.test(value.idempotencyKey)
-    || !isRecord(value.local) || typeof value.createdAt !== 'string') throw new Error('enterprise federation intent fields are invalid');
+    || !isRecord(value.local) || typeof value.createdAt !== 'string') throw guidanceError(new Error('enterprise federation intent fields are invalid'), 'guid-724040c02452f3fc');
   const identity = value.identity;
-  if (typeof identity.origin !== 'string' || typeof identity.agentId !== 'string') throw new Error('enterprise federation intent identity is invalid');
+  if (typeof identity.origin !== 'string' || typeof identity.agentId !== 'string') throw guidanceError(new Error('enterprise federation intent identity is invalid'), 'guid-f4fe95d172025147');
   assertExactKeys(value, ['version', 'id', 'operation', 'actorId', 'identity', 'input', 'idempotencyKey', 'local', 'stage', 'createdAt'], 'enterprise federation intent');
   assertExactKeys(identity, ['origin', 'agentId'], 'enterprise federation intent identity');
-  if (!Number.isFinite(Date.parse(value.createdAt))) throw new Error('enterprise federation intent timestamp is invalid');
+  if (!Number.isFinite(Date.parse(value.createdAt))) throw guidanceError(new Error('enterprise federation intent timestamp is invalid'), 'guid-c67f639cc069dcfb');
   return value as unknown as BridgeIntent;
 }
 
@@ -179,7 +180,7 @@ export class EnterpriseFederationAdapter {
     try {
       const parsed = JSON.parse(await this.readBounded(this.statePath, 2 * 1024 * 1024, 'enterprise federation state')) as BridgeState;
       if (parsed.version !== 1 || !isRecord(parsed.revisions) || Object.values(parsed.revisions).some(value => !Number.isSafeInteger(value) || Number(value) < 0)
-        || (parsed.deliveries !== undefined && (!isRecord(parsed.deliveries) || Object.values(parsed.deliveries).some(value => value !== 'published' && value !== 'pending')))) throw new Error('enterprise federation state is invalid');
+        || (parsed.deliveries !== undefined && (!isRecord(parsed.deliveries) || Object.values(parsed.deliveries).some(value => value !== 'published' && value !== 'pending')))) throw guidanceError(new Error('enterprise federation state is invalid'), 'guid-3e228eb9c9363db6');
       this.state = parsed;
     } catch (error) {
       if (!(error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT')) throw error;
@@ -205,11 +206,11 @@ export class EnterpriseFederationAdapter {
   }
 
   private authenticated(principal: ScopePrincipal | undefined, capability: ScopeCapability): { principal: ScopePrincipal & { agentId: string }; identity: PublicFederationIdentity; actorId: string } {
-    if (!principal?.agentId || principal.enterprise?.mode !== 'public' || !principal.commandCenterId) throw new Error('an authenticated public enterprise agent is required');
-    if (principal.capabilities && !principal.capabilities.includes(capability)) throw new Error(`${capability} capability is required`);
+    if (!principal?.agentId || principal.enterprise?.mode !== 'public' || !principal.commandCenterId) throw guidanceError(new Error('an authenticated public enterprise agent is required'), 'guid-76d92532b8cdb041');
+    if (principal.capabilities && !principal.capabilities.includes(capability)) throw guidanceError(new Error(`${capability} capability is required`), 'guid-20e86a6fdd5901a1');
     const origin = principal.commandCenterId.toLowerCase();
     const agentId = principal.agentId.toLowerCase();
-    if (!this.config.actors[agentId]?.authToken) throw new Error(`no public federation credential is configured for agent ${agentId}`);
+    if (!this.config.actors[agentId]?.authToken) throw guidanceError(new Error(`no public federation credential is configured for agent ${agentId}`), 'guid-19d5bcdd536f1787');
     const identity = { origin, agentId };
     return { principal: principal as ScopePrincipal & { agentId: string }, identity, actorId: makePublicActorId(origin, agentId) };
   }
@@ -219,7 +220,7 @@ export class EnterpriseFederationAdapter {
     let replica = this.publishers.get(key);
     if (!replica) {
       const credential = this.config.actors[identity.agentId]?.authToken;
-      if (!credential) throw new Error(`no public federation credential is configured for agent ${identity.agentId}`);
+      if (!credential) throw guidanceError(new Error(`no public federation credential is configured for agent ${identity.agentId}`), 'guid-19d5bcdd536f1787');
       replica = new PublicFederationReplica({
         vaultPath: this.vaultPath,
         identity,
@@ -247,7 +248,7 @@ export class EnterpriseFederationAdapter {
     const path = this.intentPath(value);
     try {
       const existing = parseIntent(await this.readBounded(path, 128 * 1024, 'enterprise federation intent'));
-      if (JSON.stringify(existing.input) !== JSON.stringify(value.input)) throw new Error('bridge idempotency key is already used by another payload');
+      if (JSON.stringify(existing.input) !== JSON.stringify(value.input)) throw guidanceError(new Error('bridge idempotency key is already used by another payload'), 'guid-904f66094e7c6011');
       return { value: existing, path };
     } catch (error) {
       if (!(error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT')) throw error;
@@ -304,7 +305,7 @@ export class EnterpriseFederationAdapter {
   private async publishPost(args: Record<string, unknown>, principalInput: ScopePrincipal | undefined): Promise<unknown> {
     const { principal, identity, actorId } = this.authenticated(principalInput, 'publish');
     const localArgs = allowArgs(args, ['slug', 'title', 'content', 'status', 'tags', 'category', 'seriesId', 'seriesTitle', 'seriesOrder', 'relatedPosts', 'duplicateOf', 'feedbackType', 'sourcePaths', 'reproduction', 'proposedChange', 'blockedTask', 'attempted', 'helpWanted', 'environment', 'expectedRevision', 'requestId']);
-    if (localArgs.status !== undefined && String(localArgs.status).toLowerCase() !== 'published') throw new Error('draft and archived posts are local only and cannot enter public federation');
+    if (localArgs.status !== undefined && String(localArgs.status).toLowerCase() !== 'published') throw guidanceError(new Error('draft and archived posts are local only and cannot enter public federation'), 'guid-ca6e7668da318029');
     await this.ensureActor(identity, actorId);
     const slug = text(localArgs.slug, 'slug').toLowerCase();
     const objectId = makePublicObjectId('post', identity.origin, identity.agentId, slug);
@@ -329,8 +330,8 @@ export class EnterpriseFederationAdapter {
     const slug = text(localArgs.slug, 'slug').toLowerCase();
     const objectId = makePublicObjectId('post', identity.origin, identity.agentId, slug);
     const expectedRevision = this.expectedRevision(objectId);
-    if (!expectedRevision) throw new Error('post has no known public federation revision');
-    const input: PublicPublishInput = { type: 'tombstone', objectId: this.mutationId('tombstone', identity, localArgs), actorId, targetObjectId: objectId, expectedRevision, reason: 'Original author deleted the post.' };
+    if (!expectedRevision) throw guidanceError(new Error('post has no known public federation revision'), 'guid-08ae94ac48cb2ead');
+    const input: PublicPublishInput = { type: 'tombstone', objectId: this.mutationId('tombstone', identity, localArgs), actorId, targetObjectId: objectId, expectedRevision, reason: guidanceText('guid-a81a450688951826', 'Original author deleted the post.') };
     validatePublicPublishInput(input, identity);
     const id = `delete-post:${objectId}:${expectedRevision}`;
     const prepared = await this.prepareIntent({ id, operation: 'delete-post', actorId, identity, input, idempotencyKey: sha256(id), local: { serviceArgs: localArgs, slug } });
@@ -354,7 +355,7 @@ export class EnterpriseFederationAdapter {
     if (remote) {
       await this.reader.pull(100);
       const target = await this.reader.getObject(postId);
-      if (!target || target.record.type !== 'post' || target.status !== 'active') throw new Error('remote public post is unavailable');
+      if (!target || target.record.type !== 'post' || target.status !== 'active') throw guidanceError(new Error('remote public post is unavailable'), 'guid-fbdd70adbce5447f');
     }
     const body = text(localArgs.content, 'content');
     assertEnterpriseMentions(body);
@@ -392,15 +393,15 @@ export class EnterpriseFederationAdapter {
     const remote = rawCommentId.startsWith('comment:');
     const targetObjectId = remote ? rawCommentId : makePublicObjectId('comment', identity.origin, identity.agentId, rawCommentId);
     const expectedRevision = this.expectedRevision(targetObjectId);
-    if (!expectedRevision) throw new Error('comment has no known public federation revision');
+    if (!expectedRevision) throw guidanceError(new Error('comment has no known public federation revision'), 'guid-fa2d71041d844605');
     if (remote) {
       await this.reader.pull(100);
       const target = await this.reader.getObject(targetObjectId);
-      if (!target || target.record.type !== 'comment' || target.record.actorId !== actorId || target.record.postId !== slug) throw new Error('remote public comment is unavailable or belongs to another actor');
-      if (String(localArgs.expectedRevision) !== String(target.revision) || target.revision !== expectedRevision) throw new Error('remote public comment revision conflict');
+      if (!target || target.record.type !== 'comment' || target.record.actorId !== actorId || target.record.postId !== slug) throw guidanceError(new Error('remote public comment is unavailable or belongs to another actor'), 'guid-7f0746d8bbd1a793');
+      if (String(localArgs.expectedRevision) !== String(target.revision) || target.revision !== expectedRevision) throw guidanceError(new Error('remote public comment revision conflict'), 'guid-dc19a1c902cd4f38');
     }
     const input: PublicPublishInput = deletion
-      ? { type: 'tombstone', objectId: this.mutationId('tombstone', identity, localArgs), actorId, targetObjectId, expectedRevision, reason: 'Original author deleted the comment.' }
+      ? { type: 'tombstone', objectId: this.mutationId('tombstone', identity, localArgs), actorId, targetObjectId, expectedRevision, reason: guidanceText('guid-ee215caa04f013e1', 'Original author deleted the comment.') }
       : { type: 'update', objectId: this.mutationId('update', identity, localArgs), actorId, targetObjectId, expectedRevision, body: text(localArgs.content, 'content') };
     if (!deletion) assertEnterpriseMentions(text(localArgs.content, 'content'));
     validatePublicPublishInput(input, identity);
@@ -412,7 +413,7 @@ export class EnterpriseFederationAdapter {
     if (remote) {
       await this.reader.pull(100);
       const target = await this.reader.getObject(targetObjectId);
-      if (!target || target.record.type !== 'comment' || target.record.actorId !== actorId) throw new Error('remote public comment is unavailable or belongs to another actor');
+      if (!target || target.record.type !== 'comment' || target.record.actorId !== actorId) throw guidanceError(new Error('remote public comment is unavailable or belongs to another actor'), 'guid-7f0746d8bbd1a793');
       const content = deletion ? 'Content deleted by its original author.' : text(localArgs.content, 'content');
       await this.writeAtomic(path!, `---\nmcpvault_type: federated_comment\ncomment_id: ${targetObjectId}\npost_id: ${slug}\nauthor: ${actorId}\ncontent_status: ${deletion ? 'deleted' : 'published'}\n---\n${content}\n`);
       local = { success: true, commentId: targetObjectId, postId: slug, path: `PublicCommunity/Local/FederatedComments/${federationStorageName(targetObjectId)}.md`, ...(deletion && { deleted: true }) };
@@ -435,7 +436,7 @@ export class EnterpriseFederationAdapter {
         return { ...local, federation: { objectId: slug, status: this.state.deliveries?.[slug] || 'pending', revision: this.state.revisions[slug] || 0 } };
       }
     }
-    if (!view || view.record.type !== 'post' || view.status !== 'active') throw new Error('federated public post not found');
+    if (!view || view.record.type !== 'post' || view.status !== 'active') throw guidanceError(new Error('federated public post not found'), 'guid-1c48a7c2d4b0e47c');
     return { path: `PublicCommunity/Imported/${view.origin}/Posts/${federationStorageName(view.objectId)}.md`, fm: { mcpvault_type: 'blog_post', post_id: view.objectId, author: view.record.actorId, title: view.record.title, status: 'published', federation_revision: view.revision }, content: view.record.body, revision: String(view.revision), commentCount: 0 };
   }
 
@@ -455,7 +456,7 @@ export class EnterpriseFederationAdapter {
     const result = await this.reader.listObjects(listParams);
     const remoteRows = result.objects.map(view => {
       const record = view.record;
-      if (record.type !== 'post') throw new Error('public federation post view changed during listing');
+      if (record.type !== 'post') throw guidanceError(new Error('public federation post view changed during listing'), 'guid-7d10adb3a7a4d5e3');
       return { path: `PublicCommunity/Imported/${view.origin}/Posts/${federationStorageName(view.objectId)}.md`, slug: view.objectId, title: record.title, author: record.actorId, status: 'published', federationRevision: view.revision, federationStatus: 'published' };
     });
     const localIds = new Set(localRows.map(row => String(row.federationObjectId)));
@@ -473,7 +474,7 @@ export class EnterpriseFederationAdapter {
     const all = result.objects.filter(view => view.record.type === 'comment' && view.record.postId === postId);
     const comments = all.slice(0, limit).map(view => {
       const record = view.record;
-      if (record.type !== 'comment') throw new Error('public federation comment view changed during listing');
+      if (record.type !== 'comment') throw guidanceError(new Error('public federation comment view changed during listing'), 'guid-75ba010aa0dabdfb');
       return { commentId: view.objectId, postId: record.postId, content: record.body, author: record.actorId, replyTo: record.replyTo, federationRevision: view.revision };
     });
     const bounded = boundedRows(comments, limit, args.maxChars);
@@ -484,7 +485,7 @@ export class EnterpriseFederationAdapter {
     actorParts(actorId);
     await this.reader.pull(100);
     const view = await this.reader.getObject(`profile:${actorId.slice('actor:'.length)}`);
-    if (!view || view.record.type !== 'profile') throw new Error('federated public profile not found');
+    if (!view || view.record.type !== 'profile') throw guidanceError(new Error('federated public profile not found'), 'guid-0e3e1e5cdcc6aff3');
     return { success: true, profile: { identity: actorId, role: 'agent', actorId, displayName: view.record.displayName, bio: view.record.bio || '', origin: view.origin, federationRevision: view.revision } };
   }
 
@@ -492,7 +493,7 @@ export class EnterpriseFederationAdapter {
     await this.reader.pull(100);
     const result = await this.reader.listObjects({ type: 'profile', status: 'active', limit: 100 });
     const rows = result.objects.map(view => {
-      if (view.record.type !== 'profile') throw new Error('public federation profile view changed during listing');
+      if (view.record.type !== 'profile') throw guidanceError(new Error('public federation profile view changed during listing'), 'guid-923455edfe152d14');
       return { identity: view.record.actorId, role: 'agent', actorId: view.record.actorId, displayName: view.record.displayName, bio: view.record.bio || '', origin: view.origin, federationRevision: view.revision };
     });
     const bounded = boundedRows(rows, args.limit, args.maxChars);
@@ -570,13 +571,13 @@ export class EnterpriseFederationAdapter {
       if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') return [] as string[];
       throw error;
     });
-    if (names.length > 500) throw new Error('enterprise federation intent queue exceeds its bounded recovery limit');
+    if (names.length > 500) throw guidanceError(new Error('enterprise federation intent queue exceeds its bounded recovery limit'), 'guid-390e2f9a2bdd2596');
     const recovered: string[] = [];
     const unresolved: string[] = [];
     for (const name of names.filter(name => name.endsWith('.md')).sort()) {
       const path = join(root, name);
       const intent = parseIntent(await this.readBounded(path, 128 * 1024, 'enterprise federation intent'));
-      if (intent.actorId !== actorId || intent.identity.origin !== identity.origin || intent.identity.agentId !== identity.agentId) throw new Error('federation intent identity mismatch');
+      if (intent.actorId !== actorId || intent.identity.origin !== identity.origin || intent.identity.agentId !== identity.agentId) throw guidanceError(new Error('federation intent identity mismatch'), 'guid-01c8d4c598af46b4');
       validatePublicPublishInput(intent.input, intent.identity);
       if (intent.stage === 'prepared' && !await this.localMatches(intent, principal)) {
         try { await this.performIntentLocal(intent, principal); } catch { unresolved.push(this.targetObjectId(intent.input)); break; }
@@ -634,7 +635,7 @@ export class EnterpriseFederationAdapter {
         case 'get_agent_profile': return String(args.identity || '').startsWith('actor:') ? this.getFederatedProfile(String(args.identity).toLowerCase()) : this.directory.get({ role: String(args.role || ''), identity: String(args.identity || '') });
         case 'list_agent_profiles':
         case 'list_agents': return this.listFederatedProfiles(args);
-        default: throw new Error(`unsupported enterprise federation operation: ${name}`);
+        default: throw guidanceError(new Error(`unsupported enterprise federation operation: ${name}`), 'guid-b3545e8027ee3b60');
       }
     });
   }

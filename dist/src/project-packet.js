@@ -1,19 +1,20 @@
+import { guidanceError, guidanceText } from './guidance-runtime.js';
 import { createHash } from 'node:crypto';
 /** Budget the final public representation; never clip source identities. */
 export function packProjectPacket(rows, metadata, limit, maxChars, options = {}) {
     const offset = options.offset ?? 0;
     if (!Number.isInteger(offset) || offset < 0 || offset > 100000)
-        throw new Error('Project offset must be an integer between 0 and 100000');
+        throw guidanceError(new Error('Project offset must be an integer between 0 and 100000'), 'guid-19aee45b80d27bfe');
     if (options.expectedSnapshot !== undefined && !/^[a-f0-9]{64}$/.test(options.expectedSnapshot))
-        throw new Error('expectedSnapshot must be a lowercase SHA-256 fingerprint');
+        throw guidanceError(new Error('expectedSnapshot must be a lowercase SHA-256 fingerprint'), 'guid-fdaefa5cd8d6564d');
     if (offset > 0 && !options.expectedSnapshot)
-        throw new Error('Project continuation requires expectedSnapshot; restart at offset 0');
+        throw guidanceError(new Error('Project continuation requires expectedSnapshot; restart at offset 0'), 'guid-0ad9d1c1ace87c3f');
     const hash = createHash('sha256').update('project-packet-v1');
     for (const row of rows)
         hash.update(JSON.stringify(row));
     const snapshotFingerprint = hash.digest('hex');
     if (options.expectedSnapshot && options.expectedSnapshot !== snapshotFingerprint)
-        throw new Error('Project view changed; restart at offset 0 without expectedSnapshot');
+        throw guidanceError(new Error('Project view changed; restart at offset 0 without expectedSnapshot'), 'guid-536dad7149f471f7');
     const compact = (row) => ({
         path: row.path, revision: row.revision, planningNeedsAttention: row.planningNeedsAttention,
         planning: row.planning, execution: { ready: row.execution?.ready }, detailsOmitted: true,
@@ -52,9 +53,9 @@ export function packProjectPacket(rows, metadata, limit, maxChars, options = {})
     // Same position, original identity and authentication retained by the host.
     if (maxChars < 16000 || options.prettyPrint) {
         return { items: [], total: rows.length, offset, returned: 0, truncated: true,
-            message: 'No project fits this budget; retry this position. No items skipped.',
+            message: guidanceText('guid-b72a049869c3bf36', 'No project fits this budget; retry this position. No items skipped.'),
             nextAction: { endpointId: 'wiki.project_packet', reuseOriginalArguments: true,
                 overrides: { maxChars: 16000, limit: 1, prettyPrint: false } } };
     }
-    throw new Error('Project identity exceeds the response ceiling; no items skipped. Inspect project paths directly.');
+    throw guidanceError(new Error('Project identity exceeds the response ceiling; no items skipped. Inspect project paths directly.'), 'guid-c970a445e371baa9');
 }

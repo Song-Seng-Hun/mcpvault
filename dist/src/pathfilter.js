@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 export class PathFilter {
     // Restricted directory/file names denied at ANY depth, not just the vault
     // root. The glob patterns below are anchored, so `node_modules/**` only
@@ -72,7 +73,7 @@ export class PathFilter {
     }
     isAllowed(path) {
         if (typeof path !== "string") {
-            throw new Error("path is required and must be a string");
+            throw guidanceError(new Error("path is required and must be a string"), 'guid-71cc567794e5cb10');
         }
         // Normalize path separators
         const normalizedPath = path.replace(/\\/g, '/');
@@ -94,7 +95,7 @@ export class PathFilter {
     }
     isAllowedForListing(path) {
         if (typeof path !== "string") {
-            throw new Error("path is required and must be a string");
+            throw guidanceError(new Error("path is required and must be a string"), 'guid-71cc567794e5cb10');
         }
         // Normalize path separators
         const normalizedPath = path.replace(/\\/g, '/');

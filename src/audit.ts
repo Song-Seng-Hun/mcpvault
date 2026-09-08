@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { appendFile, chmod, mkdir, open } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import type { ScopePrincipal } from './scope-auth.js';
@@ -94,7 +95,7 @@ export class AuditService {
   }
 
   async list(params: { principal?: ScopePrincipal; limit?: number; includeErrors?: boolean }) {
-    if (!params.principal) throw new Error('Login is required to read the security audit log');
+    if (!params.principal) throw guidanceError(new Error('Login is required to read the security audit log'), 'guid-baa5ac981e1f6c06');
     const limit = Math.min(Math.max(Number(params.limit ?? 50), 1), 500);
     const tail = await this.readTail();
     const target = params.principal.agentId || params.principal.modelId;

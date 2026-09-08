@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { createServer as createHttpServer, type IncomingMessage, type Server as HttpServer, type ServerResponse } from 'node:http';
 import { createServer as createHttpsServer, type Server as HttpsServer } from 'node:https';
 import { createHash } from 'node:crypto';
@@ -85,12 +86,12 @@ async function readBody(request: IncomingMessage, maxBytes: number): Promise<Rec
   for await (const chunk of request) {
     const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
     size += buffer.byteLength;
-    if (size > maxBytes) throw new Error(`request body exceeds ${maxBytes} bytes`);
+    if (size > maxBytes) throw guidanceError(new Error(`request body exceeds ${maxBytes} bytes`), 'guid-668226077e0f44fa');
     chunks.push(buffer);
   }
   if (chunks.length === 0) return {};
   const parsed: unknown = JSON.parse(Buffer.concat(chunks).toString('utf8'));
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('request body must be a JSON object');
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw guidanceError(new Error('request body must be a JSON object'), 'guid-cb8f7c49eade4be2');
   return parsed as Record<string, unknown>;
 }
 
@@ -107,11 +108,11 @@ function resultValue(result: any): unknown {
  */
 export async function startRestApi(server: Server, options: RestApiOptions = {}): Promise<RestApiHandle> {
   const runtime = getServerRuntime(server);
-  if (!runtime) throw new Error('The supplied MCP server has no MCPVault runtime');
+  if (!runtime) throw guidanceError(new Error('The supplied MCP server has no MCPVault runtime'), 'guid-f9ffb2364fcd3a70');
   runtime.ensureEndpointRegistry();
   const host = options.host || '127.0.0.1';
   if (!isLoopbackHost(host) && !options.tls) {
-    throw new Error('REST adapter requires TLS when binding to a non-loopback host');
+    throw guidanceError(new Error('REST adapter requires TLS when binding to a non-loopback host'), 'guid-ee781a25887cab92');
   }
   const maxBodyBytes = Math.min(Math.max(Math.trunc(options.maxBodyBytes ?? 1_048_576), 1_024), MAX_HTTP_BODY_BYTES);
   const allowedOrigins = options.allowedOrigins || [];

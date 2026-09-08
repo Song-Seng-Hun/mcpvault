@@ -1,3 +1,4 @@
+import { guidanceError, guidanceText } from './guidance-runtime.js';
 type NavigationKey = 'backlinks' | 'outlinks' | 'unresolved' | 'orphans';
 type NavigationPage = { offset: number; limit: number; maxChars: number };
 
@@ -14,10 +15,10 @@ export function packNavigationPage(key: NavigationKey, endpointId: string, resul
   const path = key === 'backlinks' ? metadata.target : key === 'outlinks' ? metadata.source : undefined;
   if (args.expectedSnapshot !== undefined) {
     if (typeof args.expectedSnapshot !== 'string' || !/^[a-f0-9]{64}$/.test(args.expectedSnapshot)) {
-      throw new Error('expectedSnapshot must be a lowercase SHA-256 fingerprint');
+      throw guidanceError(new Error('expectedSnapshot must be a lowercase SHA-256 fingerprint'), 'guid-fdaefa5cd8d6564d');
     }
     if (args.expectedSnapshot !== result.snapshotFingerprint) {
-      throw new Error('Navigation view changed; restart at offset 0 without expectedSnapshot. No continuation items returned.');
+      throw guidanceError(new Error('Navigation view changed; restart at offset 0 without expectedSnapshot. No continuation items returned.'), 'guid-26048f20ec8af887');
     }
   }
   const total = Number(result.total || 0);
@@ -71,10 +72,10 @@ export function packNavigationPage(key: NavigationKey, endpointId: string, resul
     }
   }
   if (page.maxChars === 12000 && page.limit === 1 && !args.prettyPrint) {
-    throw new Error('Exact navigation locators cannot fit the maximum response budget. No navigation item was skipped; inspect the source note directly.');
+    throw guidanceError(new Error('Exact navigation locators cannot fit the maximum response budget. No navigation item was skipped; inspect the source note directly.'), 'guid-c40909363e8ca52e');
   }
   return JSON.stringify({ [key]: [], offset: page.offset, returned: 0, truncated: true,
-    message: 'No navigation item skipped; retry this position with a larger compact budget.',
+    message: guidanceText('guid-1f2d3608605a5266', 'No navigation item skipped; retry this position with a larger compact budget.'),
     nextAction: { endpointId, reuseOriginalArguments: true, overrides: { maxChars: 12000, limit: 1, prettyPrint: false } },
   }, null, indent);
 }

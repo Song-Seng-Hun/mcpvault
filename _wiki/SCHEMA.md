@@ -7,6 +7,25 @@ updated_at: 2026-09-01T18:30:44.285Z
 ---
 # LLM Wiki schema
 
+## Interface guidance collection
+
+Optional host registration reserves `_wiki/Interface` for `interface_guidance`
+Markdown, not knowledge or call logs. Code-owned IDs resolve to prose/error
+templates, with `guidance_id`, `guidance_source_revision`,
+`guidance_default_body_revision`, `guidance_binding` and `guidance_source_refs`.
+These labels do not grant authority. Placeholder names/multiplicity must match
+the source; no evaluation or runtime values are stored. Host registration and
+compiled definitions, not editable metadata, select active templates.
+
+Use `guidance.catalog` then `notice.read`. Amendments use the existing notice
+preview/revise/feedback contract and additionally bind the current
+`sourceRevision`. `sourceId` on `guidance.catalog` reads the compiled default
+with bounded revision-safe continuation. Edited upstream conflicts are preserved
+until reviewed; malformed/hidden/unavailable guidance falls back to compiled
+prose. Auth, structural schemas and success/error flags remain code-owned.
+These documents are excluded from the server's ordinary knowledge inventories.
+See [host and agent workflow](../docs/vault-guidance.md).
+
 ## Protected notices (optional host registration)
 
 Notice identity, path, priority, topics and editor accounts come from a

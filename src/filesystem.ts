@@ -1,3 +1,4 @@
+import { guidanceError, guidanceText } from './guidance-runtime.js';
 import { join, resolve, relative, dirname, posix } from 'path';
 import { homedir } from 'os';
 import { readdir, stat, readFile, writeFile, unlink, mkdir, access, rename, copyFile } from 'node:fs/promises';
@@ -38,7 +39,7 @@ export const MAX_DERIVED_VIEW_READ_BYTES = 512 * 1024;
 function assertNoteContentSize(content: string, path: string): void {
   const byteLength = Buffer.byteLength(content, 'utf8');
   if (byteLength > MAX_NOTE_CONTENT_BYTES) {
-    throw new Error(`Note exceeds ${MAX_NOTE_CONTENT_BYTES} bytes: ${path}`);
+    throw guidanceError(new Error(`Note exceeds ${MAX_NOTE_CONTENT_BYTES} bytes: ${path}`), 'guid-345d58e81bbde0e8');
   }
   assertMemoryContent(content, path);
   assertContextRulesContent(content);
@@ -213,7 +214,7 @@ function rewriteExplicitLinks(
     }
     if (!targets.length && sourceLocationChanged && sourceRelative) {
       const intendedTarget = markdownNotePath(occurrence.target, sourcePath);
-      if (!intendedTarget) throw new Error('Cannot preserve an out-of-vault relative destination during source relocation; repair the link before moving.');
+      if (!intendedTarget) throw guidanceError(new Error('Cannot preserve an out-of-vault relative destination during source relocation; repair the link before moving.'), 'guid-fa8f8ccca118be66');
       // Preserve the authored location even before the future note exists.
       // Otherwise a new sibling at the destination could silently take over.
       targets = [intendedTarget];
@@ -268,7 +269,7 @@ function rewritePlainReference(value: string, sourcePath: string, renderedSource
     if (scoped) document = expandScopePath(authoredDocument);
   } catch {
     // Scans include inaccessible checkpoints. Never echo their URI or parse error.
-    throw new Error('Cannot validate a captured scope reference; repair malformed checkpoint metadata before retrying.');
+    throw guidanceError(new Error('Cannot validate a captured scope reference; repair malformed checkpoint metadata before retrying.'), 'guid-d5fa39f97012ea1b');
   }
   // Only the server's own community spellings are registered in this index.
   // A foreign command-center URI must never bind to a same-path local note.
@@ -285,7 +286,7 @@ function rewritePlainReference(value: string, sourcePath: string, renderedSource
   if (targets.length > 1 && (includesMovedTarget || relocatingRelative)) return { candidates: targets };
   if (!targets.length && relocatingRelative) {
     const intendedTarget = markdownNotePath(document, sourcePath);
-    if (!intendedTarget) throw new Error('Cannot preserve an out-of-vault relative Property destination during source relocation; repair the reference before moving.');
+    if (!intendedTarget) throw guidanceError(new Error('Cannot preserve an out-of-vault relative Property destination during source relocation; repair the reference before moving.'), 'guid-7d8acccdd6a70656');
     targets = [intendedTarget];
   }
   if (targets.length !== 1 || (!includesMovedTarget && !relocatingRelative)) return {};
@@ -298,7 +299,7 @@ function rewritePlainReference(value: string, sourcePath: string, renderedSource
   if (scoped) {
     const root = scopeRoot(scoped.kind, scoped.id);
     if (root ? !renderedTarget.toLowerCase().startsWith(`${root.toLowerCase()}/`) : /^(?:_scopes|_whispers|Community)(?:\/|$)/i.test(renderedTarget)) {
-      throw new Error('Move would change a captured reference scope; update the checkpoint explicitly before moving across scopes.');
+      throw guidanceError(new Error('Move would change a captured reference scope; update the checkpoint explicitly before moving across scopes.'), 'guid-45f31fcbf77694c8');
     }
     const logical = root ? renderedTarget.slice(root.length + 1) : renderedTarget;
     destination = `scope://${scoped.kind}/${scoped.id ? `${scoped.id}/` : ''}${logical}`;
@@ -505,19 +506,19 @@ export function classifyWriteError(error: unknown, path: string): Error {
   const code = error instanceof Error ? (error as NodeJS.ErrnoException).code : undefined;
   switch (code) {
     case 'ENOSPC':
-      return new Error(`No space left on device: ${path}`);
+      return guidanceError(new Error(`No space left on device: ${path}`), 'guid-2156b01b19e5b50a');
     case 'EACCES':
     case 'EPERM':
-      return new Error(`Permission denied: ${path}`);
+      return guidanceError(new Error(`Permission denied: ${path}`), 'guid-4e82fdc66a0fe90a');
     case 'EROFS':
-      return new Error(`Read-only filesystem: ${path}`);
+      return guidanceError(new Error(`Read-only filesystem: ${path}`), 'guid-23895fc069348c46');
   }
   // No filesystem code: an error we raised with a clear message (path
   // traversal, validation, etc.). Preserve it as-is.
   if (error instanceof Error && !code) {
     return error;
   }
-  return new Error(`Failed to write file: ${path} - ${error instanceof Error ? error.message : 'Unknown error'}`);
+  return guidanceError(new Error(`Failed to write file: ${path} - ${error instanceof Error ? error.message : 'Unknown error'}`), 'guid-cac65beae0b9fc04');
 }
 
 // Short mutation locks are shared by every service instance for a real Vault.
@@ -655,7 +656,7 @@ export class FileSystemService {
     // Security check: ensure path is within vault (lexical)
     const relativeToVault = relative(this.vaultPath, fullPath);
     if (relativeToVault.startsWith('..')) {
-      throw new Error(`Path traversal not allowed: ${relativePath}. Paths must be within the vault directory.`);
+      throw guidanceError(new Error(`Path traversal not allowed: ${relativePath}. Paths must be within the vault directory.`), 'guid-6eda287a313aac90');
     }
 
     // Security check: ensure symlinks don't escape vault boundary
@@ -663,11 +664,11 @@ export class FileSystemService {
       const realPath = realpathSync(fullPath);
       const realRelative = relative(this.vaultPath, realPath);
       if (realRelative.startsWith('..')) {
-        throw new Error(`Symlink target is outside vault: ${relativePath}. Symbolic links must resolve to a path within the vault directory.`);
+        throw guidanceError(new Error(`Symlink target is outside vault: ${relativePath}. Symbolic links must resolve to a path within the vault directory.`), 'guid-0978cbb142f8f6c4');
       }
       const canonicalRelative = realRelative.replace(/\\/g, '/');
       if (!this.pathFilter.isAllowedForListing(canonicalRelative)) {
-        throw new Error(`Access denied: ${relativePath}. Its canonical target is restricted.`);
+        throw guidanceError(new Error(`Access denied: ${relativePath}. Its canonical target is restricted.`), 'guid-22315a8b4963c206');
       }
       assertEnterpriseStorageAccess(canonicalRelative);
     } catch (err: unknown) {
@@ -679,11 +680,11 @@ export class FileSystemService {
             const parentReal = realpathSync(dirname(fullPath));
             const parentRelative = relative(this.vaultPath, parentReal);
             if (parentRelative.startsWith('..')) {
-              throw new Error(`Symlink target is outside vault: ${relativePath}. Symbolic links must resolve to a path within the vault directory.`);
+              throw guidanceError(new Error(`Symlink target is outside vault: ${relativePath}. Symbolic links must resolve to a path within the vault directory.`), 'guid-0978cbb142f8f6c4');
             }
             const canonicalParent = parentRelative.replace(/\\/g, '/');
             if (!this.pathFilter.isAllowedForListing(canonicalParent)) {
-              throw new Error(`Access denied: ${relativePath}. Its canonical parent is restricted.`);
+              throw guidanceError(new Error(`Access denied: ${relativePath}. Its canonical parent is restricted.`), 'guid-33e0fae467973725');
             }
             assertEnterpriseStorageAccess(canonicalParent);
           } catch (parentErr: unknown) {
@@ -693,9 +694,9 @@ export class FileSystemService {
             }
           }
         } else if (code === 'ELOOP') {
-          throw new Error(`Circular symlink detected: ${relativePath}. The symbolic link chain forms a loop.`);
+          throw guidanceError(new Error(`Circular symlink detected: ${relativePath}. The symbolic link chain forms a loop.`), 'guid-66290616fb8a2a25');
         } else if (code === 'EACCES') {
-          throw new Error(`Permission denied resolving symlink: ${relativePath}. Cannot verify the symbolic link target is within the vault.`);
+          throw guidanceError(new Error(`Permission denied resolving symlink: ${relativePath}. Cannot verify the symbolic link target is within the vault.`), 'guid-64a1de2d5f78cf2b');
         } else {
           throw err;
         }
@@ -729,7 +730,7 @@ export class FileSystemService {
       current = join(current, component);
       try {
         if (lstatSync(current).isSymbolicLink()) {
-          throw new Error(`Symbolic links are not allowed for mutations: ${relativePath}`);
+          throw guidanceError(new Error(`Symbolic links are not allowed for mutations: ${relativePath}`), 'guid-6866f78b3f983aec');
         }
       } catch (error) {
         if (error instanceof Error && error.message.startsWith('Symbolic links are not allowed')) throw error;
@@ -776,14 +777,14 @@ export class FileSystemService {
     assertEnterpriseStorageAccess(relative(this.vaultPath, fullPath));
 
     if (!this.pathFilter.isAllowed(path)) {
-      throw new Error(`Access denied: ${path}. This path is restricted (system files like .obsidian, .git, and dotfiles are not accessible).`);
+      throw guidanceError(new Error(`Access denied: ${path}. This path is restricted (system files like .obsidian, .git, and dotfiles are not accessible).`), 'guid-a904f1a7ce9c950e');
     }
 
     // Reuse this call's checked path: no await occurs between resolvePath and
     // the directory probe. Public isDirectory still validates its own input.
     const isDir = await this.isResolvedDirectory(fullPath);
     if (isDir) {
-      throw new Error(`Cannot read directory as file: ${path}. Use list_directory tool instead.`);
+      throw guidanceError(new Error(`Cannot read directory as file: ${path}. Use list_directory tool instead.`), 'guid-6dac95374869d668');
     }
 
     try {
@@ -792,16 +793,16 @@ export class FileSystemService {
     } catch (error) {
       if (error instanceof Error && 'code' in error) {
         if (error.code === 'ENOENT') {
-          throw new Error(`File not found: ${path}. Use list_directory to see available files, or check the path spelling.`, { cause: error });
+          throw guidanceError(new Error(`File not found: ${path}. Use list_directory to see available files, or check the path spelling.`, { cause: error }), 'guid-68e52acda57ed943');
         }
         if (error.code === 'EACCES') {
-          throw new Error(`Permission denied: ${path}. The file exists but cannot be read due to filesystem permissions.`);
+          throw guidanceError(new Error(`Permission denied: ${path}. The file exists but cannot be read due to filesystem permissions.`), 'guid-7d3f473659ed9e52');
         }
         if (error.code === 'EISDIR') {
-          throw new Error(`Cannot read directory as file: ${path}. Use list_directory tool instead.`);
+          throw guidanceError(new Error(`Cannot read directory as file: ${path}. Use list_directory tool instead.`), 'guid-6dac95374869d668');
         }
       }
-      throw new Error(`Failed to read file: ${path} - ${error instanceof Error ? error.message : 'Unknown error'}`, { cause: error });
+      throw guidanceError(new Error(`Failed to read file: ${path} - ${error instanceof Error ? error.message : 'Unknown error'}`, { cause: error }), 'guid-0839d2dc671a1032');
     }
   }
 
@@ -821,14 +822,14 @@ export class FileSystemService {
     if (!expectedRevision) return;
     const exists = await this.noteExists(path);
     if (expectedRevision === 'missing') {
-      if (exists) throw new Error(`Revision conflict for ${path}: expected a new note, but it already exists`);
+      if (exists) throw guidanceError(new Error(`Revision conflict for ${path}: expected a new note, but it already exists`), 'guid-e56077192c6f6fe9');
       return;
     }
-    if (!exists) throw new Error(`Revision conflict for ${path}: expected ${expectedRevision}, but the note is missing`);
+    if (!exists) throw guidanceError(new Error(`Revision conflict for ${path}: expected ${expectedRevision}, but the note is missing`), 'guid-8adc796d5fab8d28');
     // A guard needs the exact content hash, not a parsed body/Properties copy.
     const current = await this.readNoteRevision(path, maxBytes);
     if (current !== expectedRevision) {
-      throw new Error(`Revision conflict for ${path}: expected ${expectedRevision}, current ${current}. Read the note again before changing it.`);
+      throw guidanceError(new Error(`Revision conflict for ${path}: expected ${expectedRevision}, current ${current}. Read the note again before changing it.`), 'guid-b2b68521ae3b9387');
     }
   }
 
@@ -866,21 +867,21 @@ export class FileSystemService {
   ): Promise<{ revision: string }> {
     const path = this.normalizePath(params.path);
     const maxGuards=policy.maxGuards ?? 9;
-    if(!Number.isInteger(maxGuards)||maxGuards<1||maxGuards>128)throw new Error('Invalid internal revision guard budget');
+    if(!Number.isInteger(maxGuards)||maxGuards<1||maxGuards>128)throw guidanceError(new Error('Invalid internal revision guard budget'), 'guid-f94ae065606d850d');
     if (!Array.isArray(guards) || guards.length < 1 || guards.length > maxGuards) {
-      throw new Error(`A guarded note write requires between 1 and ${maxGuards} related-note revision guards`);
+      throw guidanceError(new Error(`A guarded note write requires between 1 and ${maxGuards} related-note revision guards`), 'guid-4b3dc779d1aad92f');
     }
     const targetIdentity = this.resolvePath(path).toLowerCase();
     const guardIdentities = new Set<string>();
     const normalizedGuards = guards.map(guard => {
       const guardPath = this.normalizePath(guard?.path);
-      if (!guardPath || !this.pathFilter.isAllowed(guardPath)) throw new Error(`Access denied: ${guardPath || '(empty path)'}`);
+      if (!guardPath || !this.pathFilter.isAllowed(guardPath)) throw guidanceError(new Error(`Access denied: ${guardPath || '(empty path)'}`), 'guid-26a1bd21fd48991f');
       const identity = this.resolvePath(guardPath).toLowerCase();
-      if (identity === targetIdentity) throw new Error('A guarded note write cannot repeat the target as a related-note guard, including equivalent path spellings');
-      if (guardIdentities.has(identity)) throw new Error('A related note may appear only once in revision guards, including equivalent path spellings');
+      if (identity === targetIdentity) throw guidanceError(new Error('A guarded note write cannot repeat the target as a related-note guard, including equivalent path spellings'), 'guid-3ee2bea57f208187');
+      if (guardIdentities.has(identity)) throw guidanceError(new Error('A related note may appear only once in revision guards, including equivalent path spellings'), 'guid-74264025ac24ef33');
       guardIdentities.add(identity);
       if (guard?.expectedRevision !== 'missing' && !/^[a-f0-9]{64}$/i.test(String(guard?.expectedRevision || ''))) {
-        throw new Error(`Each related-note guard requires a current SHA-256 revision or missing: ${guardPath}`);
+        throw guidanceError(new Error(`Each related-note guard requires a current SHA-256 revision or missing: ${guardPath}`), 'guid-b6cf3b4945552012');
       }
       return { path: guardPath, expectedRevision: guard.expectedRevision };
     });
@@ -896,9 +897,9 @@ export class FileSystemService {
     const path = this.normalizePath(params.path);
     const allowed = new RegExp(`^(?:Community/|_scopes/(?:models|agents)/[A-Za-z0-9._-]+/)?Views/[^/]+\\.${extension}$`, 'i');
     const label = extension === 'base' ? 'Bases' : 'Canvas';
-    if (!allowed.test(path)) throw new Error(`${label} export path must be a single .${extension} file directly under the current scope's Views/ directory`);
-    if (!this.pathFilter.isAllowed(path)) throw new Error(`Access denied: ${path}`);
-    if (!params.expectedRevision) throw new Error(`expectedRevision is required; use 'missing' for a new ${label} file`);
+    if (!allowed.test(path)) throw guidanceError(new Error(`${label} export path must be a single .${extension} file directly under the current scope's Views/ directory`), 'guid-e13d7c6e416c3e07');
+    if (!this.pathFilter.isAllowed(path)) throw guidanceError(new Error(`Access denied: ${path}`), 'guid-26a1bd21fd48991f');
+    if (!params.expectedRevision) throw guidanceError(new Error(`expectedRevision is required; use 'missing' for a new ${label} file`), 'guid-951a0c9b75f2b8b0');
     const content = String(params.content ?? '');
     assertNoteContentSize(content, path);
     return this.withMutationLock(path, async () => {
@@ -910,7 +911,7 @@ export class FileSystemService {
         if (!(error instanceof Error && 'code' in error && (error as NodeJS.ErrnoException).code === 'ENOENT')) throw error;
       }
       if (params.expectedRevision !== previousRevision) {
-        throw new Error(`Revision conflict for ${path}: expected ${params.expectedRevision}, current ${previousRevision}. Read the ${label} file again before replacing it.`);
+        throw guidanceError(new Error(`Revision conflict for ${path}: expected ${params.expectedRevision}, current ${previousRevision}. Read the ${label} file again before replacing it.`), 'guid-8a35a2238c3cdb2f');
       }
       await mkdir(dirname(fullPath), { recursive: true });
       await this.writeProtectedFile(fullPath, content, 'utf-8');
@@ -931,7 +932,7 @@ export class FileSystemService {
   async writeCanvasFile(params: { path: string; content: string; expectedRevision: string }): Promise<{ path: string; previousRevision: string; revision: string }> {
     let parsed: unknown;
     try { parsed = JSON.parse(String(params.content ?? '')); }
-    catch { throw new Error('Canvas content must be valid JSON'); }
+    catch { throw guidanceError(new Error('Canvas content must be valid JSON'), 'guid-6bca86081a98f1b0'); }
     validateJsonCanvasDocument(parsed);
     return this.writeDerivedViewFile(params, 'canvas');
   }
@@ -940,18 +941,18 @@ export class FileSystemService {
   async readCanvasFile(pathInput: string, maxBytes = MAX_DERIVED_VIEW_READ_BYTES): Promise<{ path: string; revision: string; document: unknown }> {
     const path = this.normalizePath(pathInput);
     const allowed = /^(?:Community\/|_scopes\/(?:models|agents)\/[A-Za-z0-9._-]+\/)?Views\/[^/]+\.canvas$/i;
-    if (!allowed.test(path) || !this.pathFilter.isAllowed(path)) throw new Error('Canvas health reads are limited to one scope-local Views/*.canvas file');
+    if (!allowed.test(path) || !this.pathFilter.isAllowed(path)) throw guidanceError(new Error('Canvas health reads are limited to one scope-local Views/*.canvas file'), 'guid-12d358bf766c96c3');
     const fullPath = this.resolvePath(path);
     assertEnterpriseStorageAccess(path);
     const info = await stat(fullPath);
-    if (!info.isFile()) throw new Error(`Canvas path is not a file: ${path}`);
+    if (!info.isFile()) throw guidanceError(new Error(`Canvas path is not a file: ${path}`), 'guid-2243f6e6ab96a183');
     const boundedBytes = Math.min(Math.max(Number(maxBytes) || MAX_DERIVED_VIEW_READ_BYTES, 1024), MAX_DERIVED_VIEW_READ_BYTES);
-    if (info.size > boundedBytes) throw new Error(`Canvas exceeds the ${boundedBytes}-byte health-read limit: ${path}`);
+    if (info.size > boundedBytes) throw guidanceError(new Error(`Canvas exceeds the ${boundedBytes}-byte health-read limit: ${path}`), 'guid-f0f3671005746560');
     assertEnterpriseStorageAccess(path);
     const content = await readFile(fullPath, 'utf8');
     let document: unknown;
     try { document = JSON.parse(content); }
-    catch { throw new Error(`Canvas is not valid JSON: ${path}`); }
+    catch { throw guidanceError(new Error(`Canvas is not valid JSON: ${path}`), 'guid-aa0db2f41daca3b5'); }
     return { path, revision: this.revision(content), document };
   }
 
@@ -961,21 +962,21 @@ export class FileSystemService {
     const fullPath = this.resolveWritablePath(path);
 
     if (!this.pathFilter.isAllowed(path)) {
-      throw new Error(`Access denied: ${path}. This path is restricted (system files like .obsidian, .git, and dotfiles are not accessible).`);
+      throw guidanceError(new Error(`Access denied: ${path}. This path is restricted (system files like .obsidian, .git, and dotfiles are not accessible).`), 'guid-a904f1a7ce9c950e');
     }
 
     await this.assertExpectedRevision(path, expectedRevision, revisionMaxBytes);
 
     // Validate content is a defined string to prevent writing literal "undefined"
     if (content === undefined || content === null) {
-      throw new Error(`Content is required for writing a note: ${path}. The content parameter must be a string.`);
+      throw guidanceError(new Error(`Content is required for writing a note: ${path}. The content parameter must be a string.`), 'guid-a92b847c37d8e303');
     }
 
     // Validate frontmatter if provided
     if (frontmatter) {
       const validation = this.frontmatterHandler.validate(frontmatter);
       if (!validation.isValid) {
-        throw new Error(`Invalid frontmatter: ${validation.errors.join(', ')}`);
+        throw guidanceError(new Error(`Invalid frontmatter: ${validation.errors.join(', ')}`), 'guid-bbacd231de0f80bb');
       }
     }
 
@@ -997,7 +998,7 @@ export class FileSystemService {
           // not an empty note: dropping it would destroy its body/Properties.
           if (!isMissingVaultPath(error instanceof Error ? error.cause : undefined)) throw error;
           if (expectedRevision && expectedRevision !== 'missing') {
-            throw new Error(`Revision conflict for ${path}: the source disappeared before append/prepend; read it again before changing it.`);
+            throw guidanceError(new Error(`Revision conflict for ${path}: the source disappeared before append/prepend; read it again before changing it.`), 'guid-870ebb0021ce5b99');
           }
           finalContent = frontmatter
             ? this.frontmatterHandler.stringify(frontmatter, content)
@@ -1006,7 +1007,7 @@ export class FileSystemService {
 
         if (existingNote!) {
           if (expectedRevision && existingNote.revision !== expectedRevision) {
-            throw new Error(`Revision conflict for ${path}: the source changed before append/prepend; read it again before changing it.`);
+            throw guidanceError(new Error(`Revision conflict for ${path}: the source changed before append/prepend; read it again before changing it.`), 'guid-f671900d08850673');
           }
           // Merge frontmatter if provided
           const mergedFrontmatter = frontmatter
@@ -1047,7 +1048,7 @@ export class FileSystemService {
       return { revision: this.revision(finalContent!), originalContent: finalContent! };
     } catch (error) {
       if (expectedRevision === 'missing' && error instanceof Error && 'code' in error && error.code === 'EEXIST') {
-        throw new Error(`Revision conflict for ${path}: expected a new note, but it already exists`);
+        throw guidanceError(new Error(`Revision conflict for ${path}: expected a new note, but it already exists`), 'guid-e56077192c6f6fe9');
       }
       throw classifyWriteError(error, path);
     }
@@ -1069,7 +1070,7 @@ export class FileSystemService {
       return {
         success: false,
         path,
-        message: `Access denied: ${path}. This path is restricted (system files like .obsidian, .git, and dotfiles are not accessible).`
+        message: guidanceText('guid-58d6655434915c22', `Access denied: ${path}. This path is restricted (system files like .obsidian, .git, and dotfiles are not accessible).`)
       };
     }
 
@@ -1078,7 +1079,7 @@ export class FileSystemService {
       return {
         success: false,
         path,
-        message: 'oldString cannot be empty'
+        message: guidanceText('guid-634a322986d96947', 'oldString cannot be empty')
       };
     }
 
@@ -1086,7 +1087,7 @@ export class FileSystemService {
       return {
         success: false,
         path,
-        message: 'newString is required'
+        message: guidanceText('guid-b2d2979d6ac0bc99', 'newString is required')
       };
     }
 
@@ -1095,7 +1096,7 @@ export class FileSystemService {
       return {
         success: false,
         path,
-        message: 'oldString and newString must be different'
+        message: guidanceText('guid-9fefab8424f3812c', 'oldString and newString must be different')
       };
     }
 
@@ -1114,7 +1115,7 @@ export class FileSystemService {
         return {
           success: false,
           path,
-          message: `String not found in note: "${oldString.substring(0, 50)}${oldString.length > 50 ? '...' : ''}"`,
+          message: guidanceText('guid-d4d43a67c7644230', `String not found in note: "${oldString.substring(0, 50)}${oldString.length > 50 ? '...' : ''}"`),
           matchCount: 0
         };
       }
@@ -1124,7 +1125,7 @@ export class FileSystemService {
         return {
           success: false,
           path,
-          message: `Found ${occurrences} occurrences of the string. Use replaceAll=true to replace all occurrences, or provide a more specific string to match exactly one occurrence.`,
+          message: guidanceText('guid-35ee172b1f95e01a', `Found ${occurrences} occurrences of the string. Use replaceAll=true to replace all occurrences, or provide a more specific string to match exactly one occurrence.`),
           matchCount: occurrences
         };
       }
@@ -1145,7 +1146,7 @@ export class FileSystemService {
       return {
         success: true,
         path,
-        message: `Successfully replaced ${replaceAll ? occurrences : 1} occurrence${occurrences > 1 ? 's' : ''}`,
+        message: guidanceText('guid-765878f0fc69b6ca', `Successfully replaced ${replaceAll ? occurrences : 1} occurrence${occurrences > 1 ? 's' : ''}`),
         matchCount: occurrences,
         previousRevision: note.revision,
         revision: createHash('sha256').update(updatedContent, 'utf8').digest('hex'),
@@ -1161,7 +1162,7 @@ export class FileSystemService {
       return {
         success: false,
         path,
-        message: `Failed to patch note: ${error instanceof Error ? error.message : 'Unknown error'}`
+        message: guidanceText('guid-a7d23d3cc081c33a', `Failed to patch note: ${error instanceof Error ? error.message : 'Unknown error'}`)
       };
     }
   }
@@ -1175,8 +1176,8 @@ export class FileSystemService {
       startLine: params.startLine,
       endLine: params.endLine,
     }];
-    if (!hunks.length) throw new Error('patches must contain at least one hunk');
-    if (hunks.length > 50) throw new Error('A single patch request may contain at most 50 hunks');
+    if (!hunks.length) throw guidanceError(new Error('patches must contain at least one hunk'), 'guid-97f486b4de85ac77');
+    if (hunks.length > 50) throw guidanceError(new Error('A single patch request may contain at most 50 hunks'), 'guid-eb45c7cbee42f897');
     let content = note.originalContent;
     let totalMatches = 0;
     let firstOffset = 0;
@@ -1185,25 +1186,25 @@ export class FileSystemService {
     for (const hunk of hunks) {
       const oldString = String(hunk.oldString ?? '');
       const newString = String(hunk.newString ?? '');
-      if (!oldString || oldString.trim() === '') throw new Error('oldString cannot be empty');
-      if (oldString === newString) throw new Error('oldString and newString must be different');
+      if (!oldString || oldString.trim() === '') throw guidanceError(new Error('oldString cannot be empty'), 'guid-2b12c6a8e68a5596');
+      if (oldString === newString) throw guidanceError(new Error('oldString and newString must be different'), 'guid-7d4c6ea615b7e7ef');
       const starts = lineStarts(content);
       const lineCount = content.split(/\r\n|\n|\r/).length;
       const hasRange = hunk.startLine !== undefined || hunk.endLine !== undefined;
-      if (hasRange && (hunk.startLine === undefined || hunk.endLine === undefined)) throw new Error('startLine and endLine must be supplied together');
+      if (hasRange && (hunk.startLine === undefined || hunk.endLine === undefined)) throw guidanceError(new Error('startLine and endLine must be supplied together'), 'guid-3e037195dbaabf07');
       let regionStart = 0;
       let regionEnd = content.length;
       if (hasRange) {
         const startLine = Number(hunk.startLine);
         const endLine = Number(hunk.endLine);
-        if (!Number.isInteger(startLine) || !Number.isInteger(endLine) || startLine < 1 || endLine < startLine || endLine > lineCount) throw new Error(`line range must be between 1 and ${lineCount}, with startLine <= endLine`);
+        if (!Number.isInteger(startLine) || !Number.isInteger(endLine) || startLine < 1 || endLine < startLine || endLine > lineCount) throw guidanceError(new Error(`line range must be between 1 and ${lineCount}, with startLine <= endLine`), 'guid-39d100c8d550427c');
         regionStart = starts[startLine - 1]!;
         regionEnd = endLine < lineCount ? starts[endLine]! : content.length;
       }
       const region = content.slice(regionStart, regionEnd);
       const matchCount = region.split(oldString).length - 1;
-      if (!matchCount) throw new Error(`String not found${hasRange ? ` within lines ${hunk.startLine}-${hunk.endLine}` : ''}: "${oldString.slice(0, 50)}${oldString.length > 50 ? '...' : ''}"`);
-      if (!hunk.replaceAll && matchCount > 1) throw new Error(`Found ${matchCount} occurrences; use replaceAll=true or a more specific hunk`);
+      if (!matchCount) throw guidanceError(new Error(`String not found${hasRange ? ` within lines ${hunk.startLine}-${hunk.endLine}` : ''}: "${oldString.slice(0, 50)}${oldString.length > 50 ? '...' : ''}"`), 'guid-7def09592b4f3d7a');
+      if (!hunk.replaceAll && matchCount > 1) throw guidanceError(new Error(`Found ${matchCount} occurrences; use replaceAll=true or a more specific hunk`), 'guid-bed04ce42d0e9c00');
       const matchOffset = region.indexOf(oldString);
       const replaced = hunk.replaceAll ? region.split(oldString).join(newString) : region.replace(oldString, () => newString);
       content = content.slice(0, regionStart) + replaced + content.slice(regionEnd);
@@ -1238,7 +1239,7 @@ export class FileSystemService {
   /** Apply line-scoped or multi-hunk patches as one all-or-nothing operation. */
   private async patchNoteImproved(params: PatchNoteParams): Promise<PatchNoteResult> {
     const path = this.normalizePath(params.path);
-    if (!this.pathFilter.isAllowed(path)) return { success: false, path, message: `Access denied: ${path}` };
+    if (!this.pathFilter.isAllowed(path)) return { success: false, path, message: guidanceText('guid-6b3474538aa020dc', `Access denied: ${path}`) };
     try {
       await this.assertExpectedRevision(path, params.expectedRevision);
       const note = await this.readNote(path);
@@ -1248,34 +1249,34 @@ export class FileSystemService {
       this.notifyNoteChanged(path, 'upsert');
       return planned.result;
     } catch (error) {
-      return { success: false, path, message: `Failed to patch note: ${error instanceof Error ? error.message : 'Unknown error'}` };
+      return { success: false, path, message: guidanceText('guid-a7d23d3cc081c33a', `Failed to patch note: ${error instanceof Error ? error.message : 'Unknown error'}`) };
     }
   }
 
   private planFrontmatterMutation(path: string, originalContent: string, frontmatter: NonNullable<PatchMultipleNotesParams['changes'][number]['frontmatter']>): string {
-    if (!frontmatter || typeof frontmatter !== 'object' || Array.isArray(frontmatter)) throw new Error(`frontmatter must be an object for ${path}`);
+    if (!frontmatter || typeof frontmatter !== 'object' || Array.isArray(frontmatter)) throw guidanceError(new Error(`frontmatter must be an object for ${path}`), 'guid-c1eaaba66cfb7496');
     const set = frontmatter.set ?? {};
     const remove = frontmatter.remove ?? [];
-    if (!set || typeof set !== 'object' || Array.isArray(set)) throw new Error(`frontmatter.set must be an object for ${path}`);
-    if (!Array.isArray(remove)) throw new Error(`frontmatter.remove must be an array for ${path}`);
+    if (!set || typeof set !== 'object' || Array.isArray(set)) throw guidanceError(new Error(`frontmatter.set must be an object for ${path}`), 'guid-6a764a13ea0e7b5e');
+    if (!Array.isArray(remove)) throw guidanceError(new Error(`frontmatter.remove must be an array for ${path}`), 'guid-5e20db5b3d64307c');
     const setNames = Object.keys(set);
-    if (setNames.length > 100 || remove.length > 100) throw new Error(`A change may set or remove at most 100 Properties: ${path}`);
-    if (setNames.some(name => set[name] === undefined)) throw new Error(`frontmatter.set cannot contain undefined values for ${path}; use remove instead`);
+    if (setNames.length > 100 || remove.length > 100) throw guidanceError(new Error(`A change may set or remove at most 100 Properties: ${path}`), 'guid-72ae57c2051c496e');
+    if (setNames.some(name => set[name] === undefined)) throw guidanceError(new Error(`frontmatter.set cannot contain undefined values for ${path}; use remove instead`), 'guid-514ff5eb35eaac6e');
     const blockedNames = new Set(['__proto__', 'prototype', 'constructor']);
     const cleanRemove = [...new Set(remove.map(value => String(value || '').trim()))];
     for (const name of [...setNames, ...cleanRemove]) {
-      if (!name || name.length > 100 || blockedNames.has(name)) throw new Error(`Invalid top-level Property name for ${path}: ${name || '(empty)'}`);
+      if (!name || name.length > 100 || blockedNames.has(name)) throw guidanceError(new Error(`Invalid top-level Property name for ${path}: ${name || '(empty)'}`), 'guid-8e0e86f6584023d8');
     }
     const overlap = setNames.filter(name => cleanRemove.includes(name));
-    if (overlap.length) throw new Error(`A Property cannot be both set and removed for ${path}: ${overlap.join(', ')}`);
-    if (!setNames.length && !cleanRemove.length) throw new Error(`frontmatter must set or remove at least one Property for ${path}`);
-    if (Buffer.byteLength(JSON.stringify(set), 'utf8') > 128 * 1024) throw new Error(`frontmatter.set exceeds the 128 KiB change-set limit for ${path}`);
+    if (overlap.length) throw guidanceError(new Error(`A Property cannot be both set and removed for ${path}: ${overlap.join(', ')}`), 'guid-d2d21793d019b4fb');
+    if (!setNames.length && !cleanRemove.length) throw guidanceError(new Error(`frontmatter must set or remove at least one Property for ${path}`), 'guid-ea7815c3cb0520f5');
+    if (Buffer.byteLength(JSON.stringify(set), 'utf8') > 128 * 1024) throw guidanceError(new Error(`frontmatter.set exceeds the 128 KiB change-set limit for ${path}`), 'guid-31b84d85e66d52a4');
 
     const parsed = this.frontmatterHandler.parse(originalContent);
     const nextFrontmatter = { ...parsed.frontmatter, ...set };
     for (const name of cleanRemove) delete nextFrontmatter[name];
     const validation = this.frontmatterHandler.validate(nextFrontmatter);
-    if (!validation.isValid) throw new Error(`Invalid frontmatter for ${path}: ${validation.errors.join(', ')}`);
+    if (!validation.isValid) throw guidanceError(new Error(`Invalid frontmatter for ${path}: ${validation.errors.join(', ')}`), 'guid-6be617a17753a7e2');
     const updates: Record<string, unknown> = { ...set };
     for (const name of cleanRemove) updates[name] = undefined;
     const content = parsed.matter && parsed.matter.trim() !== ''
@@ -1291,41 +1292,41 @@ export class FileSystemService {
    * is restored from the in-memory originals and reported explicitly.
    */
   async patchMultipleNotes(params: PatchMultipleNotesParams, projectPath: (path: string) => string = path => path): Promise<PatchMultipleNotesResult> {
-    if (!params || !Array.isArray(params.changes)) throw new Error('changes must be an array');
-    if (params.changes.length < 1 || params.changes.length > 10) throw new Error('A note change set must contain between 1 and 10 changes');
+    if (!params || !Array.isArray(params.changes)) throw guidanceError(new Error('changes must be an array'), 'guid-56275582a4671b0b');
+    if (params.changes.length < 1 || params.changes.length > 10) throw guidanceError(new Error('A note change set must contain between 1 and 10 changes'), 'guid-f78b834a8f1a2c46');
     const previewMaxChars = Math.min(Math.max(Number(params.previewMaxChars ?? 400), 200), 1000);
     const maxChars = Math.min(Math.max(Number(params.maxChars ?? 12000), 4096), 20000);
     let totalHunks = 0;
     let totalPatchBytes = 0;
     const targetIdentities = new Set<string>();
     const normalized = params.changes.map(change => {
-      if (!change || typeof change !== 'object') throw new Error('Every change must be an object');
+      if (!change || typeof change !== 'object') throw guidanceError(new Error('Every change must be an object'), 'guid-89ccaba71c3960e4');
       const path = this.normalizePath(change.path);
-      if (!path || !this.pathFilter.isAllowed(path)) throw new Error(`Access denied: ${path || '(empty path)'}`);
+      if (!path || !this.pathFilter.isAllowed(path)) throw guidanceError(new Error(`Access denied: ${path || '(empty path)'}`), 'guid-26a1bd21fd48991f');
       // Preflight every destination, including dry runs, before any member of
       // this batch can be written. Absolute inputs must use the same guard.
       const resolvedPath = this.resolvePath(path);
       assertLegacyDiscussionMutationAllowed(relative(this.vaultPath, resolvedPath), 'Change set', true);
       const identity = resolvedPath.toLowerCase();
-      if (targetIdentities.has(identity)) throw new Error('A note may appear only once in a change set, including equivalent path spellings. Combine its patches and Properties into one change, then dry-run again.');
+      if (targetIdentities.has(identity)) throw guidanceError(new Error('A note may appear only once in a change set, including equivalent path spellings. Combine its patches and Properties into one change, then dry-run again.'), 'guid-a3ab939d15cf65ae');
       targetIdentities.add(identity);
-      if (!/^[a-f0-9]{64}$/i.test(String(change.expectedRevision || ''))) throw new Error(`Each change requires the current SHA-256 revision of an existing note: ${path}`);
+      if (!/^[a-f0-9]{64}$/i.test(String(change.expectedRevision || ''))) throw guidanceError(new Error(`Each change requires the current SHA-256 revision of an existing note: ${path}`), 'guid-a00edd7fe82c324b');
       const patches = change.patches;
       const frontmatter = change.frontmatter;
-      if (patches !== undefined && (!Array.isArray(patches) || patches.length < 1)) throw new Error(`patches must be a non-empty array for ${path}`);
-      if (patches === undefined && frontmatter === undefined) throw new Error(`Each change needs patches, frontmatter, or both: ${path}`);
+      if (patches !== undefined && (!Array.isArray(patches) || patches.length < 1)) throw guidanceError(new Error(`patches must be a non-empty array for ${path}`), 'guid-fcf686f9db1ad765');
+      if (patches === undefined && frontmatter === undefined) throw guidanceError(new Error(`Each change needs patches, frontmatter, or both: ${path}`), 'guid-88bcfaa6a38318b0');
       totalHunks += patches?.length || 0;
       for (const hunk of patches || []) totalPatchBytes += Buffer.byteLength(String(hunk?.oldString ?? ''), 'utf8') + Buffer.byteLength(String(hunk?.newString ?? ''), 'utf8');
       return { ...change, path };
     });
-    if (totalHunks > 50) throw new Error('A note change set may contain at most 50 total patch hunks');
-    if (totalPatchBytes > 2 * 1024 * 1024) throw new Error('A note change set may contain at most 2 MiB of patch text');
+    if (totalHunks > 50) throw guidanceError(new Error('A note change set may contain at most 50 total patch hunks'), 'guid-843cf02526f0ff4c');
+    if (totalPatchBytes > 2 * 1024 * 1024) throw guidanceError(new Error('A note change set may contain at most 2 MiB of patch text'), 'guid-243148697f06f3dd');
 
     return this.withMutationLocks(normalized.map(change => change.path), async () => {
       const plans: Array<{ path: string; original: string; content: string; item: NoteChangeSetResultItem }> = [];
       for (const change of normalized) {
         const note = await this.readNote(change.path, MAX_NOTE_CONTENT_BYTES);
-        if (note.revision !== change.expectedRevision) throw new Error(`Revision conflict for ${change.path}: expected ${change.expectedRevision}, current ${note.revision}. Read every note again and rebuild the change set.`);
+        if (note.revision !== change.expectedRevision) throw guidanceError(new Error(`Revision conflict for ${change.path}: expected ${change.expectedRevision}, current ${note.revision}. Read every note again and rebuild the change set.`), 'guid-35b6ed12ce8003dc');
         let content = note.originalContent;
         let focusOffset = 0;
         let matchCount = 0;
@@ -1372,7 +1373,7 @@ export class FileSystemService {
       }));
       const dryRun = params.dryRun !== false;
       if (!dryRun && params.confirmPlanFingerprint !== planFingerprint) {
-        throw new Error('Change-set confirmation mismatch. Dry-run this exact request, inspect the previews, and pass its returned confirmPlanFingerprint before applying it.');
+        throw guidanceError(new Error('Change-set confirmation mismatch. Dry-run this exact request, inspect the previews, and pass its returned confirmPlanFingerprint before applying it.'), 'guid-42cece53614644bd');
       }
 
       // Admit the success response before side effects. Otherwise an applied
@@ -1394,7 +1395,7 @@ export class FileSystemService {
       const indent = params.prettyPrint ? 2 : undefined;
       if (JSON.stringify(response, null, indent).length > maxChars) {
         response = { ...result, changes: result.changes.map(({ preview: _preview, ...item }) => item), truncated: true };
-        if (JSON.stringify(response, null, indent).length > maxChars) throw new Error('maxChars is too small to preserve all change paths and revisions; no files were written. Increase maxChars, disable prettyPrint, or reduce the change count.');
+        if (JSON.stringify(response, null, indent).length > maxChars) throw guidanceError(new Error('maxChars is too small to preserve all change paths and revisions; no files were written. Increase maxChars, disable prettyPrint, or reduce the change count.'), 'guid-a87cd7fde5105a2a');
       }
 
       if (!dryRun) {
@@ -1402,7 +1403,7 @@ export class FileSystemService {
         // external Obsidian/editor changes that do not participate in our lock.
         for (const plan of plans) {
           const current = await readBoundedSource(this.resolvePath(plan.path), MAX_NOTE_CONTENT_BYTES);
-          if (this.revision(current) !== plan.item.previousRevision) throw new Error(`Revision conflict for ${plan.path}: it changed after preflight; no change-set files were written`);
+          if (this.revision(current) !== plan.item.previousRevision) throw guidanceError(new Error(`Revision conflict for ${plan.path}: it changed after preflight; no change-set files were written`), 'guid-461eca693740f58e');
         }
         const attempted: typeof plans = [];
         try {
@@ -1416,11 +1417,11 @@ export class FileSystemService {
               current = await readBoundedSource(fullPath, MAX_NOTE_CONTENT_BYTES);
             } catch {
               this.notifyNoteChanged(plan.path, 'upsert');
-              throw new Error(`Cannot safely recheck ${plan.path} before its individual write; inspect its current state`);
+              throw guidanceError(new Error(`Cannot safely recheck ${plan.path} before its individual write; inspect its current state`), 'guid-dbe87694514e6640');
             }
             if (this.revision(current) !== plan.item.previousRevision) {
               this.notifyNoteChanged(plan.path, 'upsert');
-              throw new Error(`Revision conflict for ${plan.path}: it changed before its individual write`);
+              throw guidanceError(new Error(`Revision conflict for ${plan.path}: it changed before its individual write`), 'guid-f89bdbd4251d29c7');
             }
             attempted.push(plan);
             await this.writeProtectedFile(fullPath, plan.content, 'utf8');
@@ -1447,7 +1448,7 @@ export class FileSystemService {
             }
           }
           const rollback = rollbackFailures.length ? ` Rollback was incomplete: ${rollbackFailures.join('; ')}` : ' All attempted writes were restored.';
-          throw new Error(`Change-set write failed: ${error instanceof Error ? error.message : 'unknown write error'}.${rollback}`);
+          throw guidanceError(new Error(`Change-set write failed: ${error instanceof Error ? error.message : 'unknown write error'}.${rollback}`), 'guid-132494fb699b28dc');
         }
         for (const plan of plans.filter(candidate => candidate.item.wouldChange)) this.notifyNoteChanged(plan.path, 'upsert');
       }
@@ -1511,16 +1512,16 @@ export class FileSystemService {
     } catch (error) {
       if (error instanceof Error) {
         if (error.message.includes('not found') || error.message.includes('ENOENT')) {
-          throw new Error(`Directory not found: ${path}. Use list_directory with no path or '/' to see root folders.`);
+          throw guidanceError(new Error(`Directory not found: ${path}. Use list_directory with no path or '/' to see root folders.`), 'guid-f965368073d3733f');
         }
         if (error.message.includes('permission') || error.message.includes('access')) {
-          throw new Error(`Permission denied: ${path}. The directory exists but cannot be read due to filesystem permissions.`);
+          throw guidanceError(new Error(`Permission denied: ${path}. The directory exists but cannot be read due to filesystem permissions.`), 'guid-20d1cd55181791bc');
         }
         if (error.message.includes('not a directory') || error.message.includes('ENOTDIR')) {
-          throw new Error(`Not a directory: ${path}. This path points to a file, not a folder. Use read_note to read files.`);
+          throw guidanceError(new Error(`Not a directory: ${path}. This path points to a file, not a folder. Use read_note to read files.`), 'guid-adfbf989918e64da');
         }
       }
-      throw new Error(`Failed to list directory: ${path} - ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw guidanceError(new Error(`Failed to list directory: ${path} - ${error instanceof Error ? error.message : 'Unknown error'}`), 'guid-da83b406aadd91f1');
     }
   }
 
@@ -1612,7 +1613,7 @@ export class FileSystemService {
           // A removed note has no remaining references. Any other failure
           // leaves integrity unknown: never report an incomplete scan as safe.
           if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return undefined;
-          throw new Error('Reference integrity scan incomplete; restore readable notes and retry. No changes were made.');
+          throw guidanceError(new Error('Reference integrity scan incomplete; restore readable notes and retry. No changes were made.'), 'guid-38983d8f6c48fa62');
         }
       }));
       for (const document of batch) if (document) documents.push(document);
@@ -1640,9 +1641,9 @@ export class FileSystemService {
 
   async previewDeleteNote(params: DeleteNotePreviewParams, canAccessPath: (path: string) => boolean = () => true): Promise<DeleteNotePreviewResult> {
     const path = this.normalizeReferenceMutationPath(params.path);
-    if (!this.pathFilter.isAllowed(path) || !canAccessPath(path)) throw new Error(`Access denied: ${path}`);
+    if (!this.pathFilter.isAllowed(path) || !canAccessPath(path)) throw guidanceError(new Error(`Access denied: ${path}`), 'guid-26a1bd21fd48991f');
     const requestedLimit = params.limit ?? 100;
-    if (!Number.isInteger(requestedLimit) || requestedLimit < 1) throw new Error('limit must be a positive integer');
+    if (!Number.isInteger(requestedLimit) || requestedLimit < 1) throw guidanceError(new Error('limit must be a positive integer'), 'guid-14abe8b02cfc3624');
     const limit = Math.min(requestedLimit, 200);
     const scan = await this.collectMoveReferencePlans(path, `${path}.__mcpvault_deleted__`, canAccessPath, false);
     const affectedLinks: DeleteNotePreviewResult['affectedLinks'] = [];
@@ -1716,7 +1717,7 @@ export class FileSystemService {
       return {
         success: false,
         path: path,
-        message: "Deletion cancelled: confirmation path does not match. For safety, both 'path' and 'confirmPath' must be identical."
+        message: guidanceText('guid-db125383e6c105d1', "Deletion cancelled: confirmation path does not match. For safety, both 'path' and 'confirmPath' must be identical.")
       };
     }
 
@@ -1724,11 +1725,11 @@ export class FileSystemService {
       return {
         success: false,
         path: path,
-        message: `Access denied: ${path}. This path is restricted (system files like .obsidian, .git, and dotfiles are not accessible).`
+        message: guidanceText('guid-58d6655434915c22', `Access denied: ${path}. This path is restricted (system files like .obsidian, .git, and dotfiles are not accessible).`)
       };
     }
     if (!['none', 'local', 'system'].includes(trashMode)) {
-      return { success: false, path, message: 'Deletion cancelled: trashMode must be none, local, or system.' };
+      return { success: false, path, message: guidanceText('guid-43da830fe410f2ba', 'Deletion cancelled: trashMode must be none, local, or system.') };
     }
 
     const fullPath = this.resolveWritablePath(path);
@@ -1740,21 +1741,21 @@ export class FileSystemService {
         return {
           success: false,
           path: path,
-          message: `Cannot delete: ${path} is not a file`
+          message: guidanceText('guid-69a52f68f3e3e7a1', `Cannot delete: ${path} is not a file`)
         };
       }
 
       if (/\.(?:md|markdown|txt)$/i.test(path)) {
         const impact = await this.previewDeleteNote({ path, limit: 1 }, canAccessPath);
         if (impact.hiddenReferencesPresent) {
-          return { success: false, path, message: 'Deletion blocked: an inaccessible scope references this note or has a hidden identity collision. Preserve or tombstone the note; only an administrator able to review every affected scope may delete it.' };
+          return { success: false, path, message: guidanceText('guid-e3ec7d9d9e49bd0c', 'Deletion blocked: an inaccessible scope references this note or has a hidden identity collision. Preserve or tombstone the note; only an administrator able to review every affected scope may delete it.') };
         }
         if (impact.total + impact.ambiguousTotal > 0) {
           if (params.allowDanglingReferences !== true) {
-            return { success: false, path, message: `Deletion blocked: ${impact.total} resolved and ${impact.ambiguousTotal} ambiguous inbound reference${impact.total + impact.ambiguousTotal === 1 ? '' : 's'} would become dangling. Call preview_delete_note, then archive/supersede/tombstone or explicitly allow dangling references.` };
+            return { success: false, path, message: guidanceText('guid-4a3713296154507d', `Deletion blocked: ${impact.total} resolved and ${impact.ambiguousTotal} ambiguous inbound reference${impact.total + impact.ambiguousTotal === 1 ? '' : 's'} would become dangling. Call preview_delete_note, then archive/supersede/tombstone or explicitly allow dangling references.`) };
           }
           if (!params.expectedRevision || !String(params.expectedRevision).trim()) {
-            return { success: false, path, message: 'allowDanglingReferences requires expectedRevision from a fresh read of the note.' };
+            return { success: false, path, message: guidanceText('guid-a05504b6ff984966', 'allowDanglingReferences requires expectedRevision from a fresh read of the note.') };
           }
         }
         if (params.expectedRevision) await this.assertExpectedRevision(path, params.expectedRevision);
@@ -1768,7 +1769,7 @@ export class FileSystemService {
         return {
           success: true,
           path: path,
-          message: `Successfully moved note to vault trash: ${path}`
+          message: guidanceText('guid-bf3659804c363621', `Successfully moved note to vault trash: ${path}`)
         };
       }
 
@@ -1780,7 +1781,7 @@ export class FileSystemService {
           return {
             success: true,
             path: path,
-            message: `Successfully moved note to system trash: ${path}`
+            message: guidanceText('guid-dc3cecf9490b62da', `Successfully moved note to system trash: ${path}`)
           };
         } catch (systemTrashError) {
           // Some locked-down Windows environments cannot launch the bundled
@@ -1792,7 +1793,7 @@ export class FileSystemService {
           return {
             success: true,
             path: path,
-            message: `System trash unavailable; moved note to vault trash instead: ${path}`
+            message: guidanceText('guid-326189a7fb29e8d9', `System trash unavailable; moved note to vault trash instead: ${path}`)
           };
         }
       }
@@ -1805,7 +1806,7 @@ export class FileSystemService {
       return {
         success: true,
         path: path,
-        message: `Successfully deleted note: ${path}. This action cannot be undone.`
+        message: guidanceText('guid-c69c5af8db0140e7', `Successfully deleted note: ${path}. This action cannot be undone.`)
       };
 
     } catch (error) {
@@ -1814,21 +1815,21 @@ export class FileSystemService {
           return {
             success: false,
             path: path,
-            message: `File not found: ${path}. Use list_directory to see available files.`
+            message: guidanceText('guid-f3ef7b0e00dee04c', `File not found: ${path}. Use list_directory to see available files.`)
           };
         }
         if (error.code === 'EACCES') {
           return {
             success: false,
             path: path,
-            message: `Permission denied: ${path}. The file exists but cannot be deleted due to filesystem permissions.`
+            message: guidanceText('guid-115ee50cfc00e222', `Permission denied: ${path}. The file exists but cannot be deleted due to filesystem permissions.`)
           };
         }
       }
       return {
         success: false,
         path: path,
-        message: `Failed to delete file: ${path} - ${error instanceof Error ? error.message : 'Unknown error'}`
+        message: guidanceText('guid-e3d5e9b841110b4c', `Failed to delete file: ${path} - ${error instanceof Error ? error.message : 'Unknown error'}`)
       };
     }
   }
@@ -1845,11 +1846,11 @@ export class FileSystemService {
     const newPath = params.newPath;
 
     if (!canAccessPath(oldPath) || !canAccessPath(newPath)) {
-      return { success: false, oldPath, newPath, message: 'Access denied: source or destination is outside the caller scope.' };
+      return { success: false, oldPath, newPath, message: guidanceText('guid-91b53e27f9ea81c3', 'Access denied: source or destination is outside the caller scope.') };
     }
 
     if (oldPath.toLowerCase() === newPath.toLowerCase()) {
-      return { success: false, oldPath, newPath, message: 'Source and destination are identical; no move was performed.' };
+      return { success: false, oldPath, newPath, message: guidanceText('guid-58f0774cacbcc19d', 'Source and destination are identical; no move was performed.') };
     }
 
     if (!this.pathFilter.isAllowed(oldPath)) {
@@ -1857,7 +1858,7 @@ export class FileSystemService {
         success: false,
         oldPath,
         newPath,
-        message: `Access denied: ${oldPath}. This path is restricted (system files like .obsidian, .git, and dotfiles are not accessible).`
+        message: guidanceText('guid-58d6655434915c22', `Access denied: ${oldPath}. This path is restricted (system files like .obsidian, .git, and dotfiles are not accessible).`)
       };
     }
 
@@ -1866,7 +1867,7 @@ export class FileSystemService {
         success: false,
         oldPath,
         newPath,
-        message: `Access denied: ${newPath}. This path is restricted (system files like .obsidian, .git, and dotfiles are not accessible).`
+        message: guidanceText('guid-58d6655434915c22', `Access denied: ${newPath}. This path is restricted (system files like .obsidian, .git, and dotfiles are not accessible).`)
       };
     }
 
@@ -1887,7 +1888,7 @@ export class FileSystemService {
             success: false,
             oldPath,
             newPath,
-            message: `Source file not found: ${oldPath}. Use list_directory to see available files.`
+            message: guidanceText('guid-70d7d7a538ba7896', `Source file not found: ${oldPath}. Use list_directory to see available files.`)
           };
         }
         throw error;
@@ -1895,12 +1896,12 @@ export class FileSystemService {
 
       if (updateLinks) {
         if (!params.expectedRevision || !String(params.expectedRevision).trim()) {
-          return { success: false, oldPath, newPath, message: 'updateLinks requires expectedRevision from a fresh read of the source note.' };
+          return { success: false, oldPath, newPath, message: guidanceText('guid-8d0da6618797f4b2', 'updateLinks requires expectedRevision from a fresh read of the source note.') };
         }
         await this.assertExpectedRevision(oldPath, params.expectedRevision);
         try {
           if (!overwrite) await access(newFullPath, constants.F_OK);
-          if (!overwrite) return { success: false, oldPath, newPath, message: `Target file already exists: ${newPath}. Use overwrite=true to replace it.` };
+          if (!overwrite) return { success: false, oldPath, newPath, message: guidanceText('guid-c8b93e38ff98c747', `Target file already exists: ${newPath}. Use overwrite=true to replace it.`) };
         } catch (error) {
           if (overwrite || !(error instanceof Error) || !('code' in error) || error.code !== 'ENOENT') throw error;
         }
@@ -1915,7 +1916,7 @@ export class FileSystemService {
           }
         }
         if (scan.hiddenReferencesPresent) {
-          return { success: false, oldPath, newPath, message: 'Move blocked: at least one inaccessible scope references this note or makes its identity ambiguous. Preserve the current path or ask an administrator with access to every affected scope to perform the move.' };
+          return { success: false, oldPath, newPath, message: guidanceText('guid-f07458143bc6b53d', 'Move blocked: at least one inaccessible scope references this note or makes its identity ambiguous. Preserve the current path or ask an administrator with access to every affected scope to perform the move.') };
         }
         if (ambiguities.length > 0) {
           const first = ambiguities[0]!;
@@ -1923,7 +1924,7 @@ export class FileSystemService {
             success: false,
             oldPath,
             newPath,
-            message: `Move blocked: ${ambiguities.length} ambiguous reference${ambiguities.length === 1 ? '' : 's'} may point to the source note. Disambiguate ${first.sourcePath}${first.propertyPath ? ` ${first.propertyPath}` : first.line ? ` line ${first.line}` : ''} before retrying updateLinks=true.`,
+            message: guidanceText('guid-954826d37bda9bb4', `Move blocked: ${ambiguities.length} ambiguous reference${ambiguities.length === 1 ? '' : 's'} may point to the source note. Disambiguate ${first.sourcePath}${first.propertyPath ? ` ${first.propertyPath}` : first.line ? ` line ${first.line}` : ''} before retrying updateLinks=true.`),
           };
         }
         assertNoteContentSize(content, newPath);
@@ -1933,7 +1934,7 @@ export class FileSystemService {
         for (const backup of linkBackups) this.resolveWritablePath(backup.path);
         for (const backup of linkBackups) {
           const current = await this.readNote(backup.path);
-          if (current.originalContent !== backup.original) throw new Error(`Inbound link source changed during rename: ${backup.path}`);
+          if (current.originalContent !== backup.original) throw guidanceError(new Error(`Inbound link source changed during rename: ${backup.path}`), 'guid-0976fcf15f9e289f');
           assertNoteContentSize(backup.rewritten, backup.path);
           // Mark before write because writeFile may truncate and then fail.
           // Rollback must cover both complete and partial writes.
@@ -1968,7 +1969,7 @@ export class FileSystemService {
       } catch (error) {
         if (error instanceof Error && 'code' in error && error.code === 'EEXIST') {
           destinationTouched = false;
-          throw new Error(`Target file already exists: ${newPath}. Use overwrite=true to replace it.`);
+          throw guidanceError(new Error(`Target file already exists: ${newPath}. Use overwrite=true to replace it.`), 'guid-2e7c727ce916c64a');
         }
         throw error;
       }
@@ -1983,7 +1984,7 @@ export class FileSystemService {
         success: true,
         oldPath,
         newPath,
-        message: `Successfully moved note from ${oldPath} to ${newPath}${linkBackups.length ? ` and updated references in ${linkBackups.length} dependent note${linkBackups.length === 1 ? '' : 's'}` : ''}`
+        message: guidanceText('guid-1d17892f9a9065d4', `Successfully moved note from ${oldPath} to ${newPath}${linkBackups.length ? ` and updated references in ${linkBackups.length} dependent note${linkBackups.length === 1 ? '' : 's'}` : ''}`)
       };
 
     } catch (error) {
@@ -2008,7 +2009,7 @@ export class FileSystemService {
         success: false,
         oldPath,
         newPath,
-        message: `Failed to move note: ${error instanceof Error ? error.message : 'Unknown error'}`
+        message: guidanceText('guid-66af0397c6aeece4', `Failed to move note: ${error instanceof Error ? error.message : 'Unknown error'}`)
       };
     }
   }
@@ -2031,7 +2032,7 @@ export class FileSystemService {
         success: false,
         oldPath,
         newPath,
-        message: "Move cancelled: confirmation paths do not match. For safety, oldPath must equal confirmOldPath and newPath must equal confirmNewPath."
+        message: guidanceText('guid-2579fb5e891bbbb5', "Move cancelled: confirmation paths do not match. For safety, oldPath must equal confirmOldPath and newPath must equal confirmNewPath.")
       };
     }
 
@@ -2040,7 +2041,7 @@ export class FileSystemService {
         success: false,
         oldPath,
         newPath,
-        message: `Access denied: ${oldPath}. This path is restricted (system files like .obsidian, .git, and dotfiles are not accessible).`
+        message: guidanceText('guid-58d6655434915c22', `Access denied: ${oldPath}. This path is restricted (system files like .obsidian, .git, and dotfiles are not accessible).`)
       };
     }
 
@@ -2049,7 +2050,7 @@ export class FileSystemService {
         success: false,
         oldPath,
         newPath,
-        message: `Access denied: ${newPath}. This path is restricted (system files like .obsidian, .git, and dotfiles are not accessible).`
+        message: guidanceText('guid-58d6655434915c22', `Access denied: ${newPath}. This path is restricted (system files like .obsidian, .git, and dotfiles are not accessible).`)
       };
     }
 
@@ -2064,7 +2065,7 @@ export class FileSystemService {
         assertMemoryContent(source, newPath);
         assertContextRulesContent(source);
       } catch (error) {
-        return { success: false, oldPath, newPath, message: `Move validation failed: ${error instanceof Error ? error.message : 'source unavailable'}` };
+        return { success: false, oldPath, newPath, message: guidanceText('guid-5ae8a9458d133d50', `Move validation failed: ${error instanceof Error ? error.message : 'source unavailable'}`) };
       }
     }
 
@@ -2075,7 +2076,7 @@ export class FileSystemService {
           success: false,
           oldPath,
           newPath,
-          message: `Source path is a directory: ${oldPath}. move_file currently supports files only.`
+          message: guidanceText('guid-889b03065d856ea2', `Source path is a directory: ${oldPath}. move_file currently supports files only.`)
         };
       }
     } catch (error) {
@@ -2084,14 +2085,14 @@ export class FileSystemService {
           success: false,
           oldPath,
           newPath,
-          message: `Source file not found: ${oldPath}. Use list_directory to see available files.`
+          message: guidanceText('guid-70d7d7a538ba7896', `Source file not found: ${oldPath}. Use list_directory to see available files.`)
         };
       }
       return {
         success: false,
         oldPath,
         newPath,
-        message: `Failed to inspect source file: ${error instanceof Error ? error.message : 'Unknown error'}`
+        message: guidanceText('guid-f2f869b6416e2c1f', `Failed to inspect source file: ${error instanceof Error ? error.message : 'Unknown error'}`)
       };
     }
 
@@ -2103,7 +2104,7 @@ export class FileSystemService {
             success: false,
             oldPath,
             newPath,
-            message: `Target file already exists: ${newPath}. Use overwrite=true to replace it.`
+            message: guidanceText('guid-c8b93e38ff98c747', `Target file already exists: ${newPath}. Use overwrite=true to replace it.`)
           };
         } catch (error) {
           if (!(error instanceof Error) || !('code' in error) || error.code !== 'ENOENT') {
@@ -2122,7 +2123,7 @@ export class FileSystemService {
               success: false,
               oldPath,
               newPath,
-              message: `Target path is a directory: ${newPath}. Please provide a file path.`
+              message: guidanceText('guid-3092b9ad1f78e841', `Target path is a directory: ${newPath}. Please provide a file path.`)
             };
           }
           await this.removeProtectedFile(newFullPath);
@@ -2153,14 +2154,14 @@ export class FileSystemService {
         success: true,
         oldPath,
         newPath,
-        message: `Successfully moved file from ${oldPath} to ${newPath}`
+        message: guidanceText('guid-78db676dca462cf3', `Successfully moved file from ${oldPath} to ${newPath}`)
       };
     } catch (error) {
       return {
         success: false,
         oldPath,
         newPath,
-        message: `Failed to move file: ${error instanceof Error ? error.message : 'Unknown error'}`
+        message: guidanceText('guid-4c2b4de17c38f30e', `Failed to move file: ${error instanceof Error ? error.message : 'Unknown error'}`)
       };
     }
   }
@@ -2169,14 +2170,14 @@ export class FileSystemService {
     const { paths, includeContent = true, includeFrontmatter = true, knownRevisions } = params;
 
     if (paths.length > 10) {
-      throw new Error('Maximum 10 files per batch read request');
+      throw guidanceError(new Error('Maximum 10 files per batch read request'), 'guid-4a096d28452931ee');
     }
 
     const results = await Promise.allSettled(
       paths.map(async (rawPath) => {
         const path = this.normalizePath(rawPath);
         if (!this.pathFilter.isAllowed(path)) {
-          throw new Error(`Access denied: ${path}. This path is restricted (system files like .obsidian, .git, and dotfiles are not accessible).`);
+          throw guidanceError(new Error(`Access denied: ${path}. This path is restricted (system files like .obsidian, .git, and dotfiles are not accessible).`), 'guid-a904f1a7ce9c950e');
         }
 
         const knownRevision = knownRevisions?.[rawPath] || knownRevisions?.[path];
@@ -2246,10 +2247,10 @@ export class FileSystemService {
   async previewMoveNote(params: MoveNotePreviewParams, canAccessPath: (path: string) => boolean = () => true): Promise<MoveNotePreviewResult> {
     const oldPath = this.normalizeReferenceMutationPath(params.oldPath);
     const newPath = this.normalizeReferenceMutationPath(params.newPath);
-    if (!this.pathFilter.isAllowed(oldPath) || !canAccessPath(oldPath)) throw new Error(`Access denied: ${oldPath}`);
-    if (!this.pathFilter.isAllowed(newPath) || !canAccessPath(newPath)) throw new Error(`Access denied: ${newPath}`);
+    if (!this.pathFilter.isAllowed(oldPath) || !canAccessPath(oldPath)) throw guidanceError(new Error(`Access denied: ${oldPath}`), 'guid-26a1bd21fd48991f');
+    if (!this.pathFilter.isAllowed(newPath) || !canAccessPath(newPath)) throw guidanceError(new Error(`Access denied: ${newPath}`), 'guid-26a1bd21fd48991f');
     const requestedLimit = params.limit ?? 100;
-    if (!Number.isInteger(requestedLimit) || requestedLimit < 1) throw new Error('limit must be a positive integer');
+    if (!Number.isInteger(requestedLimit) || requestedLimit < 1) throw guidanceError(new Error('limit must be a positive integer'), 'guid-14abe8b02cfc3624');
     const limit = Math.min(requestedLimit, 200);
     const scan = await this.collectMoveReferencePlans(oldPath, newPath, canAccessPath);
     const [targetExists, collision] = await Promise.all([this.noteExists(oldPath), this.noteExists(newPath)]);
@@ -2295,7 +2296,7 @@ export class FileSystemService {
     const path = this.normalizePath(params.path);
 
     if (!this.pathFilter.isAllowed(path)) {
-      throw new Error(`Access denied: ${path}. This path is restricted (system files like .obsidian, .git, and dotfiles are not accessible).`);
+      throw guidanceError(new Error(`Access denied: ${path}. This path is restricted (system files like .obsidian, .git, and dotfiles are not accessible).`), 'guid-a904f1a7ce9c950e');
     }
 
     await this.assertExpectedRevision(path, expectedRevision, maxBytes);
@@ -2311,7 +2312,7 @@ export class FileSystemService {
     // Validate the new frontmatter
     const validation = this.frontmatterHandler.validate(newFrontmatter);
     if (!validation.isValid) {
-      throw new Error(`Invalid frontmatter: ${validation.errors.join(', ')}`);
+      throw guidanceError(new Error(`Invalid frontmatter: ${validation.errors.join(', ')}`), 'guid-bbacd231de0f80bb');
     }
 
     const fullPath = this.resolveWritablePath(path);
@@ -2340,7 +2341,7 @@ export class FileSystemService {
       paths.map(async (rawPath): Promise<NoteInfo> => {
         const path = this.normalizePath(rawPath);
         if (!this.pathFilter.isAllowed(path)) {
-          throw new Error(`Access denied: ${path}. This path is restricted (system files like .obsidian, .git, and dotfiles are not accessible).`);
+          throw guidanceError(new Error(`Access denied: ${path}. This path is restricted (system files like .obsidian, .git, and dotfiles are not accessible).`), 'guid-a904f1a7ce9c950e');
         }
 
         const fullPath = this.resolvePath(path);
@@ -2351,7 +2352,7 @@ export class FileSystemService {
           stats = await stat(fullPath);
         } catch (error) {
           if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
-            throw new Error(`File not found: ${path}`);
+            throw guidanceError(new Error(`File not found: ${path}`), 'guid-1d1a89434322658c');
           }
           throw error;
         }
@@ -2397,16 +2398,16 @@ export class FileSystemService {
         operation,
         tags: [],
         success: false,
-        message: `Access denied: ${path}. This path is restricted (system files like .obsidian, .git, and dotfiles are not accessible).`
+        message: guidanceText('guid-58d6655434915c22', `Access denied: ${path}. This path is restricted (system files like .obsidian, .git, and dotfiles are not accessible).`)
       };
     }
 
     try {
-      if (!['list', 'add', 'remove'].includes(operation)) throw new Error('Invalid tag operation');
+      if (!['list', 'add', 'remove'].includes(operation)) throw guidanceError(new Error('Invalid tag operation'), 'guid-ddc843b4c8dc70b9');
       const note = await this.readNote(path);
-      if (isModerationHidden(note.frontmatter)) throw new Error(`Access denied: ${path}`);
+      if (isModerationHidden(note.frontmatter)) throw guidanceError(new Error(`Access denied: ${path}`), 'guid-26a1bd21fd48991f');
       if (params.expectedRevision !== undefined && params.expectedRevision !== note.revision) {
-        throw new Error(`Revision conflict for ${path}. Read the note again before changing its tags.`);
+        throw guidanceError(new Error(`Revision conflict for ${path}. Read the note again before changing its tags.`), 'guid-8ad13a0f7e9b6bae');
       }
       let currentTags: string[] = [];
 
@@ -2488,7 +2489,7 @@ export class FileSystemService {
         success: true,
         previousRevision: note.revision,
         revision: this.revision(updatedContent),
-        message: `Successfully ${operation === 'add' ? 'added' : 'removed'} tags`
+        message: guidanceText('guid-c105c5e66e7b725d', `Successfully ${operation === 'add' ? 'added' : 'removed'} tags`)
       };
 
     } catch (error) {
@@ -2563,7 +2564,7 @@ export class FileSystemService {
 
   private async findPathsForNoteReference(wikiLinkName: string, canAccessPath: (path: string) => boolean, options: ResolveNoteReferenceOptions): Promise<string[]> {
     if (!wikiLinkName.trim()) {
-      throw new Error('Empty wiki link — provide a document name inside [[ ]].');
+      throw guidanceError(new Error('Empty wiki link — provide a document name inside [[ ]].'), 'guid-142717dc0a040dd0');
     }
     if (this.metadataIndex) {
       const indexedMatches = await this.metadataIndex.resolveNoteReference(wikiLinkName, canAccessPath, options.sourcePath, options.syntax);
@@ -2622,21 +2623,21 @@ export class FileSystemService {
 
   async getBacklinks(path: string, limit: number = 100, canAccessPath: (path: string) => boolean = () => true, offset = 0, options: { includeSourceRevision?: boolean; includeSnapshot?: boolean; expectedRevision?: string } = {}): Promise<BacklinksResult> {
     const target = this.normalizePath(path);
-    if (!this.pathFilter.isAllowed(target) || !canAccessPath(target)) throw new Error(`Access denied: ${target}`);
+    if (!this.pathFilter.isAllowed(target) || !canAccessPath(target)) throw guidanceError(new Error(`Access denied: ${target}`), 'guid-26a1bd21fd48991f');
     const targetNote = options.expectedRevision === undefined ? await this.readNote(target)
       : (await this.readNoteMetadata([target], canAccessPath, { fresh: true, strict: true }))[0];
-    if (!targetNote || (options.expectedRevision !== undefined && targetNote.revision !== options.expectedRevision)) throw new Error('Backlink target revision changed');
-    if (isModerationHidden(targetNote.frontmatter)) throw new Error(`Access denied: ${target}`);
+    if (!targetNote || (options.expectedRevision !== undefined && targetNote.revision !== options.expectedRevision)) throw guidanceError(new Error('Backlink target revision changed'), 'guid-12470c1f8fe1a635');
+    if (isModerationHidden(targetNote.frontmatter)) throw guidanceError(new Error(`Access denied: ${target}`), 'guid-26a1bd21fd48991f');
     return this.withGraphRead(graph => graph.withStableRead(canAccessPath, async () => {
       const result = await graph.getBacklinks(target, limit, canAccessPath, offset, async (sourcePath, revision) => {
         try {
           const current = await this.readNoteMetadata([sourcePath], canAccessPath, { fresh: true, strict: true });
           if (!current.length || isModerationHidden(current[0]!.frontmatter)) return false;
-          if (current[0]!.revision !== revision) throw new Error('stale author');
+          if (current[0]!.revision !== revision) throw guidanceError(new Error('stale author'), 'guid-0bef5f45bbea9266');
           return true;
         } catch {
           graph.invalidate(sourcePath);
-          throw new Error('Graph source changed or became unavailable; retry the query to refresh its snapshot.');
+          throw guidanceError(new Error('Graph source changed or became unavailable; retry the query to refresh its snapshot.'), 'guid-16d3d56b92981cc2');
         }
       }, true, options.includeSnapshot, targets => this.assertGraphTargetRevisions(graph, targets, canAccessPath));
       await this.assertGraphReadRevision(graph, target, result.targetRevision, canAccessPath, targetNote.revision);
@@ -2654,10 +2655,10 @@ export class FileSystemService {
     try {
       if (!revision || (capturedRevision !== undefined && revision !== capturedRevision)
         || !this.pathFilter.isAllowed(path) || !canAccessPath(path)
-        || await this.readNoteRevision(path, maxBytes) !== revision || !canAccessPath(path)) throw new Error('stale graph source');
+        || await this.readNoteRevision(path, maxBytes) !== revision || !canAccessPath(path)) throw guidanceError(new Error('stale graph source'), 'guid-0139a3fdfe186400');
     } catch {
       graph.invalidate(path);
-      throw new Error('Graph source changed or became unavailable; retry the query to refresh its snapshot.');
+      throw guidanceError(new Error('Graph source changed or became unavailable; retry the query to refresh its snapshot.'), 'guid-16d3d56b92981cc2');
     }
   }
 
@@ -2682,9 +2683,9 @@ export class FileSystemService {
 
   async getOutlinks(path: string, limit: number = 100, canAccessPath: (path: string) => boolean = () => true, offset = 0, options: { includeSourceRevision?: boolean; includeSnapshot?: boolean } = {}): Promise<OutlinksResult> {
     const source = this.normalizePath(path);
-    if (!this.pathFilter.isAllowed(source) || !canAccessPath(source)) throw new Error(`Access denied: ${source}`);
+    if (!this.pathFilter.isAllowed(source) || !canAccessPath(source)) throw guidanceError(new Error(`Access denied: ${source}`), 'guid-26a1bd21fd48991f');
     const note = await this.readNote(source);
-    if (isModerationHidden(note.frontmatter)) throw new Error(`Access denied: ${source}`);
+    if (isModerationHidden(note.frontmatter)) throw guidanceError(new Error(`Access denied: ${source}`), 'guid-26a1bd21fd48991f');
     return this.withGraphRead(graph => graph.withStableRead(canAccessPath, async () => {
       const result = await graph.getOutlinks(source, limit, canAccessPath, offset, true, options.includeSnapshot,
         targets => this.assertGraphTargetRevisions(graph, targets, canAccessPath));
@@ -2728,7 +2729,7 @@ export class FileSystemService {
     const path = buildDailyNotePath(params.folder || 'Daily Notes', date);
     const content = params.content ?? '';
     if (params.action === 'append' && !content.trim()) {
-      throw new Error('content is required for the append action');
+      throw guidanceError(new Error('content is required for the append action'), 'guid-01acdcd56099713a');
     }
 
     const alreadyExists = await this.exists(path);
@@ -2739,7 +2740,7 @@ export class FileSystemService {
         date,
         path,
         created: false,
-        message: 'Daily note already exists; it was not overwritten.',
+        message: guidanceText('guid-24d7960d163adde5', 'Daily note already exists; it was not overwritten.'),
       };
     }
 
@@ -2796,7 +2797,7 @@ export class FileSystemService {
   async getNoteOutline(path: string): Promise<NoteHeading[]> {
     path = this.normalizePath(path);
     if (!this.pathFilter.isAllowed(path)) {
-      throw new Error(`Access denied: ${path}. This path is restricted (system files like .obsidian, .git, and dotfiles are not accessible).`);
+      throw guidanceError(new Error(`Access denied: ${path}. This path is restricted (system files like .obsidian, .git, and dotfiles are not accessible).`), 'guid-a904f1a7ce9c950e');
     }
     const fullPath = this.resolvePath(path);
     assertEnterpriseStorageAccess(path);
@@ -2807,7 +2808,7 @@ export class FileSystemService {
   async readNoteLineWindow(params: ReadNoteLinesParams): Promise<{ content: string; startLine: number; endLine: number; totalLines: number }> {
     const path = this.normalizePath(params.path);
     if (!this.pathFilter.isAllowed(path)) {
-      throw new Error(`Access denied: ${path}. This path is restricted (system files like .obsidian, .git, and dotfiles are not accessible).`);
+      throw guidanceError(new Error(`Access denied: ${path}. This path is restricted (system files like .obsidian, .git, and dotfiles are not accessible).`), 'guid-a904f1a7ce9c950e');
     }
     const fullPath = this.resolvePath(path);
     assertEnterpriseStorageAccess(path);
@@ -2820,7 +2821,7 @@ export class FileSystemService {
   }
 
   async getVaultStats(recentCount: number = 5, canAccessPath: (path: string) => boolean = () => true): Promise<VaultStats> {
-    if (!Number.isSafeInteger(recentCount) || recentCount < 0) throw new Error('recentCount must be a non-negative safe integer');
+    if (!Number.isSafeInteger(recentCount) || recentCount < 0) throw guidanceError(new Error('recentCount must be a non-negative safe integer'), 'guid-f217431867bec7d5');
     recentCount = Math.min(recentCount, 20);
     let totalNotes = 0;
     let totalFolders = 0;
@@ -2865,7 +2866,7 @@ export class FileSystemService {
           } catch (error) {
             assertEnterpriseStorageFresh();
             if (isMissingVaultPath(error)) continue;
-            if (error instanceof SourceReadLimitError) throw new Error('Vault statistics require Markdown sources within the 8 MiB supported-note limit; no partial totals were returned.');
+            if (error instanceof SourceReadLimitError) throw guidanceError(new Error('Vault statistics require Markdown sources within the 8 MiB supported-note limit; no partial totals were returned.'), 'guid-099aebef449bcaf7');
             throw new VaultReadUnavailableError();
           }
           totalNotes++;
@@ -2909,13 +2910,13 @@ export class FileSystemService {
     const rawPathPrefix = input ? this.normalizePath(input) : '';
     if (!rawPathPrefix) return '';
     if (!this.pathFilter.isAllowedForListing(rawPathPrefix)) {
-      throw new Error(`Access denied: ${rawPathPrefix}. This path is restricted (system files like .obsidian, .git, and dotfiles are not accessible).`);
+      throw guidanceError(new Error(`Access denied: ${rawPathPrefix}. This path is restricted (system files like .obsidian, .git, and dotfiles are not accessible).`), 'guid-a904f1a7ce9c950e');
     }
 
     const resolvedPrefix = this.resolvePath(rawPathPrefix);
     const pathPrefix = relative(this.vaultPath, resolvedPrefix).replace(/\\/g, '/');
     if (pathPrefix && !this.pathFilter.isAllowedForListing(pathPrefix)) {
-      throw new Error(`Access denied: ${pathPrefix}. This path is restricted (system files like .obsidian, .git, and dotfiles are not accessible).`);
+      throw guidanceError(new Error(`Access denied: ${pathPrefix}. This path is restricted (system files like .obsidian, .git, and dotfiles are not accessible).`), 'guid-a904f1a7ce9c950e');
     }
     return pathPrefix;
   }
@@ -2923,17 +2924,17 @@ export class FileSystemService {
   async listTasks(params: ListTasksParams = {}, canAccessPath: (path: string) => boolean = () => true): Promise<ListTasksResult> {
     const status = params.status || 'open';
     if (status !== 'open' && status !== 'completed' && status !== 'all') {
-      throw new Error('status must be open, completed, or all');
+      throw guidanceError(new Error('status must be open, completed, or all'), 'guid-1f4863cf189099c9');
     }
     const requestedLimit = params.limit ?? 100;
     if (!Number.isInteger(requestedLimit) || requestedLimit < 1) {
-      throw new Error('limit must be a positive integer');
+      throw guidanceError(new Error('limit must be a positive integer'), 'guid-14abe8b02cfc3624');
     }
     const limit = Math.min(requestedLimit, 500);
     const offset = params.offset ?? 0;
-    if (!Number.isSafeInteger(offset) || offset < 0) throw new Error('offset must be a non-negative safe integer');
-    if (params.expectedSnapshot !== undefined && !/^[a-f0-9]{64}$/.test(params.expectedSnapshot)) throw new Error('expectedSnapshot must be a SHA256 fingerprint from list_tasks');
-    if (offset > 0 && !params.expectedSnapshot) throw new Error('expectedSnapshot is required for continuation; restart list_tasks at offset 0');
+    if (!Number.isSafeInteger(offset) || offset < 0) throw guidanceError(new Error('offset must be a non-negative safe integer'), 'guid-f732beec22ffea3f');
+    if (params.expectedSnapshot !== undefined && !/^[a-f0-9]{64}$/.test(params.expectedSnapshot)) throw guidanceError(new Error('expectedSnapshot must be a SHA256 fingerprint from list_tasks'), 'guid-4421b16272afa055');
+    if (offset > 0 && !params.expectedSnapshot) throw guidanceError(new Error('expectedSnapshot is required for continuation; restart list_tasks at offset 0'), 'guid-e8b3d61d7b723ebd');
     // Validate the optional scope before scanning. resolvePath performs the
     // lexical and symlink boundary checks; listing validation blocks hidden
     // and system directories such as .obsidian and .git.
@@ -2955,7 +2956,7 @@ export class FileSystemService {
       try {
         content = await this.vaultIo.readUtf8Bounded(this.resolvePath(path), MAX_NOTE_CONTENT_BYTES);
       } catch (error) {
-        if (error instanceof SourceReadLimitError) throw new Error('Task inventory source exceeds 8 MiB; narrow pathPrefix or split oversized notes before retrying. No partial inventory was returned.');
+        if (error instanceof SourceReadLimitError) throw guidanceError(new Error('Task inventory source exceeds 8 MiB; narrow pathPrefix or split oversized notes before retrying. No partial inventory was returned.'), 'guid-e757f8e504051c60');
         if (isMissingVaultPath(error)) continue;
         throw new VaultReadUnavailableError();
       }
@@ -2970,7 +2971,7 @@ export class FileSystemService {
     }
     assertEnterpriseStorageFresh();
     const snapshotFingerprint = fingerprint.digest('hex');
-    if (params.expectedSnapshot && params.expectedSnapshot !== snapshotFingerprint) throw new Error('Task listing changed; restart list_tasks at offset 0 without expectedSnapshot');
+    if (params.expectedSnapshot && params.expectedSnapshot !== snapshotFingerprint) throw guidanceError(new Error('Task listing changed; restart list_tasks at offset 0 without expectedSnapshot'), 'guid-0927a7cee655be52');
     return {
       tasks,
       total,
@@ -2982,29 +2983,29 @@ export class FileSystemService {
 
   async updateTask(params: UpdateTaskParams): Promise<UpdateTaskResult> {
     const path = this.normalizePath(params.path);
-    if (!this.pathFilter.isAllowed(path)) throw new Error(`Access denied: ${path}`);
-    if (!params.taskId && (!Number.isInteger(params.line) || params.line! < 1)) throw new Error('taskId or line must identify a task');
-    if (params.status !== 'open' && params.status !== 'completed') throw new Error('status must be open or completed');
-    if (!params.expectedRevision || !String(params.expectedRevision).trim()) throw new Error('expectedRevision is required; read the note first');
+    if (!this.pathFilter.isAllowed(path)) throw guidanceError(new Error(`Access denied: ${path}`), 'guid-26a1bd21fd48991f');
+    if (!params.taskId && (!Number.isInteger(params.line) || params.line! < 1)) throw guidanceError(new Error('taskId or line must identify a task'), 'guid-40a11acf501ea9bc');
+    if (params.status !== 'open' && params.status !== 'completed') throw guidanceError(new Error('status must be open or completed'), 'guid-978b748c0ffab0dd');
+    if (!params.expectedRevision || !String(params.expectedRevision).trim()) throw guidanceError(new Error('expectedRevision is required; read the note first'), 'guid-daa24c6dc3a34e33');
 
     return this.withMutationLock(path, async () => {
       await this.assertExpectedRevision(path, params.expectedRevision);
       const note = await this.readNote(path);
-      if (isModerationHidden(note.frontmatter)) throw new Error(`Access denied: ${path}`);
-      if (note.revision !== params.expectedRevision) throw new Error(`Revision conflict for ${path}: refresh list_tasks and retry`);
+      if (isModerationHidden(note.frontmatter)) throw guidanceError(new Error(`Access denied: ${path}`), 'guid-26a1bd21fd48991f');
+      if (note.revision !== params.expectedRevision) throw guidanceError(new Error(`Revision conflict for ${path}: refresh list_tasks and retry`), 'guid-7947bdeae123b557');
       const lines = note.originalContent.split('\n');
       const candidates = extractMarkdownTasks(note.originalContent, path).filter(task =>
         params.taskId ? task.taskId === params.taskId : task.line === params.line);
-      if (candidates.length > 1) throw new Error(`Task identity is ambiguous in ${path}; read the current note and use an explicit line without taskId, or repair duplicate block IDs`);
+      if (candidates.length > 1) throw guidanceError(new Error(`Task identity is ambiguous in ${path}; read the current note and use an explicit line without taskId, or repair duplicate block IDs`), 'guid-8f746dad735fa98d');
       const locatedTask = candidates[0];
-      if (params.taskId && !locatedTask) throw new Error(`Task ${params.taskId} was not found in ${path}; refresh list_tasks and retry`);
+      if (params.taskId && !locatedTask) throw guidanceError(new Error(`Task ${params.taskId} was not found in ${path}; refresh list_tasks and retry`), 'guid-a3324e681d909535');
       const targetLine = locatedTask?.line ?? params.line!;
-      if (targetLine > lines.length) throw new Error(`Task line ${targetLine} is outside ${path}`);
+      if (targetLine > lines.length) throw guidanceError(new Error(`Task line ${targetLine} is outside ${path}`), 'guid-582a62891a8696c6');
       const targetIndex = targetLine - 1;
       const targetMatch = locatedTask
         ? /^(\s*[-*+]\s+\[)([ xX])(\]\s+.*)$/.exec(lines[targetIndex]!.replace(/\r$/, ''))
         : null;
-      if (!targetMatch) throw new Error(`Line ${targetLine} is not a Markdown checkbox task outside frontmatter/code fences`);
+      if (!targetMatch) throw guidanceError(new Error(`Line ${targetLine} is not a Markdown checkbox task outside frontmatter/code fences`), 'guid-8d00a426165904da');
       const previousStatus: 'open' | 'completed' = targetMatch[2]!.toLowerCase() === 'x' ? 'completed' : 'open';
       const marker = params.status === 'completed' ? 'x' : ' ';
       let revision = note.revision;
@@ -3062,7 +3063,7 @@ export class FileSystemService {
   }
 
   async queryNotesBounded(params: QueryNotesParams, maxChars: number, canAccessPath: (path: string) => boolean, canReadNote: (note: QueryNote) => boolean, prettyPrint = false): Promise<PackedQueryPage> {
-    if (!Number.isInteger(maxChars) || maxChars < 512 || maxChars > 20000) throw new Error('maxChars must be an integer between 512 and 20000');
+    if (!Number.isInteger(maxChars) || maxChars < 512 || maxChars > 20000) throw guidanceError(new Error('maxChars must be an integer between 512 and 20000'), 'guid-cc408e854eb4b949');
     const page = await this.queryNotes({ ...params, includeContent: false }, canAccessPath, canReadNote);
     let remainingBytes = 1024 * 1024;
     return packQueryPage(page, {
@@ -3098,8 +3099,8 @@ export class FileSystemService {
       if (options.afterPath && path.localeCompare(options.afterPath) <= 0) continue;
       let notes: QueryNote[];
       try { notes = await this.readNoteMetadata([path], canAccessPath, { fresh: true, strict: true, maxBytes: options.maxBytes ?? MAX_NOTE_CONTENT_BYTES }); }
-      catch { throw new Error('Bounded metadata inventory unavailable or too large; inspect sources before retrying.'); }
-      if (!notes[0] && options.strictMissing) throw new Error('Bounded metadata inventory changed or unavailable; repeat the query.');
+      catch { throw guidanceError(new Error('Bounded metadata inventory unavailable or too large; inspect sources before retrying.'), 'guid-35b6f32664b26275'); }
+      if (!notes[0] && options.strictMissing) throw guidanceError(new Error('Bounded metadata inventory changed or unavailable; repeat the query.'), 'guid-a349aacbec327823');
       if (notes[0]) yield notes[0];
     }
   }
@@ -3117,7 +3118,7 @@ export class FileSystemService {
     const consume = async (note: QueryNote): Promise<QueryNote> => {
       if (!consumeContent) return note;
       try { await consumeContent(note); }
-      catch { throw new Error('Inventory content projection failed; retry the request.'); }
+      catch { throw guidanceError(new Error('Inventory content projection failed; retry the request.'), 'guid-3cb70eee217eaea5'); }
       const { content: _content, ...metadata } = note;
       return metadata;
     };
@@ -3174,25 +3175,25 @@ export class FileSystemService {
     const effectiveCanAccessPath = (path: string): boolean => canAccessPath(path) && canReadEnterpriseStoragePath(path);
     const requestedLimit = params.limit ?? 100;
     if (!Number.isInteger(requestedLimit) || requestedLimit < 1) {
-      throw new Error('limit must be a positive integer');
+      throw guidanceError(new Error('limit must be a positive integer'), 'guid-14abe8b02cfc3624');
     }
     const limit = Math.min(requestedLimit, 500);
     const requestedOffset = params.offset ?? 0;
     if (!Number.isInteger(requestedOffset) || requestedOffset < 0) {
-      throw new Error('offset must be a non-negative integer');
+      throw guidanceError(new Error('offset must be a non-negative integer'), 'guid-880ff326296b27cc');
     }
     const sortOrder = params.sortOrder || 'asc';
     if (sortOrder !== 'asc' && sortOrder !== 'desc') {
-      throw new Error('sortOrder must be asc or desc');
+      throw guidanceError(new Error('sortOrder must be asc or desc'), 'guid-c6b46c2e8497168c');
     }
     if (params.sortBy !== undefined && !params.sortBy.trim()) {
-      throw new Error('sortBy cannot be empty');
+      throw guidanceError(new Error('sortBy cannot be empty'), 'guid-de74cc0ba509561c');
     }
     if (params.filters !== undefined && (typeof params.filters !== 'object' || Array.isArray(params.filters) || params.filters === null)) {
-      throw new Error('filters must be an object');
+      throw guidanceError(new Error('filters must be an object'), 'guid-58c6ed4f5526e798');
     }
     if (params.after !== undefined && (!params.after || typeof params.after !== 'object' || typeof params.after.path !== 'string' || !params.after.path.trim())) {
-      throw new Error('after must contain a cursor path');
+      throw guidanceError(new Error('after must contain a cursor path'), 'guid-7f46b6003caeb709');
     }
 
     const pathPrefix = this.resolvePathPrefix(params.pathPrefix);
@@ -3304,14 +3305,14 @@ export class FileSystemService {
     includeUnclassified?: boolean;
     limit?: number;
   }, canAccessPath: (path: string) => boolean = () => true): Promise<AuthorityShelfResult> {
-    if (!this.metadataIndex) throw new Error('Authority shelf queries require the metadata index');
+    if (!this.metadataIndex) throw guidanceError(new Error('Authority shelf queries require the metadata index'), 'guid-4c89926d25b7f89b');
     assertEnterpriseStorageFresh();
     return this.metadataIndex.queryAuthorityShelf(params, path => canAccessPath(path) && canReadEnterpriseStoragePath(path));
   }
 
   /** Fresh bypasses indexes; strict preserves storage failures instead of treating them as missing notes. */
   async readNoteMetadata(paths: readonly string[], canAccessPath: (path: string) => boolean = () => true, options: { fresh?: boolean; strict?: boolean; maxBytes?: number } = {}): Promise<QueryNote[]> {
-    if (paths.length > 500) throw new Error('note metadata lookup supports at most 500 paths');
+    if (paths.length > 500) throw guidanceError(new Error('note metadata lookup supports at most 500 paths'), 'guid-12cc4417235fd455');
     const normalizedPaths: string[] = [];
     const seen = new Set<string>();
     for (const rawPath of paths) {

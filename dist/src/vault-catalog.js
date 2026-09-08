@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { watch } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { readdir, stat } from 'node:fs/promises';
@@ -28,6 +29,7 @@ function isNote(path) {
  */
 export class VaultFileCatalog {
     pathFilter;
+    excludePath;
     cacheOwner = createDerivedCacheOwner('vault.directories');
     vaultPath;
     listeners = new Set();
@@ -51,13 +53,14 @@ export class VaultFileCatalog {
     dirtyDirectories = new Set();
     statInFlight = new Map();
     statCache = new Map();
-    constructor(vaultPath, pathFilter) {
+    constructor(vaultPath, pathFilter, excludePath = () => false) {
         this.pathFilter = pathFilter;
+        this.excludePath = excludePath;
         this.vaultPath = resolve(vaultPath);
     }
     assertOpen() {
         if (this.closed)
-            throw new Error('Vault catalog is closed.');
+            throw guidanceError(new Error('Vault catalog is closed.'), 'guid-ee328fa2d764baa6');
     }
     subscribe(listener) {
         if (this.closed)
@@ -163,7 +166,7 @@ export class VaultFileCatalog {
     /** Share concurrent file stat calls between read models without retaining file metadata. */
     async statPaths(paths) {
         this.assertOpen();
-        const unique = [...new Set(paths.map(normalizePath).filter(path => path && this.pathFilter.isAllowed(path)))];
+        const unique = [...new Set(paths.map(normalizePath).filter(path => path && !this.excludePath(path) && this.pathFilter.isAllowed(path)))];
         const result = new Map();
         for (let start = 0; start < unique.length; start += WATCH_EVENT_STAT_BATCH_SIZE) {
             const batch = unique.slice(start, start + WATCH_EVENT_STAT_BATCH_SIZE);
@@ -214,7 +217,7 @@ export class VaultFileCatalog {
             // read is filling the cache. Do not reuse that aborted scan on retry.
             this.forceReconcile = true;
         }
-        throw new Error('Catalog changed during refresh; retry the query. No stable inventory was returned.');
+        throw guidanceError(new Error('Catalog changed during refresh; retry the query. No stable inventory was returned.'), 'guid-26079e4ef8bdf960');
     }
     close() {
         if (this.closed)
@@ -313,7 +316,7 @@ export class VaultFileCatalog {
         const path = normalizePath(filename);
         // Ignore the catalog's own hidden state and other restricted files. Their
         // writes must not trigger a full public-vault refresh.
-        if (!path || !this.pathFilter.isAllowedForListing(path))
+        if (!path || this.excludePath(path) || !this.pathFilter.isAllowedForListing(path))
             return;
         if (!isNote(path) || !this.pathFilter.isAllowed(path)) {
             this.invalidate();
@@ -483,6 +486,8 @@ export class VaultFileCatalog {
         await forEachInventoryItem(entries, entry => {
             const fullPath = join(directory, entry.name);
             const relativePath = normalizePath(relative(this.vaultPath, fullPath));
+            if (this.excludePath(relativePath))
+                return;
             if (entry.directory) {
                 if (this.pathFilter.isAllowedForListing(relativePath)) {
                     directories.push({ fullPath, relativePath });

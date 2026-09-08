@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { open } from 'node:fs/promises';
 import { createGunzip } from 'node:zlib';
 import { Readable } from 'node:stream';
@@ -14,7 +15,7 @@ async function* storedChunks(handle, maxBytes) {
             return;
         total += bytesRead;
         if (total > maxBytes)
-            throw new Error('Snapshot size exceeded');
+            throw guidanceError(new Error('Snapshot size exceeded'), 'guid-6e3e9727eeb0d592');
         yield chunk.subarray(0, bytesRead);
     }
 }
@@ -24,7 +25,7 @@ async function collectBytes(source, maxBytes) {
     for await (const chunk of source) {
         total += chunk.length;
         if (total > maxBytes)
-            throw new Error('Snapshot size exceeded');
+            throw guidanceError(new Error('Snapshot size exceeded'), 'guid-6e3e9727eeb0d592');
         chunks.push(chunk);
     }
     // Callers require complete bytes. This still holds decoded chunks plus the
@@ -36,7 +37,7 @@ export async function readSnapshotBytes(path, limits) {
     const ceilings = limits.maxDecodedBytes === undefined ? [limits.maxBytes] : [limits.maxBytes, limits.maxDecodedBytes];
     for (const value of ceilings) {
         if (!Number.isSafeInteger(value) || value < 1 || value > 0x7fffffff) {
-            throw new TypeError('Invalid snapshot byte limit');
+            throw guidanceError(new TypeError('Invalid snapshot byte limit'), 'guid-0d65cfcdd8523b6d');
         }
     }
     try {
@@ -44,7 +45,7 @@ export async function readSnapshotBytes(path, limits) {
         try {
             const info = await handle.stat();
             if (!info.isFile() || info.size > limits.maxBytes)
-                throw new Error('Invalid snapshot file');
+                throw guidanceError(new Error('Invalid snapshot file'), 'guid-7d9ea82c9d983e04');
             const source = storedChunks(handle, limits.maxBytes);
             if (limits.maxDecodedBytes === undefined)
                 return await collectBytes(source, limits.maxBytes);
@@ -58,6 +59,6 @@ export async function readSnapshotBytes(path, limits) {
     catch {
         // Cache callers already rebuild from Markdown; never expose host paths or
         // native decoder messages when reporting an optional snapshot failure.
-        throw new Error('Snapshot unavailable');
+        throw guidanceError(new Error('Snapshot unavailable'), 'guid-990719536f77992d');
     }
 }

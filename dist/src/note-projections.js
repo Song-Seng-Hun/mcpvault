@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { buildMarkdownLiteralMask } from './backlinks.js';
 const HTML_BLOCK_PATTERN = /^ {0,3}<\/?(?:address|article|aside|base|basefont|blockquote|body|caption|center|col|colgroup|dd|details|dialog|dir|div|dl|dt|fieldset|figcaption|figure|footer|form|frame|frameset|h[1-6]|head|header|hr|html|iframe|legend|li|link|main|menu|menuitem|nav|noframes|ol|optgroup|option|p|param|search|section|summary|table|tbody|td|tfoot|th|thead|title|tr|track|ul)(?:[\s/>]|$)/i;
 function htmlBlockTerminator(text) {
@@ -353,7 +354,7 @@ export function projectNoteOutline(raw) {
 /** Count every visible heading, retaining only the requested leading locators. */
 export function projectNoteHeadingSummary(raw, limit = 8) {
     if (!Number.isInteger(limit) || limit < 0)
-        throw new Error('heading limit must be a non-negative integer');
+        throw guidanceError(new Error('heading limit must be a non-negative integer'), 'guid-b6e319fa65f83fc8');
     const headings = [];
     let headingCount = 0, headingChars = 0;
     for (const heading of noteHeadings(raw)) {
@@ -465,7 +466,7 @@ export function projectNoteBlockLines(raw, blockId) {
 export function selectNoteHeading(headings, requested) {
     const query = requested.trim().replace(/^#+\s*/, '').trim().toLowerCase();
     if (!query)
-        throw new Error('A non-empty heading is required');
+        throw guidanceError(new Error('A non-empty heading is required'), 'guid-2a19ba825aa8064c');
     const exact = headings.filter(heading => heading.text.trim().toLowerCase() === query);
     const parts = query.split('#').map(part => part.trim());
     const isQualified = parts.length > 1 && parts.every(Boolean);
@@ -481,9 +482,9 @@ export function selectNoteHeading(headings, requested) {
         matches = headings.filter(heading => heading.text.trim().toLowerCase().includes(query));
     }
     if (!matches.length)
-        throw new Error('Section not found');
+        throw guidanceError(new Error('Section not found'), 'guid-dea7f9598e8284ab');
     if (matches.length > 1)
-        throw new Error('Section is ambiguous. Use mcp.get_note_outline, then mcp.read_note_lines with the selected range and expectedRevision.');
+        throw guidanceError(new Error('Section is ambiguous. Use mcp.get_note_outline, then mcp.read_note_lines with the selected range and expectedRevision.'), 'guid-ab9e970c13478a09');
     return matches[0];
 }
 /** Raw physical-line window; response serialization applies its character budget. */

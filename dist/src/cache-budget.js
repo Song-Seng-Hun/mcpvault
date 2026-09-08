@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 /**
  * A process-wide budget for disposable, derived caches.
  *
@@ -20,7 +21,7 @@ export class DerivedCacheBudget {
     constructor(maxBytes = DEFAULT_DERIVED_CACHE_BUDGET_BYTES) {
         this.maxBytes = maxBytes;
         if (!Number.isFinite(maxBytes) || maxBytes <= 0 || maxBytes > Number.MAX_SAFE_INTEGER) {
-            throw new Error('maxBytes must be a positive finite number no greater than Number.MAX_SAFE_INTEGER');
+            throw guidanceError(new Error('maxBytes must be a positive finite number no greater than Number.MAX_SAFE_INTEGER'), 'guid-73767f404babc2c2');
         }
         this.maxAccountedBytes = BigInt(Math.floor(maxBytes));
     }

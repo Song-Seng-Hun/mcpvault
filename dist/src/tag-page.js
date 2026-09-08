@@ -1,3 +1,4 @@
+import { guidanceError, guidanceText } from './guidance-runtime.js';
 import { createHash } from 'node:crypto';
 import { normalizeSearchMaxChars } from './search-limits.js';
 /** Input is the graph's count-descending, ordinal-tag, caller-visible view. */
@@ -5,16 +6,16 @@ export function packTagPage(tags, args) {
     const requestedLimit = args.limit === undefined ? 50 : Number(args.limit);
     const offset = args.offset === undefined ? 0 : Number(args.offset);
     if (!Number.isSafeInteger(requestedLimit) || requestedLimit < 1)
-        throw new Error('limit must be a positive safe integer');
+        throw guidanceError(new Error('limit must be a positive safe integer'), 'guid-47251c58588eb3b1');
     if (!Number.isSafeInteger(offset) || offset < 0)
-        throw new Error('offset must be a non-negative safe integer');
+        throw guidanceError(new Error('offset must be a non-negative safe integer'), 'guid-f732beec22ffea3f');
     if (args.prefix !== undefined && typeof args.prefix !== 'string')
-        throw new Error('prefix must be a string');
+        throw guidanceError(new Error('prefix must be a string'), 'guid-f8bddbe2eb082d8d');
     if (args.expectedSnapshot !== undefined && (typeof args.expectedSnapshot !== 'string' || !/^[a-f0-9]{64}$/.test(args.expectedSnapshot))) {
-        throw new Error('expectedSnapshot must be a lowercase SHA-256 fingerprint');
+        throw guidanceError(new Error('expectedSnapshot must be a lowercase SHA-256 fingerprint'), 'guid-fdaefa5cd8d6564d');
     }
     if (offset > 0 && !args.expectedSnapshot)
-        throw new Error('Positive offset requires expectedSnapshot; start at offset 0');
+        throw guidanceError(new Error('Positive offset requires expectedSnapshot; start at offset 0'), 'guid-866b2f204c6b8361');
     const limit = Math.min(requestedLimit, 200);
     const maxChars = normalizeSearchMaxChars(args.maxChars);
     const prefix = (args.prefix ?? '').trim().replace(/^#/, '').toLowerCase();
@@ -32,7 +33,7 @@ export function packTagPage(tags, args) {
     }
     const snapshotFingerprint = hash.digest('hex');
     if (args.expectedSnapshot !== undefined && args.expectedSnapshot !== snapshotFingerprint) {
-        throw new Error('Tag view changed; restart at offset 0 without expectedSnapshot. No continuation items returned.');
+        throw guidanceError(new Error('Tag view changed; restart at offset 0 without expectedSnapshot. No continuation items returned.'), 'guid-04c0fcacda22a875');
     }
     const encode = (count) => {
         const nextOffset = offset + count;
@@ -65,12 +66,12 @@ export function packTagPage(tags, args) {
     if (best)
         return best;
     if (maxChars === 12000 && !args.prettyPrint && limit === 1) {
-        throw new Error('An exact tag or its prefix cannot fit the maximum response budget; no tag was skipped. Inspect source Properties or narrow the prefix.');
+        throw guidanceError(new Error('An exact tag or its prefix cannot fit the maximum response budget; no tag was skipped. Inspect source Properties or narrow the prefix.'), 'guid-c72bc543dcfeafe9');
     }
     // No partial tag identifiers and no silent zero-progress page loop.
     return JSON.stringify({
         tags: [], total, returned: 0, offset, truncated: true,
-        message: 'No tag skipped; retry this position with a larger compact budget.',
+        message: guidanceText('guid-7c847d47f156dab8', 'No tag skipped; retry this position with a larger compact budget.'),
         nextAction: { endpointId: 'mcp.list_all_tags', reuseOriginalArguments: true,
             overrides: { maxChars: 12000, prettyPrint: false, limit: 1 } },
     }, null, indent);

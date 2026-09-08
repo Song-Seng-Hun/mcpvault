@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { readFile } from 'node:fs/promises';
 import { readBoundedSource, SourceReadLimitError } from './bounded-source-read.js';
 import { hashUtf8Source } from './streaming-revision.js';
@@ -44,13 +45,13 @@ export class VaultIoCoordinator {
         // Validate before keying: JSON serializes NaN/Infinity as null, which would
         // otherwise share an unbounded in-flight read and bypass the reader's check.
         if (maxBytes !== undefined && (!Number.isSafeInteger(maxBytes) || maxBytes < 1 || maxBytes > 0x7fffffff)) {
-            return Promise.reject(new TypeError('Invalid source byte limit'));
+            return Promise.reject(guidanceError(new TypeError('Invalid source byte limit'), 'guid-c888784bdb4b6e35'));
         }
         return this.schedule(JSON.stringify(['revision', maxBytes ?? null, path]), () => this.revisionReader(path, maxBytes), priority);
     }
     readUtf8Metadata(path, maxBytes, priority = 'foreground') {
         if (maxBytes !== undefined && (!Number.isSafeInteger(maxBytes) || maxBytes < 1 || maxBytes > 0x7fffffff)) {
-            return Promise.reject(new TypeError('Invalid source byte limit'));
+            return Promise.reject(guidanceError(new TypeError('Invalid source byte limit'), 'guid-c888784bdb4b6e35'));
         }
         return this.schedule(JSON.stringify(['metadata', maxBytes ?? null, path]), () => this.metadataReader(path, maxBytes), priority);
     }

@@ -1,3 +1,4 @@
+import { guidanceText } from './guidance-runtime.js';
 const text = (maxLength = 500) => ({ type: 'string', maxLength });
 const strings = { type: 'array', maxItems: 20, items: text() };
 const accessToken = { type: 'string', description: 'Keep the recovered account token in the host private store, never in a note.' };
@@ -27,8 +28,8 @@ export function getWorkTools() {
     return [
         tool('manage_work_project', 'Read or revision-safely configure a peer Kanban project. op=read is public and works read-only; create/update require task capability. Membership allows coordination, never shell, repository, deployment, or private-scope access. Default WIP is three per project and one implementation per agent. No agent is automatically started.', {
             op: { type: 'string', enum: ['read', 'create', 'update'], default: 'read' }, projectId: text(64), title: text(180), goal: text(2000),
-            allowedWork: strings, participants: { ...strings, maxItems: 100, description: 'Exact account IDs, not model names; creator is included.' }, completionCriteria: strings,
-            wipLimit: { type: 'integer', minimum: 1, maximum: 100, description: 'Creation default: 3. Omit on updates to preserve the current limit.' }, personalWipLimit: { type: 'integer', minimum: 1, maximum: 20, description: 'Creation default: 1. Omit on updates to preserve the current limit.' },
+            allowedWork: strings, participants: { ...strings, maxItems: 100, description: guidanceText('guid-0696837e5cf0f029', 'Exact account IDs, not model names; creator is included.') }, completionCriteria: strings,
+            wipLimit: { type: 'integer', minimum: 1, maximum: 100, description: guidanceText('guid-b2938b2312ec6837', 'Creation default: 3. Omit on updates to preserve the current limit.') }, personalWipLimit: { type: 'integer', minimum: 1, maximum: 20, description: guidanceText('guid-16de059d6f1fb39f', 'Creation default: 1. Omit on updates to preserve the current limit.') },
             roomId: text(64), expectedRevision, requestId, maxChars: bounds.maxChars,
         }, ['projectId']),
         tool('read_work_board', 'Read a bounded current project board: tasks, actionable Wiki notes, WIP, blocked work, pending reviews and advisory overlap warnings. No duplicate task creation. Scope and moderation filtering precede counts and sorting. Finish, review, or unblock existing work before pulling more.', {

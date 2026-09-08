@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { createHash, randomBytes } from 'node:crypto';
 import { existsSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import { chmod, mkdir, open as openFile, readFile, rename, unlink, writeFile } from 'node:fs/promises';
@@ -40,28 +41,28 @@ function isPathInside(parent, target) {
 }
 function assertOutside(path, protectedPaths, label) {
     if (!isAbsolute(path))
-        throw new Error(`${label} must be an explicit absolute path`);
+        throw guidanceError(new Error(`${label} must be an explicit absolute path`), 'guid-622ae60cd2274500');
     if (protectedPaths.some(protectedPath => isPathInside(protectedPath, path))) {
-        throw new Error(`${label} must be outside the Vault and all protected service directories`);
+        throw guidanceError(new Error(`${label} must be outside the Vault and all protected service directories`), 'guid-20f74f0535d1dbf2');
     }
 }
 function normalizeCertificate(value) {
     const fingerprint = String(value || '').trim().toLowerCase().replaceAll(':', '');
     if (!CERTIFICATE_PATTERN.test(fingerprint))
-        throw new Error('certFingerprint must be a 64-character SHA-256 fingerprint');
+        throw guidanceError(new Error('certFingerprint must be a 64-character SHA-256 fingerprint'), 'guid-521edb0025572c7f');
     return fingerprint;
 }
 function normalizeOptionalText(value, field) {
     if (value === undefined)
         return undefined;
     if (typeof value !== 'string' || !value.trim() || value.trim().length > MAX_TEXT_LENGTH) {
-        throw new Error(`${field} must be a non-empty string of at most ${MAX_TEXT_LENGTH} characters`);
+        throw guidanceError(new Error(`${field} must be a non-empty string of at most ${MAX_TEXT_LENGTH} characters`), 'guid-80da8ff98d7f8ddc');
     }
     return value.trim();
 }
 function normalizeBinding(value) {
     if (!isRecord(value))
-        throw new Error('binding is required');
+        throw guidanceError(new Error('binding is required'), 'guid-1913f728c9f36b89');
     const displayLabel = normalizeOptionalText(value.displayLabel, 'displayLabel');
     const role = normalizeOptionalText(value.role, 'role');
     return {
@@ -92,7 +93,7 @@ function sameBindingIdentity(left, right) {
 }
 function parseTimestamp(value, field) {
     if (typeof value !== 'string' || !value || !Number.isFinite(Date.parse(value)))
-        throw new Error(`${field} must be an ISO timestamp`);
+        throw guidanceError(new Error(`${field} must be an ISO timestamp`), 'guid-19e9477a9c3a1ba9');
     return new Date(value).toISOString();
 }
 function sleep(ms) {
@@ -109,18 +110,18 @@ function processIsAlive(pid) {
 }
 function entryCapacity(database, key) {
     if (database[key].length >= MAX_ENTRIES)
-        throw new Error(`${key} capacity reached (${MAX_ENTRIES})`);
+        throw guidanceError(new Error(`${key} capacity reached (${MAX_ENTRIES})`), 'guid-a0d463f5f4bec0f9');
 }
 function validateDatabase(value, expectedVaultPath) {
     if (!isRecord(value) || value.version !== REGISTRY_VERSION || !isRecord(value.profile))
-        throw new Error('corrupt enterprise registry');
+        throw guidanceError(new Error('corrupt enterprise registry'), 'guid-50b11807feb66974');
     const profile = {
-        mode: value.profile.mode === 'public' || value.profile.mode === 'company' ? value.profile.mode : (() => { throw new Error('corrupt enterprise registry'); })(),
+        mode: value.profile.mode === 'public' || value.profile.mode === 'company' ? value.profile.mode : (() => { throw guidanceError(new Error('corrupt enterprise registry'), 'guid-50b11807feb66974'); })(),
         realmId: normalizeScopeId(String(value.profile.realmId || ''), 'realmId'),
         vaultPath: canonicalPath(String(value.profile.vaultPath || '')),
     };
     if (profile.vaultPath.toLowerCase() !== canonicalPath(expectedVaultPath).toLowerCase())
-        throw new Error('enterprise registry belongs to a different Vault');
+        throw guidanceError(new Error('enterprise registry belongs to a different Vault'), 'guid-804b1a93df31110a');
     const employeesRaw = value.employees;
     const runtimesRaw = value.runtimes;
     const invitesRaw = value.invites;
@@ -133,7 +134,7 @@ function validateDatabase(value, expectedVaultPath) {
         || !Array.isArray(bindingsRaw) || bindingsRaw.length > MAX_ENTRIES
         || !Array.isArray(registrationsRaw) || registrationsRaw.length > MAX_ENTRIES
         || !Array.isArray(sessionLeasesRaw) || sessionLeasesRaw.length > MAX_ENTRIES)
-        throw new Error('corrupt enterprise registry');
+        throw guidanceError(new Error('corrupt enterprise registry'), 'guid-50b11807feb66974');
     try {
         const employees = employeesRaw.map((item) => {
             if (!isRecord(item) || typeof item.active !== 'boolean' || typeof item.sharedMemoryEnabled !== 'boolean')
@@ -200,7 +201,7 @@ function validateDatabase(value, expectedVaultPath) {
     catch (error) {
         if (error instanceof Error && error.message === 'enterprise registry belongs to a different Vault')
             throw error;
-        throw new Error('corrupt enterprise registry');
+        throw guidanceError(new Error('corrupt enterprise registry'), 'guid-50b11807feb66974');
     }
 }
 export class EnterpriseRegistry {
@@ -212,7 +213,7 @@ export class EnterpriseRegistry {
     mutationQueue = Promise.resolve();
     constructor(options) {
         if (!options || typeof options.registryPath !== 'string' || typeof options.vaultPath !== 'string')
-            throw new Error('registryPath and vaultPath are required');
+            throw guidanceError(new Error('registryPath and vaultPath are required'), 'guid-c70921b5014d543b');
         this.vaultPath = canonicalPath(options.vaultPath);
         const moduleRoot = dirname(dirname(fileURLToPath(import.meta.url)));
         const packageRoot = basename(moduleRoot) === 'dist' ? dirname(moduleRoot) : moduleRoot;
@@ -232,24 +233,24 @@ export class EnterpriseRegistry {
         }
         catch (error) {
             if (isRecord(error) && error.code === 'ENOENT')
-                throw new Error('Enterprise registry is not initialized');
+                throw guidanceError(new Error('Enterprise registry is not initialized'), 'guid-752e4be12a1b78f1');
             throw error;
         }
         if (size > MAX_DATABASE_BYTES)
-            throw new Error('Enterprise registry is too large; refusing to read it');
+            throw guidanceError(new Error('Enterprise registry is too large; refusing to read it'), 'guid-ed5aa3995994cf5c');
         let parsed;
         try {
             parsed = JSON.parse(readFileSync(this.registryPath, 'utf8'));
         }
         catch {
-            throw new Error('corrupt enterprise registry');
+            throw guidanceError(new Error('corrupt enterprise registry'), 'guid-50b11807feb66974');
         }
         return validateDatabase(parsed, this.vaultPath);
     }
     async writeDatabase(database) {
         const body = `${JSON.stringify(database, null, 2)}\n`;
         if (Buffer.byteLength(body) > MAX_DATABASE_BYTES)
-            throw new Error('Enterprise registry is too large; refusing to write it');
+            throw guidanceError(new Error('Enterprise registry is too large; refusing to write it'), 'guid-b1eeb3145e2817c8');
         await mkdir(dirname(this.registryPath), { recursive: true, mode: 0o700 });
         const temporary = `${this.registryPath}.${randomBytes(8).toString('hex')}.tmp`;
         try {
@@ -289,10 +290,10 @@ export class EnterpriseRegistry {
                 catch (readError) {
                     if (isRecord(readError) && readError.code === 'ENOENT')
                         continue;
-                    throw new Error('Enterprise registry lock is corrupt; refusing to remove it automatically');
+                    throw guidanceError(new Error('Enterprise registry lock is corrupt; refusing to remove it automatically'), 'guid-12d3f8649a8afdf3');
                 }
                 if (!isRecord(record) || !Number.isSafeInteger(record.pid) || Number(record.pid) <= 0 || typeof record.nonce !== 'string' || !record.nonce) {
-                    throw new Error('Enterprise registry lock is invalid; refusing to remove it automatically');
+                    throw guidanceError(new Error('Enterprise registry lock is invalid; refusing to remove it automatically'), 'guid-5c37b8b89d0b2e5c');
                 }
                 if (!processIsAlive(Number(record.pid))) {
                     await unlink(this.lockPath);
@@ -301,7 +302,7 @@ export class EnterpriseRegistry {
                 await sleep(LOCK_WAIT_MS);
             }
         }
-        throw new Error('Unable to acquire enterprise registry lock');
+        throw guidanceError(new Error('Unable to acquire enterprise registry lock'), 'guid-6b4a59465ff40a82');
     }
     async releaseLock(lock) {
         await lock.handle.close().catch(() => undefined);
@@ -333,23 +334,23 @@ export class EnterpriseRegistry {
     }
     assertRuntimeMode(profile, kind) {
         if (profile.mode === 'company' && kind !== 'internal')
-            throw new Error('Company mode permits internal runtimes only');
+            throw guidanceError(new Error('Company mode permits internal runtimes only'), 'guid-b68188dcd9ff0d99');
         if (profile.mode === 'public' && kind !== 'external')
-            throw new Error('Public mode permits external runtimes only');
+            throw guidanceError(new Error('Public mode permits external runtimes only'), 'guid-3d7e596aa314f350');
     }
     assertActive(database, binding, certFingerprint) {
         const employee = database.employees.find(item => item.userId === binding.userId);
         if (!employee)
-            throw new Error(`Unknown enterprise employee: ${binding.userId}`);
+            throw guidanceError(new Error(`Unknown enterprise employee: ${binding.userId}`), 'guid-fa77b46d6e0bca27');
         if (!employee.active)
-            throw new Error(`Enterprise employee is disabled: ${binding.userId}`);
+            throw guidanceError(new Error(`Enterprise employee is disabled: ${binding.userId}`), 'guid-577e119b6df7aebc');
         const runtime = database.runtimes.find(item => item.runtimeId === binding.runtimeId);
         if (!runtime)
-            throw new Error(`Unknown enterprise runtime: ${binding.runtimeId}`);
+            throw guidanceError(new Error(`Unknown enterprise runtime: ${binding.runtimeId}`), 'guid-cee936246b89d804');
         if (!runtime.active)
-            throw new Error(`Enterprise runtime is disabled: ${binding.runtimeId}`);
+            throw guidanceError(new Error(`Enterprise runtime is disabled: ${binding.runtimeId}`), 'guid-006f7acac47c0e81');
         if (runtime.certFingerprint !== certFingerprint)
-            throw new Error('Request certificate does not match the assigned runtime');
+            throw guidanceError(new Error('Request certificate does not match the assigned runtime'), 'guid-1e9d83a350a9b3b0');
         this.assertRuntimeMode(database.profile, runtime.kind);
         return { employee, runtime };
     }
@@ -360,9 +361,9 @@ export class EnterpriseRegistry {
             vaultPath: canonicalPath(profileInput.vaultPath),
         };
         if (profile.mode !== 'public' && profile.mode !== 'company')
-            throw new Error('mode must be public or company');
+            throw guidanceError(new Error('mode must be public or company'), 'guid-57970225d28c73f8');
         if (profile.vaultPath.toLowerCase() !== this.vaultPath.toLowerCase())
-            throw new Error('profile vaultPath must match the configured Vault');
+            throw guidanceError(new Error('profile vaultPath must match the configured Vault'), 'guid-2a43f3b178dc4d87');
         return await this.exclusive(async () => {
             if (existsSync(this.registryPath)) {
                 const existing = this.readDatabase().profile;
@@ -370,7 +371,7 @@ export class EnterpriseRegistry {
                     await ensureEnterpriseVaultMarker(this.vaultPath, profile);
                     return existing;
                 }
-                throw new Error('Enterprise registry is already initialized with a different profile');
+                throw guidanceError(new Error('Enterprise registry is already initialized with a different profile'), 'guid-fab0beae11fae37c');
             }
             await ensureEnterpriseVaultMarker(this.vaultPath, profile);
             await this.writeDatabase({ version: 1, profile, employees: [], runtimes: [], invites: [], bindings: [], registrations: [], sessionLeases: [] });
@@ -387,12 +388,12 @@ export class EnterpriseRegistry {
     async createEmployee(params) {
         const userId = normalizeScopeId(params.userId, 'userId');
         if (params.sharedMemoryEnabled !== undefined && typeof params.sharedMemoryEnabled !== 'boolean')
-            throw new Error('sharedMemoryEnabled must be boolean');
+            throw guidanceError(new Error('sharedMemoryEnabled must be boolean'), 'guid-5fd94ae7c0bcddf6');
         return await this.exclusive(async () => {
             const database = this.readDatabase();
             entryCapacity(database, 'employees');
             if (database.employees.some(item => item.userId === userId))
-                throw new Error(`Enterprise employee already exists: ${userId}`);
+                throw guidanceError(new Error(`Enterprise employee already exists: ${userId}`), 'guid-d28f2d52be263dff');
             const employee = { userId, active: true, sharedMemoryEnabled: params.sharedMemoryEnabled === true, createdAt: this.timestamp() };
             await this.writeDatabase({ ...database, employees: [...database.employees, employee] });
             return employee;
@@ -404,7 +405,7 @@ export class EnterpriseRegistry {
             const database = this.readDatabase();
             const employee = database.employees.find(item => item.userId === userId);
             if (!employee)
-                throw new Error(`Unknown enterprise employee: ${userId}`);
+                throw guidanceError(new Error(`Unknown enterprise employee: ${userId}`), 'guid-fa77b46d6e0bca27');
             const disabled = employee.active ? { ...employee, active: false, disabledAt: this.timestamp() } : employee;
             await this.writeDatabase({ ...database, employees: database.employees.map(item => item.userId === userId ? disabled : item) });
             return disabled;
@@ -414,15 +415,15 @@ export class EnterpriseRegistry {
         const runtimeId = normalizeScopeId(params.runtimeId, 'runtimeId');
         const fingerprint = normalizeCertificate(params.certFingerprint);
         if (params.kind !== 'internal' && params.kind !== 'external')
-            throw new Error('runtime kind must be internal or external');
+            throw guidanceError(new Error('runtime kind must be internal or external'), 'guid-9eaa6dc5f595e6fc');
         return await this.exclusive(async () => {
             const database = this.readDatabase();
             this.assertRuntimeMode(database.profile, params.kind);
             entryCapacity(database, 'runtimes');
             if (database.runtimes.some(item => item.runtimeId === runtimeId))
-                throw new Error(`Enterprise runtime already exists: ${runtimeId}`);
+                throw guidanceError(new Error(`Enterprise runtime already exists: ${runtimeId}`), 'guid-b5794b1794a318a8');
             if (database.runtimes.some(item => item.certFingerprint === fingerprint))
-                throw new Error('Request certificate is already registered to another runtime');
+                throw guidanceError(new Error('Request certificate is already registered to another runtime'), 'guid-c17bd8cf504ec0b2');
             const runtime = { runtimeId, kind: params.kind, certFingerprint: fingerprint, active: true, createdAt: this.timestamp() };
             await this.writeDatabase({ ...database, runtimes: [...database.runtimes, runtime] });
             return runtime;
@@ -434,7 +435,7 @@ export class EnterpriseRegistry {
             const database = this.readDatabase();
             const runtime = database.runtimes.find(item => item.runtimeId === runtimeId);
             if (!runtime)
-                throw new Error(`Unknown enterprise runtime: ${runtimeId}`);
+                throw guidanceError(new Error(`Unknown enterprise runtime: ${runtimeId}`), 'guid-cee936246b89d804');
             const disabled = runtime.active ? { ...runtime, active: false, disabledAt: this.timestamp() } : runtime;
             await this.writeDatabase({ ...database, runtimes: database.runtimes.map(item => item.runtimeId === runtimeId ? disabled : item) });
             return disabled;
@@ -444,27 +445,27 @@ export class EnterpriseRegistry {
         const normalizedBinding = normalizeBinding(params.binding);
         const expiresAt = parseTimestamp(params.expiresAt, 'expiresAt');
         if (Date.parse(expiresAt) <= this.now().getTime())
-            throw new Error('expiresAt must be in the future');
+            throw guidanceError(new Error('expiresAt must be in the future'), 'guid-a1b211fe48b40a17');
         assertOutside(params.secretFile, this.protectedPaths, 'Invite secret file');
         const secretFile = canonicalPath(params.secretFile);
         if (secretFile.toLowerCase() === this.registryPath.toLowerCase() || secretFile.toLowerCase() === this.lockPath.toLowerCase()) {
-            throw new Error('Invite secret file must not be the enterprise registry or its lock');
+            throw guidanceError(new Error('Invite secret file must not be the enterprise registry or its lock'), 'guid-5556b7edea4ff75d');
         }
         return await this.exclusive(async () => {
             const database = this.readDatabase();
             entryCapacity(database, 'invites');
             if (database.bindings.some(item => item.accountId === normalizedBinding.accountId || item.agentId === normalizedBinding.agentId))
-                throw new Error('Account or agent is already bound');
+                throw guidanceError(new Error('Account or agent is already bound'), 'guid-b5ad143b529b15cb');
             if (database.registrations.some(item => item.status === 'completed' && (item.binding.accountId === normalizedBinding.accountId || item.binding.agentId === normalizedBinding.agentId)))
-                throw new Error('Previously registered account or agent identifiers cannot be reassigned');
+                throw guidanceError(new Error('Previously registered account or agent identifiers cannot be reassigned'), 'guid-1e9b9ba5aaebb011');
             if (database.invites.some(item => !item.consumedAt && (item.binding.accountId === normalizedBinding.accountId || item.binding.agentId === normalizedBinding.agentId)))
-                throw new Error('An active invite already exists for this account or agent');
+                throw guidanceError(new Error('An active invite already exists for this account or agent'), 'guid-d2545601f400e22b');
             const runtime = database.runtimes.find(item => item.runtimeId === normalizedBinding.runtimeId);
             const employee = database.employees.find(item => item.userId === normalizedBinding.userId);
             if (!employee?.active)
-                throw new Error('Invite employee must exist and be active');
+                throw guidanceError(new Error('Invite employee must exist and be active'), 'guid-ef6f19e5c4fd484a');
             if (!runtime?.active)
-                throw new Error('Invite runtime must exist and be active');
+                throw guidanceError(new Error('Invite runtime must exist and be active'), 'guid-90c65b97972bf61a');
             const secret = randomBytes(32).toString('base64url');
             const inviteId = `invite-${randomBytes(12).toString('hex')}`;
             const stored = { inviteId, secretHash: createHash('sha256').update(secret).digest('hex'), binding: normalizedBinding, expiresAt, createdAt: this.timestamp() };
@@ -498,33 +499,33 @@ export class EnterpriseRegistry {
         const secretHash = createHash('sha256').update(String(input.secret || '')).digest('hex');
         const invite = database.invites.find(item => item.secretHash === secretHash);
         if (!invite)
-            throw new Error('Invalid or used enterprise invite');
+            throw guidanceError(new Error('Invalid or used enterprise invite'), 'guid-686f18a23d499b8a');
         if (input.binding && !sameBinding(invite.binding, normalizeBinding(input.binding))) {
-            throw new Error('Invite identity is predetermined; self-assigned identity is not allowed');
+            throw guidanceError(new Error('Invite identity is predetermined; self-assigned identity is not allowed'), 'guid-044da821311fdef1');
         }
         if (invite.consumedAt && !invite.registrationId)
-            throw new Error('Enterprise invite was already used');
+            throw guidanceError(new Error('Enterprise invite was already used'), 'guid-06d24577581ed3c2');
         if (Date.parse(invite.expiresAt) <= this.now().getTime() && !invite.registrationId)
-            throw new Error('Enterprise invite expired');
+            throw guidanceError(new Error('Enterprise invite expired'), 'guid-fe0497a7e2475b13');
         if (database.profile.realmId !== realmId)
-            throw new Error('Enterprise invite belongs to a different realm');
+            throw guidanceError(new Error('Enterprise invite belongs to a different realm'), 'guid-80752c4c469dbd5a');
         if (database.profile.mode !== input.mode)
-            throw new Error('Enterprise invite mode does not match this command center');
+            throw guidanceError(new Error('Enterprise invite mode does not match this command center'), 'guid-e322a859a315fba2');
         if (invite.binding.runtimeId !== runtimeId)
-            throw new Error('Enterprise invite is assigned to a different runtime');
+            throw guidanceError(new Error('Enterprise invite is assigned to a different runtime'), 'guid-742da69b81417d06');
         this.assertActive(database, invite.binding, fingerprint);
         return { invite, binding: invite.binding, fingerprint };
     }
     async reserveInvite(input) {
         if (typeof input.secret !== 'string' || input.secret.length < 40 || input.secret.length > 256)
-            throw new Error('Invalid or used enterprise invite');
+            throw guidanceError(new Error('Invalid or used enterprise invite'), 'guid-686f18a23d499b8a');
         return await this.exclusive(async () => {
             const database = this.readDatabase();
             const { invite, binding: reservedBinding } = this.validateReservation(database, input);
             if (invite.registrationId) {
                 const registration = database.registrations.find(item => item.registrationId === invite.registrationId);
                 if (!registration || !sameBinding(registration.binding, reservedBinding))
-                    throw new Error('corrupt enterprise registry');
+                    throw guidanceError(new Error('corrupt enterprise registry'), 'guid-50b11807feb66974');
                 return { registrationId: registration.registrationId, binding: registration.binding };
             }
             entryCapacity(database, 'registrations');
@@ -544,23 +545,23 @@ export class EnterpriseRegistry {
             const database = this.readDatabase();
             const registration = database.registrations.find(item => item.registrationId === registrationId);
             if (!registration)
-                throw new Error(`Unknown enterprise registration: ${registrationId}`);
+                throw guidanceError(new Error(`Unknown enterprise registration: ${registrationId}`), 'guid-d85ea43e34c2fbf8');
             const invite = database.invites.find(item => item.inviteId === registration.inviteId && item.registrationId === registrationId);
             if (!invite || !sameBinding(invite.binding, registration.binding))
-                throw new Error('corrupt enterprise registry');
+                throw guidanceError(new Error('corrupt enterprise registry'), 'guid-50b11807feb66974');
             const runtime = database.runtimes.find(item => item.runtimeId === registration.binding.runtimeId);
             if (!runtime)
-                throw new Error('Enterprise runtime no longer exists');
+                throw guidanceError(new Error('Enterprise runtime no longer exists'), 'guid-6366dc3ea6666144');
             this.assertActive(database, registration.binding, runtime.certFingerprint);
             if (registration.status === 'completed') {
                 const existing = database.bindings.find(item => item.accountId === registration.binding.accountId);
                 if (!existing || !sameBinding(existing, registration.binding))
-                    throw new Error('corrupt enterprise registry');
+                    throw guidanceError(new Error('corrupt enterprise registry'), 'guid-50b11807feb66974');
                 return { registrationId, binding: existing };
             }
             entryCapacity(database, 'bindings');
             if (database.bindings.some(item => item.accountId === registration.binding.accountId || item.agentId === registration.binding.agentId))
-                throw new Error('Account or agent binding conflicts with this registration');
+                throw guidanceError(new Error('Account or agent binding conflicts with this registration'), 'guid-8f19008ca29bb70e');
             const timestamp = this.timestamp();
             await this.writeDatabase({
                 ...database,
@@ -591,7 +592,7 @@ export class EnterpriseRegistry {
             if (!binding) {
                 if (database.registrations.some(item => item.binding.accountId === accountId && item.status === 'completed'))
                     return { accountId, disabled: true };
-                throw new Error('Unknown enterprise account');
+                throw guidanceError(new Error('Unknown enterprise account'), 'guid-06857e36dec188b5');
             }
             await this.writeDatabase({ ...database,
                 bindings: database.bindings.filter(item => item.accountId !== accountId),
@@ -605,10 +606,10 @@ export class EnterpriseRegistry {
         const expected = normalizeBinding(bindingInput);
         const stored = database.bindings.find(item => item.accountId === expected.accountId);
         if (!stored || !sameBindingIdentity(stored, expected))
-            throw new Error('Enterprise account binding does not match the registered identity');
+            throw guidanceError(new Error('Enterprise account binding does not match the registered identity'), 'guid-631f25a28d47a721');
         const runtime = database.runtimes.find(item => item.runtimeId === stored.runtimeId);
         if (!runtime)
-            throw new Error(`Unknown enterprise runtime: ${stored.runtimeId}`);
+            throw guidanceError(new Error(`Unknown enterprise runtime: ${stored.runtimeId}`), 'guid-cee936246b89d804');
         const active = this.assertActive(database, stored, runtime.certFingerprint);
         return { binding: stored, ...active, policy: database.profile };
     }
@@ -616,21 +617,21 @@ export class EnterpriseRegistry {
         const fingerprint = normalizeCertificate(certFingerprintInput);
         const runtime = this.readDatabase().runtimes.find(item => item.certFingerprint === fingerprint);
         if (!runtime)
-            throw new Error('Request certificate is not registered');
+            throw guidanceError(new Error('Request certificate is not registered'), 'guid-1e85a887213bdc41');
         if (!runtime.active)
-            throw new Error(`Enterprise runtime is disabled: ${runtime.runtimeId}`);
+            throw guidanceError(new Error(`Enterprise runtime is disabled: ${runtime.runtimeId}`), 'guid-006f7acac47c0e81');
         return runtime;
     }
     assertBinding(input) {
         const database = this.readDatabase();
         const expected = normalizeBinding(input);
         if (normalizeScopeId(input.realmId, 'realmId') !== database.profile.realmId)
-            throw new Error('Enterprise binding belongs to a different realm');
+            throw guidanceError(new Error('Enterprise binding belongs to a different realm'), 'guid-44d2781bb39e3c5d');
         if (input.mode !== database.profile.mode)
-            throw new Error('Enterprise binding mode does not match this command center');
+            throw guidanceError(new Error('Enterprise binding mode does not match this command center'), 'guid-6dc20fb62c37201f');
         const stored = database.bindings.find(item => item.accountId === expected.accountId);
         if (!stored || !sameBindingIdentity(stored, expected))
-            throw new Error('Enterprise account binding does not match the registered identity');
+            throw guidanceError(new Error('Enterprise account binding does not match the registered identity'), 'guid-631f25a28d47a721');
         const active = this.assertActive(database, stored, normalizeCertificate(input.certFingerprint));
         return { binding: stored, ...active, policy: database.profile };
     }
@@ -649,18 +650,18 @@ export class EnterpriseRegistry {
         const agentId = normalizeScopeId(params.agentId, 'agentId');
         const sessionId = normalizeOptionalText(params.sessionId, 'sessionId');
         if (!sessionId)
-            throw new Error('sessionId is required');
+            throw guidanceError(new Error('sessionId is required'), 'guid-17efc95442af7d0e');
         if (!Number.isSafeInteger(params.expectedGeneration) || params.expectedGeneration < 0)
-            throw new Error('expectedGeneration must be a non-negative safe integer');
+            throw guidanceError(new Error('expectedGeneration must be a non-negative safe integer'), 'guid-6683a0a54ca59d5d');
         const expiresAt = parseTimestamp(params.expiresAt, 'expiresAt');
         if (Date.parse(expiresAt) <= this.now().getTime())
-            throw new Error('expiresAt must be in the future');
+            throw guidanceError(new Error('expiresAt must be in the future'), 'guid-a1b211fe48b40a17');
         return await this.exclusive(async () => {
             const database = this.readDatabase();
             const current = database.sessionLeases.find(item => item.agentId === agentId);
             const currentGeneration = current?.generation || 0;
             if (currentGeneration !== params.expectedGeneration)
-                throw new Error(`Stale session generation: expected ${params.expectedGeneration}, current ${currentGeneration}`);
+                throw guidanceError(new Error(`Stale session generation: expected ${params.expectedGeneration}, current ${currentGeneration}`), 'guid-996bbf0dfd95077a');
             if (!current)
                 entryCapacity(database, 'sessionLeases');
             const lease = { agentId, sessionId, generation: currentGeneration + 1, expiresAt };
@@ -676,21 +677,21 @@ export class EnterpriseRegistry {
         const sessionId = normalizeOptionalText(params.sessionId, 'sessionId');
         const lease = this.getSessionLease(agentId);
         if (!sessionId || !lease || lease.sessionId !== sessionId || lease.generation !== params.generation)
-            throw new Error('Session does not hold the current enterprise writer lease');
+            throw guidanceError(new Error('Session does not hold the current enterprise writer lease'), 'guid-d106f85ab416354d');
         return lease;
     }
     async releaseSessionLease(params) {
         const agentId = normalizeScopeId(params.agentId, 'agentId');
         const sessionId = normalizeOptionalText(params.sessionId, 'sessionId');
         if (!sessionId)
-            throw new Error('sessionId is required');
+            throw guidanceError(new Error('sessionId is required'), 'guid-17efc95442af7d0e');
         return await this.exclusive(async () => {
             const database = this.readDatabase();
             const current = database.sessionLeases.find(item => item.agentId === agentId);
             if (!current || current.generation !== params.expectedGeneration)
-                throw new Error(`Stale session generation: expected ${params.expectedGeneration}, current ${current?.generation || 0}`);
+                throw guidanceError(new Error(`Stale session generation: expected ${params.expectedGeneration}, current ${current?.generation || 0}`), 'guid-996bbf0dfd95077a');
             if (current.sessionId !== sessionId)
-                throw new Error('Session does not hold the current enterprise writer lease');
+                throw guidanceError(new Error('Session does not hold the current enterprise writer lease'), 'guid-d106f85ab416354d');
             const next = { agentId, generation: current.generation + 1 };
             await this.writeDatabase({ ...database, sessionLeases: database.sessionLeases.map(item => item.agentId === agentId ? next : item) });
             return next;

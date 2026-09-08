@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { createHash } from 'node:crypto';
 import { posix } from 'node:path';
 import { bodyStartLine, passageAction, RETRIEVAL_NOTE_BYTES } from './retrieval-service.js';
@@ -16,7 +17,7 @@ const overlap = (a, b) => a.some(v => b.includes(v));
 function bound(value, fallback, min, max) {
     const n = value ?? fallback;
     if (!Number.isInteger(n) || n < min || n > max)
-        throw Error(`Research bounds must be integers from ${min} to ${max}`);
+        throw guidanceError(Error(`Research bounds must be integers from ${min} to ${max}`), 'guid-1bcca26efc6657e1');
     return n;
 }
 function audience(path) {
@@ -52,7 +53,7 @@ export class ResearchBridgeService {
     async discover(params) {
         const limit = bound(params.limit, 3, 1, 3), maxChars = bound(params.maxChars, 6000, 1200, 12000);
         if (params.query !== undefined && (typeof params.query !== 'string' || params.query.length > 1000))
-            throw Error('Research query must be at most 1000 characters');
+            throw guidanceError(Error('Research query must be at most 1000 characters'), 'guid-3344fc552c8763f7');
         const query = (params.query || '').trim();
         const physical = (raw) => {
             try {
@@ -72,7 +73,7 @@ export class ResearchBridgeService {
         };
         const focusPath = physical(params.focusPath), comparePath = params.comparePath === undefined ? undefined : physical(params.comparePath);
         if (comparePath && key(comparePath) === key(focusPath))
-            throw Error('Choose two distinct research inputs');
+            throw guidanceError(Error('Choose two distinct research inputs'), 'guid-0ab0b4d8ab795865');
         const scope = audience(focusPath);
         const admitted = (p) => this.access.canAccessPhysicalPath(p, params.principal)
             && this.access.canReferenceFrom(focusPath, p)

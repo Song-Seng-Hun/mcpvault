@@ -1,3 +1,4 @@
+import { guidanceError, guidanceText } from './guidance-runtime.js';
 import { randomBytes } from 'node:crypto';
 import { appendFile, chmod, mkdir, open, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises';
 import type { FileHandle } from 'node:fs/promises';
@@ -108,20 +109,20 @@ async function acquireModerationFileLock(path: string): Promise<ModerationFileLo
         throw readError;
       }
       let record: unknown;
-      try { record = JSON.parse(raw); } catch { throw new Error('Moderation lock is corrupt; refusing to remove it automatically'); }
+      try { record = JSON.parse(raw); } catch { throw guidanceError(new Error('Moderation lock is corrupt; refusing to remove it automatically'), 'guid-a94f543e25668727'); }
       if (!record || typeof record !== 'object' || Array.isArray(record)
         || typeof (record as { pid?: unknown }).pid !== 'number'
         || !Number.isSafeInteger((record as { pid: number }).pid)
         || (record as { pid: number }).pid <= 0
         || typeof (record as { nonce?: unknown }).nonce !== 'string'
         || !(record as { nonce: string }).nonce) {
-        throw new Error('Moderation lock is invalid; refusing to remove it automatically');
+        throw guidanceError(new Error('Moderation lock is invalid; refusing to remove it automatically'), 'guid-b5e8a1575b8814a3');
       }
-      if (processIsAlive((record as { pid: number }).pid)) throw new Error(`Moderation database is already in use by process ${(record as { pid: number }).pid}`);
+      if (processIsAlive((record as { pid: number }).pid)) throw guidanceError(new Error(`Moderation database is already in use by process ${(record as { pid: number }).pid}`), 'guid-ed04d0cf5754c70c');
       await unlink(path);
     }
   }
-  throw new Error('Unable to acquire moderation database lock');
+  throw guidanceError(new Error('Unable to acquire moderation database lock'), 'guid-0c196f1e8992652c');
 }
 
 async function releaseModerationFileLock(lock: ModerationFileLock): Promise<void> {
@@ -184,7 +185,7 @@ export class ModerationService {
       try {
         const parsed = JSON.parse(await readFile(this.databasePath, 'utf8')) as Partial<ModerationDatabase>;
         if (parsed.version !== 1 || !Array.isArray(parsed.reports) || !Array.isArray(parsed.actions) || !Array.isArray(parsed.bans)) {
-          throw new Error('Unsupported or corrupt moderation database');
+          throw guidanceError(new Error('Unsupported or corrupt moderation database'), 'guid-701b9f4c8e23ea6c');
         }
         const eventCursor = Number.isInteger(parsed.eventCursor) && Number(parsed.eventCursor) >= 0 ? Number(parsed.eventCursor) : 0;
         database = { version: 1, reports: parsed.reports as ModerationReport[], actions: parsed.actions as ModerationActionRecord[], bans: parsed.bans as BanRecord[], eventCursor };
@@ -200,9 +201,9 @@ export class ModerationService {
           if (!line.trim()) continue;
           const parsed = JSON.parse(line) as { seq?: unknown; event?: ModerationEvent };
           const sequence = Number(parsed.seq);
-          if (!Number.isInteger(sequence) || sequence < 1 || !parsed.event || (parsed.event.kind !== 'report' && parsed.event.kind !== 'action')) throw new Error('Unsupported or corrupt moderation event log');
+          if (!Number.isInteger(sequence) || sequence < 1 || !parsed.event || (parsed.event.kind !== 'report' && parsed.event.kind !== 'action')) throw guidanceError(new Error('Unsupported or corrupt moderation event log'), 'guid-1800fa40c791a561');
           if (sequence <= cursor) continue;
-          if (sequence !== cursor + 1) throw new Error('Moderation event log sequence gap');
+          if (sequence !== cursor + 1) throw guidanceError(new Error('Moderation event log sequence gap'), 'guid-c97378f10350d8c5');
           this.applyEvent(database!, parsed.event);
           cursor = sequence;
           pending += 1;
@@ -279,14 +280,14 @@ export class ModerationService {
   }
 
   private requireLoggedIn(principal?: ScopePrincipal): ScopePrincipal {
-    if (!principal) throw new Error('Login is required to report or moderate content');
+    if (!principal) throw guidanceError(new Error('Login is required to report or moderate content'), 'guid-da0cb7942dba3c05');
     return principal;
   }
 
   private requireModerator(principal?: ScopePrincipal): ScopePrincipal {
     const caller = this.requireLoggedIn(principal);
     if (!this.scopeAuth.hasCapability(caller, 'moderate')) {
-      throw new Error('Moderator capability is required for this action; submit a report instead');
+      throw guidanceError(new Error('Moderator capability is required for this action; submit a report instead'), 'guid-da4db75a6ec71929');
     }
     return caller;
   }
@@ -296,10 +297,10 @@ export class ModerationService {
     switch (params.targetType) {
       case 'post': return `Community/Posts/${id}.md`;
       case 'comment':
-        if (!params.postId) throw new Error('postId is required for a comment target');
+        if (!params.postId) throw guidanceError(new Error('postId is required for a comment target'), 'guid-7b5593a5e1ecf527');
         return `Community/Comments/${normalizeScopeId(params.postId, 'postId')}/${id}.md`;
       case 'message':
-        if (!params.roomId) throw new Error('roomId is required for a message target');
+        if (!params.roomId) throw guidanceError(new Error('roomId is required for a message target'), 'guid-fd53e785908a2109');
         return `Community/ChatMessages/${normalizeScopeId(params.roomId, 'roomId')}/${id}.md`;
       case 'account': return undefined;
       case 'family': return undefined;
@@ -310,29 +311,29 @@ export class ModerationService {
     const targetId = normalizeScopeId(params.targetId, 'targetId');
     if (params.targetType === 'account') {
       const account = (await this.scopeAuth.listPrincipals()).find(item => item.accountId === targetId || item.agentId === targetId || item.modelId === targetId);
-      if (!account) throw new Error(`Account target not found: ${targetId}`);
+      if (!account) throw guidanceError(new Error(`Account target not found: ${targetId}`), 'guid-9591ef0b21cacd30');
       return { targetId, targetAuthor: account.agentId || account.modelId || account.accountId, userId: account.userId || account.accountId };
     }
     if (params.targetType === 'family') {
       const family = (await this.scopeAuth.listPrincipals()).filter(item => (item.userId || item.accountId) === targetId);
-      if (family.length === 0) throw new Error(`Family target not found: ${targetId}`);
+      if (family.length === 0) throw guidanceError(new Error(`Family target not found: ${targetId}`), 'guid-14973015efa38b5a');
       return { targetId, targetAuthor: targetId, userId: targetId, familySize: family.length };
     }
     const path = this.targetPath({ ...params, targetId });
     const note = await this.fileSystem.readNote(path!);
     const expectedType = params.targetType === 'post' ? 'blog_post' : params.targetType === 'comment' ? 'blog_comment' : 'chat_message';
-    if (note.frontmatter.mcpvault_type !== expectedType) throw new Error(`Target is not a community ${params.targetType}`);
+    if (note.frontmatter.mcpvault_type !== expectedType) throw guidanceError(new Error(`Target is not a community ${params.targetType}`), 'guid-009adee78ca51687');
     return { targetId, path, note, targetAuthor: String(note.frontmatter.author || '') || undefined };
   }
 
   async report(params: { principal?: ScopePrincipal; targetType: string; targetId: string; postId?: string | undefined; roomId?: string | undefined; category: string; reason: string }) {
     const reporter = this.requireLoggedIn(params.principal);
     const targetType = String(params.targetType || '').trim().toLowerCase() as ModerationTargetType;
-    if (!(MODERATION_TARGET_TYPES as readonly string[]).includes(targetType)) throw new Error(`targetType must be one of: ${MODERATION_TARGET_TYPES.join(', ')}`);
+    if (!(MODERATION_TARGET_TYPES as readonly string[]).includes(targetType)) throw guidanceError(new Error(`targetType must be one of: ${MODERATION_TARGET_TYPES.join(', ')}`), 'guid-3321b5aa1fcde3a4');
     const category = String(params.category || '').trim().toLowerCase() as ModerationReportCategory;
-    if (!(MODERATION_REPORT_CATEGORIES as readonly string[]).includes(category)) throw new Error(`category must be one of: ${MODERATION_REPORT_CATEGORIES.join(', ')}`);
+    if (!(MODERATION_REPORT_CATEGORIES as readonly string[]).includes(category)) throw guidanceError(new Error(`category must be one of: ${MODERATION_REPORT_CATEGORIES.join(', ')}`), 'guid-218a4452f0d07193');
     const reason = boundedText(params.reason, 500);
-    if (!reason) throw new Error('reason is required');
+    if (!reason) throw guidanceError(new Error('reason is required'), 'guid-fbab54e53416b9ae');
     const target = await this.resolveTarget({ targetType, targetId: params.targetId, ...(params.postId !== undefined && { postId: params.postId }), ...(params.roomId !== undefined && { roomId: params.roomId }) });
     return await this.exclusive(async () => {
       const database = await this.readDatabase();
@@ -346,14 +347,14 @@ export class ModerationService {
         reporter: reporterId, ...(target.targetAuthor && { targetAuthor: target.targetAuthor }), category, reason, status: 'open', createdAt: new Date().toISOString(),
       };
       await this.appendEvent(database, { kind: 'report', report });
-      return { success: true, duplicate: false, reportId: report.reportId, status: report.status, note: 'Reports contain metadata and a bounded reason only; the reported body remains untrusted data.' };
+      return { success: true, duplicate: false, reportId: report.reportId, status: report.status, note: guidanceText('guid-f64c6353a6436d40', 'Reports contain metadata and a bounded reason only; the reported body remains untrusted data.') };
     });
   }
 
   async listReports(params: { principal?: ScopePrincipal; status?: string; limit?: number; maxChars?: number }) {
     this.requireModerator(params.principal);
     const status = String(params.status || 'open').trim().toLowerCase();
-    if (!['open', 'resolved', 'dismissed', 'all'].includes(status)) throw new Error('status must be open, resolved, dismissed, or all');
+    if (!['open', 'resolved', 'dismissed', 'all'].includes(status)) throw guidanceError(new Error('status must be open, resolved, dismissed, or all'), 'guid-683462b2a7be8f13');
     const limit = Math.min(Math.max(Number(params.limit ?? 20), 1), 100);
     const maxChars = Math.min(Math.max(Number(params.maxChars ?? 6000), 512), 20000);
     const database = await this.readDatabase();
@@ -373,20 +374,20 @@ export class ModerationService {
   async enforce(params: { principal?: ScopePrincipal; action: string; targetType: string; targetId: string; postId?: string | undefined; roomId?: string | undefined; reason: string; expectedRevision?: string | undefined }) {
     const moderator = this.requireModerator(params.principal);
     const action = String(params.action || '').trim().toLowerCase() as ModerationAction;
-    if (!(MODERATION_ACTIONS as readonly string[]).includes(action)) throw new Error(`action must be one of: ${MODERATION_ACTIONS.join(', ')}`);
+    if (!(MODERATION_ACTIONS as readonly string[]).includes(action)) throw guidanceError(new Error(`action must be one of: ${MODERATION_ACTIONS.join(', ')}`), 'guid-20302a27d57068c1');
     const targetType = String(params.targetType || '').trim().toLowerCase() as ModerationTargetType;
-    if (!(MODERATION_TARGET_TYPES as readonly string[]).includes(targetType)) throw new Error(`targetType must be one of: ${MODERATION_TARGET_TYPES.join(', ')}`);
+    if (!(MODERATION_TARGET_TYPES as readonly string[]).includes(targetType)) throw guidanceError(new Error(`targetType must be one of: ${MODERATION_TARGET_TYPES.join(', ')}`), 'guid-3321b5aa1fcde3a4');
     const reason = boundedText(params.reason, 500);
-    if (!reason) throw new Error('reason is required');
-    if ((action === 'ban' || action === 'unban') !== (targetType === 'account' || targetType === 'family')) throw new Error('ban and unban target an account or family; content actions target a post, comment, or message');
+    if (!reason) throw guidanceError(new Error('reason is required'), 'guid-fbab54e53416b9ae');
+    if ((action === 'ban' || action === 'unban') !== (targetType === 'account' || targetType === 'family')) throw guidanceError(new Error('ban and unban target an account or family; content actions target a post, comment, or message'), 'guid-01ca3f1900bf85e1');
     const target = await this.resolveTarget({ targetType, targetId: params.targetId, ...(params.postId !== undefined && { postId: params.postId }), ...(params.roomId !== undefined && { roomId: params.roomId }) });
     const timestamp = new Date().toISOString();
 
     return await this.exclusive(async () => {
       const database = await this.readDatabase();
       if (targetType !== 'account' && targetType !== 'family') {
-        if (!params.expectedRevision) throw new Error('expectedRevision is required; read the target first');
-        if (target.note!.revision !== params.expectedRevision) throw new Error('Target changed since it was read; retry with its current revision');
+        if (!params.expectedRevision) throw guidanceError(new Error('expectedRevision is required; read the target first'), 'guid-c2449d02e562d648');
+        if (target.note!.revision !== params.expectedRevision) throw guidanceError(new Error('Target changed since it was read; retry with its current revision'), 'guid-5db81d7d0e4de752');
         const nextStatus: ModerationStatus = action === 'warn' ? 'warned' : action === 'hide' ? 'hidden' : action === 'quarantine' ? 'quarantined' : action === 'remove' ? 'removed' : 'visible';
         await this.fileSystem.writeNote({
           path: target.path!, content: target.note!.content,

@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { assertEnterpriseStorageFresh } from './enterprise-storage-context.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { lstat, mkdir, open, realpath, rename, unlink } from 'node:fs/promises';
@@ -5,7 +6,7 @@ import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 const MAX_FEDERATION_FILE_BYTES = 64 * 1024 * 1024;
 function checkedLimit(options) {
     if (!Number.isSafeInteger(options.maxBytes) || options.maxBytes < 1 || options.maxBytes > MAX_FEDERATION_FILE_BYTES) {
-        throw new Error(`maxBytes must be an integer between 1 and ${MAX_FEDERATION_FILE_BYTES}`);
+        throw guidanceError(new Error(`maxBytes must be an integer between 1 and ${MAX_FEDERATION_FILE_BYTES}`), 'guid-54152e8590bede6e');
     }
     return options.maxBytes;
 }
@@ -21,7 +22,7 @@ function targetPath(root, target) {
     const lexicalRoot = resolve(root);
     const candidate = isAbsolute(target) ? resolve(target) : resolve(lexicalRoot, target);
     if (!isInside(lexicalRoot, candidate) || candidate === lexicalRoot) {
-        throw new Error('Federation file target is outside the trusted root');
+        throw guidanceError(new Error('Federation file target is outside the trusted root'), 'guid-c151366effa760d3');
     }
     return candidate;
 }
@@ -33,7 +34,7 @@ async function canonicalRoot(root) {
     const canonical = await realpath(lexical);
     const info = await lstat(canonical);
     if (!info.isDirectory())
-        throw new Error('Federation trusted root must be a directory');
+        throw guidanceError(new Error('Federation trusted root must be a directory'), 'guid-35788928a9e30c35');
     return { lexical, canonical };
 }
 async function assertSafeExistingPath(root, target, requireFile) {
@@ -43,15 +44,15 @@ async function assertSafeExistingPath(root, target, requireFile) {
         current = join(current, parts[index]);
         const info = await lstat(current);
         if (info.isSymbolicLink())
-            throw new Error('Federation storage refuses symbolic-link or junction path components');
+            throw guidanceError(new Error('Federation storage refuses symbolic-link or junction path components'), 'guid-d5bb8e24d56b85ab');
         const canonical = await realpath(current);
         if (!isInside(root.canonical, canonical))
-            throw new Error('Federation file canonical path escapes the trusted root');
+            throw guidanceError(new Error('Federation file canonical path escapes the trusted root'), 'guid-0ff1134aa1e22677');
         const final = index === parts.length - 1;
         if (!final && !info.isDirectory())
-            throw new Error('Federation storage parent path is not a directory');
+            throw guidanceError(new Error('Federation storage parent path is not a directory'), 'guid-044296553d9ce398');
         if (final && requireFile && !info.isFile())
-            throw new Error('Federation file target is not a regular file');
+            throw guidanceError(new Error('Federation file target is not a regular file'), 'guid-9ab0b30e8106ea22');
     }
 }
 async function ensureSafeParent(root, parent) {
@@ -61,9 +62,9 @@ async function ensureSafeParent(root, parent) {
         try {
             const info = await lstat(current);
             if (info.isSymbolicLink())
-                throw new Error('Federation storage refuses symbolic-link or junction path components');
+                throw guidanceError(new Error('Federation storage refuses symbolic-link or junction path components'), 'guid-d5bb8e24d56b85ab');
             if (!info.isDirectory())
-                throw new Error('Federation storage parent path is not a directory');
+                throw guidanceError(new Error('Federation storage parent path is not a directory'), 'guid-044296553d9ce398');
         }
         catch (error) {
             if (!(error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT'))
@@ -77,13 +78,13 @@ async function ensureSafeParent(root, parent) {
             }
             const created = await lstat(current);
             if (created.isSymbolicLink())
-                throw new Error('Federation storage refuses symbolic-link or junction path components');
+                throw guidanceError(new Error('Federation storage refuses symbolic-link or junction path components'), 'guid-d5bb8e24d56b85ab');
             if (!created.isDirectory())
-                throw new Error('Federation storage parent path is not a directory');
+                throw guidanceError(new Error('Federation storage parent path is not a directory'), 'guid-044296553d9ce398');
         }
         const canonical = await realpath(current);
         if (!isInside(root.canonical, canonical))
-            throw new Error('Federation file canonical path escapes the trusted root');
+            throw guidanceError(new Error('Federation file canonical path escapes the trusted root'), 'guid-0ff1134aa1e22677');
     }
 }
 export async function readFederationFile(rootInput, targetInput, options) {
@@ -96,7 +97,7 @@ export async function readFederationFile(rootInput, targetInput, options) {
     try {
         const before = await handle.stat();
         if (!before.isFile() || before.size > maxBytes)
-            throw new Error(`${label(options)} exceeds its size limit`);
+            throw guidanceError(new Error(`${label(options)} exceeds its size limit`), 'guid-c938dfcfcc36a984');
         const buffer = Buffer.allocUnsafe(Math.min(maxBytes, before.size) + 1);
         let bytesRead = 0;
         while (bytesRead < buffer.length) {
@@ -107,7 +108,7 @@ export async function readFederationFile(rootInput, targetInput, options) {
         }
         const after = await handle.stat();
         if (bytesRead > maxBytes || after.size > maxBytes)
-            throw new Error(`${label(options)} exceeds its size limit`);
+            throw guidanceError(new Error(`${label(options)} exceeds its size limit`), 'guid-c938dfcfcc36a984');
         return buffer.subarray(0, bytesRead).toString('utf8');
     }
     finally {
@@ -136,7 +137,7 @@ export async function writeFederationFileAtomic(rootInput, targetInput, content,
     assertEnterpriseStorageFresh();
     const maxBytes = checkedLimit(options);
     if (typeof content !== 'string' || Buffer.byteLength(content, 'utf8') > maxBytes) {
-        throw new Error(`${label(options)} exceeds its size limit`);
+        throw guidanceError(new Error(`${label(options)} exceeds its size limit`), 'guid-c938dfcfcc36a984');
     }
     const root = await canonicalRoot(rootInput);
     const target = targetPath(root.lexical, targetInput);

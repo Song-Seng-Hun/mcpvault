@@ -19,6 +19,7 @@ export type VaultCatalogBatchListener = (changes?: readonly VaultCatalogChange[]
  */
 export declare class VaultFileCatalog {
     private readonly pathFilter;
+    private readonly excludePath;
     private readonly cacheOwner;
     private readonly vaultPath;
     private readonly listeners;
@@ -42,7 +43,7 @@ export declare class VaultFileCatalog {
     private readonly dirtyDirectories;
     private readonly statInFlight;
     private readonly statCache;
-    constructor(vaultPath: string, pathFilter: PathFilter);
+    constructor(vaultPath: string, pathFilter: PathFilter, excludePath?: (path: string) => boolean);
     private assertOpen;
     subscribe(listener: VaultCatalogListener): () => void;
     /** Subscribe to coalesced watcher changes so read models invalidate once per batch. */

@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 export type DailyDateInput = 'today' | 'yesterday' | 'tomorrow' | string;
 
 export function resolveDailyDate(input: DailyDateInput = 'today', now: Date = new Date()): string {
@@ -6,12 +7,12 @@ export function resolveDailyDate(input: DailyDateInput = 'today', now: Date = ne
 
   if (value !== 'today' && value !== 'yesterday' && value !== 'tomorrow') {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-      throw new Error('date must be today, yesterday, tomorrow, or YYYY-MM-DD');
+      throw guidanceError(new Error('date must be today, yesterday, tomorrow, or YYYY-MM-DD'), 'guid-238785a1b8d06f0c');
     }
     const [year, month, day] = value.split('-').map(Number);
     const parsed = new Date(Date.UTC(year!, month! - 1, day!));
     if (parsed.getUTCFullYear() !== year || parsed.getUTCMonth() !== month! - 1 || parsed.getUTCDate() !== day) {
-      throw new Error(`Invalid calendar date: ${input}`);
+      throw guidanceError(new Error(`Invalid calendar date: ${input}`), 'guid-ce4ce1aa31c833ea');
     }
     return value;
   }

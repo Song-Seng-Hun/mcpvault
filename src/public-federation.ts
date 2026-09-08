@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import {
   createHash,
   createPrivateKey,
@@ -197,18 +198,18 @@ async function acquireProcessLock(path: string): Promise<ProcessLock> {
         throw readError;
       }
       let record: unknown;
-      try { record = JSON.parse(raw); } catch { throw new Error('Public Federation process lock is corrupt; refusing to remove it automatically'); }
+      try { record = JSON.parse(raw); } catch { throw guidanceError(new Error('Public Federation process lock is corrupt; refusing to remove it automatically'), 'guid-97ff5ba4b1458912'); }
       if (!record || typeof record !== 'object' || Array.isArray(record)
         || !Number.isSafeInteger((record as Record<string, unknown>).pid) || Number((record as Record<string, unknown>).pid) <= 0
         || typeof (record as Record<string, unknown>).nonce !== 'string' || !(record as Record<string, unknown>).nonce) {
-        throw new Error('Public Federation process lock is invalid; refusing to remove it automatically');
+        throw guidanceError(new Error('Public Federation process lock is invalid; refusing to remove it automatically'), 'guid-bb2ad9ac925fc9bb');
       }
       const pid = Number((record as Record<string, unknown>).pid);
-      if (processIsAlive(pid)) throw new Error(`Public Federation storage is already in use by process ${pid}`);
+      if (processIsAlive(pid)) throw guidanceError(new Error(`Public Federation storage is already in use by process ${pid}`), 'guid-2ce2dec3f3d41a3d');
       await unlink(path);
     }
   }
-  throw new Error('Unable to acquire Public Federation process lock');
+  throw guidanceError(new Error('Unable to acquire Public Federation process lock'), 'guid-e4f97aded2ce88ef');
 }
 
 async function releaseProcessLock(lock: ProcessLock): Promise<void> {
@@ -260,14 +261,14 @@ function verifyValue(value: unknown, signature: string, publicKey: KeyObject): b
 
 function boundedId(value: string, field: string): string {
   const normalized = String(value || '').trim().toLowerCase();
-  if (!ID_PATTERN.test(normalized)) throw new Error(`${field} must be a lowercase opaque identifier`);
+  if (!ID_PATTERN.test(normalized)) throw guidanceError(new Error(`${field} must be a lowercase opaque identifier`), 'guid-2e550a2ac3b1c100');
   return normalized;
 }
 
 function boundedText(value: string, field: string, max = MAX_TEXT): string {
   const text = String(value ?? '').trim();
-  if (!text || text.length > max) throw new Error(`${field} is required and must be at most ${max} characters`);
-  if (/\u0000|[\u0001-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(text)) throw new Error(`${field} contains unsupported control characters`);
+  if (!text || text.length > max) throw guidanceError(new Error(`${field} is required and must be at most ${max} characters`), 'guid-600d6a2929171008');
+  if (/\u0000|[\u0001-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(text)) throw guidanceError(new Error(`${field} contains unsupported control characters`), 'guid-5e267e1e9c837924');
   return text;
 }
 
@@ -293,32 +294,32 @@ function profileId(identity: PublicFederationIdentity): string {
 
 function expectedObjectId(kind: string, identity: PublicFederationIdentity, actual: string): void {
   const prefix = `${kind}:${identity.origin}:${identity.agentId}:`;
-  if (!actual.startsWith(prefix) || actual.length > 512 || !/^[a-z0-9:._-]+$/.test(actual)) throw new Error(`${kind} objectId is not owned by the authenticated actor`);
+  if (!actual.startsWith(prefix) || actual.length > 512 || !/^[a-z0-9:._-]+$/.test(actual)) throw guidanceError(new Error(`${kind} objectId is not owned by the authenticated actor`), 'guid-9e884c4b2aa47849');
 }
 
 function rejectPrivateReferences(value: string, field: string): void {
   const normalized = value.replace(/\\/g, '/');
   if (/(?:^|[\[(/\s])(?:community|user|users|_scopes|_whispers|\.mcpvault|\.git)(?:\/|\]\]|\s|$)/i.test(normalized)) {
-    throw new Error(`${field} contains a private or instance-local reference`);
+    throw guidanceError(new Error(`${field} contains a private or instance-local reference`), 'guid-7c7566fa40431867');
   }
 }
 
 function assertExactKeys(value: Record<string, unknown>, allowed: readonly string[]): void {
   const allowedSet = new Set(allowed);
   const extra = Object.keys(value).find(key => !allowedSet.has(key));
-  if (extra) throw new Error(`public record contains unsupported or private field: ${extra}`);
+  if (extra) throw guidanceError(new Error(`public record contains unsupported or private field: ${extra}`), 'guid-8b9571302dbfe05b');
 }
 
 function normalizeExpectedRevision(value: number, allowZero: boolean): number {
-  if (!Number.isSafeInteger(value) || value < (allowZero ? 0 : 1)) throw new Error('expectedRevision is invalid');
+  if (!Number.isSafeInteger(value) || value < (allowZero ? 0 : 1)) throw guidanceError(new Error('expectedRevision is invalid'), 'guid-0ab6244a003a3452');
   return value;
 }
 
 function normalizeInput(input: PublicPublishInput, rawIdentity: PublicFederationIdentity): PublicFederationRecord {
-  if (!input || typeof input !== 'object') throw new Error('public record must be an object');
+  if (!input || typeof input !== 'object') throw guidanceError(new Error('public record must be an object'), 'guid-e09ffebab930ca56');
   const identity = normalizeIdentity(rawIdentity);
   const actorId = makePublicActorId(identity.origin, identity.agentId);
-  if (input.actorId !== actorId) throw new Error('actorId is not owned by the authenticated origin and agent');
+  if (input.actorId !== actorId) throw guidanceError(new Error('actorId is not owned by the authenticated origin and agent'), 'guid-15eb73725eb7f881');
   const common = { protocol: PUBLIC_FEDERATION_PROTOCOL, version: 1 as const, actorId };
   if (input.type === 'actor') {
     assertExactKeys(input as unknown as Record<string, unknown>, ['type', 'actorId', 'expectedRevision']);
@@ -349,7 +350,7 @@ function normalizeInput(input: PublicPublishInput, rawIdentity: PublicFederation
     normalizeExpectedRevision(input.expectedRevision, true);
     const postId = boundedText(input.postId, 'postId', 512).toLowerCase();
     const replyTo = input.replyTo === undefined ? undefined : boundedText(input.replyTo, 'replyTo', 512).toLowerCase();
-    if (!postId.startsWith('post:') || (replyTo && !replyTo.startsWith('comment:'))) throw new Error('comment parent IDs are invalid');
+    if (!postId.startsWith('post:') || (replyTo && !replyTo.startsWith('comment:'))) throw guidanceError(new Error('comment parent IDs are invalid'), 'guid-6c483f4ad377b173');
     const body = boundedText(input.body, 'body');
     rejectPrivateReferences(body, 'body');
     return { ...common, type: 'comment', recordId: input.objectId, objectId: input.objectId, revision: 1, postId, ...(replyTo && { replyTo }), body };
@@ -364,7 +365,7 @@ function normalizeInput(input: PublicPublishInput, rawIdentity: PublicFederation
       ...(input.displayName !== undefined && { displayName: boundedText(input.displayName, 'displayName', 128) }),
       ...(input.bio !== undefined && { bio: boundedText(input.bio, 'bio', 2_000) }),
     };
-    if (Object.keys(fields).length === 0) throw new Error('update requires a public field');
+    if (Object.keys(fields).length === 0) throw guidanceError(new Error('update requires a public field'), 'guid-526494c833cd7ec7');
     for (const [field, value] of Object.entries(fields)) rejectPrivateReferences(value, field);
     return { ...common, type: 'update', recordId: input.objectId, objectId: input.objectId, targetObjectId: boundedText(input.targetObjectId, 'targetObjectId', 512).toLowerCase(), revision, ...fields };
   }
@@ -373,7 +374,7 @@ function normalizeInput(input: PublicPublishInput, rawIdentity: PublicFederation
     expectedObjectId('tombstone', identity, input.objectId);
     return { ...common, type: 'tombstone', recordId: input.objectId, objectId: input.objectId, targetObjectId: boundedText(input.targetObjectId, 'targetObjectId', 512).toLowerCase(), revision: normalizeExpectedRevision(input.expectedRevision, false) + 1, reason: boundedText(input.reason, 'reason', 500) };
   }
-  throw new Error('unsupported public record type');
+  throw guidanceError(new Error('unsupported public record type'), 'guid-051b31a1527a1f2f');
 }
 
 /** Pure transport preflight used before a local SocialService mutation. */
@@ -388,7 +389,7 @@ function eventMarkdown(event: PublicFederationEvent): string {
 
 function parseEventMarkdown(content: string): PublicFederationEvent {
   const match = content.match(/```json public-federation-record\r?\n([^\r\n]+)\r?\n```/);
-  if (!match?.[1]) throw new Error('public federation record Markdown is invalid');
+  if (!match?.[1]) throw guidanceError(new Error('public federation record Markdown is invalid'), 'guid-13525993d3b358a5');
   return JSON.parse(match[1]) as PublicFederationEvent;
 }
 
@@ -449,7 +450,7 @@ export class PublicFederationHub {
     const privateKey = options.signingPrivateKey
       ? createPrivateKey(options.signingPrivateKey)
       : generateKeyPairSync('ed25519').privateKey;
-    if (privateKey.asymmetricKeyType !== 'ed25519') throw new Error('Public Federation signing key must be Ed25519');
+    if (privateKey.asymmetricKeyType !== 'ed25519') throw guidanceError(new Error('Public Federation signing key must be Ed25519'), 'guid-fd140080076d6966');
     this.signingPrivateKey = privateKey;
     this.signingPublicKey = createPublicKey(privateKey).export({ type: 'spki', format: 'pem' }).toString();
     this.maxRecords = Math.min(Math.max(Math.trunc(options.maxRecords ?? 100_000), 1), 1_000_000);
@@ -462,7 +463,7 @@ export class PublicFederationHub {
   }
 
   private async ensureLoaded(): Promise<void> {
-    if (this.closed) throw new Error('Public Federation hub is closed');
+    if (this.closed) throw guidanceError(new Error('Public Federation hub is closed'), 'guid-48fc18bcfb4caeee');
     if (this.initialized) return;
     if (!this.loadPromise) this.loadPromise = this.load();
     await this.loadPromise;
@@ -480,7 +481,7 @@ export class PublicFederationHub {
         const event = parseEventMarkdown(await readFederationFile(this.root, join(this.recordsRoot, name), { maxBytes: 128 * 1024 }));
         const unsigned = unsignedEvent(event);
         if (event.sequence !== this.events.length + 1 || event.previousHash !== previousHash || event.eventHash !== sha256(canonical(unsigned)) || !verifyValue(unsigned, event.signature, createPublicKey(this.signingPublicKey))) {
-          throw new Error(`invalid public federation event chain at sequence ${event.sequence}`);
+          throw guidanceError(new Error(`invalid public federation event chain at sequence ${event.sequence}`), 'guid-645e5acaa22f03ef');
         }
         this.apply(event);
         this.events.push(event);
@@ -550,37 +551,37 @@ export class PublicFederationHub {
     return this.withMutation(async () => {
       const identity = normalizeIdentity(rawIdentity);
       const key = boundedText(idempotencyKey, 'idempotencyKey', MAX_IDEMPOTENCY_KEY);
-      if (!/^[a-zA-Z0-9._:-]+$/.test(key)) throw new Error('idempotencyKey contains unsupported characters');
+      if (!/^[a-zA-Z0-9._:-]+$/.test(key)) throw guidanceError(new Error('idempotencyKey contains unsupported characters'), 'guid-fa172a62ac0530bc');
       const record = normalizeInput(input, identity);
       const scopedKey = sha256(`${identity.origin}:${identity.agentId}:${key}`);
       const payloadHash = sha256(canonical({ record }));
       const prior = this.idempotency.get(scopedKey);
       if (prior) {
-        if (prior.payloadHash !== payloadHash) throw new Error('idempotency key was already used with a different payload');
+        if (prior.payloadHash !== payloadHash) throw guidanceError(new Error('idempotency key was already used with a different payload'), 'guid-09916e6dfb668052');
         const existing = this.eventForId(prior.eventId);
-        if (!existing) throw new Error('idempotency state references a missing event');
+        if (!existing) throw guidanceError(new Error('idempotency state references a missing event'), 'guid-25ff516f7ff453f6');
         return existing;
       }
-      if (this.events.length >= this.maxRecords) throw new Error('Public Federation record quota exceeded');
+      if (this.events.length >= this.maxRecords) throw guidanceError(new Error('Public Federation record quota exceeded'), 'guid-2c2a854e1845203b');
       const actor = this.objects.get(record.actorId);
       if (record.type === 'actor') {
-        if (actor) throw new Error('actor already exists');
+        if (actor) throw guidanceError(new Error('actor already exists'), 'guid-acec98e1fd226793');
       } else if (!actor || actor.kind !== 'actor' || actor.tombstoned) {
-        throw new Error('authenticated actor must be published before social records');
+        throw guidanceError(new Error('authenticated actor must be published before social records'), 'guid-063b4205ef9befcf');
       }
       const targetId = record.type === 'update' || record.type === 'tombstone' ? record.targetObjectId : record.recordId;
       const target = this.objects.get(targetId);
       const expectedRevision = input.expectedRevision;
       if (record.type === 'actor' || record.type === 'post' || record.type === 'comment') {
-        if (expectedRevision !== 0 || target) throw new Error('revision conflict: new public object requires expectedRevision 0');
+        if (expectedRevision !== 0 || target) throw guidanceError(new Error('revision conflict: new public object requires expectedRevision 0'), 'guid-a0f5b846cdfb6fb3');
       } else if (record.type === 'profile') {
         const current = this.objects.get(record.recordId);
-        if ((current?.revision ?? 0) !== expectedRevision) throw new Error(`revision conflict: expected ${expectedRevision}, current ${current?.revision ?? 0}`);
+        if ((current?.revision ?? 0) !== expectedRevision) throw guidanceError(new Error(`revision conflict: expected ${expectedRevision}, current ${current?.revision ?? 0}`), 'guid-5f13e1a416a5feaf');
       } else {
-        if (!target) throw new Error('target public object does not exist');
-        if (target.actorId !== record.actorId) throw new Error('authenticated actor does not own the target object');
-        if (target.tombstoned) throw new Error('target public object is tombstoned');
-        if (target.revision !== expectedRevision) throw new Error(`revision conflict: expected ${expectedRevision}, current ${target.revision}`);
+        if (!target) throw guidanceError(new Error('target public object does not exist'), 'guid-f524e3f5e7a51ae7');
+        if (target.actorId !== record.actorId) throw guidanceError(new Error('authenticated actor does not own the target object'), 'guid-837a1e889d6a6a51');
+        if (target.tombstoned) throw guidanceError(new Error('target public object is tombstoned'), 'guid-2bd5f236d56ef72f');
+        if (target.revision !== expectedRevision) throw guidanceError(new Error(`revision conflict: expected ${expectedRevision}, current ${target.revision}`), 'guid-5f13e1a416a5feaf');
         if (record.type === 'update') {
           const invalid = target.kind === 'post'
             ? record.displayName !== undefined || record.bio !== undefined
@@ -589,7 +590,7 @@ export class PublicFederationHub {
               : target.kind === 'profile'
                 ? record.title !== undefined || record.body !== undefined
                 : true;
-          if (invalid) throw new Error(`an update field does not apply to a ${target.kind} object`);
+          if (invalid) throw guidanceError(new Error(`an update field does not apply to a ${target.kind} object`), 'guid-1548b66ee82a824b');
         }
       }
       const parents = record.type === 'comment' ? [record.postId, ...(record.replyTo ? [record.replyTo] : [])] : [];
@@ -609,7 +610,7 @@ export class PublicFederationHub {
       const eventHash = sha256(canonical(unsigned));
       const event: PublicFederationEvent = { ...unsigned, eventHash, signature: signValue(unsigned, this.signingPrivateKey) };
       const serialized = eventMarkdown(event);
-      if (Buffer.byteLength(serialized, 'utf8') > MAX_RECORD_BYTES) throw new Error(`public record exceeds ${MAX_RECORD_BYTES} bytes`);
+      if (Buffer.byteLength(serialized, 'utf8') > MAX_RECORD_BYTES) throw guidanceError(new Error(`public record exceeds ${MAX_RECORD_BYTES} bytes`), 'guid-221c5078b30c3465');
       const path = join(this.recordsRoot, `${String(event.sequence).padStart(12, '0')}.md`);
       await writeFederationFileAtomic(this.root, path, serialized, { maxBytes: 128 * 1024 });
       this.apply(event);
@@ -622,17 +623,17 @@ export class PublicFederationHub {
   async moderate(input: PublicModerationInput, rawIdentity: PublicFederationIdentity, idempotencyKey: string): Promise<PublicFederationEvent> {
     return this.withMutation(async () => {
       const identity = normalizeIdentity(rawIdentity);
-      if (identity.role !== 'moderator') throw new Error('moderator authority is required');
-      if (!input || typeof input !== 'object') throw new Error('moderation input must be an object');
+      if (identity.role !== 'moderator') throw guidanceError(new Error('moderator authority is required'), 'guid-11f710a3f13d26b2');
+      if (!input || typeof input !== 'object') throw guidanceError(new Error('moderation input must be an object'), 'guid-aa444b5dba2c0e38');
       assertExactKeys(input as unknown as Record<string, unknown>, ['objectId', 'action', 'reason', 'expectedRevision']);
       const objectId = boundedText(input.objectId, 'objectId', 512).toLowerCase();
       const target = this.objects.get(objectId);
-      if (!target) throw new Error('moderation target does not exist');
-      if (input.action !== 'hide' && input.action !== 'restore') throw new Error('moderation action must be hide or restore');
+      if (!target) throw guidanceError(new Error('moderation target does not exist'), 'guid-a2b809aaf2b368c4');
+      if (input.action !== 'hide' && input.action !== 'restore') throw guidanceError(new Error('moderation action must be hide or restore'), 'guid-797d2745d5c3837a');
       const expectedRevision = normalizeExpectedRevision(input.expectedRevision, true);
       const reason = boundedText(input.reason, 'reason', 500);
       const key = boundedText(idempotencyKey, 'idempotencyKey', MAX_IDEMPOTENCY_KEY);
-      if (!/^[a-zA-Z0-9._:-]+$/.test(key)) throw new Error('idempotencyKey contains unsupported characters');
+      if (!/^[a-zA-Z0-9._:-]+$/.test(key)) throw guidanceError(new Error('idempotencyKey contains unsupported characters'), 'guid-fa172a62ac0530bc');
       const scopedKey = sha256(`${identity.origin}:${identity.agentId}:moderation:${key}`);
       const record: PublicModerationRecord = {
         protocol: PUBLIC_FEDERATION_PROTOCOL,
@@ -648,13 +649,13 @@ export class PublicFederationHub {
       const payloadHash = sha256(canonical({ record }));
       const prior = this.idempotency.get(scopedKey);
       if (prior) {
-        if (prior.payloadHash !== payloadHash) throw new Error('idempotency key was already used with a different payload');
+        if (prior.payloadHash !== payloadHash) throw guidanceError(new Error('idempotency key was already used with a different payload'), 'guid-09916e6dfb668052');
         const existing = this.eventForId(prior.eventId);
-        if (!existing) throw new Error('idempotency state references a missing event');
+        if (!existing) throw guidanceError(new Error('idempotency state references a missing event'), 'guid-25ff516f7ff453f6');
         return existing;
       }
-      if (target.moderationRevision !== expectedRevision) throw new Error(`moderation revision conflict: expected ${expectedRevision}, current ${target.moderationRevision}`);
-      if (this.events.length >= this.maxRecords) throw new Error('Public Federation record quota exceeded');
+      if (target.moderationRevision !== expectedRevision) throw guidanceError(new Error(`moderation revision conflict: expected ${expectedRevision}, current ${target.moderationRevision}`), 'guid-e4cffd5efec94ec6');
+      if (this.events.length >= this.maxRecords) throw guidanceError(new Error('Public Federation record quota exceeded'), 'guid-2c2a854e1845203b');
       const unsigned = {
         eventId: `public_event_${randomUUID()}`,
         sequence: this.events.length + 1,
@@ -666,7 +667,7 @@ export class PublicFederationHub {
       };
       const event: PublicFederationEvent = { ...unsigned, eventHash: sha256(canonical(unsigned)), signature: signValue(unsigned, this.signingPrivateKey) };
       const serialized = eventMarkdown(event);
-      if (Buffer.byteLength(serialized, 'utf8') > MAX_RECORD_BYTES) throw new Error(`public record exceeds ${MAX_RECORD_BYTES} bytes`);
+      if (Buffer.byteLength(serialized, 'utf8') > MAX_RECORD_BYTES) throw guidanceError(new Error(`public record exceeds ${MAX_RECORD_BYTES} bytes`), 'guid-221c5078b30c3465');
       await writeFederationFileAtomic(this.root, join(this.recordsRoot, `${String(event.sequence).padStart(12, '0')}.md`), serialized, { maxBytes: 128 * 1024 });
       this.apply(event);
       this.events.push(event);
@@ -678,7 +679,7 @@ export class PublicFederationHub {
   async getFeed(after = 0, limit?: number): Promise<PublicFederationFeed> {
     await this.ensureLoaded();
     const cursor = Number.isSafeInteger(after) && after >= 0 ? after : 0;
-    if (cursor > this.events.length) throw new Error('feed cursor is beyond the current public federation sequence');
+    if (cursor > this.events.length) throw guidanceError(new Error('feed cursor is beyond the current public federation sequence'), 'guid-29b742adbcb94906');
     const events = this.events.filter(event => event.sequence > cursor).slice(0, normalizeLimit(limit));
     const unsigned = {
       protocol: PUBLIC_FEDERATION_PROTOCOL,

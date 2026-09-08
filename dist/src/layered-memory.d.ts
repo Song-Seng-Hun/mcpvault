@@ -54,7 +54,7 @@ export declare class LayeredMemoryService {
         retry: {
             maxChars: number;
         };
-        hint: string;
+        hint: "Repeat with retry.maxChars; if already at maximum, narrow the query.";
     } | {
         scope: "community" | "global" | "personal" | "user";
         mode: "brief" | "consolidate" | "recall";
@@ -71,7 +71,7 @@ export declare class LayeredMemoryService {
                 maxChars: number;
             };
         };
-        hint: string;
+        hint: "Inspect original alternatives with a more precise query; a larger output budget cannot increase source reads.";
     }>;
 }
 //# sourceMappingURL=layered-memory.d.ts.map

@@ -1,3 +1,4 @@
+import { guidanceError, projectGuidance } from './guidance-runtime.js';
 /** Small, finite activity formats for opt-in community participation.
  *
  * These definitions describe a suggested route through the existing Workshop
@@ -50,12 +51,12 @@ function bounded(value, maxChars) {
 export function getCommunityActivityTemplate(id) {
     const template = COMMUNITY_ACTIVITY_TEMPLATES[id];
     if (!template)
-        throw new Error(`Unknown community activity template: ${String(id)}`);
-    return template;
+        throw guidanceError(new Error(`Unknown community activity template: ${String(id)}`), 'guid-6efd2d3a57ac6653');
+    return projectGuidance(template);
 }
 export function formatCommunityActivityTemplate(id, maxChars = 6000) {
     if (!Number.isInteger(maxChars) || maxChars < 256 || maxChars > 20000)
-        throw new Error('maxChars must be an integer from 256 to 20000');
+        throw guidanceError(new Error('maxChars must be an integer from 256 to 20000'), 'guid-f2792b1c75598749');
     const template = getCommunityActivityTemplate(id);
     const lines = [
         `# ${template.title}`,

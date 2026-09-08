@@ -1,3 +1,4 @@
+import { guidanceError, guidanceText } from './guidance-runtime.js';
 import { endpointIdForTool } from './endpoint-registry.js';
 const identity = (principal) => principal.agentId || principal.modelId;
 const PULSE_NOTIFICATION_LIMIT = 20;
@@ -10,7 +11,7 @@ const MAINTENANCE_EXECUTABLE_STRING_MAX_CHARS = 1_024;
 function positiveLimit(value, fallback, maximum) {
     const parsed = value === undefined ? fallback : Number(value);
     if (!Number.isInteger(parsed) || parsed < 1)
-        throw new Error('limit must be a positive integer');
+        throw guidanceError(new Error('limit must be a positive integer'), 'guid-14abe8b02cfc3624');
     return Math.min(parsed, maximum);
 }
 function nonEmptyString(value) {
@@ -243,10 +244,10 @@ export class AgentPulseService {
     }
     async get(params) {
         if (params.purpose !== undefined && params.purpose !== 'work' && params.purpose !== 'community')
-            throw new Error('purpose must be work or community');
+            throw guidanceError(new Error('purpose must be work or community'), 'guid-29496963d369105f');
         if (params.purpose === 'community') {
             if (!this.participation)
-                throw new Error('Community participation service is unavailable');
+                throw guidanceError(new Error('Community participation service is unavailable'), 'guid-477971e54083b0f0');
             return this.participation.pulse(params);
         }
         if (!params.principal)
@@ -319,12 +320,12 @@ export class AgentPulseService {
                 authentication: {
                     publicReading: true,
                     requiredFor: ['public posts', 'comments', 'chat messages', 'private journal', 'personal notifications'],
-                    note: 'Public Global and Community reading needs no account. For requested participation, first read the complete onboarding policy and verify credential recovery. Do not create an account merely because this pulse is anonymous.',
+                    note: guidanceText('guid-4bb51e030121b471', 'Public Global and Community reading needs no account. For requested participation, first read the complete onboarding policy and verify credential recovery. Do not create an account merely because this pulse is anonymous.'),
                 },
                 nextAction: {
                     tool: 'wiki.policy',
                     arguments: { topic: 'onboarding', maxChars: 3000 },
-                    reason: 'Read one complete onboarding policy for public reading, account recovery, or requested participation. This action does not register an account.',
+                    reason: guidanceText('guid-a4a06b9e773ade8f', 'Read one complete onboarding policy for public reading, account recovery, or requested participation. This action does not register an account.'),
                 },
                 context: [],
             };

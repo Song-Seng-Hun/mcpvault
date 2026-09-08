@@ -1,7 +1,8 @@
+import { guidanceError, guidanceText } from './guidance-runtime.js';
 /** Exact first limit round-robin entries: at most limit groups * limit rows.
  * Distinct group keys still use O(groups) memory for an observed diversity count. */
 export function createRecallCollector<T>(limit: number, compare: (a: T, b: T) => number) {
-  if (!Number.isInteger(limit) || limit < 1) throw new Error('limit must be a positive integer');
+  if (!Number.isInteger(limit) || limit < 1) throw guidanceError(new Error('limit must be a positive integer'), 'guid-14abe8b02cfc3624');
   const groups = new Set<string>(), buckets = new Map<string, T[]>();
   const ordered = () => [...buckets.entries()].sort((a, b) => compare(a[1][0]!, b[1][0]!));
   return {
@@ -27,7 +28,7 @@ export function createRecallCollector<T>(limit: number, compare: (a: T, b: T) =>
 /** Never turn a compacted active-recall task into a silently shortened question. */
 export function packRecallQueue(candidates: Array<Record<string, any>>, total: number, groups: number, maxChars: number, pretty: boolean): Record<string, any> & { items: Array<Record<string, any>>; total: number; truncated: boolean } {
   const fits = (value: unknown) => JSON.stringify(value, null, pretty ? 2 : undefined).length <= maxChars;
-  const metadata = { purpose: 'Attempt recallPrompt before reading the answer. Follow dateRepairAction first for invalid metadata. Advisory reader state, not evidence or truth.',
+  const metadata = { purpose: guidanceText('guid-00b0af9c4352014e', 'Attempt recallPrompt before reading the answer. Follow dateRepairAction first for invalid metadata. Advisory reader state, not evidence or truth.'),
     diversity: { groups, strategy: 'priority_with_neighborhood_interleaving' }, generatedAt: new Date().toISOString() };
   const items: Array<Record<string, any>> = [];
   for (const item of candidates) {
@@ -51,10 +52,10 @@ export function packRecallQueue(candidates: Array<Record<string, any>>, total: n
   }
   if (maxChars < 12000) return { items: [], total, truncated: true,
     retry: { endpointId: 'wiki.recall_queue', reuseOriginalArguments: true, overrides: { maxChars: 12000 } },
-    instruction: 'Retry with the larger budget; preserve identity, limit and all other arguments.' };
+    instruction: guidanceText('guid-e1e65966428e819d', 'Retry with the larger budget; preserve identity, limit and all other arguments.') };
   const nextAction = first?.dateRepairAction || (first?.promptOmitted ? first.nextAction : undefined);
   const fallback = { items: [], total, truncated: true, ...(nextAction ? { nextAction } : { taskUnavailable: true }),
     instruction: nextAction ? 'Exact task cannot fit. Follow the metadata repair or prompt-only nextAction; do not repeat this queue request unchanged.' : 'The exact task cannot fit. Inspect recall Properties locally or narrow the authored question; do not repeat unchanged.' };
   return fits(fallback) ? fallback : { items: [], total, truncated: true, taskUnavailable: true,
-    instruction: 'The exact task cannot fit the maximum budget. Inspect recall Properties locally or narrow the authored question; do not repeat unchanged.' };
+    instruction: guidanceText('guid-f0b4a12f54b639cd', 'The exact task cannot fit the maximum budget. Inspect recall Properties locally or narrow the authored question; do not repeat unchanged.') };
 }

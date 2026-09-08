@@ -1,3 +1,4 @@
+import { guidanceError, guidanceText } from './guidance-runtime.js';
 import { posix } from 'node:path';
 import type { FileSystemService } from './filesystem.js';
 import type { ReferenceService } from './references.js';
@@ -51,12 +52,12 @@ export class WorkService {
   }
 
   private async actor(principal?: ScopePrincipal): Promise<ScopePrincipal> {
-    if (!principal) throw new Error('Authenticated account is required for project work');
+    if (!principal) throw guidanceError(new Error('Authenticated account is required for project work'), 'guid-ff97f71bf9e19e2b');
     const current = (await this.auth.listPrincipals()).find(p => p.accountId === principal.accountId);
     if (!current || current.modelId !== principal.modelId || current.agentId !== principal.agentId || current.role !== principal.role
       || (principal.commandCenterId && principal.commandCenterId !== this.access.getCommandCenterId())
-      || (current.commandCenterId && current.commandCenterId !== this.access.getCommandCenterId())) throw new Error('Authenticated account is unavailable in this scope');
-    if (!this.auth.hasCapability(current, 'task') || !this.auth.hasCapability(principal, 'task')) throw new Error('Task capability is required');
+      || (current.commandCenterId && current.commandCenterId !== this.access.getCommandCenterId())) throw guidanceError(new Error('Authenticated account is unavailable in this scope'), 'guid-20a48e6c5f1ac92e');
+    if (!this.auth.hasCapability(current, 'task') || !this.auth.hasCapability(principal, 'task')) throw guidanceError(new Error('Task capability is required'), 'guid-008719aaf7771662');
     await this.options.assertActor?.(current);
     return current;
   }
@@ -65,9 +66,9 @@ export class WorkService {
   async authorizeWorkshopProject(principal:ScopePrincipal,projectId:string,owner:boolean,delegate?:string,grantor?:string):Promise<Guard> {
     const actor=await this.actor(principal),project=await this.projectNote(projectId);
     this.member(project.frontmatter,actor);
-    if(owner && project.frontmatter.owner_account_id!==actor.accountId)throw new Error('Only project owner may delegate workshop outputs');
-    if(grantor && project.frontmatter.owner_account_id!==grantor)throw new Error('Project delegation owner changed');
-    if(delegate && (!project.frontmatter.participants.includes(delegate)||(await this.auth.listPrincipals()).every(p=>p.accountId!==delegate)))throw new Error('Delegate must be an existing project participant');
+    if(owner && project.frontmatter.owner_account_id!==actor.accountId)throw guidanceError(new Error('Only project owner may delegate workshop outputs'), 'guid-f1578dffb82a0681');
+    if(grantor && project.frontmatter.owner_account_id!==grantor)throw guidanceError(new Error('Project delegation owner changed'), 'guid-be9a21cff63aaffb');
+    if(delegate && (!project.frontmatter.participants.includes(delegate)||(await this.auth.listPrincipals()).every(p=>p.accountId!==delegate)))throw guidanceError(new Error('Delegate must be an existing project participant'), 'guid-e13d406715358578');
     return {path:projectPath(projectId),expectedRevision:project.revision};
   }
 
@@ -77,18 +78,18 @@ export class WorkService {
   }
 
   private async visible(path: string): Promise<ParsedNote> {
-    if (!this.access.canAccessPhysicalPath(path)) throw new Error('Work target is unavailable');
+    if (!this.access.canAccessPhysicalPath(path)) throw guidanceError(new Error('Work target is unavailable'), 'guid-b4cd42400f6ea6f0');
     try {
       const note = await this.fileSystem.readNote(path);
-      if (isModerationHidden(note.frontmatter)) throw new Error('hidden');
+      if (isModerationHidden(note.frontmatter)) throw guidanceError(new Error('hidden'), 'guid-6b6e4d767b4d2ef8');
       return note;
-    } catch { throw new Error('Work target is unavailable or not visible'); }
+    } catch { throw guidanceError(new Error('Work target is unavailable or not visible'), 'guid-0b05d8e6027e0780'); }
   }
 
   private async projectNote(id: string): Promise<ParsedNote> {
     id = normalizeScopeId(id, 'projectId');
     const note = await this.visible(projectPath(id));
-    if (note.frontmatter.mcpvault_type !== 'work_project' || note.frontmatter.project_id !== id) throw new Error('Project is unavailable');
+    if (note.frontmatter.mcpvault_type !== 'work_project' || note.frontmatter.project_id !== id) throw guidanceError(new Error('Project is unavailable'), 'guid-d04b26b416aecdda');
     return note;
   }
 
@@ -98,17 +99,17 @@ export class WorkService {
     const note = await this.visible(path);
     if (note.frontmatter.mcpvault_type !== (kind === 'room' ? 'chat_room' : 'blog_post')
       || note.frontmatter[kind === 'room' ? 'room_id' : 'post_id'] !== id
-      || (kind === 'post' && note.frontmatter.status !== 'published')) throw new Error(`Public ${kind} target is unavailable`);
+      || (kind === 'post' && note.frontmatter.status !== 'published')) throw guidanceError(new Error(`Public ${kind} target is unavailable`), 'guid-23351b8041a02d03');
     return { id, path, note };
   }
 
   private member(project: Properties, actor: ScopePrincipal): void {
-    if (!Array.isArray(project.participants) || !project.participants.includes(actor.accountId)) throw new Error('Account must be an explicitly configured project participant');
+    if (!Array.isArray(project.participants) || !project.participants.includes(actor.accountId)) throw guidanceError(new Error('Account must be an explicitly configured project participant'), 'guid-00f830f5c7c47901');
   }
 
   private revision(note: ParsedNote, expected?: string): void {
-    if (!expected) throw new Error('expectedRevision is required; read current context first');
-    if (note.revision !== expected) throw new Error('Revision conflict; read current context first');
+    if (!expected) throw guidanceError(new Error('expectedRevision is required; read current context first'), 'guid-1d5c0599a4862f86');
+    if (note.revision !== expected) throw guidanceError(new Error('Revision conflict; read current context first'), 'guid-c88e2d326dcccacd');
   }
 
   private request(params: WorkBaseParams, action: string, target: string) {
@@ -138,8 +139,8 @@ export class WorkService {
     const found = (Array.isArray(fm.work_receipts) ? fm.work_receipts : []).find((r: Properties) =>
       r.actor === request.actor && r.action === request.action && r.target === request.target && r.requestId === request.requestId);
     if (!found) return;
-    if (found.payload !== request.payload) throw new Error('requestId was already used with a different payload');
-    if (!found.result.revision && (found.revision_unavailable || !this.receiptMatches(note, found))) throw new Error('Receipt revision unavailable after an external Markdown edit; read current context, do not replay the mutation');
+    if (found.payload !== request.payload) throw guidanceError(new Error('requestId was already used with a different payload'), 'guid-da844e5a927b4397');
+    if (!found.result.revision && (found.revision_unavailable || !this.receiptMatches(note, found))) throw guidanceError(new Error('Receipt revision unavailable after an external Markdown edit; read current context, do not replay the mutation'), 'guid-82b05918e76dca87');
     return { ...structuredClone(found.result), revision: found.result.revision || note.revision };
   }
 
@@ -198,7 +199,7 @@ export class WorkService {
         .sort((a, b) => JSON.stringify(project[b]).length - JSON.stringify(project[a]).length)[0];
       if (!key) {
         if (result.path) { delete result.path; continue; }
-        throw new Error('maxChars is too small for the project response envelope');
+        throw guidanceError(new Error('maxChars is too small for the project response envelope'), 'guid-248a08d52702ed4d');
       }
       omit(key);
       const value = project[key];
@@ -221,7 +222,7 @@ export class WorkService {
       }
       return this.projectProjection(id, projected, params.maxChars);
     }
-    if (!['create', 'update'].includes(op)) throw new Error('Invalid project operation');
+    if (!['create', 'update'].includes(op)) throw guidanceError(new Error('Invalid project operation'), 'guid-872738a197631689');
     return coordinate(async () => {
       const actor = await this.actor(params.principal);
       const path = projectPath(id);
@@ -229,13 +230,13 @@ export class WorkService {
       const request = this.request(params, `project.${op}`, id);
       if (prior) {
         // A former owner is never allowed to use retry as an access bypass.
-        if (prior.frontmatter.owner_account_id !== actor.accountId) throw new Error('Only the immutable project owner can configure the project');
+        if (prior.frontmatter.owner_account_id !== actor.accountId) throw guidanceError(new Error('Only the immutable project owner can configure the project'), 'guid-a33891bcd3346298');
         const retry = this.retry(prior, request); if (retry) return retry;
       }
-      if (op === 'create' && prior) throw new Error('Project already exists');
-      if (op === 'update' && !prior) throw new Error('Project is unavailable');
+      if (op === 'create' && prior) throw guidanceError(new Error('Project already exists'), 'guid-da17f6c2dbef879c');
+      if (op === 'update' && !prior) throw guidanceError(new Error('Project is unavailable'), 'guid-d04b26b416aecdda');
       if (prior) this.revision(prior, params.expectedRevision);
-      else if (params.expectedRevision && params.expectedRevision !== 'missing') throw new Error('New project requires expectedRevision=missing');
+      else if (params.expectedRevision && params.expectedRevision !== 'missing') throw guidanceError(new Error('New project requires expectedRevision=missing'), 'guid-57cc7b70921a07d4');
       const fm: Properties = { ...prior?.frontmatter, mcpvault_type: 'work_project', project_id: id, owner_account_id: actor.accountId };
       fm.title = textField(params.title ?? fm.title, 'title', 180, true);
       fm.goal = textField(params.goal ?? fm.goal, 'goal', 2000, true);
@@ -244,7 +245,7 @@ export class WorkService {
       fm.participants = [actor.accountId, ...listField(params.participants ?? fm.participants ?? [], 'participants', 100)
         .map(id => normalizeScopeId(id, 'participant')).filter(id => id !== actor.accountId)];
       const accounts = new Set((await this.auth.listPrincipals()).map(p => p.accountId));
-      if (fm.participants.some((id: string) => !accounts.has(id))) throw new Error('Every participant must identify a registered account');
+      if (fm.participants.some((id: string) => !accounts.has(id))) throw guidanceError(new Error('Every participant must identify a registered account'), 'guid-be8515a686263419');
       fm.wip_limit = integer(params.wipLimit ?? fm.wip_limit, 3, 100, 'wipLimit');
       fm.personal_wip_limit = integer(params.personalWipLimit ?? fm.personal_wip_limit, 1, 20, 'personalWipLimit');
       if (params.roomId !== undefined) fm.room_id = params.roomId ? normalizeScopeId(params.roomId, 'roomId') : '';
@@ -282,7 +283,7 @@ export class WorkService {
     const all = await this.auth.listPrincipals();
     const direct = all.find(p => p.accountId === id);
     const candidates = direct ? [direct] : all.filter(p => displayIdentity(p) === id);
-    if (candidates.length !== 1) throw new Error('Assignee must resolve to exactly one registered account');
+    if (candidates.length !== 1) throw guidanceError(new Error('Assignee must resolve to exactly one registered account'), 'guid-5e48eef7d2ff7f31');
     this.member(project, candidates[0]!);
     return candidates[0]!;
   }
@@ -290,36 +291,36 @@ export class WorkService {
   private publicPath(value: string): string {
     const resolved = this.access.resolveExternalPath(value);
     const path = resolved.replace(/\\/g, '/');
-    if (!path || path.startsWith('/') || /^[a-z]:/i.test(path) || path.includes('\0') || path.split('/').some(s => s === '..' || /[. ]$/.test(s))) throw new Error('Artifact path must be a canonical public vault path');
+    if (!path || path.startsWith('/') || /^[a-z]:/i.test(path) || path.includes('\0') || path.split('/').some(s => s === '..' || /[. ]$/.test(s))) throw guidanceError(new Error('Artifact path must be a canonical public vault path'), 'guid-19c84603d15136e7');
     const normalized = posix.normalize(path);
-    if (!this.access.canAccessPhysicalPath(normalized)) throw new Error('Artifact path must be visible public');
+    if (!this.access.canAccessPhysicalPath(normalized)) throw guidanceError(new Error('Artifact path must be visible public'), 'guid-742e675d8785d46a');
     return normalized;
   }
 
   private async artifacts(value: unknown, principal: ScopePrincipal, guards: Guard[], requireRevision = false): Promise<WorkArtifact[]> {
-    if (!Array.isArray(value) || value.length > 20) throw new Error('artifacts must be an array of at most 20 locators');
+    if (!Array.isArray(value) || value.length > 20) throw guidanceError(new Error('artifacts must be an array of at most 20 locators'), 'guid-37ea3105a8a8b481');
     const artifacts: WorkArtifact[] = [];
     for (const input of value) {
-      if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('Artifact must be a locator');
+      if (!input || typeof input !== 'object' || Array.isArray(input)) throw guidanceError(new Error('Artifact must be a locator'), 'guid-c2631d487961f3eb');
       const item: WorkArtifact = {};
       for (const field of ['repository', 'branch', 'commit', 'revision'] as const) if (input[field] !== undefined) item[field] = textField(input[field], `artifact.${field}`, 300, true);
       if (item.repository && /^[a-z][a-z0-9+.-]*:\/\//i.test(item.repository)) {
         const url = new URL(item.repository);
-        if (url.username || url.password || url.search) throw new Error('Repository locators must not contain credentials or query tokens');
+        if (url.username || url.password || url.search) throw guidanceError(new Error('Repository locators must not contain credentials or query tokens'), 'guid-a0ec1e8c762998af');
       }
-      if (item.commit !== undefined && !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/i.test(item.commit)) throw new Error('Artifact commit must be an immutable full 40- or 64-character hexadecimal Git object ID (advisory, not fetched)');
+      if (item.commit !== undefined && !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/i.test(item.commit)) throw guidanceError(new Error('Artifact commit must be an immutable full 40- or 64-character hexadecimal Git object ID (advisory, not fetched)'), 'guid-11e48ca055aa2e96');
       if (input.files !== undefined) item.files = listField(input.files, 'artifact.files', 20).map(p => {
-        if (p.startsWith('/') || /^[a-z]:/i.test(p) || p.replace(/\\/g, '/').split('/').includes('..')) throw new Error('Artifact files must be repository-relative locators');
+        if (p.startsWith('/') || /^[a-z]:/i.test(p) || p.replace(/\\/g, '/').split('/').includes('..')) throw guidanceError(new Error('Artifact files must be repository-relative locators'), 'guid-98057bffa6db93d1');
         return p.replace(/\\/g, '/');
       });
       if (input.path !== undefined) {
         item.path = this.publicPath(textField(input.path, 'artifact.path', 500, true));
         await this.references.validateAndNormalize([item.path], 'Community/Tasks/artifacts.md', principal);
         const note = await this.visible(item.path);
-        if (requireRevision && (!item.revision || item.revision !== note.revision)) throw new Error('Artifact revision is missing or stale; update artifacts before approval/completion');
-        if (item.revision && item.revision !== note.revision) throw new Error('Artifact revision is stale');
+        if (requireRevision && (!item.revision || item.revision !== note.revision)) throw guidanceError(new Error('Artifact revision is missing or stale; update artifacts before approval/completion'), 'guid-1703b8bf35a1cda7');
+        if (item.revision && item.revision !== note.revision) throw guidanceError(new Error('Artifact revision is stale'), 'guid-fbbd13dad36c5414');
         guards.push({ path: item.path, expectedRevision: note.revision });
-      } else if (!item.repository || !item.commit) throw new Error('External artifacts require repository and commit locators (advisory only)');
+      } else if (!item.repository || !item.commit) throw guidanceError(new Error('External artifacts require repository and commit locators (advisory only)'), 'guid-f28729debd63666a');
       artifacts.push(item);
     }
     return artifacts;
@@ -328,12 +329,12 @@ export class WorkService {
   private async dependencies(fm: Properties, taskId: string, guards: Guard[]): Promise<void> {
     const active = new Set([taskId]); const checked = new Set<string>();
     const visit = async (id: string) => {
-      if (active.has(id)) throw new Error('Dependency or parent cycle detected');
+      if (active.has(id)) throw guidanceError(new Error('Dependency or parent cycle detected'), 'guid-f43c93d5c362cff8');
       if (checked.has(id)) return;
-      if (active.size + checked.size >= 100) throw new Error('Dependency graph exceeds the bounded validation window');
+      if (active.size + checked.size >= 100) throw guidanceError(new Error('Dependency graph exceeds the bounded validation window'), 'guid-1fcbc5cd5c24a84d');
       active.add(id);
       const note = await this.visible(taskPath(id));
-      if (note.frontmatter.mcpvault_type !== 'agent_task' || note.frontmatter.project_id !== fm.project_id) throw new Error('Dependency must be a visible task in the same project');
+      if (note.frontmatter.mcpvault_type !== 'agent_task' || note.frontmatter.project_id !== fm.project_id) throw guidanceError(new Error('Dependency must be a visible task in the same project'), 'guid-e85ad1aff682e447');
       guards.push({ path: taskPath(id), expectedRevision: note.revision });
       for (const dependency of [...(note.frontmatter.depends_on || []), ...(note.frontmatter.parent_task_id ? [note.frontmatter.parent_task_id] : [])]) await visit(normalizeScopeId(dependency, 'dependency'));
       active.delete(id); checked.add(id);
@@ -344,7 +345,7 @@ export class WorkService {
   private async ready(fm: Properties): Promise<void> {
     for (const id of fm.depends_on || []) {
       const n = await this.visible(taskPath(id));
-      if (n.frontmatter.project_id !== fm.project_id || n.frontmatter.status !== 'completed') throw new Error('Dependencies must be completed before starting or claiming work');
+      if (n.frontmatter.project_id !== fm.project_id || n.frontmatter.status !== 'completed') throw guidanceError(new Error('Dependencies must be completed before starting or claiming work'), 'guid-2edfc9f4af791b1b');
     }
   }
 
@@ -365,8 +366,8 @@ export class WorkService {
         personalLimit = Math.min(personalLimit, integer(other.frontmatter.personal_wip_limit, 1, 20, 'active project personal_wip_limit'));
       }
     }
-    if (addsProjectWip && projectCount >= projectLimit) throw new Error('Project WIP limit reached');
-    if (addsPersonalWip && personalCount >= personalLimit) throw new Error('Personal WIP limit reached across projects');
+    if (addsProjectWip && projectCount >= projectLimit) throw guidanceError(new Error('Project WIP limit reached'), 'guid-0bdbde9dbbc6920d');
+    if (addsPersonalWip && personalCount >= personalLimit) throw guidanceError(new Error('Personal WIP limit reached across projects'), 'guid-bab2cb98d8f264c9');
   }
 
   private async runTask(action: 'create' | 'update', params: any, proceed: (context?: AgentTaskWriteContext, parameters?: any) => Promise<any>): Promise<any> {
@@ -378,11 +379,11 @@ export class WorkService {
       if (params.taskId) await this.options.assertTaskMutation?.(normalizeScopeId(params.taskId, 'taskId'));
       const requestedProject = prior?.frontmatter.project_id || params.projectId;
       if (!requestedProject) {
-        if (intent) throw new Error('Work actions require a project-backed task');
+        if (intent) throw guidanceError(new Error('Work actions require a project-backed task'), 'guid-b17f67cf5c49f2e8');
         return proceed();
       }
       const projectId = normalizeScopeId(requestedProject, 'projectId');
-      if (prior && (!prior.frontmatter.project_id || (params.projectId !== undefined && normalizeScopeId(params.projectId, 'projectId') !== projectId))) throw new Error('Task project ownership is immutable; existing unprojected tasks are not migrated');
+      if (prior && (!prior.frontmatter.project_id || (params.projectId !== undefined && normalizeScopeId(params.projectId, 'projectId') !== projectId))) throw guidanceError(new Error('Task project ownership is immutable; existing unprojected tasks are not migrated'), 'guid-a714750a675ca5e7');
       const actor = await this.actor(params.principal);
       const project = await this.projectNote(normalizeScopeId(projectId, 'projectId'));
       const moderate = this.auth.hasCapability(actor, 'moderate');
@@ -394,14 +395,14 @@ export class WorkService {
       params.taskId = id;
       const current = prior || (await this.fileSystem.noteExists(taskPath(id)) ? await this.visible(taskPath(id)) : undefined);
       if (current) { const retry = this.retry(current, request); if (retry) return retry; }
-      if (action === 'create' && current) throw new Error('Task already exists');
+      if (action === 'create' && current) throw guidanceError(new Error('Task already exists'), 'guid-6a9b24709dcf6239');
       if (prior) this.revision(prior, params.expectedRevision);
       const fm: Properties = { ...prior?.frontmatter, project_id: projectId, status: taskStatus(prior?.frontmatter.status) };
       const generation = Number(fm.claim_generation || 0);
       const reviewer = intent?.kind === 'review' && intent.params.op !== 'request';
       const privilegedRelease = intent?.kind === 'claim' && intent.params.op === 'release';
-      if (prior && !reviewer && !privilegedRelease && params.expectedGeneration !== generation) throw new Error('expectedGeneration must match the current claim generation');
-      if (prior && params.expectedGeneration !== undefined && params.expectedGeneration !== generation) throw new Error('Revoked claim generation');
+      if (prior && !reviewer && !privilegedRelease && params.expectedGeneration !== generation) throw guidanceError(new Error('expectedGeneration must match the current claim generation'), 'guid-169cbe45dbdcc739');
+      if (prior && params.expectedGeneration !== undefined && params.expectedGeneration !== generation) throw guidanceError(new Error('Revoked claim generation'), 'guid-e6042ccfc84b07f2');
       if (!prior) {
         fm.requester_account_id = actor.accountId; fm.author_account_id = actor.accountId; fm.claim_generation = 0;
         fm.status = 'proposed'; fm.work_kind = 'general'; fm.depends_on = []; fm.completion_criteria = []; fm.artifacts = [];
@@ -411,14 +412,14 @@ export class WorkService {
       const accepting = intent?.kind === 'handoff' && intent.params.op === 'accept';
       const claiming = intent?.kind === 'claim' && intent.params.op !== 'release';
       const selfClaim = !fm.assignee_account_id && [actor.accountId, displayIdentity(actor)].includes(params.assignee);
-      if (prior && !isRequester && !isAssignee && !reviewer && !accepting && !claiming && !selfClaim && !privilegedRelease) throw new Error('Only task requester or assignee account can update work');
+      if (prior && !isRequester && !isAssignee && !reviewer && !accepting && !claiming && !selfClaim && !privilegedRelease) throw guidanceError(new Error('Only task requester or assignee account can update work'), 'guid-ca3d4c2dc3f79798');
       if (params.description !== undefined) fm.description = textField(params.description, 'description', 4000, true);
       if (params.completionCriteria !== undefined) fm.completion_criteria = listField(params.completionCriteria, 'completionCriteria');
       if (params.dependsOn !== undefined) fm.depends_on = listField(params.dependsOn, 'dependsOn', 20).map(id => normalizeScopeId(id, 'dependency'));
       if (params.parentTaskId !== undefined) fm.parent_task_id = params.parentTaskId ? normalizeScopeId(params.parentTaskId, 'parentTaskId') : '';
       if (params.workKind !== undefined) {
-        if (!(WORK_KINDS as readonly string[]).includes(params.workKind)) throw new Error('Invalid workKind');
-        if (fm.work_kind !== 'general' && fm.work_kind !== params.workKind) throw new Error('Risk workKind cannot be lowered or relabeled to evade review');
+        if (!(WORK_KINDS as readonly string[]).includes(params.workKind)) throw guidanceError(new Error('Invalid workKind'), 'guid-26f9290ec2e8bd9b');
+        if (fm.work_kind !== 'general' && fm.work_kind !== params.workKind) throw guidanceError(new Error('Risk workKind cannot be lowered or relabeled to evade review'), 'guid-b728b4395f1fcd65');
         fm.work_kind = params.workKind;
       }
       if (params.discussionSlug !== undefined) fm.discussion_slug = params.discussionSlug ? normalizeScopeId(params.discussionSlug, 'discussionSlug') : '';
@@ -436,13 +437,13 @@ export class WorkService {
       await this.dependencies(fm, id, guards);
       if (params.assignee !== undefined) {
         const account = params.assignee ? await this.accountForAssignee(params.assignee, project.frontmatter) : undefined;
-        if (!account || account.accountId !== actor.accountId || (prior && fm.assignee_account_id && fm.assignee_account_id !== actor.accountId)) throw new Error('Assignee changes require self-claim or exact-account handoff; use release to clear');
+        if (!account || account.accountId !== actor.accountId || (prior && fm.assignee_account_id && fm.assignee_account_id !== actor.accountId)) throw guidanceError(new Error('Assignee changes require self-claim or exact-account handoff; use release to clear'), 'guid-dc5342e7d8a49bb6');
         if (account.accountId !== fm.assignee_account_id) fm.claim_generation = generation + 1;
         fm.assignee_account_id = account.accountId; fm.assignee = displayIdentity(account); params.assignee = displayIdentity(account);
       }
       if (intent) await this.applyIntent(intent, params, fm, project.frontmatter, actor);
       // Legacy status/assignee updates get exactly the same readiness and WIP gate.
-      if (['accepted', 'in_progress', 'blocked', 'in_review'].includes(fm.status) && !fm.assignee_account_id) throw new Error('Claim an assignee account before starting work');
+      if (['accepted', 'in_progress', 'blocked', 'in_review'].includes(fm.status) && !fm.assignee_account_id) throw guidanceError(new Error('Claim an assignee account before starting work'), 'guid-c00c6990b37c6049');
       if (['in_progress', 'blocked', 'in_review'].includes(fm.status)) fm.started_at ||= timestamp();
       const newlyClaimed = fm.assignee_account_id && fm.assignee_account_id !== prior?.frontmatter.assignee_account_id;
       if (prior && fm.claim_generation !== generation) delete fm.work_review;
@@ -450,11 +451,11 @@ export class WorkService {
       await this.wip(fm, project.frontmatter, id, prior?.frontmatter);
       if (prior && reviewBasis(fm) !== reviewBasis(prior.frontmatter)) delete fm.work_review;
       if (fm.status === 'completed') {
-        if (!fm.completion_criteria?.length || !fm.verification) throw new Error('Completion requires completionCriteria and verification');
+        if (!fm.completion_criteria?.length || !fm.verification) throw guidanceError(new Error('Completion requires completionCriteria and verification'), 'guid-3a811c7a9e77bee9');
         await this.artifacts(fm.artifacts, actor, guards, true);
         if (fm.work_kind !== 'general') {
           const approval = fm.work_review;
-          if (!approval || !['approve', 'override'].includes(approval.decision) || approval.fingerprint !== reviewBasis(fm)) throw new Error('High-risk completion requires current independent approval');
+          if (!approval || !['approve', 'override'].includes(approval.decision) || approval.fingerprint !== reviewBasis(fm)) throw guidanceError(new Error('High-risk completion requires current independent approval'), 'guid-545d3ddced904170');
         }
       }
       params.status = fm.status;
@@ -471,21 +472,21 @@ export class WorkService {
         write: async (write: NoteWriteParams, applicationGuards = []) => {
           await this.actor(params.principal);
           const currentProject = await this.projectNote(projectId);
-          if (currentProject.revision !== project.revision) throw new Error('Project revision changed during work mutation');
+          if (currentProject.revision !== project.revision) throw guidanceError(new Error('Project revision changed during work mutation'), 'guid-38d47bff2f1248d3');
           if (!moderate || (!privilegedRelease && !(intent?.kind === 'review' && intent.params.op === 'override'))) this.member(currentProject.frontmatter, actor);
           await this.wip(fm, currentProject.frontmatter, id, prior?.frontmatter);
           const combined = [...guards, ...applicationGuards].filter(g => g.path !== write.path);
           const unique = [...new Map(combined.map(g => [g.path.toLowerCase(), g])).values()];
-          if (combined.some(g => unique.find(u => u.path.toLowerCase() === g.path.toLowerCase())?.expectedRevision !== g.expectedRevision)) throw new Error('Related revision changed during work mutation');
+          if (combined.some(g => unique.find(u => u.path.toLowerCase() === g.path.toLowerCase())?.expectedRevision !== g.expectedRevision)) throw guidanceError(new Error('Related revision changed during work mutation'), 'guid-cdb273014178bb3a');
           // The existing filesystem supports nine locked related revisions.
           // Fail closed rather than drop guards from a larger mutation.
-          if (unique.length > (workshopCreate?128:9)) throw new Error('Work mutation exceeds related revision guard budget; split the dependency/artifact change');
+          if (unique.length > (workshopCreate?128:9)) throw guidanceError(new Error('Work mutation exceeds related revision guard budget; split the dependency/artifact change'), 'guid-fd006d893a9a3fc2');
           result = { success: true, taskId: id, path: write.path, status: fm.status, generation: fm.claim_generation,
             claimGeneration: fm.claim_generation, ...(fm.assignee_account_id && { assigneeAccountId: fm.assignee_account_id }),
             artifactFingerprint: reviewBasis(fm), requestId: request.requestId,
             nextAction: { endpoint: 'work.packet', args: { taskId: id } } };
           if(intent?.kind==='claim'&&intent.paidContractId) {
-            if(write.frontmatter!.economy_contract_id && write.frontmatter!.economy_contract_id!==intent.paidContractId)throw new Error('Paid contract marker conflict');
+            if(write.frontmatter!.economy_contract_id && write.frontmatter!.economy_contract_id!==intent.paidContractId)throw guidanceError(new Error('Paid contract marker conflict'), 'guid-bb625df8fd8ea2e9');
             write.frontmatter!.economy_contract_id=intent.paidContractId;
             write.frontmatter!.economy_claim_request_id=request.requestId;
             write.frontmatter!.economy_claim_generation=fm.claim_generation;
@@ -514,13 +515,13 @@ export class WorkService {
     const own = fm.assignee_account_id === actor.accountId;
     if (intent.kind === 'claim') {
       if (intent.params.op === 'release') {
-        if (!own && fm.requester_account_id !== actor.accountId && project.owner_account_id !== actor.accountId && !this.auth.hasCapability(actor, 'moderate')) throw new Error('Only owner, requester, assignee or host moderator may release work');
+        if (!own && fm.requester_account_id !== actor.accountId && project.owner_account_id !== actor.accountId && !this.auth.hasCapability(actor, 'moderate')) throw guidanceError(new Error('Only owner, requester, assignee or host moderator may release work'), 'guid-88ad904c4e62fe3c');
         textField(intent.params.reason, 'release reason', 500, true);
         delete fm.assignee_account_id; delete fm.assignee; delete fm.work_handoff; delete fm.started_at;
         fm.claim_generation = generation + 1; fm.status = 'proposed'; params.assignee = '';
       } else {
-        if (finished(fm)) throw new Error('Finished work cannot be claimed');
-        if (fm.assignee_account_id && !own) throw new Error('Task already has another assignee; use handoff');
+        if (finished(fm)) throw guidanceError(new Error('Finished work cannot be claimed'), 'guid-2d3e7bee25f51bd8');
+        if (fm.assignee_account_id && !own) throw guidanceError(new Error('Task already has another assignee; use handoff'), 'guid-83276b018061f992');
         if (!own) fm.claim_generation = generation + 1;
         fm.assignee_account_id = actor.accountId; fm.assignee = displayIdentity(actor); params.assignee = displayIdentity(actor);
         fm.status = intent.params.op === 'start' ? 'in_progress' : 'accepted';
@@ -530,12 +531,12 @@ export class WorkService {
       return;
     }
     if (intent.kind === 'handoff') {
-      if (finished(fm)) throw new Error('Finished work cannot be handed off');
+      if (finished(fm)) throw guidanceError(new Error('Finished work cannot be handed off'), 'guid-9995bc4744a8ffac');
       if (intent.params.op === 'propose') {
-        if (!own) throw new Error('Only current assignee may propose a handoff');
+        if (!own) throw guidanceError(new Error('Only current assignee may propose a handoff'), 'guid-ee576be972203c63');
         const to = normalizeScopeId(textField(intent.params.toAccountId, 'toAccountId', 64, true), 'toAccountId');
         const target = (await this.auth.listPrincipals()).find(p => p.accountId === to);
-        if (!target || to === actor.accountId) throw new Error('Handoff requires another exact registered account');
+        if (!target || to === actor.accountId) throw guidanceError(new Error('Handoff requires another exact registered account'), 'guid-55d279798352054f');
         this.member(project, target);
         fm.work_handoff = { state: 'proposed', from_account_id: actor.accountId, to_account_id: to, generation,
           completed: textField(intent.params.completed, 'completed', 500), remaining: textField(intent.params.remaining, 'remaining', 500),
@@ -543,7 +544,7 @@ export class WorkService {
           artifacts: fm.artifacts, proposed_at: timestamp() };
       } else {
         const offer = fm.work_handoff;
-        if (!offer || offer.state !== 'proposed' || offer.to_account_id !== actor.accountId || offer.generation !== generation) throw new Error('Only the exact handoff recipient can accept the current proposal');
+        if (!offer || offer.state !== 'proposed' || offer.to_account_id !== actor.accountId || offer.generation !== generation) throw guidanceError(new Error('Only the exact handoff recipient can accept the current proposal'), 'guid-e3de119736b9f354');
         fm.assignee_account_id = actor.accountId; fm.assignee = displayIdentity(actor); params.assignee = displayIdentity(actor);
         fm.claim_generation = generation + 1; fm.work_handoff = { ...offer, state: 'accepted', accepted_at: timestamp() };
         delete fm.work_review;
@@ -552,21 +553,21 @@ export class WorkService {
     }
     const op = intent.params.op;
     if (op === 'request') {
-      if (!own) throw new Error('Only current assignee may request review');
-      if (!fm.completion_criteria?.length || !fm.verification) throw new Error('Review request requires completionCriteria and verification');
-      if (finished(fm)) throw new Error('Finished work cannot request review');
+      if (!own) throw guidanceError(new Error('Only current assignee may request review'), 'guid-dcee0126093f2357');
+      if (!fm.completion_criteria?.length || !fm.verification) throw guidanceError(new Error('Review request requires completionCriteria and verification'), 'guid-d96a5ea839d4822e');
+      if (finished(fm)) throw guidanceError(new Error('Finished work cannot request review'), 'guid-33302d71bb7c9304');
       fm.status = 'in_review';
       fm.work_review = { decision: 'request', fingerprint: reviewBasis(fm), account_id: actor.accountId, at: timestamp() };
     } else {
       if (op === 'override') {
-        if (!this.auth.hasCapability(actor, 'moderate')) throw new Error('Only a host moderator can explicitly override review');
+        if (!this.auth.hasCapability(actor, 'moderate')) throw guidanceError(new Error('Only a host moderator can explicitly override review'), 'guid-0518e4d6bc2421fa');
       } else {
         this.member(project, actor);
-        if ([fm.author_account_id, fm.requester_account_id, fm.assignee_account_id].includes(actor.accountId)) throw new Error('Review requires an independent authenticated account, not author or assignee');
+        if ([fm.author_account_id, fm.requester_account_id, fm.assignee_account_id].includes(actor.accountId)) throw guidanceError(new Error('Review requires an independent authenticated account, not author or assignee'), 'guid-2c8b1d68777ff712');
       }
       const reason = textField(intent.params.reason, 'review reason', 500, true);
-      if (fm.status !== 'in_review' || !fm.work_review) throw new Error('Review must first be explicitly requested');
-      if (!intent.params.artifactFingerprint || intent.params.artifactFingerprint !== reviewBasis(fm)) throw new Error('Review artifactFingerprint does not match the current basis');
+      if (fm.status !== 'in_review' || !fm.work_review) throw guidanceError(new Error('Review must first be explicitly requested'), 'guid-f6fc982b45d3dd0d');
+      if (!intent.params.artifactFingerprint || intent.params.artifactFingerprint !== reviewBasis(fm)) throw guidanceError(new Error('Review artifactFingerprint does not match the current basis'), 'guid-74fba1d52f5f41d3');
       await this.artifacts(fm.artifacts || [], actor, [], true);
       fm.work_review = { decision: op, fingerprint: reviewBasis(fm), account_id: actor.accountId, reason, at: timestamp() };
       if (op === 'changes_requested' || op === 'question') fm.status = 'in_progress';
@@ -586,20 +587,20 @@ export class WorkService {
     return this.tasks.update(update);
   }
   async claim(params: WorkClaimParams): Promise<Properties> {
-    if (!['claim', 'start', 'release'].includes(params.op)) throw new Error('Invalid claim operation');
+    if (!['claim', 'start', 'release'].includes(params.op)) throw guidanceError(new Error('Invalid claim operation'), 'guid-faea3df717f2bfc1');
     return this.mutate({ kind: 'claim', params });
   }
   /** Internal paid lease still traverses every ordinary Work admission rule. */
   async claimPaid(params:WorkClaimParams,contractId:string):Promise<Properties> {
-    if(params.op!=='start')throw new Error('Paid bridge only starts a claim');
+    if(params.op!=='start')throw guidanceError(new Error('Paid bridge only starts a claim'), 'guid-563bc26eecbcbcbb');
     return this.mutate({kind:'claim',params,paidContractId:normalizeScopeId(contractId,'contractId')});
   }
   async handoff(params: WorkHandoffParams): Promise<Properties> {
-    if (!['propose', 'accept'].includes(params.op)) throw new Error('Invalid handoff operation');
+    if (!['propose', 'accept'].includes(params.op)) throw guidanceError(new Error('Invalid handoff operation'), 'guid-10b12447ebbb54c0');
     return this.mutate({ kind: 'handoff', params });
   }
   async review(params: WorkReviewParams): Promise<Properties> {
-    if (!['request', 'approve', 'changes_requested', 'question', 'override'].includes(params.op)) throw new Error('Invalid review operation');
+    if (!['request', 'approve', 'changes_requested', 'question', 'override'].includes(params.op)) throw guidanceError(new Error('Invalid review operation'), 'guid-c35b8c849912b588');
     return this.mutate({ kind: 'review', params });
   }
 
@@ -666,7 +667,7 @@ export class WorkService {
       ...([...resources.get(n.path)!].some(resource => {
         const owners = occurrences.get(resource);
         return owners && (owners.size > 1 || !owners.has(n.path));
-      }) && { warning: 'Artifact/file overlap is advisory; coordinate with peers' }),
+      }) && { warning: guidanceText('guid-f3e8a40ffa18c42a', 'Artifact/file overlap is advisory; coordinate with peers') }),
     }));
     const wip = await this.boardWip(project.frontmatter, tasks, params.principal);
     const sig = fingerprint({ project: project.revision, inventory: selected, wip,paid, ...(wip && { accountId: params.principal?.accountId }) });
@@ -676,7 +677,7 @@ export class WorkService {
   async packet(params: WorkPacketParams) {
     const id = normalizeScopeId(params.taskId, 'taskId');
     const n = await this.visible(taskPath(id));
-    if (n.frontmatter.mcpvault_type !== 'agent_task' || !n.frontmatter.project_id) throw new Error('Packet requires a project-backed task');
+    if (n.frontmatter.mcpvault_type !== 'agent_task' || !n.frontmatter.project_id) throw guidanceError(new Error('Packet requires a project-backed task'), 'guid-77495db18b810d46');
     const project = await this.projectNote(n.frontmatter.project_id);
     const fm = n.frontmatter;
     const artifactFingerprint = reviewBasis(fm);
@@ -718,7 +719,7 @@ export class WorkService {
       ...nextActions,
       ...String(project.frontmatter.goal || '').match(/.{1,400}/gs)?.map(text => ({ kind: 'goal', text })) || [],
       ...(project.frontmatter.allowed_work || []).map((text: string) => ({ kind: 'allowedWork', text })),
-      { kind: 'authority', text: 'Task participation grants no external execution authority.' },
+      { kind: 'authority', text: guidanceText('guid-f23e84610cfaea5b', 'Task participation grants no external execution authority.') },
       ...String(fm.description || '').match(/.{1,400}/gs)?.map(text => ({ kind: 'description', text })) || [],
       ...(fm.completion_criteria || []).map((text: string) => ({ kind: 'criterion', text })),
       ...locators,
@@ -747,7 +748,7 @@ export class WorkService {
       return [action('work.review', 'approve', ['reason']), action('work.review', 'changes_requested', ['reason']), action('work.review', 'question', ['reason'])];
     }
     if (!fm.assignee_account_id) {
-      try { await this.ready(fm); } catch { return [{ kind: 'nextAction', tool: 'work.board', arguments: { projectId: fm.project_id }, reason: 'Dependencies are not ready' }]; }
+      try { await this.ready(fm); } catch { return [{ kind: 'nextAction', tool: 'work.board', arguments: { projectId: fm.project_id }, reason: guidanceText('guid-178e721211cda701', 'Dependencies are not ready') }]; }
       return [action('work.claim', 'claim')];
     }
     if (fm.assignee_account_id === actor.accountId) {
@@ -756,7 +757,7 @@ export class WorkService {
           arguments: { taskId: id, expectedRevision: note.revision, expectedGeneration: fm.claim_generation,
             requestId: `work-${fingerprint({ actor: actor.accountId, id, revision: note.revision }).slice(0, 24)}` },
           requiredInput: ['verification'], question: String(fm.work_review.reason || '').slice(0, 500),
-          reason: 'Answer or clarify the review question in updated verification before requesting review again. Use the existing discussion locator if discussion is needed.', advisory: true }];
+          reason: guidanceText('guid-62fd0e175b1358bd', 'Answer or clarify the review question in updated verification before requesting review again. Use the existing discussion locator if discussion is needed.'), advisory: true }];
       }
       if (['accepted', 'proposed'].includes(fm.status)) return [action('work.claim', 'start')];
       if (fm.verification && fm.completion_criteria?.length) {
@@ -766,7 +767,7 @@ export class WorkService {
             arguments: { taskId: id, status: 'completed', expectedRevision: note.revision, expectedGeneration: fm.claim_generation,
               requestId: `work-${fingerprint({ actor: actor.accountId, id, revision: note.revision, status: 'completed' }).slice(0, 24)}` },
             requiredInput: ['reason', 'knowledge disposition if not already recorded'],
-            reason: 'Complete with a reason and auditable knowledge disposition: retrospective, knowledgeNotes, negativeKnowledgeNotes, or noReusableKnowledge with knowledgeDispositionReason. Current dependencies and artifact revisions are rechecked on write.', advisory: true }];
+            reason: guidanceText('guid-16d4d42d05805788', 'Complete with a reason and auditable knowledge disposition: retrospective, knowledgeNotes, negativeKnowledgeNotes, or noReusableKnowledge with knowledgeDispositionReason. Current dependencies and artifact revisions are rechecked on write.'), advisory: true }];
         }
         if (fm.status !== 'in_review') return [action('work.review', 'request')];
       }

@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { open, type FileHandle } from 'node:fs/promises';
 import { createGunzip } from 'node:zlib';
 import { Readable } from 'node:stream';
@@ -20,7 +21,7 @@ async function* storedChunks(handle: FileHandle, maxBytes: number): AsyncGenerat
     const { bytesRead } = await handle.read(chunk, 0, chunk.length, null);
     if (bytesRead === 0) return;
     total += bytesRead;
-    if (total > maxBytes) throw new Error('Snapshot size exceeded');
+    if (total > maxBytes) throw guidanceError(new Error('Snapshot size exceeded'), 'guid-6e3e9727eeb0d592');
     yield chunk.subarray(0, bytesRead);
   }
 }
@@ -30,7 +31,7 @@ async function collectBytes(source: AsyncIterable<Buffer>, maxBytes: number): Pr
   let total = 0;
   for await (const chunk of source) {
     total += chunk.length;
-    if (total > maxBytes) throw new Error('Snapshot size exceeded');
+    if (total > maxBytes) throw guidanceError(new Error('Snapshot size exceeded'), 'guid-6e3e9727eeb0d592');
     chunks.push(chunk);
   }
   // Callers require complete bytes. This still holds decoded chunks plus the
@@ -43,14 +44,14 @@ export async function readSnapshotBytes(path: string, limits: SnapshotReadLimits
   const ceilings = limits.maxDecodedBytes === undefined ? [limits.maxBytes] : [limits.maxBytes, limits.maxDecodedBytes];
   for (const value of ceilings) {
     if (!Number.isSafeInteger(value) || value < 1 || value > 0x7fffffff) {
-      throw new TypeError('Invalid snapshot byte limit');
+      throw guidanceError(new TypeError('Invalid snapshot byte limit'), 'guid-0d65cfcdd8523b6d');
     }
   }
   try {
     const handle = await open(path, 'r');
     try {
       const info = await handle.stat();
-      if (!info.isFile() || info.size > limits.maxBytes) throw new Error('Invalid snapshot file');
+      if (!info.isFile() || info.size > limits.maxBytes) throw guidanceError(new Error('Invalid snapshot file'), 'guid-7d9ea82c9d983e04');
       const source = storedChunks(handle, limits.maxBytes);
       if (limits.maxDecodedBytes === undefined) return await collectBytes(source, limits.maxBytes);
       const decodedLimit = limits.maxDecodedBytes;
@@ -65,6 +66,6 @@ export async function readSnapshotBytes(path: string, limits: SnapshotReadLimits
   } catch {
     // Cache callers already rebuild from Markdown; never expose host paths or
     // native decoder messages when reporting an optional snapshot failure.
-    throw new Error('Snapshot unavailable');
+    throw guidanceError(new Error('Snapshot unavailable'), 'guid-990719536f77992d');
   }
 }

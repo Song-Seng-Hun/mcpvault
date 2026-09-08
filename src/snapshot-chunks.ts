@@ -1,14 +1,15 @@
+import { guidanceError } from './guidance-runtime.js';
 const CHUNK_BYTES = 64 * 1024;
 
 /** Owned, bounded output buffers; accepted string records still encode individually. */
 export function* snapshotByteChunks(chunks: Iterable<string | Uint8Array>, maxBytes: number): Generator<Buffer, void, unknown> {
-  if (!Number.isSafeInteger(maxBytes) || maxBytes <= 0 || maxBytes > 0x7fffffff) throw new TypeError('Invalid snapshot byte limit');
+  if (!Number.isSafeInteger(maxBytes) || maxBytes <= 0 || maxBytes > 0x7fffffff) throw guidanceError(new TypeError('Invalid snapshot byte limit'), 'guid-0d65cfcdd8523b6d');
   let total = 0, used = 0;
   let output: Buffer | undefined;
   for (const chunk of chunks) {
     const size = typeof chunk === 'string' ? Buffer.byteLength(chunk) : chunk.byteLength;
     total += size;
-    if (total > maxBytes) throw new Error('Snapshot size exceeded');
+    if (total > maxBytes) throw guidanceError(new Error('Snapshot size exceeded'), 'guid-6e3e9727eeb0d592');
     const bytes = typeof chunk === 'string' ? Buffer.from(chunk) : chunk;
     for (let offset = 0; offset < size;) {
       output ??= Buffer.allocUnsafe(CHUNK_BYTES);

@@ -1,3 +1,5 @@
+import { guidanceError } from './guidance-runtime.js';
+import { guidanceText } from './guidance-runtime.js';
 import { isModerationHidden } from './moderation-policy.js';
 import { normalizeKnowledgeApplications } from './knowledge-application-model.js';
 import { posix } from 'node:path';
@@ -35,7 +37,7 @@ export class KnowledgeApplicationService {
         const fields = [record.environment, record.conditions, record.observed, record.limitations || ''];
         const links = fields.flatMap(field => extractObsidianLinkOccurrences(field));
         if (links.length > 8)
-            throw Error('An application record supports at most eight prose links; put long analysis in a linked note');
+            throw guidanceError(Error('An application record supports at most eight prose links; put long analysis in a linked note'), 'guid-1c60dc11dd5b560c');
         const refs = new ReferenceService(this.fs, this.access);
         try {
             for (const link of links) {
@@ -102,7 +104,7 @@ export class KnowledgeApplicationService {
                 if (key !== container.toLowerCase())
                     guards.set(key, { path, expectedRevision: current.revision });
                 if (guards.size > 8)
-                    throw Error('Application records may reference at most eight distinct related notes; split this observation');
+                    throw guidanceError(Error('Application records may reference at most eight distinct related notes; split this observation'), 'guid-f0d3e7ffc47f619c');
                 locator.path = this.access.toPublicPath(path);
             }
         }
@@ -113,11 +115,11 @@ export class KnowledgeApplicationService {
     async read(params) {
         const maxChars = params.maxChars ?? 4000, limit = params.limit ?? 20;
         if (!Number.isSafeInteger(maxChars) || maxChars < 2000 || maxChars > 12000)
-            throw Error('maxChars must be 2000–12000');
+            throw guidanceError(Error('maxChars must be 2000–12000'), 'guid-625815e9774e58c7');
         if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100)
-            throw Error('limit must be 1–100');
+            throw guidanceError(Error('limit must be 1–100'), 'guid-6afb07ef59b85a17');
         if (typeof params.path !== 'string' || !params.path.trim() || params.path.length > 500)
-            throw Error('path must contain 1–500 characters');
+            throw guidanceError(Error('path must contain 1–500 characters'), 'guid-1c95c7a0b265b477');
         const principal = params.principal, path = this.physical(params.path, principal);
         const canAccess = (p) => this.access.canAccessPhysicalPath(p, principal);
         const observed = new Map();
@@ -127,7 +129,7 @@ export class KnowledgeApplicationService {
             if (observed.has(p))
                 return observed.get(p);
             if (observed.size >= 80)
-                throw Error('Application metadata budget reached; narrow the page');
+                throw guidanceError(Error('Application metadata budget reached; narrow the page'), 'guid-d674f310861e46cf');
             const current = await this.metadata(p, principal);
             if (current)
                 observed.set(p, current);
@@ -150,10 +152,10 @@ export class KnowledgeApplicationService {
         if (cursor) {
             if (typeof cursor.path !== 'string' || cursor.path.length > 1024 || !Number.isSafeInteger(cursor.index) || cursor.index < 0 || cursor.index > 8
                 || !/^[a-f0-9]{64}$/.test(cursor.revision) || cursor.knowledgePath !== this.access.toPublicPath(path) || cursor.knowledgeRevision !== knowledge.revision)
-                throw Error('Application cursor invalid or knowledge revision changed');
+                throw guidanceError(Error('Application cursor invalid or knowledge revision changed'), 'guid-0ce86a0ee30ce700');
             start = await meta(this.physical(cursor.path, principal));
             if (!start || start.revision !== cursor.revision)
-                throw Error('Application cursor observation changed; restart the query');
+                throw guidanceError(Error('Application cursor observation changed; restart the query'), 'guid-b710472aee3662ec');
         }
         // Page existing metadata, never scan all bodies or build a new application index.
         const page = await this.fs.queryNotes({ limit: 100, includeContent: false, includeTotal: false, sortBy: 'path', sortOrder: 'asc', ...(start && { after: { path: start.path, value: start.path } }) }, canAccess, n => !isModerationHidden(n.frontmatter) && n.frontmatter.knowledge_applications !== undefined);
@@ -234,10 +236,10 @@ export class KnowledgeApplicationService {
                     stopped = true;
                     if (!items.length) {
                         if (maxChars === 12000)
-                            throw Error('Application locator cannot fit; read the observation directly with a bounded notes.read');
+                            throw guidanceError(Error('Application locator cannot fit; read the observation directly with a bounded notes.read'), 'guid-3760752141a1ed8b');
                         await validateObserved();
                         const retry = { status: 'budget_too_small', warning, truncated: true, nextAction: { endpointId: 'wiki.applications', arguments: { path: publicPath(path), expectedRevision: knowledge.revision, cursor: next, limit, maxChars: 12000 } } };
-                        return JSON.stringify(retry).length <= maxChars ? retry : { status: 'budget_too_small', warning, truncated: true, retryArguments: { maxChars: 12000 }, instruction: 'Repeat the same query with retryArguments merged; no records were delivered.' };
+                        return JSON.stringify(retry).length <= maxChars ? retry : { status: 'budget_too_small', warning, truncated: true, retryArguments: { maxChars: 12000 }, instruction: guidanceText('guid-f129d0d8b5eb05ae', 'Repeat the same query with retryArguments merged; no records were delivered.') };
                     }
                     break;
                 }
@@ -254,7 +256,7 @@ export class KnowledgeApplicationService {
         await validateObserved();
         const result = envelope();
         if (JSON.stringify(result).length > maxChars)
-            throw Error('Application response budget too small for exact continuation');
+            throw guidanceError(Error('Application response budget too small for exact continuation'), 'guid-92518d07e18b3eb9');
         return result;
     }
 }

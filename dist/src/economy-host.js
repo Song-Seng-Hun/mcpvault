@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { lstat, realpath, open, readdir, rename, unlink, statfs, link } from 'node:fs/promises';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -28,7 +29,7 @@ const deadProcess = async (pid) => {
     catch (e) {
         if (e && typeof e === 'object' && 'code' in e && e.code === 'ESRCH')
             return true;
-        throw new Error('Cannot establish recovery process death');
+        throw guidanceError(new Error('Cannot establish recovery process death'), 'guid-7345f9b0283e1960');
     }
 };
 async function releaseRecoveryGate(path, gate) {
@@ -38,10 +39,10 @@ async function releaseRecoveryGate(path, gate) {
 async function assertRecoveryGate(path, gate) {
     const stat = await lstat(path);
     if (stat.isSymbolicLink())
-        throw new Error('Recovery lock symlink refused');
+        throw guidanceError(new Error('Recovery lock symlink refused'), 'guid-2204c0ef15898d33');
     const current = JSON.parse(await readFederationFile(dirname(path), path, { maxBytes: 1024 }));
     if (current.nonce !== gate.nonce || current.pid !== gate.pid || current.vault !== gate.vault)
-        throw new Error('Recovery lock fencing failed');
+        throw guidanceError(new Error('Recovery lock fencing failed'), 'guid-5c758dcf9f6b5e82');
 }
 /** Publish a complete gate with an atomic hard-link, so a killed recovery never
  * leaves the empty exclusive-create file that the old protocol could not own. */
@@ -62,7 +63,7 @@ async function acquireRecoveryGate(vault, path) {
     }
     catch (e) {
         if (e && typeof e === 'object' && 'code' in e && e.code === 'EEXIST')
-            throw new Error('Recovery gate already exists; automatic stale-gate deletion is unsafe. Require explicit offline forensic recovery');
+            throw guidanceError(new Error('Recovery gate already exists; automatic stale-gate deletion is unsafe. Require explicit offline forensic recovery'), 'guid-ecb2649b49eed7d1');
         throw e;
     }
     finally {
@@ -78,26 +79,26 @@ async function acquireRecoveryGate(vault, path) {
 /** Configuration is a host file, never a note or MCP argument. Loading is read-only. */
 export async function loadEconomyHostConfig(configPath, expectedVault) {
     if (!isAbsolute(configPath) || !isAbsolute(expectedVault))
-        throw new Error('Absolute private config and vault paths required');
+        throw guidanceError(new Error('Absolute private config and vault paths required'), 'guid-a6109f2e1dc424ff');
     const actualConfig = await realpath(configPath), root = dirname(actualConfig), vault = await realpath(expectedVault);
     const compiledRoot = dirname(dirname(fileURLToPath(import.meta.url)));
     const moduleRoot = basename(compiledRoot) === 'dist' ? dirname(compiledRoot) : compiledRoot;
     const source = moduleRoot.endsWith(`${sep}dist`) ? dirname(moduleRoot) : moduleRoot;
     if (inside(vault, actualConfig) || inside(source, actualConfig))
-        throw new Error('Economy config must be private, outside Vault and source');
+        throw guidanceError(new Error('Economy config must be private, outside Vault and source'), 'guid-b5d3635a1bb10ce3');
     const raw = JSON.parse(await readFederationFile(root, actualConfig, { maxBytes: 32768 }));
     if (!raw || raw.version !== 1 || Object.keys(raw).some(k => !['version', 'vaultPath', 'hostPath', 'policy'].includes(k)))
-        throw new Error('Invalid host economy configuration');
+        throw guidanceError(new Error('Invalid host economy configuration'), 'guid-fb1b25c7414d31b7');
     if (typeof raw.vaultPath !== 'string' || typeof raw.hostPath !== 'string' || !isAbsolute(raw.vaultPath) || !isAbsolute(raw.hostPath))
-        throw new Error('Invalid vault/host path');
+        throw guidanceError(new Error('Invalid vault/host path'), 'guid-231b0a938277f5a3');
     const configuredVault = await realpath(raw.vaultPath), host = await realpath(raw.hostPath);
     if (configuredVault !== vault)
-        throw new Error('Economy config belongs to another vault');
+        throw guidanceError(new Error('Economy config belongs to another vault'), 'guid-ddfb5503c236a2ba');
     if (inside(vault, host) || inside(source, host) || !inside(host, actualConfig))
-        throw new Error('Config and checkpoint require a private host directory outside Vault/source');
+        throw guidanceError(new Error('Config and checkpoint require a private host directory outside Vault/source'), 'guid-3b9689fb5daac093');
     const policy = validateEconomyPolicy(raw.policy);
     if (policy.enabled && policy.treasuryWeeklyBudget === undefined)
-        throw new Error('Enabled host policy requires explicit treasuryWeeklyBudget (pilot: 500)');
+        throw guidanceError(new Error('Enabled host policy requires explicit treasuryWeeklyBudget (pilot: 500)'), 'guid-40f10ea885c6fdc1');
     return { version: 1, vaultPath: vault, hostPath: host, policy };
 }
 /** Conservative OS classification plus a bounded exclusive-create/fsync/rename
@@ -105,18 +106,18 @@ export async function loadEconomyHostConfig(configPath, expectedVault) {
 export async function probeEconomyStorage(directory) {
     const path = await realpath(directory);
     if (/^\\\\|^\/\//.test(path))
-        throw new Error('Network storage cannot host economy');
+        throw guidanceError(new Error('Network storage cannot host economy'), 'guid-6142a1479af1f5a3');
     let filesystem;
     if (process.platform === 'win32') {
         const drive = /^([a-z]):\\/i.exec(path)?.[1];
         if (!drive)
-            throw new Error('Unknown Windows volume');
+            throw guidanceError(new Error('Unknown Windows volume'), 'guid-9e7750ccca1796cd');
         // Only a validated drive LETTER is inserted; no caller-authored shell text.
         const script = `Get-CimInstance Win32_LogicalDisk -Filter "DeviceID='${drive.toUpperCase()}:'" | Select-Object DriveType,FileSystem | ConvertTo-Json -Compress`;
         const { stdout } = await promisify(execFile)('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], { windowsHide: true, timeout: 10000, maxBuffer: 4096 });
         const disk = JSON.parse(stdout);
         if (disk.DriveType !== 3 || !['NTFS', 'ReFS'].includes(disk.FileSystem))
-            throw new Error('Economy requires a fixed local NTFS/ReFS volume; removable/NAS/unknown volumes refused');
+            throw guidanceError(new Error('Economy requires a fixed local NTFS/ReFS volume; removable/NAS/unknown volumes refused'), 'guid-64b857a57bb41700');
         filesystem = disk.FileSystem;
     }
     else {
@@ -124,7 +125,7 @@ export async function probeEconomyStorage(directory) {
         const supported = new Map([[0xef53, 'ext'], [0x58465342, 'xfs'], [0x9123683e, 'btrfs']]);
         const name = supported.get(type);
         if (!name)
-            throw new Error('Economy filesystem is not in the verified local allowlist');
+            throw guidanceError(new Error('Economy filesystem is not in the verified local allowlist'), 'guid-f521184c2f7d4974');
         filesystem = name;
     }
     const name = `.economy-probe-${randomUUID()}`, from = join(path, name), to = join(path, `${name}.done`);
@@ -145,12 +146,12 @@ export async function probeEconomyStorage(directory) {
                 throw e;
         }
         if (!exclusive)
-            throw new Error('Exclusive creation probe failed');
+            throw guidanceError(new Error('Exclusive creation probe failed'), 'guid-d77b2fd6dca3af09');
         await handle.close();
         handle = undefined;
         await rename(from, to);
         if (await readFederationFile(path, to, { maxBytes: 256 }) !== name)
-            throw new Error('Atomic rename probe failed');
+            throw guidanceError(new Error('Atomic rename probe failed'), 'guid-383a12515f2b8b0c');
         return { path, filesystem, probe: 'exclusive-create-sync-rename' };
     }
     finally {
@@ -181,19 +182,19 @@ export async function validateOperatorAdjudication(state, command, fs) {
         return;
     const contract = command.contractId ? state.contracts[command.contractId] : undefined;
     if (!contract?.submission || contract.submission.basis !== command.basis)
-        throw new Error('Adjudication must identify the exact submitted basis');
+        throw guidanceError(new Error('Adjudication must identify the exact submitted basis'), 'guid-1441233faac18aff');
     const task = await fs.readNote(`Community/Tasks/${contract.terms.taskId}.md`);
     if (!contract.workBinding || task.revision !== contract.workBinding.revision || task.frontmatter.assignee_account_id !== contract.worker || Number(task.frontmatter.claim_generation) !== contract.workBinding.generation || task.frontmatter.status !== 'in_progress')
-        throw new Error('Work claim divergence: reconcile exact claim before payout');
+        throw guidanceError(new Error('Work claim divergence: reconcile exact claim before payout'), 'guid-7e77ba244896e090');
     for (const artifact of contract.submission.artifacts) {
         const note = await fs.readNote(artifact.path);
         if (note.revision !== artifact.revision || isModerationHidden(note.frontmatter))
-            throw new Error('Artifact changed/hidden; payout held');
+            throw guidanceError(new Error('Artifact changed/hidden; payout held'), 'guid-3bf4d34b6fab629a');
     }
 }
 export async function recoverEconomyWriter(options, approval) {
     if (typeof approval.reason !== 'string' || !approval.reason.trim() || approval.reason.length > 1000)
-        throw new Error('Recovery reason required');
+        throw guidanceError(new Error('Recovery reason required'), 'guid-43c69bbc4794e61b');
     const vault = await realpath(options.vaultPath), host = await realpath(options.hostPath);
     const gatePath = join(vault, '.mcpvault-economy', 'recovery.lock');
     await ensureFederationDirectory(vault, dirname(gatePath));
@@ -201,14 +202,14 @@ export async function recoverEconomyWriter(options, approval) {
     try {
         const state = await inspectEconomyRecovery(options);
         if (state.fingerprint !== approval.expectedFingerprint)
-            throw new Error('Recovery inspection fingerprint changed');
+            throw guidanceError(new Error('Recovery inspection fingerprint changed'), 'guid-14f2d2a3c0317484');
         const lock = state.lock;
         if (!lock || !Number.isSafeInteger(lock.pid) || lock.pid <= 0 || lock.vault !== vault || typeof lock.nonce !== 'string')
-            throw new Error('Writer PID/identity is invalid; manual forensic recovery required');
+            throw guidanceError(new Error('Writer PID/identity is invalid; manual forensic recovery required'), 'guid-9b4f7885419fc7b8');
         if (!await deadProcess(lock.pid))
-            throw new Error('Writer PID is live/running; it will not be stopped or unlocked');
+            throw guidanceError(new Error('Writer PID is live/running; it will not be stopped or unlocked'), 'guid-ff0e84ea3584327e');
         if ((await inspectEconomyRecovery(options)).fingerprint !== state.fingerprint)
-            throw new Error('Writer changed during recovery');
+            throw guidanceError(new Error('Writer changed during recovery'), 'guid-c63746521df7a0e4');
         // Preserve the exact old lock and approval as host audit evidence. No
         // journal/checkpoint mutation, lock timeout, or PID-reuse override exists.
         const auditName = `economy-recovery-${randomUUID()}.json`;
@@ -218,7 +219,7 @@ export async function recoverEconomyWriter(options, approval) {
         // nonce immediately before the irreversible writer-lock unlink anyway.
         await assertRecoveryGate(gatePath, gate);
         if ((await lstat(target)).isSymbolicLink())
-            throw new Error('Writer lock symlink refused');
+            throw guidanceError(new Error('Writer lock symlink refused'), 'guid-a8b59a887636dcbe');
         await unlink(target);
         return { recovered: true, audit: auditName, nextAction: 'Open ledger to validate checkpoint/replay before serving any financial request' };
     }

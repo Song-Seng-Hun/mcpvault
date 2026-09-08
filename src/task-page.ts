@@ -1,3 +1,4 @@
+import { guidanceError, guidanceText } from './guidance-runtime.js';
 import type { ListTasksResult } from './types.js';
 import { normalizeSearchMaxChars } from './search-limits.js';
 
@@ -48,13 +49,13 @@ export function packTaskPage(result: ListTasksResult, args: Record<string, any>)
     if (best) return best;
   }
   if (maxChars === 12000 && !args.prettyPrint && limit === 1) {
-    throw new Error('A task locator cannot fit the maximum response budget; no task was skipped. Inspect the source note directly.');
+    throw guidanceError(new Error('A task locator cannot fit the maximum response budget; no task was skipped. Inspect the source note directly.'), 'guid-a193f9ebfe9c03a5');
   }
   // Do not emit a zero-progress next page. Retry the same position with room
   // for one receipt; reuse original public filters and authorization locally.
   return JSON.stringify({
     tasks: [], total: result.total, returned: 0, offset: result.offset, truncated: true,
-    message: 'No task skipped; retry this position with a larger compact budget.',
+    message: guidanceText('guid-4e401fd336b92c8b', 'No task skipped; retry this position with a larger compact budget.'),
     nextAction: { endpointId: 'mcp.list_tasks', reuseOriginalArguments: true,
       overrides: { maxChars: 12000, prettyPrint: false, limit: 1 } },
   }, null, indent);

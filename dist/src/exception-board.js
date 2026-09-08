@@ -1,3 +1,4 @@
+import { guidanceText } from './guidance-runtime.js';
 export function packExceptionBoard(candidates, limit, maxChars, sourceTruncated) {
     const unique = new Map();
     for (const item of candidates) {
@@ -14,7 +15,7 @@ export function packExceptionBoard(candidates, limit, maxChars, sourceTruncated)
     const base = { counts, total: ranked.length, countScope: 'validated_candidates', coverage: 'partial', advisory: true,
         truncated: sourceTruncated || ranked.length > selected.length };
     const full = { ...base, items: selected,
-        note: 'Candidate signals, not an exhaustive healthy/unhealthy verdict. Source revision matches do not verify every dependency. Follow one returned read action before revision-safe repair.' };
+        note: guidanceText('guid-d5981419b398421e', 'Candidate signals, not an exhaustive healthy/unhealthy verdict. Source revision matches do not verify every dependency. Follow one returned read action before revision-safe repair.') };
     if (JSON.stringify(full).length <= maxChars)
         return full;
     // Preserve identity, provenance and the exact action. Drop prose before work.

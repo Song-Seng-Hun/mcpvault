@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { randomUUID } from 'node:crypto';
 import { lstat, open, readdir, realpath, unlink } from 'node:fs/promises';
 import { basename, dirname, isAbsolute, join, relative, sep } from 'node:path';
@@ -21,23 +22,23 @@ export async function assertEconomyConfigured(vaultPath, configured) {
             return;
         throw e;
     }
-    throw new Error('Existing economy requires host configuration/recovery before Work mutations');
+    throw guidanceError(new Error('Existing economy requires host configuration/recovery before Work mutations'), 'guid-94e963cdfaa25446');
 }
 export function admitEconomyEventBytes(existing, proposed) {
     if (!Number.isSafeInteger(proposed) || proposed < 0 || proposed > MAX_EVENT)
-        throw new Error('Economy event byte budget exceeded');
+        throw guidanceError(new Error('Economy event byte budget exceeded'), 'guid-418d6e7fa622ed19');
     if (!Number.isSafeInteger(existing) || existing < 0 || existing + proposed > 32 * 1024 * 1024)
-        throw new Error('Economy replay byte budget exceeded; host maintenance required');
+        throw guidanceError(new Error('Economy replay byte budget exceeded; host maintenance required'), 'guid-38e0dc5dce364623');
 }
 /** Reject gaps before any pending intent can be published.  In particular, a
  * count alone cannot establish that the next filename is unused. */
 export function assertContiguousEconomyJournalNames(entries) {
     const names = entries.filter(name => name.endsWith('.md')).sort();
     if (names.length > MAX_EVENTS)
-        throw new Error('Economy journal limit reached; host maintenance required');
+        throw guidanceError(new Error('Economy journal limit reached; host maintenance required'), 'guid-9b0d0d52e1047c73');
     for (let index = 0; index < names.length; index++) {
         if (names[index] !== `${String(index + 1).padStart(10, '0')}.md`)
-            throw new Error('Economy journal sequence gap or fork');
+            throw guidanceError(new Error('Economy journal sequence gap or fork'), 'guid-253e5358c4d35bfa');
     }
     return names;
 }
@@ -72,16 +73,16 @@ export class EconomyLedger {
     static async acquire(options, initialize) {
         validateEconomyPolicy(options.policy);
         if (!options.storageVerified)
-            throw new Error('Economy requires verified local storage; network/unknown storage is refused');
+            throw guidanceError(new Error('Economy requires verified local storage; network/unknown storage is refused'), 'guid-1a13954061586bf2');
         if (!isAbsolute(options.vaultPath) || !isAbsolute(options.hostPath) || /^\\\\|^\/\//.test(options.vaultPath) || /^\\\\|^\/\//.test(options.hostPath))
-            throw new Error('Economy storage requires absolute local paths');
+            throw guidanceError(new Error('Economy storage requires absolute local paths'), 'guid-79ab65b5064fb27a');
         const vault = await realpath(options.vaultPath), host = await realpath(options.hostPath);
         const moduleRoot = dirname(dirname(fileURLToPath(import.meta.url)));
         const source = await realpath(basename(moduleRoot) === 'dist' ? dirname(moduleRoot) : moduleRoot);
         if (/^\\\\|^\/\//.test(vault) || /^\\\\|^\/\//.test(host))
-            throw new Error('Economy storage refuses canonical network paths');
+            throw guidanceError(new Error('Economy storage refuses canonical network paths'), 'guid-716d9dfc0ad4ff24');
         if (inside(vault, host) || inside(source, host))
-            throw new Error('Trusted economy checkpoint must be outside Vault and source repository');
+            throw guidanceError(new Error('Trusted economy checkpoint must be outside Vault and source repository'), 'guid-feb0ffba71279ca7');
         const ledger = new EconomyLedger({ ...options, policy: structuredClone(options.policy) }, vault, host);
         await ensureFederationDirectory(vault, ledger.journal);
         await ledger.assertNoRecovery();
@@ -89,17 +90,17 @@ export class EconomyLedger {
             ledger.lock = await open(ledger.lockPath, 'wx', 0o600);
         }
         catch {
-            throw new Error('Economy writer already exists or its crash lock needs host recovery');
+            throw guidanceError(new Error('Economy writer already exists or its crash lock needs host recovery'), 'guid-961d4180509c0d08');
         }
         try {
             await ledger.lock.writeFile(JSON.stringify({ pid: process.pid, nonce: ledger.nonce, vault }), 'utf8');
             await ledger.lock.sync();
             if (initialize) {
                 if ((await readdir(ledger.journal)).length)
-                    throw new Error('Economy already initialized or has pending journal data');
+                    throw guidanceError(new Error('Economy already initialized or has pending journal data'), 'guid-2eded69c0989beef');
                 try {
                     await lstat(ledger.checkpointPath);
-                    throw new Error('Economy checkpoint already initialized');
+                    throw guidanceError(new Error('Economy checkpoint already initialized'), 'guid-e3c2c64663226ac2');
                 }
                 catch (e) {
                     if (!missing(e))
@@ -124,19 +125,19 @@ export class EconomyLedger {
                 return;
             throw e;
         }
-        throw new Error('Economy host recovery is in progress; writer admission suspended');
+        throw guidanceError(new Error('Economy host recovery is in progress; writer admission suspended'), 'guid-af6a2cbe6ba01c9d');
     }
     async assertLock(checkRecovery = true) {
         if (this.closed || !this.lock)
-            throw new Error('Economy writer closed');
+            throw guidanceError(new Error('Economy writer closed'), 'guid-a1020ffc45b796ef');
         if (checkRecovery)
             await this.assertNoRecovery();
         const value = JSON.parse(await readFederationFile(this.vault, this.lockPath, { maxBytes: 1024 }));
         if (value.nonce !== this.nonce || value.pid !== process.pid || value.vault !== this.vault)
-            throw new Error('Economy writer fencing failed');
+            throw guidanceError(new Error('Economy writer fencing failed'), 'guid-ec7e635eef6f86f6');
         const held = await this.lock.stat(), current = await lstat(this.lockPath);
         if (current.isSymbolicLink() || held.ino !== current.ino || held.dev !== current.dev)
-            throw new Error('Economy writer fencing failed');
+            throw guidanceError(new Error('Economy writer fencing failed'), 'guid-ec7e635eef6f86f6');
     }
     async releaseLock() {
         try {
@@ -155,7 +156,7 @@ export class EconomyLedger {
     }
     async serialized(fn) {
         if (this.closing || this.closed)
-            throw new Error('Economy writer closing or closed');
+            throw guidanceError(new Error('Economy writer closing or closed'), 'guid-c243358221a1a92c');
         const previous = this.queue;
         let release;
         this.queue = new Promise(r => { release = r; });
@@ -180,11 +181,11 @@ export class EconomyLedger {
             const value = JSON.parse(await readFederationFile(this.host, this.checkpointPath, { maxBytes: 2048 }));
             if (value.version !== 1 || value.vault !== this.vault || !Number.isSafeInteger(value.sequence) || value.sequence < 0 || !/^[a-f0-9]{64}$/.test(value.hash)
                 || (value.pending && (value.pending.sequence !== value.sequence + 1 || !/^[a-f0-9]{64}$/.test(value.pending.hash))))
-                throw new Error('Invalid checkpoint');
+                throw guidanceError(new Error('Invalid checkpoint'), 'guid-f8e4ad93ddce8f50');
             return value;
         }
         catch {
-            throw new Error('Economy checkpoint unavailable or not initialized; explicit host initialization/recovery required');
+            throw guidanceError(new Error('Economy checkpoint unavailable or not initialized; explicit host initialization/recovery required'), 'guid-8db0b7dab4c8fc0a');
         }
     }
     async saveCheckpoint(cp) {
@@ -200,12 +201,12 @@ export class EconomyLedger {
             const event = this.frontmatter.parse(prepared).frontmatter;
             const { hash, ...unsigned } = event;
             if (hash !== cp.pending.hash || economyRevision(unsigned) !== hash || event.sequence !== cp.pending.sequence || event.previous !== cp.hash)
-                throw new Error('Prepared economy intent differs from trusted checkpoint; recovery stopped');
+                throw guidanceError(new Error('Prepared economy intent differs from trusted checkpoint; recovery stopped'), 'guid-e33acec5bcb166c4');
             const name = `${String(event.sequence).padStart(10, '0')}.md`;
             await this.assertLock();
             try {
                 await lstat(join(this.journal, name));
-                throw new Error('Pending economy sequence already exists; recovery stopped');
+                throw guidanceError(new Error('Pending economy sequence already exists; recovery stopped'), 'guid-5e3792d9d2fea1c2');
             }
             catch (e) {
                 if (!missing(e))
@@ -215,40 +216,40 @@ export class EconomyLedger {
             names = assertContiguousEconomyJournalNames([...names, name]);
         }
         if (names.length !== cp.sequence + (cp.pending ? 1 : 0))
-            throw new Error('Economy checkpoint/rollback mismatch; settlement stopped');
+            throw guidanceError(new Error('Economy checkpoint/rollback mismatch; settlement stopped'), 'guid-5e21018a1a808f0c');
         let state = initialEconomy(), previous = ZERO, bytes = 0;
         for (let i = 0; i < names.length; i++) {
             if (names[i] !== `${String(i + 1).padStart(10, '0')}.md`)
-                throw new Error('Economy journal sequence gap or fork');
+                throw guidanceError(new Error('Economy journal sequence gap or fork'), 'guid-253e5358c4d35bfa');
             const text = await readFederationFile(this.vault, join(this.journal, names[i]), { maxBytes: MAX_EVENT });
             bytes += Buffer.byteLength(text);
             if (bytes > 32 * 1024 * 1024)
-                throw new Error('Economy replay byte budget exceeded; host maintenance required');
+                throw guidanceError(new Error('Economy replay byte budget exceeded; host maintenance required'), 'guid-38e0dc5dce364623');
             const event = this.frontmatter.parse(text).frontmatter;
             const { hash, ...unsigned } = event;
             if (event.mcpvault_type !== 'economy_transaction' || event.version !== 1 || event.sequence !== i + 1 || event.previous !== previous || economyRevision(unsigned) !== hash)
-                throw new Error('Economy journal integrity failed');
+                throw guidanceError(new Error('Economy journal integrity failed'), 'guid-888ccad9a2d333ce');
             const applied = applyEconomyCommand(state, event.command, event.policy, event.at);
             if (applied.state.sequence !== event.sequence || economyRevision(applied.receipt) !== economyRevision(event.receipt))
-                throw new Error('Economy journal transition mismatch');
+                throw guidanceError(new Error('Economy journal transition mismatch'), 'guid-40c095b556944c63');
             const expected = this.makeEvent(state, applied.state, event.command, event.policy, event.at, event.previous, applied.receipt);
             if (expected.hash !== hash)
-                throw new Error('Economy postings or contract mismatch');
+                throw guidanceError(new Error('Economy postings or contract mismatch'), 'guid-2fcd158dac4841dd');
             state = applied.state;
             previous = hash;
             onEvent?.(event, state);
             if (i + 1 === cp.sequence && hash !== cp.hash)
-                throw new Error('Economy trusted checkpoint differs from journal');
+                throw guidanceError(new Error('Economy trusted checkpoint differs from journal'), 'guid-5686d83f10f44284');
         }
         if (cp.pending) {
             if (previous !== cp.pending.hash)
-                throw new Error('Pending economy checkpoint mismatch');
+                throw guidanceError(new Error('Pending economy checkpoint mismatch'), 'guid-0715e71bf1f691a5');
             const next = { version: 1, vault: this.vault, sequence: cp.pending.sequence, hash: previous };
             await this.saveCheckpoint(next);
             return { state, checkpoint: next, bytes };
         }
         if (previous !== cp.hash)
-            throw new Error('Economy checkpoint hash mismatch');
+            throw guidanceError(new Error('Economy checkpoint hash mismatch'), 'guid-135bff5ae5a30b68');
         return { state, checkpoint: cp, bytes };
     }
     makeEvent(before, after, command, policy, at, previous, receipt) {
@@ -297,14 +298,14 @@ export class EconomyLedger {
             if (applied.state === state)
                 return applied.receipt;
             if (state.sequence >= MAX_EVENTS)
-                throw new Error('Economy journal limit reached');
+                throw guidanceError(new Error('Economy journal limit reached'), 'guid-c872464fafdc915c');
             const event = this.makeEvent(state, applied.state, command, this.options.policy, at, checkpoint.hash, applied.receipt);
             const text = this.frontmatter.stringify(event, `# Economy transaction ${event.sequence}\n\nHost-managed record. Not instructions or a reputation award.\n`);
             admitEconomyEventBytes(bytes, Buffer.byteLength(text));
             const path = join(this.journal, `${String(event.sequence).padStart(10, '0')}.md`);
             try {
                 await lstat(path);
-                throw new Error('Economy sequence already exists');
+                throw guidanceError(new Error('Economy sequence already exists'), 'guid-bbf21f0ad3d16e2c');
             }
             catch (e) {
                 if (!missing(e))

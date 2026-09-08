@@ -1,3 +1,4 @@
+import { guidanceError, guidanceText } from './guidance-runtime.js';
 export const NAVIGATION_READ_GUIDANCE = ' Paths and locators remain exact; only context/title previews may shrink (fieldsTruncated). Follow nextAction with expectedSnapshot; changed views reject continuation: restart at offset 0 without that field. reuseOriginalArguments means merge its overrides into this request, keeping authentication local. Fingerprints guard observed results, not atomic Vault snapshots; legacy unguarded offsets remain advisory. paginationLimited marks the offset ceiling; verify source revisions before editing.';
 /** Exact locators are never prose. Budget the final public JSON before return. */
 export function packNavigationPage(key, endpointId, result, page, args, toPublicPath = path => path) {
@@ -11,10 +12,10 @@ export function packNavigationPage(key, endpointId, result, page, args, toPublic
     const path = key === 'backlinks' ? metadata.target : key === 'outlinks' ? metadata.source : undefined;
     if (args.expectedSnapshot !== undefined) {
         if (typeof args.expectedSnapshot !== 'string' || !/^[a-f0-9]{64}$/.test(args.expectedSnapshot)) {
-            throw new Error('expectedSnapshot must be a lowercase SHA-256 fingerprint');
+            throw guidanceError(new Error('expectedSnapshot must be a lowercase SHA-256 fingerprint'), 'guid-fdaefa5cd8d6564d');
         }
         if (args.expectedSnapshot !== result.snapshotFingerprint) {
-            throw new Error('Navigation view changed; restart at offset 0 without expectedSnapshot. No continuation items returned.');
+            throw guidanceError(new Error('Navigation view changed; restart at offset 0 without expectedSnapshot. No continuation items returned.'), 'guid-26048f20ec8af887');
         }
     }
     const total = Number(result.total || 0);
@@ -80,10 +81,10 @@ export function packNavigationPage(key, endpointId, result, page, args, toPublic
         }
     }
     if (page.maxChars === 12000 && page.limit === 1 && !args.prettyPrint) {
-        throw new Error('Exact navigation locators cannot fit the maximum response budget. No navigation item was skipped; inspect the source note directly.');
+        throw guidanceError(new Error('Exact navigation locators cannot fit the maximum response budget. No navigation item was skipped; inspect the source note directly.'), 'guid-c40909363e8ca52e');
     }
     return JSON.stringify({ [key]: [], offset: page.offset, returned: 0, truncated: true,
-        message: 'No navigation item skipped; retry this position with a larger compact budget.',
+        message: guidanceText('guid-1f2d3608605a5266', 'No navigation item skipped; retry this position with a larger compact budget.'),
         nextAction: { endpointId, reuseOriginalArguments: true, overrides: { maxChars: 12000, limit: 1, prettyPrint: false } },
     }, null, indent);
 }

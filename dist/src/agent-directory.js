@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { normalizeScopeId } from './scopes.js';
 import { SCOPE_CAPABILITIES } from './scope-auth.js';
 import { boundItems } from './search-limits.js';
@@ -9,14 +10,14 @@ function identityOf(principal) {
 function normalizeText(value, field, max) {
     const text = String(value ?? '').trim();
     if (Array.from(text).length > max)
-        throw new Error(`${field} must be ${max} Unicode characters or fewer`);
+        throw guidanceError(new Error(`${field} must be ${max} Unicode characters or fewer`), 'guid-ece47846ed48d00b');
     return text;
 }
 function normalizeList(value, field, maxItems, maxItemLength) {
     if (value === undefined)
         return [];
     if (!Array.isArray(value))
-        throw new Error(`${field} must be an array`);
+        throw guidanceError(new Error(`${field} must be an array`), 'guid-865ca92fb9b851b2');
     return Array.from(new Set(value.map(item => normalizeText(item, field, maxItemLength).toLowerCase()).filter(Boolean))).slice(0, maxItems);
 }
 export class AgentDirectoryService {
@@ -34,7 +35,7 @@ export class AgentDirectoryService {
         const normalized = normalizeScopeId(id, `${role}Id`);
         const principal = (await this.auth.listPrincipals()).find(candidate => candidate.role === role && (role === 'agent' ? candidate.agentId === normalized : candidate.modelId === normalized));
         if (!principal)
-            throw new Error(`No registered ${role} identity found: ${normalized}`);
+            throw guidanceError(new Error(`No registered ${role} identity found: ${normalized}`), 'guid-94183c110e2a0720');
         return principal;
     }
     async profileFor(principal) {
@@ -48,7 +49,7 @@ export class AgentDirectoryService {
         const id = identityOf(principal);
         const role = principal.role;
         if (note && note.frontmatter.mcpvault_type !== 'agent_profile') {
-            throw new Error(`Profile path is reserved for the agent directory: ${path}`);
+            throw guidanceError(new Error(`Profile path is reserved for the agent directory: ${path}`), 'guid-e410f89a6d12fe8a');
         }
         const publicIdentity = this.options.publicMode ? { ...authorIdentity(principal), ...(principal.authorLabel && { authorLabel: principal.authorLabel }) } : undefined;
         return {
@@ -70,14 +71,14 @@ export class AgentDirectoryService {
     }
     async get(params) {
         if (params.role !== 'model' && params.role !== 'agent')
-            throw new Error('role must be model or agent');
+            throw guidanceError(new Error('role must be model or agent'), 'guid-502dfddae628cd63');
         return { success: true, profile: await this.profileFor(await this.findPrincipal(params.role, params.identity)) };
     }
     async list(params) {
         if (params.role !== undefined && params.role !== 'model' && params.role !== 'agent')
-            throw new Error('role must be model or agent');
+            throw guidanceError(new Error('role must be model or agent'), 'guid-502dfddae628cd63');
         if (params.capability !== undefined && !SCOPE_CAPABILITIES.includes(params.capability))
-            throw new Error(`capability must be one of: ${SCOPE_CAPABILITIES.join(', ')}`);
+            throw guidanceError(new Error(`capability must be one of: ${SCOPE_CAPABILITIES.join(', ')}`), 'guid-6cf9835ae7ab7092');
         const principals = await this.auth.listPrincipals();
         const eligiblePrincipals = principals
             .filter(principal => !params.role || principal.role === params.role)
@@ -106,15 +107,15 @@ export class AgentDirectoryService {
     }
     async update(params) {
         if (!params.principal)
-            throw new Error('Login is required to update an agent profile');
+            throw guidanceError(new Error('Login is required to update an agent profile'), 'guid-e0d56d37399c733c');
         if (!params.expectedRevision)
-            throw new Error("expectedRevision is required; use 'missing' for a new profile");
+            throw guidanceError(new Error("expectedRevision is required; use 'missing' for a new profile"), 'guid-4cd2987ddeba702b');
         const principal = params.principal;
         const id = identityOf(principal);
         const path = this.profilePath(principal.role, id);
         const existing = await this.fileSystem.noteExists(path) ? await this.fileSystem.readNote(path) : undefined;
         if (existing && existing.frontmatter.mcpvault_type !== 'agent_profile') {
-            throw new Error(`Profile path is reserved for the agent directory: ${path}`);
+            throw guidanceError(new Error(`Profile path is reserved for the agent directory: ${path}`), 'guid-e410f89a6d12fe8a');
         }
         const displayName = normalizeText(params.displayName ?? existing?.frontmatter.display_name ?? id, 'displayName', 120) || id;
         const bio = normalizeText(params.bio ?? existing?.frontmatter.bio ?? '', 'bio', 1000);

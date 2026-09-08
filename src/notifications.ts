@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { mkdir, rename, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { gzip } from 'node:zlib';
@@ -114,7 +115,7 @@ function readStatePath(principal: ScopePrincipal): string {
 
 function limitNumber(value: unknown, fallback: number, maximum: number): number {
   const parsed = value === undefined ? fallback : Number(value);
-  if (!Number.isInteger(parsed) || parsed < 1) throw new Error('limit must be a positive integer');
+  if (!Number.isInteger(parsed) || parsed < 1) throw guidanceError(new Error('limit must be a positive integer'), 'guid-14abe8b02cfc3624');
   return Math.min(parsed, maximum);
 }
 
@@ -138,11 +139,11 @@ function encodeSnapshotString(value: string): Buffer {
 }
 
 function decodeSnapshotString(buffer: Buffer, offset: number): { value: string; offset: number } {
-  if (offset + 4 > buffer.length) throw new Error('invalid public discovery snapshot');
+  if (offset + 4 > buffer.length) throw guidanceError(new Error('invalid public discovery snapshot'), 'guid-e785599681e13d8b');
   const length = buffer.readUInt32LE(offset);
   const start = offset + 4;
   const end = start + length;
-  if (end > buffer.length) throw new Error('invalid public discovery snapshot');
+  if (end > buffer.length) throw guidanceError(new Error('invalid public discovery snapshot'), 'guid-e785599681e13d8b');
   return { value: buffer.subarray(start, end).toString('utf8'), offset: end };
 }
 
@@ -162,7 +163,7 @@ function encodePublicSnapshot(snapshot: PublicSnapshotDisk): Buffer {
   };
   const manifestIds = snapshot.manifest.map(entry => intern(entry.path));
   const noteIds = snapshot.notes.map(note => ({ path: intern(note.path), frontmatter: intern(JSON.stringify(note.frontmatter)) }));
-  if (strings.length > PUBLIC_SNAPSHOT_MAX_ENTRIES) throw new Error('public discovery snapshot string table is too large');
+  if (strings.length > PUBLIC_SNAPSHOT_MAX_ENTRIES) throw guidanceError(new Error('public discovery snapshot string table is too large'), 'guid-5763c6032b67996d');
   const chunks: Buffer[] = [PUBLIC_SNAPSHOT_MAGIC];
   const header = Buffer.allocUnsafe(16);
   header.writeUInt32LE(PUBLIC_SNAPSHOT_VERSION, 0);
@@ -194,7 +195,7 @@ function encodePublicSnapshot(snapshot: PublicSnapshotDisk): Buffer {
 
 function decodePublicSnapshot(buffer: Buffer): PublicSnapshotDisk {
   if (buffer.length < PUBLIC_SNAPSHOT_MAGIC.length + 12 || !buffer.subarray(0, PUBLIC_SNAPSHOT_MAGIC.length).equals(PUBLIC_SNAPSHOT_MAGIC)) {
-    throw new Error('unsupported public discovery snapshot');
+    throw guidanceError(new Error('unsupported public discovery snapshot'), 'guid-132d0c2459a9efb5');
   }
   let offset = PUBLIC_SNAPSHOT_MAGIC.length;
   const version = buffer.readUInt32LE(offset);
@@ -202,27 +203,27 @@ function decodePublicSnapshot(buffer: Buffer): PublicSnapshotDisk {
   const noteCount = buffer.readUInt32LE(offset + 8);
   if (version === 1) {
     offset += 12;
-    if (manifestCount > PUBLIC_SNAPSHOT_MAX_ENTRIES || noteCount > PUBLIC_SNAPSHOT_MAX_ENTRIES) throw new Error('unsupported public discovery snapshot');
+    if (manifestCount > PUBLIC_SNAPSHOT_MAX_ENTRIES || noteCount > PUBLIC_SNAPSHOT_MAX_ENTRIES) throw guidanceError(new Error('unsupported public discovery snapshot'), 'guid-132d0c2459a9efb5');
     const manifest: PublicSnapshotManifestEntry[] = [];
     for (let index = 0; index < manifestCount; index += 1) {
       const path = decodeSnapshotString(buffer, offset);
       offset = path.offset;
-      if (offset + 16 > buffer.length) throw new Error('invalid public discovery snapshot');
+      if (offset + 16 > buffer.length) throw guidanceError(new Error('invalid public discovery snapshot'), 'guid-e785599681e13d8b');
       manifest.push({ path: path.value, size: buffer.readDoubleLE(offset), mtimeMs: buffer.readDoubleLE(offset + 8) });
       offset += 16;
     }
     const notes: PublicSnapshotDiskNote[] = [];
     for (let index = 0; index < noteCount; index += 1) {
-      if (offset + 1 > buffer.length) throw new Error('invalid public discovery snapshot');
+      if (offset + 1 > buffer.length) throw guidanceError(new Error('invalid public discovery snapshot'), 'guid-e785599681e13d8b');
       const collection = CODE_COLLECTIONS[buffer[offset]!];
-      if (!collection) throw new Error('invalid public discovery snapshot collection');
+      if (!collection) throw guidanceError(new Error('invalid public discovery snapshot collection'), 'guid-df2a82b576373e40');
       offset += 1;
       const path = decodeSnapshotString(buffer, offset);
       offset = path.offset;
       const rawFrontmatter = decodeSnapshotString(buffer, offset);
       offset = rawFrontmatter.offset;
       const parsed = JSON.parse(rawFrontmatter.value) as unknown;
-      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('invalid public discovery snapshot frontmatter');
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw guidanceError(new Error('invalid public discovery snapshot frontmatter'), 'guid-2ec68d68b9f78065');
       notes.push({ collection, path: path.value, frontmatter: parsed as Record<string, unknown> });
     }
     return { manifest, notes };
@@ -230,11 +231,11 @@ function decodePublicSnapshot(buffer: Buffer): PublicSnapshotDisk {
   // The common version/manifest/note header precedes v2's string count.
   offset += 12;
   if (version !== PUBLIC_SNAPSHOT_VERSION || offset + 4 > buffer.length || manifestCount > PUBLIC_SNAPSHOT_MAX_ENTRIES || noteCount > PUBLIC_SNAPSHOT_MAX_ENTRIES) {
-    throw new Error('unsupported public discovery snapshot');
+    throw guidanceError(new Error('unsupported public discovery snapshot'), 'guid-132d0c2459a9efb5');
   }
   const stringCount = buffer.readUInt32LE(offset);
   offset += 4;
-  if (stringCount > PUBLIC_SNAPSHOT_MAX_ENTRIES) throw new Error('unsupported public discovery snapshot');
+  if (stringCount > PUBLIC_SNAPSHOT_MAX_ENTRIES) throw guidanceError(new Error('unsupported public discovery snapshot'), 'guid-132d0c2459a9efb5');
   const strings: string[] = [];
   for (let index = 0; index < stringCount; index += 1) {
     const value = decodeSnapshotString(buffer, offset);
@@ -243,12 +244,12 @@ function decodePublicSnapshot(buffer: Buffer): PublicSnapshotDisk {
   }
   const stringAt = (id: number): string => {
     const value = strings[id];
-    if (value === undefined) throw new Error('invalid public discovery snapshot string id');
+    if (value === undefined) throw guidanceError(new Error('invalid public discovery snapshot string id'), 'guid-2689e72fd23419eb');
     return value;
   };
   const manifest: PublicSnapshotManifestEntry[] = [];
   for (let index = 0; index < manifestCount; index += 1) {
-    if (offset + 20 > buffer.length) throw new Error('invalid public discovery snapshot');
+    if (offset + 20 > buffer.length) throw guidanceError(new Error('invalid public discovery snapshot'), 'guid-e785599681e13d8b');
     const pathId = buffer.readUInt32LE(offset);
     offset += 4;
     manifest.push({ path: stringAt(pathId), size: buffer.readDoubleLE(offset), mtimeMs: buffer.readDoubleLE(offset + 8) });
@@ -256,15 +257,15 @@ function decodePublicSnapshot(buffer: Buffer): PublicSnapshotDisk {
   }
   const notes: PublicSnapshotDiskNote[] = [];
   for (let index = 0; index < noteCount; index += 1) {
-    if (offset + 9 > buffer.length) throw new Error('invalid public discovery snapshot');
+    if (offset + 9 > buffer.length) throw guidanceError(new Error('invalid public discovery snapshot'), 'guid-e785599681e13d8b');
     const collection = CODE_COLLECTIONS[buffer[offset]!];
-    if (!collection) throw new Error('invalid public discovery snapshot collection');
+    if (!collection) throw guidanceError(new Error('invalid public discovery snapshot collection'), 'guid-df2a82b576373e40');
     offset += 1;
     const pathId = buffer.readUInt32LE(offset);
     const frontmatterId = buffer.readUInt32LE(offset + 4);
     offset += 8;
     const parsed = JSON.parse(stringAt(frontmatterId)) as unknown;
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('invalid public discovery snapshot frontmatter');
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw guidanceError(new Error('invalid public discovery snapshot frontmatter'), 'guid-2ec68d68b9f78065');
     notes.push({ collection, path: stringAt(pathId), frontmatter: parsed as Record<string, unknown> });
   }
   return { manifest, notes };
@@ -998,7 +999,7 @@ export class NotificationService {
   }
 
   async list(params: { principal?: ScopePrincipal; includeRead?: boolean; limit?: number; maxChars?: number; afterNotificationId?: string }) {
-    if (!params.principal) throw new Error('Login is required to read notifications');
+    if (!params.principal) throw guidanceError(new Error('Login is required to read notifications'), 'guid-6fa6ea8c6f8b504c');
     const state = await this.lastReadAt(params.principal);
     const cutoff = state.value || '';
     const candidates = await this.cachedPublicCandidates(params.principal);
@@ -1041,7 +1042,7 @@ export class NotificationService {
   }
 
   async markRead(params: { principal?: ScopePrincipal; through?: string; expectedRevision?: string }) {
-    if (!params.principal) throw new Error('Login is required to mark notifications read');
+    if (!params.principal) throw guidanceError(new Error('Login is required to mark notifications read'), 'guid-87b1e421514fa4e0');
     const path = readStatePath(params.principal);
     const existing = await this.lastReadAt(params.principal);
     const timestamp = new Date().toISOString();

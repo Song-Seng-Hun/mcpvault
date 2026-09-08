@@ -1,3 +1,4 @@
+import { guidanceError, guidanceText } from './guidance-runtime.js';
 /** Final wire projection over an already ranked, visibility-filtered queue. */
 export function packOrganizationQueue(result, endpointId, maxChars, ceiling, prettyPrint = false) {
     const fits = (value) => JSON.stringify(value, null, prettyPrint ? 2 : undefined).length <= maxChars;
@@ -31,11 +32,11 @@ export function packOrganizationQueue(result, endpointId, maxChars, ceiling, pre
             return value;
     }
     if (maxChars < ceiling || prettyPrint) {
-        const retry = packet([], { message: 'Retry the same queue. No items skipped.',
+        const retry = packet([], { message: guidanceText('guid-4ab863da22ec39d7', 'Retry the same queue. No items skipped.'),
             nextAction: { endpointId, reuseOriginalArguments: true,
                 overrides: { maxChars: ceiling, limit: 1, prettyPrint: false } } });
         if (fits(retry))
             return retry;
     }
-    throw new Error('Queue identity exceeds the response ceiling; no items skipped. Inspect source paths directly.');
+    throw guidanceError(new Error('Queue identity exceeds the response ceiling; no items skipped. Inspect source paths directly.'), 'guid-784ebe993b821f58');
 }

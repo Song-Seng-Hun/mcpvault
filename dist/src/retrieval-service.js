@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { boundSearchResults, normalizeSearchMaxChars, normalizeSearchLimit } from './search-limits.js';
 import { isModerationHidden } from './moderation-policy.js';
 import { selectContextPassages } from './context-passages.js';
@@ -43,12 +44,12 @@ export class RetrievalService {
         const raw = hit.physicalPath || hit.p;
         const expanded = raw.startsWith('scope://') ? this.access.resolveExternalPath(raw, principal) : raw.replace(/\\/g, '/');
         if (posix.isAbsolute(expanded) || expanded.includes(':'))
-            throw new Error('Search target is unavailable');
+            throw guidanceError(new Error('Search target is unavailable'), 'guid-41fae17fff5e5a9b');
         const path = posix.normalize(expanded);
         if (path === '..' || path.startsWith('../'))
-            throw new Error('Search target is unavailable');
+            throw guidanceError(new Error('Search target is unavailable'), 'guid-41fae17fff5e5a9b');
         if (!this.access.canAccessPhysicalPath(path, principal))
-            throw new Error('Search target is unavailable');
+            throw guidanceError(new Error('Search target is unavailable'), 'guid-41fae17fff5e5a9b');
         return path;
     }
     /** Capture domain admission before index ranking/limits. This is content
@@ -64,12 +65,12 @@ export class RetrievalService {
             const batch = await this.fs.queryNotes({ limit: 500, includeContent: false, includeTotal: false, sortBy: 'path', ...(prefix && prefix !== '.' && { pathPrefix: prefix }), ...(after && { after }) }, admitted, note => (params.fictionDomain === 'only') === isFictionDomain(note.frontmatter));
             for (const note of batch.notes) {
                 if (++count > 10000)
-                    throw new Error('Fiction-domain metadata window exhausted');
+                    throw guidanceError(new Error('Fiction-domain metadata window exhausted'), 'guid-4c9fde591525f971');
                 accepted.add(note.path);
             }
             after = batch.truncated ? batch.nextCursor : undefined;
             if (batch.truncated && !after)
-                throw new Error('Fiction-domain metadata changed');
+                throw guidanceError(new Error('Fiction-domain metadata changed'), 'guid-8afbb59f1a2fac1f');
         } while (after);
         return (path) => admitted(path) && accepted.has(path);
     }
@@ -79,7 +80,7 @@ export class RetrievalService {
      * complete=false forbids treating this result window as a lossless inventory. */
     async memoryCandidates(params) {
         if (typeof params.canAccessPath !== 'function')
-            throw new Error('Memory candidates require a visibility predicate');
+            throw guidanceError(new Error('Memory candidates require a visibility predicate'), 'guid-829812a0c3932d67');
         const limit = memoryCandidateLimit(params.limit);
         const admitted = (path) => this.access.canAccessPhysicalPath(path, params.principal) && params.canAccessPath(path);
         const prefix = params.pathPrefix ? this.physical({ p: params.pathPrefix }, params.principal) : '';
@@ -230,7 +231,7 @@ export class RetrievalService {
     }
     async searchNotes(params) {
         if (params.excerptMode !== undefined && !['compact', 'context'].includes(params.excerptMode))
-            throw new Error('Invalid excerptMode');
+            throw guidanceError(new Error('Invalid excerptMode'), 'guid-aeb6cd862871ecc0');
         const outcome = await this.retrieve(params);
         let results = outcome.results;
         if (params.excerptMode === 'context') {
@@ -244,11 +245,11 @@ export class RetrievalService {
                 if (isModerationHidden(note.frontmatter))
                     continue;
                 if (metadata.revision !== note.revision || (hit.rv && hit.rv !== note.revision))
-                    throw new Error('Search context changed; repeat the same query');
+                    throw guidanceError(new Error('Search context changed; repeat the same query'), 'guid-2cb5da2fceb83adc');
                 const chosen = selectContextPassages({ content: note.content, query: params.query, maxChars: 350, maxPassages: 1, startLine: bodyStartLine(note), ...(hit.ln && { preferredLine: hit.ln }) });
                 const passage = chosen.passages[0];
                 if (!this.access.canAccessPhysicalPath(path, params.principal) || await this.fs.readNoteRevision(path, RETRIEVAL_NOTE_BYTES) !== note.revision)
-                    throw new Error('Search context changed; repeat the same query');
+                    throw guidanceError(new Error('Search context changed; repeat the same query'), 'guid-2cb5da2fceb83adc');
                 const publicPath = this.access.toPublicPath(path);
                 expanded.push({ ...hit, p: publicPath, rv: note.revision,
                     ex: passage?.text || '', ln: passage?.startLine || 0,

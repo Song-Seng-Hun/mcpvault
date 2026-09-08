@@ -12,6 +12,7 @@
     "enterprise-server.ts",
     "enterprise-admin.ts",
     "economy-host.ts",
+    "guidance-host.ts",
     "public-federation-server.ts",
     "src/**/*"
   ],

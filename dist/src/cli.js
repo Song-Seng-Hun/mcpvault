@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 /**
  * Parse runtime options without importing server.ts, which starts the MCP
  * server as a side effect. Unknown positional arguments remain part of the
@@ -19,16 +20,16 @@ export function parseCliArgs(args) {
         if (arg === '--roleplay-config' || arg.startsWith('--roleplay-config=')) {
             const value = arg === '--roleplay-config' ? args[++index] : arg.slice('--roleplay-config='.length);
             if (!value || value.startsWith('--') || roleplayConfig !== undefined)
-                throw new Error('--roleplay-config requires one host configuration file');
+                throw guidanceError(new Error('--roleplay-config requires one host configuration file'), 'guid-b7dd3ed6ef7f8115');
             roleplayConfig = value;
             continue;
         }
         if (arg === '--economy-config' || arg.startsWith('--economy-config=')) {
             const value = arg === '--economy-config' ? args[++index] : arg.slice('--economy-config='.length);
             if (!value || value.startsWith('--'))
-                throw new Error('--economy-config requires a private host file path');
+                throw guidanceError(new Error('--economy-config requires a private host file path'), 'guid-99262a989a3c3643');
             if (economyConfig !== undefined)
-                throw new Error('--economy-config may be supplied only once');
+                throw guidanceError(new Error('--economy-config may be supplied only once'), 'guid-a085d216b3513911');
             economyConfig = value;
             continue;
         }
@@ -46,7 +47,7 @@ export function parseCliArgs(args) {
         if (arg.startsWith("--read-only=")) {
             const value = arg.slice("--read-only=".length).toLowerCase();
             if (value !== "true" && value !== "false") {
-                throw new Error("--read-only must be true or false");
+                throw guidanceError(new Error("--read-only must be true or false"), 'guid-b5e3941a61f81d1f');
             }
             readOnly = value === "true";
             continue;
@@ -65,7 +66,7 @@ export function parseCliArgs(args) {
         if (arg.startsWith("--http=")) {
             const value = arg.slice("--http=".length);
             if (!/^\d+$/.test(value))
-                throw new Error("--http must be a numeric port");
+                throw guidanceError(new Error("--http must be a numeric port"), 'guid-8af817def011ca06');
             restPort = Number(value);
             continue;
         }
@@ -88,14 +89,14 @@ export function parseCliArgs(args) {
                 stdio = false;
             const value = arg.slice(option.length + 1);
             if (!/^\d+$/.test(value))
-                throw new Error(`${option} must be a numeric port`);
+                throw guidanceError(new Error(`${option} must be a numeric port`), 'guid-5811340913730a1b');
             mcpHttpPort = Number(value);
             continue;
         }
         if (arg === "--mcp-http-host") {
             const value = args[index + 1];
             if (!value || value.startsWith("--"))
-                throw new Error("--mcp-http-host requires a host");
+                throw guidanceError(new Error("--mcp-http-host requires a host"), 'guid-75d34e38bdcbe05b');
             mcpHttpHost = value;
             index += 1;
             continue;
@@ -103,14 +104,14 @@ export function parseCliArgs(args) {
         if (arg.startsWith("--mcp-http-host=")) {
             const value = arg.slice("--mcp-http-host=".length).trim();
             if (!value)
-                throw new Error("--mcp-http-host requires a host");
+                throw guidanceError(new Error("--mcp-http-host requires a host"), 'guid-75d34e38bdcbe05b');
             mcpHttpHost = value;
             continue;
         }
         if (arg === "--mcp-http-cert") {
             const value = args[index + 1];
             if (!value || value.startsWith("--"))
-                throw new Error("--mcp-http-cert requires a file path");
+                throw guidanceError(new Error("--mcp-http-cert requires a file path"), 'guid-a0f7177f1fdb45ac');
             mcpHttpTlsCert = value;
             index += 1;
             continue;
@@ -118,14 +119,14 @@ export function parseCliArgs(args) {
         if (arg.startsWith("--mcp-http-cert=")) {
             const value = arg.slice("--mcp-http-cert=".length).trim();
             if (!value)
-                throw new Error("--mcp-http-cert requires a file path");
+                throw guidanceError(new Error("--mcp-http-cert requires a file path"), 'guid-a0f7177f1fdb45ac');
             mcpHttpTlsCert = value;
             continue;
         }
         if (arg === "--mcp-http-key") {
             const value = args[index + 1];
             if (!value || value.startsWith("--"))
-                throw new Error("--mcp-http-key requires a file path");
+                throw guidanceError(new Error("--mcp-http-key requires a file path"), 'guid-ff222f265ccf63a0');
             mcpHttpTlsKey = value;
             index += 1;
             continue;
@@ -133,7 +134,7 @@ export function parseCliArgs(args) {
         if (arg.startsWith("--mcp-http-key=")) {
             const value = arg.slice("--mcp-http-key=".length).trim();
             if (!value)
-                throw new Error("--mcp-http-key requires a file path");
+                throw guidanceError(new Error("--mcp-http-key requires a file path"), 'guid-ff222f265ccf63a0');
             mcpHttpTlsKey = value;
             continue;
         }

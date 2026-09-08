@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import type { FileSystemService } from './filesystem.js';
 import type { ScopeAccessPolicy } from './scope-access.js';
 import type { ScopePrincipal } from './scope-auth.js';
@@ -10,12 +11,12 @@ const MAX_REFERENCES = 50;
 
 function normalize(value: unknown): string[] {
   if (value === undefined || value === null) return [];
-  if (!Array.isArray(value)) throw new Error('references must be an array of note paths');
+  if (!Array.isArray(value)) throw guidanceError(new Error('references must be an array of note paths'), 'guid-5149921bfa80033d');
   const paths = value
     .filter((item): item is string => typeof item === 'string')
     .map(item => item.trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, ''))
     .filter(Boolean);
-  if (paths.length !== value.length) throw new Error('references must contain only non-empty strings');
+  if (paths.length !== value.length) throw guidanceError(new Error('references must contain only non-empty strings'), 'guid-17d9d33f41aa7a81');
   return Array.from(new Set(paths)).slice(0, MAX_REFERENCES);
 }
 
@@ -36,8 +37,8 @@ export class ReferenceService {
     const matches = syntax === 'markdown'
       ? await this.fileSystem.findPathForMarkdownLink(name, sourcePath || '', canAccess)
       : await this.fileSystem.findPathForWikiLink(name, canAccess, sourcePath);
-    if (matches.length === 0) throw new Error(`Obsidian reference does not resolve: [[${target}]]`);
-    if (matches.length > 1) throw new Error(`Obsidian reference is ambiguous: [[${target}]]. Use a path-qualified link such as [[folder/${name.split('/').at(-1)}]]`);
+    if (matches.length === 0) throw guidanceError(new Error(`Obsidian reference does not resolve: [[${target}]]`), 'guid-400eb2ad9b9ecc7e');
+    if (matches.length > 1) throw guidanceError(new Error(`Obsidian reference is ambiguous: [[${target}]]. Use a path-qualified link such as [[folder/${name.split('/').at(-1)}]]`), 'guid-9143e01bad625d4f');
     return matches[0]!;
   }
 
@@ -53,13 +54,13 @@ export class ReferenceService {
     for (const raw of explicit) {
       const path = /^!?\[\[.+\]\]$/.test(raw) ? await this.resolveWikiLinkTarget(parseWikiLink(raw.replace(/^!/, '')).document, principal, containerPath) : raw;
       if (!this.access.canAccessPhysicalPath(path, principal)) {
-        throw new Error(`Reference is not accessible in this scope: ${this.access.toPublicPath(path)}`);
+        throw guidanceError(new Error(`Reference is not accessible in this scope: ${this.access.toPublicPath(path)}`), 'guid-bc12cbf46a8bb0c5');
       }
       if (!this.access.canReferenceFrom(containerPath, path)) {
-        throw new Error(`A more-private note cannot be referenced from this note: ${this.access.toPublicPath(path)}`);
+        throw guidanceError(new Error(`A more-private note cannot be referenced from this note: ${this.access.toPublicPath(path)}`), 'guid-41bb26d8f842bd65');
       }
       if (!await this.fileSystem.noteExists(path)) {
-        throw new Error(`Referenced note was not found: ${this.access.toPublicPath(path)}`);
+        throw guidanceError(new Error(`Referenced note was not found: ${this.access.toPublicPath(path)}`), 'guid-4a0d37ad30c529ec');
       }
       references.push(path);
     }
@@ -70,7 +71,7 @@ export class ReferenceService {
         const target = /^!?\[\[/.test(link.link) ? parseWikiLink(link.link.replace(/^!/, '')).document : link.target;
         const path = await this.resolveWikiLinkTarget(target, principal, containerPath, /^!?\[\[/.test(link.link) ? undefined : 'markdown');
         if (!this.access.canReferenceFrom(containerPath, path)) {
-          throw new Error(`A more-private note cannot be referenced from this note: ${this.access.toPublicPath(path)}`);
+          throw guidanceError(new Error(`A more-private note cannot be referenced from this note: ${this.access.toPublicPath(path)}`), 'guid-41bb26d8f842bd65');
         }
         if (!references.includes(path)) references.push(path);
       } catch (error) {
@@ -124,9 +125,9 @@ export class ReferenceService {
     limit?: number;
     maxChars?: number;
   }) {
-    if (!this.access.canAccessPhysicalPath(params.path, params.principal)) throw new Error('Access denied to source note');
+    if (!this.access.canAccessPhysicalPath(params.path, params.principal)) throw guidanceError(new Error('Access denied to source note'), 'guid-625c00431fce3699');
     const note = await this.fileSystem.readNote(params.path);
-    if (isModerationHidden(note.frontmatter)) throw new Error('The source note is unavailable because moderation has hidden it');
+    if (isModerationHidden(note.frontmatter)) throw guidanceError(new Error('The source note is unavailable because moderation has hidden it'), 'guid-705f049baba276fe');
     const references = [
       ...(Array.isArray(note.frontmatter.references) ? note.frontmatter.references : []),
       ...(Array.isArray(note.frontmatter.evidence_paths) ? note.frontmatter.evidence_paths : []),

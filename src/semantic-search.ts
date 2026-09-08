@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { join, resolve } from 'node:path';
 import { mkdir, open, readdir, readFile, stat, unlink } from 'node:fs/promises';
@@ -166,7 +167,7 @@ async function acquireSharedEmbedder(): Promise<SharedEmbedderLease> {
     await entry.loading;
   }
   const embedder = entry.embedder;
-  if (!embedder) throw new Error('Embedding model did not initialize');
+  if (!embedder) throw guidanceError(new Error('Embedding model did not initialize'), 'guid-584287faf4f86748');
   entry.users += 1;
   return {
     embedder,
@@ -378,6 +379,7 @@ export class SemanticSearchService {
     private readonly accessPolicy = new ScopeAccessPolicy(),
     private readonly catalog?: VaultFileCatalog,
     private readonly vaultIo = new VaultIoCoordinator(),
+    private readonly excludePath: (path: string) => boolean = () => false,
   ) {
     this.vaultPath = resolve(vaultPath);
     this.indexPath = join(this.vaultPath, INDEX_DIR);
@@ -477,7 +479,7 @@ export class SemanticSearchService {
     // maximum 20-neighbor discovery window, independently of lexical's 10k cap.
     const limit = Math.min(memoryCandidateLimit(params.limit), 20);
     const unavailable = (): MemorySemanticSearchOutcome => ({ results: [], available: false, complete: false });
-    if (typeof params.canAccessPath !== 'function') throw new Error('Memory candidates require a visibility predicate');
+    if (typeof params.canAccessPath !== 'function') throw guidanceError(new Error('Memory candidates require a visibility predicate'), 'guid-829812a0c3932d67');
     if (this.inferenceAbort.signal.aborted || memoryQueryNeedsSource(params.query) || params.caseSensitive) return unavailable();
     const safe: MemorySearchParams & { principal?: ScopePrincipal } = { ...params };
     if (safe.pathPrefix === '.') safe.pathPrefix = '';
@@ -572,7 +574,7 @@ export class SemanticSearchService {
   private async searchCurrent(params: SemanticSearchParams): Promise<SemanticSearchOutcome> {
     const limit = normalizeSearchLimit(params.limit);
     const maxChars = normalizeSearchMaxChars(params.maxChars);
-    if (!params.query?.trim()) throw new Error('Search query cannot be empty');
+    if (!params.query?.trim()) throw guidanceError(new Error('Search query cannot be empty'), 'guid-f8995a2f78a531a9');
     const cacheKey = JSON.stringify({
       query: params.query.trim(),
       queryVector: params.queryVector ? createHash('sha256').update(JSON.stringify(params.queryVector)).digest('hex') : undefined,
@@ -631,7 +633,7 @@ export class SemanticSearchService {
       let vector: number[];
       if (params.queryVector !== undefined) {
         if (params.queryVector.length !== EMBEDDING_DIMENSIONS || params.queryVector.some(value => !Number.isFinite(value))) {
-          throw new Error(`queryVector must contain exactly ${EMBEDDING_DIMENSIONS} finite numbers`);
+          throw guidanceError(new Error(`queryVector must contain exactly ${EMBEDDING_DIMENSIONS} finite numbers`), 'guid-1083eb075962511a');
         }
         vector = params.queryVector.slice();
       } else {
@@ -1196,7 +1198,7 @@ export class SemanticSearchService {
     const values: unknown = output.tolist();
     const valueList = values as unknown[];
     const row: unknown = Array.isArray(valueList?.[0]) ? valueList[0] : values;
-    if (!Array.isArray(row) || row.length !== EMBEDDING_DIMENSIONS || !row.every(value => typeof value === 'number' && Number.isFinite(value))) throw new Error(`Embedding model returned an invalid ${EMBEDDING_DIMENSIONS}-dimensional vector`);
+    if (!Array.isArray(row) || row.length !== EMBEDDING_DIMENSIONS || !row.every(value => typeof value === 'number' && Number.isFinite(value))) throw guidanceError(new Error(`Embedding model returned an invalid ${EMBEDDING_DIMENSIONS}-dimensional vector`), 'guid-341d5ffab371bfe2');
     return row as number[];
   }
 
@@ -1243,10 +1245,10 @@ export class SemanticSearchService {
       try {
         const output = await embedder(texts.map(text => `${prefix}: ${text}`), { pooling: 'mean', normalize: true });
         const values = output.tolist() as unknown;
-        if (!Array.isArray(values) || values.length !== texts.length) throw new Error('Embedding model returned an invalid batch');
+        if (!Array.isArray(values) || values.length !== texts.length) throw guidanceError(new Error('Embedding model returned an invalid batch'), 'guid-745e2a91bfd5090d');
         const rows = values.map(value => value as unknown[]);
         if (!rows.every(row => Array.isArray(row) && row.length === EMBEDDING_DIMENSIONS && row.every(item => typeof item === 'number' && Number.isFinite(item)))) {
-          throw new Error(`Embedding model returned an invalid ${EMBEDDING_DIMENSIONS}-dimensional batch`);
+          throw guidanceError(new Error(`Embedding model returned an invalid ${EMBEDDING_DIMENSIONS}-dimensional batch`), 'guid-a2b85b9d3d080e5e');
         }
         return rows as number[][];
       } catch {
@@ -1410,6 +1412,7 @@ export class SemanticSearchService {
   }
 
   private pathCanBeIndexed(path: string): boolean {
+    if (this.excludePath(path)) return false;
     if (!isCanonicalSemanticPath(path) || !this.pathFilter.isAllowed(path)) return false;
     if (/^_whispers(?:\/|$)/i.test(path)) return false;
     if (/^_scopes(?:\/|$)/i.test(path) && !/^_scopes\/(?:models|agents)\/[^/]+\/.+/i.test(path)) return false;

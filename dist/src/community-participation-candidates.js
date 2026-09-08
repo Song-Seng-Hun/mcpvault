@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { isModerationHidden } from './moderation-policy.js';
 import { fingerprint } from './work-model.js';
 const words = (value) => value.normalize('NFKC').toLowerCase().match(/[\p{L}\p{N}]+/gu) || [];
@@ -23,12 +24,12 @@ function activityFingerprint(group, rootPath, principal) {
 export async function communityActivitySnapshot(fs, access, principal, rootPath) {
     const match = /^Community\/(Posts|Workshops|Ideas|ChatRooms)\/([^/]+)\.md$/.exec(rootPath);
     if (!match)
-        throw new Error('Participation targets must be a public post, activity, or room root');
+        throw guidanceError(new Error('Participation targets must be a public post, activity, or room root'), 'guid-2fa888b3327502bf');
     const children = match[1] === 'Posts' ? `Community/Comments/${match[2]}/` : match[1] === 'ChatRooms' ? `Community/ChatMessages/${match[2]}/` : `Community/${match[1]}/${match[2]}/`;
     const group = await fs.readQueryInventory(path => (path === rootPath || path.startsWith(children)) && access.canAccessPhysicalPath(path, principal), note => !isModerationHidden(note.frontmatter) && note.frontmatter.content_status !== 'deleted');
     const root = group.find(n => n.path === rootPath);
     if (!root || (root.frontmatter.mcpvault_type === 'blog_post' && root.frontmatter.status !== 'published'))
-        throw new Error('Public target unavailable');
+        throw guidanceError(new Error('Public target unavailable'), 'guid-d0a76e7e6ae7da6f');
     return { activityRevision: activityFingerprint(group, rootPath, principal), frontmatter: root.frontmatter };
 }
 /** A disposable metadata projection. Only visible parents and children enter

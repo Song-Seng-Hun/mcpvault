@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { isModerationHidden } from './moderation-policy.js';
 import { contextRuleState } from './context-rules.js';
 import { buildMarkdownLiteralMask } from './backlinks.js';
@@ -22,7 +23,7 @@ export async function selectSituationCandidates(fs, access, retrieval, query, op
         const batch = await fs.queryNotes({ limit: 500, includeContent: false, includeTotal: false, sortBy: 'path', ...(after && { after }) }, canAccess, n => !isModerationHidden(n.frontmatter) && !isFictionDomain(n.frontmatter) && !n.frontmatter.mcpvault_type && !isSituationMemory(n.frontmatter));
         for (const n of batch.notes) {
             if (++examined > 10000)
-                throw new Error('Situation metadata window exhausted');
+                throw guidanceError(new Error('Situation metadata window exhausted'), 'guid-cb08ef637cea601e');
             const state = contextRuleState(n.frontmatter.context_rules, `${query}\n${options.context}`, options.intent);
             if (state === 'invalid' || state === 'conditions_unmatched') {
                 if (options.explain && diagnostics.length < 8)
@@ -38,7 +39,7 @@ export async function selectSituationCandidates(fs, access, retrieval, query, op
         }
         after = batch.truncated ? batch.nextCursor : undefined;
         if (batch.truncated && !after)
-            throw new Error('Situation metadata changed');
+            throw guidanceError(new Error('Situation metadata changed'), 'guid-cb0beec6f8a0e1c5');
     } while (after);
     // Reserve eight candidate slots for explicit safety/evidence relations.
     const outcome = await retrieval.memoryCandidates({ query, limit: 12, ...(principal && { principal }), semantic, canAccessPath: p => allowed.has(p) && canAccess(p), candidateRevisions: revisions });

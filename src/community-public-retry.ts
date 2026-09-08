@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { createHash } from 'node:crypto';
 import type { FileSystemService } from './filesystem.js';
 import { FrontmatterHandler } from './frontmatter.js';
@@ -48,10 +49,10 @@ function fingerprint(value: unknown): string {
 
 function requestId(value: unknown): string | undefined {
   if (value === undefined) return undefined;
-  if (typeof value !== 'string') throw new Error('requestId must be a string');
+  if (typeof value !== 'string') throw guidanceError(new Error('requestId must be a string'), 'guid-4919aa05eef6f675');
   const result = value.trim();
-  if (!result) throw new Error('requestId is required when supplied');
-  if (result.length > 128) throw new Error('requestId exceeds 128 characters');
+  if (!result) throw guidanceError(new Error('requestId is required when supplied'), 'guid-c31f1980d108900b');
+  if (result.length > 128) throw guidanceError(new Error('requestId exceeds 128 characters'), 'guid-5735a3f85e1259e4');
   return result;
 }
 
@@ -89,7 +90,7 @@ export function preparePublicCreateRequest(params: {
   const id = requestId(params.requestId);
   if (!id) return undefined;
   const action = String(params.action || '').trim();
-  if (!action) throw new Error('A public create action is required');
+  if (!action) throw guidanceError(new Error('A public create action is required'), 'guid-32f9b959f67637d0');
   const actorFingerprint = fingerprint({ accountId: params.principal.accountId });
   const keyFingerprint = fingerprint({ accountId: params.principal.accountId, requestId: id });
   const payloadFingerprint = fingerprint(publicPayload(params.payload));
@@ -126,7 +127,7 @@ async function existingRequest(
     pathPrefix: 'Community', filters: { community_request_key: request.keyFingerprint },
     limit: 2, includeContent: false, includeTotal: false,
   }, path => access.canAccessPhysicalPath(path));
-  if (result.notes.length > 1) throw new Error('Public request receipt is ambiguous; operator review is required');
+  if (result.notes.length > 1) throw guidanceError(new Error('Public request receipt is ambiguous; operator review is required'), 'guid-10e033664ef18b3d');
   const match = result.notes[0];
   if (!match) return undefined;
   return verifyExistingRequest(await fileSystem.readNote(match.path, 100_000), request, targetPath, match.path);
@@ -139,12 +140,12 @@ function verifyExistingRequest(note: ParsedNote, request: PublicCreateRequest, t
     || fm.community_request_action !== request.action
     || fm.community_request_payload !== request.payloadFingerprint
     || actualPath !== targetPath) {
-    throw new Error('requestId was already used for a different public action or payload');
+    throw guidanceError(new Error('requestId was already used for a different public action or payload'), 'guid-afdd2c16aceac8d9');
   }
-  if (!visible(note)) throw new Error('Public request result is unavailable');
+  if (!visible(note)) throw guidanceError(new Error('Public request result is unavailable'), 'guid-503e43625954dd85');
   if (note.frontmatter.community_request_state !== requestState(note.frontmatter, note.content)
     || new FrontmatterHandler().stringify(note.frontmatter, note.content) !== note.originalContent) {
-    throw new Error('Public request result changed after creation; reread current public state instead of replaying the mutation');
+    throw guidanceError(new Error('Public request result changed after creation; reread current public state instead of replaying the mutation'), 'guid-99e31883517cb74f');
   }
   return note;
 }
@@ -161,32 +162,32 @@ async function reserveParticipationAttempt(params: {
   if (!params.request.requestId.startsWith(PARTICIPATION_PREFIX)) return undefined;
   const path = participationPath(params.principal);
   if (!access.canAccessPhysicalPath(path, params.principal) || !await params.fileSystem.noteExists(path)) {
-    throw new Error('Matching active participation run is required for this publicRequestId');
+    throw guidanceError(new Error('Matching active participation run is required for this publicRequestId'), 'guid-221dc07d94772392');
   }
   const note = await params.fileSystem.readNote(path, PARTICIPATION_READ_BYTES);
   const state = note.frontmatter.participation as Record<string, any> | undefined;
   const run = state?.activeRun as Record<string, any> | undefined;
   const settings = state?.settings as Record<string, any> | undefined;
   if (note.frontmatter.mcpvault_type !== 'community_participation' || state?.version !== 1 || !run || !settings) {
-    throw new Error('Matching active participation run is required for this publicRequestId');
+    throw guidanceError(new Error('Matching active participation run is required for this publicRequestId'), 'guid-221dc07d94772392');
   }
   if (run.publicRequestId !== params.request.requestId || !params.participationActions.includes(run.action)) {
-    throw new Error('publicRequestId is not authorized for this public action');
+    throw guidanceError(new Error('publicRequestId is not authorized for this public action'), 'guid-021b1608ef5f5fd6');
   }
   if (!Array.isArray(settings.allowedActions) || !settings.allowedActions.includes(run.action)
     || !Array.isArray(settings.allowedTopics) || !settings.allowedTopics.includes(run.topic)) {
-    throw new Error('Participation action or topic is no longer authorized');
+    throw guidanceError(new Error('Participation action or topic is no longer authorized'), 'guid-6b79168d8238c3e2');
   }
   if (!settings.enabled || settings.paused || (settings.pauseUntil && Date.parse(settings.pauseUntil) > Date.now())
     || !Number.isFinite(Date.parse(run.startedAt)) || Date.now() - Date.parse(run.startedAt) >= PARTICIPATION_MAX_AGE_MS) {
-    throw new Error('Participation run is paused or expired; reconcile it before another public write');
+    throw guidanceError(new Error('Participation run is paused or expired; reconcile it before another public write'), 'guid-5068a1672a7dd34c');
   }
   if (run.target?.path && !params.parentPaths.includes(run.target.path)) {
-    throw new Error('Participation run target does not match this public action');
+    throw guidanceError(new Error('Participation run target does not match this public action'), 'guid-ec6deb5f82c8cf10');
   }
   if (run.action === 'initiate') {
     if (!params.topicMetadata || !matchesParticipationTopic(params.topicMetadata, run.topic)) {
-      throw new Error('Public creation metadata does not match the authorized participation topic');
+      throw guidanceError(new Error('Public creation metadata does not match the authorized participation topic'), 'guid-1a36909fedfbc832');
     }
   } else if (!run.target?.path) {
     let topicMatches = false;
@@ -194,12 +195,12 @@ async function reserveParticipationAttempt(params: {
       const parent = await params.fileSystem.readNote(parentPath, 100_000);
       if (visible(parent) && matchesParticipationTopic(parent.frontmatter, run.topic)) { topicMatches = true; break; }
     }
-    if (!topicMatches) throw new Error('Public response target does not match the authorized participation topic');
+    if (!topicMatches) throw guidanceError(new Error('Public response target does not match the authorized participation topic'), 'guid-c0ccb2e5faecf0d2');
   }
   const attempt = { operation: params.request.action, payloadHash: params.request.payloadFingerprint, path: params.targetPath };
   if (run.publicAttempt) {
     if (run.publicAttempt.operation !== attempt.operation || run.publicAttempt.payloadHash !== attempt.payloadHash || run.publicAttempt.path !== attempt.path) {
-      throw new Error('publicRequestId was already reserved for a different public action or payload');
+      throw guidanceError(new Error('publicRequestId was already reserved for a different public action or payload'), 'guid-395988ce48cade78');
     }
     return { path, expectedRevision: note.revision };
   }
@@ -209,7 +210,7 @@ async function reserveParticipationAttempt(params: {
   }, {
     maxBytes: PARTICIPATION_READ_BYTES,
     assertAccess: () => {
-      if (!access.canAccessPhysicalPath(path, params.principal)) throw new Error('Participation unavailable');
+      if (!access.canAccessPhysicalPath(path, params.principal)) throw guidanceError(new Error('Participation unavailable'), 'guid-9753bb5370f0a467');
     },
   });
   return { path, expectedRevision: receipt.revision };
@@ -231,7 +232,7 @@ export async function runPublicCreate<T>(params: {
     if (!params.request) return params.create();
     const remembered = knownRequests.get(params.fileSystem)?.get(params.request.keyFingerprint);
     if (remembered && (remembered.action !== params.request.action || remembered.payload !== params.request.payloadFingerprint || remembered.path !== params.targetPath)) {
-      throw new Error('requestId was already used for a different public action or payload');
+      throw guidanceError(new Error('requestId was already used for a different public action or payload'), 'guid-afdd2c16aceac8d9');
     }
     const existing = await existingRequest(params.fileSystem, params.request, params.targetPath);
     if (existing) {

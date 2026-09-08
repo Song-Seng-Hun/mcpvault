@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 export const DEFAULT_SEARCH_LIMIT = 5;
 export const MAX_SEARCH_LIMIT = 20;
 export const DEFAULT_SEARCH_MAX_CHARS = 4000;
@@ -5,13 +6,13 @@ export const MAX_SEARCH_MAX_CHARS = 12000;
 
 export function normalizeSearchLimit(value: unknown, defaultValue = DEFAULT_SEARCH_LIMIT): number {
   const parsed = value === undefined ? defaultValue : Number(value);
-  if (!Number.isInteger(parsed) || parsed < 1) throw new Error('limit must be a positive integer');
+  if (!Number.isInteger(parsed) || parsed < 1) throw guidanceError(new Error('limit must be a positive integer'), 'guid-14abe8b02cfc3624');
   return Math.min(parsed, MAX_SEARCH_LIMIT);
 }
 
 export function normalizeSearchMaxChars(value: unknown, defaultValue = DEFAULT_SEARCH_MAX_CHARS): number {
   const parsed = value === undefined ? defaultValue : Number(value);
-  if (!Number.isInteger(parsed) || parsed < 512) throw new Error('maxChars must be an integer of at least 512');
+  if (!Number.isInteger(parsed) || parsed < 512) throw guidanceError(new Error('maxChars must be an integer of at least 512'), 'guid-c32875d854241bff');
   return Math.min(parsed, MAX_SEARCH_MAX_CHARS);
 }
 
@@ -70,7 +71,7 @@ export function boundedTopK<T>(items: Iterable<T>, limit: number, compare: (a: T
 
 /** Incremental top-K selection for asynchronous scans; snapshots never expose the heap. */
 export function createBoundedTopK<T>(limit: number, compare: (a: T, b: T) => number) {
-  if (!Number.isInteger(limit) || limit < 1) throw new Error('limit must be a positive integer');
+  if (!Number.isInteger(limit) || limit < 1) throw guidanceError(new Error('limit must be a positive integer'), 'guid-14abe8b02cfc3624');
   const heap: T[] = [];
   const worseThan = (a: T, b: T) => compare(a, b) > 0;
   const swap = (a: number, b: number) => {

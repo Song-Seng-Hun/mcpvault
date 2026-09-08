@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { appendFile, chmod, mkdir, open } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 function actorFor(principal, explicit) {
@@ -88,7 +89,7 @@ export class AuditService {
     }
     async list(params) {
         if (!params.principal)
-            throw new Error('Login is required to read the security audit log');
+            throw guidanceError(new Error('Login is required to read the security audit log'), 'guid-baa5ac981e1f6c06');
         const limit = Math.min(Math.max(Number(params.limit ?? 50), 1), 500);
         const tail = await this.readTail();
         const target = params.principal.agentId || params.principal.modelId;

@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 export const APPLICATION_OUTCOMES = ['succeeded', 'failed', 'inconclusive'] as const;
 
 export interface KnowledgeApplication {
@@ -53,14 +54,14 @@ const SCOPE_PATH = /^scope:\/\/(?:global\/|(?:model|agent|community)\/[a-z0-9][a
 
 function objectRecord(value: unknown, name: string): Record<string, unknown> {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) {
-    throw new TypeError(`${name} must be an object`);
+    throw guidanceError(new TypeError(`${name} must be an object`), 'guid-fb22bd2cde0b504a');
   }
   return value as Record<string, unknown>;
 }
 
 function exactKeys(value: Record<string, unknown>, allowed: Set<string>, name: string): void {
   for (const key of Object.keys(value)) {
-    if (!allowed.has(key)) throw new TypeError(`${name} contains unknown field: ${key}`);
+    if (!allowed.has(key)) throw guidanceError(new TypeError(`${name} contains unknown field: ${key}`), 'guid-37d25c397385fa29');
   }
 }
 
@@ -68,61 +69,61 @@ function normalizeLocator(value: unknown, name: string): { path: string; revisio
   const locator = objectRecord(value, name);
   exactKeys(locator, LOCATOR_KEYS, name);
   if (typeof locator.path !== 'string' || locator.path.trim().length === 0 || locator.path.length > 500) {
-    throw new TypeError(`${name}.path must be a nonempty string of at most 500 characters`);
+    throw guidanceError(new TypeError(`${name}.path must be a nonempty string of at most 500 characters`), 'guid-a6b54e11564f0b1d');
   }
   if (CONTROL.test(locator.path) || locator.path.includes('#') || locator.path.includes('^') || locator.path.includes('[[') || locator.path.includes(']]')) {
-    throw new TypeError(`${name}.path is not an exact note path`);
+    throw guidanceError(new TypeError(`${name}.path is not an exact note path`), 'guid-89902e027744abb4');
   }
   const scopeMatch = locator.path.match(SCOPE_PATH);
   if (scopeMatch) {
     if (scopeMatch[1]!.startsWith('/') || scopeMatch[1]!.includes(':') || scopeMatch[1]!.split(/[\\/]/).includes('..')) {
-      throw new TypeError(`${name}.path contains an invalid scope path`);
+      throw guidanceError(new TypeError(`${name}.path contains an invalid scope path`), 'guid-791b52f0f0ba9077');
     }
   } else {
     if (locator.path.includes(':') || /^[\\/]/.test(locator.path)) {
-      throw new TypeError(`${name}.path must be relative or a supported scope URI`);
+      throw guidanceError(new TypeError(`${name}.path must be relative or a supported scope URI`), 'guid-9a6e8521f9beb7c5');
     }
-    if (locator.path.split(/[\\/]/).includes('..')) throw new TypeError(`${name}.path contains traversal`);
+    if (locator.path.split(/[\\/]/).includes('..')) throw guidanceError(new TypeError(`${name}.path contains traversal`), 'guid-8b05d54b37e01ea1');
   }
   if (typeof locator.revision !== 'string' || !REVISION.test(locator.revision)) {
-    throw new TypeError(`${name}.revision must be exactly 64 hexadecimal characters`);
+    throw guidanceError(new TypeError(`${name}.revision must be exactly 64 hexadecimal characters`), 'guid-555fb1110e58fbed');
   }
   return { path: locator.path, revision: locator.revision.toLowerCase() };
 }
 
 function requiredText(value: unknown, name: string, maxLength: number): string {
   if (typeof value !== 'string' || value.trim().length === 0 || value.length > maxLength) {
-    throw new TypeError(`${name} must be a nonempty string of at most ${maxLength} characters`);
+    throw guidanceError(new TypeError(`${name} must be a nonempty string of at most ${maxLength} characters`), 'guid-4ecaaec969fb9fce');
   }
   return value.trim();
 }
 
 export function normalizeKnowledgeApplications(value: unknown): KnowledgeApplication[] {
   if (value === undefined) return [];
-  if (!Array.isArray(value)) throw new TypeError('knowledge applications must be an array');
-  if (value.length > 8) throw new RangeError('knowledge applications may contain at most 8 records');
+  if (!Array.isArray(value)) throw guidanceError(new TypeError('knowledge applications must be an array'), 'guid-eadabfeb28a62156');
+  if (value.length > 8) throw guidanceError(new RangeError('knowledge applications may contain at most 8 records'), 'guid-493531d779e25ea9');
   let serializedLength: number;
   try {
     serializedLength = JSON.stringify(value).length;
   } catch {
-    throw new TypeError('knowledge applications must be JSON-serializable');
+    throw guidanceError(new TypeError('knowledge applications must be JSON-serializable'), 'guid-1f5f8e8c0eab2881');
   }
-  if (serializedLength > 20_000) throw new RangeError('knowledge applications exceed 20000 JSON characters');
+  if (serializedLength > 20_000) throw guidanceError(new RangeError('knowledge applications exceed 20000 JSON characters'), 'guid-4e79df89d2b5b844');
 
   const ids = new Set<string>();
   return value.map((entry, index) => {
     const record = objectRecord(entry, `applications[${index}]`);
     exactKeys(record, APPLICATION_KEYS, `applications[${index}]`);
     if (typeof record.id !== 'string' || record.id.length === 0 || record.id.length > 64) {
-      throw new TypeError(`applications[${index}].id must be a nonempty string of at most 64 characters`);
+      throw guidanceError(new TypeError(`applications[${index}].id must be a nonempty string of at most 64 characters`), 'guid-31e7ba45d4460697');
     }
     const id = record.id;
-    if (!ID.test(id)) throw new TypeError(`applications[${index}].id has invalid format`);
-    if (ids.has(id)) throw new TypeError(`duplicate application id: ${id}`);
+    if (!ID.test(id)) throw guidanceError(new TypeError(`applications[${index}].id has invalid format`), 'guid-ab9ad7903d0e1aa9');
+    if (ids.has(id)) throw guidanceError(new TypeError(`duplicate application id: ${id}`), 'guid-257f27721be90d03');
     ids.add(id);
     const outcome = record.outcome;
     if (typeof outcome !== 'string' || !(APPLICATION_OUTCOMES as readonly string[]).includes(outcome)) {
-      throw new TypeError(`applications[${index}].outcome is invalid`);
+      throw guidanceError(new TypeError(`applications[${index}].outcome is invalid`), 'guid-6dd43fe0e4edc77e');
     }
     const normalized: KnowledgeApplication = {
       id,

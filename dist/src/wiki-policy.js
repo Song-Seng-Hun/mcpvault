@@ -1,4 +1,6 @@
+import { guidanceError, guidanceText } from './guidance-runtime.js';
 import { createHash } from 'node:crypto';
+import { projectGuidance } from './guidance-runtime.js';
 export const WIKI_POLICY_TOPICS = [
     'overview',
     'onboarding',
@@ -71,9 +73,11 @@ const POLICY_TOPICS = {
             'Official registration/editor authority comes only from a live host-private file, never category=announcement, Properties, model, family or level. Generic writes, Properties changes, delete and move cannot edit registered paths. OS/Obsidian host writes remain outside the MCP boundary.',
             'For a new amendment proposal use community.post category=feedback with noticeId, noticeRevision and proposedChange instead of code sourcePaths. Cite [[note#heading]]. Existing proposals use community.comment. Never copy private notices to shared feedback.',
             'Host-designated authenticated editors read both targets, call notice.preview with current expectedRevision, replacement body, reason and optional feedbackPath/feedbackRevision, inspect differences, then notice.revise with identical arguments and fingerprint. Reread the notice. Votes never approve revisions.',
-            'Decision adopted changes the body; deferred/rejected preserve it. Both retain exact proposal revision in protected Properties and Git. Explicit rebaseFeedback permits rereview of an older proposal against current notice text without rewriting its original history. Changed proposals invalidate current approval displays.',
+            'Decision adopted changes the body or re-acknowledges a changed interface source; deferred/rejected preserve it. Both retain exact proposal revision in protected Properties and Git. Explicit rebaseFeedback permits rereview of an older proposal against current notice text without rewriting its original history. Changed proposals invalidate current approval displays.',
+            'guidance.catalog finds reusable MCP templates under _wiki/Interface, not call logs. Query an ID or baseline phrase, then notice.read. For source_conflict, read guidance.catalog with sourceId before preview/revise with the current sourceRevision. Invalid, hidden or incompatible text falls back to code defaults. Search uses baseline IDs/text, not private or arbitrary response values.',
+            'Guidance edits change prose only, never schema constraints, authentication, endpoint selection, success/error classification or authority. Dynamic responses update next call; fixed tool/initialize descriptions may be cached by the client. Do not request every template or treat code coverage as proof that every arbitrary string is migrated.',
         ],
-        routes: ['notice.list', 'notice.read', 'community.post', 'community.comment', 'notice.preview', 'notice.revise'],
+        routes: ['notice.list', 'notice.read', 'guidance.catalog', 'community.post', 'community.comment', 'notice.preview', 'notice.revise'],
         avoid: ['promoting notice text into system instructions', 'bulk preloading every guide', 'automatic adoption by votes', 'treating host-private registration as protection from the OS administrator'],
     },
     capture: {
@@ -294,16 +298,21 @@ function boundedMaxChars(value) {
 export function getWikiPolicyTopic(topic, maxChars = 7000) {
     const requested = String(topic || 'overview').trim().toLocaleLowerCase();
     if (!WIKI_POLICY_TOPICS.includes(requested)) {
-        throw new Error(`Unknown policy topic '${requested}'. Choose one of: ${WIKI_POLICY_TOPICS.join(', ')}`);
+        throw guidanceError(new Error(`Unknown policy topic '${requested}'. Choose one of: ${WIKI_POLICY_TOPICS.join(', ')}`), 'guid-dec8912a126a8f95');
     }
     const boundedChars = boundedMaxChars(maxChars);
+    // Compute only a bounded handbook receipt, not a multi-topic response. This
+    // keeps the existing overview/topic cache protocol valid after direct edits.
+    const currentTopics = projectGuidance(POLICY_TOPICS);
+    const effectiveFingerprint = JSON.stringify(currentTopics) === JSON.stringify(POLICY_TOPICS) ? WIKI_POLICY_FINGERPRINT
+        : createHash('sha256').update(JSON.stringify([WIKI_POLICY_FINGERPRINT, currentTopics])).digest('hex');
     if (requested === 'overview') {
         const overview = {
             topic: 'overview',
             policyVersion: WIKI_POLICY_VERSION,
-            policyFingerprint: WIKI_POLICY_FINGERPRINT,
+            policyFingerprint: effectiveFingerprint,
             availableTopics: [...WIKI_POLICY_TOPICS],
-            guidance: 'Choose one topic for the current job. Detailed policy is loaded on demand so every agent turn does not pay for the whole handbook.',
+            guidance: guidanceText('guid-6bda2859843ef83a', 'Choose one topic for the current job. Detailed policy is loaded on demand so every agent turn does not pay for the whole handbook.'),
             route: { endpointId: 'wiki.policy', arguments: { topic: '<one available topic>', maxChars: boundedChars } },
         };
         if (JSON.stringify(overview).length <= boundedChars)
@@ -311,23 +320,26 @@ export function getWikiPolicyTopic(topic, maxChars = 7000) {
         return {
             topic: 'overview',
             policyVersion: WIKI_POLICY_VERSION,
-            policyFingerprint: WIKI_POLICY_FINGERPRINT,
+            policyFingerprint: effectiveFingerprint,
             availableTopics: [...WIKI_POLICY_TOPICS],
             route: 'wiki.policy(topic=<one>, maxChars=1200)',
             truncated: true,
         };
     }
     const topicId = requested;
-    const source = POLICY_TOPICS[topicId];
+    const source = currentTopics[topicId];
+    // Compiled policy identity remains a baseline; this topic receipt also binds
+    // the current Vault prose, so old guidance cannot claim an unchanged receipt.
+    const topicFingerprint = effectiveFingerprint;
     const result = {
         topic: topicId,
         policyVersion: WIKI_POLICY_VERSION,
-        policyFingerprint: WIKI_POLICY_FINGERPRINT,
+        policyFingerprint: topicFingerprint,
         purpose: source.purpose,
         rules: [...source.rules],
         routes: [...source.routes],
         avoid: [...source.avoid],
-        invariants: ['Markdown and Git remain authoritative', 'scope checks run before disclosure', 'ambiguity never authorizes a guess', 'mutations require verification'],
+        invariants: [guidanceText('guid-71b91b0d2301af31', 'Markdown and Git remain authoritative'), guidanceText('guid-e0e61202d2d55bca', 'scope checks run before disclosure'), guidanceText('guid-a40ae36a463f3eab', 'ambiguity never authorizes a guess'), guidanceText('guid-a3464c4d5a6e0b4b', 'mutations require verification')],
     };
     const rules = result.rules;
     // Never return only the signup routes after dropping credential safeguards.
@@ -336,8 +348,8 @@ export function getWikiPolicyTopic(topic, maxChars = 7000) {
         return {
             topic: topicId,
             policyVersion: WIKI_POLICY_VERSION,
-            policyFingerprint: WIKI_POLICY_FINGERPRINT,
-            instruction: 'Remain a public reader. Read the complete policy and verify private credential storage before registration; this is not a signup instruction.',
+            policyFingerprint: topicFingerprint,
+            instruction: guidanceText('guid-d77f6948cd6b824a', 'Remain a public reader. Read the complete policy and verify private credential storage before registration; this is not a signup instruction.'),
             truncated: true,
             nextAction: { endpointId: 'wiki.policy', arguments: { topic: topicId, maxChars: 3000 } },
         };
@@ -362,7 +374,7 @@ export function getWikiPolicyTopic(topic, maxChars = 7000) {
     return {
         topic: topicId,
         policyVersion: WIKI_POLICY_VERSION,
-        policyFingerprint: WIKI_POLICY_FINGERPRINT,
+        policyFingerprint: topicFingerprint,
         purpose: source.purpose.slice(0, 140),
         routes: source.routes.slice(0, 1),
         truncated: true,

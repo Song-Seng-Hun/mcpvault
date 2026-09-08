@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { FrontmatterHandler } from './frontmatter.js';
 
 export const CONTEXT_INTENTS = ['capture', 'explore', 'decide', 'execute', 'review'] as const;
@@ -30,5 +31,5 @@ const parser = new FrontmatterHandler();
 export function assertContextRulesContent(raw: string): void {
   // Parse YAML rather than scanning the raw key: escaped/quoted keys are legal YAML.
   const fm = parser.parse(raw).frontmatter;
-  if (Object.hasOwn(fm, 'context_rules') && !validContextRules(fm.context_rules)) throw new Error('Invalid context_rules: bounded literal any/all/exclude/intents lists required');
+  if (Object.hasOwn(fm, 'context_rules') && !validContextRules(fm.context_rules)) throw guidanceError(new Error('Invalid context_rules: bounded literal any/all/exclude/intents lists required'), 'guid-f7de4e35bbb09920');
 }
