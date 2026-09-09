@@ -18,7 +18,7 @@ Approved execution plan, 2026-09-09. Work in the existing checkout and user-fork
   old-world replay hashes, and disable settings/definition bypasses in evolving mode.
 - [x] Qualify UNC canonical storage with local host checkpoints and safe cross-host
   lock/recovery identity. Fault injection only on isolated NAS fixtures.
-- [ ] Focused tests, build, full suite, guidance and whitespace checks; deploy,
+- [x] Focused tests, build, full suite, guidance and whitespace checks; deploy,
   verify actual MCP reads/writes, commit generated dist and push user-fork main.
 
 ## Product contract
@@ -88,3 +88,28 @@ through actual MCP at exact Markdown revision
 `92f06955de5a32f00c07a3aa89464f0833531ea00d06ccbf777db0d17ec25a69`.
 The host-local checkpoint and recovery audit were retained together with the
 isolated NAS journal. These are test fixtures, not an initialized operational world.
+
+## Operational world capability cutover
+
+At 23:36 KST the shared runtime started from the pinned verified code commit
+`2b6b6ca2bb1d311a7fbc0f746bdac9ff6046e6e8`, with both private skill-evolution
+and roleplay host configurations. Actual MCP verification returned exactly five
+tools, roleplay `enabled: true`, `ready: false`, required setup
+`administrators`/`worldInitialization`, zero canonical turns and zero proposals.
+Repeated world/history/evolution reads agreed on the exact initial revision
+`8ffce756b6cf21ec72401a727f25e40a96c35da184b7a4ef18f0a4af7e84ef70`.
+The existing TDD skill remained enabled/original at its unchanged source revision.
+
+The empty-admin host configuration is intentionally dormant: deployment is not
+permission to invent an operational world, its owners or its designated GMs.
+The operational NAS turn directory was independently confirmed empty. Only
+host-local identity/checkpoint files and empty managed storage were provisioned.
+
+Stopping the scheduled task left its prior Node child alive. A second server was
+not started; the exact old PID, creation time and pinned executable command were
+revalidated before terminating only that orphaned child. After process/port exit,
+the same scheduled task started the verified runtime. This was a controlled
+process cutover, not a claim of graceful in-flight HTTP draining. NAS and Obsidian
+were not restarted. The prior pinned skill runtime and launcher remain available;
+any rollback must preserve new journals and the matching host checkpoints, and
+must not remove a roleplay lock without the exact host recovery procedure.
