@@ -24,6 +24,7 @@ export interface MatchedEndpoint {
 
 export interface EndpointAvailabilityContext {
   readOnly: boolean;
+  skillEvolutionEnabled?: boolean;
   capabilities: Set<ScopeCapability>;
   authenticated: boolean;
 }
@@ -121,6 +122,8 @@ const EXPLICIT_IDS: Record<string, string> = {
   preview_move_note: 'notes.move_preview',
   update_task: 'notes.task_update',
   search_notes: 'wiki.search',
+  resolve_skill: 'skill.resolve', record_skill_experience: 'skill.experience', manage_skill_candidate: 'skill.candidate',
+  evaluate_skill: 'skill.evaluate', promote_skill: 'skill.promote', rollback_skill: 'skill.rollback',
   search_scoped_notes: 'wiki.search_scoped',
   record_search_feedback: 'wiki.search_feedback',
   get_search_improvement_candidates: 'wiki.search_improvements',
@@ -273,6 +276,12 @@ const EXPLICIT_ROUTES: Record<string, { method: 'GET' | 'POST'; url: string }> =
   preview_move_note: { method: 'GET', url: '/api/notes/move-preview' },
   update_task: { method: 'POST', url: '/api/notes/tasks' },
   search_notes: { method: 'GET', url: '/api/search' },
+  resolve_skill: { method: 'GET', url: '/api/skills/resolve' },
+  record_skill_experience: { method: 'POST', url: '/api/skills/experience' },
+  manage_skill_candidate: { method: 'POST', url: '/api/skills/candidate' },
+  evaluate_skill: { method: 'POST', url: '/api/skills/evaluate' },
+  promote_skill: { method: 'POST', url: '/api/skills/promote' },
+  rollback_skill: { method: 'POST', url: '/api/skills/rollback' },
   search_scoped_notes: { method: 'GET', url: '/api/search/scoped' },
   record_search_feedback: { method: 'POST', url: '/api/search/feedback' },
   get_search_improvement_candidates: { method: 'GET', url: '/api/search/improvements' },
@@ -702,13 +711,23 @@ export class EndpointRegistry {
       .sort((left, right) => endpointScore(right, terms) - endpointScore(left, terms))
       .map(item => {
         const missing = item.requires.filter(required => !context.capabilities.has(required as ScopeCapability));
-        const disabled = context.readOnly && item.mutating;
+        const skillDisabled = context.skillEvolutionEnabled === false && item.endpointId.startsWith('skill.') && item.endpointId !== 'skill.resolve';
+        const disabled = context.readOnly && item.mutating || skillDisabled;
         const available = !disabled && (item.requires.length === 0 || context.authenticated && missing.length === 0 || item.endpointId === 'auth.register' || item.endpointId === 'auth.login');
         const state = disabled ? 'disabled' as const : available ? 'ready' as const : 'locked' as const;
-        const reason = disabled ? 'server is read-only' : !context.authenticated && item.requires.length > 0 && item.endpointId !== 'auth.register' && item.endpointId !== 'auth.login' ? 'authentication required' : missing.length > 0 ? `capability required: ${missing.join(', ')}` : undefined;
+        const reason = skillDisabled ? 'skill evolution is disabled by the host' : disabled ? 'server is read-only' : !context.authenticated && item.requires.length > 0 && item.endpointId !== 'auth.register' && item.endpointId !== 'auth.login' ? 'authentication required' : missing.length > 0 ? `capability required: ${missing.join(', ')}` : undefined;
         // One mixed-operation endpoint: discovery must not hide its public read
         // just because writes require authority. Dispatch still checks the exact
         // operation, independently of these advisory availability descriptions.
+        if (['skill.candidate', 'skill.evaluate', 'skill.promote', 'skill.rollback'].includes(item.endpointId)) {
+          const write = { available, state, requires: item.requires, ...(reason && { reason }) };
+          const publicRead = { available: true, state: 'ready' as const, requires: [] as string[] };
+          const preview = { available: !skillDisabled && context.authenticated && missing.length === 0, state: skillDisabled ? 'disabled' as const : context.authenticated && missing.length === 0 ? 'ready' as const : 'locked' as const, requires: item.requires };
+          const ops = item.endpointId === 'skill.candidate' ? { read: publicRead, list: publicRead, create: write, update: write, reject: write }
+            : item.endpointId === 'skill.evaluate' ? { read: publicRead, run: write } : { preview, apply: write };
+          const read = item.endpointId === 'skill.candidate' || item.endpointId === 'skill.evaluate' ? publicRead : preview;
+          return { ...item, ...read, operations: ops };
+        }
         if (['work.project', 'work.group'].includes(item.endpointId)) {
           const write = { available, state, requires: item.requires, ...(reason && { reason }) };
           return { ...item, requires: [], available: true, state: 'ready' as const,

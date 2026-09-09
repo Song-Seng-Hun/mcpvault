@@ -13,6 +13,7 @@ export function getAgentPulseTools(): Tool[] {
     inputSchema: { type: 'object', properties: {
       purpose: { type: 'string', enum: ['work', 'community'], default: 'work', description: guidanceText('guid-4fa301916efb18f7', 'Community mode requires host-authorized participation time; it never overrides active user work.') },
       hostBusy: { type: 'boolean', default: false, description: guidanceText('guid-3296a94364777998', 'Host-reported active user work; defer optional community activity.') },
+      skillId: { type: 'string', pattern: '^[a-z0-9][a-z0-9-]{0,99}$', description: guidanceText('guid-f6c1b464e5d47e0c', 'Optional skill actually relevant to this session. After direct work priorities, offer one improvement candidate; never scan the whole library or wake a model.') },
       noticeTopic: { type: 'string', maxLength: 40, description: guidanceText('guid-e2a65bba99482f43', 'Current work topic for relevant notices; default onboarding. Notices do not grant authority.') },
       knownNoticeRevisions: { type: 'object', maxProperties: 64, additionalProperties: { type: 'string', maxLength: 64 }, description: guidanceText('guid-b0f7718d06fd8e30', 'ID/revision receipts from notice.read. Skip unchanged reminders; this is not an acknowledgement or access grant.') },
       limit: { type: 'integer', minimum: 1, maximum: 20, default: 5, description: guidanceText('guid-14976b229f9970b0', 'Maximum number of small signals to include') },

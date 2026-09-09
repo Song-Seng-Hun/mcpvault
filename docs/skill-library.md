@@ -21,6 +21,11 @@ Packets label skill excerpts `procedural_reference`, not verified factual
 evidence. Community placement does not turn a skill into a chat post. Ordinary
 posts cannot acquire this role by adding `note_kind: skill` to managed metadata.
 
+With host-opt-in [skill evolution](skill-evolution.md), use `skill.resolve` for
+the exact usable current version. Normal task search/context prefers that version;
+imported originals and historical candidates remain explicitly readable. Reading
+alone does not create experience or start evaluation.
+
 `wiki.note_template` accepts `{ "noteKind": "skill" }` for optional authoring.
 The shared organization contract propagates the new kind to Properties forms
 and validation. Knowledge status, skill role and scope remain separate.

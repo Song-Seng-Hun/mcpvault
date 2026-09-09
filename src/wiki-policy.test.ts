@@ -40,7 +40,7 @@ describe('progressive Wiki policy', () => {
   });
 
   test('teaches bounded authority shelves and distinct relation strengths progressively', () => {
-    expect(WIKI_POLICY_VERSION).toBe(38);
+    expect(WIKI_POLICY_VERSION).toBe(39);
     const retrieval = getWikiPolicyTopic('retrieval', 2000);
     const knowledge = getWikiPolicyTopic('knowledge', 2000);
     expect(retrieval.routes).toEqual(expect.arrayContaining(['wiki.authority_map']));
@@ -66,6 +66,18 @@ describe('progressive Wiki policy', () => {
     expect(retrieval.rules.join(' ')).toContain('Vault read unavailable');
     expect(retrieval.rules.join(' ')).toContain('not evidence of deletion');
     expect(retrieval.rules.join(' ')).toContain('no retry loop');
+  });
+
+  test('skill evolution details remain progressive without displacing retrieval safety', () => {
+    const retrieval = getWikiPolicyTopic('retrieval', 4000);
+    const knowledge = getWikiPolicyTopic('knowledge', 7000);
+    expect(retrieval.rules.join(' ')).toContain('skill.resolve');
+    expect(retrieval.rules.join(' ')).toContain('cached candidates');
+    expect(knowledge.rules.join(' ')).toContain('skill.experience');
+    expect(knowledge.rules.join(' ')).toContain('Missing profiles and uncertain risk need review');
+    expect(knowledge.rules.join(' ')).toContain('never spawn agents/models');
+    expect(knowledge.routes).toContain('skill.rollback');
+    expect(JSON.stringify(knowledge).length).toBeLessThanOrEqual(7000);
   });
 
   test('semantic guidance distinguishes verified candidates from a complete knowledge census', () => {

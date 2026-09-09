@@ -23,7 +23,7 @@ export async function selectSituationCandidates(fs: FileSystemService, access: S
   const allowed = new Set<string>(); const revisions = new Map<string, string>();
   const activated: RetrievalHit[] = [];
   const diagnostics: Array<{ physicalPath: string; revision: string; reason: string }> = [];
-  const canAccess = (p: string) => access.canAccessPhysicalPath(p, principal);
+  const canAccess = (p: string) => access.canAccessPhysicalPath(p, principal) && retrieval.skillDiscoveryAllowed(p);
   let after: QueryNotesCursor | undefined; let examined = 0;
   do {
     const batch = await fs.queryNotes({ limit: 500, includeContent: false, includeTotal: false, sortBy: 'path', ...(after && { after }) }, canAccess,

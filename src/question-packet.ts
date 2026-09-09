@@ -58,7 +58,7 @@ export class QuestionPacketService {
     const diagnostics: Array<{ physicalPath: string; revision: string; reason: string }> = [];
     let examined = 0;
     const getMetadata = async (path: string, allowFiction = false) => {
-      if (!canAccess(path)) return;
+      if (!canAccess(path) || !this.retrieval.skillDiscoveryAllowed(path)) return;
       if (!metadata.has(path)) {
         if (++examined > (situation ? 20 : 40)) { gaps.add('metadata_window_exhausted'); return; }
         const value = (await this.fs.readNoteMetadata([path], canAccess, { fresh: true, strict: true, maxBytes: RETRIEVAL_NOTE_BYTES }))[0];
@@ -157,7 +157,7 @@ export class QuestionPacketService {
         envelope.retrieval = { usedQuery: outcome.usedQuery, expanded: outcome.expanded, semantic: outcome.semantic };
         if (!outcome.complete) gaps.add('retrieval_incomplete');
         diagnostics.push(...outcome.diagnostics);
-        hits = outcome.results;
+        hits = await this.retrieval.projectSkillDiscovery(outcome.results, principal, canAccess);
       } else {
         const outcome = await this.retrieval.retrieve({ query, ...(principal && { principal }), limit: 20, maxChars: 12000, includeRevisions: true, semantic: params.includeSemantic !== false && query.length > 1, fictionDomain: 'exclude' }, true);
         envelope.retrieval = { usedQuery: outcome.usedQuery, expanded: outcome.expanded, semantic: outcome.semantic };

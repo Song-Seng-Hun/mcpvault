@@ -247,16 +247,18 @@ export class AgentPulseService {
     private readonly ideation?: IdeationService,
     private readonly work?: Pick<WorkService, 'pulse'>,
     private readonly participation?: Pick<CommunityParticipationService, 'pulse'>,
+    private readonly skills?: { nextAction(params: { principal: ScopePrincipal; skillId: string }): Promise<{ endpointId: string; arguments: Record<string, unknown> } | undefined> },
   ) {}
 
-  async get(params: { principal?: ScopePrincipal; limit?: number; maxChars?: number; purpose?: 'work' | 'community'; hostBusy?: boolean }) {
+  async get(params: { principal?: ScopePrincipal; limit?: number; maxChars?: number; purpose?: 'work' | 'community'; hostBusy?: boolean; skillId?: string }) {
+    if (params.skillId !== undefined && !/^[a-z0-9][a-z0-9-]{0,99}$/.test(params.skillId)) throw guidanceError(Error('Invalid relevant skillId'), 'guid-df39616b6f882f4d');
     if (params.purpose !== undefined && params.purpose !== 'work' && params.purpose !== 'community') throw guidanceError(new Error('purpose must be work or community'), 'guid-29496963d369105f');
     if (params.purpose === 'community') {
       if (!this.participation) throw guidanceError(new Error('Community participation service is unavailable'), 'guid-477971e54083b0f0');
       return this.participation.pulse(params);
     }
     if (!params.principal) return this.getUncached(params);
-    const key = JSON.stringify({ accountId: params.principal.accountId, userId: params.principal.userId, modelId: params.principal.modelId, agentId: params.principal.agentId, role: params.principal.role, limit: params.limit, maxChars: params.maxChars });
+    const key = JSON.stringify({ accountId: params.principal.accountId, userId: params.principal.userId, modelId: params.principal.modelId, agentId: params.principal.agentId, role: params.principal.role, limit: params.limit, maxChars: params.maxChars, skillId: params.skillId, hostBusy: params.hostBusy });
     const running = this.inFlight.get(key);
     if (running) return running;
     const computation = this.getUncached(params);
@@ -311,7 +313,7 @@ export class AgentPulseService {
     return plan;
   }
 
-  private async getUncached(params: { principal?: ScopePrincipal; limit?: number; maxChars?: number }): Promise<Record<string, unknown>> {
+  private async getUncached(params: { principal?: ScopePrincipal; limit?: number; maxChars?: number; skillId?: string; hostBusy?: boolean }): Promise<Record<string, unknown>> {
     const limit = positiveLimit(params.limit, 5, 20);
     const maxChars = positiveLimit(params.maxChars, 5000, 12000);
 
@@ -377,8 +379,13 @@ export class AgentPulseService {
       || reviewQueue.items.length > 0
       || wikiInbox.items.length > 0
       || Boolean(postSummary.feedbackPosts?.length || postSummary.forumPosts?.length);
+    let skillAction: { endpointId: string; arguments: Record<string, unknown> } | undefined;
+    if (!hasDirectPriority && !params.hostBusy && params.skillId && this.skills) {
+      try { skillAction = await this.skills.nextAction({ principal, skillId: params.skillId }); }
+      catch { /* Optional skill work must not suppress ordinary priorities. */ }
+    }
     let idleWikiPlan: CompactIdleWikiPlan | undefined;
-    if (!hasDirectPriority) {
+    if (!hasDirectPriority && !skillAction) {
       try {
         idleWikiPlan = await this.idleWikiPlanFor(principal);
       } catch {
@@ -457,6 +464,9 @@ export class AgentPulseService {
       reason = priorityPost.category === 'feedback'
         ? 'An active MCPVault feedback report is available. Read its reproduction details and source locations, then propose or implement a focused improvement if you can verify it.'
         : 'An agent is blocked and asking the community for help. Read the attempted approach and provide a precise, evidence-based answer or next experiment.';
+    } else if (skillAction) {
+      nextAction = { tool: skillAction.endpointId, arguments: skillAction.arguments };
+      reason = 'One candidate for the skill relevant to this session is available. Read its exact revision; do not start a background model or exceed the current task scope.';
     } else if (idleWikiPlan) {
       nextAction = {
         tool: idleWikiPlan.inspect.endpointId,

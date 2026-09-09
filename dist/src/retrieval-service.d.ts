@@ -53,6 +53,10 @@ export declare class RetrievalService {
     private readonly semantic;
     private readonly access;
     private readonly fs;
+    private skillEvolution?;
+    attachSkillEvolution(service: NonNullable<RetrievalService['skillEvolution']>): void;
+    projectSkillDiscovery(hits: RetrievalHit[], principal?: ScopePrincipal, admitted?: (path: string) => boolean): Promise<RetrievalHit[]>;
+    skillDiscoveryAllowed(path: string): boolean;
     constructor(search: SearchService, collaboration: CollaborationService, semantic: Pick<SemanticSearchService, 'search'> & Partial<Pick<SemanticSearchService, 'memoryCandidates'>>, access: ScopeAccessPolicy, fs: FileSystemService);
     physical(hit: RetrievalHit, principal?: ScopePrincipal): string;
     /** Capture domain admission before index ranking/limits. This is content

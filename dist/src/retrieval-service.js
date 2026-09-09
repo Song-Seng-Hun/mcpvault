@@ -33,6 +33,12 @@ export class RetrievalService {
     semantic;
     access;
     fs;
+    skillEvolution;
+    attachSkillEvolution(service) { this.skillEvolution = service; }
+    async projectSkillDiscovery(hits, principal, admitted) {
+        return this.skillEvolution ? this.skillEvolution.projectDiscovery(hits, principal, admitted) : hits;
+    }
+    skillDiscoveryAllowed(path) { return this.skillEvolution?.discoveryAllowed(path) ?? true; }
     constructor(search, collaboration, semantic, access, fs) {
         this.search = search;
         this.collaboration = collaboration;
@@ -82,7 +88,7 @@ export class RetrievalService {
         if (typeof params.canAccessPath !== 'function')
             throw guidanceError(new Error('Memory candidates require a visibility predicate'), 'guid-829812a0c3932d67');
         const limit = memoryCandidateLimit(params.limit);
-        const admitted = (path) => this.access.canAccessPhysicalPath(path, params.principal) && params.canAccessPath(path);
+        const admitted = (path) => this.access.canAccessPhysicalPath(path, params.principal) && params.canAccessPath(path) && (this.skillEvolution?.discoveryAllowed(path) ?? true);
         const prefix = params.pathPrefix ? this.physical({ p: params.pathPrefix }, params.principal) : '';
         const safe = {
             query: params.query, limit, canAccessPath: admitted, pathPrefix: prefix === '.' ? '' : prefix,
@@ -157,7 +163,7 @@ export class RetrievalService {
         return { results: results.slice(0, limit), usedQuery, expanded, semantic, complete };
     }
     async retrieve(params, allowExpansion = false) {
-        const scopeAdmitted = (path) => this.access.canAccessPhysicalPath(path, params.principal) && (!params.canAccessPath || params.canAccessPath(path));
+        const scopeAdmitted = (path) => this.access.canAccessPhysicalPath(path, params.principal) && (!params.canAccessPath || params.canAccessPath(path)) && (this.skillEvolution?.discoveryAllowed(path) ?? true);
         const admitted = await this.fictionAdmission(params, scopeAdmitted);
         // Runtime payloads are not typed: only the authenticated principal supplies identity.
         const safe = { query: params.query };
@@ -227,7 +233,18 @@ export class RetrievalService {
             // ordinary search ordering and its compact compatibility contract stay intact.
             results = [...results].sort((a, b) => Number(Boolean(b.wk)) - Number(Boolean(a.wk)) || score(b) - score(a));
         }
-        return { results, usedQuery, expanded, semantic };
+        const within = (path, prefix) => {
+            const normalize = (v) => v.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '').toLowerCase();
+            const p = normalize(path), root = normalize(prefix);
+            return !root || p === root || p.startsWith(`${root}/`);
+        };
+        const prefix = params.pathPrefix ? this.physical({ p: params.pathPrefix }, params.principal) : '';
+        const exactMatches = constrainedQuery(params.query) ? new Set(results.map(h => this.physical(h, params.principal))) : undefined;
+        const projected = await this.projectSkillDiscovery(results, params.principal, path => admitted(path)
+            && (!prefix || prefix === '.' || within(path, prefix))
+            && !(params.excludePaths || []).some(exclude => within(path, exclude))
+            && (!exactMatches || exactMatches.has(path)));
+        return { results: boundSearchResults(projected, normalizeSearchMaxChars(params.maxChars)), usedQuery, expanded, semantic };
     }
     async searchNotes(params) {
         if (params.excerptMode !== undefined && !['compact', 'context'].includes(params.excerptMode))

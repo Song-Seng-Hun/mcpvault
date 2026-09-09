@@ -1,13 +1,14 @@
 import { guidanceError, guidanceText } from './guidance-runtime.js';
 import { join, resolve, relative, dirname, posix } from 'path';
 import { homedir } from 'os';
-import { readdir, stat, readFile, writeFile, unlink, mkdir, access, rename, copyFile } from 'node:fs/promises';
+import { readdir, stat, readFile, writeFile, unlink, mkdir, access, rename, copyFile, open } from 'node:fs/promises';
 import { constants, lstatSync, realpathSync } from 'node:fs';
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import trash from 'trash';
 import { FrontmatterHandler } from './frontmatter.js';
 import { PathFilter } from './pathfilter.js';
 import { assertRoleplayMutationBoundary } from './roleplay-boundary.js';
+import { assertSkillEvolutionMutationBoundary } from './skill-evolution-boundary.js';
 import { generateObsidianUri } from './uri.js';
 import type { ParsedNote, DirectoryListing, NoteWriteParams, DeleteNoteParams, DeleteResult, DeleteNotePreviewParams, DeleteNotePreviewResult, MoveNoteParams, MoveNotePreviewParams, MoveNotePreviewResult, MoveFileParams, MoveResult, BatchReadParams, BatchReadResult, UpdateFrontmatterParams, NoteInfo, TagManagementParams, TagManagementResult, PatchNoteParams, PatchNoteResult, PatchMultipleNotesParams, PatchMultipleNotesResult, NoteChangeSetResultItem, VaultStats, NoteHeading, ReadNoteLinesParams, BacklinksResult, OutlinksResult, UnresolvedLinksResult, OrphanNotesResult, DailyNoteResult, ListTasksParams, ListTasksResult, TaskItem, UpdateTaskParams, UpdateTaskResult, QueryNotesParams, QueryNotesResult, QueryNote, QueryNotesCursor, AuthorityShelfResult } from './types.js';
 import { extractObsidianLinkOccurrences } from './backlinks.js';
@@ -524,6 +525,11 @@ export function classifyWriteError(error: unknown, path: string): Error {
 // Short mutation locks are shared by every service instance for a real Vault.
 // This is process-local coordination, not a cross-process transaction promise.
 const vaultMutationTails = new Map<string, Promise<void>>();
+// Cooperation is opt-in: generic note/Obsidian writers do not participate, so
+// this coordinates only callers that wrap their whole workflow with this API.
+const skillTransactionTails = new Map<string, Promise<void>>();
+const RESERVED_SKILL_LOCK_IDS = /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])$/i;
+const SKILL_LOCK_ID = /^[a-z0-9][a-z0-9-]{0,99}$/;
 
 export class FileSystemService {
   private frontmatterHandler: FrontmatterHandler;
@@ -590,6 +596,117 @@ export class FileSystemService {
       ? operation()
       : this.withMutationLockKey(ordered[index]!, () => acquire(index + 1));
     return acquire(0);
+  }
+
+  /**
+   * Cooperatively serialize one complete skill-evolution workflow. This is not
+   * a transaction over generic note or Obsidian writers that do not use it.
+   */
+  async withSkillTransaction<T>(skillId: string, operation: () => Promise<T>): Promise<T> {
+    if (!SKILL_LOCK_ID.test(skillId) || RESERVED_SKILL_LOCK_IDS.test(skillId)) {
+      throw guidanceError(new Error('Invalid skill transaction skill ID.'), 'guid-bad9384933b91750');
+    }
+    const key = this.skillTransactionKey(skillId);
+    const previous = skillTransactionTails.get(key) || Promise.resolve();
+    let releaseQueue!: () => void;
+    const current = new Promise<void>(resolveLock => { releaseQueue = resolveLock; });
+    skillTransactionTails.set(key, current);
+    await previous;
+    try {
+      return await this.withSkillLockFile(skillId, operation);
+    } finally {
+      releaseQueue();
+      if (skillTransactionTails.get(key) === current) skillTransactionTails.delete(key);
+    }
+  }
+
+  private skillTransactionKey(skillId: string): string {
+    let canonicalVault = this.vaultPath;
+    try { canonicalVault = realpathSync(this.vaultPath); } catch { /* Lock acquisition fails closed later. */ }
+    if (process.platform === 'win32') canonicalVault = canonicalVault.toLowerCase();
+    return `${canonicalVault}\0${skillId}`;
+  }
+
+  private assertSkillLockDirectory(vaultRoot: string, path: string): void {
+    const entry = lstatSync(path);
+    const pathReal = realpathSync(path);
+    const pathRelative = relative(vaultRoot, pathReal);
+    if (!entry.isDirectory() || entry.isSymbolicLink()
+      || pathRelative === '..'
+      || pathRelative.startsWith(`..${process.platform === 'win32' ? '\\' : '/'}`)
+      || resolve(vaultRoot, pathRelative) !== resolve(pathReal)) {
+      throw guidanceError(new Error('Skill transaction lock containment could not be verified.'), 'guid-6f18cfc09262bf64');
+    }
+  }
+
+  private async createOrVerifySkillLockDirectory(vaultRoot: string, path: string): Promise<void> {
+    try {
+      this.assertSkillLockDirectory(vaultRoot, path);
+      return;
+    } catch (error) {
+      if (!(error && typeof error === 'object' && 'code' in error && (error as NodeJS.ErrnoException).code === 'ENOENT')) throw error;
+    }
+    try {
+      await mkdir(path);
+    } catch (error) {
+      if (!(error && typeof error === 'object' && 'code' in error && (error as NodeJS.ErrnoException).code === 'EEXIST')) throw error;
+    }
+    this.assertSkillLockDirectory(vaultRoot, path);
+  }
+
+  private async withSkillLockFile<T>(skillId: string, operation: () => Promise<T>): Promise<T> {
+    const lockDirectoryRelative = '.mcpvault/skill-locks';
+    assertEnterpriseStorageAccess(lockDirectoryRelative, true);
+    const vaultRoot = realpathSync(this.vaultPath);
+    if (resolve(vaultRoot) !== resolve(this.vaultPath) || lstatSync(this.vaultPath).isSymbolicLink()) {
+      throw guidanceError(new Error('Skill transaction vault containment could not be verified.'), 'guid-82cf6483992998eb');
+    }
+
+    const lockRoot = join(this.vaultPath, '.mcpvault');
+    const lockDirectory = join(lockRoot, 'skill-locks');
+    await this.createOrVerifySkillLockDirectory(vaultRoot, lockRoot);
+    await this.createOrVerifySkillLockDirectory(vaultRoot, lockDirectory);
+
+    const lockPath = join(lockDirectory, `${skillId}.lock`);
+    let handle: Awaited<ReturnType<typeof open>>;
+    try {
+      handle = await open(lockPath, 'wx');
+    } catch (error) {
+      if (error && typeof error === 'object' && 'code' in error && (error as NodeJS.ErrnoException).code === 'EEXIST') {
+        throw guidanceError(new Error('Skill transaction is busy; retry later.'), 'guid-c2269e77bfe61c79');
+      }
+      throw guidanceError(new Error('Skill transaction lock could not be acquired.'), 'guid-308e9594883a82e4');
+    }
+
+    // This is an opaque, non-secret ownership marker. It is not an authority
+    // credential; it only avoids treating unstable SMB/NFS dev/inode values as
+    // the sole ownership proof during best-effort cooperative cleanup.
+    const ownershipMarker = randomUUID();
+    try {
+      await handle.writeFile(ownershipMarker, 'utf8');
+    } catch {
+      await handle.close();
+      throw guidanceError(new Error('Skill transaction lock could not be initialized.'), 'guid-69c186a3c052674b');
+    }
+    try {
+      return await operation();
+    } finally {
+      await handle.close();
+      try {
+        this.assertSkillLockDirectory(vaultRoot, lockRoot);
+        this.assertSkillLockDirectory(vaultRoot, lockDirectory);
+        const current = lstatSync(lockPath);
+        if (current.isSymbolicLink() || !current.isFile()) throw guidanceError(new Error('lock replacement'), 'guid-627f17a9e181730c');
+        // lstat prevents following a replacement symlink. A close-to-unlink
+        // race remains outside this cooperative, non-hostile lock boundary.
+        if (await readFile(lockPath, 'utf8') !== ownershipMarker) throw guidanceError(new Error('lock replacement'), 'guid-627f17a9e181730c');
+        await unlink(lockPath);
+      } catch (error) {
+        if (!(error && typeof error === 'object' && 'code' in error && (error as NodeJS.ErrnoException).code === 'ENOENT')) {
+          throw guidanceError(new Error('Skill transaction lock could not be released.'), 'guid-cdaac20482eb59de');
+        }
+      }
+    }
   }
 
   constructor(
@@ -725,6 +842,7 @@ export class FileSystemService {
     const fullPath = this.resolvePath(relativePath);
     const relativePathToVault = relative(this.vaultPath, fullPath);
     assertRoleplayMutationBoundary(relativePathToVault);
+    assertSkillEvolutionMutationBoundary(relativePathToVault);
     this.assertNoticeMutation(relativePathToVault);
     assertEnterpriseStorageAccess(relativePathToVault, true);
     // Guard the canonical vault-relative destination for every service write,
@@ -750,14 +868,18 @@ export class FileSystemService {
 
   /** Recheck live host notice authority at dispatch, after awaited preparation. */
   private async writeProtectedFile(path: string, content: string, options: Parameters<typeof writeFile>[2] = 'utf8') {
+    assertSkillEvolutionMutationBoundary(relative(this.vaultPath, path));
     this.assertNoticeMutation(relative(this.vaultPath, path));
     return writeFile(path, content, options);
   }
   private async removeProtectedFile(path: string) {
+    assertSkillEvolutionMutationBoundary(relative(this.vaultPath, path));
     this.assertNoticeMutation(relative(this.vaultPath, path));
     return unlink(path);
   }
   private async renameProtectedFile(from: string, to: string) {
+    assertSkillEvolutionMutationBoundary(relative(this.vaultPath, from));
+    assertSkillEvolutionMutationBoundary(relative(this.vaultPath, to));
     this.assertNoticeMutation(relative(this.vaultPath, from));
     this.assertNoticeMutation(relative(this.vaultPath, to));
     return rename(from, to);

@@ -16,7 +16,7 @@ export async function selectSituationCandidates(fs, access, retrieval, query, op
     const revisions = new Map();
     const activated = [];
     const diagnostics = [];
-    const canAccess = (p) => access.canAccessPhysicalPath(p, principal);
+    const canAccess = (p) => access.canAccessPhysicalPath(p, principal) && retrieval.skillDiscoveryAllowed(p);
     let after;
     let examined = 0;
     do {

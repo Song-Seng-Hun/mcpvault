@@ -23,6 +23,15 @@ credentials or additional client tools are installed. Existing bounded search,
 context and revision-safe reads retrieve procedures progressively. Exact
 commands and limitations: [skill library](../docs/skill-library.md).
 
+Host-opt-in evolution adds `_evolution/` beneath each imported skill, without
+modifying the import. Experiences, candidates, evaluations, versions, transition
+history and `current.md` remain ordinary Markdown with `skill_record_kind` and
+structured `skill_evolution` Properties. Evolution state is not knowledge lifecycle.
+Candidates and audit receipts are excluded from automatic procedural discovery.
+Host attestations must match exact revisions and durable write receipts; signatures
+alone never establish freshness or grant permissions. See the
+[evolution contract](../docs/skill-evolution.md) for evaluation and recovery limits.
+
 ## Independent research rounds
 
 The two dynamic `workshop.research` / `workshop.research_update` endpoints manage

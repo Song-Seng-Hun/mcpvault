@@ -1,5 +1,11 @@
 export { createServer } from './createServer.js';
 export type { CreateServerOptions, ServerRuntime } from './createServer.js';
+export { SkillEvolutionService } from './skill-evolution.js';
+export type { SkillEvolutionHost } from './skill-evolution.js';
+export type { SkillEvaluationProfile, SkillEvaluationInput, SkillEvaluationResult } from './skill-evaluation.js';
+export { proceduralLines } from './skill-evaluation.js';
+export { inspectSkillLock, recoverSkillLock } from './skill-evolution-recovery.js';
+export type { SkillLockInspection, SkillLockRecovery, RecoverSkillLockOptions } from './skill-evolution-recovery.js';
 export { startRestApi } from './rest-api.js';
 export type { RestApiHandle, RestApiOptions } from './rest-api.js';
 export { startMcpHttpApi } from './mcp-http.js';

@@ -53,6 +53,8 @@ import { getAuditTools } from "./audit-tools.js";
 import { AgentTaskService } from "./agent-tasks.js";
 import { AGENT_TASK_MUTATING_TOOLS, getAgentTaskTools } from "./agent-task-tools.js";
 import { getWorkTools, WORK_MUTATING_TOOLS, WORK_TASK_PROPERTIES } from './work-tools.js';
+import { SkillEvolutionService, type SkillEvolutionHost } from './skill-evolution.js';
+import { getSkillEvolutionTools, SKILL_MUTATING_TOOLS, skillReadAlias } from './skill-evolution-tools.js';
 import { WorkGroupService } from './work-groups.js';
 import { getRoleplayTools, ROLEPLAY_MUTATING_TOOLS } from './roleplay-tools.js';
 import { getNoticeTools } from './notice-tools.js';
@@ -221,6 +223,8 @@ function requestFairnessKey(args: Record<string, unknown>): string {
 }
 
 export interface CreateServerOptions {
+  /** Explicit trusted host registration. Never loaded from a request or Vault note. */
+  skillEvolution?: SkillEvolutionHost;
   /** Host-private notice registration/delegation file, reloaded before operations. */
   noticeConfigPath?: string;
   guidanceDefinitions?: readonly GuidanceDefinition[];
@@ -244,6 +248,7 @@ export interface CreateServerOptions {
 }
 
 const MUTATING_TOOLS = new Set([
+  ...SKILL_MUTATING_TOOLS,
   ...ENTERPRISE_FEDERATION_MUTATING_TOOLS,
   "write_note",
   "manage_wiki_moc_region",
@@ -339,6 +344,8 @@ const CAPABILITY_FOR_TOOL: Partial<Record<string, ScopeCapability>> = {
   record_community_participation: "profile",
   create_agent_task: "task",
   manage_work_project: 'task',
+  record_skill_experience: 'write', manage_skill_candidate: 'write', evaluate_skill: 'write', promote_skill: 'write', rollback_skill: 'write',
+  preview_skill_promotion: 'write', preview_skill_rollback: 'write',
   manage_work_group: 'task',
   manage_roleplay_world: 'chat', manage_roleplay_character: 'chat', manage_roleplay_scene: 'chat',
   revise_notice: 'write', preview_notice: 'write',
@@ -597,6 +604,13 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         if(!(await scopeAuth.listPrincipals()).some(p=>p.accountId===actor.accountId)||await moderation.isBanned(actor.accountId,actor.userId))throw guidanceError(new Error('Current authorized account required'), 'guid-163a12295a1d8545');
       }}).participationOptions()}),
   });
+  const skillEvolution = new SkillEvolutionService(fileSystem, scopeAccess, scopeAuth, options.skillEvolution, {
+    readOnly,
+    assertActor: async principal => {
+      if (await moderation.isBanned(principal.accountId, principal.userId)) throw guidanceError(Error('This skill account is suspended by moderation'), 'guid-f2a52b5e03e2009a');
+    },
+  });
+  retrieval.attachSkillEvolution(skillEvolution);
   ideation.attachOutputAdapter({
     authorizeProject:(principal,projectId,owner,delegate,grantor)=>work.authorizeWorkshopProject(principal,projectId,owner,delegate,grantor),
     assertAccess:async(principal,input)=>{
@@ -615,7 +629,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         {revisionGuards:guards,workshopOutput:receipt,assertOutputAccess:assertAccess});
     },
   });
-  const agentPulse = new AgentPulseService(notifications, social, chat, agentTasks, continuity, reputation, llmWiki, ideation, work, participation);
+  const agentPulse = new AgentPulseService(notifications, social, chat, agentTasks, continuity, reputation, llmWiki, ideation, work, participation, skillEvolution);
   const endpointRegistry = new EndpointRegistry();
   const requestGate = new RequestConcurrencyGate();
 
@@ -930,6 +944,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         ...getAuditTools(),
         ...getAgentTaskTools(),
         ...getWorkTools(),
+        ...getSkillEvolutionTools(),
         ...getCommunityFeatureTools(),
         ...getObsidianSearchTools(),
         ...getAgentPulseTools(),
@@ -1296,7 +1311,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
     let toolName = requestedToolName;
     let args = request.params.arguments;
 
-    if (readOnly && MUTATING_TOOLS.has(toolName) && !(toolName === 'manage_wiki_moc_region' && args?.operation === 'status') && !(['manage_work_project', 'manage_work_group', 'manage_community_participation'].includes(toolName) && (args?.op === undefined || args?.op === 'read'))) {
+    if (readOnly && MUTATING_TOOLS.has(toolName) && !skillReadAlias(toolName, args?.op) && !(toolName === 'manage_wiki_moc_region' && args?.operation === 'status') && !(['manage_work_project', 'manage_work_group', 'manage_community_participation'].includes(toolName) && (args?.op === undefined || args?.op === 'read'))) {
       await audit.record({ tool: toolName, ...(args && typeof args === 'object' ? { args: args as Record<string, unknown> } : {}), outcome: 'error', error: 'read-only mode' });
       return {
         content: [{
@@ -1332,6 +1347,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
       }
 
       if (toolName === 'manage_wiki_moc_region' && rawArgs.operation === 'status') toolName = 'read_wiki_moc_region_status';
+      toolName = skillReadAlias(toolName, rawArgs.op) || toolName;
       if (toolName === 'manage_work_project' && (rawArgs.op === undefined || rawArgs.op === 'read')) toolName = 'read_work_project';
       if (toolName === 'manage_work_group' && (rawArgs.op === undefined || rawArgs.op === 'read')) toolName = 'read_work_group';
       if (['manage_roleplay_world', 'manage_roleplay_character', 'manage_roleplay_scene'].includes(toolName) && (!rawArgs.op || rawArgs.op === 'read')) toolName = toolName.replace('manage_', 'read_');
@@ -1453,7 +1469,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
             undefined,
             trimmedArgs.limit,
             trimmedArgs.maxChars,
-            { readOnly, authenticated: Boolean(principal), capabilities: new Set(principal?.capabilities || []) },
+            { readOnly, skillEvolutionEnabled: skillEvolution.enabled, authenticated: Boolean(principal), capabilities: new Set(principal?.capabilities || []) },
             false,
           );
           return jsonResult({ ...result, note: guidanceText('guid-0c8552eb471dcc1f', 'Capability availability reflects this session; data state such as unread mentions is returned by the endpoint itself.') }, trimmedArgs.prettyPrint);
@@ -1472,7 +1488,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
             trimmedArgs.query,
             trimmedArgs.limit,
             trimmedArgs.maxChars,
-            { readOnly, authenticated: Boolean(principal), capabilities: new Set(principal?.capabilities || []) },
+            { readOnly, skillEvolutionEnabled: skillEvolution.enabled, authenticated: Boolean(principal), capabilities: new Set(principal?.capabilities || []) },
             false,
           );
           return jsonResult(result, trimmedArgs.prettyPrint);
@@ -1500,6 +1516,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
             maxChars: trimmedArgs.maxChars,
             ...(trimmedArgs.purpose !== undefined && { purpose: trimmedArgs.purpose }),
             ...(trimmedArgs.hostBusy !== undefined && { hostBusy: trimmedArgs.hostBusy }),
+            ...(trimmedArgs.skillId !== undefined && { skillId: trimmedArgs.skillId }),
           });
           if (principal && scopeAuth.authenticate(rawArgs.accessToken)?.accountId !== principal.accountId) throw guidanceError(new Error('Session expired during pulse; login again'), 'guid-5051af441248af37');
           return jsonResult(packet, trimmedArgs.purpose === 'community' ? false : trimmedArgs.prettyPrint);
@@ -2520,6 +2537,16 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         }
         case 'manage_work_project':
         case 'read_work_project': return jsonResult(await work.project({ ...trimmedArgs, principal }), false);
+        case 'resolve_skill': return jsonResult(await skillEvolution.resolve({ ...trimmedArgs, principal }), false);
+        case 'record_skill_experience': return jsonResult(await skillEvolution.experience({ ...trimmedArgs, principal }), false);
+        case 'manage_skill_candidate':
+        case 'read_skill_candidate': return jsonResult(await skillEvolution.candidate({ ...trimmedArgs, principal }), false);
+        case 'evaluate_skill':
+        case 'read_skill_evaluation': return jsonResult(await skillEvolution.evaluate({ ...trimmedArgs, principal }), false);
+        case 'promote_skill':
+        case 'preview_skill_promotion': return jsonResult(await skillEvolution.promote({ ...trimmedArgs, principal }), false);
+        case 'rollback_skill':
+        case 'preview_skill_rollback': return jsonResult(await skillEvolution.rollback({ ...trimmedArgs, principal }), false);
         case 'manage_work_group':
         case 'read_work_group': return jsonResult(await workGroups.group({ ...trimmedArgs, principal }), false);
         case 'read_work_coverage': return jsonResult(await work.coverage({ ...trimmedArgs, principal }), false);

@@ -46,6 +46,15 @@ export declare class FileSystemService {
     private withMutationLockKey;
     /** Acquire several note locks in one stable order so reciprocal edits cannot deadlock. */
     private withMutationLocks;
+    /**
+     * Cooperatively serialize one complete skill-evolution workflow. This is not
+     * a transaction over generic note or Obsidian writers that do not use it.
+     */
+    withSkillTransaction<T>(skillId: string, operation: () => Promise<T>): Promise<T>;
+    private skillTransactionKey;
+    private assertSkillLockDirectory;
+    private createOrVerifySkillLockDirectory;
+    private withSkillLockFile;
     constructor(vaultPath: string, pathFilter?: PathFilter, frontmatterHandler?: FrontmatterHandler, onNoteChanged?: ((path: string, kind: 'upsert' | 'delete') => void | Promise<void>) | undefined, metadataIndex?: VaultMetadataIndex | undefined, graphIndex?: VaultGraphIndex | undefined, vaultIo?: VaultIoCoordinator, scopeAccess?: ScopeAccessPolicy, assertNoticeMutation?: (path: string) => void);
     /**
      * Normalize an incoming path to be vault-relative. Strips leading slashes

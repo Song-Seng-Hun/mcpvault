@@ -226,11 +226,12 @@ export class AgentPulseService {
     ideation;
     work;
     participation;
+    skills;
     inFlight = new Map();
     // Cached plans are advisory only. A stale entry can cause redundant inspect
     // suggestions or an expectedRevision conflict; the pulse never mutates.
     idleWikiPlanCache = new Map();
-    constructor(notifications, social, chat, tasks, continuity, reputation, llmWiki, ideation, work, participation) {
+    constructor(notifications, social, chat, tasks, continuity, reputation, llmWiki, ideation, work, participation, skills) {
         this.notifications = notifications;
         this.social = social;
         this.chat = chat;
@@ -241,8 +242,11 @@ export class AgentPulseService {
         this.ideation = ideation;
         this.work = work;
         this.participation = participation;
+        this.skills = skills;
     }
     async get(params) {
+        if (params.skillId !== undefined && !/^[a-z0-9][a-z0-9-]{0,99}$/.test(params.skillId))
+            throw guidanceError(Error('Invalid relevant skillId'), 'guid-df39616b6f882f4d');
         if (params.purpose !== undefined && params.purpose !== 'work' && params.purpose !== 'community')
             throw guidanceError(new Error('purpose must be work or community'), 'guid-29496963d369105f');
         if (params.purpose === 'community') {
@@ -252,7 +256,7 @@ export class AgentPulseService {
         }
         if (!params.principal)
             return this.getUncached(params);
-        const key = JSON.stringify({ accountId: params.principal.accountId, userId: params.principal.userId, modelId: params.principal.modelId, agentId: params.principal.agentId, role: params.principal.role, limit: params.limit, maxChars: params.maxChars });
+        const key = JSON.stringify({ accountId: params.principal.accountId, userId: params.principal.userId, modelId: params.principal.modelId, agentId: params.principal.agentId, role: params.principal.role, limit: params.limit, maxChars: params.maxChars, skillId: params.skillId, hostBusy: params.hostBusy });
         const running = this.inFlight.get(key);
         if (running)
             return running;
@@ -372,8 +376,15 @@ export class AgentPulseService {
             || reviewQueue.items.length > 0
             || wikiInbox.items.length > 0
             || Boolean(postSummary.feedbackPosts?.length || postSummary.forumPosts?.length);
+        let skillAction;
+        if (!hasDirectPriority && !params.hostBusy && params.skillId && this.skills) {
+            try {
+                skillAction = await this.skills.nextAction({ principal, skillId: params.skillId });
+            }
+            catch { /* Optional skill work must not suppress ordinary priorities. */ }
+        }
         let idleWikiPlan;
-        if (!hasDirectPriority) {
+        if (!hasDirectPriority && !skillAction) {
             try {
                 idleWikiPlan = await this.idleWikiPlanFor(principal);
             }
@@ -458,6 +469,10 @@ export class AgentPulseService {
             reason = priorityPost.category === 'feedback'
                 ? 'An active MCPVault feedback report is available. Read its reproduction details and source locations, then propose or implement a focused improvement if you can verify it.'
                 : 'An agent is blocked and asking the community for help. Read the attempted approach and provide a precise, evidence-based answer or next experiment.';
+        }
+        else if (skillAction) {
+            nextAction = { tool: skillAction.endpointId, arguments: skillAction.arguments };
+            reason = 'One candidate for the skill relevant to this session is available. Read its exact revision; do not start a background model or exceed the current task scope.';
         }
         else if (idleWikiPlan) {
             nextAction = {

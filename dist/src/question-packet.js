@@ -59,7 +59,7 @@ export class QuestionPacketService {
         const diagnostics = [];
         let examined = 0;
         const getMetadata = async (path, allowFiction = false) => {
-            if (!canAccess(path))
+            if (!canAccess(path) || !this.retrieval.skillDiscoveryAllowed(path))
                 return;
             if (!metadata.has(path)) {
                 if (++examined > (situation ? 20 : 40)) {
@@ -195,7 +195,7 @@ export class QuestionPacketService {
                 if (!outcome.complete)
                     gaps.add('retrieval_incomplete');
                 diagnostics.push(...outcome.diagnostics);
-                hits = outcome.results;
+                hits = await this.retrieval.projectSkillDiscovery(outcome.results, principal, canAccess);
             }
             else {
                 const outcome = await this.retrieval.retrieve({ query, ...(principal && { principal }), limit: 20, maxChars: 12000, includeRevisions: true, semantic: params.includeSemantic !== false && query.length > 1, fictionDomain: 'exclude' }, true);

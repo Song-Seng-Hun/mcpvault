@@ -40,6 +40,15 @@ export function passageAction(path: string, revision: string, startLine: number,
 /** Shared adapter-independent retrieval. Indexes discover; current Markdown
  * supplies excerpt content. No persistent question/answer cache or model. */
 export class RetrievalService {
+  private skillEvolution?: {
+    discoveryAllowed(path: string): boolean;
+    projectDiscovery(hits: RetrievalHit[], principal?: ScopePrincipal, admitted?: (path: string) => boolean): Promise<RetrievalHit[]>;
+  };
+  attachSkillEvolution(service: NonNullable<RetrievalService['skillEvolution']>): void { this.skillEvolution = service; }
+  async projectSkillDiscovery(hits: RetrievalHit[], principal?: ScopePrincipal, admitted?: (path: string) => boolean): Promise<RetrievalHit[]> {
+    return this.skillEvolution ? this.skillEvolution.projectDiscovery(hits, principal, admitted) : hits;
+  }
+  skillDiscoveryAllowed(path: string): boolean { return this.skillEvolution?.discoveryAllowed(path) ?? true; }
   constructor(private readonly search: SearchService, private readonly collaboration: CollaborationService,
     private readonly semantic: Pick<SemanticSearchService, 'search'> & Partial<Pick<SemanticSearchService, 'memoryCandidates'>>, private readonly access: ScopeAccessPolicy,
     private readonly fs: FileSystemService) {}
@@ -80,7 +89,7 @@ export class RetrievalService {
   async memoryCandidates(params: MemoryCandidateParams): Promise<MemoryCandidateOutcome> {
     if (typeof params.canAccessPath !== 'function') throw guidanceError(new Error('Memory candidates require a visibility predicate'), 'guid-829812a0c3932d67');
     const limit = memoryCandidateLimit(params.limit);
-    const admitted = (path: string) => this.access.canAccessPhysicalPath(path, params.principal) && params.canAccessPath(path);
+    const admitted = (path: string) => this.access.canAccessPhysicalPath(path, params.principal) && params.canAccessPath(path) && (this.skillEvolution?.discoveryAllowed(path) ?? true);
     const prefix = params.pathPrefix ? this.physical({ p: params.pathPrefix } as RetrievalHit, params.principal) : '';
     const safe: MemorySearchParams = {
       query: params.query, limit, canAccessPath: admitted, pathPrefix: prefix === '.' ? '' : prefix,
@@ -138,7 +147,7 @@ export class RetrievalService {
   }
 
   async retrieve(params: RetrievalParams, allowExpansion = false): Promise<RetrievalOutcome> {
-    const scopeAdmitted = (path: string) => this.access.canAccessPhysicalPath(path, params.principal) && (!params.canAccessPath || params.canAccessPath(path));
+    const scopeAdmitted = (path: string) => this.access.canAccessPhysicalPath(path, params.principal) && (!params.canAccessPath || params.canAccessPath(path)) && (this.skillEvolution?.discoveryAllowed(path) ?? true);
     const admitted = await this.fictionAdmission(params, scopeAdmitted);
     // Runtime payloads are not typed: only the authenticated principal supplies identity.
     const safe: SearchParams = { query: params.query };
@@ -194,7 +203,18 @@ export class RetrievalService {
       // ordinary search ordering and its compact compatibility contract stay intact.
       results = [...results].sort((a, b) => Number(Boolean(b.wk)) - Number(Boolean(a.wk)) || score(b) - score(a));
     }
-    return { results, usedQuery, expanded, semantic };
+    const within = (path: string, prefix: string) => {
+      const normalize = (v: string) => v.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '').toLowerCase();
+      const p = normalize(path), root = normalize(prefix);
+      return !root || p === root || p.startsWith(`${root}/`);
+    };
+    const prefix = params.pathPrefix ? this.physical({ p: params.pathPrefix } as RetrievalHit, params.principal) : '';
+    const exactMatches = constrainedQuery(params.query) ? new Set(results.map(h => this.physical(h, params.principal))) : undefined;
+    const projected = await this.projectSkillDiscovery(results, params.principal, path => admitted(path)
+      && (!prefix || prefix === '.' || within(path, prefix))
+      && !(params.excludePaths || []).some(exclude => within(path, exclude))
+      && (!exactMatches || exactMatches.has(path)));
+    return { results: boundSearchResults(projected, normalizeSearchMaxChars(params.maxChars)), usedQuery, expanded, semantic };
   }
 
   async searchNotes(params: RetrievalParams): Promise<RetrievalHit[]> {

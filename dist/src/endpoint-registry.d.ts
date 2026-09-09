@@ -23,6 +23,7 @@ export interface MatchedEndpoint {
 }
 export interface EndpointAvailabilityContext {
     readOnly: boolean;
+    skillEvolutionEnabled?: boolean;
     capabilities: Set<ScopeCapability>;
     authenticated: boolean;
 }

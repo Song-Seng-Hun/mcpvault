@@ -24,15 +24,25 @@ export declare class AgentPulseService {
     private readonly ideation?;
     private readonly work?;
     private readonly participation?;
+    private readonly skills?;
     private readonly inFlight;
     private readonly idleWikiPlanCache;
-    constructor(notifications: NotificationService, social: SocialService, chat: ChatService, tasks: AgentTaskService, continuity: ContinuityService, reputation: ReputationService, llmWiki?: LlmWikiService | undefined, ideation?: IdeationService | undefined, work?: Pick<WorkService, 'pulse'> | undefined, participation?: Pick<CommunityParticipationService, 'pulse'> | undefined);
+    constructor(notifications: NotificationService, social: SocialService, chat: ChatService, tasks: AgentTaskService, continuity: ContinuityService, reputation: ReputationService, llmWiki?: LlmWikiService | undefined, ideation?: IdeationService | undefined, work?: Pick<WorkService, 'pulse'> | undefined, participation?: Pick<CommunityParticipationService, 'pulse'> | undefined, skills?: {
+        nextAction(params: {
+            principal: ScopePrincipal;
+            skillId: string;
+        }): Promise<{
+            endpointId: string;
+            arguments: Record<string, unknown>;
+        } | undefined>;
+    } | undefined);
     get(params: {
         principal?: ScopePrincipal;
         limit?: number;
         maxChars?: number;
         purpose?: 'work' | 'community';
         hostBusy?: boolean;
+        skillId?: string;
     }): Promise<Record<string, unknown>>;
     private idleWikiPlanCacheKey;
     private rememberIdleWikiPlan;
