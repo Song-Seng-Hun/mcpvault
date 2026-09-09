@@ -1,8 +1,8 @@
 import { guidanceError } from './guidance-runtime.js';
 import { randomUUID, createHash } from 'node:crypto';
-import { lstat, open, readdir, realpath, unlink, type FileHandle } from 'node:fs/promises';
-import { basename, dirname, isAbsolute, join, relative, sep } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { lstat, open, readdir, unlink, type FileHandle } from 'node:fs/promises';
+import { basename, join } from 'node:path';
+import { roleplayHostIdentity, validateRoleplayStorage } from './roleplay-storage-host.js';
 import { FrontmatterHandler } from './frontmatter.js';
 import { PathFilter } from './pathfilter.js';
 import { extractMentions } from './social.js';
@@ -20,7 +20,6 @@ export const ROLEPLAY_REPLAY_MAX_BYTES = 32 * 1024 * 1024;
 const TEMPORARY_TURN = /^\.[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.tmp$/;
 const MAX_TEMPORARY_TURNS = 16;
 const missing = (e: unknown): boolean => Boolean(e && typeof e === 'object' && 'code' in e && e.code === 'ENOENT');
-const inside = (root: string, path: string): boolean => { const r = relative(root, path); return !r || (r !== '..' && !r.startsWith(`..${sep}`) && !isAbsolute(r)); };
 const revision = (text: string): string => createHash('sha256').update(text).digest('hex');
 
 export function assertRoleplayReplayAdmission(existingBytes: number, candidateBytes: number): void {
@@ -50,25 +49,23 @@ export class RoleplayStore {
   private closing: Promise<void> | undefined;
   private readonly fm = new FrontmatterHandler();
   private verified: Replay | undefined;
-  private constructor(readonly options: RoleplayStoreOptions) {}
+  private constructor(readonly options: RoleplayStoreOptions, private readonly hostId: string) {}
   private get lockPath(): string { return join(this.options.vaultPath, '.mcpvault-roleplay', 'writer.lock'); }
   private get checkpointPath(): string { return join(this.options.hostPath, `roleplay-${roleplayHash(this.options.vaultPath.toLowerCase())}.checkpoint.json`); }
   private get preparedPath(): string { return this.checkpointPath.replace('.checkpoint.json', '.prepared.md'); }
 
   static async open(options: RoleplayStoreOptions): Promise<RoleplayStore> {
-    if (!isAbsolute(options.vaultPath) || !isAbsolute(options.hostPath)) throw guidanceError(new Error('Roleplay needs absolute host-provisioned storage paths'), 'guid-7f8b4247ac44e921');
-    const vaultPath = await realpath(options.vaultPath), hostPath = await realpath(options.hostPath);
-    const compiled = dirname(dirname(fileURLToPath(import.meta.url))), source = basename(compiled) === 'dist' ? dirname(compiled) : compiled;
-    if (inside(vaultPath, hostPath) || inside(source, hostPath) || /^\\\\|^\/\//.test(vaultPath) || /^\\\\|^\/\//.test(hostPath)) throw guidanceError(new Error('Roleplay checkpoint must be local and outside Vault/source'), 'guid-febc054cac933e9e');
-    if (!Array.isArray(options.policy.administrators) || !options.policy.administrators.length || options.policy.administrators.length > 20) throw guidanceError(new Error('Explicit host administrators required'), 'guid-f83ee70da08f1adb');
-    const store = new RoleplayStore({ vaultPath, hostPath, policy: structuredClone(options.policy) });
+    const { vaultPath, hostPath } = await validateRoleplayStorage(options);
+    if (!Array.isArray(options.policy.administrators) || options.policy.administrators.length > 20) throw guidanceError(new Error('Explicit host administrators array required'), 'guid-f83ee70da08f1adb');
+    const hostId = (await roleplayHostIdentity(hostPath, true))!;
+    const store = new RoleplayStore({ vaultPath, hostPath, policy: structuredClone(options.policy) }, hostId);
     await ensureFederationDirectory(vaultPath, join(vaultPath, ROLEPLAY_ROOT));
     await ensureFederationDirectory(vaultPath, join(vaultPath, '.mcpvault-roleplay'));
     await store.assertNoRecovery();
     try { store.lock = await open(store.lockPath, 'wx', 0o600); }
     catch { throw guidanceError(new Error('Roleplay writer already exists or crash lock needs explicit host recovery'), 'guid-2e39a35b0d753bdc'); }
     try {
-      await store.lock.writeFile(JSON.stringify({ pid: process.pid, nonce: store.nonce, vault: vaultPath })); await store.lock.sync();
+      await store.lock.writeFile(JSON.stringify({ pid: process.pid, nonce: store.nonce, vault: vaultPath, hostId })); await store.lock.sync();
       await store.assertNoRecovery();
       try { await lstat(store.checkpointPath); }
       catch (e) {
@@ -86,10 +83,13 @@ export class RoleplayStore {
   }
   private async assertWriter(checkRecovery = true): Promise<void> {
     if (!this.lock) throw guidanceError(new Error('Roleplay writer is closed'), 'guid-c35f7bcfd1ae8506');
+    await validateRoleplayStorage(this.options);
     if (checkRecovery) await this.assertNoRecovery();
     const current = JSON.parse(await readFederationFile(this.options.vaultPath, this.lockPath, { maxBytes: 2048 }));
     const held = await this.lock.stat(), disk = await lstat(this.lockPath);
-    if (disk.isSymbolicLink() || current.nonce !== this.nonce || current.pid !== process.pid || current.vault !== this.options.vaultPath || held.ino !== disk.ino || held.dev !== disk.dev) throw guidanceError(new Error('Roleplay writer fencing failed'), 'guid-50547e1c3f6a6645');
+    // SMB file IDs may collide or differ between handle/path queries. Ownership
+    // is the durable nonce/PID/Vault/host tuple under cooperative host fencing.
+    if (!held.isFile() || !disk.isFile() || disk.isSymbolicLink() || current.nonce !== this.nonce || current.pid !== process.pid || current.vault !== this.options.vaultPath || current.hostId !== this.hostId) throw guidanceError(new Error('Roleplay writer fencing failed'), 'guid-50547e1c3f6a6645');
   }
   private async release(): Promise<void> {
     try { await this.assertWriter(false); await this.lock!.close(); this.lock = undefined; await unlink(this.lockPath); }
@@ -115,7 +115,10 @@ export class RoleplayStore {
     const cp = JSON.parse(await readFederationFile(this.options.hostPath, this.checkpointPath, { maxBytes: 2048 })) as Checkpoint;
     if (cp.version !== 1 || cp.vault !== this.options.vaultPath || !Number.isSafeInteger(cp.sequence) || cp.sequence < 0 || cp.sequence > 10000 || !/^[a-f0-9]{64}$/.test(cp.hash)) throw guidanceError(new Error('Roleplay checkpoint invalid; host repair required'), 'guid-5b9f82430fb8c51a');
     const dir = join(this.options.vaultPath, ROLEPLAY_ROOT);
+    await ensureFederationDirectory(this.options.vaultPath, dir);
     let names = await canonicalTurnNames(dir);
+    // Check before replay can finish a pending intent or update its checkpoint.
+    if (!this.options.policy.administrators.length && (cp.sequence !== 0 || cp.pending || names.length)) throw guidanceError(new Error('Explicit host administrators required for an initialized roleplay journal'), 'guid-e2747762923e4582');
     if (names.length < cp.sequence || names.length > cp.sequence + (cp.pending ? 1 : 0)) throw guidanceError(new Error('Roleplay checkpoint/record mismatch; host repair required'), 'guid-d5cbf65c3b751ac9');
     let existingBytes = 0;
     const texts: string[] = [];

@@ -27,7 +27,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1026
+        "line": 1027
       }
     ]
   },
@@ -57,7 +57,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-service.ts",
-        "line": 71
+        "line": 97
       }
     ]
   },
@@ -120,7 +120,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-tools.ts",
-        "line": 90
+        "line": 92
       }
     ]
   },
@@ -355,7 +355,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-host.ts",
-        "line": 18
+        "line": 17
       }
     ]
   },
@@ -490,7 +490,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-model.ts",
-        "line": 323
+        "line": 328
       }
     ]
   },
@@ -581,7 +581,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 113
+        "line": 114
       }
     ]
   },
@@ -611,7 +611,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-tools.ts",
-        "line": 83
+        "line": 84
       }
     ]
   },
@@ -642,7 +642,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3455
+        "line": 3459
       }
     ]
   },
@@ -908,7 +908,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 777
+        "line": 778
       }
     ]
   },
@@ -984,7 +984,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 128
+        "line": 129
       }
     ]
   },
@@ -1060,7 +1060,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2674
+        "line": 2678
       }
     ]
   },
@@ -1173,7 +1173,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 246
+        "line": 247
       }
     ]
   },
@@ -1339,11 +1339,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-service.ts",
-        "line": 109
+        "line": 175
       },
       {
         "file": "src/roleplay-service.ts",
-        "line": 113
+        "line": 179
       }
     ]
   },
@@ -1358,7 +1358,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1199
+        "line": 1200
       }
     ]
   },
@@ -1373,7 +1373,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 86
+        "line": 87
       }
     ]
   },
@@ -1508,7 +1508,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1037
+        "line": 1038
       }
     ]
   },
@@ -1841,7 +1841,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-service.ts",
-        "line": 189
+        "line": 290
       }
     ]
   },
@@ -1886,7 +1886,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 115
+        "line": 116
       }
     ]
   },
@@ -1937,6 +1937,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-077201252db63bd2",
+    "kind": "error",
+    "template": "Roleplay host identity mismatch or invalid identity; forensic host review required",
+    "parts": [
+      "Roleplay host identity mismatch or invalid identity; forensic host review required"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/roleplay-storage-host.ts",
+        "line": 89
+      }
+    ]
+  },
+  {
     "id": "guid-078f689c464d6bec",
     "kind": "prose",
     "template": "Existing visible vault file path OR credential-free HTTPS repository URL and exact relative file. No glob, folder reservation, shell, or external filesystem locking.",
@@ -1962,7 +1977,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-model.ts",
-        "line": 314
+        "line": 319
       }
     ]
   },
@@ -2099,7 +2114,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2713
+        "line": 2717
       }
     ]
   },
@@ -2193,7 +2208,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 119
+        "line": 120
       }
     ]
   },
@@ -2225,7 +2240,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 624
+        "line": 625
       }
     ]
   },
@@ -2255,7 +2270,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 799
+        "line": 800
       }
     ]
   },
@@ -2304,7 +2319,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-model.ts",
-        "line": 79
+        "line": 81
       }
     ]
   },
@@ -2573,7 +2588,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 157
+        "line": 158
       }
     ]
   },
@@ -2588,7 +2603,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 79
+        "line": 80
       }
     ]
   },
@@ -2690,7 +2705,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3756
+        "line": 3760
       }
     ]
   },
@@ -2846,7 +2861,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3810
+        "line": 3814
       }
     ]
   },
@@ -3319,7 +3334,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 275
+        "line": 276
       }
     ]
   },
@@ -3390,7 +3405,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1475
+        "line": 1477
       }
     ]
   },
@@ -3496,7 +3511,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1293
+        "line": 1294
       }
     ]
   },
@@ -3526,7 +3541,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-model.ts",
-        "line": 217
+        "line": 221
       }
     ]
   },
@@ -3737,7 +3752,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 230
+        "line": 231
       }
     ]
   },
@@ -3767,7 +3782,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1174
+        "line": 1175
       }
     ]
   },
@@ -3918,7 +3933,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 683
+        "line": 684
       }
     ]
   },
@@ -3963,11 +3978,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1417
+        "line": 1419
       },
       {
         "file": "src/createServer.ts",
-        "line": 2306
+        "line": 2308
       }
     ]
   },
@@ -3997,7 +4012,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-model.ts",
-        "line": 268
+        "line": 273
       }
     ]
   },
@@ -4092,7 +4107,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-store.ts",
-        "line": 137
+        "line": 140
       }
     ]
   },
@@ -4122,7 +4137,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 770
+        "line": 771
       }
     ]
   },
@@ -4385,7 +4400,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-recovery.ts",
-        "line": 84
+        "line": 88
       }
     ]
   },
@@ -4416,7 +4431,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 172
+        "line": 173
       }
     ]
   },
@@ -4491,7 +4506,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-service.ts",
-        "line": 83
+        "line": 111
       }
     ]
   },
@@ -4642,7 +4657,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 296
+        "line": 297
       }
     ]
   },
@@ -4782,6 +4797,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-12501d308b72a4de",
+    "kind": "error",
+    "template": "Roleplay host storage must be local and outside Vault/source",
+    "parts": [
+      "Roleplay host storage must be local and outside Vault/source"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/roleplay-storage-host.ts",
+        "line": 22
+      }
+    ]
+  },
+  {
     "id": "guid-128e524ab9187563",
     "kind": "error",
     "template": "date is invalid",
@@ -4913,7 +4943,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 141
+        "line": 142
       }
     ]
   },
@@ -5078,7 +5108,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1527
+        "line": 1529
       }
     ]
   },
@@ -5153,7 +5183,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-model.ts",
-        "line": 165
+        "line": 167
       }
     ]
   },
@@ -5260,7 +5290,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 170
+        "line": 171
       }
     ]
   },
@@ -5321,7 +5351,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 251
+        "line": 252
       }
     ]
   },
@@ -5384,7 +5414,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-model.ts",
-        "line": 305
+        "line": 310
       }
     ]
   },
@@ -5445,7 +5475,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1170
+        "line": 1171
       }
     ]
   },
@@ -5468,15 +5498,15 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       },
       {
         "file": "src/createServer.ts",
-        "line": 3067
+        "line": 3071
       },
       {
         "file": "src/createServer.ts",
-        "line": 3101
+        "line": 3105
       },
       {
         "file": "src/createServer.ts",
-        "line": 3161
+        "line": 3165
       },
       {
         "file": "src/endpoint-registry.ts",
@@ -5637,7 +5667,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       },
       {
         "file": "src/roleplay-recovery.ts",
-        "line": 92
+        "line": 95
       }
     ]
   },
@@ -5947,11 +5977,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 590
+        "line": 591
       },
       {
         "file": "src/createServer.ts",
-        "line": 604
+        "line": 605
       }
     ]
   },
@@ -5996,7 +6026,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 308
+        "line": 309
       }
     ]
   },
@@ -6151,7 +6181,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 904
+        "line": 905
       }
     ]
   },
@@ -6182,7 +6212,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1262
+        "line": 1263
       }
     ]
   },
@@ -6228,7 +6258,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 124
+        "line": 125
       }
     ]
   },
@@ -6552,7 +6582,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1357
+        "line": 1359
       }
     ]
   },
@@ -6582,7 +6612,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 237
+        "line": 238
       }
     ]
   },
@@ -6693,7 +6723,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 964
+        "line": 965
       }
     ]
   },
@@ -6953,7 +6983,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 154
+        "line": 155
       }
     ]
   },
@@ -7103,7 +7133,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 261
+        "line": 262
       }
     ]
   },
@@ -7182,7 +7212,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2752
+        "line": 2756
       }
     ]
   },
@@ -7259,7 +7289,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 771
+        "line": 772
       }
     ]
   },
@@ -7457,7 +7487,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 923
+        "line": 924
       }
     ]
   },
@@ -7564,7 +7594,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 116
+        "line": 117
       }
     ]
   },
@@ -7743,7 +7773,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3475
+        "line": 3479
       }
     ]
   },
@@ -7788,7 +7818,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 195
+        "line": 196
       }
     ]
   },
@@ -7835,7 +7865,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 291
+        "line": 292
       }
     ]
   },
@@ -7865,7 +7895,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2533
+        "line": 2537
       }
     ]
   },
@@ -8155,7 +8185,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 208
+        "line": 209
       }
     ]
   },
@@ -8257,7 +8287,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 866
+        "line": 867
       }
     ]
   },
@@ -8287,7 +8317,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3063
+        "line": 3067
       },
       {
         "file": "src/filesystem.ts",
@@ -8381,7 +8411,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1005
+        "line": 1006
       }
     ]
   },
@@ -8460,7 +8490,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1533
+        "line": 1535
       }
     ]
   },
@@ -8572,6 +8602,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-2045390514d0533e",
+    "kind": "error",
+    "template": "Roleplay host storage must be canonical local storage",
+    "parts": [
+      "Roleplay host storage must be canonical local storage"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/roleplay-storage-host.ts",
+        "line": 33
+      }
+    ]
+  },
+  {
     "id": "guid-206cb9d68684c46e",
     "kind": "prose",
     "template": "Reply through the linked discussionSlug using community.comment. Link long analysis. Check pulse at natural checkpoints; the server does not wake models. No reviewer means wait; changed artifacts or criteria invalidate approval.",
@@ -8582,7 +8627,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 194
+        "line": 195
       }
     ]
   },
@@ -8598,6 +8643,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/organization.ts",
         "line": 202
+      }
+    ]
+  },
+  {
+    "id": "guid-20753271c655756d",
+    "kind": "error",
+    "template": "Roleplay setup required: host administrators are not configured",
+    "parts": [
+      "Roleplay setup required: host administrators are not configured"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/roleplay-service.ts",
+        "line": 95
       }
     ]
   },
@@ -8839,6 +8899,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-212b5867b16f9ed0",
+    "kind": "error",
+    "template": "Evolution reference visibility changed; refresh",
+    "parts": [
+      "Evolution reference visibility changed; refresh"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/roleplay-service.ts",
+        "line": 289
+      }
+    ]
+  },
+  {
     "id": "guid-212f227d6cca90d6",
     "kind": "prose",
     "template": "For forum: relevant model, tool, OS, or runtime context",
@@ -8911,7 +8986,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 249
+        "line": 250
       }
     ]
   },
@@ -9010,7 +9085,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 183
+        "line": 184
       }
     ]
   },
@@ -9040,7 +9115,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 211
+        "line": 212
       }
     ]
   },
@@ -9186,7 +9261,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2721
+        "line": 2725
       }
     ]
   },
@@ -9201,7 +9276,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 102
+        "line": 103
       }
     ]
   },
@@ -9292,7 +9367,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 184
+        "line": 185
       }
     ]
   },
@@ -9413,7 +9488,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 795
+        "line": 796
       }
     ]
   },
@@ -9627,7 +9702,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 390
+        "line": 391
       }
     ]
   },
@@ -9642,7 +9717,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1249
+        "line": 1250
       }
     ]
   },
@@ -9763,7 +9838,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3466
+        "line": 3470
       }
     ]
   },
@@ -10284,7 +10359,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2717
+        "line": 2721
       }
     ]
   },
@@ -10364,7 +10439,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3081
+        "line": 3085
       },
       {
         "file": "src/filesystem.ts",
@@ -10514,7 +10589,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 70
+        "line": 71
       }
     ]
   },
@@ -10589,7 +10664,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1070
+        "line": 1071
       }
     ]
   },
@@ -10604,7 +10679,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 190
+        "line": 191
       }
     ]
   },
@@ -10729,7 +10804,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1482
+        "line": 1484
       }
     ]
   },
@@ -10838,7 +10913,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 652
+        "line": 653
       }
     ]
   },
@@ -10913,7 +10988,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 242
+        "line": 243
       }
     ]
   },
@@ -10928,7 +11003,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 871
+        "line": 872
       }
     ]
   },
@@ -10982,7 +11057,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 857
+        "line": 858
       }
     ]
   },
@@ -11076,7 +11151,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 139
+        "line": 140
       }
     ]
   },
@@ -11121,7 +11196,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3741
+        "line": 3745
       }
     ]
   },
@@ -11293,7 +11368,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 225
+        "line": 226
       }
     ]
   },
@@ -11308,7 +11383,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1127
+        "line": 1128
       }
     ]
   },
@@ -11323,7 +11398,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 840
+        "line": 841
       }
     ]
   },
@@ -11353,7 +11428,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 449
+        "line": 450
       }
     ]
   },
@@ -11462,7 +11537,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 210
+        "line": 211
       }
     ]
   },
@@ -11714,7 +11789,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 282
+        "line": 283
       }
     ]
   },
@@ -11815,6 +11890,25 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-2ce9e54957e7e2d0",
+    "kind": "error",
+    "template": "Evolution reference capacity reached",
+    "parts": [
+      "Evolution reference capacity reached"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/roleplay-service.ts",
+        "line": 63
+      },
+      {
+        "file": "src/roleplay-service.ts",
+        "line": 153
+      }
+    ]
+  },
+  {
     "id": "guid-2d1d881607c25416",
     "kind": "prose",
     "template": "Find at most3 visible funded peer-work quests, or read one contract with its fixed criteria, fees, generation and current revision. Default4000/max12000 characters. Drafts are requester-only. XP never grants shell/model budget or forces peers to act. Host economy is OFF by default.",
@@ -11886,7 +11980,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 143
+        "line": 144
       }
     ]
   },
@@ -12037,7 +12131,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-store.ts",
-        "line": 69
+        "line": 66
       }
     ]
   },
@@ -12114,7 +12208,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 410
+        "line": 411
       }
     ]
   },
@@ -12721,7 +12815,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 223
+        "line": 224
       }
     ]
   },
@@ -12782,7 +12876,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1044
+        "line": 1045
       }
     ]
   },
@@ -12918,7 +13012,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-model.ts",
-        "line": 295
+        "line": 300
       }
     ]
   },
@@ -13223,7 +13317,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 719
+        "line": 720
       }
     ]
   },
@@ -13484,7 +13578,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2671
+        "line": 2675
       }
     ]
   },
@@ -13514,7 +13608,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 131
+        "line": 132
       }
     ]
   },
@@ -13577,7 +13671,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2956
+        "line": 2960
       }
     ]
   },
@@ -13669,7 +13763,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 186
+        "line": 187
       }
     ]
   },
@@ -13729,11 +13823,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3758
+        "line": 3762
       },
       {
         "file": "src/createServer.ts",
-        "line": 3811
+        "line": 3815
       }
     ]
   },
@@ -14119,7 +14213,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 152
+        "line": 153
       }
     ]
   },
@@ -14134,7 +14228,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 281
+        "line": 282
       }
     ]
   },
@@ -14164,7 +14258,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 299
+        "line": 300
       }
     ]
   },
@@ -14357,7 +14451,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-model.ts",
-        "line": 90
+        "line": 92
       }
     ]
   },
@@ -14619,7 +14713,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-model.ts",
-        "line": 246
+        "line": 251
       }
     ]
   },
@@ -14732,7 +14826,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-model.ts",
-        "line": 315
+        "line": 320
       }
     ]
   },
@@ -14808,7 +14902,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-tools.ts",
-        "line": 114
+        "line": 116
       }
     ]
   },
@@ -14899,7 +14993,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 272
+        "line": 273
       }
     ]
   },
@@ -14929,7 +15023,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 215
+        "line": 216
       }
     ]
   },
@@ -15035,7 +15129,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1510
+        "line": 1512
       }
     ]
   },
@@ -15175,7 +15269,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 73
+        "line": 74
       }
     ]
   },
@@ -15190,7 +15284,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 206
+        "line": 207
       }
     ]
   },
@@ -15207,7 +15301,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3198
+        "line": 3202
       }
     ]
   },
@@ -15334,11 +15428,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1247
+        "line": 1248
       },
       {
         "file": "src/createServer.ts",
-        "line": 1265
+        "line": 1266
       }
     ]
   },
@@ -15438,7 +15532,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3468
+        "line": 3472
       }
     ]
   },
@@ -15651,15 +15745,15 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 580
+        "line": 581
       },
       {
         "file": "src/createServer.ts",
-        "line": 594
+        "line": 595
       },
       {
         "file": "src/createServer.ts",
-        "line": 1429
+        "line": 1431
       }
     ]
   },
@@ -15674,7 +15768,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 797
+        "line": 798
       }
     ]
   },
@@ -16116,7 +16210,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1047
+        "line": 1048
       }
     ]
   },
@@ -16131,7 +16225,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1402
+        "line": 1404
       }
     ]
   },
@@ -16192,7 +16286,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 169
+        "line": 170
       }
     ]
   },
@@ -16238,7 +16332,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3085
+        "line": 3089
       },
       {
         "file": "src/filesystem.ts",
@@ -16407,7 +16501,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 155
+        "line": 156
       }
     ]
   },
@@ -16422,7 +16516,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1337
+        "line": 1338
       }
     ]
   },
@@ -16740,7 +16834,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 220
+        "line": 221
       }
     ]
   },
@@ -16770,7 +16864,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 158
+        "line": 159
       }
     ]
   },
@@ -16815,7 +16909,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1333
+        "line": 1334
       }
     ]
   },
@@ -16875,7 +16969,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 171
+        "line": 172
       }
     ]
   },
@@ -16935,7 +17029,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-model.ts",
-        "line": 320
+        "line": 325
       }
     ]
   },
@@ -17026,7 +17120,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 911
+        "line": 912
       }
     ]
   },
@@ -17041,7 +17135,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 741
+        "line": 742
       }
     ]
   },
@@ -17176,7 +17270,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 176
+        "line": 177
       }
     ]
   },
@@ -17341,7 +17435,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 123
+        "line": 124
       }
     ]
   },
@@ -17401,7 +17495,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 965
+        "line": 966
       }
     ]
   },
@@ -17463,7 +17557,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 732
+        "line": 733
       }
     ]
   },
@@ -17615,15 +17709,15 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1096
+        "line": 1097
       },
       {
         "file": "src/createServer.ts",
-        "line": 1109
+        "line": 1110
       },
       {
         "file": "src/createServer.ts",
-        "line": 1123
+        "line": 1124
       }
     ]
   },
@@ -17965,7 +18059,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       },
       {
         "file": "src/createServer.ts",
-        "line": 395
+        "line": 396
       },
       {
         "file": "src/moderation-tools.ts",
@@ -18104,7 +18198,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 296
+        "line": 297
       }
     ]
   },
@@ -18224,7 +18318,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 264
+        "line": 265
       }
     ]
   },
@@ -18239,7 +18333,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 854
+        "line": 855
       }
     ]
   },
@@ -18284,7 +18378,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 734
+        "line": 735
       }
     ]
   },
@@ -18299,7 +18393,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 959
+        "line": 960
       }
     ]
   },
@@ -18314,115 +18408,115 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 654
+        "line": 655
       },
       {
         "file": "src/createServer.ts",
-        "line": 707
+        "line": 708
       },
       {
         "file": "src/createServer.ts",
-        "line": 745
+        "line": 746
       },
       {
         "file": "src/createServer.ts",
-        "line": 758
+        "line": 759
       },
       {
         "file": "src/createServer.ts",
-        "line": 859
+        "line": 860
       },
       {
         "file": "src/createServer.ts",
-        "line": 885
+        "line": 886
       },
       {
         "file": "src/createServer.ts",
-        "line": 897
+        "line": 898
       },
       {
         "file": "src/createServer.ts",
-        "line": 924
+        "line": 925
       },
       {
         "file": "src/createServer.ts",
-        "line": 968
+        "line": 969
       },
       {
         "file": "src/createServer.ts",
-        "line": 981
+        "line": 982
       },
       {
         "file": "src/createServer.ts",
-        "line": 993
+        "line": 994
       },
       {
         "file": "src/createServer.ts",
-        "line": 1001
+        "line": 1002
       },
       {
         "file": "src/createServer.ts",
-        "line": 1015
+        "line": 1016
       },
       {
         "file": "src/createServer.ts",
-        "line": 1030
+        "line": 1031
       },
       {
         "file": "src/createServer.ts",
-        "line": 1050
+        "line": 1051
       },
       {
         "file": "src/createServer.ts",
-        "line": 1060
+        "line": 1061
       },
       {
         "file": "src/createServer.ts",
-        "line": 1085
+        "line": 1086
       },
       {
         "file": "src/createServer.ts",
-        "line": 1098
+        "line": 1099
       },
       {
         "file": "src/createServer.ts",
-        "line": 1112
+        "line": 1113
       },
       {
         "file": "src/createServer.ts",
-        "line": 1128
+        "line": 1129
       },
       {
         "file": "src/createServer.ts",
-        "line": 1145
+        "line": 1146
       },
       {
         "file": "src/createServer.ts",
-        "line": 1160
+        "line": 1161
       },
       {
         "file": "src/createServer.ts",
-        "line": 1189
+        "line": 1190
       },
       {
         "file": "src/createServer.ts",
-        "line": 1203
+        "line": 1204
       },
       {
         "file": "src/createServer.ts",
-        "line": 1218
+        "line": 1219
       },
       {
         "file": "src/createServer.ts",
-        "line": 1234
+        "line": 1235
       },
       {
         "file": "src/createServer.ts",
-        "line": 1250
+        "line": 1251
       },
       {
         "file": "src/createServer.ts",
-        "line": 1267
+        "line": 1268
       }
     ]
   },
@@ -18467,7 +18561,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2290
+        "line": 2292
       }
     ]
   },
@@ -18482,7 +18576,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-model.ts",
-        "line": 283
+        "line": 288
       }
     ]
   },
@@ -19302,11 +19396,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-model.ts",
-        "line": 180
+        "line": 182
       },
       {
         "file": "src/roleplay-model.ts",
-        "line": 202
+        "line": 205
       }
     ]
   },
@@ -19412,7 +19506,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 90
+        "line": 91
       }
     ]
   },
@@ -19427,7 +19521,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3598
+        "line": 3602
       }
     ]
   },
@@ -19638,7 +19732,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-model.ts",
-        "line": 281
+        "line": 286
       }
     ]
   },
@@ -19685,7 +19779,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 193
+        "line": 194
       }
     ]
   },
@@ -19700,7 +19794,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-store.ts",
-        "line": 38
+        "line": 37
       }
     ]
   },
@@ -19715,7 +19809,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1083
+        "line": 1084
       }
     ]
   },
@@ -19855,7 +19949,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-service.ts",
-        "line": 68
+        "line": 93
       }
     ]
   },
@@ -19915,7 +20009,22 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 159
+        "line": 160
+      }
+    ]
+  },
+  {
+    "id": "guid-4ffac96ea4cee858",
+    "kind": "error",
+    "template": "Evolution lore changed during proposal",
+    "parts": [
+      "Evolution lore changed during proposal"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/roleplay-service.ts",
+        "line": 149
       }
     ]
   },
@@ -19945,7 +20054,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1027
+        "line": 1028
       }
     ]
   },
@@ -20082,7 +20191,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1521
+        "line": 1523
       }
     ]
   },
@@ -20230,7 +20339,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 813
+        "line": 814
       }
     ]
   },
@@ -20290,7 +20399,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 65
+        "line": 66
       }
     ]
   },
@@ -20305,7 +20414,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 176
+        "line": 177
       }
     ]
   },
@@ -20411,7 +20520,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3016
+        "line": 3020
       }
     ]
   },
@@ -20634,7 +20743,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-model.ts",
-        "line": 252
+        "line": 257
       }
     ]
   },
@@ -20694,7 +20803,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1405
+        "line": 1407
       }
     ]
   },
@@ -20833,7 +20942,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 650
+        "line": 651
       }
     ]
   },
@@ -20878,7 +20987,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-model.ts",
-        "line": 156
+        "line": 158
       }
     ]
   },
@@ -20908,7 +21017,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 827
+        "line": 828
       }
     ]
   },
@@ -20954,7 +21063,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1409
+        "line": 1411
       }
     ]
   },
@@ -21030,6 +21139,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/llm-wiki-tools.ts",
         "line": 728
+      }
+    ]
+  },
+  {
+    "id": "guid-53a5871330e81ee0",
+    "kind": "error",
+    "template": "Roleplay writer host identity is missing or mismatched; explicit originating host review required",
+    "parts": [
+      "Roleplay writer host identity is missing or mismatched; explicit originating host review required"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/roleplay-storage-host.ts",
+        "line": 97
       }
     ]
   },
@@ -21119,7 +21243,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 781
+        "line": 782
       }
     ]
   },
@@ -21302,7 +21426,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-model.ts",
-        "line": 298
+        "line": 303
       }
     ]
   },
@@ -21317,7 +21441,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 266
+        "line": 267
       }
     ]
   },
@@ -21517,7 +21641,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 185
+        "line": 186
       }
     ]
   },
@@ -21547,7 +21671,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 967
+        "line": 968
       }
     ]
   },
@@ -21562,7 +21686,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 274
+        "line": 275
       }
     ]
   },
@@ -21592,11 +21716,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 826
+        "line": 827
       },
       {
         "file": "src/createServer.ts",
-        "line": 843
+        "line": 844
       }
     ]
   },
@@ -21611,7 +21735,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-model.ts",
-        "line": 230
+        "line": 235
       }
     ]
   },
@@ -21701,7 +21825,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1248
+        "line": 1249
       }
     ]
   },
@@ -21716,7 +21840,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 187
+        "line": 188
       }
     ]
   },
@@ -21881,7 +22005,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 140
+        "line": 141
       }
     ]
   },
@@ -22142,7 +22266,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-model.ts",
-        "line": 116
+        "line": 118
       }
     ]
   },
@@ -22190,7 +22314,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2985
+        "line": 2989
       }
     ]
   },
@@ -22206,7 +22330,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-model.ts",
-        "line": 41
+        "line": 43
       }
     ]
   },
@@ -22281,7 +22405,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 842
+        "line": 843
       }
     ]
   },
@@ -22326,7 +22450,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 173
+        "line": 174
       }
     ]
   },
@@ -22651,7 +22775,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 72
+        "line": 73
       }
     ]
   },
@@ -23153,7 +23277,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 739
+        "line": 740
       }
     ]
   },
@@ -23168,7 +23292,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 99
+        "line": 100
       }
     ]
   },
@@ -23349,7 +23473,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-model.ts",
-        "line": 176
+        "line": 178
       }
     ]
   },
@@ -23469,7 +23593,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 718
+        "line": 719
       }
     ]
   },
@@ -23485,6 +23609,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/economy-service.ts",
         "line": 214
+      }
+    ]
+  },
+  {
+    "id": "guid-5d82a96bcf0cc6da",
+    "kind": "prose",
+    "template": "In explicitly evolving worlds, optionally propose 1..5 typed changes after a witnessed designated scene using roleplay.evolution and exact turn/note revisions. Own beliefs/one-sided attitudes remain subjective; registered effects alone support automatic facts. Core/lore changes need current controller or designated world-GM approval, mixed changes both. Preview/fingerprint before apply; reject or propose an approved retraction instead of overwriting history. Initial, current and pending settings remain distinct; corrected or changed lore needs review. No OOC/private-conversation collection or background model calls.",
+    "parts": [
+      "In explicitly evolving worlds, optionally propose 1..5 typed changes after a witnessed designated scene using roleplay.evolution and exact turn/note revisions. Own beliefs/one-sided attitudes remain subjective; registered effects alone support automatic facts. Core/lore changes need current controller or designated world-GM approval, mixed changes both. Preview/fingerprint before apply; reject or propose an approved retraction instead of overwriting history. Initial, current and pending settings remain distinct; corrected or changed lore needs review. No OOC/private-conversation collection or background model calls."
+    ],
+    "binding": "projection",
+    "sources": [
+      {
+        "file": "src/wiki-policy.ts",
+        "line": 62
       }
     ]
   },
@@ -23625,7 +23764,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 218
+        "line": 219
       }
     ]
   },
@@ -23755,7 +23894,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-tools.ts",
-        "line": 86
+        "line": 87
       }
     ]
   },
@@ -23919,7 +24058,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1077
+        "line": 1078
       }
     ]
   },
@@ -23968,7 +24107,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 117
+        "line": 118
       }
     ]
   },
@@ -23985,7 +24124,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3912
+        "line": 3916
       }
     ]
   },
@@ -24187,7 +24326,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 828
+        "line": 829
       }
     ]
   },
@@ -24202,7 +24341,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 128
+        "line": 129
       }
     ]
   },
@@ -24217,7 +24356,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 222
+        "line": 223
       }
     ]
   },
@@ -24262,7 +24401,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1111
+        "line": 1112
       }
     ]
   },
@@ -24307,7 +24446,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 196
+        "line": 197
       }
     ]
   },
@@ -24401,7 +24540,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 248
+        "line": 249
       }
     ]
   },
@@ -24431,7 +24570,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 68
+        "line": 69
       }
     ]
   },
@@ -24510,7 +24649,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 231
+        "line": 232
       }
     ]
   },
@@ -24546,7 +24685,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3490
+        "line": 3494
       }
     ]
   },
@@ -25092,7 +25231,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 681
+        "line": 682
       }
     ]
   },
@@ -25168,7 +25307,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-model.ts",
-        "line": 152
+        "line": 154
       }
     ]
   },
@@ -25323,7 +25462,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 720
+        "line": 721
       }
     ]
   },
@@ -25338,7 +25477,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 651
+        "line": 652
       }
     ]
   },
@@ -25604,7 +25743,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-model.ts",
-        "line": 173
+        "line": 175
       }
     ]
   },
@@ -25774,7 +25913,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 71
+        "line": 72
       }
     ]
   },
@@ -25975,7 +26114,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 191
+        "line": 192
       }
     ]
   },
@@ -26050,7 +26189,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 245
+        "line": 246
       }
     ]
   },
@@ -26065,7 +26204,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 149
+        "line": 150
       }
     ]
   },
@@ -26202,7 +26341,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-model.ts",
-        "line": 245
+        "line": 250
       }
     ]
   },
@@ -26248,7 +26387,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 202
+        "line": 203
       }
     ]
   },
@@ -26388,6 +26527,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-6b282a83057732d5",
+    "kind": "error",
+    "template": "Evolution source unavailable",
+    "parts": [
+      "Evolution source unavailable"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/roleplay-service.ts",
+        "line": 78
+      }
+    ]
+  },
+  {
     "id": "guid-6b3474538aa020dc",
     "kind": "prose",
     "template": "Access denied: {arg0}",
@@ -26459,7 +26613,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 825
+        "line": 826
       }
     ]
   },
@@ -26534,7 +26688,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 120
+        "line": 121
       }
     ]
   },
@@ -26594,7 +26748,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 337
+        "line": 338
       }
     ]
   },
@@ -26641,7 +26795,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 451
+        "line": 452
       }
     ]
   },
@@ -26656,11 +26810,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3599
+        "line": 3603
       },
       {
         "file": "src/createServer.ts",
-        "line": 3757
+        "line": 3761
       }
     ]
   },
@@ -26675,7 +26829,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 992
+        "line": 993
       }
     ]
   },
@@ -26705,7 +26859,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 278
+        "line": 279
       }
     ]
   },
@@ -26780,7 +26934,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1041
+        "line": 1042
       }
     ]
   },
@@ -26916,7 +27070,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-model.ts",
-        "line": 187
+        "line": 189
       }
     ]
   },
@@ -26946,7 +27100,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 399
+        "line": 400
       }
     ]
   },
@@ -26961,7 +27115,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1423
+        "line": 1425
       }
     ]
   },
@@ -26991,7 +27145,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 240
+        "line": 241
       }
     ]
   },
@@ -27051,7 +27205,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 105
+        "line": 106
       }
     ]
   },
@@ -27208,7 +27362,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 285
+        "line": 286
       }
     ]
   },
@@ -27441,7 +27595,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-store.ts",
-        "line": 28
+        "line": 27
       }
     ]
   },
@@ -27565,7 +27719,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 649
+        "line": 650
       }
     ]
   },
@@ -27595,7 +27749,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 285
+        "line": 286
       }
     ]
   },
@@ -27641,7 +27795,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 121
+        "line": 122
       }
     ]
   },
@@ -27899,7 +28053,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3600
+        "line": 3604
       }
     ]
   },
@@ -27929,7 +28083,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-service.ts",
-        "line": 62
+        "line": 87
       }
     ]
   },
@@ -28115,7 +28269,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 269
+        "line": 270
       }
     ]
   },
@@ -28175,11 +28329,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-store.ts",
-        "line": 150
+        "line": 153
       },
       {
         "file": "src/roleplay-store.ts",
-        "line": 163
+        "line": 166
       }
     ]
   },
@@ -28224,7 +28378,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 363
+        "line": 364
       }
     ]
   },
@@ -28303,7 +28457,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1792
+        "line": 1794
       }
     ]
   },
@@ -28443,7 +28597,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1241
+        "line": 1242
       }
     ]
   },
@@ -28504,7 +28658,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1009
+        "line": 1010
       }
     ]
   },
@@ -28579,7 +28733,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 237
+        "line": 238
       }
     ]
   },
@@ -28862,7 +29016,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 101
+        "line": 102
       }
     ]
   },
@@ -28922,7 +29076,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-store.ts",
-        "line": 132
+        "line": 135
       }
     ]
   },
@@ -29012,7 +29166,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 114
+        "line": 115
       }
     ]
   },
@@ -29132,7 +29286,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-model.ts",
-        "line": 321
+        "line": 326
       }
     ]
   },
@@ -29324,7 +29478,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-service.ts",
-        "line": 115
+        "line": 186
       }
     ]
   },
@@ -29585,7 +29739,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 221
+        "line": 222
       }
     ]
   },
@@ -29752,7 +29906,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 250
+        "line": 251
       }
     ]
   },
@@ -29907,7 +30061,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 452
+        "line": 453
       }
     ]
   },
@@ -30200,7 +30354,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-recovery.ts",
-        "line": 83
+        "line": 87
       }
     ]
   },
@@ -30290,7 +30444,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 125
+        "line": 126
       }
     ]
   },
@@ -30305,7 +30459,22 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 304
+        "line": 305
+      }
+    ]
+  },
+  {
+    "id": "guid-79de38f9d85b981c",
+    "kind": "error",
+    "template": "Roleplay storage path has an invalid file type",
+    "parts": [
+      "Roleplay storage path has an invalid file type"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/roleplay-storage-host.ts",
+        "line": 30
       }
     ]
   },
@@ -30365,7 +30534,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 979
+        "line": 980
       }
     ]
   },
@@ -30395,7 +30564,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 199
+        "line": 200
       }
     ]
   },
@@ -30611,7 +30780,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1110
+        "line": 1111
       }
     ]
   },
@@ -30937,7 +31106,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 405
+        "line": 406
       }
     ]
   },
@@ -30952,7 +31121,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 243
+        "line": 244
       }
     ]
   },
@@ -30967,11 +31136,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-store.ts",
-        "line": 124
+        "line": 127
       },
       {
         "file": "src/roleplay-store.ts",
-        "line": 153
+        "line": 156
       }
     ]
   },
@@ -31031,7 +31200,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 682
+        "line": 683
       }
     ]
   },
@@ -31314,7 +31483,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2712
+        "line": 2716
       }
     ]
   },
@@ -31445,7 +31614,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 918
+        "line": 919
       }
     ]
   },
@@ -31593,21 +31762,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-7f8b4247ac44e921",
-    "kind": "error",
-    "template": "Roleplay needs absolute host-provisioned storage paths",
-    "parts": [
-      "Roleplay needs absolute host-provisioned storage paths"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/roleplay-store.ts",
-        "line": 59
-      }
-    ]
-  },
-  {
     "id": "guid-7fe7147dc38ff138",
     "kind": "prose",
     "template": "The selected MOC hierarchy contains a moc_parent edge that crosses a privacy boundary.",
@@ -31633,7 +31787,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3519
+        "line": 3523
       }
     ]
   },
@@ -31739,7 +31893,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-service.ts",
-        "line": 94
+        "line": 122
       }
     ]
   },
@@ -31900,7 +32054,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 62
+        "line": 63
       }
     ]
   },
@@ -31945,7 +32099,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 668
+        "line": 669
       }
     ]
   },
@@ -31960,7 +32114,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 168
+        "line": 169
       }
     ]
   },
@@ -32070,7 +32224,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 244
+        "line": 245
       }
     ]
   },
@@ -32145,7 +32299,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2952
+        "line": 2956
       }
     ]
   },
@@ -32192,6 +32346,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/roleplay-recovery.ts",
         "line": 44
+      }
+    ]
+  },
+  {
+    "id": "guid-8271b17da92569fd",
+    "kind": "prose",
+    "template": "After a relevant witnessed scene, optionally propose 1..5 typed changes using exact history turn and note revisions. Beliefs and one-sided attitudes are subjective; core changes require explicit approval.",
+    "parts": [
+      "After a relevant witnessed scene, optionally propose 1..5 typed changes using exact history turn and note revisions. Beliefs and one-sided attitudes are subjective; core changes require explicit approval."
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/roleplay-service.ts",
+        "line": 282
       }
     ]
   },
@@ -32259,7 +32428,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 93
+        "line": 94
       }
     ]
   },
@@ -32319,7 +32488,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1025
+        "line": 1026
       }
     ]
   },
@@ -32409,7 +32578,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 740
+        "line": 741
       }
     ]
   },
@@ -32529,7 +32698,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 237
+        "line": 238
       }
     ]
   },
@@ -32651,7 +32820,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 782
+        "line": 783
       }
     ]
   },
@@ -32847,7 +33016,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-model.ts",
-        "line": 227
+        "line": 232
       }
     ]
   },
@@ -32907,7 +33076,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1126
+        "line": 1127
       }
     ]
   },
@@ -33013,7 +33182,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1413
+        "line": 1415
       }
     ]
   },
@@ -33073,7 +33242,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 796
+        "line": 797
       }
     ]
   },
@@ -33103,7 +33272,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 841
+        "line": 842
       }
     ]
   },
@@ -33232,7 +33401,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 389
+        "line": 390
       }
     ]
   },
@@ -33307,11 +33476,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1159
+        "line": 1160
       },
       {
         "file": "src/createServer.ts",
-        "line": 1172
+        "line": 1173
       }
     ]
   },
@@ -33371,7 +33540,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 181
+        "line": 182
       }
     ]
   },
@@ -33471,7 +33640,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-model.ts",
-        "line": 290
+        "line": 295
       }
     ]
   },
@@ -33531,7 +33700,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-service.ts",
-        "line": 180
+        "line": 278
       }
     ]
   },
@@ -33592,7 +33761,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 215
+        "line": 216
       }
     ]
   },
@@ -33699,7 +33868,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3190
+        "line": 3194
       }
     ]
   },
@@ -33733,7 +33902,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 4100
+        "line": 4104
       }
     ]
   },
@@ -33748,7 +33917,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-store.ts",
-        "line": 147
+        "line": 150
       }
     ]
   },
@@ -33884,7 +34053,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-model.ts",
-        "line": 148
+        "line": 150
       }
     ]
   },
@@ -33934,7 +34103,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 85
+        "line": 86
       }
     ]
   },
@@ -33949,7 +34118,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 279
+        "line": 280
       }
     ]
   },
@@ -34010,7 +34179,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-model.ts",
-        "line": 98
+        "line": 100
       }
     ]
   },
@@ -34071,7 +34240,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 118
+        "line": 119
       }
     ]
   },
@@ -34321,19 +34490,19 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1187
+        "line": 1188
       },
       {
         "file": "src/createServer.ts",
-        "line": 1201
+        "line": 1202
       },
       {
         "file": "src/createServer.ts",
-        "line": 1216
+        "line": 1217
       },
       {
         "file": "src/createServer.ts",
-        "line": 1232
+        "line": 1233
       }
     ]
   },
@@ -34441,7 +34610,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1425
+        "line": 1427
       }
     ]
   },
@@ -34487,7 +34656,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 292
+        "line": 293
       }
     ]
   },
@@ -34623,7 +34792,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-store.ts",
-        "line": 185
+        "line": 188
       }
     ]
   },
@@ -34638,7 +34807,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 872
+        "line": 873
       }
     ]
   },
@@ -34698,7 +34867,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 144
+        "line": 145
       }
     ]
   },
@@ -34789,7 +34958,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 192
+        "line": 193
       }
     ]
   },
@@ -34849,7 +35018,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 204
+        "line": 205
       }
     ]
   },
@@ -34940,7 +35109,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3187
+        "line": 3191
       }
     ]
   },
@@ -35172,7 +35341,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2725
+        "line": 2729
       }
     ]
   },
@@ -35322,7 +35491,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 390
+        "line": 391
       }
     ]
   },
@@ -35914,7 +36083,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 149
+        "line": 150
       }
     ]
   },
@@ -35930,7 +36099,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3300
+        "line": 3304
       }
     ]
   },
@@ -36251,7 +36420,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 122
+        "line": 123
       }
     ]
   },
@@ -36315,7 +36484,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 212
+        "line": 213
       }
     ]
   },
@@ -36420,7 +36589,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 293
+        "line": 294
       }
     ]
   },
@@ -36619,7 +36788,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1141
+        "line": 1142
       }
     ]
   },
@@ -36695,7 +36864,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 653
+        "line": 654
       }
     ]
   },
@@ -36710,7 +36879,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-store.ts",
-        "line": 165
+        "line": 168
       }
     ]
   },
@@ -36775,6 +36944,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/filesystem.ts",
         "line": 2056
+      }
+    ]
+  },
+  {
+    "id": "guid-955b01ad6d6a5a61",
+    "kind": "error",
+    "template": "Roleplay host identity must be an unshared local file; host review required",
+    "parts": [
+      "Roleplay host identity must be an unshared local file; host review required"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/roleplay-storage-host.ts",
+        "line": 83
       }
     ]
   },
@@ -36941,7 +37125,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 162
+        "line": 163
       }
     ]
   },
@@ -37128,7 +37312,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3726
+        "line": 3730
       }
     ]
   },
@@ -37238,7 +37422,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       },
       {
         "file": "src/roleplay-model.ts",
-        "line": 33
+        "line": 35
       },
       {
         "file": "src/workshop-output.ts",
@@ -37295,7 +37479,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3087
+        "line": 3091
       },
       {
         "file": "src/filesystem.ts",
@@ -37329,7 +37513,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-store.ts",
-        "line": 85
+        "line": 82
       }
     ]
   },
@@ -37434,7 +37618,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 93
+        "line": 94
       }
     ]
   },
@@ -37483,7 +37667,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 743
+        "line": 744
       }
     ]
   },
@@ -37513,7 +37697,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 162
+        "line": 163
       }
     ]
   },
@@ -37543,7 +37727,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 209
+        "line": 210
       }
     ]
   },
@@ -37573,7 +37757,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 744
+        "line": 745
       }
     ]
   },
@@ -37603,7 +37787,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1125
+        "line": 1126
       }
     ]
   },
@@ -37680,7 +37864,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-model.ts",
-        "line": 52
+        "line": 54
       }
     ]
   },
@@ -37979,7 +38163,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-model.ts",
-        "line": 258
+        "line": 263
       }
     ]
   },
@@ -38138,7 +38322,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       },
       {
         "file": "src/roleplay-recovery.ts",
-        "line": 94
+        "line": 97
       }
     ]
   },
@@ -38153,7 +38337,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1049
+        "line": 1050
       }
     ]
   },
@@ -38245,7 +38429,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 296
+        "line": 297
       }
     ]
   },
@@ -38275,7 +38459,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 791
+        "line": 792
       }
     ]
   },
@@ -38416,7 +38600,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1422
+        "line": 1424
       }
     ]
   },
@@ -38677,7 +38861,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2417
+        "line": 2419
       }
     ]
   },
@@ -38723,7 +38907,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 227
+        "line": 228
       }
     ]
   },
@@ -38903,7 +39087,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-model.ts",
-        "line": 178
+        "line": 180
       }
     ]
   },
@@ -38996,7 +39180,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 65
+        "line": 66
       }
     ]
   },
@@ -39086,7 +39270,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 149
+        "line": 150
       }
     ]
   },
@@ -39227,7 +39411,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1011
+        "line": 1012
       }
     ]
   },
@@ -39257,7 +39441,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1082
+        "line": 1083
       }
     ]
   },
@@ -39272,7 +39456,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 260
+        "line": 261
       }
     ]
   },
@@ -39321,7 +39505,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1462
+        "line": 1464
       }
     ]
   },
@@ -39351,7 +39535,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 820
+        "line": 821
       }
     ]
   },
@@ -39396,7 +39580,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-tools.ts",
-        "line": 101
+        "line": 103
       }
     ]
   },
@@ -39473,7 +39657,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2675
+        "line": 2679
       }
     ]
   },
@@ -39518,7 +39702,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-model.ts",
-        "line": 136
+        "line": 138
       }
     ]
   },
@@ -39533,7 +39717,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 255
+        "line": 256
       }
     ]
   },
@@ -39677,7 +39861,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1230
+        "line": 1231
       }
     ]
   },
@@ -39801,7 +39985,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 363
+        "line": 364
       }
     ]
   },
@@ -40046,7 +40230,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 363
+        "line": 364
       }
     ]
   },
@@ -40291,7 +40475,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 224
+        "line": 225
       }
     ]
   },
@@ -40366,7 +40550,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-model.ts",
-        "line": 49
+        "line": 51
       }
     ]
   },
@@ -40427,7 +40611,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 65
+        "line": 66
       }
     ]
   },
@@ -40442,7 +40626,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1048
+        "line": 1049
       }
     ]
   },
@@ -40487,7 +40671,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 205
+        "line": 206
       }
     ]
   },
@@ -40608,7 +40792,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 705
+        "line": 706
       }
     ]
   },
@@ -40688,6 +40872,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-a697afe16be54ad7",
+    "kind": "error",
+    "template": "Evolution source revision changed",
+    "parts": [
+      "Evolution source revision changed"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/roleplay-service.ts",
+        "line": 80
+      }
+    ]
+  },
+  {
     "id": "guid-a6b54e11564f0b1d",
     "kind": "error",
     "template": "{arg0}.path must be a nonempty string of at most 500 characters",
@@ -40733,7 +40932,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-service.ts",
-        "line": 88
+        "line": 116
       }
     ]
   },
@@ -40863,6 +41062,25 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-a74ec05a3c859799",
+    "kind": "error",
+    "template": "Evolution reference unavailable",
+    "parts": [
+      "Evolution reference unavailable"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/roleplay-service.ts",
+        "line": 66
+      },
+      {
+        "file": "src/roleplay-service.ts",
+        "line": 68
+      }
+    ]
+  },
+  {
     "id": "guid-a79b30156f45b269",
     "kind": "prose",
     "template": "Shared questions/cadence are templates, not personal history. Agent dates, quality, confusion and repair work come only from their private record. Missing state is unseen; hidden state is unavailable, never a fabricated due task.",
@@ -40873,7 +41091,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 228
+        "line": 229
       }
     ]
   },
@@ -40989,7 +41207,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1213
+        "line": 1214
       }
     ]
   },
@@ -41139,7 +41357,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 308
+        "line": 309
       }
     ]
   },
@@ -41154,7 +41372,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 145
+        "line": 146
       }
     ]
   },
@@ -41218,7 +41436,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       },
       {
         "file": "src/roleplay-recovery.ts",
-        "line": 102
+        "line": 106
       }
     ]
   },
@@ -41372,7 +41590,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 666
+        "line": 667
       }
     ]
   },
@@ -41432,7 +41650,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 233
+        "line": 234
       }
     ]
   },
@@ -41635,7 +41853,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 207
+        "line": 208
       }
     ]
   },
@@ -41665,7 +41883,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 676
+        "line": 677
       }
     ]
   },
@@ -41695,7 +41913,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 96
+        "line": 97
       }
     ]
   },
@@ -42027,7 +42245,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 258
+        "line": 259
       }
     ]
   },
@@ -42160,7 +42378,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 736
+        "line": 737
       }
     ]
   },
@@ -42221,7 +42439,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 669
+        "line": 670
       }
     ]
   },
@@ -42386,7 +42604,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 404
+        "line": 405
       }
     ]
   },
@@ -42465,7 +42683,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1046
+        "line": 1047
       }
     ]
   },
@@ -42723,7 +42941,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-model.ts",
-        "line": 300
+        "line": 305
       }
     ]
   },
@@ -42813,7 +43031,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 88
+        "line": 89
       }
     ]
   },
@@ -42888,7 +43106,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1214
+        "line": 1215
       }
     ]
   },
@@ -43013,7 +43231,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 704
+        "line": 705
       }
     ]
   },
@@ -43028,7 +43246,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 690
+        "line": 691
       }
     ]
   },
@@ -43043,7 +43261,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1000
+        "line": 1001
       }
     ]
   },
@@ -43180,7 +43398,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-service.ts",
-        "line": 48
+        "line": 52
       }
     ]
   },
@@ -43245,6 +43463,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-b129bd46351cc211",
+    "kind": "error",
+    "template": "Evolution target unavailable",
+    "parts": [
+      "Evolution target unavailable"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/roleplay-service.ts",
+        "line": 137
+      }
+    ]
+  },
+  {
     "id": "guid-b133f659c637bc49",
     "kind": "error",
     "template": "maxChars is too small for the mutation receipt",
@@ -43270,7 +43503,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 108
+        "line": 109
       }
     ]
   },
@@ -43376,7 +43609,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1092
+        "line": 1093
       }
     ]
   },
@@ -43391,7 +43624,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 146
+        "line": 147
       }
     ]
   },
@@ -43540,7 +43773,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 128
+        "line": 129
       }
     ]
   },
@@ -43555,7 +43788,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 892
+        "line": 893
       }
     ]
   },
@@ -43600,7 +43833,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 165
+        "line": 166
       }
     ]
   },
@@ -43690,7 +43923,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-model.ts",
-        "line": 57
+        "line": 59
       }
     ]
   },
@@ -43783,7 +44016,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 93
+        "line": 94
       }
     ]
   },
@@ -43816,7 +44049,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 100
+        "line": 101
       }
     ]
   },
@@ -43866,7 +44099,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2711
+        "line": 2715
       }
     ]
   },
@@ -43930,7 +44163,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 277
+        "line": 278
       }
     ]
   },
@@ -43975,7 +44208,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 765
+        "line": 766
       }
     ]
   },
@@ -44051,11 +44284,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 824
+        "line": 825
       },
       {
         "file": "src/createServer.ts",
-        "line": 978
+        "line": 979
       }
     ]
   },
@@ -44115,7 +44348,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 199
+        "line": 200
       }
     ]
   },
@@ -44190,11 +44423,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-model.ts",
-        "line": 95
+        "line": 97
       },
       {
         "file": "src/roleplay-service.ts",
-        "line": 147
+        "line": 241
       }
     ]
   },
@@ -44278,7 +44511,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 74
+        "line": 75
       }
     ]
   },
@@ -44323,7 +44556,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 199
+        "line": 200
       }
     ]
   },
@@ -44480,7 +44713,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 188
+        "line": 189
       }
     ]
   },
@@ -44525,7 +44758,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-store.ts",
-        "line": 157
+        "line": 160
       }
     ]
   },
@@ -44665,7 +44898,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 880
+        "line": 881
       }
     ]
   },
@@ -44687,15 +44920,15 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
   {
     "id": "guid-b688e0efefa79e81",
     "kind": "error",
-    "template": "Explicit administrator accounts required",
+    "template": "Explicit administrator accounts array required",
     "parts": [
-      "Explicit administrator accounts required"
+      "Explicit administrator accounts array required"
     ],
     "binding": "call",
     "sources": [
       {
         "file": "src/roleplay-host.ts",
-        "line": 19
+        "line": 18
       }
     ]
   },
@@ -44725,7 +44958,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 290
+        "line": 291
       }
     ]
   },
@@ -44740,7 +44973,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 75
+        "line": 76
       }
     ]
   },
@@ -44847,7 +45080,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 974
+        "line": 975
       }
     ]
   },
@@ -45058,6 +45291,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-b778d07e4fe47825",
+    "kind": "error",
+    "template": "Roleplay needs canonical absolute storage paths without device aliases or dot segments",
+    "parts": [
+      "Roleplay needs canonical absolute storage paths without device aliases or dot segments"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/roleplay-storage-host.ts",
+        "line": 21
+      }
+    ]
+  },
+  {
     "id": "guid-b77a917c971234ec",
     "kind": "error",
     "template": "Invalid skill id",
@@ -45238,7 +45486,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1066
+        "line": 1067
       }
     ]
   },
@@ -45301,7 +45549,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 189
+        "line": 190
       }
     ]
   },
@@ -45316,7 +45564,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 135
+        "line": 136
       }
     ]
   },
@@ -45376,7 +45624,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-tools.ts",
-        "line": 128
+        "line": 130
       }
     ]
   },
@@ -45391,7 +45639,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2949
+        "line": 2953
       }
     ]
   },
@@ -45467,7 +45715,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-model.ts",
-        "line": 329
+        "line": 337
       }
     ]
   },
@@ -45482,7 +45730,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 839
+        "line": 840
       }
     ]
   },
@@ -45900,7 +46148,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1043
+        "line": 1044
       }
     ]
   },
@@ -45915,7 +46163,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 229
+        "line": 230
       }
     ]
   },
@@ -46090,7 +46338,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 735
+        "line": 736
       }
     ]
   },
@@ -46136,7 +46384,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-service.ts",
-        "line": 106
+        "line": 172
       }
     ]
   },
@@ -46242,7 +46490,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-model.ts",
-        "line": 72
+        "line": 74
       }
     ]
   },
@@ -46317,7 +46565,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 721
+        "line": 722
       }
     ]
   },
@@ -46332,7 +46580,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 134
+        "line": 135
       }
     ]
   },
@@ -46549,7 +46797,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3484
+        "line": 3488
       }
     ]
   },
@@ -46564,7 +46812,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1045
+        "line": 1046
       }
     ]
   },
@@ -46801,7 +47049,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 692
+        "line": 693
       }
     ]
   },
@@ -46925,7 +47173,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 280
+        "line": 281
       }
     ]
   },
@@ -47045,7 +47293,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-tools.ts",
-        "line": 119
+        "line": 121
       }
     ]
   },
@@ -47076,7 +47324,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 255
+        "line": 256
       }
     ]
   },
@@ -47106,7 +47354,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-model.ts",
-        "line": 37
+        "line": 39
       }
     ]
   },
@@ -47307,7 +47555,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 301
+        "line": 302
       }
     ]
   },
@@ -47478,7 +47726,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-service.ts",
-        "line": 190
+        "line": 291
       }
     ]
   },
@@ -47493,11 +47741,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1158
+        "line": 1159
       },
       {
         "file": "src/createServer.ts",
-        "line": 1171
+        "line": 1172
       }
     ]
   },
@@ -47513,6 +47761,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/llm-wiki.ts",
         "line": 4451
+      }
+    ]
+  },
+  {
+    "id": "guid-c214792552584bc2",
+    "kind": "error",
+    "template": "Roleplay storage refuses symbolic-link or junction path components",
+    "parts": [
+      "Roleplay storage refuses symbolic-link or junction path components"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/roleplay-storage-host.ts",
+        "line": 29
       }
     ]
   },
@@ -47622,6 +47885,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-c277db54ecf9ed54",
+    "kind": "error",
+    "template": "Roleplay host identity is invalid; forensic host review required",
+    "parts": [
+      "Roleplay host identity is invalid; forensic host review required"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/roleplay-storage-host.ts",
+        "line": 87
+      }
+    ]
+  },
+  {
     "id": "guid-c27d14f8939547c4",
     "kind": "prose",
     "template": "Exact visible ordinary note whose relation list is being replaced",
@@ -47647,11 +47925,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1010
+        "line": 1011
       },
       {
         "file": "src/createServer.ts",
-        "line": 1042
+        "line": 1043
       }
     ]
   },
@@ -47837,7 +48115,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-model.ts",
-        "line": 54
+        "line": 56
       }
     ]
   },
@@ -47867,7 +48145,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-store.ts",
-        "line": 88
+        "line": 85
       }
     ]
   },
@@ -47942,7 +48220,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 136
+        "line": 137
       }
     ]
   },
@@ -48238,7 +48516,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-model.ts",
-        "line": 253
+        "line": 258
       }
     ]
   },
@@ -48253,7 +48531,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-model.ts",
-        "line": 65
+        "line": 67
       }
     ]
   },
@@ -48468,11 +48746,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       },
       {
         "file": "src/roleplay-recovery.ts",
-        "line": 96
+        "line": 100
       },
       {
         "file": "src/roleplay-recovery.ts",
-        "line": 100
+        "line": 104
       }
     ]
   },
@@ -48487,7 +48765,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 93
+        "line": 94
       }
     ]
   },
@@ -48502,7 +48780,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 302
+        "line": 303
       }
     ]
   },
@@ -48517,7 +48795,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 105
+        "line": 106
       }
     ]
   },
@@ -48670,7 +48948,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-tools.ts",
-        "line": 95
+        "line": 97
       }
     ]
   },
@@ -48686,7 +48964,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1319
+        "line": 1320
       }
     ]
   },
@@ -48799,7 +49077,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 89
+        "line": 90
       }
     ]
   },
@@ -48814,27 +49092,27 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 706
+        "line": 707
       },
       {
         "file": "src/createServer.ts",
-        "line": 1188
+        "line": 1189
       },
       {
         "file": "src/createServer.ts",
-        "line": 1202
+        "line": 1203
       },
       {
         "file": "src/createServer.ts",
-        "line": 1217
+        "line": 1218
       },
       {
         "file": "src/createServer.ts",
-        "line": 1233
+        "line": 1234
       },
       {
         "file": "src/createServer.ts",
-        "line": 1266
+        "line": 1267
       }
     ]
   },
@@ -48864,7 +49142,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-service.ts",
-        "line": 148
+        "line": 242
       }
     ]
   },
@@ -48879,7 +49157,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3990
+        "line": 3994
       }
     ]
   },
@@ -48924,7 +49202,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 87
+        "line": 88
       }
     ]
   },
@@ -48969,7 +49247,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 966
+        "line": 967
       }
     ]
   },
@@ -48984,7 +49262,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 179
+        "line": 180
       }
     ]
   },
@@ -49074,7 +49352,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2656
+        "line": 2660
       }
     ]
   },
@@ -49273,7 +49551,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 713
+        "line": 714
       }
     ]
   },
@@ -49288,7 +49566,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 858
+        "line": 859
       }
     ]
   },
@@ -49525,7 +49803,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1021
+        "line": 1022
       }
     ]
   },
@@ -49555,7 +49833,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1229
+        "line": 1230
       }
     ]
   },
@@ -49600,7 +49878,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 684
+        "line": 685
       }
     ]
   },
@@ -49767,7 +50045,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3503
+        "line": 3507
       }
     ]
   },
@@ -49889,7 +50167,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1081
+        "line": 1082
       }
     ]
   },
@@ -49904,7 +50182,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 265
+        "line": 266
       }
     ]
   },
@@ -49934,7 +50212,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 699
+        "line": 700
       }
     ]
   },
@@ -49964,7 +50242,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-model.ts",
-        "line": 296
+        "line": 301
       }
     ]
   },
@@ -50092,7 +50370,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-model.ts",
-        "line": 76
+        "line": 78
       }
     ]
   },
@@ -50126,7 +50404,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-store.ts",
-        "line": 161
+        "line": 164
       }
     ]
   },
@@ -50141,7 +50419,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3512
+        "line": 3516
       },
       {
         "file": "src/filesystem.ts",
@@ -50282,7 +50560,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 263
+        "line": 264
       }
     ]
   },
@@ -50351,7 +50629,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-model.ts",
-        "line": 216
+        "line": 220
       }
     ]
   },
@@ -50366,7 +50644,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/endpoint-registry.ts",
-        "line": 635
+        "line": 636
       }
     ]
   },
@@ -50426,7 +50704,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 262
+        "line": 263
       }
     ]
   },
@@ -50517,7 +50795,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1154
+        "line": 1155
       }
     ]
   },
@@ -50630,7 +50908,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 856
+        "line": 857
       }
     ]
   },
@@ -50690,7 +50968,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 269
+        "line": 270
       }
     ]
   },
@@ -50721,7 +50999,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1119
+        "line": 1120
       }
     ]
   },
@@ -50803,6 +51081,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/work-responsibility.ts",
         "line": 15
+      }
+    ]
+  },
+  {
+    "id": "guid-cecdcf8e36da06dd",
+    "kind": "prose",
+    "template": "Propose, read, list, preview, apply or reject bounded fictional evolution. Only witnessed designated scene turns with exact receipt and note revisions are evidence. Personal beliefs and one-sided attitudes may auto-apply, never as world facts. Core/lore changes need current controller or designated world GM approval; mixed changes need both. Preview fingerprint is required to apply. Retract an applied proposal through a new approved retract change; history is immutable. No model inference or real XP.",
+    "parts": [
+      "Propose, read, list, preview, apply or reject bounded fictional evolution. Only witnessed designated scene turns with exact receipt and note revisions are evidence. Personal beliefs and one-sided attitudes may auto-apply, never as world facts. Core/lore changes need current controller or designated world GM approval; mixed changes need both. Preview fingerprint is required to apply. Retract an applied proposal through a new approved retract change; history is immutable. No model inference or real XP."
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/roleplay-tools.ts",
+        "line": 148
       }
     ]
   },
@@ -50931,7 +51224,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 686
+        "line": 687
       }
     ]
   },
@@ -50976,7 +51269,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1029
+        "line": 1030
       }
     ]
   },
@@ -51021,7 +51314,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 112
+        "line": 113
       }
     ]
   },
@@ -51205,7 +51498,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3718
+        "line": 3722
       }
     ]
   },
@@ -51220,7 +51513,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-model.ts",
-        "line": 251
+        "line": 256
       }
     ]
   },
@@ -51307,35 +51600,35 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 648
+        "line": 649
       },
       {
         "file": "src/createServer.ts",
-        "line": 665
+        "line": 666
       },
       {
         "file": "src/createServer.ts",
-        "line": 680
+        "line": 681
       },
       {
         "file": "src/createServer.ts",
-        "line": 717
+        "line": 718
       },
       {
         "file": "src/createServer.ts",
-        "line": 896
+        "line": 897
       },
       {
         "file": "src/createServer.ts",
-        "line": 908
+        "line": 909
       },
       {
         "file": "src/createServer.ts",
-        "line": 1245
+        "line": 1246
       },
       {
         "file": "src/createServer.ts",
-        "line": 1261
+        "line": 1262
       }
     ]
   },
@@ -51441,15 +51734,15 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1532
+        "line": 1534
       },
       {
         "file": "src/createServer.ts",
-        "line": 1537
+        "line": 1539
       },
       {
         "file": "src/createServer.ts",
-        "line": 1538
+        "line": 1540
       }
     ]
   },
@@ -51579,7 +51872,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-service.ts",
-        "line": 184
+        "line": 283
       }
     ]
   },
@@ -51654,7 +51947,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 703
+        "line": 704
       }
     ]
   },
@@ -51684,7 +51977,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 980
+        "line": 981
       }
     ]
   },
@@ -51700,7 +51993,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3282
+        "line": 3286
       }
     ]
   },
@@ -51730,7 +52023,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 65
+        "line": 66
       }
     ]
   },
@@ -52005,7 +52298,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3295
+        "line": 3299
       }
     ]
   },
@@ -52088,7 +52381,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 798
+        "line": 799
       }
     ]
   },
@@ -52118,7 +52411,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-recovery.ts",
-        "line": 74
+        "line": 77
       }
     ]
   },
@@ -52148,7 +52441,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 667
+        "line": 668
       }
     ]
   },
@@ -52316,7 +52609,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 79
+        "line": 80
       }
     ]
   },
@@ -52331,7 +52624,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 850
+        "line": 851
       }
     ]
   },
@@ -52481,7 +52774,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 79
+        "line": 80
       }
     ]
   },
@@ -52511,7 +52804,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1135
+        "line": 1136
       }
     ]
   },
@@ -52586,7 +52879,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 215
+        "line": 216
       }
     ]
   },
@@ -52624,7 +52917,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 255
+        "line": 256
       }
     ]
   },
@@ -52654,11 +52947,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-store.ts",
-        "line": 119
+        "line": 122
       },
       {
         "file": "src/roleplay-store.ts",
-        "line": 145
+        "line": 148
       }
     ]
   },
@@ -52720,7 +53013,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3477
+        "line": 3481
       }
     ]
   },
@@ -52818,7 +53111,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 409
+        "line": 410
       }
     ]
   },
@@ -52878,7 +53171,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1014
+        "line": 1015
       }
     ]
   },
@@ -52939,7 +53232,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1246
+        "line": 1247
       }
     ]
   },
@@ -53014,7 +53307,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 215
+        "line": 216
       }
     ]
   },
@@ -53059,7 +53352,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 176
+        "line": 177
       }
     ]
   },
@@ -53074,7 +53367,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 742
+        "line": 743
       }
     ]
   },
@@ -53153,7 +53446,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 373
+        "line": 374
       }
     ]
   },
@@ -53259,11 +53552,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/endpoint-registry.ts",
-        "line": 745
+        "line": 746
       },
       {
         "file": "src/endpoint-registry.ts",
-        "line": 747
+        "line": 748
       }
     ]
   },
@@ -53339,7 +53632,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-model.ts",
-        "line": 64
+        "line": 66
       }
     ]
   },
@@ -53370,7 +53663,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 757
+        "line": 758
       }
     ]
   },
@@ -53430,7 +53723,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 835
+        "line": 836
       }
     ]
   },
@@ -53460,7 +53753,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 963
+        "line": 964
       }
     ]
   },
@@ -53490,7 +53783,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 691
+        "line": 692
       }
     ]
   },
@@ -53551,7 +53844,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1185
+        "line": 1186
       }
     ]
   },
@@ -53783,7 +54076,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 619
+        "line": 620
       }
     ]
   },
@@ -53813,7 +54106,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 255
+        "line": 256
       }
     ]
   },
@@ -53918,7 +54211,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 644
+        "line": 645
       }
     ]
   },
@@ -53998,7 +54291,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 303
+        "line": 304
       }
     ]
   },
@@ -54255,7 +54548,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-service.ts",
-        "line": 104
+        "line": 170
       }
     ]
   },
@@ -54270,7 +54563,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1257
+        "line": 1258
       }
     ]
   },
@@ -54366,7 +54659,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 232
+        "line": 233
       }
     ]
   },
@@ -54411,19 +54704,19 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1186
+        "line": 1187
       },
       {
         "file": "src/createServer.ts",
-        "line": 1200
+        "line": 1201
       },
       {
         "file": "src/createServer.ts",
-        "line": 1215
+        "line": 1216
       },
       {
         "file": "src/createServer.ts",
-        "line": 1231
+        "line": 1232
       }
     ]
   },
@@ -54438,7 +54731,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 76
+        "line": 77
       }
     ]
   },
@@ -54483,11 +54776,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-store.ts",
-        "line": 128
+        "line": 131
       },
       {
         "file": "src/roleplay-store.ts",
-        "line": 159
+        "line": 162
       }
     ]
   },
@@ -54533,7 +54826,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-model.ts",
-        "line": 111
+        "line": 113
       }
     ]
   },
@@ -54594,7 +54887,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 111
+        "line": 112
       }
     ]
   },
@@ -54639,7 +54932,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 142
+        "line": 143
       }
     ]
   },
@@ -54654,7 +54947,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 873
+        "line": 874
       }
     ]
   },
@@ -54720,6 +55013,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-de99b6f9b89e14fb",
+    "kind": "error",
+    "template": "Evolution lore revision changed; review and resubmit",
+    "parts": [
+      "Evolution lore revision changed; review and resubmit"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/roleplay-service.ts",
+        "line": 164
+      }
+    ]
+  },
+  {
     "id": "guid-dea7f9598e8284ab",
     "kind": "error",
     "template": "Section not found",
@@ -54762,7 +55070,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 323
+        "line": 324
       }
     ]
   },
@@ -54777,7 +55085,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 778
+        "line": 779
       }
     ]
   },
@@ -54792,7 +55100,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-service.ts",
-        "line": 183
+        "line": 281
       }
     ]
   },
@@ -54822,7 +55130,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 269
+        "line": 270
       }
     ]
   },
@@ -54871,7 +55179,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 98
+        "line": 99
       }
     ]
   },
@@ -54901,7 +55209,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3130
+        "line": 3134
       }
     ]
   },
@@ -55011,15 +55319,15 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-service.ts",
-        "line": 54
+        "line": 58
       },
       {
         "file": "src/roleplay-service.ts",
-        "line": 56
+        "line": 60
       },
       {
         "file": "src/roleplay-service.ts",
-        "line": 149
+        "line": 243
       }
     ]
   },
@@ -55079,7 +55387,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 176
+        "line": 177
       }
     ]
   },
@@ -55124,7 +55432,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-model.ts",
-        "line": 45
+        "line": 47
       }
     ]
   },
@@ -55322,7 +55630,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 363
+        "line": 364
       }
     ]
   },
@@ -55337,7 +55645,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 728
+        "line": 729
       }
     ]
   },
@@ -55357,6 +55665,25 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-e1119b396dc42f91",
+    "kind": "error",
+    "template": "Evolution proposal unavailable",
+    "parts": [
+      "Evolution proposal unavailable"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/roleplay-service.ts",
+        "line": 157
+      },
+      {
+        "file": "src/roleplay-service.ts",
+        "line": 230
+      }
+    ]
+  },
+  {
     "id": "guid-e11355222074e51e",
     "kind": "prose",
     "template": "Move or synchronize public organization contracts and global knowledge without leaking local/private state.",
@@ -55367,7 +55694,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 288
+        "line": 289
       }
     ]
   },
@@ -55397,7 +55724,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 738
+        "line": 739
       }
     ]
   },
@@ -55519,7 +55846,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-store.ts",
-        "line": 35
+        "line": 34
       }
     ]
   },
@@ -55595,7 +55922,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 234
+        "line": 235
       }
     ]
   },
@@ -55672,7 +55999,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-model.ts",
-        "line": 170
+        "line": 172
       }
     ]
   },
@@ -55717,7 +56044,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3716
+        "line": 3720
       }
     ]
   },
@@ -55733,6 +56060,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/llm-wiki-tools.ts",
         "line": 424
+      }
+    ]
+  },
+  {
+    "id": "guid-e2747762923e4582",
+    "kind": "error",
+    "template": "Explicit host administrators required for an initialized roleplay journal",
+    "parts": [
+      "Explicit host administrators required for an initialized roleplay journal"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/roleplay-store.ts",
+        "line": 121
       }
     ]
   },
@@ -55777,7 +56119,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1097
+        "line": 1098
       }
     ]
   },
@@ -55822,7 +56164,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 909
+        "line": 910
       }
     ]
   },
@@ -55943,7 +56285,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-model.ts",
-        "line": 199
+        "line": 202
       }
     ]
   },
@@ -56019,7 +56361,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-service.ts",
-        "line": 187
+        "line": 286
       }
     ]
   },
@@ -56081,7 +56423,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 137
+        "line": 138
       }
     ]
   },
@@ -56157,7 +56499,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 252
+        "line": 253
       }
     ]
   },
@@ -56437,7 +56779,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1264
+        "line": 1265
       }
     ]
   },
@@ -56504,7 +56846,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1346
+        "line": 1347
       }
     ]
   },
@@ -56549,7 +56891,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-store.ts",
-        "line": 76
+        "line": 73
       }
     ]
   },
@@ -56598,7 +56940,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 752
+        "line": 753
       }
     ]
   },
@@ -56696,7 +57038,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-model.ts",
-        "line": 109
+        "line": 111
       }
     ]
   },
@@ -56711,7 +57053,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1028
+        "line": 1029
       }
     ]
   },
@@ -56866,7 +57208,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1105
+        "line": 1106
       }
     ]
   },
@@ -56974,21 +57316,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/llm-wiki.ts",
         "line": 9076
-      }
-    ]
-  },
-  {
-    "id": "guid-e833ded8a55eb1b4",
-    "kind": "error",
-    "template": "Roleplay recovery audit must be outside the Vault",
-    "parts": [
-      "Roleplay recovery audit must be outside the Vault"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/roleplay-recovery.ts",
-        "line": 86
       }
     ]
   },
@@ -57148,7 +57475,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2994
+        "line": 2998
       }
     ]
   },
@@ -57163,7 +57490,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 910
+        "line": 911
       }
     ]
   },
@@ -57238,7 +57565,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2467
+        "line": 2469
       }
     ]
   },
@@ -57344,7 +57671,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 308
+        "line": 309
       }
     ]
   },
@@ -57615,7 +57942,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2837
+        "line": 2841
       }
     ]
   },
@@ -57690,7 +58017,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 110
+        "line": 111
       }
     ]
   },
@@ -57780,7 +58107,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 661
+        "line": 662
       }
     ]
   },
@@ -57871,7 +58198,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 870
+        "line": 871
       }
     ]
   },
@@ -57901,7 +58228,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 82
+        "line": 83
       }
     ]
   },
@@ -58010,7 +58337,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-service.ts",
-        "line": 47
+        "line": 51
       }
     ]
   },
@@ -58248,6 +58575,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-ed8aaf19dcee304c",
+    "kind": "error",
+    "template": "Use revision-checked evolution proposals for world core changes",
+    "parts": [
+      "Use revision-checked evolution proposals for world core changes"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/roleplay-model.ts",
+        "line": 194
+      }
+    ]
+  },
+  {
     "id": "guid-ed9116786b830430",
     "kind": "prose",
     "template": "self review attempt",
@@ -58292,7 +58634,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-service.ts",
-        "line": 65
+        "line": 90
+      },
+      {
+        "file": "src/roleplay-service.ts",
+        "line": 231
       }
     ]
   },
@@ -58416,7 +58762,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 733
+        "line": 734
       }
     ]
   },
@@ -58570,7 +58916,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-model.ts",
-        "line": 273
+        "line": 278
       }
     ]
   },
@@ -58585,7 +58931,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 105
+        "line": 106
       }
     ]
   },
@@ -58615,7 +58961,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-tools.ts",
-        "line": 133
+        "line": 135
       }
     ]
   },
@@ -58844,7 +59190,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 182
+        "line": 183
       }
     ]
   },
@@ -58889,7 +59235,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 133
+        "line": 134
       }
     ]
   },
@@ -58934,7 +59280,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 226
+        "line": 227
       }
     ]
   },
@@ -59069,7 +59415,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 247
+        "line": 248
       }
     ]
   },
@@ -59191,7 +59537,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 138
+        "line": 139
       }
     ]
   },
@@ -59266,7 +59612,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3237
+        "line": 3241
       }
     ]
   },
@@ -59311,7 +59657,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 756
+        "line": 757
       }
     ]
   },
@@ -59601,7 +59947,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 610
+        "line": 611
       }
     ]
   },
@@ -59616,7 +59962,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-model.ts",
-        "line": 263
+        "line": 268
       }
     ]
   },
@@ -59830,7 +60176,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 988
+        "line": 989
       }
     ]
   },
@@ -59891,7 +60237,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1013
+        "line": 1014
       }
     ]
   },
@@ -59956,6 +60302,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-f4595efd2b3e3e49",
+    "kind": "error",
+    "template": "Evolution lore changed during opt-in",
+    "parts": [
+      "Evolution lore changed during opt-in"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/roleplay-service.ts",
+        "line": 183
+      }
+    ]
+  },
+  {
     "id": "guid-f469de1b55185f0c",
     "kind": "error",
     "template": "toProperty must be one simple top-level Property name",
@@ -59996,7 +60357,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 305
+        "line": 306
       }
     ]
   },
@@ -60041,7 +60402,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3184
+        "line": 3188
       }
     ]
   },
@@ -60086,7 +60447,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-model.ts",
-        "line": 159
+        "line": 161
       }
     ]
   },
@@ -60131,7 +60492,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 156
+        "line": 157
       }
     ]
   },
@@ -60178,7 +60539,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-model.ts",
-        "line": 155
+        "line": 157
       }
     ]
   },
@@ -60255,7 +60616,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1173
+        "line": 1174
       }
     ]
   },
@@ -60315,7 +60676,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1084
+        "line": 1085
       }
     ]
   },
@@ -60330,7 +60691,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2647
+        "line": 2651
       }
     ]
   },
@@ -60409,7 +60770,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 922
+        "line": 923
       }
     ]
   },
@@ -60474,6 +60835,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-f637c1ea21ed2c16",
+    "kind": "prose",
+    "template": "Linked lore changed or became unavailable; it is excluded from current context until explicitly reviewed.",
+    "parts": [
+      "Linked lore changed or became unavailable; it is excluded from current context until explicitly reviewed."
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/roleplay-service.ts",
+        "line": 262
+      }
+    ]
+  },
+  {
     "id": "guid-f64c6353a6436d40",
     "kind": "prose",
     "template": "Reports contain metadata and a bounded reason only; the reported body remains untrusted data.",
@@ -60514,11 +60890,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-model.ts",
-        "line": 195
+        "line": 198
       },
       {
         "file": "src/roleplay-model.ts",
-        "line": 234
+        "line": 239
       }
     ]
   },
@@ -60610,6 +60986,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/work-service.ts",
         "line": 612
+      }
+    ]
+  },
+  {
+    "id": "guid-f6ff3da9fc1c3d53",
+    "kind": "error",
+    "template": "Invalid evolution changes",
+    "parts": [
+      "Invalid evolution changes"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/roleplay-service.ts",
+        "line": 130
       }
     ]
   },
@@ -60718,7 +61109,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 162
+        "line": 163
       }
     ]
   },
@@ -60733,7 +61124,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 807
+        "line": 808
       }
     ]
   },
@@ -60748,7 +61139,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 884
+        "line": 885
       }
     ]
   },
@@ -60763,7 +61154,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-tools.ts",
-        "line": 138
+        "line": 140
       }
     ]
   },
@@ -60823,7 +61214,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-model.ts",
-        "line": 306
+        "line": 311
       }
     ]
   },
@@ -60845,15 +61236,15 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
   {
     "id": "guid-f83ee70da08f1adb",
     "kind": "error",
-    "template": "Explicit host administrators required",
+    "template": "Explicit host administrators array required",
     "parts": [
-      "Explicit host administrators required"
+      "Explicit host administrators array required"
     ],
     "binding": "call",
     "sources": [
       {
         "file": "src/roleplay-store.ts",
-        "line": 63
+        "line": 59
       }
     ]
   },
@@ -60898,7 +61289,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/endpoint-registry.ts",
-        "line": 616
+        "line": 617
       }
     ]
   },
@@ -60913,7 +61304,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1012
+        "line": 1013
       }
     ]
   },
@@ -61071,7 +61462,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-tools.ts",
-        "line": 107
+        "line": 109
       }
     ]
   },
@@ -61242,7 +61633,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-service.ts",
-        "line": 78
+        "line": 104
       }
     ]
   },
@@ -61363,7 +61754,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1056
+        "line": 1057
       }
     ]
   },
@@ -61576,7 +61967,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1263
+        "line": 1264
       }
     ]
   },
@@ -61763,7 +62154,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 737
+        "line": 738
       }
     ]
   },
@@ -61861,7 +62252,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1166
+        "line": 1167
       }
     ]
   },
@@ -62306,6 +62697,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-fdf0fccf1a7df014",
+    "kind": "error",
+    "template": "Use revision-checked evolution proposals for character core changes",
+    "parts": [
+      "Use revision-checked evolution proposals for character core changes"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/roleplay-model.ts",
+        "line": 228
+      }
+    ]
+  },
+  {
     "id": "guid-fdfc2dbd662e299f",
     "kind": "prose",
     "template": "Short explanation for the transition",
@@ -62366,6 +62772,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-fe3120d849184726",
+    "kind": "error",
+    "template": "Invalid evolution sources",
+    "parts": [
+      "Invalid evolution sources"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/roleplay-service.ts",
+        "line": 75
+      }
+    ]
+  },
+  {
     "id": "guid-fe5374719162f510",
     "kind": "error",
     "template": "Memory cursor is outside the result window",
@@ -62391,7 +62812,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 285
+        "line": 286
       }
     ]
   },
@@ -62471,7 +62892,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 84
+        "line": 85
       }
     ]
   },
@@ -62515,8 +62936,8 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "binding": "call",
     "sources": [
       {
-        "file": "src/roleplay-store.ts",
-        "line": 62
+        "file": "src/roleplay-storage-host.ts",
+        "line": 57
       }
     ]
   },
@@ -62599,7 +63020,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       },
       {
         "file": "src/roleplay-recovery.ts",
-        "line": 95
+        "line": 99
       }
     ]
   },
@@ -62686,7 +63107,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 855
+        "line": 856
       }
     ]
   },
@@ -62701,7 +63122,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1124
+        "line": 1125
       }
     ]
   },
@@ -62731,7 +63152,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 276
+        "line": 277
       }
     ]
   },
@@ -62776,7 +63197,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 167
+        "line": 168
       }
     ]
   },
@@ -62791,7 +63212,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-model.ts",
-        "line": 308
+        "line": 313
       }
     ]
   },
@@ -62852,7 +63273,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 685
+        "line": 686
       }
     ]
   },

@@ -29,7 +29,7 @@ describe('bounded roleplay schema sidecar', () => {
     expect(effect.properties.to.anyOf.some((s: any) => new RegExp(s.pattern).test('character:iris'))).toBe(true);
     expect(effect.allOf).toBeDefined();
   });
-  test('exposes exactly the eight dynamic endpoint tools and six mutating tools', () => {
+  test('exposes nine dynamic endpoint tools and seven mutating tools', () => {
     expect(getRoleplayTools().map(tool => tool.name)).toEqual([
       'manage_roleplay_world',
       'manage_roleplay_character',
@@ -39,6 +39,7 @@ describe('bounded roleplay schema sidecar', () => {
       'resolve_roleplay_action',
       'read_roleplay_history',
       'correct_roleplay_turn',
+      'manage_roleplay_evolution',
     ]);
     expect([...ROLEPLAY_MUTATING_TOOLS]).toEqual([
       'manage_roleplay_world',
@@ -47,6 +48,7 @@ describe('bounded roleplay schema sidecar', () => {
       'submit_roleplay_action',
       'resolve_roleplay_action',
       'correct_roleplay_turn',
+      'manage_roleplay_evolution',
     ]);
   });
 

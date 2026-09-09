@@ -4,6 +4,7 @@ import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { RoleplayStore } from './roleplay-store.js';
 import { roleplayHash, roleplayRevision } from './roleplay-model.js';
 import { randomUUID } from 'node:crypto';
@@ -79,3 +80,50 @@ it('does not auto-unlock an old recovery gate and suspends writer admission', as
   await expect(RoleplayStore.open(f.options)).rejects.toThrow(/recovery/i);
   expect(await readFile(gate, 'utf8')).toBe(original);
 });
+
+it('recovers a genuinely killed writer after its durable intent but before canonical rename', async () => {
+  const f = await fixture(); await f.store.close();
+  const code = `
+    import fs from 'node:fs/promises';
+    import { syncBuiltinESMExports } from 'node:module';
+    const original = fs.rename;
+    fs.rename = async (from, to) => {
+      if (String(to).endsWith('0000000001.md')) {
+        process.stdout.write('INTENT_READY\\n');
+        setInterval(() => {}, 1000);
+        await new Promise(() => {});
+      }
+      return original(from, to);
+    };
+    syncBuiltinESMExports();
+    const { RoleplayStore } = await import(${JSON.stringify(pathToFileURL(join(process.cwd(), 'src/roleplay-store.ts')).href)});
+    const { roleplayRevision } = await import(${JSON.stringify(pathToFileURL(join(process.cwd(), 'src/roleplay-model.ts')).href)});
+    const store = await RoleplayStore.open(JSON.parse(process.argv[1]));
+    await store.transact({ op: 'initialize', actor: 'host', requestId: 'killed-child',
+      expectedRevision: roleplayRevision(await store.snapshot()), data: { title: 'Test archive', places: { hall: [] } } });
+  `;
+  const child = spawn(process.execPath, ['--import', 'tsx', '--input-type=module', '-e', code, JSON.stringify(f.options)], { stdio: ['ignore', 'pipe', 'pipe'] });
+  let stderr = ''; child.stderr.on('data', chunk => { stderr += chunk; });
+  const exited = once(child, 'exit');
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error(`child intent timeout: ${stderr}`)), 10000);
+      let output = '';
+      child.stdout.on('data', chunk => { output += chunk; if (output.includes('INTENT_READY')) { clearTimeout(timeout); resolve(); } });
+      child.once('exit', () => { clearTimeout(timeout); reject(new Error(`child exited before intent: ${stderr}`)); });
+      child.once('error', error => { clearTimeout(timeout); reject(error); });
+    });
+    child.kill('SIGKILL'); await exited;
+    const inspection = await inspectRoleplayRecovery(f.options);
+    expect(inspection.lock.pid).toBe(child.pid);
+    expect(inspection.lock.hostId).toBe(inspection.hostId);
+    expect(inspection.checkpoint?.pending?.sequence).toBe(1);
+    expect(inspection.turnFiles).toBe(0);
+    await recoverRoleplayWriter(f.options, { expectedFingerprint: inspection.fingerprint, reason: 'test child killed at canonical rename boundary' });
+    const restarted = await RoleplayStore.open(f.options);
+    try { expect((await restarted.snapshot()).title).toBe('Test archive'); expect((await restarted.snapshot()).sequence).toBe(1); }
+    finally { await restarted.close(); }
+  } finally {
+    if (child.exitCode === null && child.signalCode === null) { child.kill('SIGKILL'); await exited; }
+  }
+}, 20000);

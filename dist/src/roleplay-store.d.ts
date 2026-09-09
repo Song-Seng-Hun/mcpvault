@@ -46,6 +46,7 @@ export declare function canonicalTurnNames(dir: string): Promise<string[]>;
  * Host checkpoint is integrity metadata, not a disposable index or a secret-vault claim. */
 export declare class RoleplayStore {
     readonly options: RoleplayStoreOptions;
+    private readonly hostId;
     private lock;
     private readonly nonce;
     private queue;

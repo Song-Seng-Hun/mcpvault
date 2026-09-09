@@ -350,6 +350,7 @@ const CAPABILITY_FOR_TOOL: Partial<Record<string, ScopeCapability>> = {
   manage_roleplay_world: 'chat', manage_roleplay_character: 'chat', manage_roleplay_scene: 'chat',
   revise_notice: 'write', preview_notice: 'write',
   submit_roleplay_action: 'chat', resolve_roleplay_action: 'chat', correct_roleplay_turn: 'chat',
+  manage_roleplay_evolution: 'chat', preview_roleplay_evolution: 'chat',
   claim_work_task: 'task',
   handoff_work_task: 'task',
   review_work_task: 'task',
@@ -1352,6 +1353,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
       if (toolName === 'manage_work_group' && (rawArgs.op === undefined || rawArgs.op === 'read')) toolName = 'read_work_group';
       if (['manage_roleplay_world', 'manage_roleplay_character', 'manage_roleplay_scene'].includes(toolName) && (!rawArgs.op || rawArgs.op === 'read')) toolName = toolName.replace('manage_', 'read_');
       if (toolName === 'correct_roleplay_turn' && rawArgs.op === 'preview') toolName = 'preview_roleplay_correction';
+      if (toolName === 'manage_roleplay_evolution' && ['read', 'list', 'preview'].includes(String(rawArgs.op))) toolName = rawArgs.op === 'preview' ? 'preview_roleplay_evolution' : 'read_roleplay_evolution';
       if (toolName === 'manage_community_participation' && (rawArgs.op === undefined || rawArgs.op === 'read')) toolName = 'read_community_participation';
       if (readOnly && MUTATING_TOOLS.has(toolName)) {
         throw guidanceError(new Error(`Endpoint '${toolName}' is disabled because MCPVault is running in read-only mode.`), 'guid-189f788b35f642fb');
@@ -2520,8 +2522,10 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         case 'manage_roleplay_scene': case 'read_roleplay_scene':
         case 'read_roleplay_context': case 'read_roleplay_history':
         case 'submit_roleplay_action': case 'resolve_roleplay_action':
+        case 'manage_roleplay_evolution': case 'read_roleplay_evolution': case 'preview_roleplay_evolution':
         case 'correct_roleplay_turn': case 'preview_roleplay_correction': {
           const endpoints: Record<string, string> = { manage_roleplay_world: 'world', read_roleplay_world: 'world', manage_roleplay_character: 'character', read_roleplay_character: 'character', manage_roleplay_scene: 'scene', read_roleplay_scene: 'scene', read_roleplay_context: 'context', read_roleplay_history: 'history', submit_roleplay_action: 'action', resolve_roleplay_action: 'resolve', correct_roleplay_turn: 'correct', preview_roleplay_correction: 'correct' };
+          Object.assign(endpoints, { manage_roleplay_evolution: 'evolution', read_roleplay_evolution: 'evolution', preview_roleplay_evolution: 'evolution' });
           const service = new RoleplayService(fileSystem, scopeAccess, references, options.roleplay, {
             assertActor: async () => { await revalidateActor(); }, retrieval,
             changed: path => queueReadModelChange(path, 'upsert'),

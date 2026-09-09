@@ -22,6 +22,8 @@ export declare class RoleplayService {
     private visible;
     private current;
     private assertRoom;
+    private captureGuards;
+    private validateEvolutionSources;
     execute(endpoint: string, params: Record<string, any>, principal?: ScopePrincipal): Promise<Record<string, any>>;
     private executeCoordinated;
     private read;

@@ -1,3 +1,4 @@
+import { type RoleplayEvolution } from './roleplay-evolution-model.js';
 export interface RoleplayPolicy {
     administrators: string[];
     maxCharacters?: number;
@@ -96,6 +97,7 @@ export interface Pending {
     content: string;
 }
 export interface RoleplayState {
+    evolution?: RoleplayEvolution;
     sequence: number;
     title?: string;
     definition?: string;

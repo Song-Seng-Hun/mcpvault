@@ -10,8 +10,10 @@ import { posix } from 'node:path';
 import { characterItems, worldItems, textRows } from './roleplay-projections.js';
 import { endpointIdForTool } from './endpoint-registry.js';
 import { readChatReplyTarget } from './chat.js';
+import { activeEvolution, evolutionPreview } from './roleplay-evolution-model.js';
+import { currentLore, evolutionRows, evolutionProposalRows } from './roleplay-evolution-projections.js';
 const fields = {
-    initialize: ['title', 'places'], settings: ['title', 'definition', 'lore', 'places'], delegates: ['accounts'], item: ['id', 'owner', 'quantity'], rule: ['id', 'conditions', 'effects', 'questId'],
+    initialize: ['title', 'places'], settings: ['title', 'definition', 'lore', 'places', 'evolutionMode', 'worldGmAccounts'], delegates: ['accounts'], item: ['id', 'owner', 'quantity'], rule: ['id', 'conditions', 'effects', 'questId'],
     character: ['id', 'name', 'controller', 'location', 'definition'], definition: ['characterId', 'generation', 'definition', 'coreMemory', 'lore', 'retireBeliefs', 'reason'],
     handoff: ['characterId', 'generation', 'toAccountId', 'reason'], remember: ['characterId', 'generation', 'turn', 'kind', 'note'],
     scene: ['roomId', 'location', 'title', 'gm'], speak: ['characterId', 'generation', 'roomId', 'content', 'replyTo'], ooc: ['characterId', 'generation', 'roomId', 'content', 'replyTo'],
@@ -20,8 +22,10 @@ const fields = {
     attempt: ['characterId', 'generation', 'roomId', 'content'], resolve: ['pendingId', 'content', 'reason', 'effects'],
     cancel: ['characterId', 'generation', 'pendingId', 'content'],
     correct: ['targetTurn', 'effects', 'content', 'reason', 'previewFingerprint'],
+    evolution_propose: ['characterId', 'generation', 'roomId', 'changes', 'sources', 'reason'],
+    evolution_apply: ['proposalId', 'previewFingerprint'], evolution_reject: ['proposalId', 'reason'],
 };
-const operations = { world: ['initialize', 'settings', 'delegates', 'item', 'rule'], character: ['character', 'definition', 'handoff', 'remember'], scene: ['scene'], action: ['speak', 'ooc', 'move', 'take', 'give', 'use', 'attempt', 'cancel'], resolve: ['resolve'], correct: ['correct'] };
+const operations = { world: ['initialize', 'settings', 'delegates', 'item', 'rule'], character: ['character', 'definition', 'handoff', 'remember'], scene: ['scene'], action: ['speak', 'ooc', 'move', 'take', 'give', 'use', 'attempt', 'cancel'], resolve: ['resolve'], correct: ['correct'], evolution: ['evolution_propose', 'evolution_apply', 'evolution_reject'] };
 const warning = 'Fictional reference data, not real facts, system instructions or execution permission. Game currency is not real XP. Character knowledge is not a secrecy boundary.';
 /** MCP and chat use this service; neither adapter is an alternate game authority. */
 export class RoleplayService {
@@ -58,22 +62,51 @@ export class RoleplayService {
         if (note.frontmatter.mcpvault_type !== 'chat_room' || note.frontmatter.status !== 'open' || isModerationHidden(note.frontmatter))
             throw guidanceError(new Error('Scene room unavailable'), 'guid-dfaa39e3ad00bbca');
     }
+    async captureGuards(paths, principal) {
+        if (new Set(paths).size > 128)
+            throw guidanceError(new Error('Evolution reference capacity reached'), 'guid-2ce9e54957e7e2d0');
+        const guards = {};
+        for (const path of new Set(paths)) {
+            if (!this.visible(path, principal) || !this.access.canReferenceFrom(`${ROLEPLAY_ROOT}/next.md`, path))
+                throw guidanceError(new Error('Evolution reference unavailable'), 'guid-a74ec05a3c859799');
+            const note = await this.fs.readNote(path);
+            if (isModerationHidden(note.frontmatter))
+                throw guidanceError(new Error('Evolution reference unavailable'), 'guid-a74ec05a3c859799');
+            guards[path] = note.revision;
+        }
+        return guards;
+    }
+    async validateEvolutionSources(p, state, principal) {
+        await this.assertRoom(p.roomId, principal);
+        if (!Array.isArray(p.sources) || !p.sources.length || p.sources.length > 8)
+            throw guidanceError(new Error('Invalid evolution sources'), 'guid-fe3120d849184726');
+        for (const source of p.sources) {
+            const receipt = Object.values(state.requests).find(r => r.receipt.id === source.turnId)?.receipt;
+            if (!receipt || receipt.roomId !== p.roomId || receipt.revision !== source.revision)
+                throw guidanceError(new Error('Evolution source unavailable'), 'guid-6b282a83057732d5');
+            const path = `${ROLEPLAY_ROOT}/${String(receipt.sequence).padStart(10, '0')}.md`;
+            if (!this.visible(path, principal) || await this.fs.readNoteRevision(path) !== source.noteRevision)
+                throw guidanceError(new Error('Evolution source revision changed'), 'guid-a697afe16be54ad7');
+        }
+    }
     async execute(endpoint, params, principal) {
         return coordinate(() => this.executeCoordinated(endpoint, params, principal));
     }
     async executeCoordinated(endpoint, params, principal) {
         if (!this.store && endpoint === 'world' && (!params.op || params.op === 'read'))
             return { enabled: false, reason: guidanceText('guid-7072f7a56e0ad49f', 'Host-provisioned roleplay world is not configured'), warning };
-        const read = ['context', 'history'].includes(endpoint) || (!params.op || params.op === 'read') && ['world', 'character', 'scene'].includes(endpoint);
+        const read = ['context', 'history'].includes(endpoint) || (!params.op || params.op === 'read') && ['world', 'character', 'scene'].includes(endpoint) || endpoint === 'evolution' && ['read', 'list', 'preview'].includes(params.op);
         if (read)
             return this.read(endpoint, params, principal);
         if (!principal || !principal.capabilities?.includes('chat'))
             throw guidanceError(new Error('Login and chat capability required'), 'guid-edb25890c8cf32d2');
         await this.options.assertActor(principal);
-        const op = endpoint === 'resolve' ? 'resolve' : endpoint === 'correct' ? 'correct' : params.op;
+        const op = endpoint === 'resolve' ? 'resolve' : endpoint === 'correct' ? 'correct' : endpoint === 'evolution' ? `evolution_${params.op}` : params.op;
         if (!operations[endpoint]?.includes(op))
             throw guidanceError(new Error('Invalid roleplay operation for this endpoint'), 'guid-4f8b6a74c237b46c');
-        const { state } = await this.current(principal);
+        const { state, records: currentRecords } = await this.current(principal);
+        if (!this.store.options.policy.administrators.length)
+            throw guidanceError(new Error('Roleplay setup required: host administrators are not configured'), 'guid-20753271c655756d');
         if (endpoint === 'correct' && params.op === 'preview') {
             if (!this.store.options.policy.administrators.includes(principal.accountId))
                 throw guidanceError(new Error('Host world administrator required'), 'guid-0037cc09937b784e');
@@ -86,6 +119,9 @@ export class RoleplayService {
         if (endpoint === 'correct' && params.op !== 'apply')
             throw guidanceError(new Error('Correction requires preview then apply'), 'guid-f992450dae841bab');
         const data = Object.fromEntries(fields[op].filter(key => params[key] !== undefined).map(key => [key, params[key]]));
+        const originalCommand = currentRecords.find(r => r.event.command.actor === principal.accountId && r.event.command.requestId === params.requestId)?.event.command;
+        if (originalCommand?.data.loreGuards)
+            data.loreGuards = structuredClone(originalCommand.data.loreGuards);
         // Credentials, arbitrary caller actor fields and protocol controls never enter canonical records.
         const command = { op, actor: principal.accountId, requestId: roleplayId(params.requestId, 'requestId'), expectedRevision: String(params.expectedRevision || ''), data };
         if (op === 'rule' && data.questId) {
@@ -111,6 +147,53 @@ export class RoleplayService {
                 }
             }
             try {
+                if (op === 'evolution_propose') {
+                    await this.validateEvolutionSources(data, current, principal);
+                    if (!Array.isArray(data.changes) || data.changes.length < 1 || data.changes.length > 5)
+                        throw guidanceError(new Error('Invalid evolution changes'), 'guid-f6ff3da9fc1c3d53');
+                    const referencePaths = currentLore(current, () => true, data.characterId);
+                    referencePaths.push(...await this.references.validateAndNormalize(undefined, `${ROLEPLAY_ROOT}/next.md`, principal, String(data.reason ?? ''), { strictBodyLinks: true }));
+                    for (const change of data.changes) {
+                        if (current.characters[change.target])
+                            referencePaths.push(...currentLore(current, () => true, change.target));
+                        if (change.kind === 'retract') {
+                            const target = current.evolution?.proposals[change.target];
+                            if (!target)
+                                throw guidanceError(new Error('Evolution target unavailable'), 'guid-b129bd46351cc211');
+                            await this.validateEvolutionSources(target, current, principal);
+                            referencePaths.push(...Object.keys(target.loreGuards));
+                        }
+                        if (change.text)
+                            referencePaths.push(...await this.references.validateAndNormalize(undefined, `${ROLEPLAY_ROOT}/next.md`, principal, change.text, { strictBodyLinks: true }));
+                        if (change.lore) {
+                            change.lore = await this.references.validateAndNormalize(change.lore, `${ROLEPLAY_ROOT}/next.md`, principal);
+                            referencePaths.push(...change.lore);
+                        }
+                    }
+                    const guards = await this.captureGuards(originalCommand ? Object.keys(data.loreGuards ?? {}) : referencePaths, principal);
+                    if (!originalCommand) {
+                        if (data.loreGuards && roleplayHash(data.loreGuards) !== roleplayHash(guards))
+                            throw guidanceError(new Error('Evolution lore changed during proposal'), 'guid-4ffac96ea4cee858');
+                        data.loreGuards = guards;
+                    }
+                    const distinct = new Set([...Object.values(current.evolution?.proposals ?? {}).flatMap(p => Object.keys(p.loreGuards)), ...Object.keys(guards)]);
+                    if (distinct.size > 128)
+                        throw guidanceError(new Error('Evolution reference capacity reached'), 'guid-2ce9e54957e7e2d0');
+                }
+                if (['evolution_apply', 'evolution_reject'].includes(op)) {
+                    const p = current.evolution?.proposals[data.proposalId];
+                    if (!p)
+                        throw guidanceError(new Error('Evolution proposal unavailable'), 'guid-e1119b396dc42f91');
+                    await this.validateEvolutionSources(p, current, principal);
+                    for (const change of p.changes)
+                        if (change.kind === 'retract') {
+                            const target = current.evolution.proposals[change.target];
+                            await this.validateEvolutionSources(target, current, principal);
+                            await this.captureGuards(Object.keys(target.loreGuards), principal);
+                        }
+                    if (op === 'evolution_apply' && roleplayHash(await this.captureGuards(Object.keys(p.loreGuards), principal)) !== roleplayHash(p.loreGuards))
+                        throw guidanceError(new Error('Evolution lore revision changed; review and resubmit'), 'guid-de99b6f9b89e14fb');
+                }
                 for (const key of ['content', 'definition', 'coreMemory', 'note', 'title', 'reason']) {
                     if (data[key])
                         await this.references.validateAndNormalize(undefined, `${ROLEPLAY_ROOT}/next.md`, principal, String(data[key]), { strictBodyLinks: true });
@@ -132,6 +215,12 @@ export class RoleplayService {
                     if (data.lore.some((path) => posix.normalize(path) !== path || !this.visible(path, principal) || !this.access.canReferenceFrom(`${ROLEPLAY_ROOT}/next.md`, path)))
                         throw guidanceError(new Error('Lore unavailable'), 'guid-05a1273361e00690');
                 }
+                if (op === 'settings' && !current.evolution && (data.evolutionMode !== undefined || data.worldGmAccounts !== undefined)) {
+                    const guards = await this.captureGuards([...(data.lore ?? current.lore ?? []), ...Object.values(current.characters).flatMap(c => c.lore)], principal);
+                    if (data.loreGuards && roleplayHash(data.loreGuards) !== roleplayHash(guards))
+                        throw guidanceError(new Error('Evolution lore changed during opt-in'), 'guid-f4595efd2b3e3e49');
+                    data.loreGuards = guards;
+                }
             }
             catch {
                 throw guidanceError(new Error('A roleplay reference is unavailable or cannot be shared in this Community scope'), 'guid-75de11b62e6c5d55');
@@ -151,21 +240,48 @@ export class RoleplayService {
         const roomMetadata = await this.fs.readNoteMetadata(roomPaths, p => this.visible(p, principal), { fresh: true });
         const readableRooms = new Set(roomMetadata.filter(n => n.frontmatter.mcpvault_type === 'chat_room' && !isModerationHidden(n.frontmatter)).map(n => String(n.frontmatter.room_id)));
         const roomFingerprint = roleplayHash(roomMetadata.map(n => [n.path, n.revision]));
-        const records = allRecords.filter(r => !r.event.receipt.roomId || readableRooms.has(r.event.receipt.roomId));
+        const records = allRecords.filter(r => this.visible(r.path, principal) && (!r.event.receipt.roomId || readableRooms.has(r.event.receipt.roomId)));
         const availableTurns = new Set(records.map(r => r.event.receipt.id));
         let items = [];
         const loreRevisions = new Map();
+        const evolutionPaths = [...new Set([...Object.keys(state.evolution?.loreGuards ?? {}), ...Object.values(state.evolution?.proposals ?? {}).flatMap(p => Object.keys(p.loreGuards))])];
+        const evolutionMetadata = await this.fs.readNoteMetadata(evolutionPaths, p => this.visible(p, principal), { fresh: true });
+        const evolutionFingerprint = roleplayHash(evolutionMetadata.map(n => [n.path, n.revision]));
+        const visibleReferences = new Map(evolutionMetadata.filter(n => !isModerationHidden(n.frontmatter)).map(n => [n.path, n.revision]));
+        const loreValid = (p) => Object.entries(p.loreGuards).every(([path, rev]) => visibleReferences.get(path) === rev);
+        const basisVisible = (p) => readableRooms.has(p.roomId) && p.sources.every(source => availableTurns.has(source.turnId)) && Object.keys(p.loreGuards).every(path => visibleReferences.has(path));
+        const proposalVisible = (p) => basisVisible(p) && p.changes.every(change => change.kind !== 'retract' || !!state.evolution?.proposals[change.target] && basisVisible(state.evolution.proposals[change.target]));
+        const usable = (p) => proposalVisible(p) && loreValid(p);
         const envelope = { revision, fictionDomain: 'roleplay', warning };
         if (endpoint === 'world') {
             envelope.enabled = true;
             envelope.title = state.title ?? null;
-            items = worldItems(state).filter(item => !params.id || item.id === params.id || item.ruleId === params.id);
+            envelope.ready = !!state.title && !!this.store.options.policy.administrators.length;
+            if (!envelope.ready)
+                envelope.setupRequired = this.store.options.policy.administrators.length ? ['worldInitialization'] : ['administrators', 'worldInitialization'];
+            envelope.evolutionMode = state.evolution?.mode ?? 'fixed';
+            items = [...evolutionRows(state, usable, 'world'), ...worldItems(state).map(row => state.evolution && row.kind === 'worldDefinition' ? { ...row, kind: 'initialWorldDefinition' } : row)].filter(item => !params.id || item.id === params.id || item.ruleId === params.id);
         }
         else if (endpoint === 'scene') {
             items = Object.values(state.scenes).filter(s => readableRooms.has(s.roomId) && (!params.roomId || s.roomId === params.roomId));
         }
         else if (endpoint === 'character') {
-            items = Object.values(state.characters).filter(c => !params.characterId || c.id === params.characterId).flatMap(c => characterItems(c, state, availableTurns));
+            items = Object.values(state.characters).filter(c => !params.characterId || c.id === params.characterId).flatMap(c => [...evolutionRows(state, usable, c.id), ...characterItems(c, state, availableTurns).map(row => state.evolution && ['definition', 'coreMemory'].includes(row.kind) ? { ...row, kind: row.kind === 'definition' ? 'initialDefinition' : 'initialCoreMemory' } : row)]);
+        }
+        else if (endpoint === 'evolution') {
+            envelope.evolutionMode = state.evolution?.mode ?? 'fixed';
+            const proposals = Object.values(state.evolution?.proposals ?? {}).filter(proposalVisible).filter(p => (!params.proposalId || p.id === params.proposalId) && (!params.characterId || p.changes.some(c => c.target === params.characterId)));
+            if (params.op === 'preview') {
+                const p = proposals.find(p => p.id === params.proposalId);
+                if (!p)
+                    throw guidanceError(new Error('Evolution proposal unavailable'), 'guid-e1119b396dc42f91');
+                if (!principal || !principal.capabilities?.includes('chat'))
+                    throw guidanceError(new Error('Login and chat capability required'), 'guid-edb25890c8cf32d2');
+                await this.validateEvolutionSources(p, state, principal);
+                envelope.preview = evolutionPreview(state, p.id);
+                envelope.preview.basisValid &&= loreValid(p);
+            }
+            items = proposals.reverse().flatMap(p => evolutionProposalRows(state, p, loreValid(p)));
         }
         else if (endpoint === 'history') {
             items = records.filter(r => (!params.turnId || r.event.receipt.id === params.turnId) && (!params.roomId || r.event.receipt.roomId === params.roomId) && (!params.characterId || r.event.receipt.characterId === params.characterId))
@@ -186,18 +302,23 @@ export class RoleplayService {
                 kind: 'registered_action', ruleId: rule.id, conditionsMatch: roleplayRuleConditionsMatch(state, rule, c.id),
                 nextAction: { endpointId: 'roleplay.action', arguments: { op: 'use', ruleId: rule.id, characterId: c.id, generation: c.generation, ...(params.roomId && { roomId: params.roomId }) }, requires: ['roomId', 'expectedRevision', 'requestId', 'content'] },
             })).sort((a, b) => Number(b.conditionsMatch) - Number(a.conditionsMatch)).slice(0, 5);
-            const characterRows = characterItems(c, state, availableTurns);
-            const backgroundKinds = new Set(['definition', 'belief']);
+            const characterRows = characterItems(c, state, availableTurns).map(row => state.evolution && ['definition', 'coreMemory'].includes(row.kind) ? { ...row, kind: row.kind === 'definition' ? 'initialDefinition' : 'initialCoreMemory' } : row);
+            const backgroundKinds = new Set(['definition', 'initialDefinition', 'initialCoreMemory', 'belief']);
             const currentRows = characterRows.filter(row => !backgroundKinds.has(row.kind));
             currentRows.sort((a, b) => Number(!['character', 'coreMemory'].includes(a.kind)) - Number(!['character', 'coreMemory'].includes(b.kind)));
-            items = [...currentRows, ...ruleHints,
+            items = [...evolutionRows(state, usable, c.id), ...currentRows, ...ruleHints,
                 ...Object.values(state.pending).filter(p => p.characterId === c.id && readableRooms.has(p.roomId)).map(p => ({ kind: 'pending', ...p })),
                 ...records.filter(r => r.event.receipt.witnesses.includes(c.id) || known.has(r.event.receipt.id)).slice(-20).reverse().map(r => ({ kind: 'event', id: r.event.receipt.id, content: r.event.receipt.content, path: r.path, revision: r.revision })),
-                ...characterRows.filter(row => backgroundKinds.has(row.kind)), ...textRows('worldDefinition', state.definition ?? '')];
-            if (this.options.retrieval && (c.lore.length || state.lore?.length)) {
+                ...characterRows.filter(row => backgroundKinds.has(row.kind)), ...textRows(state.evolution ? 'initialWorldDefinition' : 'worldDefinition', state.definition ?? '')];
+            const effectiveLore = currentLore(state, usable, c.id);
+            const expectedLore = { ...state.evolution?.loreGuards, ...Object.fromEntries(activeEvolution(state, usable).flatMap(p => p.changes.some(change => change.kind.endsWith('_lore')) ? Object.entries(p.loreGuards) : [])) };
+            const safeLore = effectiveLore.filter(path => !state.evolution || expectedLore[path] === visibleReferences.get(path) && visibleReferences.has(path));
+            if (state.evolution && effectiveLore.some(path => !safeLore.includes(path)))
+                items.push({ kind: 'loreNeedsReview', message: guidanceText('guid-f637c1ea21ed2c16', 'Linked lore changed or became unavailable; it is excluded from current context until explicitly reviewed.') });
+            if (this.options.retrieval && safeLore.length) {
                 const query = roleplayText(params.query ?? c.location, 500);
                 // Only explicitly linked lore is available to this character. Similarity does not teach secrets.
-                const paths = new Set([...c.lore, ...(state.lore ?? [])].filter(path => this.visible(path, principal)));
+                const paths = new Set(safeLore.filter(path => this.visible(path, principal)));
                 const outcome = await this.options.retrieval.retrieve({ query, ...(principal && { principal }), limit: 8, maxChars: 4000, includeRevisions: true, fictionDomain: 'only', canAccessPath: path => paths.has(path), semantic: false });
                 for (const hit of outcome.results.slice(0, 8)) {
                     const path = hit.physicalPath || hit.p;
@@ -217,16 +338,21 @@ export class RoleplayService {
                 }
             }
             envelope.nextAction = { endpointId: 'roleplay.action', requires: ['characterId', 'generation', 'roomId', 'expectedRevision', 'requestId', 'content'], hint: guidanceText('guid-dee8d8908e987515', 'Check registered_action hints and use a matching rule before submitting an unregistered attempt to the GM. Condition matches are advisory, not guaranteed success. For more rules, read roleplay.world (op: read) with its cursor.') };
+            if (state.evolution?.mode === 'evolving')
+                envelope.evolutionAction = { endpointId: 'roleplay.evolution', op: 'propose', hint: guidanceText('guid-8271b17da92569fd', 'After a relevant witnessed scene, optionally propose 1..5 typed changes using exact history turn and note revisions. Beliefs and one-sided attitudes are subjective; core changes require explicit approval.') };
         }
         else
             throw guidanceError(new Error('Unknown roleplay read'), 'guid-d1a2e5dcf1f461fe');
-        const result = page(items, envelope, roleplayHash({ revision, endpoint, characterId: params.characterId, roomId: params.roomId, turnId: params.turnId, id: params.id, query: params.query, roomFingerprint, loreRevisions: [...loreRevisions] }), params, `roleplay.${endpoint}`);
+        const result = page(items, envelope, roleplayHash({ revision, endpoint, op: params.op, proposalId: params.proposalId, characterId: params.characterId, roomId: params.roomId, turnId: params.turnId, id: params.id, query: params.query, roomFingerprint, evolutionFingerprint, loreRevisions: [...loreRevisions] }), params, `roleplay.${endpoint}`);
         if (principal)
             await this.options.assertActor(principal);
         for (const [path, expected] of loreRevisions)
             if (!this.visible(path, principal) || await this.fs.readNoteRevision(path) !== expected)
                 throw guidanceError(new Error('Lore changed or became unavailable; refresh context'), 'guid-e3a5febe0be39d9b');
         const finalRooms = await this.fs.readNoteMetadata(roomPaths, p => this.visible(p, principal), { fresh: true });
+        const finalEvolution = await this.fs.readNoteMetadata(evolutionPaths, p => this.visible(p, principal), { fresh: true });
+        if (roleplayHash(finalEvolution.map(n => [n.path, n.revision])) !== evolutionFingerprint)
+            throw guidanceError(new Error('Evolution reference visibility changed; refresh'), 'guid-212b5867b16f9ed0');
         if (roleplayHash(finalRooms.map(n => [n.path, n.revision])) !== roomFingerprint)
             throw guidanceError(new Error('Room visibility changed; refresh context'), 'guid-07374536cef1606a');
         if (roleplayRevision(await this.store.snapshot()) !== revision)

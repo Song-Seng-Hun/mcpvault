@@ -8,15 +8,15 @@ Approved execution plan, 2026-09-09. Work in the existing checkout and user-fork
 - [x] Fast-forward the previously verified skill implementation into local main.
 - [x] Add private host CLI configuration; verify and deploy skills to the actual NAS
   before implementing world evolution. Keep real automatic evaluators unregistered.
-- [ ] Add optional world evolution over the existing canonical turn journal:
+- [x] Add optional world evolution over the existing canonical turn journal:
   initial definition, append-only changes, current projection. No new model runner.
-- [ ] Implement bounded proposals, conservative automatic admission, revision-bound
+- [x] Implement bounded proposals, conservative automatic admission, revision-bound
   previews and authenticated approval/rejection. World changes need explicitly
   designated world GMs; character core changes need its current controller;
   mixed changes need both. No approver means pending.
-- [ ] Connect current context and audit history, preserve fiction/private filtering,
+- [x] Connect current context and audit history, preserve fiction/private filtering,
   old-world replay hashes, and disable settings/definition bypasses in evolving mode.
-- [ ] Qualify UNC canonical storage with local host checkpoints and safe cross-host
+- [x] Qualify UNC canonical storage with local host checkpoints and safe cross-host
   lock/recovery identity. Fault injection only on isolated NAS fixtures.
 - [ ] Focused tests, build, full suite, guidance and whitespace checks; deploy,
   verify actual MCP reads/writes, commit generated dist and push user-fork main.
@@ -61,3 +61,30 @@ The first scheduled-stop attempt conservatively stopped before restart while CIM
 still reported its just-terminated process. A fresh check established no old process
 or listener, then only the scheduled task was started. This was a controlled Windows
 task restart, not evidence of graceful in-flight HTTP request draining.
+
+## World implementation and NAS qualification
+
+The new optional evolution state preserves legacy initial/replay hashes. Typed
+personal perspective and exact action-effect projections auto-apply; larger
+bundles use current-controller/designated-world-GM approval. Context distinguishes
+initial/current/subjective/pending material. External lore drift, source correction
+and retraction never silently restore superseded lore. Legacy direct core edits
+stay closed after opt-in, including when temporarily fixed.
+
+Independent review found and reproduced three gaps (hidden retraction targets,
+stale initial lore fallback, and opt-in response-loss idempotency); regression
+tests were first red, then green. Re-review found no remaining actionable issue.
+Focused roleplay run: 11 files / 83 tests passed. Production build and guidance
+consistency passed. Full suite: 331 files / 4,300 tests passed, 2 platform skips
+(`npm test -- --testTimeout=30000`, 283.91 seconds). Operational cutover remains
+the final gate; no claim of gameplay readiness follows from these test results.
+
+The isolated actual NAS probe completed at approximately 23:29 KST against
+`.mcpvault-validation/roleplay-evolving-rZBPko`. It refused competing and live
+writers and foreign-host recovery, killed only its own child after durable intent
+but before canonical rename, recovered the matching host lock, replayed, and
+preserved evolved context across restart. Its sixth canonical turn was reread
+through actual MCP at exact Markdown revision
+`92f06955de5a32f00c07a3aa89464f0833531ea00d06ccbf777db0d17ec25a69`.
+The host-local checkpoint and recovery audit were retained together with the
+isolated NAS journal. These are test fixtures, not an initialized operational world.

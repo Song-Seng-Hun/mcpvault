@@ -18,6 +18,27 @@ async function fixture() {
   return { root, options, store, command };
 }
 describe('durable roleplay records', () => {
+  it('refuses empty administrators for initialized journals without changing checkpoint or journal', async () => {
+    const f = await fixture(); const turn = await f.store.transact(f.command); await f.store.close();
+    const checkpoint = join(f.options.hostPath, `roleplay-${roleplayHash(f.options.vaultPath.toLowerCase())}.checkpoint.json`);
+    const before = await readFile(checkpoint, 'utf8'), journal = await readFile(join(f.options.vaultPath, turn.path), 'utf8');
+    await expect(RoleplayStore.open({ ...f.options, policy: { administrators: [] } })).rejects.toThrow(/administrator/i);
+    expect(await readFile(checkpoint, 'utf8')).toBe(before);
+    expect(await readFile(join(f.options.vaultPath, turn.path), 'utf8')).toBe(journal);
+  });
+  it('does not complete a pending initialization intent when reopened without administrators', async () => {
+    const f = await fixture(); const turn = await f.store.transact(f.command);
+    const [{ event }] = (await f.store.read()).records; await f.store.close();
+    const prefix = join(f.options.hostPath, `roleplay-${roleplayHash(f.options.vaultPath.toLowerCase())}`);
+    const text = await readFile(join(f.options.vaultPath, turn.path), 'utf8');
+    await writeFile(`${prefix}.prepared.md`, text);
+    const checkpoint = JSON.stringify({ version: 1, vault: f.options.vaultPath, sequence: 0, hash: '0'.repeat(64), pending: { sequence: 1, hash: event.hash } });
+    await writeFile(`${prefix}.checkpoint.json`, checkpoint); await rm(join(f.options.vaultPath, turn.path));
+    await expect(RoleplayStore.open({ ...f.options, policy: { administrators: [] } })).rejects.toThrow(/administrator/i);
+    expect(await readFile(`${prefix}.checkpoint.json`, 'utf8')).toBe(checkpoint);
+    expect(await readFile(`${prefix}.prepared.md`, 'utf8')).toBe(text);
+    await expect(readFile(join(f.options.vaultPath, turn.path), 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
+  });
   it('uses the existing deduplicated account and enterprise mention grammar', async () => {
     const f = await fixture();
     try {

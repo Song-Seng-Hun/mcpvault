@@ -59,6 +59,7 @@ const EXPLICIT_IDS = {
     list_notices: 'notice.list', read_notice: 'notice.read', preview_notice: 'notice.preview', revise_notice: 'notice.revise',
     read_roleplay_context: 'roleplay.context', submit_roleplay_action: 'roleplay.action', resolve_roleplay_action: 'roleplay.resolve',
     read_roleplay_history: 'roleplay.history', correct_roleplay_turn: 'roleplay.correct',
+    manage_roleplay_evolution: 'roleplay.evolution',
     public_federation_pull: 'federation.pull',
     public_federation_retry: 'federation.retry',
     public_federation_get: 'federation.get',
@@ -701,11 +702,11 @@ export class EndpointRegistry {
                     operations: { read: { available: true, state: 'ready', requires: [] }, create: write, update: write,
                         ...(item.endpointId === 'work.group' && { join: write, leave: write, archive: write }) } };
             }
-            if (['roleplay.world', 'roleplay.character', 'roleplay.scene'].includes(item.endpointId)) {
+            if (['roleplay.world', 'roleplay.character', 'roleplay.scene', 'roleplay.evolution'].includes(item.endpointId)) {
                 const write = { available, state, requires: item.requires, ...(reason && { reason }) };
                 const ops = item.input.properties?.op?.enum ?? [];
                 return { ...item, requires: [], available: true, state: 'ready',
-                    operations: Object.fromEntries(ops.map(op => [op, op === 'read' ? { available: true, state: 'ready', requires: [] } : write])) };
+                    operations: Object.fromEntries(ops.map(op => [op, ['read', 'list'].includes(op) ? { available: true, state: 'ready', requires: [] } : op === 'preview' ? { available: context.authenticated && missing.length === 0, state: context.authenticated && missing.length === 0 ? 'ready' : 'locked', requires: item.requires } : write])) };
             }
             if (item.endpointId === 'community.participation') {
                 const write = { available, state, requires: item.requires, ...(reason && { reason }) };

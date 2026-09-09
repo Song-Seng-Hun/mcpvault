@@ -1,5 +1,6 @@
 import { guidanceError } from './guidance-runtime.js';
 import { createHash } from 'node:crypto';
+import { applyEvolution, configureEvolution, type RoleplayEvolution } from './roleplay-evolution-model.js';
 
 export interface RoleplayPolicy { administrators: string[]; maxCharacters?: number }
 export interface Character {
@@ -20,6 +21,7 @@ export interface RoleplayCommand { op: string; actor: string; requestId: string;
 export interface RoleplayReceipt { id: string; sequence: number; actor: string; characterId?: string; roomId?: string; kind: string; content: string; effects: Effect[]; revision: string; correctedTurn?: string; witnesses: string[]; questId?: string; dependencies?: string[] }
 export interface Pending { id: string; characterId: string; generation: number; location: string; roomId: string; characterFingerprint: string; content: string }
 export interface RoleplayState {
+  evolution?: RoleplayEvolution;
   sequence: number; title?: string; definition?: string; lore?: string[]; places: Record<string, string[]>; delegates: string[];
   characters: Record<string, Character>; scenes: Record<string, Scene>; rules: Record<string, Rule>;
   items: Record<string, Record<string, number>>; pending: Record<string, Pending>;
@@ -189,6 +191,7 @@ export function applyRoleplayCommand(before: RoleplayState, command: RoleplayCom
     }
     case 'settings': {
       requireAdmin();
+      if (s.evolution && ['title', 'definition', 'lore', 'places'].some(key => d[key] !== undefined)) throw guidanceError(new Error('Use revision-checked evolution proposals for world core changes'), 'guid-ed8aaf19dcee304c');
       if (d.title !== undefined) s.title = roleplayText(d.title, 180);
       if (d.definition !== undefined) s.definition = roleplayText(d.definition, 4000);
       if (d.lore !== undefined) {
@@ -209,6 +212,7 @@ export function applyRoleplayCommand(before: RoleplayState, command: RoleplayCom
         for (const balances of Object.values(s.items)) for (const [id, quantity] of Object.entries(balances)) if (quantity > 0) ownerLocation(s, id);
         for (const p of Object.values(s.pending)) location(s, p.location);
       }
+      configureEvolution(s, d);
       content = 'World settings updated without resetting progress.'; break;
     }
     case 'character': {
@@ -221,6 +225,7 @@ export function applyRoleplayCommand(before: RoleplayState, command: RoleplayCom
     }
     case 'definition': {
       const c = controlled();
+      if (s.evolution) throw guidanceError(new Error('Use revision-checked evolution proposals for character core changes'), 'guid-fdf0fccf1a7df014');
       if (d.definition !== undefined) c.definition = roleplayText(d.definition, 4000);
       if (d.coreMemory !== undefined) c.coreMemory = d.coreMemory ? roleplayText(d.coreMemory, 600) : '';
       if (d.retireBeliefs !== undefined) {
@@ -325,6 +330,9 @@ export function applyRoleplayCommand(before: RoleplayState, command: RoleplayCom
       // The footprint/downstream gates above prevent rewriting peers' later outcomes.
       for (const effect of effects) applyEffects(s, [effect], effect.op === 'transfer' ? ownerLocation(s, effect.from) : character(s, effect.characterId).location);
       correctedTurn = target.id; roomId = scene.roomId; break;
+    }
+    case 'evolution_propose': case 'evolution_apply': case 'evolution_reject': {
+      ({ characterId, roomId, content } = applyEvolution(s, command, id)); break;
     }
     default: throw guidanceError(new Error('Unsupported roleplay operation'), 'guid-b96878577d6c0c8d');
   }

@@ -74,6 +74,7 @@ export const ROLEPLAY_MUTATING_TOOLS = [
   'submit_roleplay_action',
   'resolve_roleplay_action',
   'correct_roleplay_turn',
+  'manage_roleplay_evolution',
 ] as const;
 
 export function getRoleplayTools(): Tool[] {
@@ -86,6 +87,7 @@ export function getRoleplayTools(): Tool[] {
         definition: { type: 'string', maxLength: 8000, description: guidanceText('guid-5e589b6c9876933d', 'World background; at most 4000 Unicode characters, never executable instructions.') }, lore: { type: 'array', maxItems: 8, items: noteRef },
         title, places: { type: 'object', maxProperties: 100, additionalProperties: { type: 'array', maxItems: 20, items: id } },
         accounts: { type: 'array', maxItems: 50, items: accountId },
+        evolutionMode: { type: 'string', enum: ['fixed', 'evolving'] }, worldGmAccounts: { type: 'array', maxItems: 50, items: accountId },
         id, owner, quantity: { type: 'integer', minimum: 1, maximum: 1_000_000 },
         conditions, effects, questId: { ...id, description: guidanceText('guid-006e6a045050c034', 'Optional funded quest binding; actual funding and authorization are server-validated.') },
       }),
@@ -140,6 +142,30 @@ export function getRoleplayTools(): Tool[] {
         op: { type: 'string', enum: ['preview', 'apply'] }, targetTurn: id, content: prose, reason: prose, effects,
         previewFingerprint: { type: 'string', pattern: '^[a-f0-9]{64}$' },
       }),
+    },
+    {
+      name: 'manage_roleplay_evolution',
+      description: guidanceText('guid-cecdcf8e36da06dd', 'Propose, read, list, preview, apply or reject bounded fictional evolution. Only witnessed designated scene turns with exact receipt and note revisions are evidence. Personal beliefs and one-sided attitudes may auto-apply, never as world facts. Core/lore changes need current controller or designated world GM approval; mixed changes need both. Preview fingerprint is required to apply. Retract an applied proposal through a new approved retract change; history is immutable. No model inference or real XP.'),
+      inputSchema: {
+        type: 'object', additionalProperties: false, required: ['op'],
+        properties: { ...commandBase, ...page,
+          op: { type: 'string', enum: ['propose', 'read', 'list', 'preview', 'apply', 'reject'] },
+          characterId: id, generation, roomId: id, proposalId: id, reason: prose,
+          previewFingerprint: { type: 'string', pattern: '^[a-f0-9]{64}$' },
+          sources: { type: 'array', minItems: 1, maxItems: 8, items: { type: 'object', additionalProperties: false, required: ['turnId', 'revision', 'noteRevision'], properties: { turnId: id, revision: { type: 'string', pattern: '^[a-f0-9]{64}$' }, noteRevision: { type: 'string', pattern: '^[a-f0-9]{64}$' } } } },
+          changes: { type: 'array', minItems: 1, maxItems: 5, items: { type: 'object', additionalProperties: false, required: ['kind', 'target', 'key'], properties: {
+            kind: { type: 'string', enum: ['belief', 'attitude', 'event_fact', 'character_core', 'world_core', 'character_lore', 'world_lore', 'retract'] }, target: id, key: id,
+            text: { type: 'string', maxLength: 8000 }, lore: { type: 'array', maxItems: 8, items: noteRef },
+          } } },
+        },
+        allOf: [
+          { if: { properties: { op: { enum: ['propose', 'apply', 'reject'] } } }, then: { required: ['accessToken', 'expectedRevision', 'requestId'] } },
+          { if: { properties: { op: { const: 'preview' } } }, then: { required: ['accessToken', 'proposalId'] } },
+          { if: { properties: { op: { const: 'propose' } } }, then: { required: ['characterId', 'generation', 'roomId', 'sources', 'changes', 'reason'] } },
+          { if: { properties: { op: { const: 'apply' } } }, then: { required: ['proposalId', 'previewFingerprint'] } },
+          { if: { properties: { op: { const: 'reject' } } }, then: { required: ['proposalId', 'reason'] } },
+        ],
+      },
     },
   ];
 }

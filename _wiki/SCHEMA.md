@@ -96,6 +96,25 @@ administrative turns use `mcpvault_type: roleplay_turn`. Both are the same
 authoritative journal, not replicated chat and game logs. Body <=280 Unicode
 characters. Host integrity checkpoints are outside the Vault and source Git.
 
+Optional evolution is absent from legacy state/hash projections until explicit
+host opt-in. `settings` adds `evolutionMode: fixed|evolving` and exact
+`worldGmAccounts`. New `evolution_propose`, `evolution_apply`, and
+`evolution_reject` commands use the same version-1 turn journal, not a second
+database. Proposals pin source turn/world/Markdown revisions, typed changes,
+proposer/controller generation, current-value basis, exact lore revisions and
+approval accounts. Initial definitions remain unchanged; current projections
+exclude superseded, retracted, corrected, inaccessible or drifted evidence.
+Own beliefs/attitudes are explicitly subjective. Only committed typed action
+effects automatically establish fictional event facts. Core/lore changes need
+current character controllers and/or explicitly designated world GMs; mixed
+bundles need both. Previews bind the world revision and authority basis.
+
+Canonical Markdown may reside on UNC storage. Trusted checkpoints, prepared
+intents and durable originating host identity stay on the verified local host.
+Foreign/unidentified UNC locks cannot be reclaimed from a local PID probe.
+An explicit empty administrator list provisions only empty dormant storage;
+it never initializes world content or admits existing journals without owners.
+
 Character definition, location/inventory/stats/flags/relations, and cognition
 are separate fields. Controllers are exact account IDs plus generations;
 model/family/display names confer no control. Cognition kinds are `known`,

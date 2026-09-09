@@ -9,7 +9,7 @@ import { RoleplayStore } from './roleplay-store.js';
 import { roleplayRevision } from './roleplay-model.js';
 const cleanup: Array<() => Promise<unknown>> = [];
 afterEach(async () => { for (const f of cleanup.splice(0).reverse()) await f(); });
-test('eight dynamic endpoints keep five MCP tools; two authenticated players share one state and immutable chat projection', async () => {
+test('nine dynamic endpoints keep five MCP tools; two authenticated players share one state and immutable chat projection', async () => {
   const root = await mkdtemp(join(tmpdir(), 'roleplay-mcp-')); cleanup.push(() => rm(root, { recursive: true, force: true }));
   const vaultPath = join(root, 'vault'), hostPath = join(root, 'host'); await mkdir(vaultPath); await mkdir(hostPath);
   const world = await RoleplayStore.open({ vaultPath, hostPath, policy: { administrators: ['host'] } }); cleanup.push(() => world.close());
@@ -80,6 +80,29 @@ test('eight dynamic endpoints keep five MCP tools; two authenticated players sha
   const edit = await call('notes.patch', { path: moved.value.path, oldString: 'I enter', newString: 'Forged', expectedRevision: moved.value.noteRevision, accessToken: tokens[winner] });
   expect(edit.error).toBe(true);
   expect((await call('roleplay.world', { op: 'read' })).error).not.toBe(true);
+  expect((await act('world', { op: 'settings', evolutionMode: 'evolving', worldGmAccounts: ['host'] })).error).not.toBe(true);
+  const dialogue = await act('action', { op: 'speak', characterId: winner, generation: 1, roomId: 'garden', content: 'The garden now feels safer to me.' }, winner);
+  expect(dialogue.error).not.toBe(true);
+  const evolved = await act('evolution', { op: 'propose', characterId: winner, generation: 1, roomId: 'garden', reason: 'After unlocking the vault.',
+    sources: [{ turnId: dialogue.value.id, revision: dialogue.value.revision, noteRevision: dialogue.value.noteRevision }],
+    changes: [{ kind: 'belief', target: winner, key: 'garden', text: 'I feel safer in the garden now.' }] }, winner);
+  expect(evolved.error, JSON.stringify(evolved.value)).not.toBe(true);
+  const evolutionRead = await call('roleplay.evolution', { op: 'read', proposalId: evolved.value.id });
+  expect(evolutionRead.error, JSON.stringify(evolutionRead.value)).not.toBe(true);
+  expect(evolutionRead.value.items.some((i: any) => i.kind === 'proposal' && i.status === 'applied')).toBe(true);
+  const evolvedContext = await call('roleplay.context', { characterId: winner, roomId: 'garden', maxChars: 4000 });
+  expect(JSON.stringify(evolvedContext.value)).toContain('I feel safer in the garden now.');
+  const readonlyServer = createServer(vaultPath, { roleplay: world, readOnly: true }); cleanup.push(() => readonlyServer.close());
+  const readonlyApi = await startMcpHttpApi(readonlyServer, { port: 0 }); cleanup.push(() => readonlyApi.close());
+  const readonlyClient = new Client({ name: 'read-only-evolution', version: '1' }); cleanup.push(() => readonlyClient.close());
+  await readonlyClient.connect(new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${readonlyApi.port}${readonlyApi.path}`)));
+  expect((await call('roleplay.evolution', { op: 'list' }, readonlyClient)).error).not.toBe(true);
+  const beforeReadonly = roleplayRevision(await world.snapshot());
+  for (const op of ['propose', 'apply', 'reject']) {
+    const denied = await call('roleplay.evolution', { op, requestId: `readonly-${op}`, expectedRevision: beforeReadonly, accessToken: tokens[winner], proposalId: evolved.value.id }, readonlyClient);
+    expect(denied.error).toBe(true); expect(String(denied.value)).toMatch(/read.only/i);
+  }
+  expect(roleplayRevision(await world.snapshot())).toBe(beforeReadonly);
   const path = join(vaultPath, moved.value.path);
   const original = await readFile(path, 'utf8');
   await writeFile(path, original.replace('I enter the garden.', 'FORGED SUCCESS'));

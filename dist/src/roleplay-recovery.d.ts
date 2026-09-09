@@ -11,6 +11,7 @@ interface Checkpoint {
 }
 export declare function inspectRoleplayRecovery(options: Pick<RoleplayStoreOptions, 'vaultPath' | 'hostPath'>): Promise<{
     fingerprint: string;
+    hostId: string | null;
     lock: any;
     lockText: string | null;
     checkpoint: Checkpoint | null;
