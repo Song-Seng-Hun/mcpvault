@@ -3129,6 +3129,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-0becf4fd37f41b9e",
+    "kind": "error",
+    "template": "Invalid skill approval accounts in configuration",
+    "parts": [
+      "Invalid skill approval accounts in configuration"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/skill-evolution-host.ts",
+        "line": 62
+      }
+    ]
+  },
+  {
     "id": "guid-0bef5f45bbea9266",
     "kind": "error",
     "template": "stale author",
@@ -4522,6 +4537,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/workshop-facilitation.ts",
         "line": 591
+      }
+    ]
+  },
+  {
+    "id": "guid-111158398fd1d75f",
+    "kind": "error",
+    "template": "Only one registered profile per skill is supported",
+    "parts": [
+      "Only one registered profile per skill is supported"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/skill-evolution-host.ts",
+        "line": 69
       }
     ]
   },
@@ -8981,6 +9011,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/wiki-policy.ts",
         "line": 183
+      }
+    ]
+  },
+  {
+    "id": "guid-21c04b7267006371",
+    "kind": "error",
+    "template": "Skill evolution configuration must be outside Vault/source in private storage",
+    "parts": [
+      "Skill evolution configuration must be outside Vault/source in private storage"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/skill-evolution-host.ts",
+        "line": 53
       }
     ]
   },
@@ -13629,6 +13674,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-34ad54599515207a",
+    "kind": "error",
+    "template": "Skill evolution configuration belongs to another Vault",
+    "parts": [
+      "Skill evolution configuration belongs to another Vault"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/skill-evolution-host.ts",
+        "line": 60
+      }
+    ]
+  },
+  {
     "id": "guid-34d04e818ff4bc8a",
     "kind": "error",
     "template": "valueMap must be an object keyed by exact scalar values",
@@ -15309,6 +15369,22 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/llm-wiki.ts",
         "line": 6572
+      }
+    ]
+  },
+  {
+    "id": "guid-3c27527344dbc762",
+    "kind": "error",
+    "template": "Host private storage permissions could not be verified (check code {arg0})",
+    "parts": [
+      "Host private storage permissions could not be verified (check code ",
+      ")"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/skill-evolution-host.ts",
+        "line": 44
       }
     ]
   },
@@ -17469,6 +17545,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-46ec4feb2d119755",
+    "kind": "error",
+    "template": "Skill evolution key storage is unavailable or not private",
+    "parts": [
+      "Skill evolution key storage is unavailable or not private"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/skill-evolution-host.ts",
+        "line": 75
+      }
+    ]
+  },
+  {
     "id": "guid-471faacd7cb544d9",
     "kind": "prose",
     "template": "Observable outcome for any actionable note",
@@ -17743,6 +17834,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/metadata-snapshot.ts",
         "line": 24
+      }
+    ]
+  },
+  {
+    "id": "guid-486534f4168da8e9",
+    "kind": "error",
+    "template": "Skill profile is not uniquely registered by host code",
+    "parts": [
+      "Skill profile is not uniquely registered by host code"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/skill-evolution-host.ts",
+        "line": 66
       }
     ]
   },
@@ -19221,6 +19327,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-4d4fe90e090414b6",
+    "kind": "error",
+    "template": "Invalid skill evolution configuration",
+    "parts": [
+      "Invalid skill evolution configuration"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/skill-evolution-host.ts",
+        "line": 59
+      }
+    ]
+  },
+  {
     "id": "guid-4d74511fcf80efc7",
     "kind": "error",
     "template": "record_wiki_recall requires an LLM Wiki knowledge note",
@@ -20007,6 +20128,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/llm-wiki.ts",
         "line": 13241
+      }
+    ]
+  },
+  {
+    "id": "guid-507c8d8e99459b41",
+    "kind": "error",
+    "template": "Invalid skill evolution attestation key",
+    "parts": [
+      "Invalid skill evolution attestation key"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/skill-evolution-host.ts",
+        "line": 76
       }
     ]
   },
@@ -22022,7 +22158,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/cli.ts",
-        "line": 102
+        "line": 109
       }
     ]
   },
@@ -29169,11 +29305,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/cli.ts",
-        "line": 109
+        "line": 116
       },
       {
         "file": "src/cli.ts",
-        "line": 117
+        "line": 124
       }
     ]
   },
@@ -30726,6 +30862,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/social-tools.ts",
         "line": 7
+      }
+    ]
+  },
+  {
+    "id": "guid-7c8ada537ca42c7b",
+    "kind": "error",
+    "template": "Host private storage permissions must be owner-only",
+    "parts": [
+      "Host private storage permissions must be owner-only"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/skill-evolution-host.ts",
+        "line": 20
       }
     ]
   },
@@ -34245,7 +34396,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/cli.ts",
-        "line": 81
+        "line": 88
       }
     ]
   },
@@ -37498,7 +37649,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/cli.ts",
-        "line": 43
+        "line": 50
       }
     ]
   },
@@ -38592,6 +38743,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-9eb630366d07760c",
+    "kind": "error",
+    "template": "Invalid or unavailable skill evolution configuration",
+    "parts": [
+      "Invalid or unavailable skill evolution configuration"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/skill-evolution-host.ts",
+        "line": 57
+      }
+    ]
+  },
+  {
     "id": "guid-9ebc7f816b46e8b5",
     "kind": "prose",
     "template": "Read bounded notifications derived from public mentions, replies, and activity on your public posts. By default returns unread items only; includeRead and afterNotificationId support incremental context-efficient polling.",
@@ -38875,7 +39041,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/cli.ts",
-        "line": 44
+        "line": 51
       }
     ]
   },
@@ -38982,11 +39148,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/cli.ts",
-        "line": 124
+        "line": 131
       },
       {
         "file": "src/cli.ts",
-        "line": 132
+        "line": 139
       }
     ]
   },
@@ -41881,6 +42047,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-ac09bac55dedcc28",
+    "kind": "error",
+    "template": "Skill evolution key must be a private sibling file",
+    "parts": [
+      "Skill evolution key must be a private sibling file"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/skill-evolution-host.ts",
+        "line": 61
+      }
+    ]
+  },
+  {
     "id": "guid-ac325836fb0e23c8",
     "kind": "prose",
     "template": "Case-insensitive exact match against primary_moc, moc, or one mocs value",
@@ -44389,7 +44570,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/cli.ts",
-        "line": 62
+        "line": 69
       }
     ]
   },
@@ -45012,7 +45193,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/cli.ts",
-        "line": 37
+        "line": 44
       }
     ]
   },
@@ -53103,6 +53284,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-d86d734e1f7df8be",
+    "kind": "error",
+    "template": "Host private storage requires canonical local paths without links",
+    "parts": [
+      "Host private storage requires canonical local paths without links"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/skill-evolution-host.ts",
+        "line": 19
+      }
+    ]
+  },
+  {
     "id": "guid-d884aff29afc09af",
     "kind": "prose",
     "template": "Workflow filter; active means open or in_progress",
@@ -58146,6 +58342,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-edec5828dc744b3d",
+    "kind": "error",
+    "template": "Skill evolution configuration requires absolute private host and Vault paths",
+    "parts": [
+      "Skill evolution configuration requires absolute private host and Vault paths"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/skill-evolution-host.ts",
+        "line": 50
+      }
+    ]
+  },
+  {
     "id": "guid-ededfecd03debaf5",
     "kind": "prose",
     "template": "Leave a short public message in an open global chat room. A greeting, concise finding, challenge, or explicit question creates a durable invitation for the next agent; keep it focused and build on nearby context. Each message is a separate Markdown note, so concurrent models do not overwrite the room or each other. Content is limited to 280 Unicode characters; use replyTo for a threaded reply.",
@@ -59136,6 +59347,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-f1b0524458043f1b",
+    "kind": "error",
+    "template": "--skill-evolution-config requires one host configuration file",
+    "parts": [
+      "--skill-evolution-config requires one host configuration file"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/cli.ts",
+        "line": 39
+      }
+    ]
+  },
+  {
     "id": "guid-f1d0e0f657505b7b",
     "kind": "prose",
     "template": "GTD-style observable outcome",
@@ -59605,6 +59831,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/createServer.ts",
         "line": 988
+      }
+    ]
+  },
+  {
+    "id": "guid-f3dabd4de1ecd163",
+    "kind": "error",
+    "template": "Invalid skill profile identifiers",
+    "parts": [
+      "Invalid skill profile identifiers"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/skill-evolution-host.ts",
+        "line": 63
       }
     ]
   },
@@ -62396,11 +62637,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/cli.ts",
-        "line": 139
+        "line": 146
       },
       {
         "file": "src/cli.ts",
-        "line": 147
+        "line": 154
       }
     ]
   },

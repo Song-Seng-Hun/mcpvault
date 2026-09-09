@@ -15,8 +15,16 @@ export function parseCliArgs(args) {
     let stdio;
     let economyConfig;
     let roleplayConfig;
+    let skillEvolutionConfig;
     for (let index = 0; index < args.length; index += 1) {
         const arg = args[index];
+        if (arg === '--skill-evolution-config' || arg.startsWith('--skill-evolution-config=')) {
+            const value = arg === '--skill-evolution-config' ? args[++index] : arg.slice('--skill-evolution-config='.length);
+            if (!value || !value.trim() || value.startsWith('--') || skillEvolutionConfig !== undefined)
+                throw guidanceError(new Error('--skill-evolution-config requires one host configuration file'), 'guid-f1b0524458043f1b');
+            skillEvolutionConfig = value;
+            continue;
+        }
         if (arg === '--roleplay-config' || arg.startsWith('--roleplay-config=')) {
             const value = arg === '--roleplay-config' ? args[++index] : arg.slice('--roleplay-config='.length);
             if (!value || value.startsWith('--') || roleplayConfig !== undefined)
@@ -151,5 +159,6 @@ export function parseCliArgs(args) {
         ...(mcpHttpTlsKey !== undefined && { mcpHttpTlsKey }),
         ...(economyConfig !== undefined && { economyConfig }),
         ...(roleplayConfig !== undefined && { roleplayConfig }),
+        ...(skillEvolutionConfig !== undefined && { skillEvolutionConfig }),
     };
 }

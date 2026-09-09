@@ -28,10 +28,36 @@ const server = createServer(vaultPath, { skillEvolution: configuration });
 The key must have at least 32 characters; provision strong random key material,
 retain it privately across restarts, and keep a recoverable private backup. Losing
 or rotating it invalidates existing attestations; do not silently regenerate a key
-on startup. No production key, evaluator profile, CLI switch, environment-variable
-loader, or live NAS activation is supplied by this change. Deployment is a separate
-explicit host action. Keep the same key/profile configuration across cooperating
+on startup. No production evaluator is bundled. Keep the same key/profile configuration across cooperating
 server instances for the command center.
+
+The ordinary server also accepts `--skill-evolution-config <absolute-private-file>`.
+The JSON file and sibling key must be in a canonical local directory outside the
+Vault and source, readable only by its owner (Windows also permits SYSTEM and
+Administrators). Permissions are checked before reading the key. A wrong Vault,
+missing key, broad ACL or unknown profile is a startup error, not silent disablement.
+
+```json
+{
+  "version": 1,
+  "vaultPath": "\\\\172.30.1.24\\MCPVault",
+  "enabled": true,
+  "attestationKeyFile": "attestation.key",
+  "approverAccounts": [],
+  "profileIds": []
+}
+```
+
+`scripts/provision-skill-evolution.ps1` creates a new owner-restricted directory,
+then generates and durably saves a random key without printing it. Pass an explicit
+local `-PrivateDirectory` and exact `-VaultPath`; it refuses existing key/config
+files rather than rotating them. Back up that directory to an equally restricted
+host destination. Never place its contents in a repository or Vault backup.
+The stock CLI has no approved evaluator registry; use an empty `profileIds` list
+for experience/candidate collection. Trusted host integrations may pass reviewed
+profiles to `loadSkillEvolutionHostConfig` or use the SDK directly. Configuration
+does not import arbitrary JavaScript, execute note content or confer approval rights
+through model/display names. Empty approver accounts disable manual promotion.
 
 A `SkillEvaluationProfile` fixes `id`, `revision`, `skillId`, `caseIds`,
 `targetCaseIds`, `maxDurationMs`, and one trusted `evaluate` callback. The callback

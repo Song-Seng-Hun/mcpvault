@@ -9,6 +9,7 @@ export interface ParsedCliArgs {
   mcpHttpTlsKey?: string;
   economyConfig?: string;
   roleplayConfig?: string;
+  skillEvolutionConfig?: string;
   /** Dedicated HTTP process; omitted preserves legacy stdio behavior. */
   stdio?: false;
 }
@@ -29,9 +30,15 @@ export function parseCliArgs(args: string[]): ParsedCliArgs {
   let stdio: false | undefined;
   let economyConfig:string|undefined;
   let roleplayConfig: string | undefined;
+  let skillEvolutionConfig: string | undefined;
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index]!;
+    if (arg === '--skill-evolution-config' || arg.startsWith('--skill-evolution-config=')) {
+      const value = arg === '--skill-evolution-config' ? args[++index] : arg.slice('--skill-evolution-config='.length);
+      if (!value || !value.trim() || value.startsWith('--') || skillEvolutionConfig !== undefined) throw guidanceError(new Error('--skill-evolution-config requires one host configuration file'), 'guid-f1b0524458043f1b');
+      skillEvolutionConfig = value; continue;
+    }
     if (arg === '--roleplay-config' || arg.startsWith('--roleplay-config=')) {
       const value = arg === '--roleplay-config' ? args[++index] : arg.slice('--roleplay-config='.length);
       if (!value || value.startsWith('--') || roleplayConfig !== undefined) throw guidanceError(new Error('--roleplay-config requires one host configuration file'), 'guid-b7dd3ed6ef7f8115');
@@ -163,5 +170,6 @@ export function parseCliArgs(args: string[]): ParsedCliArgs {
     ...(mcpHttpTlsKey !== undefined && { mcpHttpTlsKey }),
     ...(economyConfig!==undefined && {economyConfig}),
     ...(roleplayConfig !== undefined && { roleplayConfig }),
+    ...(skillEvolutionConfig !== undefined && { skillEvolutionConfig }),
   };
 }

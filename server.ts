@@ -10,6 +10,7 @@ import { loadEconomyHostConfig, probeEconomyStorage } from './src/economy-host.j
 import { EconomyLedger } from './src/economy-ledger.js';
 import { RoleplayStore } from './src/roleplay-store.js';
 import { loadRoleplayHostConfig } from './src/roleplay-host.js';
+import { loadSkillEvolutionHostConfig } from './src/skill-evolution-host.js';
 import { existsSync, readFileSync } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, join, resolve } from "path";
@@ -62,6 +63,9 @@ Options:
   --roleplay-config FILE
                   Opt-in shared fictional world with host-approved administrators.
                   Trusted checkpoint outside Vault/source; existing rooms unchanged.
+  --skill-evolution-config FILE
+                  Opt-in experience and candidate recording with a private host key.
+                  No automatic evaluation without host-registered skill profiles.
   --mcp-http[=PORT]
                   Expose MCP 2026 Stateless Streamable HTTP (default 8788)
   --mcp-http-only[=PORT]
@@ -86,7 +90,7 @@ Examples:
 
 // Remove runtime options before joining trailing args, preserving support for
 // unquoted vault paths with spaces. When omitted, use the current directory.
-const { vaultPathArg, readOnly, restPort, mcpHttpPort, mcpHttpHost, mcpHttpTlsCert, mcpHttpTlsKey, stdio, economyConfig, roleplayConfig } = parseCliArgs(cliArgs);
+const { vaultPathArg, readOnly, restPort, mcpHttpPort, mcpHttpHost, mcpHttpTlsCert, mcpHttpTlsKey, stdio, economyConfig, roleplayConfig, skillEvolutionConfig } = parseCliArgs(cliArgs);
 const vaultPath = resolve(vaultPathArg || process.cwd());
 
 if (mcpHttpPort === undefined && (mcpHttpHost || mcpHttpTlsCert || mcpHttpTlsKey)) {
@@ -102,8 +106,9 @@ if(hostEconomy?.policy.enabled) {
 let mcpServer:ReturnType<typeof createServer>;
 let roleplay: RoleplayStore | undefined;
 try {
+  const skillEvolution = skillEvolutionConfig ? await loadSkillEvolutionHostConfig(resolve(skillEvolutionConfig), vaultPath) : undefined;
   if (roleplayConfig) roleplay = await RoleplayStore.open(await loadRoleplayHostConfig(resolve(roleplayConfig), vaultPath));
-  mcpServer=createServer(vaultPath, { version: VERSION, readOnly, ...(economy&&{economy}), ...(roleplay && { roleplay }) });
+  mcpServer=createServer(vaultPath, { version: VERSION, readOnly, ...(economy&&{economy}), ...(roleplay && { roleplay }), ...(skillEvolution && { skillEvolution }) });
 } catch(error){await roleplay?.close(); await economy?.ledger.close();throw error;}
 const lifecycle = createServerLifecycle(mcpServer);
 if(economy)lifecycle.add(economy.ledger);

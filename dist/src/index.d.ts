@@ -1,5 +1,6 @@
 export { createServer } from './createServer.js';
 export type { CreateServerOptions, ServerRuntime } from './createServer.js';
+export { loadSkillEvolutionHostConfig } from './skill-evolution-host.js';
 export { SkillEvolutionService } from './skill-evolution.js';
 export type { SkillEvolutionHost } from './skill-evolution.js';
 export type { SkillEvaluationProfile, SkillEvaluationInput, SkillEvaluationResult } from './skill-evaluation.js';

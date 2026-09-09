@@ -1,6 +1,16 @@
 import { describe, expect, test } from "vitest";
 import { parseCliArgs } from "./cli.js";
 
+test('parses skill evolution host configuration without consuming the NAS path or enabling other services', () => {
+  const vault = '\\\\172.30.1.24\\MCPVault';
+  for (const args of [['--skill-evolution-config=C:\\Private\\skill.json'], ['--skill-evolution-config', 'C:\\Private\\skill.json']]) {
+    expect(parseCliArgs([vault, ...args])).toEqual({ vaultPathArg: vault, readOnly: false, skillEvolutionConfig: 'C:\\Private\\skill.json' });
+  }
+  for (const args of [['--skill-evolution-config'], ['--skill-evolution-config='], ['--skill-evolution-config', '--read-only'], ['--skill-evolution-config=a', '--skill-evolution-config=b']]) {
+    expect(() => parseCliArgs(['/vault', ...args])).toThrow(/skill-evolution-config/);
+  }
+});
+
 test('parses host-only roleplay configuration without enabling economy or changing the vault', () => {
   expect(parseCliArgs(['E:\\Vault', '--roleplay-config=E:\\Private\\roleplay.json'])).toMatchObject({ vaultPathArg: 'E:\\Vault', roleplayConfig: 'E:\\Private\\roleplay.json' });
   expect(parseCliArgs(['E:\\Vault', '--roleplay-config', 'E:\\Private\\roleplay.json']).economyConfig).toBeUndefined();

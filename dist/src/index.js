@@ -1,4 +1,5 @@
 export { createServer } from './createServer.js';
+export { loadSkillEvolutionHostConfig } from './skill-evolution-host.js';
 export { SkillEvolutionService } from './skill-evolution.js';
 export { proceduralLines } from './skill-evaluation.js';
 export { inspectSkillLock, recoverSkillLock } from './skill-evolution-recovery.js';
