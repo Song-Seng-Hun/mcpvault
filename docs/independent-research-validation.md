@@ -39,10 +39,15 @@ security fix. It is not counted as a completed test run.
 
 ## Limits
 
-No actual Gemini/Claude/Codex research-quality comparison has been run. The
-ArcticSwarm numbers in the preserved plan are the authors' reported results,
-not MCPVault performance. Alternative exploration, supported candidates, error
-correction, latency/I/O and token efficiency have not been benchmarked here.
+An actual two-session Codex model timing pilot was subsequently completed:
+[preregistered evidence and results](research/independent-timing-pilot-20260909.md).
+On six controlled fictional cases, early and delayed peer-hypothesis exposure
+both scored 11/12 finally; this does not establish superiority or equivalence.
+The fixture broker, scripted peer hypotheses and existing protocol regression
+are distinct from actual authenticated multi-agent MCP collaboration. Gemini,
+Claude, web research, token efficiency and real disk/network I/O remain untested.
+The ArcticSwarm numbers in the preserved plan are the authors' reported results,
+not MCPVault performance.
 
 The server cannot erase prior model context, isolate sessions sharing an account,
 control other channels, or protect files from the NAS/host operator. Stored prose

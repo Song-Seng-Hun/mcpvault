@@ -1,0 +1,115 @@
+{
+  "early": {
+    "model": "gpt-5.6-luna",
+    "turns": 4,
+    "sourceRounds": 2,
+    "sourceRecords": 18,
+    "sourceChars": 1570,
+    "promptChars": 6926,
+    "responseChars": 5417,
+    "provisionalChars": 2017,
+    "finalChars": 2958,
+    "observedStageMilliseconds": [
+      24864,
+      26688,
+      20349,
+      57018
+    ],
+    "dispatchToFinalObservedMs": 128922,
+    "scores": {
+      "provisional": [
+        1,
+        2,
+        2,
+        2,
+        2,
+        2
+      ],
+      "final": [
+        1,
+        2,
+        2,
+        2,
+        2,
+        2
+      ]
+    },
+    "earlyIncorrectPeerAdoptions": 0,
+    "spontaneousUnsupportedInitialCausalConclusion": 0,
+    "correctionCases": [],
+    "finalPartial": [
+      "c1"
+    ],
+    "finalUnresolved": [
+      "c4"
+    ]
+  },
+  "delayed": {
+    "model": "gpt-5.6-luna",
+    "turns": 4,
+    "sourceRounds": 2,
+    "sourceRecords": 18,
+    "sourceChars": 1580,
+    "promptChars": 6570,
+    "responseChars": 5602,
+    "provisionalChars": 2203,
+    "finalChars": 2957,
+    "observedStageMilliseconds": [
+      14897,
+      26179,
+      13797,
+      47775
+    ],
+    "dispatchToFinalObservedMs": 102648,
+    "scores": {
+      "provisional": [
+        0,
+        2,
+        2,
+        2,
+        2,
+        2
+      ],
+      "final": [
+        1,
+        2,
+        2,
+        2,
+        2,
+        2
+      ]
+    },
+    "earlyIncorrectPeerAdoptions": null,
+    "spontaneousUnsupportedInitialCausalConclusion": 1,
+    "correctionCases": [
+      "c1"
+    ],
+    "finalPartial": [
+      "c1"
+    ],
+    "finalUnresolved": [
+      "c4"
+    ]
+  },
+  "audit": {
+    "passed": true,
+    "fixtureHashes": {
+      "preregistration": "097e14060e4c7ed66bb03f1bb82f253b01d153a19752d41442ca3e7787bf8d65",
+      "cases": "ef55fbac312c31c75e3d029f1b84b02df3e9a3162b3e7e27e7886fac8740d2b5"
+    },
+    "protocolTests": {
+      "passed": 27,
+      "files": 2,
+      "durationSeconds": 19.72
+    },
+    "limitations": [
+      "unblinded main-agent grading",
+      "one session per arm",
+      "fixed order",
+      "standardized not actual peer",
+      "early exposure repeated at common review",
+      "brokered fixtures not actual MCP calls",
+      "time includes coordinator delay"
+    ]
+  }
+}

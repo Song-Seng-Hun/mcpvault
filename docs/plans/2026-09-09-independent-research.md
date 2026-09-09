@@ -3,7 +3,9 @@
 Status: the independent-research implementation was deployed on 2026-09-09 after
 NAS cutover, at the user's request. Existing subject groups/temporary teams remain
 unchanged. Protocol tests, static security review, NAS guidance sync and the current
-Codex connection are verified; actual model effectiveness is not yet measured.
+Codex connection are verified. A subsequent two-session controlled model pilot
+found equal final rubric scores, not general effectiveness; see
+`../research/independent-timing-pilot-20260909.md` for results and limitations.
 See `../independent-research.md` for the endpoint contract and
 `../independent-research-validation.md` for evidence and remaining limits.
 
@@ -68,11 +70,14 @@ are not independently authenticated readers. Do not promise absolute isolation.
   revoked access, concurrent submissions and restart. Broader common projections
   reuse the existing private-path predicate; this is not an exhaustive side-channel
   proof or a claim to control host filesystem access.
-- [ ] Compare open collaboration with independent-first review on the same small
+- [x] Run a limited early-versus-delayed standardized peer-exposure pilot on the same small
   research set and comparable budgets. Measure supported candidates, alternative
   exploration, error correction, unresolved conclusions, I/O and response size.
-- [ ] At most two actual isolated model sessions, sequentially; label actual
+- [x] At most two actual isolated model sessions, sequentially; label actual
   behavior separately from protocol simulation. No automatic worker fan-out.
+- [ ] Broader actual multi-agent research comparison (not satisfied by scripted
+  peer evidence): repeated/counterbalanced runs and direct host/MCP use remain
+  future evaluation, not a claimed outcome of the two-session pilot.
 - [x] After host stability: targeted tests, build, one-worker full suite, diff
   check, shared-server verification, then only user-fork source/docs/tests/dist.
 
