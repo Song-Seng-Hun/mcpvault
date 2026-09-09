@@ -7,6 +7,52 @@ updated_at: 2026-09-01T18:30:44.285Z
 ---
 # LLM Wiki schema
 
+## Optional creative workspace contract
+
+`Community/Stories/<projectId>/` contains ordinary Markdown with
+`fiction_domain: story`. `Project.md` (`mcpvault_type: story_project`) records
+the brief, registered participants, immutable owner, revocable authenticated
+`showrunner_account_id`, opt-in `enabled`, bounded `max_steps`, Work project ID,
+explicit branch presentation/chronology/shot sequences, and selected adoption
+path/revision pairs. No name or literary role grants execution or access.
+
+`Artifacts/*.md` (`story_artifact`) stores a stable artifact ID, immutable kind
+and branch, body, optional scene/shot/graph metadata and exact `source_revisions`.
+`world_fact`, `belief`, `reader_reveal` and `author_plan` are narrative layers,
+not epistemic proof. Character `knownBy` is narrative filtering, never an ACL.
+`Reviews/*.md` (`story_review`) pins artifact revision, real reviewer identity,
+editorial pass and attributed continuity classifications; it is advisory.
+
+`visual_model` artifacts additionally require `data.sourceSceneId`, exact
+`sourceSceneRevision`, and `visual.events` (at most 64). Each event identifies
+actor/optional target/location artifacts, action, authored `basis`
+(`stated`/`inferred`/`uncertain`), and an exact quote plus zero-based Unicode
+code-point start/exclusive-end offsets in the scene body. Matching fenced
+examples are excluded. Same-project/branch sources are pinned; projections
+are partial and cannot establish narrative truth or completeness.
+`story.visual` reads these projections, previews selected edit intents, and
+creates separate `alternative` artifacts with validated `data.visualProposal`
+provenance. Original scenes, chronology/presentation sequences and adoptions
+are unchanged. Adoption of an alternative does not replace a sequenced scene.
+
+`Adoptions/*.md` (`story_adoption`) is an immutable snapshot. It becomes selected
+only when the exact snapshot path/revision appears in Project.md `adopted`.
+Prepared/orphan snapshots and later drafts do not change that selection.
+Revision receipts in managed Properties support bounded idempotent retries;
+they do not supersede externally changed Markdown or current authority.
+
+`Sessions/*.md` (`story_session`) coordinates actual Work assignments and
+bounded draft/review/revise/decision/waiting transitions. Work acceptance and
+completion remain explicit. `Rehearsals/*.md` (`story_rehearsal`) records pinned
+declarative branch runs as proposals, not shared-world events. Exports have
+source and output manifests; file-only Canvas placement is navigation only.
+Managed story writes require dynamic endpoints and normal scope/path checks;
+generic writes, deletes and ancestor moves cannot forge or relocate the tree.
+
+Do not auto-convert existing research notes or initialize the shared roleplay
+world. See [creative workspace](../docs/creative-workspace.md) and one bounded
+`wiki.policy` topic `story` for operations and limitations.
+
 ## Procedural skill library
 
 `note_kind: skill` is ordinary `llm_wiki_type: knowledge`, not an executable

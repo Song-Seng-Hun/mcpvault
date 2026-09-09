@@ -68,7 +68,7 @@ export class QuestionPacketService {
                 }
                 const value = (await this.fs.readNoteMetadata([path], canAccess, { fresh: true, strict: true, maxBytes: RETRIEVAL_NOTE_BYTES }))[0];
                 const allowed = value && !isModerationHidden(value.frontmatter)
-                    && (allowFiction || !isFictionDomain(value.frontmatter))
+                    && (allowFiction || !isFictionDomain(value.frontmatter, path))
                     && !(situation && isSituationMemory(value.frontmatter))
                     && !(value.frontmatter.mcpvault_type === 'blog_post' && value.frontmatter.status !== 'published');
                 metadata.set(path, allowed ? value : undefined);
@@ -86,7 +86,7 @@ export class QuestionPacketService {
             if (!meta)
                 return;
             const value = await this.fs.readNote(path, RETRIEVAL_NOTE_BYTES);
-            if (!canAccess(path) || isModerationHidden(value.frontmatter) || (path !== explicitPath && isFictionDomain(value.frontmatter)) || value.revision !== meta.revision || (expectedRevision && value.revision !== expectedRevision))
+            if (!canAccess(path) || isModerationHidden(value.frontmatter) || (path !== explicitPath && isFictionDomain(value.frontmatter, path)) || value.revision !== meta.revision || (expectedRevision && value.revision !== expectedRevision))
                 throw guidanceError(new Error('Context changed; retry the question'), 'guid-9e2c5234ada24056');
             sources.set(path, value);
             return value;

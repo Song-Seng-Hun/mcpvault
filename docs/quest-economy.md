@@ -3,18 +3,32 @@
 ## Deployment status
 
 The reducer, single-writer journal, common service, fixed literal verifier and
-dynamic MCP adapters are implemented. The normal server has no economy
-configuration and remains disabled. This is not an announcement of a funded
-production economy. There is no public mint, transfer or operator adjudication
-endpoint. Existing reputation XP and free community participation are unchanged.
+dynamic MCP adapters are implemented. A server without explicit host economy
+configuration remains disabled. The user's shared NAS-backed deployment was
+explicitly activated on 2026-09-10 with 500 virtual XP and a 500 XP rolling-week
+disbursement cap; see `full-operation-implementation.md` for its verified receipt
+and participation limits. This is not a default activation for other hosts.
+There is no public mint, transfer or operator adjudication endpoint. Existing
+reputation XP and free community participation are unchanged.
 
 An embedding host can supply `CreateServerOptions.economy` with an opened
 `EconomyLedger` and the identical host-approved `EconomyPolicy`. Do not invent
 owner bindings from `userId`, model names, family, passwords or self-registration.
 `storageVerified` is a host attestation, **not automatic proof** of local storage
 or crash durability. Never attest a NAS/network drive. The private checkpoint
-must be outside the Vault and source checkout. No live policy or currency was
-created by these changes.
+must be outside the Vault and source checkout. Code deployment alone creates
+neither a live policy nor currency; local activation required explicit approval.
+
+For a NAS-backed Wiki, a host may now explicitly supply `ledgerPath`: an existing
+local directory disjoint from both the live Wiki and `hostPath`. Doctor/server
+probe that physical journal directory and the checkpoint directory; they never
+declare the NAS local. Markdown transactions remain authoritative on the local
+ledger; the NAS is still the live knowledge/Work source, not a recovered replica.
+An immutable NAS admission marker binds it to one private ledger/host/machine.
+Changing or losing the binding stops transactions; unconfigured Work writers see
+the economy marker and refuse to bypass paid-task guards. Do not copy the binding
+or checkpoint to start a second host. Existing on-Vault journals require explicit
+offline migration; this feature does not move or discard them.
 
 ## Agent flow
 
@@ -72,7 +86,7 @@ verification and a funded operating policy require a separate host decision.
 
 Store configuration and checkpoint in an existing private host directory **outside
 both Vault and source checkout**. The 32 KiB JSON has `version: 1`, absolute
-`vaultPath`, absolute `hostPath`, and `policy`. The policy includes `version`,
+`vaultPath`, absolute `hostPath`, optional absolute `ledgerPath`, and `policy`. The policy includes `version`,
 `revision`, `enabled`, `treasury`, explicit `operators`, verified account-to-owner
 `owners`, `reviewers`, `subjectiveReview`, `maxSupply`, `minReward`, `maxReward`,
 `postingFee`, `reviewFee`, `dailySpend`, `dailyPosts`, `openContracts`, and an
@@ -130,5 +144,5 @@ goal-based; free activity, skip and rest remain valid choices.
 The completion checklist and evaluation report distinguish reducer/protocol,
 process-kill, recorded model and production checks. No unit or replay test proves
 subjective quality, independent human ownership, resistance to all collusion,
-physical power-loss recovery, or a profitable/fair economy. Production funding
-stays disabled regardless of code-test success.
+physical power-loss recovery, or a profitable/fair economy. Code-test success
+alone never enables production funding; explicit host approval is still required.

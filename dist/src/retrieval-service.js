@@ -68,7 +68,7 @@ export class RetrievalService {
         let count = 0;
         const prefix = params.pathPrefix ? this.physical({ p: params.pathPrefix }, params.principal) : undefined;
         do {
-            const batch = await this.fs.queryNotes({ limit: 500, includeContent: false, includeTotal: false, sortBy: 'path', ...(prefix && prefix !== '.' && { pathPrefix: prefix }), ...(after && { after }) }, admitted, note => (params.fictionDomain === 'only') === isFictionDomain(note.frontmatter));
+            const batch = await this.fs.queryNotes({ limit: 500, includeContent: false, includeTotal: false, sortBy: 'path', ...(prefix && prefix !== '.' && { pathPrefix: prefix }), ...(after && { after }) }, admitted, note => (params.fictionDomain === 'only') === isFictionDomain(note.frontmatter, note.path));
             for (const note of batch.notes) {
                 if (++count > 10000)
                     throw guidanceError(new Error('Fiction-domain metadata window exhausted'), 'guid-4c9fde591525f971');

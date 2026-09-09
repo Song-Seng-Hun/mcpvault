@@ -106,7 +106,7 @@ export class PathFilter {
       const lowerPath = normalizedPath.toLowerCase();
       const hasAllowedExtension = this.allowedExtensions.some(ext =>
         lowerPath.endsWith(ext)
-      );
+      ) || /^community\/stories\/[a-z0-9][a-z0-9-]{0,63}\/exports\/[^/]+\.fountain$/i.test(normalizedPath);
       if (!hasAllowedExtension) {
         return false;
       }

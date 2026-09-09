@@ -89,7 +89,7 @@ export class PathFilter {
         // For files, check extension if allowedExtensions is configured
         if (this.allowedExtensions.length > 0 && this.isFile(this.canonicalizeForMatch(normalizedPath))) {
             const lowerPath = normalizedPath.toLowerCase();
-            const hasAllowedExtension = this.allowedExtensions.some(ext => lowerPath.endsWith(ext));
+            const hasAllowedExtension = this.allowedExtensions.some(ext => lowerPath.endsWith(ext)) || /^community\/stories\/[a-z0-9][a-z0-9-]{0,63}\/exports\/[^/]+\.fountain$/i.test(normalizedPath);
             if (!hasAllowedExtension) {
                 return false;
             }

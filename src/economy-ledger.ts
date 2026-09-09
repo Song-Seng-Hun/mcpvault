@@ -4,6 +4,7 @@ import { lstat, open, readdir, realpath, unlink, type FileHandle } from 'node:fs
 import { basename, dirname, isAbsolute, join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { FrontmatterHandler } from './frontmatter.js';
+import { assertLegacyEconomyStorage, bindEconomyStorage } from './economy-storage.js';
 import { ensureFederationDirectory, readFederationFile, writeFederationFileAtomic } from './public-federation-storage.js';
 import { applyEconomyCommand, economyRevision, initialEconomy, validateEconomyPolicy,
   type EconomyCommand, type EconomyPolicy, type EconomyReceipt, type EconomyState } from './economy-model.js';
@@ -12,6 +13,8 @@ export interface EconomyLedgerOptions {
   vaultPath: string;
   /** Existing private host directory outside the Vault and source checkout. */
   hostPath: string;
+  /** Optional explicitly bound local journal directory for a separate live Wiki. */
+  ledgerPath?: string;
   /** Explicit host attestation: local storage with exclusive create + atomic rename.
    * Never accepted as a tool argument. Network/NAS storage must not be attested. */
   storageVerified: boolean;
@@ -65,6 +68,7 @@ export class EconomyLedger {
   private queue: Promise<void> = Promise.resolve();
   private closed=false;
   private closing: Promise<void> | undefined;
+  private assertStorageBinding: (() => Promise<void>) | undefined;
   private constructor(private readonly options: EconomyLedgerOptions, private readonly vault: string, private readonly host: string) {
     this.journal=join(vault,'.mcpvault-economy','journal');
     this.lockPath=join(vault,'.mcpvault-economy','writer.lock');
@@ -76,13 +80,17 @@ export class EconomyLedger {
   private static async acquire(options:EconomyLedgerOptions,initialize:boolean):Promise<EconomyLedger> {
     validateEconomyPolicy(options.policy);
     if (!options.storageVerified) throw guidanceError(new Error('Economy requires verified local storage; network/unknown storage is refused'), 'guid-1a13954061586bf2');
-    if (!isAbsolute(options.vaultPath) || !isAbsolute(options.hostPath) || /^\\\\|^\/\//.test(options.vaultPath) || /^\\\\|^\/\//.test(options.hostPath)) throw guidanceError(new Error('Economy storage requires absolute local paths'), 'guid-79ab65b5064fb27a');
-    const vault=await realpath(options.vaultPath), host=await realpath(options.hostPath);
+    if (options.ledgerPath === undefined) await assertLegacyEconomyStorage(options);
+    const binding = options.ledgerPath === undefined ? undefined : await bindEconomyStorage(options, initialize);
+    const physicalVault = binding?.ledgerPath ?? options.vaultPath;
+    if (!isAbsolute(physicalVault) || !isAbsolute(options.hostPath) || /^\\\\|^\/\//.test(physicalVault) || /^\\\\|^\/\//.test(options.hostPath)) throw guidanceError(new Error('Economy storage requires absolute local paths'), 'guid-79ab65b5064fb27a');
+    const vault=await realpath(physicalVault), host=await realpath(options.hostPath);
     const moduleRoot=dirname(dirname(fileURLToPath(import.meta.url)));
     const source=await realpath(basename(moduleRoot)==='dist'?dirname(moduleRoot):moduleRoot);
     if (/^\\\\|^\/\//.test(vault) || /^\\\\|^\/\//.test(host))throw guidanceError(new Error('Economy storage refuses canonical network paths'), 'guid-716d9dfc0ad4ff24');
     if (inside(vault,host) || inside(source,host)) throw guidanceError(new Error('Trusted economy checkpoint must be outside Vault and source repository'), 'guid-feb0ffba71279ca7');
     const ledger=new EconomyLedger({...options,policy:structuredClone(options.policy)},vault,host);
+    ledger.assertStorageBinding = binding?.assertBinding;
     await ensureFederationDirectory(vault,ledger.journal);
     await ledger.assertNoRecovery();
     try { ledger.lock=await open(ledger.lockPath,'wx',0o600); }
@@ -105,7 +113,7 @@ export class EconomyLedger {
   }
   private async assertLock(checkRecovery=true): Promise<void> {
     if(this.closed || !this.lock) throw guidanceError(new Error('Economy writer closed'), 'guid-a1020ffc45b796ef');
-    if(checkRecovery)await this.assertNoRecovery();
+    if(checkRecovery) { await this.assertStorageBinding?.(); await this.assertNoRecovery(); }
     const value=JSON.parse(await readFederationFile(this.vault,this.lockPath,{maxBytes:1024}));
     if(value.nonce!==this.nonce || value.pid!==process.pid || value.vault!==this.vault) throw guidanceError(new Error('Economy writer fencing failed'), 'guid-ec7e635eef6f86f6');
     const held=await this.lock.stat(), current=await lstat(this.lockPath);

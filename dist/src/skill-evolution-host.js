@@ -6,6 +6,7 @@ import { lstat, realpath } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { readFederationFile } from './public-federation-storage.js';
 import { profileFingerprint } from './skill-evaluation.js';
+import { createTrustedSkillEvaluationProfiles } from './skill-evaluation-profiles.js';
 const inside = (root, path) => { const r = relative(root, path); return !r || (r !== '..' && !r.startsWith(`..${sep}`) && !isAbsolute(r)); };
 const local = (path) => isAbsolute(path) && !/^(?:\\\\|\/\/)/.test(path);
 const runFile = promisify(execFile);
@@ -45,7 +46,7 @@ export async function assertHostPrivateStorage(paths) {
     }
 }
 /** Host-only loader. JSON selects registered profiles; it cannot load scripts or inline keys. */
-export async function loadSkillEvolutionHostConfig(configPath, expectedVault, registeredProfiles = []) {
+export async function loadSkillEvolutionHostConfig(configPath, expectedVault, registeredProfiles = createTrustedSkillEvaluationProfiles()) {
     if (!local(configPath) || !isAbsolute(expectedVault))
         throw guidanceError(new Error('Skill evolution configuration requires absolute private host and Vault paths'), 'guid-edec5828dc744b3d');
     const directory = dirname(configPath), vault = await realpath(expectedVault);

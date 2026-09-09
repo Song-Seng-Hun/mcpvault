@@ -28,7 +28,8 @@ const server = createServer(vaultPath, { skillEvolution: configuration });
 The key must have at least 32 characters; provision strong random key material,
 retain it privately across restarts, and keep a recoverable private backup. Losing
 or rotating it invalidates existing attestations; do not silently regenerate a key
-on startup. No production evaluator is bundled. Keep the same key/profile configuration across cooperating
+on startup. The host can select the bounded document evaluator described below.
+Keep the same key/profile configuration across cooperating
 server instances for the command center.
 
 The ordinary server also accepts `--skill-evolution-config <absolute-private-file>`.
@@ -53,9 +54,25 @@ then generates and durably saves a random key without printing it. Pass an expli
 local `-PrivateDirectory` and exact `-VaultPath`; it refuses existing key/config
 files rather than rotating them. Back up that directory to an equally restricted
 host destination. Never place its contents in a repository or Vault backup.
-The stock CLI has no approved evaluator registry; use an empty `profileIds` list
-for experience/candidate collection. Trusted host integrations may pass reviewed
-profiles to `loadSkillEvolutionHostConfig` or use the SDK directly. Configuration
+
+The ordinary CLI loader registers `local-tdd-document-contract-v1` for the admitted
+`local-test-driven-development` skill. Select that exact ID in `profileIds` to run
+six deterministic document checks comparing baseline and candidate: test-first,
+red/green/refactor order, canonical-path/service-account verification, credential
+output prohibition, and sandbox-versus-live evidence. Fenced, quoted, inline-code,
+comment and frontmatter examples do not count as procedure clauses. The profile
+executes no candidate code, file reads, shell commands or model calls.
+
+This is document evidence, not a claim that a model obeyed it or that deployment
+succeeded. It intentionally returns `approval_required`; the existing authenticated
+host-authorized `admin` agent may review semantics and evidence and use the
+revision/fingerprint-checked `mode: approved` promotion flow. A human is not required
+by the protocol. Exact English matching can conservatively miss paraphrases. Other
+skills still need appropriate individually registered evaluators; one TDD profile
+is not a universal skill judge.
+Keep `profileIds` empty for experience/candidate collection unless explicitly
+enabling the reviewed bundled profile above. Trusted host integrations may pass
+additional reviewed profiles to `loadSkillEvolutionHostConfig` or use the SDK directly. Configuration
 does not import arbitrary JavaScript, execute note content or confer approval rights
 through model/display names. Empty approver accounts disable manual promotion.
 

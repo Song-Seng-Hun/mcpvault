@@ -100,7 +100,7 @@ export class LayeredMemoryService {
         if (params.pathPrefix && !canAccess(prefix + '/probe.md'))
             throw guidanceError(new Error('Memory pathPrefix must remain in the selected scope'), 'guid-4e820df2ca7dade6');
         const visible = (note) => !isModerationHidden(note.frontmatter)
-            && !isFictionDomain(note.frontmatter)
+            && !isFictionDomain(note.frontmatter, note.path)
             && !(note.frontmatter.mcpvault_type === 'blog_post' && note.frontmatter.status === 'draft')
             && records(note).some(e => e && MEMORY_ROLES.includes(e.role));
         // Read every metadata page before using negative facts such as "uncorrected".

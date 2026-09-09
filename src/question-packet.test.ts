@@ -49,6 +49,19 @@ test('an explicit fiction path remains readable but its linked fiction evidence 
   expect(JSON.stringify(linked)).not.toContain('FICTION_LINK_CANARY');
 });
 
+test('raw story manuscript output is excluded from real-world retrieval and linked evidence', async () => {
+  const output = 'Community/Stories/book/Exports/manuscript.output.md';
+  await note(output, 'storyexportneedle FICTION_EXPORT_CANARY an invented library rule.');
+  await note('Knowledge/Real.md', `---\nevidence_paths: ["${output}"]\n---\nstoryexportneedle verified operating rule.`);
+  const discovered = await packet.read({ query: 'storyexportneedle', includeSemantic: false, maxChars: 12000 });
+  const linked = await packet.read({ query: 'storyexportneedle', path: 'Knowledge/Real.md', includeSemantic: false, maxChars: 12000 });
+  expect(JSON.stringify(discovered)).not.toContain('FICTION_EXPORT_CANARY');
+  expect(JSON.stringify(linked)).not.toContain('FICTION_EXPORT_CANARY');
+  expect(discovered.sources.map((s: any) => s.path)).toContain('Knowledge/Real.md');
+  const explicit = await packet.read({ query: 'storyexportneedle', path: output, includeSemantic: false, maxChars: 12000 });
+  expect(JSON.stringify(explicit)).toContain('FICTION_EXPORT_CANARY');
+});
+
 test.each(['edit', 'delete', 'hide', 'revoke'] as const)('drops all collected text on intervening %s', async mode => {
   await note('Knowledge/A.md', '# Retry\n\nretry ORIGINALSECRET.');
   const read = fs.readNote.bind(fs);

@@ -20,7 +20,7 @@ const initial=JSON.parse(await readFederationFile(dirname(actualConfig),actualCo
 const config=await loadEconomyHostConfig(actualConfig,initial.vaultPath);
 if(operation==='inspect') {console.log(JSON.stringify(await inspectEconomyRecovery(config)));process.exit(0);}
 const probes=[];
-for(const path of [config.vaultPath,config.hostPath])probes.push(await probeEconomyStorage(path));
+for(const path of [config.ledgerPath ?? config.vaultPath,config.hostPath])probes.push(await probeEconomyStorage(path));
 if(operation==='doctor'){console.log(JSON.stringify({enabled:config.policy.enabled,probes,powerLossGuarantee:false}));process.exit(0);}
 const command=commandPath?JSON.parse(await readFederationFile(dirname(await realpath(commandPath)),await realpath(commandPath),{maxBytes:8192})):undefined;
 if(operation==='recover') {

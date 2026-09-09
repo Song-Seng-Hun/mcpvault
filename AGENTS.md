@@ -132,6 +132,17 @@ managed `Community/` paths.
 
 ## Repository workflow
 
+Standing user instruction (2026-09-10): for implementation work, complete the
+existing-branch workflow through verified NAS-backed runtime deployment, commit,
+and push to the user's fork. Do not create a branch or worktree unless explicitly
+requested. Do not stop at "not deployed / not committed / not pushed" after the
+user has authorized implementation; report a concrete blocker if any step fails.
+Research-only, planning, and review requests still do not authorize implementation.
+Keep deployment rollback artifacts and verify live endpoints; preserve existing
+Vault data, world state, economy journals, and credentials. This is not permission
+to publish packages/releases, open upstream PRs, or force-push. Exclude local
+host data and secrets from commits and preserve unrelated changes.
+
 Primary commands:
 
 ```bash

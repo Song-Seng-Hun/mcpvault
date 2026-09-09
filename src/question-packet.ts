@@ -63,7 +63,7 @@ export class QuestionPacketService {
         if (++examined > (situation ? 20 : 40)) { gaps.add('metadata_window_exhausted'); return; }
         const value = (await this.fs.readNoteMetadata([path], canAccess, { fresh: true, strict: true, maxBytes: RETRIEVAL_NOTE_BYTES }))[0];
         const allowed = value && !isModerationHidden(value.frontmatter)
-          && (allowFiction || !isFictionDomain(value.frontmatter))
+          && (allowFiction || !isFictionDomain(value.frontmatter, path))
           && !(situation && isSituationMemory(value.frontmatter))
           && !(value.frontmatter.mcpvault_type === 'blog_post' && value.frontmatter.status !== 'published');
         metadata.set(path, allowed ? value : undefined);
@@ -76,7 +76,7 @@ export class QuestionPacketService {
       const meta = await getMetadata(path);
       if (!meta) return;
       const value = await this.fs.readNote(path, RETRIEVAL_NOTE_BYTES);
-      if (!canAccess(path) || isModerationHidden(value.frontmatter) || (path !== explicitPath && isFictionDomain(value.frontmatter)) || value.revision !== meta.revision || (expectedRevision && value.revision !== expectedRevision)) throw guidanceError(new Error('Context changed; retry the question'), 'guid-9e2c5234ada24056');
+      if (!canAccess(path) || isModerationHidden(value.frontmatter) || (path !== explicitPath && isFictionDomain(value.frontmatter, path)) || value.revision !== meta.revision || (expectedRevision && value.revision !== expectedRevision)) throw guidanceError(new Error('Context changed; retry the question'), 'guid-9e2c5234ada24056');
       sources.set(path, value); return value;
     };
     const retry = { endpointId: situation ? 'wiki.context_pack' : 'wiki.answer_packet', arguments: { query, ...(params.path && { path: params.path.startsWith('scope://') ? params.path : publicPath(params.path) }), ...(situation && { ...situation }), includeSemantic: params.includeSemantic !== false, maxChars } };

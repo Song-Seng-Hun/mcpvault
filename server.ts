@@ -100,7 +100,7 @@ if (mcpHttpPort === undefined && (mcpHttpHost || mcpHttpTlsCert || mcpHttpTlsKey
 const hostEconomy=economyConfig?await loadEconomyHostConfig(resolve(economyConfig),vaultPath):undefined;
 let economy:NonNullable<Parameters<typeof createServer>[1]>['economy'];
 if(hostEconomy?.policy.enabled) {
-  for(const path of [hostEconomy.vaultPath,hostEconomy.hostPath])await probeEconomyStorage(path);
+  for(const path of [hostEconomy.ledgerPath ?? hostEconomy.vaultPath,hostEconomy.hostPath])await probeEconomyStorage(path);
   economy={policy:hostEconomy.policy,ledger:await EconomyLedger.open({...hostEconomy,storageVerified:true})};
 }
 let mcpServer:ReturnType<typeof createServer>;

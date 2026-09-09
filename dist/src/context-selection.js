@@ -20,7 +20,7 @@ export async function selectSituationCandidates(fs, access, retrieval, query, op
     let after;
     let examined = 0;
     do {
-        const batch = await fs.queryNotes({ limit: 500, includeContent: false, includeTotal: false, sortBy: 'path', ...(after && { after }) }, canAccess, n => !isModerationHidden(n.frontmatter) && !isFictionDomain(n.frontmatter) && !n.frontmatter.mcpvault_type && !isSituationMemory(n.frontmatter));
+        const batch = await fs.queryNotes({ limit: 500, includeContent: false, includeTotal: false, sortBy: 'path', ...(after && { after }) }, canAccess, n => !isModerationHidden(n.frontmatter) && !isFictionDomain(n.frontmatter, n.path) && !n.frontmatter.mcpvault_type && !isSituationMemory(n.frontmatter));
         for (const n of batch.notes) {
             if (++examined > 10000)
                 throw guidanceError(new Error('Situation metadata window exhausted'), 'guid-cb08ef637cea601e');

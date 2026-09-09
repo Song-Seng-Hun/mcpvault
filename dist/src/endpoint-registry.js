@@ -1,6 +1,7 @@
 import { guidanceError, guidanceText } from './guidance-runtime.js';
 import { boundSearchResults } from './search-limits.js';
 import { projectGuidance } from './guidance-runtime.js';
+import { STORY_OPERATIONS } from './story-tools.js';
 const CONTROL_TOOLS = new Set(['orient_wiki', 'get_agent_pulse', 'list_active_capabilities', 'search_capabilities', 'call_endpoint']);
 const ENDPOINT_QUERY_STOP_WORDS = new Set([
     'a', 'an', 'and', 'are', 'as', 'at', 'be', 'by', 'can', 'could', 'do', 'for', 'from', 'get', 'give', 'i', 'in', 'into', 'is', 'it', 'me', 'of', 'on', 'or', 'please', 'show', 'that', 'the', 'to', 'use', 'want', 'with', 'would',
@@ -499,9 +500,15 @@ const ENDPOINT_ALIASES = {
     synthesize_workshop: ['workshop', 'meeting', 'synthesis', 'decision', 'conclusion'],
 };
 export function endpointIdForTool(toolName) {
+    const story = Object.entries(STORY_OPERATIONS).find(([, spec]) => spec.tool === toolName);
+    if (story)
+        return `story.${story[0]}`;
     return EXPLICIT_IDS[toolName] || `mcp.${toolName}`;
 }
 function routeFor(tool, mutating) {
+    // The generic executor has no path-bound projectId for a body to override.
+    if (Object.values(STORY_OPERATIONS).some(spec => spec.tool === tool.name))
+        return { method: mutating ? 'POST' : 'GET', url: `/api/endpoint/${endpointIdForTool(tool.name)}` };
     const explicit = EXPLICIT_ROUTES[tool.name];
     if (explicit)
         return mutating && explicit.method !== 'POST' ? { ...explicit, method: 'POST' } : explicit;
@@ -687,6 +694,22 @@ export class EndpointRegistry {
             // One mixed-operation endpoint: discovery must not hide its public read
             // just because writes require authority. Dispatch still checks the exact
             // operation, independently of these advisory availability descriptions.
+            if (item.endpointId.startsWith('story.')) {
+                const spec = STORY_OPERATIONS[item.endpointId.slice('story.'.length)];
+                if (spec) {
+                    const read = { available: true, state: 'ready', requires: [] };
+                    const requires = ['write', 'task'];
+                    const writeMissing = requires.filter(required => !context.capabilities.has(required));
+                    const writeAvailable = !context.readOnly && context.authenticated && writeMissing.length === 0;
+                    const writeReason = context.readOnly ? 'server is read-only' : !context.authenticated ? 'authentication required'
+                        : writeMissing.length ? `capability required: ${writeMissing.join(', ')}` : undefined;
+                    const write = { available: writeAvailable, state: context.readOnly ? 'disabled' : writeAvailable ? 'ready' : 'locked',
+                        requires, ...(writeReason && { reason: writeReason }) };
+                    return { ...item, ...(spec.reads.length ? read : write), operations: Object.fromEntries([
+                            ...spec.reads.map(op => [op, read]), ...spec.writes.map(op => [op, write]),
+                        ]) };
+                }
+            }
             if (['skill.candidate', 'skill.evaluate', 'skill.promote', 'skill.rollback'].includes(item.endpointId)) {
                 const write = { available, state, requires: item.requires, ...(reason && { reason }) };
                 const publicRead = { available: true, state: 'ready', requires: [] };

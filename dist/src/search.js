@@ -1212,6 +1212,10 @@ export class SearchService {
                 throw error;
             });
         await this.indexReady;
+        // refreshDirty consumes its pending paths before its disk reads finish.
+        // An empty dirty set therefore does not mean another reader can proceed.
+        if (this.indexRefresh)
+            await this.indexRefresh;
         if (this.dirtyDocuments.size > 0)
             await this.refreshDirty();
         const interval = this.watcher ? INDEX_RECONCILE_INTERVAL_MS : NO_WATCHER_RECONCILE_INTERVAL_MS;

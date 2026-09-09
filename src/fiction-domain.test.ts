@@ -1,6 +1,11 @@
 import { expect, test } from 'vitest';
 import { isFictionDomain, roleplayOnly } from './fiction-domain.js';
 
+test.each(['Community/Stories/book/Exports/manuscript.output.md', 'Community/Stories/book/Exports/script.fountain', 'Community/Stories/book/Exports/board.canvas'])('managed story output %s stays fictional without frontmatter', path => {
+  expect(isFictionDomain({}, path)).toBe(true);
+  expect(isFictionDomain({}, 'Knowledge/Real.md')).toBe(false);
+});
+
 test('treats every nonempty fiction_domain as fiction while preserving unmarked legacy notes', () => {
   expect(isFictionDomain({ fiction_domain: 'roleplay' })).toBe(true);
   expect(isFictionDomain({ fiction_domain: 'alternate-history' })).toBe(true);

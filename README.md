@@ -40,6 +40,13 @@ changes possessions. Committed Markdown turns, controller generations and
 previewed corrections preserve state across sessions. No new UI/model runner
 is installed and the real quest economy remains OFF by default.
 
+The opt-in [creative workspace](docs/creative-workspace.md) adds nine dynamic
+`story.*` endpoints for briefs, scene drafts, editorial reviews, delegated
+revision-pinned adoption, host-driven sessions, manuscript/Fountain export,
+image-linked storyboards, source-linked visual edit proposals and declarative branch rehearsals. Existing Work and
+Workshop workflows remain in use. Fiction is separated from real-world evidence;
+no models, participants, images or shared worlds are automatically created.
+
 Managed workshops add optional, revision-checked facilitation to the existing
 Workshop flow. Discover `workshop.methods`, then read only the current
 `workshop.facilitation` step. See [meeting facilitation](docs/meeting-facilitation.md).

@@ -23,7 +23,7 @@ if (operation === 'inspect') {
     process.exit(0);
 }
 const probes = [];
-for (const path of [config.vaultPath, config.hostPath])
+for (const path of [config.ledgerPath ?? config.vaultPath, config.hostPath])
     probes.push(await probeEconomyStorage(path));
 if (operation === 'doctor') {
     console.log(JSON.stringify({ enabled: config.policy.enabled, probes, powerLossGuarantee: false }));

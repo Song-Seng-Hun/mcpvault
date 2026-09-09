@@ -4,6 +4,7 @@ import { lstat, open, readdir, realpath, unlink } from 'node:fs/promises';
 import { basename, dirname, isAbsolute, join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { FrontmatterHandler } from './frontmatter.js';
+import { assertLegacyEconomyStorage, bindEconomyStorage } from './economy-storage.js';
 import { ensureFederationDirectory, readFederationFile, writeFederationFileAtomic } from './public-federation-storage.js';
 import { applyEconomyCommand, economyRevision, initialEconomy, validateEconomyPolicy } from './economy-model.js';
 const ZERO = '0'.repeat(64);
@@ -59,6 +60,7 @@ export class EconomyLedger {
     queue = Promise.resolve();
     closed = false;
     closing;
+    assertStorageBinding;
     constructor(options, vault, host) {
         this.options = options;
         this.vault = vault;
@@ -74,9 +76,13 @@ export class EconomyLedger {
         validateEconomyPolicy(options.policy);
         if (!options.storageVerified)
             throw guidanceError(new Error('Economy requires verified local storage; network/unknown storage is refused'), 'guid-1a13954061586bf2');
-        if (!isAbsolute(options.vaultPath) || !isAbsolute(options.hostPath) || /^\\\\|^\/\//.test(options.vaultPath) || /^\\\\|^\/\//.test(options.hostPath))
+        if (options.ledgerPath === undefined)
+            await assertLegacyEconomyStorage(options);
+        const binding = options.ledgerPath === undefined ? undefined : await bindEconomyStorage(options, initialize);
+        const physicalVault = binding?.ledgerPath ?? options.vaultPath;
+        if (!isAbsolute(physicalVault) || !isAbsolute(options.hostPath) || /^\\\\|^\/\//.test(physicalVault) || /^\\\\|^\/\//.test(options.hostPath))
             throw guidanceError(new Error('Economy storage requires absolute local paths'), 'guid-79ab65b5064fb27a');
-        const vault = await realpath(options.vaultPath), host = await realpath(options.hostPath);
+        const vault = await realpath(physicalVault), host = await realpath(options.hostPath);
         const moduleRoot = dirname(dirname(fileURLToPath(import.meta.url)));
         const source = await realpath(basename(moduleRoot) === 'dist' ? dirname(moduleRoot) : moduleRoot);
         if (/^\\\\|^\/\//.test(vault) || /^\\\\|^\/\//.test(host))
@@ -84,6 +90,7 @@ export class EconomyLedger {
         if (inside(vault, host) || inside(source, host))
             throw guidanceError(new Error('Trusted economy checkpoint must be outside Vault and source repository'), 'guid-feb0ffba71279ca7');
         const ledger = new EconomyLedger({ ...options, policy: structuredClone(options.policy) }, vault, host);
+        ledger.assertStorageBinding = binding?.assertBinding;
         await ensureFederationDirectory(vault, ledger.journal);
         await ledger.assertNoRecovery();
         try {
@@ -130,8 +137,10 @@ export class EconomyLedger {
     async assertLock(checkRecovery = true) {
         if (this.closed || !this.lock)
             throw guidanceError(new Error('Economy writer closed'), 'guid-a1020ffc45b796ef');
-        if (checkRecovery)
+        if (checkRecovery) {
+            await this.assertStorageBinding?.();
             await this.assertNoRecovery();
+        }
         const value = JSON.parse(await readFederationFile(this.vault, this.lockPath, { maxBytes: 1024 }));
         if (value.nonce !== this.nonce || value.pid !== process.pid || value.vault !== this.vault)
             throw guidanceError(new Error('Economy writer fencing failed'), 'guid-ec7e635eef6f86f6');

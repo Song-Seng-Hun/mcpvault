@@ -3,6 +3,7 @@ import type { Tool } from '@modelcontextprotocol/server';
 import type { ScopeCapability } from './scope-auth.js';
 import { boundSearchResults } from './search-limits.js';
 import { projectGuidance } from './guidance-runtime.js';
+import { STORY_OPERATIONS } from './story-tools.js';
 
 export interface EndpointDescriptor {
   endpointId: string;
@@ -536,10 +537,14 @@ const ENDPOINT_ALIASES: Record<string, string[]> = {
 };
 
 export function endpointIdForTool(toolName: string): string {
+  const story = Object.entries(STORY_OPERATIONS).find(([, spec]) => spec.tool === toolName);
+  if (story) return `story.${story[0]}`;
   return EXPLICIT_IDS[toolName] || `mcp.${toolName}`;
 }
 
 function routeFor(tool: Tool, mutating: boolean): { method: 'GET' | 'POST'; url: string } {
+  // The generic executor has no path-bound projectId for a body to override.
+  if (Object.values(STORY_OPERATIONS).some(spec => spec.tool === tool.name)) return { method: mutating ? 'POST' : 'GET', url: `/api/endpoint/${endpointIdForTool(tool.name)}` };
   const explicit = EXPLICIT_ROUTES[tool.name];
   if (explicit) return mutating && explicit.method !== 'POST' ? { ...explicit, method: 'POST' } : explicit;
   return { method: mutating ? 'POST' : 'GET', url: `/api/mcp/${tool.name}` };
@@ -720,6 +725,22 @@ export class EndpointRegistry {
         // One mixed-operation endpoint: discovery must not hide its public read
         // just because writes require authority. Dispatch still checks the exact
         // operation, independently of these advisory availability descriptions.
+        if (item.endpointId.startsWith('story.')) {
+          const spec = STORY_OPERATIONS[item.endpointId.slice('story.'.length)];
+          if (spec) {
+            const read = { available: true, state: 'ready' as const, requires: [] as string[] };
+            const requires = ['write', 'task'];
+            const writeMissing = requires.filter(required => !context.capabilities.has(required as ScopeCapability));
+            const writeAvailable = !context.readOnly && context.authenticated && writeMissing.length === 0;
+            const writeReason = context.readOnly ? 'server is read-only' : !context.authenticated ? 'authentication required'
+              : writeMissing.length ? `capability required: ${writeMissing.join(', ')}` : undefined;
+            const write = { available: writeAvailable, state: context.readOnly ? 'disabled' as const : writeAvailable ? 'ready' as const : 'locked' as const,
+              requires, ...(writeReason && { reason: writeReason }) };
+            return { ...item, ...(spec.reads.length ? read : write), operations: Object.fromEntries([
+              ...spec.reads.map(op => [op, read]), ...spec.writes.map(op => [op, write]),
+            ]) };
+          }
+        }
         if (['skill.candidate', 'skill.evaluate', 'skill.promote', 'skill.rollback'].includes(item.endpointId)) {
           const write = { available, state, requires: item.requires, ...(reason && { reason }) };
           const publicRead = { available: true, state: 'ready' as const, requires: [] as string[] };

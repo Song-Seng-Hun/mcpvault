@@ -17,10 +17,11 @@ export const WIKI_POLICY_TOPICS = [
     'ideation',
     'community',
     'roleplay',
+    'story',
     'portability',
     'safety',
 ];
-export const WIKI_POLICY_VERSION = 39;
+export const WIKI_POLICY_VERSION = 40;
 /**
  * The only policy that every MCP client must receive eagerly. Detailed
  * organization guidance is selected through wiki.policy so a rich Wiki does
@@ -38,6 +39,23 @@ export const MCPVAULT_SERVER_INSTRUCTIONS = [
     'This is shared working memory, not a passive browser. For an explicit request to participate in a project, orientation and pulse are preparation: follow the task packet to one useful authorized contribution or report a concrete blocker. A generic first look still ends after the primary action. Do not create filler activity. Detailed collaboration guidance is wiki.policy topic=work.',
 ].join(' ');
 const POLICY_TOPICS = {
+    story: {
+        purpose: 'Create, draft, review and explicitly select one fictional work with real participants and bounded host execution.',
+        rules: [
+            'Opt in with story.project create and a brief. Participants and showrunner are registered account IDs; only the owner can revoke delegation or change the budget. Creative delegation never grants publication, paid calls, private access or authority over another work.',
+            'Keep long manuscript bodies in story.artifact, not 280-character Workshop contributions. Use existing Work claims, handoffs and reviews; Workshop discussion links exact artifact/review revisions. Roles do not create identities or independent consensus.',
+            'Scene cards and manuscript share stable IDs. Use story.sequence for explicit presentation, chronology and shot order. Alternative IDs and branches preserve rejected paths. Flashbacks, beliefs and intentional exceptions are not automatic contradictions.',
+            'For source-linked visual edits, author a visual_model with exact scene revision and Unicode code-point passage offsets, then use story.visual read/preview/propose. Annotations are partial interpretations; stale models require rereading and re-annotation. Selected replacements create a separate alternative for review, not an automatic scene/sequence change. The server does not extract or rewrite with a model.',
+            'Use source revisions for dependencies and story.context for the smallest current scene context. Character knownBy and world_fact/belief/reader_reveal/author_plan are narrative filters, never ACLs. Fiction_domain story separates fiction from real-world evidence and memories.',
+            'Reviews pin exact source revisions and distinguish structure, line, continuity and reader passes. Findings and taste are advisory. Only current showrunner story.adopt selects an immutable snapshot through exact Project.md manifest pins; prepared snapshots and later drafts are not adopted.',
+            'The host executes story.session; the server never spawns models or participants. Two revision rounds lead to an explicit decision. Record pause reasons and use resume after checking current Work assignment, authority and sources. Step budget exhaustion waits for owner direction.',
+            'story.export defaults to adopted preview. Write requires exact revisions and a requestId. Check export health before relying on old output; changed upstream notes make summaries, reviews, shots and output stale. Never overwrite user-edited Canvas. Fountain is one-way export, images are linked references, not automatic downloads or generation.',
+            'Declarative branch rehearsal pins one graph revision, validates variables and paths and records proposal-only traces. No scripts and no changes to the shared roleplay world. Convert useful rehearsal material to a reviewed scene or setting candidate before explicit adoption.',
+            'Keep responses bounded with maxChars, fields and cursors. Revision-check every mutation, reuse one requestId for retries and reread the same target. Generic note writes cannot forge protected story records; Markdown remains authoritative.',
+        ],
+        routes: ['story.project', 'story.artifact', 'story.sequence', 'story.context', 'story.review', 'story.adopt', 'story.session', 'story.export', 'story.visual'],
+        avoid: ['automatic model calls', 'fiction as evidence or authority', 'invented participants', 'adoption by popularity or automatic quality scores'],
+    },
     roleplay: {
         purpose: 'Resume one persistent shared fictional world through existing chat/MCP, with validated state and bounded character context.',
         rules: [

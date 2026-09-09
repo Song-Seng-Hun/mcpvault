@@ -9,6 +9,7 @@ import { FrontmatterHandler } from './frontmatter.js';
 import { PathFilter } from './pathfilter.js';
 import { assertRoleplayMutationBoundary } from './roleplay-boundary.js';
 import { assertSkillEvolutionMutationBoundary } from './skill-evolution-boundary.js';
+import { assertStoryMutationBoundary } from './story-boundary.js';
 import { generateObsidianUri } from './uri.js';
 import type { ParsedNote, DirectoryListing, NoteWriteParams, DeleteNoteParams, DeleteResult, DeleteNotePreviewParams, DeleteNotePreviewResult, MoveNoteParams, MoveNotePreviewParams, MoveNotePreviewResult, MoveFileParams, MoveResult, BatchReadParams, BatchReadResult, UpdateFrontmatterParams, NoteInfo, TagManagementParams, TagManagementResult, PatchNoteParams, PatchNoteResult, PatchMultipleNotesParams, PatchMultipleNotesResult, NoteChangeSetResultItem, VaultStats, NoteHeading, ReadNoteLinesParams, BacklinksResult, OutlinksResult, UnresolvedLinksResult, OrphanNotesResult, DailyNoteResult, ListTasksParams, ListTasksResult, TaskItem, UpdateTaskParams, UpdateTaskResult, QueryNotesParams, QueryNotesResult, QueryNote, QueryNotesCursor, AuthorityShelfResult } from './types.js';
 import { extractObsidianLinkOccurrences } from './backlinks.js';
@@ -843,6 +844,7 @@ export class FileSystemService {
     const relativePathToVault = relative(this.vaultPath, fullPath);
     assertRoleplayMutationBoundary(relativePathToVault);
     assertSkillEvolutionMutationBoundary(relativePathToVault);
+    assertStoryMutationBoundary(relativePathToVault);
     this.assertNoticeMutation(relativePathToVault);
     assertEnterpriseStorageAccess(relativePathToVault, true);
     // Guard the canonical vault-relative destination for every service write,
@@ -868,16 +870,20 @@ export class FileSystemService {
 
   /** Recheck live host notice authority at dispatch, after awaited preparation. */
   private async writeProtectedFile(path: string, content: string, options: Parameters<typeof writeFile>[2] = 'utf8') {
+    assertStoryMutationBoundary(relative(this.vaultPath, path));
     assertSkillEvolutionMutationBoundary(relative(this.vaultPath, path));
     this.assertNoticeMutation(relative(this.vaultPath, path));
     return writeFile(path, content, options);
   }
   private async removeProtectedFile(path: string) {
+    assertStoryMutationBoundary(relative(this.vaultPath, path));
     assertSkillEvolutionMutationBoundary(relative(this.vaultPath, path));
     this.assertNoticeMutation(relative(this.vaultPath, path));
     return unlink(path);
   }
   private async renameProtectedFile(from: string, to: string) {
+    assertStoryMutationBoundary(relative(this.vaultPath, from));
+    assertStoryMutationBoundary(relative(this.vaultPath, to));
     assertSkillEvolutionMutationBoundary(relative(this.vaultPath, from));
     assertSkillEvolutionMutationBoundary(relative(this.vaultPath, to));
     this.assertNoticeMutation(relative(this.vaultPath, from));
@@ -898,6 +904,58 @@ export class FileSystemService {
    * a revision is not an access grant or a fresh moderation classification. */
   async readNoteRevision(path: string, maxBytes?: number): Promise<string> {
     return this.withNoteRead(path, fullPath => this.vaultIo.readUtf8Revision(fullPath, maxBytes));
+  }
+
+  /** Raw image fingerprint only; callers must separately enforce source scope.
+   * Do not broaden Markdown parsing or follow aliases into another scope. */
+  async readStoryImageRevision(path: string, maxBytes = 8 * 1024 * 1024): Promise<string | undefined> {
+    path = this.normalizePath(path);
+    if (!/\.(?:png|jpe?g|webp|gif)$/i.test(path)) throw guidanceError(new Error('Unsupported story image extension'), 'guid-a266a4677e9e7e10');
+    return this.readStoryBinaryRevision(path, maxBytes);
+  }
+
+  /** Managed output hashes use original bytes, including malformed UTF-8. */
+  async readStoryOutputRevision(path: string, maxBytes = 8 * 1024 * 1024): Promise<string | undefined> {
+    path = this.normalizePath(path);
+    if (!/^Community\/Stories\/[a-z0-9][a-z0-9-]{0,63}\/Exports\/[^/]+\.(?:canvas|fountain|output\.md)$/i.test(path)
+      || !this.pathFilter.isAllowed(path)) throw guidanceError(new Error('Invalid managed story output path'), 'guid-a3a17abad794a52c');
+    return this.readStoryBinaryRevision(path, maxBytes);
+  }
+
+  private async readStoryBinaryRevision(path: string, maxBytes: number): Promise<string | undefined> {
+    if (!Number.isSafeInteger(maxBytes) || maxBytes < 1 || maxBytes > 8 * 1024 * 1024) throw guidanceError(new Error('Invalid story image byte limit'), 'guid-071f863f15bc9bbc');
+    if (!this.pathFilter.isAllowedForListing(path)) throw guidanceError(new Error('Story image path is restricted'), 'guid-98660a88b15662d1');
+    const fullPath = this.resolvePath(path);
+    const lexical = relative(this.vaultPath, fullPath).replace(/\\/g, '/');
+    assertEnterpriseStorageAccess(lexical);
+    let handle: Awaited<ReturnType<typeof open>> | undefined;
+    try {
+      const canonical = relative(this.vaultPath, realpathSync(fullPath)).replace(/\\/g, '/');
+      if (canonical.toLowerCase() !== lexical.toLowerCase()) throw guidanceError(new Error('Story image canonical alias is not permitted'), 'guid-5faaf9b7b21c6248');
+      assertEnterpriseStorageAccess(canonical);
+      handle = await open(fullPath, 'r');
+      const before = await handle.stat();
+      if (!before.isFile()) throw guidanceError(new Error('Story image must be a regular file'), 'guid-866e58472ddea6f7');
+      if (before.size > maxBytes) throw guidanceError(new Error('Story image exceeds byte budget'), 'guid-d399378dd9215453');
+      const hash = createHash('sha256'); let size = 0;
+      for (;;) {
+        const buffer = Buffer.allocUnsafe(Math.min(64 * 1024, maxBytes - size + 1));
+        const { bytesRead } = await handle.read(buffer, 0, buffer.length, null);
+        if (!bytesRead) break;
+        size += bytesRead;
+        if (size > maxBytes) throw guidanceError(new Error('Story image exceeds byte budget'), 'guid-d399378dd9215453');
+        hash.update(buffer.subarray(0, bytesRead));
+      }
+      const after = await handle.stat();
+      if (before.size !== after.size || before.mtimeMs !== after.mtimeMs || before.ctimeMs !== after.ctimeMs) throw guidanceError(new Error('Story image changed during read'), 'guid-f9ad5110f3ed629b');
+      assertEnterpriseStorageAccess(canonical);
+      const currentPath = relative(this.vaultPath, realpathSync(fullPath)).replace(/\\/g, '/');
+      if (currentPath.toLowerCase() !== canonical.toLowerCase()) throw guidanceError(new Error('Story image canonical path changed'), 'guid-1a5516a0e9d90e67');
+      return hash.digest('hex');
+    } catch (error) {
+      if (!handle && error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') return undefined;
+      throw error;
+    } finally { await handle?.close(); }
   }
 
   private async withNoteRead<T>(path: string, read: (fullPath: string) => Promise<T>): Promise<T> {
@@ -956,7 +1014,9 @@ export class FileSystemService {
     }
     if (!exists) throw guidanceError(new Error(`Revision conflict for ${path}: expected ${expectedRevision}, but the note is missing`), 'guid-8adc796d5fab8d28');
     // A guard needs the exact content hash, not a parsed body/Properties copy.
-    const current = await this.readNoteRevision(path, maxBytes);
+    const current = /^Community\/Stories\/[a-z0-9][a-z0-9-]{0,63}\/Exports\/[^/]+(?:\.output\.md|\.fountain|\.canvas)$/i.test(path)
+      ? await this.readStoryOutputRevision(path, maxBytes)
+      : await this.readNoteRevision(path, maxBytes);
     if (current !== expectedRevision) {
       throw guidanceError(new Error(`Revision conflict for ${path}: expected ${expectedRevision}, current ${current}. Read the note again before changing it.`), 'guid-b2b68521ae3b9387');
     }
@@ -1015,9 +1075,12 @@ export class FileSystemService {
       return { path: guardPath, expectedRevision: guard.expectedRevision };
     });
     return this.withMutationLocks([path, ...normalizedGuards.map(guard => guard.path)], async () => {
-      await policy.assertAccess?.();
-      for (const guard of normalizedGuards) await this.assertExpectedRevision(guard.path, guard.expectedRevision, policy.maxBytes);
-      const receipt = await this.writeNoteUnlocked({ ...params, path }, policy.maxBytes, policy.assertAccess);
+      const assertCurrent = async () => {
+        await policy.assertAccess?.();
+        for (const guard of normalizedGuards) await this.assertExpectedRevision(guard.path, guard.expectedRevision, policy.maxBytes);
+      };
+      await assertCurrent();
+      const receipt = await this.writeNoteUnlocked({ ...params, path }, policy.maxBytes, assertCurrent);
       return { revision: receipt.revision };
     });
   }
@@ -1171,6 +1234,10 @@ export class FileSystemService {
       // Recheck caller policy after all awaited preparation, at write dispatch.
       const accessCheck = assertAccess?.();
       if (accessCheck) await accessCheck;
+      // External host editors do not participate in our revision locks. Check
+      // again after asynchronous authorization/source checks, immediately before
+      // dispatch, so an edit during those awaits is never silently truncated.
+      await this.assertExpectedRevision(path, expectedRevision, revisionMaxBytes);
       await this.writeProtectedFile(fullPath, finalContent!, expectedRevision === 'missing'
         ? { encoding: 'utf-8', flag: 'wx' } : 'utf-8');
       this.notifyNoteChanged(path, 'upsert');

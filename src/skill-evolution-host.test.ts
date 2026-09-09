@@ -46,6 +46,18 @@ test('does not load arbitrary profile code and admits only host-registered profi
   expect((await f.load(f.path, f.vault, [profile])).profiles).toEqual([profile]);
   await expect(f.load(f.path, f.vault, [profile, profile])).rejects.toThrow(/profile/);
 });
+
+test('the actual host loader supplies the trusted document evaluator when explicitly selected', async () => {
+  const f = await fixture();
+  await f.save({ ...f.config, approverAccounts: ['admin'], profileIds: ['local-tdd-document-contract-v1'] });
+  const host = await f.load(f.path, f.vault);
+  expect(host.profiles).toHaveLength(1);
+  expect(host.profiles[0]).toMatchObject({ id: 'local-tdd-document-contract-v1', skillId: 'local-test-driven-development' });
+  const result = await host.profiles[0]!.evaluate({ skillId: 'local-test-driven-development', baseline: 'Unchanged text', candidate: 'Unchanged text', signal: new AbortController().signal });
+  expect(result.risk).toBe('approval_required');
+  expect(result.cases).toHaveLength(6);
+  expect(result.cases.every(c => c.baseline === c.candidate)).toBe(true);
+});
 test('rejects config in Vault, key traversal and linked private directories', async () => {
   const f = await fixture(), publicConfig = join(f.vault, 'config.json');
   await writeFile(publicConfig, JSON.stringify(f.config));

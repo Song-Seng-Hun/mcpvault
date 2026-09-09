@@ -9,6 +9,7 @@ import { readFederationFile, writeFederationFileAtomic, ensureFederationDirector
 import { economyRevision, validateEconomyPolicy } from './economy-model.js';
 import { assertContiguousEconomyJournalNames } from './economy-ledger.js';
 import { isModerationHidden } from './moderation-policy.js';
+import { assertLegacyEconomyStorage, bindEconomyStorage, validateEconomyStoragePaths } from './economy-storage.js';
 const inside = (base, path) => { const r = relative(base, path); return !r || (!r.startsWith(`..${sep}`) && r !== '..' && !isAbsolute(r)); };
 const missing = (e) => Boolean(e && typeof e === 'object' && 'code' in e && e.code === 'ENOENT');
 async function optional(root, path, maxBytes) {
@@ -87,7 +88,7 @@ export async function loadEconomyHostConfig(configPath, expectedVault) {
     if (inside(vault, actualConfig) || inside(source, actualConfig))
         throw guidanceError(new Error('Economy config must be private, outside Vault and source'), 'guid-b5d3635a1bb10ce3');
     const raw = JSON.parse(await readFederationFile(root, actualConfig, { maxBytes: 32768 }));
-    if (!raw || raw.version !== 1 || Object.keys(raw).some(k => !['version', 'vaultPath', 'hostPath', 'policy'].includes(k)))
+    if (!raw || raw.version !== 1 || Object.keys(raw).some(k => !['version', 'vaultPath', 'hostPath', 'ledgerPath', 'policy'].includes(k)))
         throw guidanceError(new Error('Invalid host economy configuration'), 'guid-fb1b25c7414d31b7');
     if (typeof raw.vaultPath !== 'string' || typeof raw.hostPath !== 'string' || !isAbsolute(raw.vaultPath) || !isAbsolute(raw.hostPath))
         throw guidanceError(new Error('Invalid vault/host path'), 'guid-231b0a938277f5a3');
@@ -96,10 +97,11 @@ export async function loadEconomyHostConfig(configPath, expectedVault) {
         throw guidanceError(new Error('Economy config belongs to another vault'), 'guid-ddfb5503c236a2ba');
     if (inside(vault, host) || inside(source, host) || !inside(host, actualConfig))
         throw guidanceError(new Error('Config and checkpoint require a private host directory outside Vault/source'), 'guid-3b9689fb5daac093');
+    const separated = raw.ledgerPath === undefined ? undefined : await validateEconomyStoragePaths(raw);
     const policy = validateEconomyPolicy(raw.policy);
     if (policy.enabled && policy.treasuryWeeklyBudget === undefined)
         throw guidanceError(new Error('Enabled host policy requires explicit treasuryWeeklyBudget (pilot: 500)'), 'guid-40f10ea885c6fdc1');
-    return { version: 1, vaultPath: vault, hostPath: host, policy };
+    return { version: 1, vaultPath: vault, hostPath: host, ...(separated && { ledgerPath: separated.ledgerPath }), policy };
 }
 /** Conservative OS classification plus a bounded exclusive-create/fsync/rename
  * probe. This checks supported local semantics, not power-loss hardware claims. */
@@ -167,12 +169,15 @@ export async function probeEconomyStorage(directory) {
     }
 }
 export async function inspectEconomyRecovery(options) {
-    const vault = await realpath(options.vaultPath), host = await realpath(options.hostPath);
+    if (options.ledgerPath === undefined)
+        await assertLegacyEconomyStorage(options);
+    const binding = options.ledgerPath === undefined ? undefined : await bindEconomyStorage(options);
+    const vault = await realpath(binding?.ledgerPath ?? options.vaultPath), host = await realpath(options.hostPath);
     const lockPath = join(vault, '.mcpvault-economy', 'writer.lock');
     const lock = await optional(vault, lockPath, 1024);
     const checkpoint = await optional(host, join(host, `economy-${economyRevision(vault.toLowerCase())}.checkpoint.json`), 2048);
     const names = assertContiguousEconomyJournalNames(await readdir(join(vault, '.mcpvault-economy', 'journal')));
-    return { fingerprint: economyRevision({ vault, lock, checkpoint, names }), lock: lock ? JSON.parse(lock) : null,
+    return { fingerprint: economyRevision({ vault, lock, checkpoint, names, ...(binding && { wiki: binding.vaultPath }) }), lock: lock ? JSON.parse(lock) : null,
         checkpoint: checkpoint ? JSON.parse(checkpoint) : null, journalFiles: names.length, action: 'Stop the exact server, inspect, then recover only a confirmed dead writer. Never reset journal/checkpoint.' };
 }
 /** Runs inside the ledger's serialized commit path.  It deliberately receives
@@ -195,7 +200,10 @@ export async function validateOperatorAdjudication(state, command, fs) {
 export async function recoverEconomyWriter(options, approval) {
     if (typeof approval.reason !== 'string' || !approval.reason.trim() || approval.reason.length > 1000)
         throw guidanceError(new Error('Recovery reason required'), 'guid-43c69bbc4794e61b');
-    const vault = await realpath(options.vaultPath), host = await realpath(options.hostPath);
+    if (options.ledgerPath === undefined)
+        await assertLegacyEconomyStorage(options);
+    const binding = options.ledgerPath === undefined ? undefined : await bindEconomyStorage(options);
+    const vault = await realpath(binding?.ledgerPath ?? options.vaultPath), host = await realpath(options.hostPath);
     const gatePath = join(vault, '.mcpvault-economy', 'recovery.lock');
     await ensureFederationDirectory(vault, dirname(gatePath));
     const gate = await acquireRecoveryGate(vault, gatePath);
@@ -218,6 +226,7 @@ export async function recoverEconomyWriter(options, approval) {
         // A second recoverer cannot take this gate automatically. Reassert our
         // nonce immediately before the irreversible writer-lock unlink anyway.
         await assertRecoveryGate(gatePath, gate);
+        await binding?.assertBinding();
         if ((await lstat(target)).isSymbolicLink())
             throw guidanceError(new Error('Writer lock symlink refused'), 'guid-a8b59a887636dcbe');
         await unlink(target);

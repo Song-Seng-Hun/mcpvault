@@ -82,6 +82,12 @@ export declare class FileSystemService {
     /** Hash current decoded UTF-8 without parsing. Callers still enforce scope;
      * a revision is not an access grant or a fresh moderation classification. */
     readNoteRevision(path: string, maxBytes?: number): Promise<string>;
+    /** Raw image fingerprint only; callers must separately enforce source scope.
+     * Do not broaden Markdown parsing or follow aliases into another scope. */
+    readStoryImageRevision(path: string, maxBytes?: number): Promise<string | undefined>;
+    /** Managed output hashes use original bytes, including malformed UTF-8. */
+    readStoryOutputRevision(path: string, maxBytes?: number): Promise<string | undefined>;
+    private readStoryBinaryRevision;
     private withNoteRead;
     noteExists(path: string): Promise<boolean>;
     private assertExpectedRevision;

@@ -57,6 +57,8 @@ import { SkillEvolutionService } from './skill-evolution.js';
 import { getSkillEvolutionTools, SKILL_MUTATING_TOOLS, skillReadAlias } from './skill-evolution-tools.js';
 import { WorkGroupService } from './work-groups.js';
 import { getRoleplayTools, ROLEPLAY_MUTATING_TOOLS } from './roleplay-tools.js';
+import { getStoryTools, STORY_MUTATING_TOOLS, storyReadAlias, storyEndpointForTool, assertStoryOperation } from './story-tools.js';
+import { StoryService } from './story-service.js';
 import { getNoticeTools } from './notice-tools.js';
 import { NoticeRegistry, NoticeService } from './notices.js';
 import { GuidanceCatalog } from './guidance-catalog.js';
@@ -222,6 +224,7 @@ function requestFairnessKey(args) {
     return `token:${(hash >>> 0).toString(16)}`;
 }
 const MUTATING_TOOLS = new Set([
+    ...STORY_MUTATING_TOOLS,
     ...SKILL_MUTATING_TOOLS,
     ...ENTERPRISE_FEDERATION_MUTATING_TOOLS,
     "write_note",
@@ -317,6 +320,9 @@ const CAPABILITY_FOR_TOOL = {
     record_community_participation: "profile",
     create_agent_task: "task",
     manage_work_project: 'task',
+    manage_story_project: 'task', manage_story_artifact: 'task', manage_story_sequence: 'task',
+    manage_story_review: 'task', adopt_story_artifact: 'task', manage_story_session: 'task', manage_story_export: 'task',
+    manage_story_visual: 'task',
     record_skill_experience: 'write', manage_skill_candidate: 'write', evaluate_skill: 'write', promote_skill: 'write', rollback_skill: 'write',
     preview_skill_promotion: 'write', preview_skill_rollback: 'write',
     manage_work_group: 'task',
@@ -887,6 +893,7 @@ export function createServer(vaultPath, options = {}) {
         ...getResearchBridgeTools(),
         ...getChatTools(),
         ...getRoleplayTools(),
+        ...getStoryTools(),
         ...getNoticeTools(),
         ...getReferenceTools(),
         ...getWhisperTools(),
@@ -1261,7 +1268,7 @@ export function createServer(vaultPath, options = {}) {
         const request = { params: { name: requestedToolName, arguments: requestArgs } };
         let toolName = requestedToolName;
         let args = request.params.arguments;
-        if (readOnly && MUTATING_TOOLS.has(toolName) && !skillReadAlias(toolName, args?.op) && !(toolName === 'manage_wiki_moc_region' && args?.operation === 'status') && !(['manage_work_project', 'manage_work_group', 'manage_community_participation'].includes(toolName) && (args?.op === undefined || args?.op === 'read'))) {
+        if (readOnly && MUTATING_TOOLS.has(toolName) && !storyReadAlias(toolName, args?.op) && !skillReadAlias(toolName, args?.op) && !(toolName === 'manage_wiki_moc_region' && args?.operation === 'status') && !(['manage_work_project', 'manage_work_group', 'manage_community_participation'].includes(toolName) && (args?.op === undefined || args?.op === 'read'))) {
             await audit.record({ tool: toolName, ...(args && typeof args === 'object' ? { args: args } : {}), outcome: 'error', error: 'read-only mode' });
             return {
                 content: [{
@@ -1297,6 +1304,7 @@ export function createServer(vaultPath, options = {}) {
             if (toolName === 'manage_wiki_moc_region' && rawArgs.operation === 'status')
                 toolName = 'read_wiki_moc_region_status';
             toolName = skillReadAlias(toolName, rawArgs.op) || toolName;
+            toolName = storyReadAlias(toolName, rawArgs.op) || toolName;
             if (toolName === 'manage_work_project' && (rawArgs.op === undefined || rawArgs.op === 'read'))
                 toolName = 'read_work_project';
             if (toolName === 'manage_work_group' && (rawArgs.op === undefined || rawArgs.op === 'read'))
@@ -1399,6 +1407,24 @@ export function createServer(vaultPath, options = {}) {
                 if (federation && new Set(['publish_blog_post', 'delete_blog_post', 'comment_on_blog_post', 'edit_blog_comment', 'delete_blog_comment', 'update_agent_profile', 'get_agent_profile', 'list_agent_profiles', 'list_blog_posts', 'read_blog_post', 'list_blog_comments', 'public_federation_pull', 'public_federation_retry', 'public_federation_get', 'public_federation_list']).has(toolName)) {
                     const { accessToken: _token, password: _password, invitationToken: _invitation, principal: _claimedPrincipal, ...publicArgs } = trimmedArgs;
                     return jsonResult(await federation.dispatch(toolName, publicArgs, principal), trimmedArgs.prettyPrint);
+                }
+                const storyEndpoint = storyEndpointForTool(toolName);
+                if (storyEndpoint) {
+                    assertStoryOperation(storyEndpoint, trimmedArgs.op);
+                    const storyArgs = { ...trimmedArgs };
+                    // REST query parameters are strings. Normalize only bounded read
+                    // controls; operation names and all mutation inputs retain their types.
+                    if (!STORY_MUTATING_TOOLS.has(toolName)) {
+                        for (const key of ['maxChars', 'limit']) {
+                            if (typeof storyArgs[key] === 'string' && /^\d{1,5}$/.test(storyArgs[key]))
+                                storyArgs[key] = Number(storyArgs[key]);
+                        }
+                    }
+                    const service = new StoryService(fileSystem, scopeAccess, references, scopeAuth, work, agentTasks, {
+                        readOnly, assertActor: async () => { await revalidateActor(); },
+                        changed: path => queueReadModelChange(path, 'upsert'),
+                    });
+                    return jsonResult(await service.execute(storyEndpoint, storyArgs, principal), false);
                 }
                 switch (toolName) {
                     case "get_scope_context": {

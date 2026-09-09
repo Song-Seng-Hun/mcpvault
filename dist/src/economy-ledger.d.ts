@@ -3,6 +3,8 @@ export interface EconomyLedgerOptions {
     vaultPath: string;
     /** Existing private host directory outside the Vault and source checkout. */
     hostPath: string;
+    /** Optional explicitly bound local journal directory for a separate live Wiki. */
+    ledgerPath?: string;
     /** Explicit host attestation: local storage with exclusive create + atomic rename.
      * Never accepted as a tool argument. Network/NAS storage must not be attested. */
     storageVerified: boolean;
@@ -31,6 +33,7 @@ export declare class EconomyLedger {
     private queue;
     private closed;
     private closing;
+    private assertStorageBinding;
     private constructor();
     static initialize(options: EconomyLedgerOptions): Promise<EconomyLedger>;
     static open(options: EconomyLedgerOptions): Promise<EconomyLedger>;

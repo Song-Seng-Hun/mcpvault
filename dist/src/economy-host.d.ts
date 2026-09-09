@@ -1,10 +1,11 @@
 import { type EconomyCommand, type EconomyPolicy, type EconomyState } from './economy-model.js';
-import { type EconomyLedgerOptions } from './economy-ledger.js';
 import type { FileSystemService } from './filesystem.js';
+import { type EconomyStoragePaths } from './economy-storage.js';
 export interface EconomyHostConfig {
     version: 1;
     vaultPath: string;
     hostPath: string;
+    ledgerPath?: string;
     policy: EconomyPolicy;
 }
 /** Configuration is a host file, never a note or MCP argument. Loading is read-only. */
@@ -16,7 +17,7 @@ export declare function probeEconomyStorage(directory: string): Promise<{
     filesystem: string;
     probe: 'exclusive-create-sync-rename';
 }>;
-export declare function inspectEconomyRecovery(options: Pick<EconomyLedgerOptions, 'vaultPath' | 'hostPath'>): Promise<{
+export declare function inspectEconomyRecovery(options: EconomyStoragePaths): Promise<{
     fingerprint: string;
     lock: any;
     checkpoint: any;
@@ -26,7 +27,7 @@ export declare function inspectEconomyRecovery(options: Pick<EconomyLedgerOption
 /** Runs inside the ledger's serialized commit path.  It deliberately receives
  * the already-replayed state so callers never call ledger.snapshot() recursively. */
 export declare function validateOperatorAdjudication(state: EconomyState, command: EconomyCommand, fs: FileSystemService): Promise<void>;
-export declare function recoverEconomyWriter(options: Pick<EconomyLedgerOptions, 'vaultPath' | 'hostPath'>, approval: {
+export declare function recoverEconomyWriter(options: EconomyStoragePaths, approval: {
     expectedFingerprint: string;
     reason: string;
 }): Promise<{

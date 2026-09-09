@@ -1,5 +1,20 @@
 export const GUIDANCE_DEFINITIONS = [
     {
+        "id": "guid-000df2933df89929",
+        "kind": "prose",
+        "template": "fiction as evidence or authority",
+        "parts": [
+            "fiction as evidence or authority"
+        ],
+        "binding": "projection",
+        "sources": [
+            {
+                "file": "src/wiki-policy.ts",
+                "line": 69
+            }
+        ]
+    },
+    {
         "id": "guid-001cbc301b7855f0",
         "kind": "error",
         "template": "Previous version changed; explicit review is required",
@@ -25,7 +40,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1027
+                "line": 1034
             }
         ]
     },
@@ -298,6 +313,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-010f5603b2d023db",
+        "kind": "error",
+        "template": "Invalid export source scope",
+        "parts": [
+            "Invalid export source scope"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-exports.ts",
+                "line": 289
+            }
+        ]
+    },
+    {
         "id": "guid-010f90a83277ed2b",
         "kind": "error",
         "template": "Research submission changed; original snapshot required",
@@ -338,7 +368,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 2787
+                "line": 2854
             }
         ]
     },
@@ -358,6 +388,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-015d8876563455bf",
+        "kind": "error",
+        "template": "Invalid, disabled or wrong-node choice.",
+        "parts": [
+            "Invalid, disabled or wrong-node choice."
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-branch.ts",
+                "line": 292
+            }
+        ]
+    },
+    {
         "id": "guid-015dc38c18cd1b53",
         "kind": "error",
         "template": "Memory collection changed; repeat without cursor",
@@ -369,6 +414,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/layered-memory.ts",
                 "line": 302
+            }
+        ]
+    },
+    {
+        "id": "guid-015eda9ee13d3b4e",
+        "kind": "error",
+        "template": "Export write guard bound exceeded",
+        "parts": [
+            "Export write guard bound exceeded"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-exports.ts",
+                "line": 454
             }
         ]
     },
@@ -413,7 +473,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 2861
+                "line": 2928
             }
         ]
     },
@@ -579,7 +639,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 114
+                "line": 132
             }
         ]
     },
@@ -640,7 +700,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 3459
+                "line": 3484
             }
         ]
     },
@@ -906,7 +966,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 778
+                "line": 784
             }
         ]
     },
@@ -982,7 +1042,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 129
+                "line": 147
             }
         ]
     },
@@ -1058,7 +1118,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 2678
+                "line": 2703
             }
         ]
     },
@@ -1146,6 +1206,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-0497063b3c4246b0",
+        "kind": "error",
+        "template": "Story path traversal is not allowed",
+        "parts": [
+            "Story path traversal is not allowed"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-model.ts",
+                "line": 16
+            }
+        ]
+    },
+    {
         "id": "guid-0497df1f14c7793e",
         "kind": "error",
         "template": "Invalid promotion mode",
@@ -1171,7 +1246,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 247
+                "line": 265
             }
         ]
     },
@@ -1202,6 +1277,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/review-dashboard-packet.ts",
                 "line": 86
+            }
+        ]
+    },
+    {
+        "id": "guid-04cfcf2ce35f917f",
+        "kind": "error",
+        "template": "Character block must be followed by dialogue.",
+        "parts": [
+            "Character block must be followed by dialogue."
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-media.ts",
+                "line": 144
             }
         ]
     },
@@ -1296,6 +1386,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-052a95be7b103cc4",
+        "kind": "error",
+        "template": "Export output changed after write; manifest remains pending",
+        "parts": [
+            "Export output changed after write; manifest remains pending"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-exports.ts",
+                "line": 462
+            }
+        ]
+    },
+    {
         "id": "guid-055a9a2cf6523359",
         "kind": "error",
         "template": "Account capacity reached ({arg0}); ask the server operator to remove inactive accounts",
@@ -1308,6 +1413,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/scope-auth.ts",
                 "line": 478
+            }
+        ]
+    },
+    {
+        "id": "guid-05617ba6f20ce3ec",
+        "kind": "error",
+        "template": "Invalid continuity classification",
+        "parts": [
+            "Invalid continuity classification"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-editorial.ts",
+                "line": 47
             }
         ]
     },
@@ -1356,7 +1476,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1200
+                "line": 1207
             }
         ]
     },
@@ -1371,7 +1491,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 87
+                "line": 105
             }
         ]
     },
@@ -1417,6 +1537,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/independent-research.ts",
                 "line": 150
+            }
+        ]
+    },
+    {
+        "id": "guid-05e318910a3f8833",
+        "kind": "error",
+        "template": "Managed story records cannot be edited, moved or deleted through generic tools; use story endpoints",
+        "parts": [
+            "Managed story records cannot be edited, moved or deleted through generic tools; use story endpoints"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-boundary.ts",
+                "line": 19
             }
         ]
     },
@@ -1506,7 +1641,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1038
+                "line": 1045
             }
         ]
     },
@@ -1583,6 +1718,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/enterprise-registry.ts",
                 "line": 643
+            }
+        ]
+    },
+    {
+        "id": "guid-0688c9bbd6df63ad",
+        "kind": "error",
+        "template": "Story source unavailable in this scope",
+        "parts": [
+            "Story source unavailable in this scope"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-workspace.ts",
+                "line": 121
             }
         ]
     },
@@ -1824,7 +1974,22 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/economy-ledger.ts",
-                "line": 177
+                "line": 185
+            }
+        ]
+    },
+    {
+        "id": "guid-071f863f15bc9bbc",
+        "kind": "error",
+        "template": "Invalid story image byte limit",
+        "parts": [
+            "Invalid story image byte limit"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/filesystem.ts",
+                "line": 926
             }
         ]
     },
@@ -1884,7 +2049,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 116
+                "line": 134
             }
         ]
     },
@@ -2097,7 +2262,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 934
+                "line": 992
             }
         ]
     },
@@ -2112,7 +2277,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 2717
+                "line": 2742
             }
         ]
     },
@@ -2206,7 +2371,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 120
+                "line": 138
             }
         ]
     },
@@ -2238,7 +2403,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 625
+                "line": 631
             }
         ]
     },
@@ -2268,7 +2433,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 800
+                "line": 806
             }
         ]
     },
@@ -2283,7 +2448,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 3103
+                "line": 3170
             }
         ]
     },
@@ -2378,7 +2543,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 2066
+                "line": 2133
             }
         ]
     },
@@ -2394,11 +2559,26 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 791
+                "line": 792
             },
             {
                 "file": "src/filesystem.ts",
-                "line": 807
+                "line": 808
+            }
+        ]
+    },
+    {
+        "id": "guid-098a54c8438172f7",
+        "kind": "prose",
+        "template": "Keep long manuscript bodies in story.artifact, not 280-character Workshop contributions. Use existing Work claims, handoffs and reviews; Workshop discussion links exact artifact/review revisions. Roles do not create identities or independent consensus.",
+        "parts": [
+            "Keep long manuscript bodies in story.artifact, not 280-character Workshop contributions. Use existing Work claims, handoffs and reviews; Workshop discussion links exact artifact/review revisions. Roles do not create identities or independent consensus."
+        ],
+        "binding": "projection",
+        "sources": [
+            {
+                "file": "src/wiki-policy.ts",
+                "line": 58
             }
         ]
     },
@@ -2481,7 +2661,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 2998
+                "line": 3065
             }
         ]
     },
@@ -2561,6 +2741,22 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-0a3b75ea608989a5",
+        "kind": "error",
+        "template": "Fountain {arg0} requires nonempty visible text.",
+        "parts": [
+            "Fountain ",
+            " requires nonempty visible text."
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-media.ts",
+                "line": 340
+            }
+        ]
+    },
+    {
         "id": "guid-0a48df9b0578f639",
         "kind": "error",
         "template": "The primary and additional MOC paths must be distinct",
@@ -2586,7 +2782,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 158
+                "line": 176
             }
         ]
     },
@@ -2601,7 +2797,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 80
+                "line": 98
             }
         ]
     },
@@ -2703,7 +2899,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 3760
+                "line": 3785
             }
         ]
     },
@@ -2859,7 +3055,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 3814
+                "line": 3839
             }
         ]
     },
@@ -2998,6 +3194,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/economy-model.ts",
                 "line": 229
+            }
+        ]
+    },
+    {
+        "id": "guid-0b5055eee2e3e795",
+        "kind": "error",
+        "template": "Output bound invalid.",
+        "parts": [
+            "Output bound invalid."
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-media.ts",
+                "line": 111
             }
         ]
     },
@@ -3152,7 +3363,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/skill-evolution-host.ts",
-                "line": 62
+                "line": 63
             }
         ]
     },
@@ -3167,7 +3378,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 2765
+                "line": 2832
             }
         ]
     },
@@ -3332,7 +3543,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 276
+                "line": 294
             }
         ]
     },
@@ -3403,7 +3614,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1477
+                "line": 1502
             }
         ]
     },
@@ -3509,7 +3720,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1294
+                "line": 1301
             }
         ]
     },
@@ -3750,7 +3961,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 231
+                "line": 249
             }
         ]
     },
@@ -3780,7 +3991,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1175
+                "line": 1182
             }
         ]
     },
@@ -3797,6 +4008,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/workshop-lineage.ts",
                 "line": 110
+            }
+        ]
+    },
+    {
+        "id": "guid-0e130b0f91cb2f2f",
+        "kind": "error",
+        "template": "Invalid image reference.",
+        "parts": [
+            "Invalid image reference."
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-media.ts",
+                "line": 176
             }
         ]
     },
@@ -3931,7 +4157,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 684
+                "line": 690
             }
         ]
     },
@@ -3976,11 +4202,11 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1419
+                "line": 1427
             },
             {
                 "file": "src/createServer.ts",
-                "line": 2308
+                "line": 2333
             }
         ]
     },
@@ -4135,7 +4361,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 771
+                "line": 777
             }
         ]
     },
@@ -4429,7 +4655,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 173
+                "line": 191
             }
         ]
     },
@@ -4564,7 +4790,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/skill-evolution-host.ts",
-                "line": 69
+                "line": 70
             }
         ]
     },
@@ -4625,7 +4851,22 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 1954
+                "line": 2021
+            }
+        ]
+    },
+    {
+        "id": "guid-1174660416781f4b",
+        "kind": "error",
+        "template": "Export request output changed or was superseded; cannot replay success",
+        "parts": [
+            "Export request output changed or was superseded; cannot replay success"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-exports.ts",
+                "line": 387
             }
         ]
     },
@@ -4645,6 +4886,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-11a38fc1b40c95cc",
+        "kind": "error",
+        "template": "Invalid story sequence operation",
+        "parts": [
+            "Invalid story sequence operation"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-projects.ts",
+                "line": 95
+            }
+        ]
+    },
+    {
         "id": "guid-11b8ada44b081b57",
         "kind": "prose",
         "template": "direct file copying around sync validation",
@@ -4655,7 +4911,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 297
+                "line": 315
             }
         ]
     },
@@ -4686,6 +4942,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/economy-model.ts",
                 "line": 222
+            }
+        ]
+    },
+    {
+        "id": "guid-11d7ee007bf83ea7",
+        "kind": "error",
+        "template": "Only assigned writer may submit during draft/revise stage",
+        "parts": [
+            "Only assigned writer may submit during draft/revise stage"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-session.ts",
+                "line": 119
             }
         ]
     },
@@ -4790,7 +5061,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 2758
+                "line": 2825
             }
         ]
     },
@@ -4850,7 +5121,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 3444
+                "line": 3511
             }
         ]
     },
@@ -4880,7 +5151,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 1073
+                "line": 1136
             }
         ]
     },
@@ -4941,7 +5212,22 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 142
+                "line": 160
+            }
+        ]
+    },
+    {
+        "id": "guid-131d239102094298",
+        "kind": "prose",
+        "template": "The host executes story.session; the server never spawns models or participants. Two revision rounds lead to an explicit decision. Record pause reasons and use resume after checking current Work assignment, authority and sources. Step budget exhaustion waits for owner direction.",
+        "parts": [
+            "The host executes story.session; the server never spawns models or participants. Two revision rounds lead to an explicit decision. Record pause reasons and use resume after checking current Work assignment, authority and sources. Step budget exhaustion waits for owner direction."
+        ],
+        "binding": "projection",
+        "sources": [
+            {
+                "file": "src/wiki-policy.ts",
+                "line": 63
             }
         ]
     },
@@ -4958,7 +5244,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 1580
+                "line": 1647
             }
         ]
     },
@@ -5106,7 +5392,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1529
+                "line": 1554
             }
         ]
     },
@@ -5151,7 +5437,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/economy-ledger.ts",
-                "line": 181
+                "line": 189
             }
         ]
     },
@@ -5288,7 +5574,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 171
+                "line": 189
             }
         ]
     },
@@ -5303,7 +5589,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 2696
+                "line": 2763
             }
         ]
     },
@@ -5349,7 +5635,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 252
+                "line": 270
             }
         ]
     },
@@ -5364,7 +5650,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/economy-host.ts",
-                "line": 124
+                "line": 128
             }
         ]
     },
@@ -5473,7 +5759,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1171
+                "line": 1178
             }
         ]
     },
@@ -5496,35 +5782,35 @@ export const GUIDANCE_DEFINITIONS = [
             },
             {
                 "file": "src/createServer.ts",
-                "line": 3071
+                "line": 3096
             },
             {
                 "file": "src/createServer.ts",
-                "line": 3105
+                "line": 3130
             },
             {
                 "file": "src/createServer.ts",
-                "line": 3165
+                "line": 3190
             },
             {
                 "file": "src/endpoint-registry.ts",
-                "line": 66
+                "line": 67
             },
             {
                 "file": "src/filesystem.ts",
-                "line": 1775
+                "line": 1842
             },
             {
                 "file": "src/filesystem.ts",
-                "line": 2382
+                "line": 2449
             },
             {
                 "file": "src/filesystem.ts",
-                "line": 3060
+                "line": 3127
             },
             {
                 "file": "src/filesystem.ts",
-                "line": 3307
+                "line": 3374
             },
             {
                 "file": "src/git-history.ts",
@@ -5606,6 +5892,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-14e62bb43a9b24ad",
+        "kind": "error",
+        "template": "Stale graph revision.",
+        "parts": [
+            "Stale graph revision."
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-branch.ts",
+                "line": 272
+            }
+        ]
+    },
+    {
         "id": "guid-14ee1cc0c33cffa4",
         "kind": "prose",
         "template": "Read-only complete-sibling MOC order preflight. nav_order controls hierarchy siblings; authored links inside one MOC body keep their Markdown order.",
@@ -5661,7 +5962,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/economy-host.ts",
-                "line": 141
+                "line": 147
             },
             {
                 "file": "src/roleplay-recovery.ts",
@@ -5793,6 +6094,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/llm-wiki.ts",
                 "line": 14230
+            }
+        ]
+    },
+    {
+        "id": "guid-15b6ac4ba1411d83",
+        "kind": "error",
+        "template": "Review decision requires changes_requested or ready",
+        "parts": [
+            "Review decision requires changes_requested or ready"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-session.ts",
+                "line": 135
             }
         ]
     },
@@ -5975,11 +6291,11 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 591
+                "line": 597
             },
             {
                 "file": "src/createServer.ts",
-                "line": 605
+                "line": 611
             }
         ]
     },
@@ -6024,7 +6340,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 309
+                "line": 327
             }
         ]
     },
@@ -6099,11 +6415,11 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 2769
+                "line": 2836
             },
             {
                 "file": "src/filesystem.ts",
-                "line": 2790
+                "line": 2857
             }
         ]
     },
@@ -6154,6 +6470,22 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-16f9f362c54e8592",
+        "kind": "error",
+        "template": "Duplicate {arg0}",
+        "parts": [
+            "Duplicate ",
+            ""
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-model.ts",
+                "line": 50
+            }
+        ]
+    },
+    {
         "id": "guid-1703b8bf35a1cda7",
         "kind": "error",
         "template": "Artifact revision is missing or stale; update artifacts before approval/completion",
@@ -6179,7 +6511,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 905
+                "line": 911
             }
         ]
     },
@@ -6210,7 +6542,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1263
+                "line": 1270
             }
         ]
     },
@@ -6256,7 +6588,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 125
+                "line": 143
             }
         ]
     },
@@ -6302,6 +6634,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/work-service.ts",
                 "line": 866
+            }
+        ]
+    },
+    {
+        "id": "guid-17b1afb7ff65e8cc",
+        "kind": "error",
+        "template": "Rehearsal records are immutable; choose a new sessionId",
+        "parts": [
+            "Rehearsal records are immutable; choose a new sessionId"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-session.ts",
+                "line": 43
             }
         ]
     },
@@ -6580,7 +6927,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1359
+                "line": 1367
             }
         ]
     },
@@ -6600,6 +6947,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-18b5af8b138f047a",
+        "kind": "error",
+        "template": "New story session requires expectedRevision=missing",
+        "parts": [
+            "New story session requires expectedRevision=missing"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-session.ts",
+                "line": 61
+            }
+        ]
+    },
+    {
         "id": "guid-18c1b38b49e3b781",
         "kind": "prose",
         "template": "treating recall success as evidence validation",
@@ -6610,7 +6972,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 238
+                "line": 256
             }
         ]
     },
@@ -6721,7 +7083,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 965
+                "line": 972
             }
         ]
     },
@@ -6930,7 +7292,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/economy-ledger.ts",
-                "line": 78
+                "line": 82
             }
         ]
     },
@@ -6981,7 +7343,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 155
+                "line": 173
             }
         ]
     },
@@ -7012,6 +7374,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/community-public-retry.ts",
                 "line": 190
+            }
+        ]
+    },
+    {
+        "id": "guid-1a5516a0e9d90e67",
+        "kind": "error",
+        "template": "Story image canonical path changed",
+        "parts": [
+            "Story image canonical path changed"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/filesystem.ts",
+                "line": 953
             }
         ]
     },
@@ -7121,6 +7498,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-1ad4adf46ea17ac4",
+        "kind": "error",
+        "template": "Story export output changed during raw read",
+        "parts": [
+            "Story export output changed during raw read"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-exports.ts",
+                "line": 308
+            }
+        ]
+    },
+    {
         "id": "guid-1af8187d9501156d",
         "kind": "prose",
         "template": "Use a workshop when phased divergence and convergence are useful; use an Agora post when the work is a public stance-based debate.",
@@ -7131,7 +7523,22 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 262
+                "line": 280
+            }
+        ]
+    },
+    {
+        "id": "guid-1b0351dd2a19ca34",
+        "kind": "error",
+        "template": "Invalid story layer",
+        "parts": [
+            "Invalid story layer"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-model.ts",
+                "line": 92
             }
         ]
     },
@@ -7210,7 +7617,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 2756
+                "line": 2781
             }
         ]
     },
@@ -7243,6 +7650,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/organization.ts",
                 "line": 767
+            }
+        ]
+    },
+    {
+        "id": "guid-1b917f6ca8d79ecf",
+        "kind": "error",
+        "template": "Story inventory changed during pagination",
+        "parts": [
+            "Story inventory changed during pagination"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-workspace.ts",
+                "line": 178
             }
         ]
     },
@@ -7287,7 +7709,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 772
+                "line": 778
             }
         ]
     },
@@ -7485,7 +7907,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 924
+                "line": 930
             }
         ]
     },
@@ -7592,7 +8014,22 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 117
+                "line": 135
+            }
+        ]
+    },
+    {
+        "id": "guid-1d0fc343cfe0f803",
+        "kind": "error",
+        "template": "Current session role required",
+        "parts": [
+            "Current session role required"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-session.ts",
+                "line": 92
             }
         ]
     },
@@ -7610,7 +8047,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 2116
+                "line": 2183
             }
         ]
     },
@@ -7626,7 +8063,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 2484
+                "line": 2551
             },
             {
                 "file": "src/vault-graph.ts",
@@ -7760,6 +8197,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-1deb8f97deb1d8c6",
+        "kind": "error",
+        "template": "Story export reference belongs to a different project",
+        "parts": [
+            "Story export reference belongs to a different project"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-exports.ts",
+                "line": 123
+            }
+        ]
+    },
+    {
         "id": "guid-1dedb23a0e8f4def",
         "kind": "error",
         "template": "Access denied: agent '{arg0}' belongs to another model scope",
@@ -7771,7 +8223,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 3479
+                "line": 3504
             }
         ]
     },
@@ -7816,7 +8268,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 196
+                "line": 214
             }
         ]
     },
@@ -7863,7 +8315,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 292
+                "line": 310
             }
         ]
     },
@@ -7893,7 +8345,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 2537
+                "line": 2562
             }
         ]
     },
@@ -8183,7 +8635,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 209
+                "line": 227
             }
         ]
     },
@@ -8285,7 +8737,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 867
+                "line": 873
             }
         ]
     },
@@ -8315,11 +8767,11 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 3067
+                "line": 3092
             },
             {
                 "file": "src/filesystem.ts",
-                "line": 3056
+                "line": 3123
             }
         ]
     },
@@ -8409,7 +8861,22 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1006
+                "line": 1013
+            }
+        ]
+    },
+    {
+        "id": "guid-1f738d45e44e8d21",
+        "kind": "error",
+        "template": "Held story export output changed during write authorization",
+        "parts": [
+            "Held story export output changed during write authorization"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-exports.ts",
+                "line": 421
             }
         ]
     },
@@ -8488,7 +8955,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1535
+                "line": 1560
             }
         ]
     },
@@ -8549,6 +9016,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/llm-wiki-tools.ts",
                 "line": 580
+            }
+        ]
+    },
+    {
+        "id": "guid-1ffc12ac249663b7",
+        "kind": "error",
+        "template": "Story export sources changed during read",
+        "parts": [
+            "Story export sources changed during read"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-exports.ts",
+                "line": 112
             }
         ]
     },
@@ -8625,7 +9107,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 195
+                "line": 213
             }
         ]
     },
@@ -8687,6 +9169,25 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/llm-wiki-tools.ts",
                 "line": 775
+            }
+        ]
+    },
+    {
+        "id": "guid-2090cc5af0c365c4",
+        "kind": "error",
+        "template": "Story artifact unavailable",
+        "parts": [
+            "Story artifact unavailable"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-artifacts.ts",
+                "line": 41
+            },
+            {
+                "file": "src/story-workspace.ts",
+                "line": 56
             }
         ]
     },
@@ -8770,7 +9271,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 1647
+                "line": 1714
             }
         ]
     },
@@ -8927,6 +9428,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-213aca2efa032b4a",
+        "kind": "error",
+        "template": "Scene count bound exceeded.",
+        "parts": [
+            "Scene count bound exceeded."
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-media.ts",
+                "line": 124
+            }
+        ]
+    },
+    {
         "id": "guid-213efdaaff7e74f5",
         "kind": "error",
         "template": "Memory candidate limit must be a positive integer",
@@ -8953,7 +9469,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 510
+                "line": 511
             }
         ]
     },
@@ -8984,7 +9500,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 250
+                "line": 268
             }
         ]
     },
@@ -9083,7 +9599,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 184
+                "line": 202
             }
         ]
     },
@@ -9098,7 +9614,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/skill-evolution-host.ts",
-                "line": 53
+                "line": 54
             }
         ]
     },
@@ -9113,7 +9629,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 212
+                "line": 230
             }
         ]
     },
@@ -9143,7 +9659,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/economy-host.ts",
-                "line": 31
+                "line": 32
             }
         ]
     },
@@ -9218,6 +9734,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-221f93094bb9aed8",
+        "kind": "prose",
+        "template": "story.export defaults to adopted preview. Write requires exact revisions and a requestId. Check export health before relying on old output; changed upstream notes make summaries, reviews, shots and output stale. Never overwrite user-edited Canvas. Fountain is one-way export, images are linked references, not automatic downloads or generation.",
+        "parts": [
+            "story.export defaults to adopted preview. Write requires exact revisions and a requestId. Check export health before relying on old output; changed upstream notes make summaries, reviews, shots and output stale. Never overwrite user-edited Canvas. Fountain is one-way export, images are linked references, not automatic downloads or generation."
+        ],
+        "binding": "projection",
+        "sources": [
+            {
+                "file": "src/wiki-policy.ts",
+                "line": 64
+            }
+        ]
+    },
+    {
         "id": "guid-22315a8b4963c206",
         "kind": "error",
         "template": "Access denied: {arg0}. Its canonical target is restricted.",
@@ -9229,7 +9760,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 795
+                "line": 796
             }
         ]
     },
@@ -9259,7 +9790,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 2725
+                "line": 2750
             }
         ]
     },
@@ -9274,7 +9805,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 103
+                "line": 121
             }
         ]
     },
@@ -9305,7 +9836,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 1077
+                "line": 1140
             }
         ]
     },
@@ -9355,6 +9886,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-22730e18f43896ef",
+        "kind": "error",
+        "template": "Story project changed during export write",
+        "parts": [
+            "Story project changed during export write"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-exports.ts",
+                "line": 415
+            }
+        ]
+    },
+    {
         "id": "guid-22756bf04d3a5198",
         "kind": "prose",
         "template": "Peer Kanban: work.board → work.packet → work.claim. Review or unblock before pulling new work. Peer requests grant no execution authority. Use current revision/generation; high-risk work needs independent current-artifact approval through work.review.",
@@ -9365,7 +9911,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 185
+                "line": 203
             }
         ]
     },
@@ -9381,6 +9927,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/community-participation.ts",
                 "line": 254
+            }
+        ]
+    },
+    {
+        "id": "guid-2299689a2c78ffa7",
+        "kind": "error",
+        "template": "Invalid story path",
+        "parts": [
+            "Invalid story path"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-model.ts",
+                "line": 12
             }
         ]
     },
@@ -9486,7 +10047,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 796
+                "line": 802
             }
         ]
     },
@@ -9547,7 +10108,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/economy-host.ts",
-                "line": 61
+                "line": 62
             }
         ]
     },
@@ -9654,7 +10215,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 515
+                "line": 516
             }
         ]
     },
@@ -9700,7 +10261,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 391
+                "line": 397
             }
         ]
     },
@@ -9715,7 +10276,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1250
+                "line": 1257
             }
         ]
     },
@@ -9821,7 +10382,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 1452
+                "line": 1519
             }
         ]
     },
@@ -9836,7 +10397,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 3470
+                "line": 3495
             }
         ]
     },
@@ -9916,6 +10477,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-24ab6a920c687ba2",
+        "kind": "error",
+        "template": "Showrunner must be a registered participant",
+        "parts": [
+            "Showrunner must be a registered participant"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-projects.ts",
+                "line": 63
+            }
+        ]
+    },
+    {
         "id": "guid-24cda5fd35e474f5",
         "kind": "error",
         "template": "proposal is already {arg0}",
@@ -9962,7 +10538,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 2872
+                "line": 2939
             }
         ]
     },
@@ -10022,11 +10598,30 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/economy-ledger.ts",
-                "line": 49
+                "line": 52
             },
             {
                 "file": "src/economy-ledger.ts",
-                "line": 162
+                "line": 170
+            }
+        ]
+    },
+    {
+        "id": "guid-253f2d40f9d9fc4f",
+        "kind": "error",
+        "template": "Conflicting story source revision guards",
+        "parts": [
+            "Conflicting story source revision guards"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-store.ts",
+                "line": 66
+            },
+            {
+                "file": "src/story-workspace.ts",
+                "line": 102
             }
         ]
     },
@@ -10087,7 +10682,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 2164
+                "line": 2231
             }
         ]
     },
@@ -10149,6 +10744,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/context-tools.ts",
                 "line": 14
+            }
+        ]
+    },
+    {
+        "id": "guid-25ea87cf327fcefb",
+        "kind": "error",
+        "template": "Refresh stale artifact dependencies before starting a session",
+        "parts": [
+            "Refresh stale artifact dependencies before starting a session"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-session.ts",
+                "line": 69
             }
         ]
     },
@@ -10357,7 +10967,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 2721
+                "line": 2746
             }
         ]
     },
@@ -10437,59 +11047,59 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 3085
+                "line": 3110
             },
             {
                 "file": "src/filesystem.ts",
-                "line": 1007
+                "line": 1067
             },
             {
                 "file": "src/filesystem.ts",
-                "line": 1030
+                "line": 1093
             },
             {
                 "file": "src/filesystem.ts",
-                "line": 1434
+                "line": 1501
             },
             {
                 "file": "src/filesystem.ts",
-                "line": 1773
+                "line": 1840
             },
             {
                 "file": "src/filesystem.ts",
-                "line": 2379
+                "line": 2446
             },
             {
                 "file": "src/filesystem.ts",
-                "line": 2380
+                "line": 2447
             },
             {
                 "file": "src/filesystem.ts",
-                "line": 2537
+                "line": 2604
             },
             {
                 "file": "src/filesystem.ts",
-                "line": 2755
+                "line": 2822
             },
             {
                 "file": "src/filesystem.ts",
-                "line": 2759
+                "line": 2826
             },
             {
                 "file": "src/filesystem.ts",
-                "line": 2815
+                "line": 2882
             },
             {
                 "file": "src/filesystem.ts",
-                "line": 2817
+                "line": 2884
             },
             {
                 "file": "src/filesystem.ts",
-                "line": 3115
+                "line": 3182
             },
             {
                 "file": "src/filesystem.ts",
-                "line": 3123
+                "line": 3190
             },
             {
                 "file": "src/llm-wiki.ts",
@@ -10587,7 +11197,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 71
+                "line": 89
             }
         ]
     },
@@ -10662,7 +11272,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1071
+                "line": 1078
             }
         ]
     },
@@ -10677,7 +11287,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 191
+                "line": 209
             }
         ]
     },
@@ -10743,6 +11353,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-2788668adbcd099b",
+        "kind": "error",
+        "template": "Story read revision conflict; reread the current source",
+        "parts": [
+            "Story read revision conflict; reread the current source"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-workspace.ts",
+                "line": 209
+            }
+        ]
+    },
+    {
         "id": "guid-27a23b6c2e345129",
         "kind": "error",
         "template": "Project guard requires WorkService",
@@ -10802,7 +11427,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1484
+                "line": 1509
             }
         ]
     },
@@ -10911,7 +11536,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 653
+                "line": 659
             }
         ]
     },
@@ -10927,6 +11552,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/social.ts",
                 "line": 265
+            }
+        ]
+    },
+    {
+        "id": "guid-2850972cf3cdf5d1",
+        "kind": "error",
+        "template": "Exact story revision required",
+        "parts": [
+            "Exact story revision required"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-model.ts",
+                "line": 55
             }
         ]
     },
@@ -10986,7 +11626,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 243
+                "line": 261
             }
         ]
     },
@@ -11001,7 +11641,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 872
+                "line": 878
             }
         ]
     },
@@ -11016,7 +11656,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 58
+                "line": 76
             }
         ]
     },
@@ -11055,7 +11695,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 858
+                "line": 864
             }
         ]
     },
@@ -11149,7 +11789,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 140
+                "line": 158
             }
         ]
     },
@@ -11194,7 +11834,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 3745
+                "line": 3770
             }
         ]
     },
@@ -11366,7 +12006,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 226
+                "line": 244
             }
         ]
     },
@@ -11381,7 +12021,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1128
+                "line": 1135
             }
         ]
     },
@@ -11396,7 +12036,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 841
+                "line": 847
             }
         ]
     },
@@ -11426,7 +12066,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 450
+                "line": 456
             }
         ]
     },
@@ -11535,7 +12175,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 211
+                "line": 229
             }
         ]
     },
@@ -11565,7 +12205,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 1318
+                "line": 1385
             }
         ]
     },
@@ -11787,7 +12427,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 283
+                "line": 301
             }
         ]
     },
@@ -11907,6 +12547,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-2d0d4883c9673f88",
+        "kind": "error",
+        "template": "Invalid story project operation",
+        "parts": [
+            "Invalid story project operation"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-projects.ts",
+                "line": 40
+            }
+        ]
+    },
+    {
         "id": "guid-2d1d881607c25416",
         "kind": "prose",
         "template": "Find at most3 visible funded peer-work quests, or read one contract with its fixed criteria, fees, generation and current revision. Default4000/max12000 characters. Drafts are requester-only. XP never grants shell/model budget or forces peers to act. Host economy is OFF by default.",
@@ -11933,7 +12588,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/search.ts",
-                "line": 1852
+                "line": 1855
             }
         ]
     },
@@ -11978,7 +12633,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 144
+                "line": 162
             }
         ]
     },
@@ -12070,6 +12725,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/community-features.ts",
                 "line": 117
+            }
+        ]
+    },
+    {
+        "id": "guid-2dffd8189b3411cd",
+        "kind": "error",
+        "template": "Use story.adopt to select the exact snapshot before completing the session",
+        "parts": [
+            "Use story.adopt to select the exact snapshot before completing the session"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-session.ts",
+                "line": 144
             }
         ]
     },
@@ -12206,7 +12876,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 411
+                "line": 417
             }
         ]
     },
@@ -12237,7 +12907,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 2101
+                "line": 2168
             }
         ]
     },
@@ -12268,6 +12938,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/layered-memory-tools.ts",
                 "line": 15
+            }
+        ]
+    },
+    {
+        "id": "guid-2ebd7fa705c4d5a0",
+        "kind": "error",
+        "template": "Story review unavailable",
+        "parts": [
+            "Story review unavailable"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-editorial.ts",
+                "line": 29
             }
         ]
     },
@@ -12331,7 +13016,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/economy-ledger.ts",
-                "line": 93
+                "line": 101
             }
         ]
     },
@@ -12617,7 +13302,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/economy-ledger.ts",
-                "line": 171
+                "line": 179
             }
         ]
     },
@@ -12648,6 +13333,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/git-history.ts",
                 "line": 316
+            }
+        ]
+    },
+    {
+        "id": "guid-2ff367592d97ff84",
+        "kind": "error",
+        "template": "Story export reference unavailable in this project scope",
+        "parts": [
+            "Story export reference unavailable in this project scope"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-exports.ts",
+                "line": 87
             }
         ]
     },
@@ -12782,7 +13482,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 678
+                "line": 679
             }
         ]
     },
@@ -12798,7 +13498,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 2255
+                "line": 2322
             }
         ]
     },
@@ -12813,7 +13513,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 224
+                "line": 242
             }
         ]
     },
@@ -12874,7 +13574,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1045
+                "line": 1052
             }
         ]
     },
@@ -12981,6 +13681,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/workshop-facilitation.ts",
                 "line": 646
+            }
+        ]
+    },
+    {
+        "id": "guid-31968611d35aa744",
+        "kind": "error",
+        "template": "Character block requires dialogue.",
+        "parts": [
+            "Character block requires dialogue."
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-media.ts",
+                "line": 149
             }
         ]
     },
@@ -13132,7 +13847,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 1402
+                "line": 1469
             }
         ]
     },
@@ -13270,7 +13985,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 1925
+                "line": 1992
             }
         ]
     },
@@ -13286,6 +14001,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/economy-service.ts",
                 "line": 208
+            }
+        ]
+    },
+    {
+        "id": "guid-32969c22129455ba",
+        "kind": "error",
+        "template": "Invalid story projection field",
+        "parts": [
+            "Invalid story projection field"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-service.ts",
+                "line": 53
             }
         ]
     },
@@ -13315,7 +14045,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 720
+                "line": 726
             }
         ]
     },
@@ -13546,7 +14276,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 811
+                "line": 812
             }
         ]
     },
@@ -13576,7 +14306,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 2675
+                "line": 2700
             }
         ]
     },
@@ -13606,7 +14336,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 132
+                "line": 150
             }
         ]
     },
@@ -13669,7 +14399,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 2960
+                "line": 2985
             }
         ]
     },
@@ -13686,7 +14416,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 43
+                "line": 44
             }
         ]
     },
@@ -13702,6 +14432,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/global-sync.ts",
                 "line": 1475
+            }
+        ]
+    },
+    {
+        "id": "guid-346513ff2ce57c96",
+        "kind": "error",
+        "template": "Story export response exceeds maxChars",
+        "parts": [
+            "Story export response exceeds maxChars"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-exports.ts",
+                "line": 269
             }
         ]
     },
@@ -13761,7 +14506,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 187
+                "line": 205
             }
         ]
     },
@@ -13776,7 +14521,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/skill-evolution-host.ts",
-                "line": 60
+                "line": 61
             }
         ]
     },
@@ -13821,11 +14566,11 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 3762
+                "line": 3787
             },
             {
                 "file": "src/createServer.ts",
-                "line": 3815
+                "line": 3840
             }
         ]
     },
@@ -13939,6 +14684,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-3581a75ed50dc03d",
+        "kind": "error",
+        "template": "Artifact kind and branch are immutable; create an explicit alternative",
+        "parts": [
+            "Artifact kind and branch are immutable; create an explicit alternative"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-artifacts.ts",
+                "line": 45
+            }
+        ]
+    },
+    {
         "id": "guid-358dcf7fed0e9a38",
         "kind": "prose",
         "template": "Optional exact task_context filter",
@@ -13967,7 +14727,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 1458
+                "line": 1525
             }
         ]
     },
@@ -13982,7 +14742,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 3231
+                "line": 3298
             }
         ]
     },
@@ -14014,7 +14774,22 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 1257
+                "line": 1324
+            }
+        ]
+    },
+    {
+        "id": "guid-35f9c39b65be5077",
+        "kind": "error",
+        "template": "maxSteps bound must be 1..256.",
+        "parts": [
+            "maxSteps bound must be 1..256."
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-branch.ts",
+                "line": 274
             }
         ]
     },
@@ -14077,6 +14852,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/work-model.ts",
                 "line": 45
+            }
+        ]
+    },
+    {
+        "id": "guid-364b002a416d8558",
+        "kind": "error",
+        "template": "Media output bound exceeded.",
+        "parts": [
+            "Media output bound exceeded."
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-media.ts",
+                "line": 115
             }
         ]
     },
@@ -14211,7 +15001,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 153
+                "line": 171
             }
         ]
     },
@@ -14226,7 +15016,22 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 282
+                "line": 300
+            }
+        ]
+    },
+    {
+        "id": "guid-3713d4ee283d7504",
+        "kind": "error",
+        "template": "Invalid story account",
+        "parts": [
+            "Invalid story account"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-model.ts",
+                "line": 33
             }
         ]
     },
@@ -14256,7 +15061,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 300
+                "line": 318
             }
         ]
     },
@@ -14294,7 +15099,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 59
+                "line": 77
             }
         ]
     },
@@ -14469,6 +15274,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-37ac223bfe7bf84e",
+        "kind": "error",
+        "template": "shotIds must be an exact unique permutation of supplied shots.",
+        "parts": [
+            "shotIds must be an exact unique permutation of supplied shots."
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-media.ts",
+                "line": 187
+            }
+        ]
+    },
+    {
         "id": "guid-37ac72bfd88149e5",
         "kind": "prose",
         "template": "Short qualifier for homonymous terms",
@@ -14495,6 +15315,25 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/global-sync.ts",
                 "line": 972
+            }
+        ]
+    },
+    {
+        "id": "guid-37ba60f2a097b446",
+        "kind": "error",
+        "template": "Branch output bound exceeded.",
+        "parts": [
+            "Branch output bound exceeded."
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-branch.ts",
+                "line": 300
+            },
+            {
+                "file": "src/story-branch.ts",
+                "line": 310
             }
         ]
     },
@@ -14617,7 +15456,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/economy-host.ts",
-                "line": 101
+                "line": 103
             }
         ]
     },
@@ -14726,7 +15565,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 1745
+                "line": 1812
             }
         ]
     },
@@ -14775,11 +15614,11 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/economy-ledger.ts",
-                "line": 41
+                "line": 44
             },
             {
                 "file": "src/economy-ledger.ts",
-                "line": 164
+                "line": 172
             }
         ]
     },
@@ -14905,6 +15744,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-39b96262ec5a55cd",
+        "kind": "error",
+        "template": "Story metadata exceeds 64000 characters",
+        "parts": [
+            "Story metadata exceeds 64000 characters"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-model.ts",
+                "line": 117
+            }
+        ]
+    },
+    {
         "id": "guid-39b9d71fda08bfb6",
         "kind": "error",
         "template": "provenance must be an object",
@@ -14920,6 +15774,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-39c377b71502eb3d",
+        "kind": "error",
+        "template": "Incomplete export requires the same requestId, actor and payload to recover",
+        "parts": [
+            "Incomplete export requires the same requestId, actor and payload to recover"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-exports.ts",
+                "line": 394
+            }
+        ]
+    },
+    {
         "id": "guid-39d100c8d550427c",
         "kind": "error",
         "template": "line range must be between 1 and {arg0}, with startLine <= endLine",
@@ -14931,7 +15800,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 1329
+                "line": 1396
             }
         ]
     },
@@ -14991,7 +15860,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 273
+                "line": 291
             }
         ]
     },
@@ -15021,7 +15890,22 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 216
+                "line": 234
+            }
+        ]
+    },
+    {
+        "id": "guid-3a7948fe34b84609",
+        "kind": "error",
+        "template": "Chronology must contain the same scene IDs as presentation",
+        "parts": [
+            "Chronology must contain the same scene IDs as presentation"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-projects.ts",
+                "line": 103
             }
         ]
     },
@@ -15127,7 +16011,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1512
+                "line": 1537
             }
         ]
     },
@@ -15267,7 +16151,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 74
+                "line": 92
             }
         ]
     },
@@ -15282,7 +16166,22 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 207
+                "line": 225
+            }
+        ]
+    },
+    {
+        "id": "guid-3b5483e4876445a4",
+        "kind": "error",
+        "template": "Stale review source revision",
+        "parts": [
+            "Stale review source revision"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-editorial.ts",
+                "line": 41
             }
         ]
     },
@@ -15299,7 +16198,22 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 3202
+                "line": 3227
+            }
+        ]
+    },
+    {
+        "id": "guid-3b6c00d08c50666a",
+        "kind": "prose",
+        "template": "For source-linked visual edits, author a visual_model with exact scene revision and Unicode code-point passage offsets, then use story.visual read/preview/propose. Annotations are partial interpretations; stale models require rereading and re-annotation. Selected replacements create a separate alternative for review, not an automatic scene/sequence change. The server does not extract or rewrite with a model.",
+        "parts": [
+            "For source-linked visual edits, author a visual_model with exact scene revision and Unicode code-point passage offsets, then use story.visual read/preview/propose. Annotations are partial interpretations; stale models require rereading and re-annotation. Selected replacements create a separate alternative for review, not an automatic scene/sequence change. The server does not extract or rewrite with a model."
+        ],
+        "binding": "projection",
+        "sources": [
+            {
+                "file": "src/wiki-policy.ts",
+                "line": 60
             }
         ]
     },
@@ -15314,7 +16228,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/economy-host.ts",
-                "line": 64
+                "line": 65
             }
         ]
     },
@@ -15411,7 +16325,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/economy-host.ts",
-                "line": 129
+                "line": 133
             }
         ]
     },
@@ -15426,11 +16340,11 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1248
+                "line": 1255
             },
             {
                 "file": "src/createServer.ts",
-                "line": 1266
+                "line": 1273
             }
         ]
     },
@@ -15476,7 +16390,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/skill-evolution-host.ts",
-                "line": 44
+                "line": 45
             }
         ]
     },
@@ -15530,7 +16444,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 3472
+                "line": 3497
             }
         ]
     },
@@ -15693,7 +16607,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 3250
+                "line": 3317
             }
         ]
     },
@@ -15713,6 +16627,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/work-groups.ts",
                 "line": 217
+            }
+        ]
+    },
+    {
+        "id": "guid-3cbce561d34fd065",
+        "kind": "error",
+        "template": "Review source revision changed",
+        "parts": [
+            "Review source revision changed"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-session.ts",
+                "line": 131
             }
         ]
     },
@@ -15743,15 +16672,15 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 581
+                "line": 587
             },
             {
                 "file": "src/createServer.ts",
-                "line": 595
+                "line": 601
             },
             {
                 "file": "src/createServer.ts",
-                "line": 1431
+                "line": 1439
             }
         ]
     },
@@ -15766,7 +16695,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 798
+                "line": 804
             }
         ]
     },
@@ -15781,7 +16710,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 159
+                "line": 161
             }
         ]
     },
@@ -15797,6 +16726,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/workshop-facilitation.ts",
                 "line": 574
+            }
+        ]
+    },
+    {
+        "id": "guid-3d5a2c0b90bcb4aa",
+        "kind": "error",
+        "template": "Final selection requires decision stage",
+        "parts": [
+            "Final selection requires decision stage"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-session.ts",
+                "line": 139
             }
         ]
     },
@@ -15901,7 +16845,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 1323
+                "line": 1390
             }
         ]
     },
@@ -15947,6 +16891,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/organization.ts",
                 "line": 272
+            }
+        ]
+    },
+    {
+        "id": "guid-3e579edb8098ba83",
+        "kind": "error",
+        "template": "Stale or unrelated adoption review",
+        "parts": [
+            "Stale or unrelated adoption review"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-editorial.ts",
+                "line": 87
             }
         ]
     },
@@ -16085,7 +17044,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 1009
+                "line": 1069
             }
         ]
     },
@@ -16168,6 +17127,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-3f4a96f70573f427",
+        "kind": "error",
+        "template": "Existing Work task does not match the requested story session",
+        "parts": [
+            "Existing Work task does not match the requested story session"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-session.ts",
+                "line": 82
+            }
+        ]
+    },
+    {
         "id": "guid-3f4bf4f1fba39e6b",
         "kind": "error",
         "template": "Duplicate synthesis input identity",
@@ -16179,6 +17153,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/knowledge-synthesis.ts",
                 "line": 74
+            }
+        ]
+    },
+    {
+        "id": "guid-3f874c934cddf53e",
+        "kind": "error",
+        "template": "Invalid editorial pass",
+        "parts": [
+            "Invalid editorial pass"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-editorial.ts",
+                "line": 44
             }
         ]
     },
@@ -16208,7 +17197,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1048
+                "line": 1055
             }
         ]
     },
@@ -16223,7 +17212,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1404
+                "line": 1412
             }
         ]
     },
@@ -16284,7 +17273,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 170
+                "line": 188
             }
         ]
     },
@@ -16320,6 +17309,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-4081a539d2e3380d",
+        "kind": "error",
+        "template": "Duplicate shot id.",
+        "parts": [
+            "Duplicate shot id."
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-media.ts",
+                "line": 162
+            }
+        ]
+    },
+    {
         "id": "guid-40a11acf501ea9bc",
         "kind": "error",
         "template": "taskId or line must identify a task",
@@ -16330,11 +17334,11 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 3089
+                "line": 3114
             },
             {
                 "file": "src/filesystem.ts",
-                "line": 3116
+                "line": 3183
             }
         ]
     },
@@ -16349,7 +17353,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/economy-ledger.ts",
-                "line": 169
+                "line": 177
             }
         ]
     },
@@ -16364,7 +17368,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/economy-host.ts",
-                "line": 66
+                "line": 68
             }
         ]
     },
@@ -16484,7 +17488,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/economy-ledger.ts",
-                "line": 40
+                "line": 43
             }
         ]
     },
@@ -16499,7 +17503,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 156
+                "line": 174
             }
         ]
     },
@@ -16514,7 +17518,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1338
+                "line": 1345
             }
         ]
     },
@@ -16554,6 +17558,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/references.ts",
                 "line": 94
+            }
+        ]
+    },
+    {
+        "id": "guid-41bf004618654280",
+        "kind": "error",
+        "template": "Story session revision conflict",
+        "parts": [
+            "Story session revision conflict"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-session.ts",
+                "line": 89
             }
         ]
     },
@@ -16687,6 +17706,53 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-426744b73c10263a",
+        "kind": "prose",
+        "template": "automatic model calls",
+        "parts": [
+            "automatic model calls"
+        ],
+        "binding": "projection",
+        "sources": [
+            {
+                "file": "src/wiki-policy.ts",
+                "line": 69
+            }
+        ]
+    },
+    {
+        "id": "guid-426b945f507e46a2",
+        "kind": "error",
+        "template": "Invalid selected adoption snapshot path",
+        "parts": [
+            "Invalid selected adoption snapshot path"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-exports.ts",
+                "line": 182
+            }
+        ]
+    },
+    {
+        "id": "guid-42775255e013dc58",
+        "kind": "error",
+        "template": "{arg0} requires an array of at most {arg1} entries",
+        "parts": [
+            "",
+            " requires an array of at most ",
+            " entries"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-model.ts",
+                "line": 45
+            }
+        ]
+    },
+    {
         "id": "guid-427893d8fdc72ff1",
         "kind": "prose",
         "template": "Optional language or script tag for authority labels, such as ko or en-US",
@@ -16777,6 +17843,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-42c25f66a2e31918",
+        "kind": "error",
+        "template": "Story artifact title must be a single line",
+        "parts": [
+            "Story artifact title must be a single line"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-artifacts.ts",
+                "line": 47
+            }
+        ]
+    },
+    {
         "id": "guid-42cece53614644bd",
         "kind": "error",
         "template": "Change-set confirmation mismatch. Dry-run this exact request, inspect the previews, and pass its returned confirmPlanFingerprint before applying it.",
@@ -16787,7 +17868,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 1505
+                "line": 1572
             }
         ]
     },
@@ -16832,7 +17913,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 221
+                "line": 239
             }
         ]
     },
@@ -16862,7 +17943,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 159
+                "line": 177
             }
         ]
     },
@@ -16897,6 +17978,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-434b265edef0945f",
+        "kind": "error",
+        "template": "Only story owner can change delegation or project settings",
+        "parts": [
+            "Only story owner can change delegation or project settings"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-workspace.ts",
+                "line": 49
+            }
+        ]
+    },
+    {
         "id": "guid-4359efceb29154d2",
         "kind": "error",
         "template": "Unknown endpointId. Call search_capabilities first and use an exact endpointId.",
@@ -16907,7 +18003,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1334
+                "line": 1341
             }
         ]
     },
@@ -16923,6 +18019,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/llm-wiki.ts",
                 "line": 6384
+            }
+        ]
+    },
+    {
+        "id": "guid-437791f635c6098d",
+        "kind": "prose",
+        "template": "The visual_model artifact ID, not the authentication model family.",
+        "parts": [
+            "The visual_model artifact ID, not the authentication model family."
+        ],
+        "binding": "projection",
+        "sources": [
+            {
+                "file": "src/story-tools.ts",
+                "line": 102
             }
         ]
     },
@@ -16967,7 +18078,22 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 172
+                "line": 190
+            }
+        ]
+    },
+    {
+        "id": "guid-43ad377f6a9b27d7",
+        "kind": "error",
+        "template": "Story export image changed during read; refresh",
+        "parts": [
+            "Story export image changed during read; refresh"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-exports.ts",
+                "line": 245
             }
         ]
     },
@@ -16982,7 +18108,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/economy-host.ts",
-                "line": 134
+                "line": 138
             }
         ]
     },
@@ -17012,7 +18138,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 1861
+                "line": 1928
             }
         ]
     },
@@ -17073,7 +18199,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 3065
+                "line": 3132
             }
         ]
     },
@@ -17118,7 +18244,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 912
+                "line": 918
             }
         ]
     },
@@ -17133,7 +18259,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 742
+                "line": 748
             }
         ]
     },
@@ -17268,7 +18394,22 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 177
+                "line": 195
+            }
+        ]
+    },
+    {
+        "id": "guid-450369594eecb108",
+        "kind": "error",
+        "template": "Story brief required",
+        "parts": [
+            "Story brief required"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-projects.ts",
+                "line": 51
             }
         ]
     },
@@ -17284,6 +18425,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/skill-evolution.ts",
                 "line": 233
+            }
+        ]
+    },
+    {
+        "id": "guid-450c843e2da5d495",
+        "kind": "error",
+        "template": "Export format is immutable; use a new exportId",
+        "parts": [
+            "Export format is immutable; use a new exportId"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-exports.ts",
+                "line": 404
             }
         ]
     },
@@ -17433,7 +18589,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 124
+                "line": 142
             }
         ]
     },
@@ -17478,7 +18634,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 303
+                "line": 304
             }
         ]
     },
@@ -17493,7 +18649,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 966
+                "line": 973
             }
         ]
     },
@@ -17509,7 +18665,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 1535
+                "line": 1602
             }
         ]
     },
@@ -17525,6 +18681,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/llm-wiki-tools.ts",
                 "line": 478
+            }
+        ]
+    },
+    {
+        "id": "guid-4654f9bf4c27d282",
+        "kind": "error",
+        "template": "Invalid story cursor",
+        "parts": [
+            "Invalid story cursor"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-service.ts",
+                "line": 52
             }
         ]
     },
@@ -17555,7 +18726,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 733
+                "line": 739
             }
         ]
     },
@@ -17647,7 +18818,22 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/skill-evolution-host.ts",
-                "line": 75
+                "line": 76
+            }
+        ]
+    },
+    {
+        "id": "guid-47021259b7e8dbd8",
+        "kind": "error",
+        "template": "Only assigned editor may review during review stage",
+        "parts": [
+            "Only assigned editor may review during review stage"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-session.ts",
+                "line": 130
             }
         ]
     },
@@ -17707,15 +18893,15 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1097
+                "line": 1104
             },
             {
                 "file": "src/createServer.ts",
-                "line": 1110
+                "line": 1117
             },
             {
                 "file": "src/createServer.ts",
-                "line": 1124
+                "line": 1131
             }
         ]
     },
@@ -17900,6 +19086,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-483aa010b6cf04dc",
+        "kind": "error",
+        "template": "Invalid story session operation",
+        "parts": [
+            "Invalid story session operation"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-session.ts",
+                "line": 36
+            }
+        ]
+    },
+    {
         "id": "guid-483bf8ff5f940713",
         "kind": "prose",
         "template": "A map of content that answers a bounded set of navigation questions.",
@@ -17940,7 +19141,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/skill-evolution-host.ts",
-                "line": 66
+                "line": 67
             }
         ]
     },
@@ -17986,6 +19187,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/workshop-output.ts",
                 "line": 69
+            }
+        ]
+    },
+    {
+        "id": "guid-488e9b0372d356ae",
+        "kind": "error",
+        "template": "Choice sequence bound or ID invalid.",
+        "parts": [
+            "Choice sequence bound or ID invalid."
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-branch.ts",
+                "line": 275
             }
         ]
     },
@@ -18057,7 +19273,7 @@ export const GUIDANCE_DEFINITIONS = [
             },
             {
                 "file": "src/createServer.ts",
-                "line": 396
+                "line": 402
             },
             {
                 "file": "src/moderation-tools.ts",
@@ -18122,6 +19338,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/llm-wiki.ts",
                 "line": 7547
+            }
+        ]
+    },
+    {
+        "id": "guid-48df151793790076",
+        "kind": "error",
+        "template": "Story export output changed during health read",
+        "parts": [
+            "Story export output changed during health read"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-exports.ts",
+                "line": 350
             }
         ]
     },
@@ -18196,7 +19427,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 297
+                "line": 315
             }
         ]
     },
@@ -18291,6 +19522,25 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-4958238102f1ffb6",
+        "kind": "error",
+        "template": "Story artifact cannot depend on itself",
+        "parts": [
+            "Story artifact cannot depend on itself"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-artifacts.ts",
+                "line": 64
+            },
+            {
+                "file": "src/story-artifacts.ts",
+                "line": 69
+            }
+        ]
+    },
+    {
         "id": "guid-49589e53a41252ce",
         "kind": "error",
         "template": "Current explicit output delegation is required",
@@ -18316,7 +19566,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 265
+                "line": 283
             }
         ]
     },
@@ -18331,7 +19581,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 855
+                "line": 861
             }
         ]
     },
@@ -18376,7 +19626,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 735
+                "line": 741
             }
         ]
     },
@@ -18391,7 +19641,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 960
+                "line": 967
             }
         ]
     },
@@ -18406,115 +19656,115 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 655
+                "line": 661
             },
             {
                 "file": "src/createServer.ts",
-                "line": 708
+                "line": 714
             },
             {
                 "file": "src/createServer.ts",
-                "line": 746
+                "line": 752
             },
             {
                 "file": "src/createServer.ts",
-                "line": 759
+                "line": 765
             },
             {
                 "file": "src/createServer.ts",
-                "line": 860
+                "line": 866
             },
             {
                 "file": "src/createServer.ts",
-                "line": 886
+                "line": 892
             },
             {
                 "file": "src/createServer.ts",
-                "line": 898
+                "line": 904
             },
             {
                 "file": "src/createServer.ts",
-                "line": 925
+                "line": 931
             },
             {
                 "file": "src/createServer.ts",
-                "line": 969
+                "line": 976
             },
             {
                 "file": "src/createServer.ts",
-                "line": 982
+                "line": 989
             },
             {
                 "file": "src/createServer.ts",
-                "line": 994
+                "line": 1001
             },
             {
                 "file": "src/createServer.ts",
-                "line": 1002
+                "line": 1009
             },
             {
                 "file": "src/createServer.ts",
-                "line": 1016
+                "line": 1023
             },
             {
                 "file": "src/createServer.ts",
-                "line": 1031
+                "line": 1038
             },
             {
                 "file": "src/createServer.ts",
-                "line": 1051
+                "line": 1058
             },
             {
                 "file": "src/createServer.ts",
-                "line": 1061
+                "line": 1068
             },
             {
                 "file": "src/createServer.ts",
-                "line": 1086
+                "line": 1093
             },
             {
                 "file": "src/createServer.ts",
-                "line": 1099
+                "line": 1106
             },
             {
                 "file": "src/createServer.ts",
-                "line": 1113
+                "line": 1120
             },
             {
                 "file": "src/createServer.ts",
-                "line": 1129
+                "line": 1136
             },
             {
                 "file": "src/createServer.ts",
-                "line": 1146
+                "line": 1153
             },
             {
                 "file": "src/createServer.ts",
-                "line": 1161
+                "line": 1168
             },
             {
                 "file": "src/createServer.ts",
-                "line": 1190
+                "line": 1197
             },
             {
                 "file": "src/createServer.ts",
-                "line": 1204
+                "line": 1211
             },
             {
                 "file": "src/createServer.ts",
-                "line": 1219
+                "line": 1226
             },
             {
                 "file": "src/createServer.ts",
-                "line": 1235
+                "line": 1242
             },
             {
                 "file": "src/createServer.ts",
-                "line": 1251
+                "line": 1258
             },
             {
                 "file": "src/createServer.ts",
-                "line": 1268
+                "line": 1275
             }
         ]
     },
@@ -18559,7 +19809,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 2292
+                "line": 2317
             }
         ]
     },
@@ -18604,7 +19854,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 2302
+                "line": 2369
             }
         ]
     },
@@ -18680,7 +19930,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 1884
+                "line": 1951
             }
         ]
     },
@@ -18876,6 +20126,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-4ad78ac5122eabbc",
+        "kind": "error",
+        "template": "Image reference is unavailable in story scope",
+        "parts": [
+            "Image reference is unavailable in story scope"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-artifacts.ts",
+                "line": 86
+            }
+        ]
+    },
+    {
         "id": "guid-4add15d4da9e6f48",
         "kind": "error",
         "template": "orderedMocs[{arg0}] is too long",
@@ -18937,6 +20202,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-4b2f619e0c8504a5",
+        "kind": "error",
+        "template": "Shot durationSeconds bound invalid.",
+        "parts": [
+            "Shot durationSeconds bound invalid."
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-media.ts",
+                "line": 166
+            }
+        ]
+    },
+    {
         "id": "guid-4b2f6f433ca3aebe",
         "kind": "prose",
         "template": "Directional typed relation or focus_supports; use the reciprocal planner for related/same_as/close_match",
@@ -18978,7 +20258,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 1001
+                "line": 1061
             }
         ]
     },
@@ -19024,6 +20304,14 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/notices.ts",
                 "line": 24
+            },
+            {
+                "file": "src/story-service.ts",
+                "line": 50
+            },
+            {
+                "file": "src/story-workspace.ts",
+                "line": 211
             }
         ]
     },
@@ -19163,7 +20451,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 2293
+                "line": 2360
             }
         ]
     },
@@ -19183,6 +20471,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/llm-wiki-tools.ts",
                 "line": 561
+            }
+        ]
+    },
+    {
+        "id": "guid-4c47ca6e7e588eef",
+        "kind": "error",
+        "template": "Story export output has invalid UTF8 or changed during decoding; refusing overwrite",
+        "parts": [
+            "Story export output has invalid UTF8 or changed during decoding; refusing overwrite"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-exports.ts",
+                "line": 407
             }
         ]
     },
@@ -19258,7 +20561,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 3437
+                "line": 3504
             }
         ]
     },
@@ -19289,6 +20592,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/scope-access.ts",
                 "line": 56
+            }
+        ]
+    },
+    {
+        "id": "guid-4cba29bf6b1d3e7e",
+        "kind": "error",
+        "template": "At most 16 story branches",
+        "parts": [
+            "At most 16 story branches"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-projects.ts",
+                "line": 110
             }
         ]
     },
@@ -19429,7 +20747,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/skill-evolution-host.ts",
-                "line": 59
+                "line": 60
             }
         ]
     },
@@ -19504,7 +20822,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 91
+                "line": 109
             }
         ]
     },
@@ -19519,7 +20837,25 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 3602
+                "line": 3627
+            }
+        ]
+    },
+    {
+        "id": "guid-4e03244cd8af6884",
+        "kind": "error",
+        "template": "{arg0} requires {arg1}..{arg2} Unicode characters",
+        "parts": [
+            "",
+            " requires ",
+            "..",
+            " Unicode characters"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-model.ts",
+                "line": 37
             }
         ]
     },
@@ -19629,6 +20965,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-4e805149637683ef",
+        "kind": "error",
+        "template": "Unknown story endpoint",
+        "parts": [
+            "Unknown story endpoint"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-service.ts",
+                "line": 46
+            }
+        ]
+    },
+    {
         "id": "guid-4e820df2ca7dade6",
         "kind": "error",
         "template": "Memory pathPrefix must remain in the selected scope",
@@ -19655,7 +21006,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 513
+                "line": 514
             }
         ]
     },
@@ -19686,6 +21037,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/roleplay-tools.ts",
                 "line": 17
+            }
+        ]
+    },
+    {
+        "id": "guid-4e8d1cf2726091bd",
+        "kind": "error",
+        "template": "Story review is immutable; create a new ID with expectedRevision=missing",
+        "parts": [
+            "Story review is immutable; create a new ID with expectedRevision=missing"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-editorial.ts",
+                "line": 38
             }
         ]
     },
@@ -19777,7 +21143,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 194
+                "line": 212
             }
         ]
     },
@@ -19807,7 +21173,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1084
+                "line": 1091
             }
         ]
     },
@@ -19855,6 +21221,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/llm-wiki.ts",
                 "line": 533
+            }
+        ]
+    },
+    {
+        "id": "guid-4f3423434ac44189",
+        "kind": "error",
+        "template": "Story source belongs to a different branch",
+        "parts": [
+            "Story source belongs to a different branch"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-workspace.ts",
+                "line": 57
             }
         ]
     },
@@ -20007,7 +21388,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 160
+                "line": 178
             }
         ]
     },
@@ -20052,7 +21433,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1028
+                "line": 1035
             }
         ]
     },
@@ -20189,7 +21570,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1523
+                "line": 1548
             }
         ]
     },
@@ -20249,7 +21630,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/skill-evolution-host.ts",
-                "line": 76
+                "line": 77
             }
         ]
     },
@@ -20337,7 +21718,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 814
+                "line": 820
             }
         ]
     },
@@ -20397,7 +21778,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 66
+                "line": 84
             }
         ]
     },
@@ -20412,7 +21793,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 177
+                "line": 195
             }
         ]
     },
@@ -20473,7 +21854,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 1393
+                "line": 1460
             }
         ]
     },
@@ -20518,7 +21899,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 3020
+                "line": 3045
             }
         ]
     },
@@ -20551,6 +21932,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/llm-wiki-tools.ts",
                 "line": 657
+            }
+        ]
+    },
+    {
+        "id": "guid-51669242ec601abf",
+        "kind": "error",
+        "template": "Story export dependency bound exceeded",
+        "parts": [
+            "Story export dependency bound exceeded"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-exports.ts",
+                "line": 153
             }
         ]
     },
@@ -20801,7 +22197,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1407
+                "line": 1415
             }
         ]
     },
@@ -20940,7 +22336,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 651
+                "line": 657
             }
         ]
     },
@@ -21015,7 +22411,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 828
+                "line": 834
             }
         ]
     },
@@ -21061,7 +22457,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1411
+                "line": 1419
             }
         ]
     },
@@ -21241,7 +22637,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 782
+                "line": 788
             }
         ]
     },
@@ -21439,7 +22835,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 267
+                "line": 285
             }
         ]
     },
@@ -21485,6 +22881,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/llm-wiki.ts",
                 "line": 13033
+            }
+        ]
+    },
+    {
+        "id": "guid-554f0e49be29a671",
+        "kind": "error",
+        "template": "Story title must be a single line",
+        "parts": [
+            "Story title must be a single line"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-projects.ts",
+                "line": 53
             }
         ]
     },
@@ -21639,7 +23050,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 186
+                "line": 204
             }
         ]
     },
@@ -21669,7 +23080,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 968
+                "line": 975
             }
         ]
     },
@@ -21684,7 +23095,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 275
+                "line": 293
             }
         ]
     },
@@ -21714,11 +23125,11 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 827
+                "line": 833
             },
             {
                 "file": "src/createServer.ts",
-                "line": 844
+                "line": 850
             }
         ]
     },
@@ -21748,7 +23159,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 1424
+                "line": 1491
             }
         ]
     },
@@ -21823,7 +23234,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1249
+                "line": 1256
             }
         ]
     },
@@ -21838,7 +23249,22 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 188
+                "line": 206
+            }
+        ]
+    },
+    {
+        "id": "guid-567df9dbcb6abf99",
+        "kind": "error",
+        "template": "Invalid source.",
+        "parts": [
+            "Invalid source."
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-media.ts",
+                "line": 106
             }
         ]
     },
@@ -21868,7 +23294,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/economy-ledger.ts",
-                "line": 174
+                "line": 182
             }
         ]
     },
@@ -22003,7 +23429,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 141
+                "line": 159
             }
         ]
     },
@@ -22269,6 +23695,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-5803ac931a2f23e1",
+        "kind": "error",
+        "template": "Export manifest revision conflict",
+        "parts": [
+            "Export manifest revision conflict"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-exports.ts",
+                "line": 397
+            }
+        ]
+    },
+    {
         "id": "guid-5811340913730a1b",
         "kind": "error",
         "template": "{arg0} must be a numeric port",
@@ -22297,7 +23738,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 3132
+                "line": 3199
             }
         ]
     },
@@ -22312,7 +23753,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 2989
+                "line": 3014
             }
         ]
     },
@@ -22363,6 +23804,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-58451fd7ab4222fc",
+        "kind": "error",
+        "template": "Story record exceeds the 500000-byte storage budget",
+        "parts": [
+            "Story record exceeds the 500000-byte storage budget"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-store.ts",
+                "line": 61
+            }
+        ]
+    },
+    {
         "id": "guid-58556cee5812240f",
         "kind": "error",
         "template": "Selected source comparison maxChars must be 2000–12000",
@@ -22403,7 +23859,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 843
+                "line": 849
             }
         ]
     },
@@ -22448,7 +23904,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 174
+                "line": 192
             }
         ]
     },
@@ -22553,7 +24009,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 3322
+                "line": 3389
             }
         ]
     },
@@ -22584,31 +24040,31 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 1202
+                "line": 1269
             },
             {
                 "file": "src/filesystem.ts",
-                "line": 1857
+                "line": 1924
             },
             {
                 "file": "src/filesystem.ts",
-                "line": 1990
+                "line": 2057
             },
             {
                 "file": "src/filesystem.ts",
-                "line": 1999
+                "line": 2066
             },
             {
                 "file": "src/filesystem.ts",
-                "line": 2173
+                "line": 2240
             },
             {
                 "file": "src/filesystem.ts",
-                "line": 2182
+                "line": 2249
             },
             {
                 "file": "src/filesystem.ts",
-                "line": 2530
+                "line": 2597
             }
         ]
     },
@@ -22638,7 +24094,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 1982
+                "line": 2049
             }
         ]
     },
@@ -22733,6 +24189,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-59536f5facfa4f81",
+        "kind": "error",
+        "template": "Cross-branch story reference is not allowed",
+        "parts": [
+            "Cross-branch story reference is not allowed"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-workspace.ts",
+                "line": 111
+            }
+        ]
+    },
+    {
         "id": "guid-59738b31d9867846",
         "kind": "error",
         "template": "Research round already exists; use a new roundId",
@@ -22744,6 +24215,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/independent-research.ts",
                 "line": 162
+            }
+        ]
+    },
+    {
+        "id": "guid-59781fdb2c28b246",
+        "kind": "error",
+        "template": "Story artifact already exists; choose a distinct alternative ID",
+        "parts": [
+            "Story artifact already exists; choose a distinct alternative ID"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-artifacts.ts",
+                "line": 40
             }
         ]
     },
@@ -22773,7 +24259,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 73
+                "line": 91
             }
         ]
     },
@@ -22944,6 +24430,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-5a4361959efd84f5",
+        "kind": "prose",
+        "template": "Keep responses bounded with maxChars, fields and cursors. Revision-check every mutation, reuse one requestId for retries and reread the same target. Generic note writes cannot forge protected story records; Markdown remains authoritative.",
+        "parts": [
+            "Keep responses bounded with maxChars, fields and cursors. Revision-check every mutation, reuse one requestId for retries and reread the same target. Generic note writes cannot forge protected story records; Markdown remains authoritative."
+        ],
+        "binding": "projection",
+        "sources": [
+            {
+                "file": "src/wiki-policy.ts",
+                "line": 66
+            }
+        ]
+    },
+    {
         "id": "guid-5a45b0b5c070aa75",
         "kind": "error",
         "template": "{arg0} must be one of: {arg1}",
@@ -22961,6 +24462,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-5a4d236c818f8345",
+        "kind": "error",
+        "template": "Invalid story export operation",
+        "parts": [
+            "Invalid story export operation"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-exports.ts",
+                "line": 361
+            }
+        ]
+    },
+    {
         "id": "guid-5a50e92128726e60",
         "kind": "error",
         "template": "Graph changed during refresh; retry the query. No stable graph view was returned.",
@@ -22972,6 +24488,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/vault-graph.ts",
                 "line": 481
+            }
+        ]
+    },
+    {
+        "id": "guid-5a753ac02bac613c",
+        "kind": "error",
+        "template": "Export manifest changed after completion",
+        "parts": [
+            "Export manifest changed after completion"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-exports.ts",
+                "line": 468
             }
         ]
     },
@@ -23049,7 +24580,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 2197
+                "line": 2264
             }
         ]
     },
@@ -23125,6 +24656,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/skill-evolution-store.ts",
                 "line": 129
+            }
+        ]
+    },
+    {
+        "id": "guid-5b30b3771ccf56a7",
+        "kind": "error",
+        "template": "Invalid screenplay block type.",
+        "parts": [
+            "Invalid screenplay block type."
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-media.ts",
+                "line": 141
             }
         ]
     },
@@ -23275,7 +24821,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 740
+                "line": 746
             }
         ]
     },
@@ -23290,7 +24836,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 100
+                "line": 118
             }
         ]
     },
@@ -23321,6 +24867,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/vault-index.ts",
                 "line": 588
+            }
+        ]
+    },
+    {
+        "id": "guid-5c11f7cf1eff4a01",
+        "kind": "error",
+        "template": "Session participant membership revoked; pause and request owner direction",
+        "parts": [
+            "Session participant membership revoked; pause and request owner direction"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-session.ts",
+                "line": 105
             }
         ]
     },
@@ -23441,7 +25002,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/economy-host.ts",
-                "line": 33
+                "line": 34
             }
         ]
     },
@@ -23531,7 +25092,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 60
+                "line": 78
             }
         ]
     },
@@ -23566,6 +25127,36 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-5d4f13f11315ff5e",
+        "kind": "prose",
+        "template": "invented participants",
+        "parts": [
+            "invented participants"
+        ],
+        "binding": "projection",
+        "sources": [
+            {
+                "file": "src/wiki-policy.ts",
+                "line": 69
+            }
+        ]
+    },
+    {
+        "id": "guid-5d4fcd4a659296a9",
+        "kind": "error",
+        "template": "Story export dependency depth bound exceeded",
+        "parts": [
+            "Story export dependency depth bound exceeded"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-exports.ts",
+                "line": 146
+            }
+        ]
+    },
+    {
         "id": "guid-5d5a8198b9833fe6",
         "kind": "error",
         "template": "Waiting for every configured participant to submit evidence or an explicit no-result account",
@@ -23591,7 +25182,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 719
+                "line": 725
             }
         ]
     },
@@ -23621,7 +25212,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 62
+                "line": 80
             }
         ]
     },
@@ -23762,7 +25353,22 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 219
+                "line": 237
+            }
+        ]
+    },
+    {
+        "id": "guid-5e055f6c29756447",
+        "kind": "error",
+        "template": "Invalid branch graph.",
+        "parts": [
+            "Invalid branch graph."
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-branch.ts",
+                "line": 271
             }
         ]
     },
@@ -23793,7 +25399,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 1390
+                "line": 1457
             }
         ]
     },
@@ -23808,7 +25414,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/economy-ledger.ts",
-                "line": 159
+                "line": 167
             }
         ]
     },
@@ -23843,7 +25449,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/economy-ledger.ts",
-                "line": 154
+                "line": 162
             }
         ]
     },
@@ -24056,7 +25662,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1078
+                "line": 1085
             }
         ]
     },
@@ -24105,7 +25711,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 118
+                "line": 136
             }
         ]
     },
@@ -24122,7 +25728,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 3916
+                "line": 3941
             }
         ]
     },
@@ -24169,6 +25775,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/scope-auth.ts",
                 "line": 382
+            }
+        ]
+    },
+    {
+        "id": "guid-5faaf9b7b21c6248",
+        "kind": "error",
+        "template": "Story image canonical alias is not permitted",
+        "parts": [
+            "Story image canonical alias is not permitted"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/filesystem.ts",
+                "line": 934
             }
         ]
     },
@@ -24324,7 +25945,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 829
+                "line": 835
             }
         ]
     },
@@ -24339,7 +25960,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 129
+                "line": 147
             }
         ]
     },
@@ -24354,7 +25975,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 223
+                "line": 241
             }
         ]
     },
@@ -24399,7 +26020,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1112
+                "line": 1119
             }
         ]
     },
@@ -24414,7 +26035,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/economy-host.ts",
-                "line": 74
+                "line": 76
             }
         ]
     },
@@ -24444,7 +26065,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 197
+                "line": 215
             }
         ]
     },
@@ -24538,7 +26159,22 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 249
+                "line": 267
+            }
+        ]
+    },
+    {
+        "id": "guid-61d0d9aee9288279",
+        "kind": "error",
+        "template": "Story project delegation or revision changed during operation",
+        "parts": [
+            "Story project delegation or revision changed during operation"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-workspace.ts",
+                "line": 45
             }
         ]
     },
@@ -24568,7 +26204,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 69
+                "line": 87
             }
         ]
     },
@@ -24584,6 +26220,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/scope-auth.ts",
                 "line": 346
+            }
+        ]
+    },
+    {
+        "id": "guid-620e2037b58dbd93",
+        "kind": "error",
+        "template": "Cross-project story reference is not allowed",
+        "parts": [
+            "Cross-project story reference is not allowed"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-workspace.ts",
+                "line": 110
             }
         ]
     },
@@ -24647,7 +26298,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 232
+                "line": 250
             }
         ]
     },
@@ -24683,7 +26334,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 3494
+                "line": 3519
             }
         ]
     },
@@ -24748,11 +26399,11 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 699
+                "line": 700
             },
             {
                 "file": "src/filesystem.ts",
-                "line": 702
+                "line": 703
             }
         ]
     },
@@ -24815,6 +26466,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/organization.ts",
                 "line": 316
+            }
+        ]
+    },
+    {
+        "id": "guid-62dcd036dde4c5ea",
+        "kind": "error",
+        "template": "Story chronology must contain the explicit presentation scene IDs",
+        "parts": [
+            "Story chronology must contain the explicit presentation scene IDs"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-exports.ts",
+                "line": 105
             }
         ]
     },
@@ -24909,7 +26575,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 1211
+                "line": 1278
             }
         ]
     },
@@ -24956,6 +26622,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/enterprise-registry.ts",
                 "line": 603
+            }
+        ]
+    },
+    {
+        "id": "guid-6384f0cc8f0ae872",
+        "kind": "error",
+        "template": "Decision source revision changed",
+        "parts": [
+            "Decision source revision changed"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-session.ts",
+                "line": 141
             }
         ]
     },
@@ -25154,7 +26835,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 823
+                "line": 824
             }
         ]
     },
@@ -25184,7 +26865,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/economy-host.ts",
-                "line": 83
+                "line": 85
             }
         ]
     },
@@ -25229,7 +26910,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 682
+                "line": 688
             }
         ]
     },
@@ -25261,6 +26942,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/llm-wiki-tools.ts",
                 "line": 422
+            }
+        ]
+    },
+    {
+        "id": "guid-65456151ef90fa33",
+        "kind": "error",
+        "template": "Story participant membership required",
+        "parts": [
+            "Story participant membership required"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-workspace.ts",
+                "line": 48
             }
         ]
     },
@@ -25430,7 +27126,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 821
+                "line": 822
             }
         ]
     },
@@ -25460,7 +27156,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 721
+                "line": 727
             }
         ]
     },
@@ -25475,7 +27171,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 652
+                "line": 658
             }
         ]
     },
@@ -25590,7 +27286,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 2141
+                "line": 2208
             }
         ]
     },
@@ -25606,6 +27302,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/community-participation-activities.ts",
                 "line": 39
+            }
+        ]
+    },
+    {
+        "id": "guid-66c52ecb8f1e134f",
+        "kind": "prose",
+        "template": "Fiction and summaries are not authority. Stale items need source review. Character knowledge is not an ACL.",
+        "parts": [
+            "Fiction and summaries are not authority. Stale items need source review. Character knowledge is not an ACL."
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-context.ts",
+                "line": 49
             }
         ]
     },
@@ -25911,7 +27622,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 72
+                "line": 90
             }
         ]
     },
@@ -25972,7 +27683,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 858
+                "line": 860
             }
         ]
     },
@@ -26052,7 +27763,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 925
+                "line": 983
             }
         ]
     },
@@ -26112,7 +27823,23 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 192
+                "line": 210
+            }
+        ]
+    },
+    {
+        "id": "guid-6916f450b4345a98",
+        "kind": "error",
+        "template": "Invalid {arg0} field",
+        "parts": [
+            "Invalid ",
+            " field"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-model.ts",
+                "line": 41
             }
         ]
     },
@@ -26187,7 +27914,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 246
+                "line": 264
             }
         ]
     },
@@ -26202,7 +27929,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 150
+                "line": 168
             }
         ]
     },
@@ -26234,7 +27961,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 1873
+                "line": 1940
             }
         ]
     },
@@ -26249,7 +27976,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 689
+                "line": 690
             }
         ]
     },
@@ -26370,7 +28097,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 1389
+                "line": 1456
             }
         ]
     },
@@ -26385,7 +28112,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 203
+                "line": 221
             }
         ]
     },
@@ -26551,7 +28278,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 1371
+                "line": 1438
             }
         ]
     },
@@ -26611,7 +28338,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 826
+                "line": 832
             }
         ]
     },
@@ -26627,6 +28354,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/work-service.ts",
                 "line": 85
+            }
+        ]
+    },
+    {
+        "id": "guid-6b73889fd2c40978",
+        "kind": "error",
+        "template": "Rehearsal is only a proposal; create and review a scene or setting artifact before adoption",
+        "parts": [
+            "Rehearsal is only a proposal; create and review a scene or setting artifact before adoption"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-editorial.ts",
+                "line": 78
             }
         ]
     },
@@ -26686,7 +28428,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 121
+                "line": 139
             }
         ]
     },
@@ -26731,7 +28473,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 1064
+                "line": 1127
             }
         ]
     },
@@ -26746,7 +28488,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 338
+                "line": 356
             }
         ]
     },
@@ -26763,7 +28505,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 1408
+                "line": 1475
             }
         ]
     },
@@ -26793,7 +28535,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 452
+                "line": 458
             }
         ]
     },
@@ -26808,11 +28550,11 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 3603
+                "line": 3628
             },
             {
                 "file": "src/createServer.ts",
-                "line": 3761
+                "line": 3786
             }
         ]
     },
@@ -26827,7 +28569,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 993
+                "line": 1000
             }
         ]
     },
@@ -26857,7 +28599,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 279
+                "line": 297
             }
         ]
     },
@@ -26873,6 +28615,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/economy-model.ts",
                 "line": 143
+            }
+        ]
+    },
+    {
+        "id": "guid-6c3a7311269dd84d",
+        "kind": "error",
+        "template": "Current showrunner required",
+        "parts": [
+            "Current showrunner required"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-workspace.ts",
+                "line": 50
             }
         ]
     },
@@ -26907,6 +28664,36 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-6c42c7767e126ce8",
+        "kind": "error",
+        "template": "Skill document evaluation aborted",
+        "parts": [
+            "Skill document evaluation aborted"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/skill-evaluation-profiles.ts",
+                "line": 29
+            }
+        ]
+    },
+    {
+        "id": "guid-6c474ae9f1026b83",
+        "kind": "error",
+        "template": "Fountain heading must start with a Unicode letter or number after leading whitespace.",
+        "parts": [
+            "Fountain heading must start with a Unicode letter or number after leading whitespace."
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-media.ts",
+                "line": 310
+            }
+        ]
+    },
+    {
         "id": "guid-6c483f4ad377b173",
         "kind": "error",
         "template": "comment parent IDs are invalid",
@@ -26932,7 +28719,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1042
+                "line": 1049
             }
         ]
     },
@@ -27027,6 +28814,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-6ce6645e45698939",
+        "kind": "error",
+        "template": "Export output unavailable",
+        "parts": [
+            "Export output unavailable"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-exports.ts",
+                "line": 307
+            }
+        ]
+    },
+    {
         "id": "guid-6cf3e34daf1444a8",
         "kind": "error",
         "template": "Invalid economy policy",
@@ -27098,7 +28900,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 400
+                "line": 406
             }
         ]
     },
@@ -27113,7 +28915,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1425
+                "line": 1433
             }
         ]
     },
@@ -27143,7 +28945,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 241
+                "line": 259
             }
         ]
     },
@@ -27203,7 +29005,22 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 106
+                "line": 124
+            }
+        ]
+    },
+    {
+        "id": "guid-6d8642c6b0efb148",
+        "kind": "error",
+        "template": "Economy journal and checkpoint require separate non-overlapping directories",
+        "parts": [
+            "Economy journal and checkpoint require separate non-overlapping directories"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/economy-storage.ts",
+                "line": 29
             }
         ]
     },
@@ -27249,11 +29066,11 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 916
+                "line": 974
             },
             {
                 "file": "src/filesystem.ts",
-                "line": 931
+                "line": 989
             }
         ]
     },
@@ -27360,7 +29177,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 286
+                "line": 304
             }
         ]
     },
@@ -27528,7 +29345,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 783
+                "line": 784
             },
             {
                 "file": "src/git-history.ts",
@@ -27627,7 +29444,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 638
+                "line": 639
             }
         ]
     },
@@ -27717,7 +29534,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 650
+                "line": 656
             }
         ]
     },
@@ -27747,7 +29564,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 286
+                "line": 304
             }
         ]
     },
@@ -27793,7 +29610,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 122
+                "line": 140
             }
         ]
     },
@@ -27995,6 +29812,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-70337d549bf8feaf",
+        "kind": "error",
+        "template": "Story project revision conflict; reread current delegation and context",
+        "parts": [
+            "Story project revision conflict; reread current delegation and context"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-workspace.ts",
+                "line": 62
+            }
+        ]
+    },
+    {
         "id": "guid-703ea5e27c171975",
         "kind": "error",
         "template": "evidence[{arg0}].quoteHash must be a SHA-256 hexadecimal digest",
@@ -28051,7 +29883,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 3604
+                "line": 3629
             }
         ]
     },
@@ -28097,6 +29929,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/llm-wiki.ts",
                 "line": 11293
+            }
+        ]
+    },
+    {
+        "id": "guid-70b32e9e26a0169c",
+        "kind": "error",
+        "template": "Export output changed after completion",
+        "parts": [
+            "Export output changed after completion"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-exports.ts",
+                "line": 470
             }
         ]
     },
@@ -28187,11 +30034,11 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 2020
+                "line": 2087
             },
             {
                 "file": "src/filesystem.ts",
-                "line": 2217
+                "line": 2284
             }
         ]
     },
@@ -28267,7 +30114,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 270
+                "line": 288
             }
         ]
     },
@@ -28297,7 +30144,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/economy-ledger.ts",
-                "line": 83
+                "line": 90
             }
         ]
     },
@@ -28376,7 +30223,22 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 364
+                "line": 382
+            }
+        ]
+    },
+    {
+        "id": "guid-71c3be81a2186032",
+        "kind": "error",
+        "template": "Effect arithmetic overflow: values must remain finite and bounded.",
+        "parts": [
+            "Effect arithmetic overflow: values must remain finite and bounded."
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-branch.ts",
+                "line": 295
             }
         ]
     },
@@ -28455,7 +30317,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1794
+                "line": 1819
             }
         ]
     },
@@ -28471,6 +30333,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/enterprise-federation.ts",
                 "line": 126
+            }
+        ]
+    },
+    {
+        "id": "guid-724acf3b7419fddb",
+        "kind": "error",
+        "template": "Rehearsal dependencies are stale",
+        "parts": [
+            "Rehearsal dependencies are stale"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-session.ts",
+                "line": 46
             }
         ]
     },
@@ -28595,7 +30472,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1242
+                "line": 1249
             }
         ]
     },
@@ -28611,7 +30488,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 1392
+                "line": 1459
             }
         ]
     },
@@ -28656,7 +30533,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1010
+                "line": 1017
             }
         ]
     },
@@ -28731,7 +30608,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 238
+                "line": 256
             }
         ]
     },
@@ -28761,7 +30638,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/economy-host.ts",
-                "line": 24
+                "line": 25
             },
             {
                 "file": "src/roleplay-recovery.ts",
@@ -28908,6 +30785,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-73d90a42b4aec370",
+        "kind": "error",
+        "template": "At most 100 selected artifacts per branch",
+        "parts": [
+            "At most 100 selected artifacts per branch"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-editorial.ts",
+                "line": 101
+            }
+        ]
+    },
+    {
         "id": "guid-73eabe6107db8274",
         "kind": "error",
         "template": "{arg0} exceeds {arg1} characters",
@@ -28999,7 +30891,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 1010
+                "line": 1070
             }
         ]
     },
@@ -29014,7 +30906,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 102
+                "line": 120
             }
         ]
     },
@@ -29075,6 +30967,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/roleplay-store.ts",
                 "line": 135
+            }
+        ]
+    },
+    {
+        "id": "guid-744e209a42ff96d7",
+        "kind": "error",
+        "template": "Selected adoption snapshot revision or identity changed",
+        "parts": [
+            "Selected adoption snapshot revision or identity changed"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-exports.ts",
+                "line": 187
             }
         ]
     },
@@ -29164,7 +31071,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 115
+                "line": 133
             }
         ]
     },
@@ -29602,7 +31509,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 1278
+                "line": 1345
             }
         ]
     },
@@ -29663,6 +31570,36 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/llm-wiki.ts",
                 "line": 2213
+            }
+        ]
+    },
+    {
+        "id": "guid-76bb65717a43e45b",
+        "kind": "error",
+        "template": "Invalid media input.",
+        "parts": [
+            "Invalid media input."
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-media.ts",
+                "line": 121
+            }
+        ]
+    },
+    {
+        "id": "guid-76c1fd470b548777",
+        "kind": "error",
+        "template": "Prepared export manifest changed before output write",
+        "parts": [
+            "Prepared export manifest changed before output write"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-exports.ts",
+                "line": 450
             }
         ]
     },
@@ -29737,7 +31674,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 222
+                "line": 240
             }
         ]
     },
@@ -29769,6 +31706,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/independent-research.ts",
                 "line": 87
+            }
+        ]
+    },
+    {
+        "id": "guid-770d71419f86f396",
+        "kind": "error",
+        "template": "Only branch_graph artifacts carry a graph",
+        "parts": [
+            "Only branch_graph artifacts carry a graph"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-artifacts.ts",
+                "line": 52
             }
         ]
     },
@@ -29864,6 +31816,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-7762bc4c4040a964",
+        "kind": "error",
+        "template": "Explicit adopt/reject/hold/adjust_scope decision and reason required",
+        "parts": [
+            "Explicit adopt/reject/hold/adjust_scope decision and reason required"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-session.ts",
+                "line": 140
+            }
+        ]
+    },
+    {
         "id": "guid-7766dc5d95f71c68",
         "kind": "error",
         "template": "Research review limit reached",
@@ -29904,7 +31871,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 251
+                "line": 269
             }
         ]
     },
@@ -30059,7 +32026,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 453
+                "line": 459
             }
         ]
     },
@@ -30169,7 +32136,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 2286
+                "line": 2353
             }
         ]
     },
@@ -30262,7 +32229,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 3124
+                "line": 3191
             }
         ]
     },
@@ -30397,7 +32364,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/economy-ledger.ts",
-                "line": 79
+                "line": 86
             }
         ]
     },
@@ -30432,6 +32399,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-79d24ed11166098a",
+        "kind": "error",
+        "template": "Dialogue block requires a character.",
+        "parts": [
+            "Dialogue block requires a character."
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-media.ts",
+                "line": 145
+            }
+        ]
+    },
+    {
         "id": "guid-79dd41b4ba3fc857",
         "kind": "prose",
         "template": "Question packets default to 4000 characters (max 12000), inspect at most 20 candidates and read at most 8 documents. Search fresh means index/source agreement, not knowledge validity. Check separate summary, lifecycle, review and integrity fields. Social leads are not evidence; clipped passages are incomplete quotations.",
@@ -30442,7 +32424,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 126
+                "line": 144
             }
         ]
     },
@@ -30457,7 +32439,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 305
+                "line": 323
             }
         ]
     },
@@ -30532,7 +32514,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 980
+                "line": 987
             }
         ]
     },
@@ -30562,7 +32544,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 200
+                "line": 218
             }
         ]
     },
@@ -30612,6 +32594,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-7a93d787318585c6",
+        "kind": "error",
+        "template": "Invalid screenplay block",
+        "parts": [
+            "Invalid screenplay block"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-model.ts",
+                "line": 105
+            }
+        ]
+    },
+    {
         "id": "guid-7aa8571eb2dc8c5f",
         "kind": "error",
         "template": "This Decision Record is protected by legal_hold or preserve_until and cannot be rejected through MCP.",
@@ -30638,6 +32635,33 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/llm-wiki-tools.ts",
                 "line": 503
+            }
+        ]
+    },
+    {
+        "id": "guid-7aee9ee36500bf7f",
+        "kind": "error",
+        "template": "Story reference limit exceeded",
+        "parts": [
+            "Story reference limit exceeded"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-artifacts.ts",
+                "line": 80
+            },
+            {
+                "file": "src/story-workspace.ts",
+                "line": 79
+            },
+            {
+                "file": "src/story-workspace.ts",
+                "line": 84
+            },
+            {
+                "file": "src/story-workspace.ts",
+                "line": 153
             }
         ]
     },
@@ -30700,6 +32724,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/ideation.ts",
                 "line": 240
+            }
+        ]
+    },
+    {
+        "id": "guid-7b5018255abb6b7f",
+        "kind": "error",
+        "template": "Submitted source revision is stale",
+        "parts": [
+            "Submitted source revision is stale"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-session.ts",
+                "line": 120
             }
         ]
     },
@@ -30778,7 +32817,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1111
+                "line": 1118
             }
         ]
     },
@@ -30814,6 +32853,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/ideation.ts",
                 "line": 569
+            }
+        ]
+    },
+    {
+        "id": "guid-7be5aef0dc1830d3",
+        "kind": "error",
+        "template": "Invalid story artifact kind",
+        "parts": [
+            "Invalid story artifact kind"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-artifacts.ts",
+                "line": 43
             }
         ]
     },
@@ -31043,7 +33097,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/skill-evolution-host.ts",
-                "line": 20
+                "line": 21
             }
         ]
     },
@@ -31079,6 +33133,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-7cb733c47642b787",
+        "kind": "error",
+        "template": "Story export reference unavailable",
+        "parts": [
+            "Story export reference unavailable"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-exports.ts",
+                "line": 81
+            }
+        ]
+    },
+    {
         "id": "guid-7cc28ab1a72f9786",
         "kind": "prose",
         "template": "Optional notification id that was processed",
@@ -31104,7 +33173,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 406
+                "line": 412
             }
         ]
     },
@@ -31119,7 +33188,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 244
+                "line": 262
             }
         ]
     },
@@ -31198,7 +33267,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 683
+                "line": 689
             }
         ]
     },
@@ -31244,7 +33313,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 928
+                "line": 986
             }
         ]
     },
@@ -31289,7 +33358,22 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 1319
+                "line": 1386
+            }
+        ]
+    },
+    {
+        "id": "guid-7d66ac69b6e6b784",
+        "kind": "error",
+        "template": "Invalid missing image flag.",
+        "parts": [
+            "Invalid missing image flag."
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-media.ts",
+                "line": 179
             }
         ]
     },
@@ -31334,7 +33418,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 290
+                "line": 291
             }
         ]
     },
@@ -31404,6 +33488,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-7da1cd6cd978c2b2",
+        "kind": "error",
+        "template": "Invalid story export selection",
+        "parts": [
+            "Invalid story export selection"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-exports.ts",
+                "line": 51
+            }
+        ]
+    },
+    {
         "id": "guid-7dbba8f3a2b832a6",
         "kind": "error",
         "template": "Executable frontmatter engines are disabled",
@@ -31451,7 +33550,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 1335
+                "line": 1402
             }
         ]
     },
@@ -31481,7 +33580,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 2716
+                "line": 2741
             }
         ]
     },
@@ -31526,7 +33625,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/economy-host.ts",
-                "line": 126
+                "line": 130
             }
         ]
     },
@@ -31612,7 +33711,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 919
+                "line": 925
             }
         ]
     },
@@ -31691,7 +33790,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 3325
+                "line": 3392
             }
         ]
     },
@@ -31745,6 +33844,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-7f888c5f0d6d2a80",
+        "kind": "error",
+        "template": "Cross-project image reference",
+        "parts": [
+            "Cross-project image reference"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-artifacts.ts",
+                "line": 87
+            }
+        ]
+    },
+    {
         "id": "guid-7f8a2f2fb7903531",
         "kind": "prose",
         "template": "A durable objection linked to the exact claim it challenges and the evidence that supports the objection.",
@@ -31785,7 +33899,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 3523
+                "line": 3548
             }
         ]
     },
@@ -31892,6 +34006,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/roleplay-service.ts",
                 "line": 122
+            }
+        ]
+    },
+    {
+        "id": "guid-80a816c8e1722a90",
+        "kind": "error",
+        "template": "Work assignment changed or closed; pause the story session",
+        "parts": [
+            "Work assignment changed or closed; pause the story session"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-session.ts",
+                "line": 110
             }
         ]
     },
@@ -32052,7 +34181,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 63
+                "line": 81
             }
         ]
     },
@@ -32097,7 +34226,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 669
+                "line": 675
             }
         ]
     },
@@ -32112,7 +34241,22 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 169
+                "line": 187
+            }
+        ]
+    },
+    {
+        "id": "guid-81585a71bd6a6d6c",
+        "kind": "error",
+        "template": "Story read response exceeded its declared budget",
+        "parts": [
+            "Story read response exceeded its declared budget"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-service.ts",
+                "line": 75
             }
         ]
     },
@@ -32177,6 +34321,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-81a64ba219bfd612",
+        "kind": "error",
+        "template": "Session review must match current source and assigned editor",
+        "parts": [
+            "Session review must match current source and assigned editor"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-session.ts",
+                "line": 134
+            }
+        ]
+    },
+    {
         "id": "guid-81a91ba8634d3eea",
         "kind": "prose",
         "template": "Read one Wiki note progressively from one checked source snapshot. Start with summary/key_points, then outline or a unique section/block with bounded nearby context. Key points prefer claims, then authored key_points, then body paragraphs. Missing summary/progressive metadata falls back to one leading paragraph; key_points fallback uses at most five. contentSource=body_excerpt and excerptRange identify source context, not a synthesized summary or complete note coverage. summaryFresh/summaryStale survive compaction and describe stored metadata versus the body digest, not factual truth; inspect source before relying on stale summaries. Exact headings take priority; ambiguous locators require outline/line selection. Full reads are explicit and bounded. If truncated, nextAction re-reads the section/excerpt envelope or outline with a revision guard; replace rather than append the preview. Malformed root dates instead route dateRepairAction/nextAction to revision-checked notes.read for Properties; dateIssuesOmitted still means a warning. Inspect source before correcting dates; never guess or erase holds.",
@@ -32222,7 +34381,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 245
+                "line": 263
             }
         ]
     },
@@ -32297,7 +34456,23 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 2956
+                "line": 2981
+            }
+        ]
+    },
+    {
+        "id": "guid-82263fb2c54b6c08",
+        "kind": "error",
+        "template": "{arg0} must be a single line.",
+        "parts": [
+            "",
+            " must be a single line."
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-media.ts",
+                "line": 103
             }
         ]
     },
@@ -32344,6 +34519,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/roleplay-recovery.ts",
                 "line": 44
+            }
+        ]
+    },
+    {
+        "id": "guid-826ea853a58847f4",
+        "kind": "error",
+        "template": "Duplicate scene id.",
+        "parts": [
+            "Duplicate scene id."
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-media.ts",
+                "line": 133
             }
         ]
     },
@@ -32426,7 +34616,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 94
+                "line": 112
             }
         ]
     },
@@ -32441,7 +34631,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 662
+                "line": 663
             }
         ]
     },
@@ -32486,7 +34676,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1026
+                "line": 1033
             }
         ]
     },
@@ -32576,7 +34766,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 741
+                "line": 747
             }
         ]
     },
@@ -32696,7 +34886,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 238
+                "line": 256
             }
         ]
     },
@@ -32713,6 +34903,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/global-sync.ts",
                 "line": 249
+            }
+        ]
+    },
+    {
+        "id": "guid-83ddae674d38649b",
+        "kind": "error",
+        "template": "Invalid story medium",
+        "parts": [
+            "Invalid story medium"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-model.ts",
+                "line": 70
             }
         ]
     },
@@ -32803,7 +35008,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 1451
+                "line": 1518
             }
         ]
     },
@@ -32818,7 +35023,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 783
+                "line": 789
             }
         ]
     },
@@ -33074,7 +35279,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1127
+                "line": 1134
             }
         ]
     },
@@ -33180,7 +35385,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1415
+                "line": 1423
             }
         ]
     },
@@ -33230,6 +35435,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-85c0dba66711e345",
+        "kind": "error",
+        "template": "Pending output changed outside export; refusing overwrite",
+        "parts": [
+            "Pending output changed outside export; refusing overwrite"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-exports.ts",
+                "line": 411
+            }
+        ]
+    },
+    {
         "id": "guid-85e0a60c5e0bf05a",
         "kind": "prose",
         "template": "How the result behaved for the task",
@@ -33240,7 +35460,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 797
+                "line": 803
             }
         ]
     },
@@ -33270,7 +35490,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 842
+                "line": 848
             }
         ]
     },
@@ -33399,7 +35619,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 390
+                "line": 396
             }
         ]
     },
@@ -33449,6 +35669,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-866e58472ddea6f7",
+        "kind": "error",
+        "template": "Story image must be a regular file",
+        "parts": [
+            "Story image must be a regular file"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/filesystem.ts",
+                "line": 938
+            }
+        ]
+    },
+    {
         "id": "guid-86aa0f8a9434bbd9",
         "kind": "error",
         "template": "requestId cannot be used to update a community post",
@@ -33474,11 +35709,11 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1160
+                "line": 1167
             },
             {
                 "file": "src/createServer.ts",
-                "line": 1173
+                "line": 1180
             }
         ]
     },
@@ -33538,7 +35773,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 182
+                "line": 200
             }
         ]
     },
@@ -33554,7 +35789,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 1130
+                "line": 1193
             }
         ]
     },
@@ -33759,7 +35994,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 216
+                "line": 234
             }
         ]
     },
@@ -33819,7 +36054,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 3312
+                "line": 3379
             }
         ]
     },
@@ -33866,7 +36101,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 3194
+                "line": 3219
             }
         ]
     },
@@ -33900,7 +36135,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 4104
+                "line": 4129
             }
         ]
     },
@@ -33975,7 +36210,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/economy-ledger.ts",
-                "line": 167
+                "line": 175
             }
         ]
     },
@@ -33991,7 +36226,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 2208
+                "line": 2275
             }
         ]
     },
@@ -34067,7 +36302,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 1446
+                "line": 1513
             }
         ]
     },
@@ -34101,7 +36336,22 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 86
+                "line": 104
+            }
+        ]
+    },
+    {
+        "id": "guid-88d1842edfa6d960",
+        "kind": "error",
+        "template": "Selected adoption snapshot changed",
+        "parts": [
+            "Selected adoption snapshot changed"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-session.ts",
+                "line": 147
             }
         ]
     },
@@ -34116,7 +36366,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 280
+                "line": 298
             }
         ]
     },
@@ -34152,6 +36402,25 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-890b48acb1c3dfa8",
+        "kind": "error",
+        "template": "Invalid story operation",
+        "parts": [
+            "Invalid story operation"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-service.ts",
+                "line": 48
+            },
+            {
+                "file": "src/story-tools.ts",
+                "line": 82
+            }
+        ]
+    },
+    {
         "id": "guid-891f57c06e919da5",
         "kind": "error",
         "template": "Memory scope inventory exceeds the 10000-note safety guard; current correction discovery is unavailable. No incomplete current-memory claim was returned.",
@@ -34163,6 +36432,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/layered-memory.ts",
                 "line": 102
+            }
+        ]
+    },
+    {
+        "id": "guid-893618d10f74ff0a",
+        "kind": "error",
+        "template": "Invalid export source identity",
+        "parts": [
+            "Invalid export source identity"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-exports.ts",
+                "line": 287
             }
         ]
     },
@@ -34238,7 +36522,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 119
+                "line": 137
             }
         ]
     },
@@ -34268,7 +36552,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 1432
+                "line": 1499
             }
         ]
     },
@@ -34428,6 +36712,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-8a2cf81b3a17a9a3",
+        "kind": "error",
+        "template": "Invalid branch run input.",
+        "parts": [
+            "Invalid branch run input."
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-branch.ts",
+                "line": 270
+            }
+        ]
+    },
+    {
         "id": "guid-8a35a2238c3cdb2f",
         "kind": "error",
         "template": "Revision conflict for {arg0}: expected {arg1}, current {arg2}. Read the {arg3} file again before replacing it.",
@@ -34442,7 +36741,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 1043
+                "line": 1106
             }
         ]
     },
@@ -34488,19 +36787,19 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1188
+                "line": 1195
             },
             {
                 "file": "src/createServer.ts",
-                "line": 1202
+                "line": 1209
             },
             {
                 "file": "src/createServer.ts",
-                "line": 1217
+                "line": 1224
             },
             {
                 "file": "src/createServer.ts",
-                "line": 1233
+                "line": 1240
             }
         ]
     },
@@ -34516,7 +36815,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 2539
+                "line": 2606
             }
         ]
     },
@@ -34533,7 +36832,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 957
+                "line": 1015
             }
         ]
     },
@@ -34608,7 +36907,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1427
+                "line": 1435
             }
         ]
     },
@@ -34654,7 +36953,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 293
+                "line": 311
             }
         ]
     },
@@ -34795,6 +37094,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-8bfba69b75aed011",
+        "kind": "error",
+        "template": "Shot order bound invalid.",
+        "parts": [
+            "Shot order bound invalid."
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-media.ts",
+                "line": 165
+            }
+        ]
+    },
+    {
         "id": "guid-8c145960c7afaa3d",
         "kind": "prose",
         "template": "Merge with existing frontmatter (default: true)",
@@ -34805,7 +37119,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 873
+                "line": 879
             }
         ]
     },
@@ -34865,7 +37179,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 145
+                "line": 163
             }
         ]
     },
@@ -34956,7 +37270,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 193
+                "line": 211
             }
         ]
     },
@@ -35016,7 +37330,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 205
+                "line": 223
             }
         ]
     },
@@ -35077,7 +37391,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 3137
+                "line": 3204
             }
         ]
     },
@@ -35107,7 +37421,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 3191
+                "line": 3216
             }
         ]
     },
@@ -35122,7 +37436,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 2028
+                "line": 2095
             }
         ]
     },
@@ -35232,7 +37546,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/economy-ledger.ts",
-                "line": 137
+                "line": 145
             }
         ]
     },
@@ -35279,7 +37593,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 1397
+                "line": 1464
             }
         ]
     },
@@ -35339,7 +37653,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 2729
+                "line": 2754
             }
         ]
     },
@@ -35489,7 +37803,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 391
+                "line": 397
             }
         ]
     },
@@ -35550,7 +37864,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 3128
+                "line": 3195
             }
         ]
     },
@@ -35707,6 +38021,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-8fff448fa0e82d60",
+        "kind": "error",
+        "template": "Stale artifact dependencies must be refreshed before adoption",
+        "parts": [
+            "Stale artifact dependencies must be refreshed before adoption"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-editorial.ts",
+                "line": 77
+            }
+        ]
+    },
+    {
         "id": "guid-901452e81ea2fb22",
         "kind": "prose",
         "template": "ISO deadline, distinct from scheduledAt",
@@ -35778,6 +38107,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/agent-directory-tools.ts",
                 "line": 25
+            }
+        ]
+    },
+    {
+        "id": "guid-907482adda4fc8b5",
+        "kind": "error",
+        "template": "Story sequence artifact kind mismatch",
+        "parts": [
+            "Story sequence artifact kind mismatch"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-exports.ts",
+                "line": 190
             }
         ]
     },
@@ -36081,7 +38425,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 150
+                "line": 168
             }
         ]
     },
@@ -36097,7 +38441,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 3304
+                "line": 3329
             }
         ]
     },
@@ -36112,7 +38456,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 1978
+                "line": 2045
             }
         ]
     },
@@ -36408,6 +38752,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-931062d9deeeeea9",
+        "kind": "error",
+        "template": "maxChars too small for story response; request a field or larger budget",
+        "parts": [
+            "maxChars too small for story response; request a field or larger budget"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-workspace.ts",
+                "line": 238
+            }
+        ]
+    },
+    {
         "id": "guid-931a2427eec55bbe",
         "kind": "prose",
         "template": "Semantic hits, including cached candidates, recheck source hashes and moderation. An absent hit can mean stale or unavailable vectors, not missing knowledge; use lexical results during semantic cooldown.",
@@ -36418,7 +38777,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 123
+                "line": 141
             }
         ]
     },
@@ -36482,7 +38841,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 213
+                "line": 231
             }
         ]
     },
@@ -36587,7 +38946,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 294
+                "line": 312
             }
         ]
     },
@@ -36786,7 +39145,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1142
+                "line": 1149
             }
         ]
     },
@@ -36801,7 +39160,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/economy-ledger.ts",
-                "line": 37
+                "line": 40
             }
         ]
     },
@@ -36847,7 +39206,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 1031
+                "line": 1094
             }
         ]
     },
@@ -36862,7 +39221,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 654
+                "line": 660
             }
         ]
     },
@@ -36941,7 +39300,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 2056
+                "line": 2123
             }
         ]
     },
@@ -37123,7 +39482,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 163
+                "line": 181
             }
         ]
     },
@@ -37168,7 +39527,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/economy-ledger.ts",
-                "line": 89
+                "line": 97
             }
         ]
     },
@@ -37310,7 +39669,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 3730
+                "line": 3755
             }
         ]
     },
@@ -37423,6 +39782,10 @@ export const GUIDANCE_DEFINITIONS = [
                 "line": 35
             },
             {
+                "file": "src/story-model.ts",
+                "line": 98
+            },
+            {
                 "file": "src/workshop-output.ts",
                 "line": 31
             },
@@ -37444,6 +39807,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/organization.ts",
                 "line": 318
+            }
+        ]
+    },
+    {
+        "id": "guid-972ac7a1fbfcc516",
+        "kind": "error",
+        "template": "Story export sources changed during read; refresh",
+        "parts": [
+            "Story export sources changed during read; refresh"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-exports.ts",
+                "line": 241
             }
         ]
     },
@@ -37477,11 +39855,11 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 3091
+                "line": 3116
             },
             {
                 "file": "src/filesystem.ts",
-                "line": 3117
+                "line": 3184
             }
         ]
     },
@@ -37561,6 +39939,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-97d4a2b8838254bd",
+        "kind": "error",
+        "template": "Story export reference has ambiguous platform spelling",
+        "parts": [
+            "Story export reference has ambiguous platform spelling"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-exports.ts",
+                "line": 83
+            }
+        ]
+    },
+    {
         "id": "guid-97f486b4de85ac77",
         "kind": "error",
         "template": "patches must contain at least one hunk",
@@ -37571,7 +39964,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 1308
+                "line": 1375
             }
         ]
     },
@@ -37606,6 +39999,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-9809f474f3c0a933",
+        "kind": "error",
+        "template": "Story sources changed during read; refresh context",
+        "parts": [
+            "Story sources changed during read; refresh context"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-store.ts",
+                "line": 79
+            }
+        ]
+    },
+    {
         "id": "guid-9823f6eab0e07504",
         "kind": "prose",
         "template": "treating host-private registration as protection from the OS administrator",
@@ -37616,7 +40024,22 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 94
+                "line": 112
+            }
+        ]
+    },
+    {
+        "id": "guid-98660a88b15662d1",
+        "kind": "error",
+        "template": "Story image path is restricted",
+        "parts": [
+            "Story image path is restricted"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/filesystem.ts",
+                "line": 927
             }
         ]
     },
@@ -37665,7 +40088,22 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 744
+                "line": 750
+            }
+        ]
+    },
+    {
+        "id": "guid-9880e6aec3ce5441",
+        "kind": "error",
+        "template": "Duplicate story source",
+        "parts": [
+            "Duplicate story source"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-workspace.ts",
+                "line": 69
             }
         ]
     },
@@ -37695,7 +40133,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 163
+                "line": 181
             }
         ]
     },
@@ -37725,7 +40163,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 210
+                "line": 228
             }
         ]
     },
@@ -37755,7 +40193,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 745
+                "line": 751
             }
         ]
     },
@@ -37785,7 +40223,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1126
+                "line": 1133
             }
         ]
     },
@@ -37918,6 +40356,36 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-99a80d4068929f01",
+        "kind": "error",
+        "template": "Story session has reached a terminal stage",
+        "parts": [
+            "Story session has reached a terminal stage"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-session.ts",
+                "line": 91
+            }
+        ]
+    },
+    {
+        "id": "guid-99aefa7d92bd14b9",
+        "kind": "prose",
+        "template": "Declarative branch rehearsal pins one graph revision, validates variables and paths and records proposal-only traces. No scripts and no changes to the shared roleplay world. Convert useful rehearsal material to a reviewed scene or setting candidate before explicit adoption.",
+        "parts": [
+            "Declarative branch rehearsal pins one graph revision, validates variables and paths and records proposal-only traces. No scripts and no changes to the shared roleplay world. Convert useful rehearsal material to a reviewed scene or setting candidate before explicit adoption."
+        ],
+        "binding": "projection",
+        "sources": [
+            {
+                "file": "src/wiki-policy.ts",
+                "line": 65
+            }
+        ]
+    },
+    {
         "id": "guid-99c4501a828d4c82",
         "kind": "error",
         "template": "Output ID conflict or different payload; never overwrite it",
@@ -37975,6 +40443,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/skill-evolution.ts",
                 "line": 386
+            }
+        ]
+    },
+    {
+        "id": "guid-9a0c659348c1ab33",
+        "kind": "error",
+        "template": "Story collection exceeds byte scan budget; request a narrower branch or kind",
+        "parts": [
+            "Story collection exceeds byte scan budget; request a narrower branch or kind"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-workspace.ts",
+                "line": 174
             }
         ]
     },
@@ -38136,6 +40619,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-9aa544766a680b4b",
+        "kind": "error",
+        "template": "Existing economy requires explicit storage migration",
+        "parts": [
+            "Existing economy requires explicit storage migration"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/economy-storage.ts",
+                "line": 58
+            }
+        ]
+    },
+    {
         "id": "guid-9ab0b30e8106ea22",
         "kind": "error",
         "template": "Federation file target is not a regular file",
@@ -38201,6 +40699,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-9ae6a064af0e96ae",
+        "kind": "error",
+        "template": "Rehearsal requires a current branch graph revision",
+        "parts": [
+            "Rehearsal requires a current branch graph revision"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-session.ts",
+                "line": 45
+            }
+        ]
+    },
+    {
         "id": "guid-9b04817ff861f4d3",
         "kind": "error",
         "template": "This community comment is unavailable because it was hidden by moderation",
@@ -38226,7 +40739,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/economy-ledger.ts",
-                "line": 47
+                "line": 50
             }
         ]
     },
@@ -38316,7 +40829,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/economy-host.ts",
-                "line": 143
+                "line": 149
             },
             {
                 "file": "src/roleplay-recovery.ts",
@@ -38335,7 +40848,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1050
+                "line": 1057
             }
         ]
     },
@@ -38427,7 +40940,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 297
+                "line": 315
             }
         ]
     },
@@ -38457,7 +40970,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 792
+                "line": 798
             }
         ]
     },
@@ -38598,7 +41111,22 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1424
+                "line": 1432
+            }
+        ]
+    },
+    {
+        "id": "guid-9d34725353bfea71",
+        "kind": "error",
+        "template": "Authenticated story account unavailable or lacks write/task capability",
+        "parts": [
+            "Authenticated story account unavailable or lacks write/task capability"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-workspace.ts",
+                "line": 31
             }
         ]
     },
@@ -38834,6 +41362,37 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-9e4a0e979a52a008",
+        "kind": "error",
+        "template": "Invalid story {arg0}",
+        "parts": [
+            "Invalid story ",
+            ""
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-model.ts",
+                "line": 29
+            }
+        ]
+    },
+    {
+        "id": "guid-9e58911680ef8724",
+        "kind": "error",
+        "template": "Story image source revision changed or unavailable",
+        "parts": [
+            "Story image source revision changed or unavailable"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-artifacts.ts",
+                "line": 89
+            }
+        ]
+    },
+    {
         "id": "guid-9e7750ccca1796cd",
         "kind": "error",
         "template": "Unknown Windows volume",
@@ -38844,7 +41403,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/economy-host.ts",
-                "line": 78
+                "line": 80
             }
         ]
     },
@@ -38859,7 +41418,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 2419
+                "line": 2444
             }
         ]
     },
@@ -38905,7 +41464,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 228
+                "line": 246
             }
         ]
     },
@@ -38935,7 +41494,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/skill-evolution-host.ts",
-                "line": 57
+                "line": 58
             }
         ]
     },
@@ -38966,6 +41525,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/llm-wiki-tools.ts",
                 "line": 377
+            }
+        ]
+    },
+    {
+        "id": "guid-9ee772c8c32276bf",
+        "kind": "error",
+        "template": "Story collection scan exceeds 2048 records; request a narrower branch or kind",
+        "parts": [
+            "Story collection scan exceeds 2048 records; request a narrower branch or kind"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-workspace.ts",
+                "line": 170
             }
         ]
     },
@@ -39011,6 +41585,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/obsidian-search-tools.ts",
                 "line": 13
+            }
+        ]
+    },
+    {
+        "id": "guid-9f64c1b62ce9a67b",
+        "kind": "error",
+        "template": "Session roles require real registered project participants",
+        "parts": [
+            "Session roles require real registered project participants"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-session.ts",
+                "line": 66
             }
         ]
     },
@@ -39131,7 +41720,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 1228
+                "line": 1295
             }
         ]
     },
@@ -39147,7 +41736,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 1442
+                "line": 1509
             }
         ]
     },
@@ -39178,7 +41767,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 66
+                "line": 84
             }
         ]
     },
@@ -39193,7 +41782,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 1887
+                "line": 1954
             }
         ]
     },
@@ -39209,6 +41798,36 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/wiki-moc-regions.ts",
                 "line": 165
+            }
+        ]
+    },
+    {
+        "id": "guid-a065e15882394e58",
+        "kind": "error",
+        "template": "Stale adoption source revision",
+        "parts": [
+            "Stale adoption source revision"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-editorial.ts",
+                "line": 76
+            }
+        ]
+    },
+    {
+        "id": "guid-a07ae198de9cdc0b",
+        "kind": "error",
+        "template": "Invalid absolute or ambiguous story path",
+        "parts": [
+            "Invalid absolute or ambiguous story path"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-model.ts",
+                "line": 14
             }
         ]
     },
@@ -39268,7 +41887,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 150
+                "line": 168
             }
         ]
     },
@@ -39349,7 +41968,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/economy-ledger.ts",
-                "line": 107
+                "line": 115
             }
         ]
     },
@@ -39409,7 +42028,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1012
+                "line": 1019
             }
         ]
     },
@@ -39439,7 +42058,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1083
+                "line": 1090
             }
         ]
     },
@@ -39454,7 +42073,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 261
+                "line": 279
             }
         ]
     },
@@ -39503,7 +42122,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1464
+                "line": 1489
             }
         ]
     },
@@ -39533,7 +42152,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 821
+                "line": 827
             }
         ]
     },
@@ -39614,6 +42233,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-a23077c2ed6264b9",
+        "kind": "error",
+        "template": "Session context is stale; refresh dependencies before continuing",
+        "parts": [
+            "Session context is stale; refresh dependencies before continuing"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-session.ts",
+                "line": 113
+            }
+        ]
+    },
+    {
         "id": "guid-a232757e66235002",
         "kind": "error",
         "template": "trustLevel must be unrated, low, medium, high, or verified",
@@ -39655,7 +42289,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 2679
+                "line": 2704
             }
         ]
     },
@@ -39671,6 +42305,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/community-participation.ts",
                 "line": 76
+            }
+        ]
+    },
+    {
+        "id": "guid-a266a4677e9e7e10",
+        "kind": "error",
+        "template": "Unsupported story image extension",
+        "parts": [
+            "Unsupported story image extension"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/filesystem.ts",
+                "line": 913
             }
         ]
     },
@@ -39715,7 +42364,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 256
+                "line": 274
             }
         ]
     },
@@ -39859,7 +42508,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1231
+                "line": 1238
             }
         ]
     },
@@ -39891,7 +42540,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 3130
+                "line": 3197
             }
         ]
     },
@@ -39983,7 +42632,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 364
+                "line": 382
             }
         ]
     },
@@ -39998,7 +42647,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 3232
+                "line": 3299
             }
         ]
     },
@@ -40128,6 +42777,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-a3a17abad794a52c",
+        "kind": "error",
+        "template": "Invalid managed story output path",
+        "parts": [
+            "Invalid managed story output path"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/filesystem.ts",
+                "line": 921
+            }
+        ]
+    },
+    {
         "id": "guid-a3ab939d15cf65ae",
         "kind": "error",
         "template": "A note may appear only once in a change set, including equivalent path spellings. Combine its patches and Properties into one change, then dry-run again.",
@@ -40138,7 +42802,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 1440
+                "line": 1507
             }
         ]
     },
@@ -40218,6 +42882,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-a3f35e53c6d2b6bf",
+        "kind": "error",
+        "template": "Story canonical alias is unavailable in this scope",
+        "parts": [
+            "Story canonical alias is unavailable in this scope"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-store.ts",
+                "line": 22
+            }
+        ]
+    },
+    {
         "id": "guid-a40ae36a463f3eab",
         "kind": "prose",
         "template": "ambiguity never authorizes a guess",
@@ -40228,7 +42907,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 364
+                "line": 382
             }
         ]
     },
@@ -40308,6 +42987,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/workshop-facilitation.ts",
                 "line": 215
+            }
+        ]
+    },
+    {
+        "id": "guid-a44053c1d16e3e8a",
+        "kind": "error",
+        "template": "maxSteps requires 1..128",
+        "parts": [
+            "maxSteps requires 1..128"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-projects.ts",
+                "line": 66
             }
         ]
     },
@@ -40473,7 +43167,22 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 225
+                "line": 243
+            }
+        ]
+    },
+    {
+        "id": "guid-a5328b16fe5c1832",
+        "kind": "error",
+        "template": "Shot count bound exceeded.",
+        "parts": [
+            "Shot count bound exceeded."
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-media.ts",
+                "line": 156
             }
         ]
     },
@@ -40609,7 +43318,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 66
+                "line": 84
             }
         ]
     },
@@ -40624,7 +43333,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1049
+                "line": 1056
             }
         ]
     },
@@ -40669,7 +43378,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 206
+                "line": 224
             }
         ]
     },
@@ -40760,7 +43469,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/economy-host.ts",
-                "line": 53
+                "line": 54
             }
         ]
     },
@@ -40790,7 +43499,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 706
+                "line": 712
             }
         ]
     },
@@ -41089,7 +43798,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 229
+                "line": 247
             }
         ]
     },
@@ -41186,11 +43895,11 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 1294
+                "line": 1361
             },
             {
                 "file": "src/filesystem.ts",
-                "line": 1381
+                "line": 1448
             }
         ]
     },
@@ -41205,7 +43914,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1214
+                "line": 1221
             }
         ]
     },
@@ -41310,7 +44019,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 1527
+                "line": 1594
             }
         ]
     },
@@ -41355,7 +44064,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 309
+                "line": 327
             }
         ]
     },
@@ -41370,7 +44079,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 146
+                "line": 164
             }
         ]
     },
@@ -41386,6 +44095,25 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/organization.ts",
                 "line": 451
+            }
+        ]
+    },
+    {
+        "id": "guid-a8a63dee1b73a5ee",
+        "kind": "error",
+        "template": "Story authored value scan budget exceeded",
+        "parts": [
+            "Story authored value scan budget exceeded"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-workspace.ts",
+                "line": 137
+            },
+            {
+                "file": "src/story-workspace.ts",
+                "line": 145
             }
         ]
     },
@@ -41430,7 +44158,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/economy-host.ts",
-                "line": 154
+                "line": 161
             },
             {
                 "file": "src/roleplay-recovery.ts",
@@ -41450,39 +44178,39 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 909
+                "line": 967
             },
             {
                 "file": "src/filesystem.ts",
-                "line": 1094
+                "line": 1157
             },
             {
                 "file": "src/filesystem.ts",
-                "line": 2309
+                "line": 2376
             },
             {
                 "file": "src/filesystem.ts",
-                "line": 2428
+                "line": 2495
             },
             {
                 "file": "src/filesystem.ts",
-                "line": 2473
+                "line": 2540
             },
             {
                 "file": "src/filesystem.ts",
-                "line": 2929
+                "line": 2996
             },
             {
                 "file": "src/filesystem.ts",
-                "line": 2940
+                "line": 3007
             },
             {
                 "file": "src/filesystem.ts",
-                "line": 3042
+                "line": 3109
             },
             {
                 "file": "src/filesystem.ts",
-                "line": 3048
+                "line": 3115
             }
         ]
     },
@@ -41528,7 +44256,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 1101
+                "line": 1164
             }
         ]
     },
@@ -41588,7 +44316,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 667
+                "line": 673
             }
         ]
     },
@@ -41648,7 +44376,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 234
+                "line": 252
             }
         ]
     },
@@ -41694,7 +44422,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 1084
+                "line": 1147
             }
         ]
     },
@@ -41727,6 +44455,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/llm-wiki.ts",
                 "line": 481
+            }
+        ]
+    },
+    {
+        "id": "guid-aa3767d2d4e9c9af",
+        "kind": "error",
+        "template": "New story project requires expectedRevision=missing",
+        "parts": [
+            "New story project requires expectedRevision=missing"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-projects.ts",
+                "line": 49
             }
         ]
     },
@@ -41851,7 +44594,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 208
+                "line": 226
             }
         ]
     },
@@ -41881,7 +44624,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 677
+                "line": 683
             }
         ]
     },
@@ -41911,7 +44654,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 97
+                "line": 115
             }
         ]
     },
@@ -41928,6 +44671,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/llm-wiki.ts",
                 "line": 6358
+            }
+        ]
+    },
+    {
+        "id": "guid-aae26eddde0a336a",
+        "kind": "error",
+        "template": "Artifact sources are stale; refresh before reviewing",
+        "parts": [
+            "Artifact sources are stale; refresh before reviewing"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-editorial.ts",
+                "line": 42
             }
         ]
     },
@@ -41972,7 +44730,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 56
+                "line": 74
             }
         ]
     },
@@ -42112,6 +44870,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-ab8ca3a523b3961a",
+        "kind": "error",
+        "template": "Story export cannot depend on its own manifest or output",
+        "parts": [
+            "Story export cannot depend on its own manifest or output"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-exports.ts",
+                "line": 402
+            }
+        ]
+    },
+    {
         "id": "guid-ab9ad7903d0e1aa9",
         "kind": "error",
         "template": "applications[{arg0}].id has invalid format",
@@ -42243,7 +45016,22 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 259
+                "line": 277
+            }
+        ]
+    },
+    {
+        "id": "guid-abf312fb0162c3a7",
+        "kind": "error",
+        "template": "Invalid skill document evaluation input",
+        "parts": [
+            "Invalid skill document evaluation input"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/skill-evaluation-profiles.ts",
+                "line": 26
             }
         ]
     },
@@ -42273,7 +45061,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/skill-evolution-host.ts",
-                "line": 61
+                "line": 62
             }
         ]
     },
@@ -42376,7 +45164,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 737
+                "line": 743
             }
         ]
     },
@@ -42437,7 +45225,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 670
+                "line": 676
             }
         ]
     },
@@ -42602,7 +45390,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 405
+                "line": 411
             }
         ]
     },
@@ -42681,7 +45469,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1047
+                "line": 1054
             }
         ]
     },
@@ -42697,7 +45485,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 1650
+                "line": 1717
             }
         ]
     },
@@ -43004,6 +45792,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-af13b18a3f536082",
+        "kind": "error",
+        "template": "Scene and shot sequence IDs must be distinct",
+        "parts": [
+            "Scene and shot sequence IDs must be distinct"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-exports.ts",
+                "line": 106
+            }
+        ]
+    },
+    {
         "id": "guid-af3e50404d031367",
         "kind": "error",
         "template": "Rejected candidate cannot be evaluated or promoted",
@@ -43029,7 +45832,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 89
+                "line": 107
             }
         ]
     },
@@ -43089,7 +45892,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/economy-ledger.ts",
-                "line": 104
+                "line": 112
             }
         ]
     },
@@ -43104,7 +45907,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1215
+                "line": 1222
             }
         ]
     },
@@ -43135,6 +45938,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/organization.ts",
                 "line": 257
+            }
+        ]
+    },
+    {
+        "id": "guid-afa75f2f9fd701cc",
+        "kind": "error",
+        "template": "Shot durationSeconds must not exceed 86400",
+        "parts": [
+            "Shot durationSeconds must not exceed 86400"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-model.ts",
+                "line": 100
             }
         ]
     },
@@ -43229,7 +46047,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 705
+                "line": 711
             }
         ]
     },
@@ -43244,7 +46062,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 691
+                "line": 697
             }
         ]
     },
@@ -43259,7 +46077,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1001
+                "line": 1008
             }
         ]
     },
@@ -43322,6 +46140,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/llm-wiki.ts",
                 "line": 5788
+            }
+        ]
+    },
+    {
+        "id": "guid-b074c86a4bfb3254",
+        "kind": "error",
+        "template": "Story export reference alias unavailable in this scope",
+        "parts": [
+            "Story export reference alias unavailable in this scope"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-exports.ts",
+                "line": 95
             }
         ]
     },
@@ -43501,7 +46334,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 109
+                "line": 127
             }
         ]
     },
@@ -43582,6 +46415,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-b17869f5723da32f",
+        "kind": "prose",
+        "template": "Cycle allowed; play is step-bounded.",
+        "parts": [
+            "Cycle allowed; play is step-bounded."
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-branch.ts",
+                "line": 244
+            }
+        ]
+    },
+    {
         "id": "guid-b17f67cf5c49f2e8",
         "kind": "error",
         "template": "Work actions require a project-backed task",
@@ -43607,7 +46455,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1093
+                "line": 1100
             }
         ]
     },
@@ -43622,7 +46470,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 147
+                "line": 165
             }
         ]
     },
@@ -43771,7 +46619,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 129
+                "line": 147
             }
         ]
     },
@@ -43786,7 +46634,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 893
+                "line": 899
             }
         ]
     },
@@ -43816,7 +46664,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 57
+                "line": 75
             }
         ]
     },
@@ -43831,7 +46679,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 166
+                "line": 184
             }
         ]
     },
@@ -43939,7 +46787,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 961
+                "line": 1021
             }
         ]
     },
@@ -43954,7 +46802,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 1219
+                "line": 1286
             }
         ]
     },
@@ -44014,7 +46862,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 94
+                "line": 112
             }
         ]
     },
@@ -44047,7 +46895,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 101
+                "line": 119
             }
         ]
     },
@@ -44067,6 +46915,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/community-features.ts",
                 "line": 291
+            }
+        ]
+    },
+    {
+        "id": "guid-b35421a5bc968bdc",
+        "kind": "error",
+        "template": "Adoption creates a new immutable snapshot; expectedRevision=missing required",
+        "parts": [
+            "Adoption creates a new immutable snapshot; expectedRevision=missing required"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-editorial.ts",
+                "line": 74
             }
         ]
     },
@@ -44097,7 +46960,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 2715
+                "line": 2740
             }
         ]
     },
@@ -44161,7 +47024,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 278
+                "line": 296
             }
         ]
     },
@@ -44206,7 +47069,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 766
+                "line": 772
             }
         ]
     },
@@ -44282,11 +47145,11 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 825
+                "line": 831
             },
             {
                 "file": "src/createServer.ts",
-                "line": 979
+                "line": 986
             }
         ]
     },
@@ -44346,7 +47209,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 200
+                "line": 218
             }
         ]
     },
@@ -44445,6 +47308,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-b4f3066b2ca9c1cf",
+        "kind": "error",
+        "template": "Cyclic story authored data is unavailable",
+        "parts": [
+            "Cyclic story authored data is unavailable"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-workspace.ts",
+                "line": 141
+            }
+        ]
+    },
+    {
         "id": "guid-b4fbc7565e078b37",
         "kind": "error",
         "template": "This workshop is closed for contributions",
@@ -44509,7 +47387,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 75
+                "line": 93
             }
         ]
     },
@@ -44554,7 +47432,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 200
+                "line": 218
             }
         ]
     },
@@ -44620,6 +47498,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-b573a0201a6740b4",
+        "kind": "prose",
+        "template": "Scene cards and manuscript share stable IDs. Use story.sequence for explicit presentation, chronology and shot order. Alternative IDs and branches preserve rejected paths. Flashbacks, beliefs and intentional exceptions are not automatic contradictions.",
+        "parts": [
+            "Scene cards and manuscript share stable IDs. Use story.sequence for explicit presentation, chronology and shot order. Alternative IDs and branches preserve rejected paths. Flashbacks, beliefs and intentional exceptions are not automatic contradictions."
+        ],
+        "binding": "projection",
+        "sources": [
+            {
+                "file": "src/wiki-policy.ts",
+                "line": 59
+            }
+        ]
+    },
+    {
         "id": "guid-b5794b1794a318a8",
         "kind": "error",
         "template": "Enterprise runtime already exists: {arg0}",
@@ -44646,7 +47539,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 54
+                "line": 72
             }
         ]
     },
@@ -44711,7 +47604,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 189
+                "line": 207
             }
         ]
     },
@@ -44786,7 +47679,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/economy-host.ts",
-                "line": 58
+                "line": 59
             }
         ]
     },
@@ -44870,6 +47763,25 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-b60e5bf2e689feab",
+        "kind": "error",
+        "template": "Media input bound exceeded.",
+        "parts": [
+            "Media input bound exceeded."
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-media.ts",
+                "line": 129
+            },
+            {
+                "file": "src/story-media.ts",
+                "line": 184
+            }
+        ]
+    },
+    {
         "id": "guid-b67964f904bbf640",
         "kind": "error",
         "template": "Invalid scope path: {arg0}",
@@ -44896,7 +47808,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 881
+                "line": 887
             }
         ]
     },
@@ -44956,7 +47868,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 291
+                "line": 309
             }
         ]
     },
@@ -44971,7 +47883,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 76
+                "line": 94
             }
         ]
     },
@@ -45002,7 +47914,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 1013
+                "line": 1073
             }
         ]
     },
@@ -45078,7 +47990,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 975
+                "line": 982
             }
         ]
     },
@@ -45484,7 +48396,22 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1067
+                "line": 1074
+            }
+        ]
+    },
+    {
+        "id": "guid-b8639c563cc4e61b",
+        "kind": "error",
+        "template": "Invalid declarative story branch graph",
+        "parts": [
+            "Invalid declarative story branch graph"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-artifacts.ts",
+                "line": 55
             }
         ]
     },
@@ -45547,7 +48474,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 190
+                "line": 208
             }
         ]
     },
@@ -45562,7 +48489,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 136
+                "line": 154
             }
         ]
     },
@@ -45637,7 +48564,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 2953
+                "line": 2978
             }
         ]
     },
@@ -45728,7 +48655,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 840
+                "line": 846
             }
         ]
     },
@@ -46050,7 +48977,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 607
+                "line": 608
             },
             {
                 "file": "src/skill-evolution-recovery.ts",
@@ -46146,7 +49073,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1044
+                "line": 1051
             }
         ]
     },
@@ -46161,7 +49088,22 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 230
+                "line": 248
+            }
+        ]
+    },
+    {
+        "id": "guid-bb3d21997240b051",
+        "kind": "error",
+        "template": "Reviews are revision-pinned records; create a new review for a new source",
+        "parts": [
+            "Reviews are revision-pinned records; create a new review for a new source"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-editorial.ts",
+                "line": 34
             }
         ]
     },
@@ -46267,11 +49209,11 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 1108
+                "line": 1171
             },
             {
                 "file": "src/filesystem.ts",
-                "line": 2444
+                "line": 2511
             },
             {
                 "file": "src/frontmatter.ts",
@@ -46292,6 +49234,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/llm-wiki.ts",
                 "line": 255
+            }
+        ]
+    },
+    {
+        "id": "guid-bbd5af4cdafa0930",
+        "kind": "error",
+        "template": "Invalid initial state.",
+        "parts": [
+            "Invalid initial state."
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-branch.ts",
+                "line": 276
             }
         ]
     },
@@ -46321,7 +49278,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/economy-ledger.ts",
-                "line": 225
+                "line": 233
             }
         ]
     },
@@ -46336,7 +49293,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 736
+                "line": 742
             }
         ]
     },
@@ -46563,7 +49520,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 722
+                "line": 728
             }
         ]
     },
@@ -46578,7 +49535,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 135
+                "line": 153
             }
         ]
     },
@@ -46795,7 +49752,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 3488
+                "line": 3513
             }
         ]
     },
@@ -46810,7 +49767,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1046
+                "line": 1053
             }
         ]
     },
@@ -46871,7 +49828,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 1336
+                "line": 1403
             }
         ]
     },
@@ -47032,7 +49989,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 1901
+                "line": 1968
             }
         ]
     },
@@ -47047,7 +50004,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 693
+                "line": 699
             }
         ]
     },
@@ -47116,6 +50073,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-bfc0d659adbc55db",
+        "kind": "error",
+        "template": "Unmanaged output already exists; choose a new exportId",
+        "parts": [
+            "Unmanaged output already exists; choose a new exportId"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-exports.ts",
+                "line": 409
+            }
+        ]
+    },
+    {
         "id": "guid-bfc987f6099e1ce0",
         "kind": "prose",
         "template": "Revision returned when reading the comment",
@@ -47127,6 +50099,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/social-tools.ts",
                 "line": 71
+            }
+        ]
+    },
+    {
+        "id": "guid-bfcfca478556cc04",
+        "kind": "error",
+        "template": "Invalid story export format",
+        "parts": [
+            "Invalid story export format"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-exports.ts",
+                "line": 46
             }
         ]
     },
@@ -47171,7 +50158,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 281
+                "line": 299
             }
         ]
     },
@@ -47322,7 +50309,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 256
+                "line": 274
             }
         ]
     },
@@ -47383,7 +50370,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 2621
+                "line": 2688
             }
         ]
     },
@@ -47553,7 +50540,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 302
+                "line": 320
             }
         ]
     },
@@ -47664,7 +50651,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 1386
+                "line": 1453
             }
         ]
     },
@@ -47739,11 +50726,11 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1159
+                "line": 1166
             },
             {
                 "file": "src/createServer.ts",
-                "line": 1172
+                "line": 1179
             }
         ]
     },
@@ -47788,7 +50775,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 676
+                "line": 677
             }
         ]
     },
@@ -47818,7 +50805,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/economy-ledger.ts",
-                "line": 120
+                "line": 128
             }
         ]
     },
@@ -47849,6 +50836,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/llm-wiki.ts",
                 "line": 7035
+            }
+        ]
+    },
+    {
+        "id": "guid-c25843a52b0cd332",
+        "kind": "error",
+        "template": "A waiting reason is required",
+        "parts": [
+            "A waiting reason is required"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-session.ts",
+                "line": 96
             }
         ]
     },
@@ -47923,11 +50925,11 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1011
+                "line": 1018
             },
             {
                 "file": "src/createServer.ts",
-                "line": 1043
+                "line": 1050
             }
         ]
     },
@@ -48063,7 +51065,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/endpoint-registry.ts",
-                "line": 72
+                "line": 73
             },
             {
                 "file": "src/search-limits.ts",
@@ -48098,7 +51100,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 131
+                "line": 133
             }
         ]
     },
@@ -48218,7 +51220,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 137
+                "line": 155
             }
         ]
     },
@@ -48395,6 +51397,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-c4b3acfa17ea65e6",
+        "kind": "error",
+        "template": "Story cursor invalidated; reread current revision",
+        "parts": [
+            "Story cursor invalidated; reread current revision"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-workspace.ts",
+                "line": 220
+            }
+        ]
+    },
+    {
         "id": "guid-c4b4e462c6a1c50f",
         "kind": "prose",
         "template": "Add one compatible extension or respectful critique within the bounded turn.",
@@ -48530,6 +51547,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/roleplay-model.ts",
                 "line": 67
+            }
+        ]
+    },
+    {
+        "id": "guid-c5656c77c3f31b68",
+        "kind": "error",
+        "template": "Story export read revision conflict; reread the current source",
+        "parts": [
+            "Story export read revision conflict; reread the current source"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-exports.ts",
+                "line": 258
             }
         ]
     },
@@ -48684,6 +51716,22 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-c6061ca24c37b263",
+        "kind": "error",
+        "template": "{arg0} string bound or value invalid.",
+        "parts": [
+            "",
+            " string bound or value invalid."
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-media.ts",
+                "line": 99
+            }
+        ]
+    },
+    {
         "id": "guid-c60c7284497b0876",
         "kind": "error",
         "template": "Participation {arg0}",
@@ -48740,7 +51788,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/economy-host.ts",
-                "line": 145
+                "line": 151
             },
             {
                 "file": "src/roleplay-recovery.ts",
@@ -48763,7 +51811,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 94
+                "line": 112
             }
         ]
     },
@@ -48778,7 +51826,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 303
+                "line": 321
             }
         ]
     },
@@ -48793,7 +51841,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 106
+                "line": 124
             }
         ]
     },
@@ -48870,7 +51918,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 1938
+                "line": 2005
             }
         ]
     },
@@ -48900,7 +51948,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 3316
+                "line": 3383
             }
         ]
     },
@@ -48962,7 +52010,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1320
+                "line": 1327
             }
         ]
     },
@@ -49075,7 +52123,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 90
+                "line": 108
             }
         ]
     },
@@ -49090,27 +52138,27 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 707
+                "line": 713
             },
             {
                 "file": "src/createServer.ts",
-                "line": 1189
+                "line": 1196
             },
             {
                 "file": "src/createServer.ts",
-                "line": 1203
+                "line": 1210
             },
             {
                 "file": "src/createServer.ts",
-                "line": 1218
+                "line": 1225
             },
             {
                 "file": "src/createServer.ts",
-                "line": 1234
+                "line": 1241
             },
             {
                 "file": "src/createServer.ts",
-                "line": 1267
+                "line": 1274
             }
         ]
     },
@@ -49155,7 +52203,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 3994
+                "line": 4019
             }
         ]
     },
@@ -49200,7 +52248,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 88
+                "line": 106
             }
         ]
     },
@@ -49245,7 +52293,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 967
+                "line": 974
             }
         ]
     },
@@ -49260,7 +52308,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 180
+                "line": 198
             }
         ]
     },
@@ -49350,7 +52398,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 2660
+                "line": 2685
             }
         ]
     },
@@ -49410,7 +52458,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/economy-ledger.ts",
-                "line": 220
+                "line": 228
             }
         ]
     },
@@ -49484,11 +52532,11 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 2033
+                "line": 2100
             },
             {
                 "file": "src/filesystem.ts",
-                "line": 2236
+                "line": 2303
             }
         ]
     },
@@ -49549,7 +52597,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 714
+                "line": 720
             }
         ]
     },
@@ -49564,7 +52612,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 859
+                "line": 865
             }
         ]
     },
@@ -49619,6 +52667,29 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/public-federation-storage.ts",
                 "line": 137
+            }
+        ]
+    },
+    {
+        "id": "guid-c956ec1a110365b0",
+        "kind": "error",
+        "template": "Story target unavailable",
+        "parts": [
+            "Story target unavailable"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-store.ts",
+                "line": 19
+            },
+            {
+                "file": "src/story-store.ts",
+                "line": 20
+            },
+            {
+                "file": "src/story-store.ts",
+                "line": 25
             }
         ]
     },
@@ -49801,7 +52872,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1022
+                "line": 1029
             }
         ]
     },
@@ -49831,7 +52902,22 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1230
+                "line": 1237
+            }
+        ]
+    },
+    {
+        "id": "guid-ca27f70da9a38a37",
+        "kind": "error",
+        "template": "Managed output changed outside export; refusing overwrite",
+        "parts": [
+            "Managed output changed outside export; refusing overwrite"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-exports.ts",
+                "line": 410
             }
         ]
     },
@@ -49876,7 +52962,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 685
+                "line": 691
             }
         ]
     },
@@ -50032,6 +53118,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-cac4fb3cc75af265",
+        "kind": "prose",
+        "template": "Create, draft, review and explicitly select one fictional work with real participants and bounded host execution.",
+        "parts": [
+            "Create, draft, review and explicitly select one fictional work with real participants and bounded host execution."
+        ],
+        "binding": "projection",
+        "sources": [
+            {
+                "file": "src/wiki-policy.ts",
+                "line": 55
+            }
+        ]
+    },
+    {
         "id": "guid-cac5f7422b6d4801",
         "kind": "error",
         "template": "{arg0} requires expectedRevision when updating an existing note. Read the note first and pass its revision.",
@@ -50043,7 +53144,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 3507
+                "line": 3532
             }
         ]
     },
@@ -50060,7 +53161,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 522
+                "line": 523
             }
         ]
     },
@@ -50165,7 +53266,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1082
+                "line": 1089
             }
         ]
     },
@@ -50180,7 +53281,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 266
+                "line": 284
             }
         ]
     },
@@ -50210,7 +53311,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 700
+                "line": 706
             }
         ]
     },
@@ -50256,6 +53357,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/llm-wiki.ts",
                 "line": 10745
+            }
+        ]
+    },
+    {
+        "id": "guid-cb89b9f741876499",
+        "kind": "error",
+        "template": "Conflicting scene source revision",
+        "parts": [
+            "Conflicting scene source revision"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-artifacts.ts",
+                "line": 61
             }
         ]
     },
@@ -50320,6 +53436,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/llm-wiki.ts",
                 "line": 8855
+            }
+        ]
+    },
+    {
+        "id": "guid-cbebc93974b368d0",
+        "kind": "error",
+        "template": "Story project unavailable",
+        "parts": [
+            "Story project unavailable"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-workspace.ts",
+                "line": 38
             }
         ]
     },
@@ -50407,6 +53538,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-cc254b7092ff5f2b",
+        "kind": "error",
+        "template": "Add registered participants through work.project before including them in the creative workspace",
+        "parts": [
+            "Add registered participants through work.project before including them in the creative workspace"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-projects.ts",
+                "line": 76
+            }
+        ]
+    },
+    {
         "id": "guid-cc408e854eb4b949",
         "kind": "error",
         "template": "maxChars must be an integer between 512 and 20000",
@@ -50417,11 +53563,11 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 3516
+                "line": 3541
             },
             {
                 "file": "src/filesystem.ts",
-                "line": 3195
+                "line": 3262
             },
             {
                 "file": "src/query-page.ts",
@@ -50558,7 +53704,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 264
+                "line": 282
             }
         ]
     },
@@ -50642,7 +53788,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/endpoint-registry.ts",
-                "line": 636
+                "line": 641
             }
         ]
     },
@@ -50702,7 +53848,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 263
+                "line": 281
             }
         ]
     },
@@ -50793,7 +53939,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1155
+                "line": 1162
             }
         ]
     },
@@ -50808,7 +53954,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 706
+                "line": 707
             }
         ]
     },
@@ -50906,7 +54052,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 857
+                "line": 863
             }
         ]
     },
@@ -50956,6 +54102,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-ce24ce921bcd2c72",
+        "kind": "error",
+        "template": "Story dependency byte budget exceeded",
+        "parts": [
+            "Story dependency byte budget exceeded"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-workspace.ts",
+                "line": 124
+            }
+        ]
+    },
+    {
         "id": "guid-ce39aa406632c19b",
         "kind": "prose",
         "template": "using reactions or author level as proof",
@@ -50966,7 +54127,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 270
+                "line": 288
             }
         ]
     },
@@ -50997,7 +54158,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1120
+                "line": 1127
             }
         ]
     },
@@ -51222,7 +54383,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 687
+                "line": 693
             }
         ]
     },
@@ -51257,6 +54418,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-cf8cff9a7d52c8f9",
+        "kind": "prose",
+        "template": "adoption by popularity or automatic quality scores",
+        "parts": [
+            "adoption by popularity or automatic quality scores"
+        ],
+        "binding": "projection",
+        "sources": [
+            {
+                "file": "src/wiki-policy.ts",
+                "line": 69
+            }
+        ]
+    },
+    {
         "id": "guid-cf8ec5fc16fdfc9c",
         "kind": "prose",
         "template": "Required current revision from read_note",
@@ -51267,7 +54443,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1030
+                "line": 1037
             }
         ]
     },
@@ -51312,7 +54488,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 113
+                "line": 131
             }
         ]
     },
@@ -51343,6 +54519,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/skill-evolution.ts",
                 "line": 307
+            }
+        ]
+    },
+    {
+        "id": "guid-d0114783c10e7554",
+        "kind": "prose",
+        "template": "Reviews pin exact source revisions and distinguish structure, line, continuity and reader passes. Findings and taste are advisory. Only current showrunner story.adopt selects an immutable snapshot through exact Project.md manifest pins; prepared snapshots and later drafts are not adopted.",
+        "parts": [
+            "Reviews pin exact source revisions and distinguish structure, line, continuity and reader passes. Findings and taste are advisory. Only current showrunner story.adopt selects an immutable snapshot through exact Project.md manifest pins; prepared snapshots and later drafts are not adopted."
+        ],
+        "binding": "projection",
+        "sources": [
+            {
+                "file": "src/wiki-policy.ts",
+                "line": 62
             }
         ]
     },
@@ -51496,7 +54687,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 3722
+                "line": 3747
             }
         ]
     },
@@ -51598,35 +54789,35 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 649
+                "line": 655
             },
             {
                 "file": "src/createServer.ts",
-                "line": 666
+                "line": 672
             },
             {
                 "file": "src/createServer.ts",
-                "line": 681
+                "line": 687
             },
             {
                 "file": "src/createServer.ts",
-                "line": 718
+                "line": 724
             },
             {
                 "file": "src/createServer.ts",
-                "line": 897
+                "line": 903
             },
             {
                 "file": "src/createServer.ts",
-                "line": 909
+                "line": 915
             },
             {
                 "file": "src/createServer.ts",
-                "line": 1246
+                "line": 1253
             },
             {
                 "file": "src/createServer.ts",
-                "line": 1262
+                "line": 1269
             }
         ]
     },
@@ -51732,15 +54923,15 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1534
+                "line": 1559
             },
             {
                 "file": "src/createServer.ts",
-                "line": 1539
+                "line": 1564
             },
             {
                 "file": "src/createServer.ts",
-                "line": 1540
+                "line": 1565
             }
         ]
     },
@@ -51945,7 +55136,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 704
+                "line": 710
             }
         ]
     },
@@ -51975,7 +55166,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 981
+                "line": 988
             }
         ]
     },
@@ -51991,7 +55182,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 3286
+                "line": 3311
             }
         ]
     },
@@ -52021,7 +55212,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 66
+                "line": 84
             }
         ]
     },
@@ -52205,7 +55396,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 1400
+                "line": 1467
             }
         ]
     },
@@ -52296,7 +55487,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 3299
+                "line": 3324
             }
         ]
     },
@@ -52369,6 +55560,25 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-d399378dd9215453",
+        "kind": "error",
+        "template": "Story image exceeds byte budget",
+        "parts": [
+            "Story image exceeds byte budget"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/filesystem.ts",
+                "line": 939
+            },
+            {
+                "file": "src/filesystem.ts",
+                "line": 946
+            }
+        ]
+    },
+    {
         "id": "guid-d3ad9af6670d2a33",
         "kind": "prose",
         "template": "Optional short repair hint; never include secrets or raw prompts",
@@ -52379,7 +55589,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 799
+                "line": 805
             }
         ]
     },
@@ -52439,7 +55649,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 668
+                "line": 674
             }
         ]
     },
@@ -52515,7 +55725,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 61
+                "line": 79
             }
         ]
     },
@@ -52592,7 +55802,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 1247
+                "line": 1314
             }
         ]
     },
@@ -52607,7 +55817,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 80
+                "line": 98
             }
         ]
     },
@@ -52622,7 +55832,22 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 851
+                "line": 857
+            }
+        ]
+    },
+    {
+        "id": "guid-d4dfa0a24abe5418",
+        "kind": "error",
+        "template": "Story inventory source changed; restart the current page",
+        "parts": [
+            "Story inventory source changed; restart the current page"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-workspace.ts",
+                "line": 172
             }
         ]
     },
@@ -52772,7 +55997,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 80
+                "line": 98
             }
         ]
     },
@@ -52802,7 +56027,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1136
+                "line": 1143
             }
         ]
     },
@@ -52877,7 +56102,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 216
+                "line": 234
             }
         ]
     },
@@ -52915,7 +56140,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 256
+                "line": 274
             }
         ]
     },
@@ -53011,7 +56236,22 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 3481
+                "line": 3506
+            }
+        ]
+    },
+    {
+        "id": "guid-d5f6b2083a488a2b",
+        "kind": "error",
+        "template": "Shot requires source scene ID and revision",
+        "parts": [
+            "Shot requires source scene ID and revision"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-artifacts.ts",
+                "line": 50
             }
         ]
     },
@@ -53026,7 +56266,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 273
+                "line": 274
             }
         ]
     },
@@ -53109,7 +56349,22 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 410
+                "line": 416
+            }
+        ]
+    },
+    {
+        "id": "guid-d66331b1833308b4",
+        "kind": "error",
+        "template": "Screenplay block count bound exceeded.",
+        "parts": [
+            "Screenplay block count bound exceeded."
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-media.ts",
+                "line": 138
             }
         ]
     },
@@ -53169,7 +56424,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1015
+                "line": 1022
             }
         ]
     },
@@ -53230,7 +56485,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1247
+                "line": 1254
             }
         ]
     },
@@ -53305,7 +56560,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 216
+                "line": 234
             }
         ]
     },
@@ -53350,7 +56605,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 177
+                "line": 195
             }
         ]
     },
@@ -53365,7 +56620,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 743
+                "line": 749
             }
         ]
     },
@@ -53410,7 +56665,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/economy-host.ts",
-                "line": 99
+                "line": 101
             }
         ]
     },
@@ -53444,7 +56699,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 374
+                "line": 392
             }
         ]
     },
@@ -53550,11 +56805,11 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/endpoint-registry.ts",
-                "line": 746
+                "line": 767
             },
             {
                 "file": "src/endpoint-registry.ts",
-                "line": 748
+                "line": 769
             }
         ]
     },
@@ -53585,7 +56840,22 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/skill-evolution-host.ts",
-                "line": 19
+                "line": 20
+            }
+        ]
+    },
+    {
+        "id": "guid-d870602663666228",
+        "kind": "error",
+        "template": "Changed story export output path",
+        "parts": [
+            "Changed story export output path"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-exports.ts",
+                "line": 278
             }
         ]
     },
@@ -53661,7 +56931,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 758
+                "line": 764
             }
         ]
     },
@@ -53721,7 +56991,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 836
+                "line": 842
             }
         ]
     },
@@ -53751,7 +57021,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 964
+                "line": 971
             }
         ]
     },
@@ -53781,7 +57051,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 692
+                "line": 698
             }
         ]
     },
@@ -53842,7 +57112,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1186
+                "line": 1193
             }
         ]
     },
@@ -53873,6 +57143,24 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/llm-wiki-tools.ts",
                 "line": 404
+            }
+        ]
+    },
+    {
+        "id": "guid-d9de25f147d04b12",
+        "kind": "prose",
+        "template": "Prepare and revise [[{arg0}]] for story session {arg1}. Intended writer account: {arg2}. The actual writer claims it; no other account accepts on its behalf.",
+        "parts": [
+            "Prepare and revise [[",
+            "]] for story session ",
+            ". Intended writer account: ",
+            ". The actual writer claims it; no other account accepts on its behalf."
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-session.ts",
+                "line": 74
             }
         ]
     },
@@ -54010,7 +57298,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 1653
+                "line": 1720
             }
         ]
     },
@@ -54074,7 +57362,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 620
+                "line": 626
             }
         ]
     },
@@ -54089,7 +57377,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 3118
+                "line": 3185
             }
         ]
     },
@@ -54104,7 +57392,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 256
+                "line": 274
             }
         ]
     },
@@ -54194,7 +57482,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 1849
+                "line": 1916
             }
         ]
     },
@@ -54209,7 +57497,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 645
+                "line": 651
             }
         ]
     },
@@ -54289,7 +57577,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 304
+                "line": 322
             }
         ]
     },
@@ -54350,7 +57638,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 1549
+                "line": 1616
             }
         ]
     },
@@ -54456,7 +57744,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 1913
+                "line": 1980
             }
         ]
     },
@@ -54536,6 +57824,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-dc8ad1a547d8f573",
+        "kind": "error",
+        "template": "Story export unavailable",
+        "parts": [
+            "Story export unavailable"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-exports.ts",
+                "line": 375
+            }
+        ]
+    },
+    {
         "id": "guid-dc8b2591e21ee3fd",
         "kind": "error",
         "template": "Invalid lore references",
@@ -54561,7 +57864,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1258
+                "line": 1265
             }
         ]
     },
@@ -54657,7 +57960,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 233
+                "line": 251
             }
         ]
     },
@@ -54673,6 +57976,36 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/organization.ts",
                 "line": 192
+            }
+        ]
+    },
+    {
+        "id": "guid-dd0c24f25f5da449",
+        "kind": "error",
+        "template": "Story export reference belongs to a different branch",
+        "parts": [
+            "Story export reference belongs to a different branch"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-exports.ts",
+                "line": 125
+            }
+        ]
+    },
+    {
+        "id": "guid-dd0fc9a0a52557e5",
+        "kind": "error",
+        "template": "Prepared export sources changed; preserve partial output and use a new exportId",
+        "parts": [
+            "Prepared export sources changed; preserve partial output and use a new exportId"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-exports.ts",
+                "line": 405
             }
         ]
     },
@@ -54702,19 +58035,19 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1187
+                "line": 1194
             },
             {
                 "file": "src/createServer.ts",
-                "line": 1201
+                "line": 1208
             },
             {
                 "file": "src/createServer.ts",
-                "line": 1216
+                "line": 1223
             },
             {
                 "file": "src/createServer.ts",
-                "line": 1232
+                "line": 1239
             }
         ]
     },
@@ -54729,7 +58062,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 77
+                "line": 95
             }
         ]
     },
@@ -54839,7 +58172,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 2535
+                "line": 2602
             }
         ]
     },
@@ -54860,6 +58193,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-dde1371232bfbf0b",
+        "kind": "error",
+        "template": "Rehearsal maxSteps exceeds the explicit project budget",
+        "parts": [
+            "Rehearsal maxSteps exceeds the explicit project budget"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-session.ts",
+                "line": 48
+            }
+        ]
+    },
+    {
         "id": "guid-ddfb5503c236a2ba",
         "kind": "error",
         "template": "Economy config belongs to another vault",
@@ -54870,7 +58218,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/economy-host.ts",
-                "line": 63
+                "line": 64
             }
         ]
     },
@@ -54885,7 +58233,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 112
+                "line": 130
             }
         ]
     },
@@ -54930,7 +58278,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 143
+                "line": 161
             }
         ]
     },
@@ -54945,7 +58293,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 874
+                "line": 880
             }
         ]
     },
@@ -54991,7 +58339,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 3319
+                "line": 3386
             }
         ]
     },
@@ -55068,7 +58416,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 324
+                "line": 342
             }
         ]
     },
@@ -55083,7 +58431,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 779
+                "line": 785
             }
         ]
     },
@@ -55128,7 +58476,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 270
+                "line": 288
             }
         ]
     },
@@ -55177,7 +58525,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 99
+                "line": 117
             }
         ]
     },
@@ -55207,7 +58555,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 3134
+                "line": 3159
             }
         ]
     },
@@ -55257,6 +58605,36 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/agent-pulse.ts",
                 "line": 254
+            }
+        ]
+    },
+    {
+        "id": "guid-df71765e9cd303d3",
+        "kind": "error",
+        "template": "Every exported artifact requires an exact selected adoption",
+        "parts": [
+            "Every exported artifact requires an exact selected adoption"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-exports.ts",
+                "line": 180
+            }
+        ]
+    },
+    {
+        "id": "guid-df7fd365c37c0207",
+        "kind": "error",
+        "template": "Story target changed during read",
+        "parts": [
+            "Story target changed during read"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-store.ts",
+                "line": 24
             }
         ]
     },
@@ -55385,7 +58763,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 177
+                "line": 195
             }
         ]
     },
@@ -55628,7 +59006,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 364
+                "line": 382
             }
         ]
     },
@@ -55643,7 +59021,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 729
+                "line": 735
             }
         ]
     },
@@ -55692,7 +59070,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 289
+                "line": 307
             }
         ]
     },
@@ -55722,7 +59100,22 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 739
+                "line": 745
+            }
+        ]
+    },
+    {
+        "id": "guid-e13672cb1d5841d1",
+        "kind": "error",
+        "template": "Resume requires the waiting stage",
+        "parts": [
+            "Resume requires the waiting stage"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-session.ts",
+                "line": 115
             }
         ]
     },
@@ -55754,7 +59147,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 1029
+                "line": 1092
             }
         ]
     },
@@ -55920,7 +59313,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 235
+                "line": 253
             }
         ]
     },
@@ -56042,7 +59435,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 3720
+                "line": 3745
             }
         ]
     },
@@ -56117,7 +59510,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1098
+                "line": 1105
             }
         ]
     },
@@ -56152,6 +59545,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-e2cdb3ee11ac3b6e",
+        "kind": "error",
+        "template": "Invalid initial state key or value.",
+        "parts": [
+            "Invalid initial state key or value."
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-branch.ts",
+                "line": 282
+            }
+        ]
+    },
+    {
         "id": "guid-e2d10e4935e38670",
         "kind": "prose",
         "template": "Operation to perform: 'add', 'remove', or 'list'",
@@ -56162,7 +59570,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 910
+                "line": 916
             }
         ]
     },
@@ -56238,7 +59646,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/economy-ledger.ts",
-                "line": 151
+                "line": 159
             }
         ]
     },
@@ -56389,7 +59797,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/economy-ledger.ts",
-                "line": 94
+                "line": 102
             }
         ]
     },
@@ -56406,7 +59814,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 1961
+                "line": 2028
             }
         ]
     },
@@ -56421,7 +59829,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 138
+                "line": 156
             }
         ]
     },
@@ -56451,7 +59859,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 1880
+                "line": 1947
             }
         ]
     },
@@ -56497,7 +59905,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 253
+                "line": 271
             }
         ]
     },
@@ -56533,6 +59941,10 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/economy-model.ts",
                 "line": 120
+            },
+            {
+                "file": "src/story-store.ts",
+                "line": 37
             }
         ]
     },
@@ -56777,7 +60189,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1265
+                "line": 1272
             }
         ]
     },
@@ -56793,11 +60205,11 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 954
+                "line": 1012
             },
             {
                 "file": "src/filesystem.ts",
-                "line": 1180
+                "line": 1247
             }
         ]
     },
@@ -56844,7 +60256,22 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1347
+                "line": 1354
+            }
+        ]
+    },
+    {
+        "id": "guid-e5c417b59e26f844",
+        "kind": "prose",
+        "template": "Node is unreachable from start.",
+        "parts": [
+            "Node is unreachable from start."
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-branch.ts",
+                "line": 224
             }
         ]
     },
@@ -56894,6 +60321,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-e5e86772458fe6f7",
+        "kind": "error",
+        "template": "Story image must be an authorized local image reference",
+        "parts": [
+            "Story image must be an authorized local image reference"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-exports.ts",
+                "line": 88
+            }
+        ]
+    },
+    {
         "id": "guid-e5e885a41f5e01b5",
         "kind": "prose",
         "template": "Reasoning role for durable atomic, knowledge, or Decision Record notes",
@@ -56938,7 +60380,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 753
+                "line": 759
             }
         ]
     },
@@ -56954,6 +60396,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/economy-service.ts",
                 "line": 62
+            }
+        ]
+    },
+    {
+        "id": "guid-e651289629df0413",
+        "kind": "error",
+        "template": "Story authored text byte budget exceeded",
+        "parts": [
+            "Story authored text byte budget exceeded"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-workspace.ts",
+                "line": 149
             }
         ]
     },
@@ -57041,6 +60498,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-e717f6a5d68ada1f",
+        "kind": "error",
+        "template": "Sequence requires scenes and shot list requires shots",
+        "parts": [
+            "Sequence requires scenes and shot list requires shots"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-projects.ts",
+                "line": 107
+            }
+        ]
+    },
+    {
         "id": "guid-e72b992de1a8e4a0",
         "kind": "prose",
         "template": "Desired checkbox state",
@@ -57051,7 +60523,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1029
+                "line": 1036
             }
         ]
     },
@@ -57081,7 +60553,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 3088
+                "line": 3155
             }
         ]
     },
@@ -57097,6 +60569,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/economy-model.ts",
                 "line": 129
+            }
+        ]
+    },
+    {
+        "id": "guid-e76b2d39e41b8863",
+        "kind": "error",
+        "template": "enabled must be boolean",
+        "parts": [
+            "enabled must be boolean"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-projects.ts",
+                "line": 64
             }
         ]
     },
@@ -57206,7 +60693,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1106
+                "line": 1113
             }
         ]
     },
@@ -57267,6 +60754,10 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/notices.ts",
                 "line": 142
+            },
+            {
+                "file": "src/story-service.ts",
+                "line": 51
             }
         ]
     },
@@ -57314,6 +60805,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/llm-wiki.ts",
                 "line": 9076
+            }
+        ]
+    },
+    {
+        "id": "guid-e838d67e6be7c56e",
+        "kind": "error",
+        "template": "Story export manifest changed outside managed writes",
+        "parts": [
+            "Story export manifest changed outside managed writes"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-exports.ts",
+                "line": 283
             }
         ]
     },
@@ -57375,6 +60881,25 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/scope-access.ts",
                 "line": 138
+            }
+        ]
+    },
+    {
+        "id": "guid-e8860ba50d173e0b",
+        "kind": "error",
+        "template": "Story session unavailable",
+        "parts": [
+            "Story session unavailable"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-session.ts",
+                "line": 33
+            },
+            {
+                "file": "src/story-session.ts",
+                "line": 88
             }
         ]
     },
@@ -57458,7 +60983,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 3066
+                "line": 3133
             }
         ]
     },
@@ -57473,7 +60998,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 2998
+                "line": 3023
             }
         ]
     },
@@ -57488,7 +61013,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 911
+                "line": 917
             }
         ]
     },
@@ -57563,7 +61088,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 2469
+                "line": 2494
             }
         ]
     },
@@ -57669,7 +61194,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 309
+                "line": 327
             }
         ]
     },
@@ -57790,7 +61315,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 1401
+                "line": 1468
             }
         ]
     },
@@ -57825,6 +61350,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-ea9f4f4c9899c959",
+        "kind": "error",
+        "template": "Story project reference limit exceeds 50 sources",
+        "parts": [
+            "Story project reference limit exceeds 50 sources"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-projects.ts",
+                "line": 57
+            }
+        ]
+    },
+    {
         "id": "guid-eaafbc1c56068037",
         "kind": "error",
         "template": "Work group already exists",
@@ -57851,6 +61391,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/llm-wiki.ts",
                 "line": 5828
+            }
+        ]
+    },
+    {
+        "id": "guid-eac4ab54fda807e6",
+        "kind": "error",
+        "template": "Every story participant must be a registered account",
+        "parts": [
+            "Every story participant must be a registered account"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-projects.ts",
+                "line": 61
             }
         ]
     },
@@ -57940,7 +61495,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 2841
+                "line": 2866
             }
         ]
     },
@@ -58015,7 +61570,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 111
+                "line": 129
             }
         ]
     },
@@ -58030,7 +61585,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 1309
+                "line": 1376
             }
         ]
     },
@@ -58105,7 +61660,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 662
+                "line": 668
             }
         ]
     },
@@ -58155,6 +61710,36 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-ec28b49aa9663450",
+        "kind": "prose",
+        "template": "Opt in with story.project create and a brief. Participants and showrunner are registered account IDs; only the owner can revoke delegation or change the budget. Creative delegation never grants publication, paid calls, private access or authority over another work.",
+        "parts": [
+            "Opt in with story.project create and a brief. Participants and showrunner are registered account IDs; only the owner can revoke delegation or change the budget. Creative delegation never grants publication, paid calls, private access or authority over another work."
+        ],
+        "binding": "projection",
+        "sources": [
+            {
+                "file": "src/wiki-policy.ts",
+                "line": 57
+            }
+        ]
+    },
+    {
+        "id": "guid-ec2e79aa817cec12",
+        "kind": "error",
+        "template": "Story server is read-only",
+        "parts": [
+            "Story server is read-only"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-workspace.ts",
+                "line": 26
+            }
+        ]
+    },
+    {
         "id": "guid-ec33b1a9b0206049",
         "kind": "error",
         "template": "Reply target is not a chat message: {arg0}",
@@ -58196,7 +61781,22 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 871
+                "line": 877
+            }
+        ]
+    },
+    {
+        "id": "guid-ec40ac46d9976233",
+        "kind": "error",
+        "template": "Invalid story artifact operation",
+        "parts": [
+            "Invalid story artifact operation"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-artifacts.ts",
+                "line": 35
             }
         ]
     },
@@ -58226,7 +61826,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 83
+                "line": 101
             }
         ]
     },
@@ -58286,11 +61886,11 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/economy-ledger.ts",
-                "line": 110
+                "line": 118
             },
             {
                 "file": "src/economy-ledger.ts",
-                "line": 112
+                "line": 120
             }
         ]
     },
@@ -58350,7 +61950,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/economy-host.ts",
-                "line": 46
+                "line": 47
             },
             {
                 "file": "src/roleplay-recovery.ts",
@@ -58415,6 +62015,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/agent-pulse-tools.ts",
                 "line": 20
+            }
+        ]
+    },
+    {
+        "id": "guid-ecd08c74e017d651",
+        "kind": "prose",
+        "template": "Non-end node has no choices.",
+        "parts": [
+            "Non-end node has no choices."
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-branch.ts",
+                "line": 214
             }
         ]
     },
@@ -58573,6 +62188,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-ed6da384f8f234b5",
+        "kind": "error",
+        "template": "Story export source guard bound exceeded; narrow the explicit sequence",
+        "parts": [
+            "Story export source guard bound exceeded; narrow the explicit sequence"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-exports.ts",
+                "line": 114
+            }
+        ]
+    },
+    {
         "id": "guid-ed8aaf19dcee304c",
         "kind": "error",
         "template": "Use revision-checked evolution proposals for world core changes",
@@ -58686,6 +62316,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-edd99c685600962c",
+        "kind": "error",
+        "template": "Story export manifest UTF8 byte bound exceeded; narrow sources or use a new exportId",
+        "parts": [
+            "Story export manifest UTF8 byte bound exceeded; narrow sources or use a new exportId"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-exports.ts",
+                "line": 76
+            }
+        ]
+    },
+    {
         "id": "guid-edec5828dc744b3d",
         "kind": "error",
         "template": "Skill evolution configuration requires absolute private host and Vault paths",
@@ -58696,7 +62341,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/skill-evolution-host.ts",
-                "line": 50
+                "line": 51
             }
         ]
     },
@@ -58760,7 +62405,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 734
+                "line": 740
             }
         ]
     },
@@ -58929,7 +62574,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 106
+                "line": 124
             }
         ]
     },
@@ -59148,6 +62793,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-efd4fa27077badf6",
+        "kind": "error",
+        "template": "Story project already exists",
+        "parts": [
+            "Story project already exists"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-projects.ts",
+                "line": 47
+            }
+        ]
+    },
+    {
         "id": "guid-efd98ea9efdb47d5",
         "kind": "error",
         "template": "section or blockId is required when view=section",
@@ -59188,7 +62848,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 183
+                "line": 201
             }
         ]
     },
@@ -59233,7 +62893,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 134
+                "line": 152
             }
         ]
     },
@@ -59278,7 +62938,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 227
+                "line": 245
             }
         ]
     },
@@ -59293,7 +62953,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 2048
+                "line": 2115
             }
         ]
     },
@@ -59413,7 +63073,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 248
+                "line": 266
             }
         ]
     },
@@ -59445,7 +63105,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 1079
+                "line": 1142
             }
         ]
     },
@@ -59535,7 +63195,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 139
+                "line": 157
             }
         ]
     },
@@ -59610,7 +63270,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 3241
+                "line": 3266
             }
         ]
     },
@@ -59655,7 +63315,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 757
+                "line": 763
             }
         ]
     },
@@ -59761,7 +63421,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 2953
+                "line": 3020
             }
         ]
     },
@@ -59945,7 +63605,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 611
+                "line": 617
             }
         ]
     },
@@ -59992,7 +63652,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 2224
+                "line": 2291
             }
         ]
     },
@@ -60164,6 +63824,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-f3c4fad9c1502a9a",
+        "kind": "prose",
+        "template": "Use source revisions for dependencies and story.context for the smallest current scene context. Character knownBy and world_fact/belief/reader_reveal/author_plan are narrative filters, never ACLs. Fiction_domain story separates fiction from real-world evidence and memories.",
+        "parts": [
+            "Use source revisions for dependencies and story.context for the smallest current scene context. Character knownBy and world_fact/belief/reader_reveal/author_plan are narrative filters, never ACLs. Fiction_domain story separates fiction from real-world evidence and memories."
+        ],
+        "binding": "projection",
+        "sources": [
+            {
+                "file": "src/wiki-policy.ts",
+                "line": 61
+            }
+        ]
+    },
+    {
         "id": "guid-f3c70167650ac717",
         "kind": "prose",
         "template": "Compare caller-supplied note revisions against current visible revisions without reading note bodies. Returns unchanged, changed, new, or missing states.",
@@ -60174,7 +63849,22 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 989
+                "line": 996
+            }
+        ]
+    },
+    {
+        "id": "guid-f3cd11ece760bc34",
+        "kind": "error",
+        "template": "Export manifest bound exceeded; narrow the sequence",
+        "parts": [
+            "Export manifest bound exceeded; narrow the sequence"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-exports.ts",
+                "line": 435
             }
         ]
     },
@@ -60189,7 +63879,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/skill-evolution-host.ts",
-                "line": 63
+                "line": 64
             }
         ]
     },
@@ -60220,7 +63910,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 1947
+                "line": 2014
             }
         ]
     },
@@ -60235,7 +63925,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1014
+                "line": 1021
             }
         ]
     },
@@ -60266,6 +63956,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/llm-wiki.ts",
                 "line": 10435
+            }
+        ]
+    },
+    {
+        "id": "guid-f42a3374d1e197bc",
+        "kind": "error",
+        "template": "Story dependency limit exceeds 128 sources",
+        "parts": [
+            "Story dependency limit exceeds 128 sources"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-workspace.ts",
+                "line": 104
             }
         ]
     },
@@ -60330,6 +64035,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-f4713f8aededc77c",
+        "kind": "error",
+        "template": "Shot order must be an integer",
+        "parts": [
+            "Shot order must be an integer"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-model.ts",
+                "line": 99
+            }
+        ]
+    },
+    {
         "id": "guid-f471ecbe16edf63f",
         "kind": "error",
         "template": "Economy conservation invariant failed; writes suspended",
@@ -60355,7 +64075,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 306
+                "line": 324
             }
         ]
     },
@@ -60400,7 +64120,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 3188
+                "line": 3213
             }
         ]
     },
@@ -60490,7 +64210,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 157
+                "line": 175
             }
         ]
     },
@@ -60614,7 +64334,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1174
+                "line": 1181
             }
         ]
     },
@@ -60629,7 +64349,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/economy-host.ts",
-                "line": 89
+                "line": 91
             }
         ]
     },
@@ -60674,7 +64394,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1085
+                "line": 1092
             }
         ]
     },
@@ -60689,7 +64409,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 2651
+                "line": 2676
             }
         ]
     },
@@ -60743,6 +64463,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-f5d3f4b24b32d0aa",
+        "kind": "prose",
+        "template": "Rehearsal steps; defaults to and cannot exceed the current project maxSteps budget.",
+        "parts": [
+            "Rehearsal steps; defaults to and cannot exceed the current project maxSteps budget."
+        ],
+        "binding": "projection",
+        "sources": [
+            {
+                "file": "src/story-tools.ts",
+                "line": 100
+            }
+        ]
+    },
+    {
         "id": "guid-f5d9d178558ce688",
         "kind": "prose",
         "template": "Optional stable identity for durable notes; not a security boundary",
@@ -60768,7 +64503,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 923
+                "line": 929
             }
         ]
     },
@@ -60908,7 +64643,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 1139
+                "line": 1202
             }
         ]
     },
@@ -61028,7 +64763,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 3064
+                "line": 3131
             },
             {
                 "file": "src/tag-page.ts",
@@ -61077,7 +64812,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 1425
+                "line": 1492
             }
         ]
     },
@@ -61107,7 +64842,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 163
+                "line": 181
             }
         ]
     },
@@ -61122,7 +64857,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 808
+                "line": 814
             }
         ]
     },
@@ -61137,7 +64872,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 885
+                "line": 891
             }
         ]
     },
@@ -61287,7 +65022,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/endpoint-registry.ts",
-                "line": 617
+                "line": 622
             }
         ]
     },
@@ -61302,7 +65037,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1013
+                "line": 1020
             }
         ]
     },
@@ -61337,7 +65072,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 1553
+                "line": 1620
             }
         ]
     },
@@ -61398,7 +65133,22 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/economy-ledger.ts",
-                "line": 135
+                "line": 143
+            }
+        ]
+    },
+    {
+        "id": "guid-f8f98de35547be51",
+        "kind": "error",
+        "template": "Image count bound exceeded.",
+        "parts": [
+            "Image count bound exceeded."
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-media.ts",
+                "line": 174
             }
         ]
     },
@@ -61450,6 +65200,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-f92fdb0bee9722f5",
+        "kind": "error",
+        "template": "Unmanaged story export manifest",
+        "parts": [
+            "Unmanaged story export manifest"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-exports.ts",
+                "line": 275
+            }
+        ]
+    },
+    {
         "id": "guid-f93e93030d8e686a",
         "kind": "prose",
         "template": "Read or bind a fictional scene to a world location. Scene GM eligibility is host-configured and delegated; this data grants no execution authority. Reread the world revision after scene changes.",
@@ -61475,7 +65240,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 999
+                "line": 1059
             }
         ]
     },
@@ -61525,7 +65290,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 1644
+                "line": 1711
             }
         ]
     },
@@ -61557,6 +65322,25 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/organization.ts",
                 "line": 618
+            }
+        ]
+    },
+    {
+        "id": "guid-f979124430a4ae81",
+        "kind": "error",
+        "template": "Stale story source revision",
+        "parts": [
+            "Stale story source revision"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-workspace.ts",
+                "line": 71
+            },
+            {
+                "file": "src/story-workspace.ts",
+                "line": 125
             }
         ]
     },
@@ -61632,6 +65416,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/roleplay-service.ts",
                 "line": 104
+            }
+        ]
+    },
+    {
+        "id": "guid-f9ad5110f3ed629b",
+        "kind": "error",
+        "template": "Story image changed during read",
+        "parts": [
+            "Story image changed during read"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/filesystem.ts",
+                "line": 950
             }
         ]
     },
@@ -61752,7 +65551,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1057
+                "line": 1064
             }
         ]
     },
@@ -61863,6 +65662,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-fa5d6dd70f510c40",
+        "kind": "error",
+        "template": "Story project disabled",
+        "parts": [
+            "Story project disabled"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-workspace.ts",
+                "line": 47
+            }
+        ]
+    },
+    {
         "id": "guid-fa77b46d6e0bca27",
         "kind": "error",
         "template": "Unknown enterprise employee: {arg0}",
@@ -61935,7 +65749,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 218
+                "line": 219
             }
         ]
     },
@@ -61965,7 +65779,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1264
+                "line": 1271
             }
         ]
     },
@@ -62055,7 +65869,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/economy-host.ts",
-                "line": 60
+                "line": 61
             }
         ]
     },
@@ -62152,7 +65966,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 738
+                "line": 744
             }
         ]
     },
@@ -62250,7 +66064,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1167
+                "line": 1174
             }
         ]
     },
@@ -62455,6 +66269,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-fceb85c8e6f99945",
+        "kind": "error",
+        "template": "Economy storage binding unavailable or changed; explicit host recovery required",
+        "parts": [
+            "Economy storage binding unavailable or changed; explicit host recovery required"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/economy-storage.ts",
+                "line": 14
+            }
+        ]
+    },
+    {
         "id": "guid-fcf686f9db1ad765",
         "kind": "error",
         "template": "patches must be a non-empty array for {arg0}",
@@ -62466,7 +66295,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/filesystem.ts",
-                "line": 1445
+                "line": 1512
             }
         ]
     },
@@ -62680,6 +66509,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-fdcef9cb9054ef89",
+        "kind": "error",
+        "template": "Authenticated account required for story mutation",
+        "parts": [
+            "Authenticated account required for story mutation"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-workspace.ts",
+                "line": 25
+            }
+        ]
+    },
+    {
         "id": "guid-fde1c023c52f87f4",
         "kind": "error",
         "template": "slug and commentId are required for a comment context",
@@ -62810,7 +66654,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 286
+                "line": 304
             }
         ]
     },
@@ -62890,7 +66734,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 85
+                "line": 103
             }
         ]
     },
@@ -62920,7 +66764,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/economy-ledger.ts",
-                "line": 84
+                "line": 91
             }
         ]
     },
@@ -62974,6 +66818,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-fed85d3656d09e7d",
+        "kind": "error",
+        "template": "Paused session source revision changed; owner must create a new session",
+        "parts": [
+            "Paused session source revision changed; owner must create a new session"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-session.ts",
+                "line": 116
+            }
+        ]
+    },
+    {
         "id": "guid-fedc6036762c75f1",
         "kind": "error",
         "template": "target comment was not found",
@@ -62985,6 +66844,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/community-features.ts",
                 "line": 290
+            }
+        ]
+    },
+    {
+        "id": "guid-feed735d46b25e41",
+        "kind": "error",
+        "template": "Receipt unavailable after external Markdown edit; reread changed story",
+        "parts": [
+            "Receipt unavailable after external Markdown edit; reread changed story"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/story-store.ts",
+                "line": 40
             }
         ]
     },
@@ -63014,7 +66888,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/economy-host.ts",
-                "line": 144
+                "line": 150
             },
             {
                 "file": "src/roleplay-recovery.ts",
@@ -63105,7 +66979,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 856
+                "line": 862
             }
         ]
     },
@@ -63120,7 +66994,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1125
+                "line": 1132
             }
         ]
     },
@@ -63150,7 +67024,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 277
+                "line": 295
             }
         ]
     },
@@ -63195,7 +67069,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/wiki-policy.ts",
-                "line": 168
+                "line": 186
             }
         ]
     },
@@ -63271,7 +67145,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 686
+                "line": 692
             }
         ]
     },
