@@ -1,6 +1,6 @@
 import { guidanceError } from './guidance-runtime.js';
 import { createHash, randomUUID } from 'node:crypto';
-import { join, resolve } from 'node:path';
+import { join, resolve, relative } from 'node:path';
 import { mkdir, open, readdir, readFile, stat, unlink } from 'node:fs/promises';
 import { ScopeAccessPolicy } from './scope-access.js';
 import { memoryCandidateLimit, memoryQueryNeedsSource } from './search.js';
@@ -926,7 +926,7 @@ export class SemanticSearchService {
             if (entry.isDirectory())
                 directories.push(full);
             else if (entry.isFile() && entry.name.toLowerCase().endsWith('.md'))
-                output.push(full.slice(this.vaultPath.length + 1));
+                output.push(relative(this.vaultPath, full).replace(/\\/g, '/'));
         }
         for (let start = 0; start < directories.length; start += budget) {
             const batch = directories.slice(start, start + budget);

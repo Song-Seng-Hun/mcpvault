@@ -6103,6 +6103,13 @@ export class LlmWikiService {
         };
         if (JSON.stringify(names).length <= boundedChars)
             return names;
+        // New Properties must not push the complete field vocabulary and native
+        // editing guardrails over a cliff. Relation detail can be read separately.
+        const { relations: omittedRelations, ...fieldNames } = names;
+        const vocabulary = { ...fieldNames, relationDetailsOmitted: true,
+            nextAction: nextAction || { endpointId: endpointIdForTool('get_wiki_property_contract'), arguments: { maxChars: 12000 } } };
+        if (JSON.stringify(vocabulary).length <= boundedChars)
+            return vocabulary;
         return {
             contractFingerprint,
             totalFields: allFields.length,

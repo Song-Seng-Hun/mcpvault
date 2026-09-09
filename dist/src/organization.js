@@ -16,7 +16,7 @@ import { RESEARCH_TEMPLATE_IDS, getResearchTemplate, RESEARCH_LITERATURE_SECTION
  * These fields describe how an agent should work with a note inside an
  * already-authorized scope; they never grant access or replace Git history.
  */
-export const NOTE_KINDS = ['fleeting', 'literature', 'atomic', 'moc', 'knowledge', 'question', 'hypothesis', 'experiment', 'assumption', 'decision', 'project', 'area', 'resource', 'journal', 'task'];
+export const NOTE_KINDS = ['fleeting', 'literature', 'atomic', 'moc', 'knowledge', 'question', 'hypothesis', 'experiment', 'assumption', 'decision', 'project', 'area', 'resource', 'journal', 'task', 'skill'];
 export const LIFECYCLES = ['inbox', 'active', 'review', 'evergreen', 'superseded', 'archived'];
 export const TASK_STATUSES = ['open', 'next_action', 'waiting', 'blocked', 'someday', 'completed', 'cancelled'];
 /** Auditable outcomes that close the task-to-knowledge feedback loop. */
@@ -46,7 +46,7 @@ export const TERM_STATUSES = ['preferred', 'deprecated', 'redirect'];
 export const KNOWLEDGE_ROLES = ['concept', 'argument', 'model', 'observation', 'counterargument'];
 /** Optional note-template IDs. Knowledge-role templates refine a durable note
  * without introducing another note kind or storage format. */
-export const NOTE_TEMPLATE_IDS = ['atomic', 'literature', 'question', 'hypothesis', 'experiment', 'assumption', 'decision', 'project', 'moc', 'negative', 'synthesis', ...KNOWLEDGE_ROLES, ...RESEARCH_TEMPLATE_IDS];
+export const NOTE_TEMPLATE_IDS = ['atomic', 'literature', 'question', 'hypothesis', 'experiment', 'assumption', 'decision', 'project', 'moc', 'negative', 'synthesis', 'skill', ...KNOWLEDGE_ROLES, ...RESEARCH_TEMPLATE_IDS];
 /** Standard Obsidian Bases projections. Keep the runtime and tool schema on
  * one shared list so a documented view cannot become unreachable. */
 export const BASES_VIEW_IDS = ['all', 'inbox', 'inbox_oldest', 'projects', 'project_next_actions', 'review', 'epistemic', 'experiments', 'open_questions', 'decisions', 'knowledge', 'concepts', 'arguments', 'models', 'observations', 'counterarguments', 'unreviewed_evidence', 'negative_knowledge', 'deprecated_terms', 'maintenance', 'authority', 'review_checklist', 'collections', 'archives'];
@@ -164,6 +164,12 @@ export const ORGANIZATION_PROPERTY_CONTRACT = [
     { name: 'title', type: 'text', description: 'Optional human-readable note title; the file path remains authoritative' },
     { name: 'wiki_view', type: 'object', description: 'Versioned restricted saved metadata query; no JavaScript or DQL execution' },
     { name: 'note_kind', type: 'text', description: 'What the note is for', allowed: NOTE_KINDS },
+    { name: 'skill_id', type: 'text', description: 'Namespaced source identity for a reusable procedural skill; not an execution grant.', appliesTo: ['skill'] },
+    { name: 'skill_origin', type: 'text', description: 'Portable source package label, without private host paths.', appliesTo: ['skill'] },
+    { name: 'skill_version', type: 'text', description: 'Imported source version; does not claim installed tool compatibility.', appliesTo: ['skill'] },
+    { name: 'skill_origin_sha256', type: 'text', description: 'SHA256 of the imported original text, not a review certification.', appliesTo: ['skill'] },
+    { name: 'skill_projection_sha256', type: 'text', description: 'Importer projection digest for conflict detection; advisory, not host authorization.', appliesTo: ['skill'] },
+    { name: 'skill_license', type: 'text', description: 'Explicitly reviewed sharing license with retained terms.', appliesTo: ['skill'] },
     { name: 'lifecycle', type: 'text', description: 'What should happen to the knowledge next', allowed: LIFECYCLES },
     { name: 'knowledge_status', type: 'text', description: 'Reviewable publication state for durable knowledge', allowed: KNOWLEDGE_STATUSES },
     { name: 'confidence', type: 'text', description: 'Declared confidence in the knowledge note; not a substitute for evidence', allowed: CONFIDENCE_LEVELS },
@@ -365,6 +371,11 @@ export function organizationNoteTemplate(value = 'atomic') {
     if (research)
         return { templateId, noteKind: research.properties.note_kind, ...research };
     const templates = {
+        skill: {
+            purpose: guidanceText('guid-75f5449c494d0524', 'Reusable procedural knowledge, retrieved when relevant. Reading it does not install tools or grant execution permission.'),
+            properties: { note_kind: 'skill', memory_role: 'procedural', lifecycle: 'review', summary: '', retrieval_cues: [], use_when: '', related: [] },
+            markdown: guidanceText('guid-241c33e27a2086c4', '# {{title}}\n\n## Use when\n\n## Inputs and prerequisites\n\n## Procedure\n\n## Expected result and verification\n\n## Limits and required tools\n\n## Source and version\n'),
+        },
         atomic: {
             purpose: guidanceText('guid-2dcbe0f8ae1d7232', 'One reusable concept or claim written in your own words.'),
             properties: { note_kind: 'atomic', lifecycle: 'evergreen', knowledge_role: 'concept', summary: '', related: [] },

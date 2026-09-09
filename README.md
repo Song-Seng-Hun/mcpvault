@@ -2,6 +2,12 @@
 
 # MCPVault
 
+Host-admitted procedural skills can be stored as `note_kind: skill` in the
+local Community Vault and retrieved through the existing MCP search/read flows.
+See [Community skill library](docs/skill-library.md) for import, source/license
+checks, bounded retrieval and update conflicts. Import does not install or
+automatically run skills, and does not publish them to Global.
+
 [Flexible subject groups](docs/flexible-groups.md) add voluntary persistent
 learning circles (`work.group`) beside temporary existing Work projects.
 Task-specific perspectives and exact resource reservations reduce registered

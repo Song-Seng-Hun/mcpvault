@@ -20,13 +20,14 @@ import { isFictionDomain } from './fiction-domain.js';
 
 export interface QuestionParams { query: string; path?: string; expectedRevision?: string; includeSemantic?: boolean; maxChars?: number; prettyPrint?: boolean; principal?: ScopePrincipal }
 export interface SituationParams extends QuestionParams { context?: string; intent?: ContextIntent; explain?: boolean }
-type Role = 'knowledge' | 'source' | 'counterpoint' | 'related_context' | 'lead';
+type Role = 'knowledge' | 'source' | 'counterpoint' | 'related_context' | 'lead' | 'procedural_reference';
 type Locator = { path: string; revision?: string; heading?: string; blockId?: string; startLine?: number; endLine?: number; quoteHash?: string };
 const hash = (s: string) => createHash('sha256').update(s).digest('hex');
 const text = (v: unknown, max = 180) => typeof v === 'string' ? v.slice(0, max) : '';
 const identity = (v: string) => v.trim().toLocaleLowerCase();
 const knowledge = (fm: Record<string, any>) => fm.llm_wiki_type === 'knowledge' || Boolean(fm.note_kind && fm.llm_wiki_type !== 'source' && !fm.mcpvault_type);
-const social = (path: string, fm: Record<string, any>) => /(?:^|\/)Community\//i.test(path) || Boolean(fm.mcpvault_type) || fm.llm_wiki_type === 'issue' || fm.note_kind === 'task';
+const skillReference = (fm: Record<string, any>) => fm.note_kind === 'skill' && fm.llm_wiki_type === 'knowledge' && !fm.mcpvault_type;
+const social = (path: string, fm: Record<string, any>) => (/(?:^|\/)Community\//i.test(path) && !skillReference(fm)) || Boolean(fm.mcpvault_type) || fm.llm_wiki_type === 'issue' || fm.note_kind === 'task';
 const counterpoint = (fm: Record<string, any>) => fm.knowledge_polarity === 'negative' || fm.polarity === 'negative' || fm.note_kind === 'negative_knowledge' || fm.knowledge_role === 'negative_knowledge';
 class PacketBudgetError extends Error {}
 
@@ -182,6 +183,8 @@ export class QuestionPacketService {
       const linked: Array<{ target: string; from: string; role: Role; locator?: Locator }> = [];
       const socialLeads = new Map<string, string | undefined>();
       const addRow = (path: string, note: ParsedNote, role: Role, matchQuery: string, locator?: Locator) => {
+        // A procedure is neither a verified fact nor executable authority, even when cited.
+        if (skillReference(note.frontmatter) && role !== 'counterpoint') role = 'procedural_reference';
         const existing = rows.find(r => r.path === publicPath(path));
         if (existing?.role === 'source' && role !== 'source') {
           if (role === 'counterpoint') existing.counterpointKind = 'explicit_contradiction';
@@ -270,7 +273,7 @@ export class QuestionPacketService {
       const uniqueLinks = situation ? linked.filter((link, i) => !linked.slice(0, i).some(old => old.target === link.target && old.role === link.role)) : linked;
       const duplicateTargets = new Set(situation?.explain ? linked.filter((link, i) => linked.slice(0, i).some(old => old.target === link.target && old.role === link.role)).map(link => link.target) : []);
       // Safety context precedes bulk evidence; explicit priorities are not author fields.
-      if (situation) uniqueLinks.sort((a, b) => ({ counterpoint: 0, related_context: 1, source: 2, knowledge: 3, lead: 4 }[a.role]) - ({ counterpoint: 0, related_context: 1, source: 2, knowledge: 3, lead: 4 }[b.role]));
+      if (situation) uniqueLinks.sort((a, b) => ({ counterpoint: 0, related_context: 1, source: 2, knowledge: 3, lead: 4, procedural_reference: 3 }[a.role]) - ({ counterpoint: 0, related_context: 1, source: 2, knowledge: 3, lead: 4, procedural_reference: 3 }[b.role]));
       if (situation && uniqueLinks.length > Math.max(0, 20 - candidates.length)) gaps.add('linked_candidate_window_exhausted');
       for (const link of uniqueLinks.slice(0, situation ? Math.max(0, 20 - candidates.length) : 20)) {
         if (sources.size >= (situation ? 8 : 6)) { gaps.add('linked_context_window_exhausted'); break; }

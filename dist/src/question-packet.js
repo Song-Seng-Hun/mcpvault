@@ -17,7 +17,8 @@ const hash = (s) => createHash('sha256').update(s).digest('hex');
 const text = (v, max = 180) => typeof v === 'string' ? v.slice(0, max) : '';
 const identity = (v) => v.trim().toLocaleLowerCase();
 const knowledge = (fm) => fm.llm_wiki_type === 'knowledge' || Boolean(fm.note_kind && fm.llm_wiki_type !== 'source' && !fm.mcpvault_type);
-const social = (path, fm) => /(?:^|\/)Community\//i.test(path) || Boolean(fm.mcpvault_type) || fm.llm_wiki_type === 'issue' || fm.note_kind === 'task';
+const skillReference = (fm) => fm.note_kind === 'skill' && fm.llm_wiki_type === 'knowledge' && !fm.mcpvault_type;
+const social = (path, fm) => (/(?:^|\/)Community\//i.test(path) && !skillReference(fm)) || Boolean(fm.mcpvault_type) || fm.llm_wiki_type === 'issue' || fm.note_kind === 'task';
 const counterpoint = (fm) => fm.knowledge_polarity === 'negative' || fm.polarity === 'negative' || fm.note_kind === 'negative_knowledge' || fm.knowledge_role === 'negative_knowledge';
 class PacketBudgetError extends Error {
 }
@@ -223,6 +224,9 @@ export class QuestionPacketService {
             const linked = [];
             const socialLeads = new Map();
             const addRow = (path, note, role, matchQuery, locator) => {
+                // A procedure is neither a verified fact nor executable authority, even when cited.
+                if (skillReference(note.frontmatter) && role !== 'counterpoint')
+                    role = 'procedural_reference';
                 const existing = rows.find(r => r.path === publicPath(path));
                 if (existing?.role === 'source' && role !== 'source') {
                     if (role === 'counterpoint')
@@ -346,7 +350,7 @@ export class QuestionPacketService {
             const duplicateTargets = new Set(situation?.explain ? linked.filter((link, i) => linked.slice(0, i).some(old => old.target === link.target && old.role === link.role)).map(link => link.target) : []);
             // Safety context precedes bulk evidence; explicit priorities are not author fields.
             if (situation)
-                uniqueLinks.sort((a, b) => ({ counterpoint: 0, related_context: 1, source: 2, knowledge: 3, lead: 4 }[a.role]) - ({ counterpoint: 0, related_context: 1, source: 2, knowledge: 3, lead: 4 }[b.role]));
+                uniqueLinks.sort((a, b) => ({ counterpoint: 0, related_context: 1, source: 2, knowledge: 3, lead: 4, procedural_reference: 3 }[a.role]) - ({ counterpoint: 0, related_context: 1, source: 2, knowledge: 3, lead: 4, procedural_reference: 3 }[b.role]));
             if (situation && uniqueLinks.length > Math.max(0, 20 - candidates.length))
                 gaps.add('linked_candidate_window_exhausted');
             for (const link of uniqueLinks.slice(0, situation ? Math.max(0, 20 - candidates.length) : 20)) {

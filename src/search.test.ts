@@ -2,7 +2,7 @@ import { describe, test, expect, beforeEach, afterEach } from "vitest";
 import { SearchService } from "./search.js";
 import { PathFilter } from "./pathfilter.js";
 import { writeFile, readFile, mkdir, mkdtemp, rm } from "fs/promises";
-import { dirname, join } from "path";
+import { dirname, join, sep } from "path";
 import { tmpdir } from "os";
 
 let testVaultPath: string;
@@ -33,6 +33,18 @@ async function writeNote(path: string, content: string) {
 }
 
 describe("SearchService", () => {
+  test('share-root trailing separator preserves Community and private scope prefixes', async () => {
+    await writeNote('Community/Skills/Method.md', '---\nnote_kind: skill\ntitle: Community method\n---\nneedleScopedRoot');
+    await writeNote('_scopes/users/private.md', 'needleScopedRoot');
+    // Windows resolve(UNC share root) retains its final separator. Simulate
+    // that root shape on an isolated local fixture, never traverse a real share.
+    (searchService as any).vaultPath = testVaultPath + sep;
+    const results = await searchService.search({ query:'needleScopedRoot', canAccessPath:p=>!p.startsWith('_scopes/') });
+    expect(results.map(r=>r.p)).toEqual(['Community/Skills/Method.md']);
+    expect(results[0]!.t).toBe('Community method');
+    searchService.invalidate('Community/Skills/Method.md');
+    expect((await searchService.search({query:'needleScopedRoot',canAccessPath:p=>!p.startsWith('_scopes/')})).map(r=>r.p)).toEqual(['Community/Skills/Method.md']);
+  });
   // ============================================================================
   // BASIC SEARCH
   // ============================================================================

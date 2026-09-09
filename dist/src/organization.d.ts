@@ -5,7 +5,7 @@
  * These fields describe how an agent should work with a note inside an
  * already-authorized scope; they never grant access or replace Git history.
  */
-export declare const NOTE_KINDS: readonly ['fleeting', 'literature', 'atomic', 'moc', 'knowledge', 'question', 'hypothesis', 'experiment', 'assumption', 'decision', 'project', 'area', 'resource', 'journal', 'task'];
+export declare const NOTE_KINDS: readonly ['fleeting', 'literature', 'atomic', 'moc', 'knowledge', 'question', 'hypothesis', 'experiment', 'assumption', 'decision', 'project', 'area', 'resource', 'journal', 'task', 'skill'];
 export declare const LIFECYCLES: readonly ['inbox', 'active', 'review', 'evergreen', 'superseded', 'archived'];
 export declare const TASK_STATUSES: readonly ['open', 'next_action', 'waiting', 'blocked', 'someday', 'completed', 'cancelled'];
 /** Auditable outcomes that close the task-to-knowledge feedback loop. */
@@ -35,7 +35,7 @@ export declare const TERM_STATUSES: readonly ['preferred', 'deprecated', 'redire
 export declare const KNOWLEDGE_ROLES: readonly ['concept', 'argument', 'model', 'observation', 'counterargument'];
 /** Optional note-template IDs. Knowledge-role templates refine a durable note
  * without introducing another note kind or storage format. */
-export declare const NOTE_TEMPLATE_IDS: readonly ["atomic", "literature", "question", "hypothesis", "experiment", "assumption", "decision", "project", "moc", "negative", "synthesis", "concept", "argument", "model", "observation", "counterargument", "research-journal", "search-log", "bridge-hypothesis"];
+export declare const NOTE_TEMPLATE_IDS: readonly ["atomic", "literature", "question", "hypothesis", "experiment", "assumption", "decision", "project", "moc", "negative", "synthesis", "skill", "concept", "argument", "model", "observation", "counterargument", "research-journal", "search-log", "bridge-hypothesis"];
 /** Standard Obsidian Bases projections. Keep the runtime and tool schema on
  * one shared list so a documented view cannot become unreachable. */
 export declare const BASES_VIEW_IDS: readonly ['all', 'inbox', 'inbox_oldest', 'projects', 'project_next_actions', 'review', 'epistemic', 'experiments', 'open_questions', 'decisions', 'knowledge', 'concepts', 'arguments', 'models', 'observations', 'counterarguments', 'unreviewed_evidence', 'negative_knowledge', 'deprecated_terms', 'maintenance', 'authority', 'review_checklist', 'collections', 'archives'];

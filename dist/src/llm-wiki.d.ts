@@ -221,7 +221,7 @@ export declare class LlmWikiService {
         summaryHighlights?: unknown;
         expectedRevision: string;
     }): Promise<{
-        noteKind: "area" | "assumption" | "atomic" | "decision" | "experiment" | "fleeting" | "hypothesis" | "journal" | "knowledge" | "literature" | "moc" | "project" | "question" | "resource" | "task";
+        noteKind: "area" | "assumption" | "atomic" | "decision" | "experiment" | "fleeting" | "hypothesis" | "journal" | "knowledge" | "literature" | "moc" | "project" | "question" | "resource" | "skill" | "task";
         distilledFrom: {
             path: string;
             revision: string;
@@ -1382,6 +1382,57 @@ export declare class LlmWikiService {
             };
         };
         truncated: boolean;
+    } | {
+        purpose: "Managed Properties; custom fields remain allowed.";
+        contractFingerprint: string;
+        fields: string[];
+        conventions: {
+            nativeCompatibility: {
+                safeTypes: string[];
+                mcpManagedComplexFields: string[];
+            };
+            lifecycle: string;
+        };
+        totalFields: number;
+        totalRelations: number;
+        selection?: {
+            mode: string;
+            names: string[];
+            matches: number;
+            offset: number;
+            returned: number;
+            unknownNames?: string[];
+            nextOffset?: number;
+        } | {
+            mode: string;
+            query: string;
+            matches: number;
+            offset: number;
+            returned: number;
+            unknownNames?: string[];
+            nextOffset?: number;
+        };
+        truncated: boolean;
+        relationDetailsOmitted: boolean;
+        nextAction: {
+            endpointId: string;
+            arguments: {
+                names: string[];
+                offset: number;
+                limit: number;
+                maxChars: number;
+            } | {
+                query: string;
+                offset: number;
+                limit: number;
+                maxChars: number;
+            };
+        } | {
+            endpointId: string;
+            arguments: {
+                maxChars: number;
+            };
+        };
     } | {
         contractFingerprint: string;
         totalFields: number;

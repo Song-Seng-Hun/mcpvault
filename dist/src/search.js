@@ -1,5 +1,5 @@
 import { guidanceError } from './guidance-runtime.js';
-import { join, resolve } from 'path';
+import { join, resolve, relative } from 'path';
 import { watch } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, readdir, rename, stat, writeFile } from 'node:fs/promises';
@@ -21,7 +21,7 @@ const MAX_INDEXED_TEXT_BYTES = 64 * 1024 * 1024;
 const NGRAM_SIZE = 3;
 const SEARCH_SNAPSHOT_FILE = '.mcpvault/search-index.snapshot.bin';
 const LEGACY_SEARCH_SNAPSHOT_FILE = '.mcpvault/search-index.snapshot.gz';
-const SEARCH_SNAPSHOT_VERSION = 6;
+const SEARCH_SNAPSHOT_VERSION = 7;
 const SNAPSHOT_SAVE_DEBOUNCE_MS = 1_000;
 const DIRECTORY_CACHE_TTL_MS = 5_000;
 const DIRECTORY_CACHE_MAX_ENTRIES = 1_024;
@@ -1015,7 +1015,7 @@ export class SearchService {
                 ...(document.useWhen ? [document.useWhen] : [])].join('\n').toLowerCase();
             const score = terms.reduce((value, term) => value + Number(discovery.includes(term)), 0);
             candidates.push({ score, result: {
-                    p: document.relativePath, t: document.relativePath.split('/').pop()?.replace(/\.md$/i, '') || document.relativePath,
+                    p: document.relativePath, t: document.title,
                     ex: '', mc: 0, rv: document.revision, why: ['indexed_candidate'],
                 } });
             // Retain at most the hard maximum plus an overflow witness. No partial
@@ -1261,9 +1261,9 @@ export class SearchService {
             const next = new Map();
             for (let start = 0; start < paths.length; start += INDEX_READ_BATCH_SIZE) {
                 const batch = paths.slice(start, start + INDEX_READ_BATCH_SIZE);
-                const sharedStats = this.catalog ? await this.catalog.statPaths(batch.map(fullPath => fullPath.substring(this.vaultPath.length + 1).replace(/\\/g, '/'))) : undefined;
+                const sharedStats = this.catalog ? await this.catalog.statPaths(batch.map(fullPath => relative(this.vaultPath, fullPath).replace(/\\/g, '/'))) : undefined;
                 const documents = await Promise.all(batch.map(fullPath => {
-                    const relativePath = fullPath.substring(this.vaultPath.length + 1).replace(/\\/g, '/');
+                    const relativePath = relative(this.vaultPath, fullPath).replace(/\\/g, '/');
                     return this.readIndexedDocument(fullPath, this.documents.get(relativePath), sharedStats?.get(relativePath));
                 }));
                 for (const document of documents) {
@@ -1326,7 +1326,9 @@ export class SearchService {
         }
     }
     async readIndexedDocument(fullPath, existing, sharedStat) {
-        const relativePath = fullPath.substring(this.vaultPath.length + 1).replace(/\\/g, '/');
+        // UNC/drive roots retain a trailing separator after resolve(). Arithmetic
+        // slicing drops the first scope character; use path semantics instead.
+        const relativePath = relative(this.vaultPath, fullPath).replace(/\\/g, '/');
         if (!this.pathFilter.isAllowed(relativePath))
             return undefined;
         try {
@@ -1350,7 +1352,8 @@ export class SearchService {
             const body = frontmatterMatch ? content.slice(frontmatterMatch[0].length) : content;
             const frontmatterText = frontmatterMatch?.[1] || '';
             const parsedFrontmatter = parseSearchFrontmatter(frontmatterText);
-            const title = relativePath.split('/').pop()?.replace(/\.md$/i, '') || relativePath;
+            const title = parsedFrontmatter?.note_kind === 'skill' && typeof parsedFrontmatter.title === 'string' && parsedFrontmatter.title.trim() && parsedFrontmatter.title.length <= 280
+                ? parsedFrontmatter.title : relativePath.split('/').pop()?.replace(/\.md$/i, '') || relativePath;
             const authorityMetadata = authorityMetadataFromFrontmatter(parsedFrontmatter);
             const authorityTerms = [title, ...authorityMetadata.authorityTerms];
             const retrievalMetadata = retrievalMetadataFromFrontmatter(parsedFrontmatter);
@@ -1875,7 +1878,7 @@ export class SearchService {
                             : undefined;
         return {
             p: document.relativePath,
-            t: candidate.title,
+            t: document.title,
             ex: excerpt,
             mc: matchCount,
             ln: lineNumber,

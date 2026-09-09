@@ -1,6 +1,6 @@
-import { access, mkdtemp, rm } from 'node:fs/promises';
+import { access, mkdtemp, rm, mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, sep } from 'node:path';
 import { afterEach, describe, expect, test } from 'vitest';
 import { PathFilter } from './pathfilter.js';
 import { SemanticSearchService } from './semantic-search.js';
@@ -12,6 +12,16 @@ afterEach(async () => {
 });
 
 describe('semantic index process lease', () => {
+  test('fallback scanning preserves Community prefix for share-shaped roots', async () => {
+    const vault=await mkdtemp(join(tmpdir(),'mcpvault-semantic-root-'));vaults.push(vault);
+    await mkdir(join(vault,'Community','Skills'),{recursive:true});
+    await writeFile(join(vault,'Community','Skills','Method.md'),'# Reference');
+    const service=new SemanticSearchService(vault,new PathFilter());
+    try {
+      (service as any).vaultPath=vault+sep;
+      expect(await (service as any).findMarkdownFiles(vault+sep)).toEqual(['Community/Skills/Method.md']);
+    } finally { await service.close(); }
+  });
   test('close releases the owned lock and permits a standby instance to take over', async () => {
     const vault = await mkdtemp(join(tmpdir(), 'mcpvault-semantic-close-'));
     vaults.push(vault);

@@ -7,6 +7,22 @@ updated_at: 2026-09-01T18:30:44.285Z
 ---
 # LLM Wiki schema
 
+## Procedural skill library
+
+`note_kind: skill` is ordinary `llm_wiki_type: knowledge`, not an executable
+tool or protected permission role. Optional `memory_role: procedural` remains
+orthogonal to scope. The host import collection is `Community/Skills/<id>/`;
+Community is local to this command center and excluded from Global sync.
+`skill_id`, `skill_origin`, `skill_version`, `skill_license`,
+`skill_origin_sha256` and `skill_projection_sha256` are advisory provenance and
+conflict-detection Properties, never authority or review certification.
+
+Original SKILL.md/Markdown references and license terms remain reference data.
+The explicit host manifest is private and is not imported. No scripts, models,
+credentials or additional client tools are installed. Existing bounded search,
+context and revision-safe reads retrieve procedures progressively. Exact
+commands and limitations: [skill library](../docs/skill-library.md).
+
 ## Independent research rounds
 
 The two dynamic `workshop.research` / `workshop.research_update` endpoints manage
