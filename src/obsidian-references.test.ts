@@ -1,4 +1,4 @@
-import { afterEach, expect, test } from 'vitest';
+import { afterEach, expect, test, vi } from 'vitest';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -9,6 +9,18 @@ import { ReferenceService } from './references.js';
 import { ScopeAccessPolicy } from './scope-access.js';
 
 const vaults: string[] = [];
+
+test('POSIX reference spelling is not replaced by Windows trailing-dot aliases', async () => {
+  const descriptor = Object.getOwnPropertyDescriptor(process, 'platform')!;
+  Object.defineProperty(process, 'platform', { ...descriptor, value: 'linux' });
+  try {
+    const canonical = vi.fn((path: string) => path);
+    const fs = { canonicalReferencePath: canonical, noteExists: async () => true } as unknown as FileSystemService;
+    const refs = new ReferenceService(fs, new ScopeAccessPolicy());
+    expect(await refs.validateAndNormalize(['Folder./Note.md'], 'Root.md')).toEqual(['Folder./Note.md']);
+    expect(canonical).toHaveBeenCalledWith('Folder./Note.md');
+  } finally { Object.defineProperty(process, 'platform', descriptor); }
+});
 afterEach(async () => { for (const vault of vaults.splice(0)) await rm(vault, { recursive: true, force: true }); });
 
 test('body Obsidian wikilinks become validated references while unresolved links remain lintable', async () => {

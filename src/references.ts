@@ -6,6 +6,7 @@ import { extractObsidianLinkOccurrences } from './backlinks.js';
 import { isModerationHidden } from './moderation-policy.js';
 import { parseWikiLink } from './wikilink/resolveWikiLink.js';
 import { RELATION_FIELDS } from './organization.js';
+import { posix } from 'node:path';
 
 const MAX_REFERENCES = 50;
 
@@ -14,7 +15,7 @@ function normalize(value: unknown): string[] {
   if (!Array.isArray(value)) throw guidanceError(new Error('references must be an array of note paths'), 'guid-5149921bfa80033d');
   const paths = value
     .filter((item): item is string => typeof item === 'string')
-    .map(item => item.trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, ''))
+    .map(item => item.trim().replace(/\\/g, '/'))
     .filter(Boolean);
   if (paths.length !== value.length) throw guidanceError(new Error('references must contain only non-empty strings'), 'guid-17d9d33f41aa7a81');
   return Array.from(new Set(paths)).slice(0, MAX_REFERENCES);
@@ -30,6 +31,21 @@ export class ReferenceService {
     private readonly fileSystem: FileSystemService,
     private readonly access: ScopeAccessPolicy,
   ) {}
+
+  private lexicalPath(value: string, principal?: ScopePrincipal, authorize = true): string {
+    const raw = value.startsWith('scope://') ? this.access.resolveExternalPath(value, principal) : value;
+    if (/^(?:[/\\]|~)|:/.test(raw)) throw guidanceError(new Error('Reference must be a Vault-relative authorized path'), 'guid-9a8c78ee8a1b736b');
+    const path = posix.normalize(raw.replace(/\\/g, '/').split('/').map(part => process.platform !== 'win32' || part === '.' || part === '..' ? part : part.replace(/[. ]+$/, '')).join('/'));
+    if (path === '..' || path.startsWith('../') || (authorize && !this.access.canAccessPhysicalPath(path, principal))) throw guidanceError(new Error('Reference unavailable in this scope'), 'guid-fe6b3ca2a3a02285');
+    return path;
+  }
+
+  private canonicalPath(value: string, principal?: ScopePrincipal): string {
+    const lexical = this.lexicalPath(value, principal);
+    const canonical = this.fileSystem.canonicalReferencePath(lexical);
+    if (!this.access.canAccessPhysicalPath(canonical, principal)) throw guidanceError(new Error('Reference unavailable in this scope'), 'guid-fe6b3ca2a3a02285');
+    return canonical;
+  }
 
   private async resolveWikiLinkTarget(target: string, principal?: ScopePrincipal, sourcePath?: string, syntax?: 'markdown'): Promise<string> {
     const name = target.trim();
@@ -49,10 +65,14 @@ export class ReferenceService {
    * loudly because they claim to be evidence.
    */
   async validateAndNormalize(value: unknown, containerPath: string, principal?: ScopePrincipal, content?: string, policy: { strictBodyLinks?: boolean } = {}): Promise<string[]> {
+    // Managed containers (for example Whisper) authorize their operation in
+    // their own service. Normalize their scope without granting generic reads.
+    containerPath = this.lexicalPath(containerPath, principal, false);
     const explicit = normalize(value);
     const references: string[] = [];
     for (const raw of explicit) {
-      const path = /^!?\[\[.+\]\]$/.test(raw) ? await this.resolveWikiLinkTarget(parseWikiLink(raw.replace(/^!/, '')).document, principal, containerPath) : raw;
+      const resolved = /^!?\[\[.+\]\]$/.test(raw) ? await this.resolveWikiLinkTarget(parseWikiLink(raw.replace(/^!/, '')).document, principal, containerPath) : raw;
+      const path = this.canonicalPath(resolved, principal);
       if (!this.access.canAccessPhysicalPath(path, principal)) {
         throw guidanceError(new Error(`Reference is not accessible in this scope: ${this.access.toPublicPath(path)}`), 'guid-bc12cbf46a8bb0c5');
       }
@@ -62,14 +82,14 @@ export class ReferenceService {
       if (!await this.fileSystem.noteExists(path)) {
         throw guidanceError(new Error(`Referenced note was not found: ${this.access.toPublicPath(path)}`), 'guid-4a0d37ad30c529ec');
       }
-      references.push(path);
+      if (!references.includes(path)) references.push(path);
     }
     for (const link of extractObsidianLinkOccurrences(String(content || ''))) {
       try {
         // Keep authored wikilink spelling, including relative prefixes and
         // table escapes, through the shared wikilink parser.
         const target = /^!?\[\[/.test(link.link) ? parseWikiLink(link.link.replace(/^!/, '')).document : link.target;
-        const path = await this.resolveWikiLinkTarget(target, principal, containerPath, /^!?\[\[/.test(link.link) ? undefined : 'markdown');
+        const path = this.canonicalPath(await this.resolveWikiLinkTarget(target, principal, containerPath, /^!?\[\[/.test(link.link) ? undefined : 'markdown'), principal);
         if (!this.access.canReferenceFrom(containerPath, path)) {
           throw guidanceError(new Error(`A more-private note cannot be referenced from this note: ${this.access.toPublicPath(path)}`), 'guid-41bb26d8f842bd65');
         }
@@ -97,6 +117,7 @@ export class ReferenceService {
       if (/^!?\[\[.+\]\]$/.test(path)) {
         try { target = await this.resolveWikiLinkTarget(parseWikiLink(path.replace(/^!/, '')).document, principal); } catch { continue; }
       }
+      try { target = this.canonicalPath(target, principal); } catch { continue; }
       if (!this.access.canAccessPhysicalPath(target, principal) || !await this.fileSystem.noteExists(target)) continue;
       const note = await this.fileSystem.readNote(target);
       if (isModerationHidden(note.frontmatter)) continue;
@@ -125,6 +146,7 @@ export class ReferenceService {
     limit?: number;
     maxChars?: number;
   }) {
+    params = { ...params, path: this.canonicalPath(params.path, params.principal) };
     if (!this.access.canAccessPhysicalPath(params.path, params.principal)) throw guidanceError(new Error('Access denied to source note'), 'guid-625c00431fce3699');
     const note = await this.fileSystem.readNote(params.path);
     if (isModerationHidden(note.frontmatter)) throw guidanceError(new Error('The source note is unavailable because moderation has hidden it'), 'guid-705f049baba276fe');

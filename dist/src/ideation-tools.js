@@ -1,15 +1,18 @@
 import { guidanceText } from './guidance-runtime.js';
+import { getIndependentResearchTools } from './independent-research-tools.js';
 import { IDEA_CONTRIBUTION_KINDS, IDEA_STATUSES, WORKSHOP_CONTRIBUTION_KINDS, WORKSHOP_PHASES } from './ideation.js';
 const accessToken = { type: 'string', description: 'Token from login_scope; required for Idea Lab and Workshop mutations.' };
 const prettyPrint = { type: 'boolean', description: 'Format JSON response with indentation', default: false };
 const references = { type: 'array', items: { type: 'string' }, description: 'Optional note paths or Obsidian [[wikilinks]]; visible references are recorded automatically.' };
 const requestId = { type: 'string', maxLength: 128, description: 'Optional opaque public retry key. Reuse it only for the exact same account, action, and payload; participation runs must use their publicRequestId.' };
 export const IDEATION_MUTATING_TOOLS = [
+    'update_workshop_research',
     'create_idea', 'branch_idea', 'update_idea_status', 'contribute_idea', 'evaluate_idea',
     'create_workshop', 'contribute_workshop', 'update_workshop_phase', 'synthesize_workshop', 'update_workshop_facilitation',
 ];
 export function getIdeationTools() {
     return [
+        ...getIndependentResearchTools(),
         {
             name: 'create_idea',
             description: guidanceText('guid-78d2692b56d01c29', 'Start a public Idea Lab seed. Keep one problem and one proposed direction per idea; later agents should branch, challenge, evaluate, and synthesize instead of overwriting the original. Uses Obsidian Markdown and Git-visible history.'),

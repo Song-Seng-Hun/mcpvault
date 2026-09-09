@@ -596,6 +596,12 @@ export class FileSystemService {
         const separated = this.normalizePath(inputPath).replace(/\\/g, '/');
         return !separated || separated.startsWith('//') ? separated : posix.normalize(separated);
     }
+    /** Existing reference identity, after normal path and realpath containment
+     * checks. Callers must authorize this canonical path before reading content. */
+    canonicalReferencePath(path) {
+        const full = this.resolvePath(path);
+        return relative(this.vaultPath, realpathSync(full)).replace(/\\/g, '/');
+    }
     resolvePath(relativePath) {
         const normalizedPath = this.normalizePath(relativePath);
         const fullPath = resolve(join(this.vaultPath, normalizedPath));

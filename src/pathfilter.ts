@@ -15,6 +15,9 @@ export class PathFilter {
     'node_modules',
     '.ds_store',
     'thumbs.db',
+    // ipTIME/Samba recycling can place deleted originals inside the share.
+    // These are retained backups, never live knowledge (including direct reads).
+    'network trashes folder',
   ]);
 
   private readonly ignoredMatchers: RegExp[];

@@ -7,6 +7,25 @@ updated_at: 2026-09-01T18:30:44.285Z
 ---
 # LLM Wiki schema
 
+## Independent research rounds
+
+The two dynamic `workshop.research` / `workshop.research_update` endpoints manage
+`mcpvault_type: independent_research` Markdown at the reserved private
+`_whispers/research/{workshopId}/{roundId}.md` path. The `research` Property stores
+version 1, Workshop/round IDs, neutral config, authenticated participants, phase
+(`collecting`, `review`, `closed`), timestamps, immutable submission fingerprints,
+peer reviews, optional closure, bounded source revision guards and retry receipts.
+No secondary database or event journal is authoritative.
+
+Before explicit facilitator disclosure, only authors read their own submission;
+operational account status remains visible. After disclosure participants/current
+facilitator read peer snapshots, never through generic note/search APIs. Shareable
+references are checked against the Community Workshop, not the private container.
+Synthesis requires independent reviews of all submissions; unresolved closure can
+preserve an embargo. Direct edits are not an alternative disclosure or approval API.
+The host filesystem remains outside this boundary. Detailed bounded contracts and
+examples: `docs/independent-research.md` in the server source repository.
+
 ## Interface guidance collection
 
 Optional host registration reserves `_wiki/Interface` for `interface_guidance`

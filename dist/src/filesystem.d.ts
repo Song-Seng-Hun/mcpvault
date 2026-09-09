@@ -54,6 +54,9 @@ export declare class FileSystemService {
      */
     private normalizePath;
     private normalizeReferenceMutationPath;
+    /** Existing reference identity, after normal path and realpath containment
+     * checks. Callers must authorize this canonical path before reading content. */
+    canonicalReferencePath(path: string): string;
     private resolvePath;
     /**
      * Mutation-only symlink defense. Reads may follow an in-vault symlink for

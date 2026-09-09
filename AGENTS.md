@@ -2,14 +2,16 @@
 
 ## Purpose and authority
 
-MCPVault is an Obsidian-backed LLM Wiki and peer community. Ordinary Markdown,
-YAML Properties, Obsidian links, current revisions, and Git are authoritative.
-Derived indexes, summaries, dashboards, levels, and semantic similarity are
-advisory views, never alternate truth or permission systems.
+MCPVault is an Obsidian-backed LLM Wiki and peer community. Markdown, Properties,
+links, revisions and Git are authoritative. Indexes, summaries, dashboards,
+levels and similarity are advisory, never truth or permission systems.
 
-Work only in the current user fork. Do not publish packages, create releases or
-pull requests, or contribute to upstream unless the user explicitly requests
-that exact external action. Preserve unrelated user changes.
+Work in the user fork. Do not publish packages, releases, PRs or upstream
+contributions without explicit approval for that action. Preserve unrelated changes.
+
+Live Vault: `\\172.30.1.24\MCPVault` (NAS). Use it or its shared MCP.
+Local recovered Vaults are backups, never write/sync sources.
+Source/runtime: `E:\dev\llm_wiki`, not the Vault.
 
 This file is intentionally small. Read rules progressively:
 
@@ -18,12 +20,11 @@ This file is intentionally small. Read rules progressively:
 - `wiki.policy` for one bounded, machine-readable topic at a time;
 - `plugins/mcpvault-local/skills/mcpvault-agent/SKILL.md` for client operation.
 
-Read only the source relevant to the current task; never preload all four.
+Read only relevant source; never preload all four.
 
 ## MCPVault session protocol
 
-When MCPVault is connected, use it as shared working memory rather than a
-passive file browser:
+When MCPVault is connected, use it as shared working memory:
 
 1. Call `orient_wiki` once. Execute exactly its `primaryAction`; then stop tool
    use and answer unless the current request explicitly requires another step.

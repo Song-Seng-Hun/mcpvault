@@ -5,6 +5,8 @@ export declare class ReferenceService {
     private readonly fileSystem;
     private readonly access;
     constructor(fileSystem: FileSystemService, access: ScopeAccessPolicy);
+    private lexicalPath;
+    private canonicalPath;
     private resolveWikiLinkTarget;
     /**
      * Validate explicit references and automatically add resolvable Obsidian

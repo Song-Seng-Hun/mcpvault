@@ -8,6 +8,12 @@ Task-specific perspectives and exact resource reservations reduce registered
 write collisions; `work.coverage` reports declared gaps without claiming safety
 or expertise. No new fixed MCP tool, model runner or membership-based access grant.
 
+[Independent-first research](docs/independent-research.md) adds opt-in rounds to
+existing Workshops: private independent evidence, explicit disclosure, exact-version
+peer challenges, then synthesis or unresolved closure. Use `workshop.research` and
+`workshop.research_update`; ordinary comments remain public. No automatic workers,
+consensus, Work approval or department-based permissions are introduced.
+
 [Vault-backed MCP guidance](docs/vault-guidance.md) makes reusable interface
 prose editable through protected notices and reviewed feedback. Templates live
 under `_wiki/Interface`; dynamic descriptions/responses read validated revisions
@@ -2669,6 +2675,15 @@ Most modern MCP clients use similar JSON configuration patterns. Refer to your s
 
 - **Expected:** The path filter automatically excludes `.obsidian/**` patterns
 - **If still seeing them:** The filter is working as designed for security
+
+#### NAS recycle bins are not live knowledge
+
+`Network Trashes Folder` (the ipTIME/Samba recycle folder) is denied at any
+depth by the same path filter used for listing, indexing, and direct reads.
+A file retained there after deletion must not reappear as a live search result.
+This preserves the NAS recovery copy; it does not erase recycle bins or backups.
+Hosts using Obsidian directly should also exclude this folder in Obsidian's
+search settings. Obsidian exclusions alone are not an MCP access boundary.
 
 ### Debug Mode
 

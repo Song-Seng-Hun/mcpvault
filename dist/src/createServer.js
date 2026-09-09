@@ -92,6 +92,7 @@ import { VaultGraphIndex } from "./vault-graph.js";
 import { VaultIoCoordinator } from "./vault-io.js";
 import { IdeationService } from "./ideation.js";
 import { IDEATION_MUTATING_TOOLS, getIdeationTools } from "./ideation-tools.js";
+import { IndependentResearchService } from './independent-research.js';
 import { ECONOMY_MUTATING_TOOLS, getEconomyTools } from './economy-tools.js';
 import { EconomyService } from './economy-service.js';
 import { assertEconomyConfigured } from './economy-ledger.js';
@@ -334,6 +335,8 @@ const CAPABILITY_FOR_TOOL = {
     evaluate_idea: "comment",
     create_workshop: "publish",
     update_workshop_facilitation: 'publish',
+    read_workshop_research: 'publish',
+    update_workshop_research: 'publish',
     manage_quest_contract: 'task', review_quest_contract: 'task',
     contribute_workshop: "comment",
     update_workshop_phase: "status",
@@ -481,6 +484,10 @@ export function createServer(vaultPath, options = {}) {
     const audit = new AuditService(resolvedVaultPath);
     const agentTasks = new AgentTaskService(fileSystem, references, scopeAuth, scopeAccess);
     const ideation = new IdeationService(fileSystem, references);
+    const independentResearch = new IndependentResearchService(fileSystem, references, scopeAccess, async (accountId) => {
+        const actor = (await scopeAuth.listPrincipals()).find(p => p.accountId === accountId);
+        return Boolean(actor && scopeAuth.hasCapability(actor, 'publish') && !await moderation.isBanned(actor.accountId, actor.userId));
+    });
     const communityFeatures = new CommunityFeaturesService(fileSystem, scopeAccess, scopeAuth, reputation, resolvedVaultPath, notifications, fileCatalog);
     communityFeaturesCache = communityFeatures;
     // The lexical, metadata, graph, and semantic indexes subscribe to the
@@ -2413,6 +2420,10 @@ export function createServer(vaultPath, options = {}) {
                     }
                     case 'list_workshop_methods':
                         return jsonResult(ideation.getWorkshopMethods({ methodId: trimmedArgs.methodId, stepId: trimmedArgs.stepId, cursor: trimmedArgs.cursor, maxChars: trimmedArgs.maxChars }), false);
+                    case 'read_workshop_research':
+                        return jsonResult(await independentResearch.read({ ...trimmedArgs, principal, revalidateActor }), false);
+                    case 'update_workshop_research':
+                        return jsonResult(await independentResearch.update({ ...trimmedArgs, principal, revalidateActor }), false);
                     case 'read_workshop_facilitation':
                         return jsonResult(await ideation.readWorkshopFacilitation({ ...(principal && { principal }), workshopId: trimmedArgs.workshopId, cursor: trimmedArgs.cursor, limit: trimmedArgs.limit, maxChars: trimmedArgs.maxChars }), false);
                     case 'update_workshop_facilitation':

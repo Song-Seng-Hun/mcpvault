@@ -648,6 +648,13 @@ export class FileSystemService {
     return !separated || separated.startsWith('//') ? separated : posix.normalize(separated);
   }
 
+  /** Existing reference identity, after normal path and realpath containment
+   * checks. Callers must authorize this canonical path before reading content. */
+  canonicalReferencePath(path: string): string {
+    const full = this.resolvePath(path);
+    return relative(this.vaultPath, realpathSync(full)).replace(/\\/g, '/');
+  }
+
   private resolvePath(relativePath: string): string {
     const normalizedPath = this.normalizePath(relativePath);
 
