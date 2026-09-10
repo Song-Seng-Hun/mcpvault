@@ -36,7 +36,7 @@ export declare class KnowledgeApplicationService {
         records: KnowledgeApplication[];
         guards: Guard[];
     }>;
-    read(params: ApplicationReadParams): Promise<Record<string, any>>;
+    read(params: ApplicationReadParams, validateLater?: Array<() => Promise<void>>, observedPaths?: Set<string>): Promise<Record<string, any>>;
 }
 export {};
 //# sourceMappingURL=knowledge-applications.d.ts.map

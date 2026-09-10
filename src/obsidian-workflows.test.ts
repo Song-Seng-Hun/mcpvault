@@ -40,11 +40,27 @@ test('MOC registration rejects anonymous and read-only clients', async () => {
     const { server, client, call } = await connect(readOnly);
     try {
       expect((await call('wiki.moc_region', { path: 'Map.md', operation: 'register', pathPrefix: 'Knowledge' })).error).toBe(true);
-      const status = await call('wiki.moc_region', { path: 'Map.md', operation: 'status' });
+      const status = await call('wiki.moc_region_status', { path: 'Map.md' });
       expect(status.error, status.text).toBeFalsy(); expect(status.value.status).toBe('unregistered');
-      expect((await call('wiki.moc_region_status', { path: 'Map.md' })).value.status).toBe('unregistered');
     }
     finally { await client.close(); await server.close(); }
+  }
+});
+
+test('transition-only MOC status alias delegates to the canonical read with identical access', async () => {
+  await writeFile(join(vault, 'Map.md'), '---\nnote_kind: moc\n---\n# Map');
+  await writeFile(join(vault, 'Hidden.md'), '---\nnote_kind: moc\nmoderation_status: hidden\n---\nPRIVATE BODY');
+  for (const readOnly of [false, true]) {
+    const { server, client, call } = await connect(readOnly);
+    try {
+      for (const path of ['Map.md', 'Hidden.md', 'scope://agent/another/Private.md']) {
+        const canonical = await call('wiki.moc_region_status', { path });
+        const legacy = await call('wiki.moc_region', { path, operation: 'status' });
+        expect(Boolean(legacy.error)).toBe(Boolean(canonical.error));
+        if (!canonical.error) expect(legacy.value).toEqual(canonical.value);
+        else expect(legacy.text).not.toContain('PRIVATE BODY');
+      }
+    } finally { await client.close(); await server.close(); }
   }
 });
 test('mechanical normalization previews an exact change set without refreshing semantic fingerprints', async () => {

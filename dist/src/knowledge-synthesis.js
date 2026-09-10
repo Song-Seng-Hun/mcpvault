@@ -34,7 +34,7 @@ export async function inspectSynthesisBasis(value, container, read, access, prin
                 return { state: 'inputs_unavailable' };
             if (current.revision !== input.revision)
                 changedInputIds.push(input.id);
-            if (historicalInput(current.frontmatter))
+            if (input.role === 'historical_context' || historicalInput(current.frontmatter))
                 historicalInputIds.push(input.id);
         }
         catch {

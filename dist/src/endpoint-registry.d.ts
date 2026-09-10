@@ -26,6 +26,10 @@ export interface EndpointAvailabilityContext {
     skillEvolutionEnabled?: boolean;
     capabilities: Set<ScopeCapability>;
     authenticated: boolean;
+    principalKey?: string;
+    roleplayConfigured?: boolean;
+    roleplayWritesConfigured?: boolean;
+    economyConfigured?: boolean;
 }
 export declare function endpointIdForTool(toolName: string): string;
 export declare class EndpointRegistry {
@@ -33,7 +37,10 @@ export declare class EndpointRegistry {
     setTools(tools: Tool[], requiredCapabilities: Partial<Record<string, ScopeCapability>>, mutatingTools: Set<string>): void;
     resolve(id: unknown): EndpointDescriptor | undefined;
     resolveRoute(method: string, pathname: string): MatchedEndpoint | undefined;
-    list(query: unknown, requestedLimit: unknown, requestedMaxChars: unknown, context: EndpointAvailabilityContext, activeOnly: boolean): {
+    list(query: unknown, requestedLimit: unknown, requestedMaxChars: unknown, context: EndpointAvailabilityContext, activeOnly: boolean, page?: {
+        compact?: boolean;
+        cursor?: unknown;
+    }): {
         endpoints: Array<EndpointDescriptor & {
             available: boolean;
             state: 'ready' | 'locked' | 'disabled';
@@ -41,6 +48,7 @@ export declare class EndpointRegistry {
         }>;
         total: number;
         truncated: boolean;
+        nextCursor?: string;
     };
     size(): number;
 }

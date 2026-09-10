@@ -8151,7 +8151,7 @@ export class LlmWikiService {
     contextBefore?: number;
     contextAfter?: number;
     maxChars?: number;
-  }) {
+  }, validateLater?: Array<() => Promise<void>>, observedPaths?: Set<string>) {
     if (!this.access.canAccessPhysicalPath(params.path, params.principal)) throw guidanceError(new Error(`Access denied: ${this.access.toPublicPath(params.path)}`), 'guid-26a1bd21fd48991f');
     const view = params.view || 'summary';
     if (!(WIKI_PROJECTION_VIEWS as readonly string[]).includes(view)) throw guidanceError(new Error('view must be summary, progressive, key_points, outline, section, or full'), 'guid-1006ef2aa0d55765');
@@ -8378,6 +8378,24 @@ export class LlmWikiService {
       retentionAt: projectDate('retention_at'), preserveUntil: projectDate('preserve_until'),
       reviewedAt: projectDate('last_reviewed_at'), clarifiedAt: projectDate('clarified_at'),
     };
+    const basisInputs: Array<{ path: string; revision: string }> = [];
+    const synthesisBasis = note.frontmatter.knowledge_synthesis === undefined ? undefined
+      : await inspectSynthesisBasis(note.frontmatter.knowledge_synthesis, params.path, async path => {
+        const current = (await this.fileSystem.readNoteMetadata([path],
+          p => this.access.canAccessPhysicalPath(p, params.principal),
+          { fresh: true, strict: true, maxBytes: MAX_NOTE_CONTENT_BYTES }))[0];
+        if (!current?.revision || isModerationHidden(current.frontmatter)) throw guidanceError(new Error('Synthesis input unavailable'), 'guid-c4dc6c580c193da3');
+        basisInputs.push({ path, revision: current.revision });
+        observedPaths?.add(path);
+        return current;
+      }, this.access, params.principal);
+    if (synthesisBasis) {
+      observedPaths?.add(params.path);
+      const validateBasis = () => this.assertCurrentContextSources(params.principal,
+        [{ path: params.path, revision: note.revision }, ...basisInputs], 9, MAX_NOTE_CONTENT_BYTES);
+      await validateBasis();
+      validateLater?.push(validateBasis);
+    }
     return {
       path: this.access.toPublicPath(params.path),
       title,
@@ -8416,6 +8434,13 @@ export class LlmWikiService {
       ...(Number.isInteger(note.frontmatter.summary_layer) && { summaryLayer: note.frontmatter.summary_layer }),
       ...(Array.isArray(note.frontmatter.summary_highlights) && { summaryHighlights: note.frontmatter.summary_highlights.slice(0, 12) }),
       ...(projectedClaims.length > 0 && { claims: projectedClaims }),
+      ...(synthesisBasis && { synthesisBasis }),
+      // Application locators have a 500-character contract. Longer ordinary
+      // note paths must remain readable even though they cannot be recorded there.
+      ...(note.frontmatter.llm_wiki_type === 'knowledge' && this.access.toPublicPath(params.path).length <= 500 && { applicationRead: {
+        endpointId: 'wiki.applications',
+        arguments: { path: this.access.toPublicPath(params.path), expectedRevision: note.revision, limit: 3, maxChars: 4000 },
+      } }),
       ...(Array.isArray(note.frontmatter.next_actions) && { nextActions: note.frontmatter.next_actions.slice(0, 20) }),
       ...(typeof note.frontmatter.next_action === 'string' && { nextAction: note.frontmatter.next_action }),
       ...(typeof note.frontmatter.waiting_for === 'string' && { waitingFor: note.frontmatter.waiting_for }),
@@ -11805,10 +11830,34 @@ export class LlmWikiService {
     }
   }
 
-  async answerPacket(principal: ScopePrincipal | undefined, path: string, maxChars = 7000, includeSemantic = true, intent: AnswerPacketIntent = 'decide') {
+  /** Keep complete authored claims within the enclosing packet budget before
+   * dropping opposing context. Omitted objects remain recoverable at the root revision. */
+  private trimPacketClaims(packet: Record<string, any>, envelope: Record<string, any>, maxChars: number): void {
+    while (JSON.stringify(envelope).length > maxChars && packet.source.content?.length > 160) {
+      packet.source.content = boundedText(packet.source.content, Math.max(160, Math.floor(packet.source.content.length * 0.7)));
+      packet.truncated = envelope.truncated = true;
+    }
+    const trail = packet.reasoningTrail;
+    if (!Array.isArray(trail?.claims) || !trail.claims.length) return;
+    const total = trail.claims.length + (trail.omittedClaims?.count || 0);
+    while (JSON.stringify(envelope).length > maxChars && trail.claims.length) {
+      trail.claims.pop();
+      trail.omittedClaims = { count: total - trail.claims.length, nextAction: {
+        endpointId: 'notes.read', arguments: { path: packet.source.path, expectedRevision: packet.source.revision, maxChars: 12000 },
+      } };
+      packet.truncated = envelope.truncated = true;
+    }
+  }
+
+  async answerPacket(principal: ScopePrincipal | undefined, path: string, maxChars = 7000, includeSemantic = true, intent: AnswerPacketIntent = 'decide', validateReuse: Array<() => Promise<void>> = [], observedReusePaths = new Set<string>()) {
     const boundedChars = Math.min(Math.max(Number(maxChars) || 7000, 1024), 16000);
     const selectedIntent: AnswerPacketIntent = (ANSWER_PACKET_INTENTS as readonly string[]).includes(intent) ? intent : 'decide';
-    const source = await this.readProjection({ ...(principal && { principal }), path, view: 'progressive', maxChars: Math.min(2400, Math.max(1200, Math.floor(boundedChars * 0.34))) });
+    const source = await this.readProjection({ ...(principal && { principal }), path, view: 'progressive', maxChars: Math.min(2400, Math.max(1200, Math.floor(boundedChars * 0.34))) }, validateReuse, observedReusePaths);
+    const applicationHandoff = source.applicationRead && ['decide', 'review', 'execute'].includes(selectedIntent)
+      ? { truncated: true, nextAction: source.applicationRead } : undefined;
+    const applications = applicationHandoff
+      ? await new KnowledgeApplicationService(this.fileSystem, this.access).read({ ...applicationHandoff.nextAction.arguments, ...(principal && { principal }) }, validateReuse, observedReusePaths)
+      : undefined;
     const sourcePacket = {
       path: source.path,
       title: source.title,
@@ -11820,6 +11869,7 @@ export class LlmWikiService {
       ...(source.temporal && { temporal: source.temporal }),
       ...(source.summaryFresh !== undefined && { summaryFresh: source.summaryFresh }),
       ...(source.summaryStale !== undefined && { summaryStale: source.summaryStale }),
+      ...(source.synthesisBasis && { synthesisBasis: source.synthesisBasis }),
       ...(Array.isArray(source.keyPoints) && { keyPoints: source.keyPoints.slice(0, 8) }),
       ...(Array.isArray(source.openQuestions) && { openQuestions: source.openQuestions.slice(0, 8) }),
       ...(source.navigation && { navigation: source.navigation }),
@@ -11846,7 +11896,7 @@ export class LlmWikiService {
     const readNeighbor = async (item: Record<string, any>) => {
       try {
         const target = this.access.resolveExternalPath(String(item.path), principal);
-        const projection = await this.readProjection({ ...(principal && { principal }), path: target, view: 'progressive', maxChars: 900 });
+        const projection = await this.readProjection({ ...(principal && { principal }), path: target, view: 'progressive', maxChars: 900 }, validateReuse, observedReusePaths);
         if (projection.revision !== item.revision) throw guidanceError(new Error('neighbor classification changed'), 'guid-8a1963c9a7e611b7');
         return {
           path: projection.path,
@@ -11857,6 +11907,7 @@ export class LlmWikiService {
           ...(projection.status && { status: projection.status }),
           ...(projection.polarity && { polarity: projection.polarity }),
           ...(projection.summaryFresh !== undefined && { summaryFresh: projection.summaryFresh }),
+          ...(projection.synthesisBasis && { synthesisBasis: projection.synthesisBasis }),
           relationToSource: isCounterpoint(item) ? 'counterpoint_or_review' : 'supporting_context',
           reasons: item.reasons,
           ...(item.pathTrace && { pathTrace: item.pathTrace }),
@@ -11873,21 +11924,26 @@ export class LlmWikiService {
       review: { goal: 'Find what became stale, disputed, unresolved, or structurally disconnected since the last review.', next: 'Re-read the affected note, record review checks/open items, and preserve rejected paths as negative knowledge when useful.' },
     }[selectedIntent];
     const evidence = Array.isArray(source.evidence) ? source.evidence.slice(0, 8) : [];
-    const provenanceSession = new SourceProvenanceSession(this.fileSystem, this.access, path, principal);
+    const provenanceSession = new SourceProvenanceSession(this.fileSystem, this.access, path, principal, observedReusePaths);
     const evidenceDiversity = await this.evidenceDiversity(principal, path, 12, provenanceSession);
-    const claims = Array.isArray(source.keyPoints) ? source.keyPoints.slice(0, 8) : [];
+    // Context keeps the same source/ancestry guards after its nested Answer.
+    // Root-only sessions are already covered by Context's root revision check.
+    if (evidenceDiversity.evidencePathCount > 0) validateReuse.unshift(() => provenanceSession.validate());
+    const claims = source.claims || [];
+    const basisReview = [sourcePacket, ...context].find(item => item.synthesisBasis && item.synthesisBasis.state !== 'current_revisions');
     const decisions = context
       .filter(item => String(item.noteKind || '').toLowerCase() === 'decision' || String(item.relationToSource || '').includes('decision'))
       .slice(0, 3)
       .map(item => ({ path: item.path, title: item.title, revision: item.revision, content: item.content }));
     const reasoningTrail = {
       question: Array.isArray(source.openQuestions) && source.openQuestions.length > 0 ? source.openQuestions.slice(0, 4) : (String(source.noteKind || '').toLowerCase() === 'question' ? [source.title] : []),
-      claims,
+      claims: [...claims],
       evidence: evidence.map((item: any) => ({ path: item.path, ...(item.heading && { heading: item.heading }), ...(item.blockId && { blockId: item.blockId }), ...(item.startLine && { startLine: item.startLine }), ...(item.endLine && { endLine: item.endLine }), ...(item.revision && { revision: item.revision }), ...(item.quoteHash && { quoteHash: item.quoteHash }) })),
       counterexamples: context.filter(item => item.relationToSource === 'counterpoint_or_review').slice(0, 3).map(item => ({ path: item.path, title: item.title, revision: item.revision, polarity: item.polarity, status: item.status, content: item.content })),
       decisions,
       gaps: [
         ...(claims.length === 0 ? ['claim'] : []),
+        ...(basisReview ? ['synthesis_basis_review'] : []),
         ...(evidence.length === 0 ? ['evidence'] : []),
         ...(evidence.length > 0 && evidenceDiversity.distinctSourceWorkCount < 2 && ['decide', 'review'].includes(selectedIntent) ? ['independent_source_work_review'] : []),
         ...(evidenceDiversity.provenance.groups.some(g => g.sourcePaths.length > 1) ? ['shared_source_origin'] : []),
@@ -11903,12 +11959,15 @@ export class LlmWikiService {
       .slice(0, 8);
     const sourceEvidencePaths = [...new Set(evidence.map((item: any) => typeof item?.path === 'string' ? item.path : '').filter(Boolean))].slice(0, 20);
     const synthesisPlan = ['decide', 'review'].includes(selectedIntent) ? {
-      status: evidence.length === 0 ? 'needs_immutable_evidence'
+      status: basisReview ? 'needs_synthesis_basis_review' : evidence.length === 0 ? 'needs_immutable_evidence'
         : counterpoints.length === 0 ? 'needs_counterpoint_review'
           : selectedIntent === 'review' ? 'ready_for_review_record' : 'ready_for_decision_draft',
       inputs: synthesisInputs,
       missingStages: reasoningTrail.gaps,
-      nextAction: evidence.length === 0
+      nextAction: basisReview ? {
+        endpointId: 'notes.read',
+        arguments: { path: basisReview.path, expectedRevision: basisReview.revision, maxChars: 4000 },
+      } : evidence.length === 0
         ? {
           endpointId: endpointIdForTool('ingest_source'),
           arguments: {},
@@ -11947,6 +12006,7 @@ export class LlmWikiService {
       counterpoints: context.filter(item => item.relationToSource === 'counterpoint_or_review'),
       reasoningTrail,
       evidenceDiversity,
+      ...(applications && { applications }),
       ...(synthesisPlan && { synthesisPlan }),
       neighborhood: {
         totalCandidates: neighborhood.totalCandidates,
@@ -11957,6 +12017,11 @@ export class LlmWikiService {
     // New ancestry metadata must not displace an existing counterpoint. Work
     // paths are already present in the evidence projection; omit optional group
     // detail and repeated boilerplate before trimming actual opposing context.
+    if (JSON.stringify(result).length > boundedChars && applications) {
+      if (applications.items?.length === 0 && !applications.truncated) delete result.applications;
+      else result.applications = applicationHandoff;
+      result.truncated = true;
+    }
     while (JSON.stringify(result).length > boundedChars && result.evidenceDiversity.provenance.groups.length) {
       result.evidenceDiversity.provenance.groups.pop();
       result.evidenceDiversity.provenance.truncated = true;
@@ -11968,6 +12033,7 @@ export class LlmWikiService {
       result.evidenceDiversity.note = 'Declared source-work diversity is advisory, not independent verification or truth.';
       if (result.synthesisPlan) result.synthesisPlan.preservation = 'Preserve originals, objections and failed paths; only explicit revision-safe decisions may supersede inputs.';
     }
+    this.trimPacketClaims(result, result, boundedChars);
     while (JSON.stringify(result).length > boundedChars && (result.supporting.length > 0 || result.counterpoints.length > 0 || result.reasoningTrail.decisions.length > 0 || result.reasoningTrail.counterexamples.length > 0)) {
       result.truncated = true;
       if (result.supporting.length > 0) result.supporting.pop();
@@ -11980,16 +12046,26 @@ export class LlmWikiService {
       result.source.content = boundedText(result.source.content, Math.max(160, Math.floor(result.source.content.length * 0.7)));
     }
     await this.assertCurrentContextSources(principal, [sourcePacket, ...context]);
-    await provenanceSession.validate();
+    if (evidenceDiversity.evidencePathCount === 0) await provenanceSession.validate();
+    for (const validate of validateReuse) await validate();
+    for (const item of [sourcePacket, ...context]) observedReusePaths.add(this.access.resolveExternalPath(item.path, principal));
+    // No await after this sweep: a later validator may revoke an earlier
+    // validator's input even though each callback checks its own paths.
+    if ([...observedReusePaths].some(p => !this.access.canAccessPhysicalPath(p, principal))) throw guidanceError(new Error('A context source changed or became unavailable; re-read the root note and retry.'), 'guid-5785b47b9b162c2e');
     if (JSON.stringify(result).length <= boundedChars) return result;
     // A caller-supplied budget is a hard response contract. Metadata such as
     // aliases or relation explanations can be large even after bodies are
     // trimmed, so retain only the identity needed for a safe follow-up read.
+    const omittedClaims = claims.length ? { count: claims.length, nextAction: {
+      endpointId: 'notes.read', arguments: { path: source.path, expectedRevision: source.revision, maxChars: 12000 },
+    } } : undefined;
     const compact: Record<string, unknown> = {
       mode: 'bounded_answer_packet',
       intent: selectedIntent,
-      source: { path: result.source.path, title: result.source.title, revision: result.source.revision },
-      reasoningTrail: { gaps: result.reasoningTrail.gaps, note: result.reasoningTrail.note },
+      source: { path: result.source.path, title: result.source.title, revision: result.source.revision,
+        ...(source.synthesisBasis && { synthesisBasis: { state: source.synthesisBasis.state } }) },
+      ...(applicationHandoff && { applications: applicationHandoff }),
+      reasoningTrail: { gaps: result.reasoningTrail.gaps, note: result.reasoningTrail.note, ...(omittedClaims && { omittedClaims }) },
       ...(synthesisPlan && { synthesisPlan: { status: synthesisPlan.status, nextAction: synthesisPlan.nextAction, preservation: synthesisPlan.preservation } }),
       truncated: true,
     };
@@ -11998,13 +12074,23 @@ export class LlmWikiService {
     const minimal: Record<string, any> = {
       mode: 'bounded_answer_packet',
       intent: selectedIntent,
-      source: { path: result.source.path, revision: result.source.revision },
-      reasoningTrail: { gaps: result.reasoningTrail.gaps },
+      source: { path: result.source.path, revision: result.source.revision,
+        ...(source.synthesisBasis && { synthesisBasis: { state: source.synthesisBasis.state } }) },
+      ...(applicationHandoff && { applications: applicationHandoff }),
+      // readBinding is not an executable nextAction. Resolve its dotted *From
+      // references in the returned envelope into path/expectedRevision first,
+      // then call notes.read with those arguments and its default read budget.
+      reasoningTrail: { gaps: result.reasoningTrail.gaps, ...(omittedClaims && { omittedClaims: {
+        count: omittedClaims.count, readBinding: { endpointId: 'notes.read', pathFrom: 'source.path', expectedRevisionFrom: 'source.revision' },
+      } }) },
       provenanceNotice: evidenceDiversity.provenance.notice,
       ...(tinyAction && { synthesisPlan: { status: synthesisPlan?.status, nextAction: { endpointId: tinyAction.endpointId, ...(tinyAction.arguments?.path && { arguments: { path: tinyAction.arguments.path } }) } } }),
       truncated: true,
     };
     if (JSON.stringify(minimal).length > boundedChars) delete minimal.synthesisPlan;
+    // Preserve the existing exact root recovery locator when repeating it in
+    // an optional application handoff cannot fit the caller's minimum budget.
+    if (JSON.stringify(minimal).length > boundedChars) delete minimal.applications;
     if (JSON.stringify(minimal).length > boundedChars) throw guidanceError(new Error('maxChars is too small to preserve this root path and revision; increase the read budget.'), 'guid-8d6b644d9e762dd4');
     return minimal;
   }
@@ -12655,7 +12741,9 @@ export class LlmWikiService {
     if (!this.access.canAccessPhysicalPath(path, principal)) throw guidanceError(new Error('Access denied'), 'guid-c18889ef85fd3e0b');
     const rootNote = await this.fileSystem.readNote(path);
     if (isModerationHidden(rootNote.frontmatter)) throw guidanceError(new Error('The source note is unavailable'), 'guid-cc7847e1773f9398');
-    const packet = await this.answerPacket(principal, path, boundedChars, includeSemantic, intent);
+    const validateReuse: Array<() => Promise<void>> = [];
+    const observedReusePaths = new Set<string>();
+    const packet = await this.answerPacket(principal, path, boundedChars, includeSemantic, intent, validateReuse, observedReusePaths);
     const source = packet.source as Record<string, any>;
     if (source.revision !== rootNote.revision) throw guidanceError(new Error('The root note changed while building its context pack; re-read it and retry.'), 'guid-47ce4b499cdf5c0f');
     const supporting = Array.isArray(packet.supporting) ? packet.supporting as Array<Record<string, any>> : [];
@@ -12698,7 +12786,15 @@ export class LlmWikiService {
       ...counterpoints.map(item => ({ path: item.path, title: item.title, revision: item.revision, role: 'counterpoint_or_review' })),
     ].filter((item, index, all) => item.path && all.findIndex(candidate => candidate.path === item.path) === index);
     const trail = packet.reasoningTrail as Record<string, any> | undefined;
+    const claimBinding = trail?.omittedClaims?.readBinding;
+    if (claimBinding) {
+      claimBinding.pathFrom = 'packet.source.path';
+      claimBinding.expectedRevisionFrom = 'packet.source.revision';
+    }
     const synthesis = packet.synthesisPlan as Record<string, any> | undefined;
+    const applicationHandoff = packet.applications && { truncated: true, nextAction: {
+      endpointId: 'wiki.applications', arguments: { path: source.path, expectedRevision: source.revision, limit: 3, maxChars: 4000 },
+    } };
     const result = {
       mode: 'context_pack',
       purpose: guidanceText('guid-08aa656f0791236e', 'A live, bounded shelf for one question, project, MOC, or decision. It is derived from Markdown and must be re-read at the returned revisions before editing or relying on it.'),
@@ -12711,6 +12807,7 @@ export class LlmWikiService {
         rootRevision: source.revision,
         rootSummaryFresh: source.summaryFresh,
         rootSummaryStale: source.summaryStale,
+        ...(source.synthesisBasis && { synthesisBasis: source.synthesisBasis }),
         note: guidanceText('guid-ebfc9a4a447254f7', 'A revision is a freshness guard, not a truth score. Re-read a stale or changed entrypoint before acting.'),
       },
       gaps: Array.isArray(trail?.gaps) ? trail.gaps : [],
@@ -12724,7 +12821,15 @@ export class LlmWikiService {
     await this.assertCurrentContextSources(principal, [source, ...orderedEntries,
       ...supporting, ...counterpoints, ...(synthesis?.inputs || []),
       ...(trail?.decisions || []), ...(trail?.counterexamples || [])]);
+    for (const validate of validateReuse) await validate();
+    for (const item of [source, ...orderedEntries, ...supporting, ...counterpoints, ...(synthesis?.inputs || []), ...(trail?.decisions || []), ...(trail?.counterexamples || [])]) observedReusePaths.add(this.access.resolveExternalPath(item.path, principal));
+    if ([...observedReusePaths].some(p => !this.access.canAccessPhysicalPath(p, principal))) throw guidanceError(new Error('A context source changed or became unavailable; re-read the root note and retry.'), 'guid-5785b47b9b162c2e');
+    this.trimPacketClaims(packet, result, boundedChars);
     if (JSON.stringify(result).length <= boundedChars) return result;
+    const omittedCount = (trail?.claims?.length || 0) + (trail?.omittedClaims?.count || 0);
+    const omittedClaims = omittedCount ? { count: omittedCount, nextAction: {
+      endpointId: 'notes.read', arguments: { path: source.path, expectedRevision: source.revision, maxChars: 12000 },
+    } } : undefined;
     const compact = {
       mode: 'context_pack',
       purpose: result.purpose,
@@ -12740,7 +12845,8 @@ export class LlmWikiService {
         mode: 'bounded_answer_packet',
         intent: result.intent,
         source: result.root,
-        reasoningTrail: { gaps: result.gaps, note: trail?.note },
+        ...(applicationHandoff && { applications: applicationHandoff }),
+        reasoningTrail: { gaps: result.gaps, note: trail?.note, ...(omittedClaims && { omittedClaims }) },
       },
       truncated: true,
     };
@@ -12748,10 +12854,16 @@ export class LlmWikiService {
     const minimal = {
       mode: 'context_pack',
       root: { path: source.path, revision: source.revision },
+      ...(omittedClaims && { omittedClaims: {
+        count: omittedClaims.count, readBinding: { endpointId: 'notes.read', pathFrom: 'root.path', expectedRevisionFrom: 'root.revision' },
+      } }),
+      ...(source.synthesisBasis && { freshness: { synthesisBasis: { state: source.synthesisBasis.state } } }),
+      ...(applicationHandoff && { applications: applicationHandoff }),
       readOrder: [source.path],
       entrypoints: [{ path: source.path, revision: source.revision, role: 'root' }] as Array<Record<string, any>>,
       truncated: true,
     };
+    if (JSON.stringify(minimal).length > boundedChars) delete minimal.applications;
     for (const entry of result.entrypoints.slice(1)) {
       minimal.entrypoints.push({ path: entry.path, revision: entry.revision, role: entry.role });
       minimal.readOrder.push(entry.path);

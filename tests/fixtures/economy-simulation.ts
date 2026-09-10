@@ -1,5 +1,5 @@
-import { guidanceError, guidanceText } from './guidance-runtime.js';
-import { applyEconomyCommand, assertEconomyConservation, economyRevision, initialEconomy, type EconomyCommand, type EconomyPolicy, type EconomyState, type QuestTerms } from './economy-model.js';
+import { guidanceError, guidanceText } from '../../src/guidance-runtime.js';
+import { applyEconomyCommand, assertEconomyConservation, economyRevision, initialEconomy, type EconomyCommand, type EconomyPolicy, type EconomyState, type QuestTerms } from '../../src/economy-model.js';
 
 export interface EconomyPilotSimulationOptions { runs: number }
 export interface EconomyPilotSimulationReport {

@@ -441,7 +441,7 @@ write permission. Explicit owner-bound registrations exist only in host state,
 not in note Properties. Generated navigation does not supply evidence or count
 as an orphan repair. Manual Markdown and YAML outside the region are preserved.
 Use `wiki.moc_region` preview/register/regenerate/stop and the read-only
-`wiki.moc_region_status` (also operation=status) to inspect conflicts.
+`wiki.moc_region_status` to inspect conflicts.
 
 Host templates/fileClasses are generated from `wiki.property_contract` with
 `hostBundle: true`, using its canonical contract fingerprint. Form definitions

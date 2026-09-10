@@ -8,6 +8,15 @@ export function workshopDecisionContext(input) {
         throw guidanceError(new Error('Decision context and caveats exceed 4000 characters; shorten without dropping conditions'), 'guid-dc72116623556fdf');
     return context;
 }
+export function workshopTaskDescription(input, workshopPath) {
+    const description = [input.description, ...[
+            ['Alternatives', input.alternatives], ['Consequences', input.consequences], ['Minority views', input.minority],
+            ['Uncertainty', input.uncertainty], ['Revisit conditions', input.revisit],
+        ].flatMap(([heading, values]) => values.length ? [`## ${heading}`, ...values] : []), `Workshop: [[${workshopPath}]]`].join('\n\n');
+    if (Array.from(description).length > 4000)
+        throw guidanceError(new Error('Task description and caveats exceed 4000 characters; shorten without dropping conditions'), 'guid-7bf9a7bcbdc5c88a');
+    return description;
+}
 function object(value) {
     if (!value || typeof value !== 'object' || Array.isArray(value))
         throw guidanceError(new Error('Expected structured object'), 'guid-95bd017177342779');
@@ -120,6 +129,8 @@ export class WorkshopOutputService {
             ...(v.type === 'decision' ? { context: text(v.context, 'context', 2000), decision: text(v.decision, 'decision', 2000) } : { description: text(v.description, 'description', 3000) }) };
         if (input.type === 'decision')
             workshopDecisionContext(input);
+        else
+            workshopTaskDescription(input, path);
         const receipt = { workshopPath: path, outputId, payloadFingerprint: fingerprint({ input, projectId: d.projectId, scope: d.scope }), actor: actor.accountId };
         // This closure is trusted call context. Never persist it or reconstruct
         // authority from the public reservation or output receipt.

@@ -29,6 +29,7 @@ type Guard = {
     expectedRevision: string;
 };
 export declare function workshopDecisionContext(input: WorkshopOutputInput): string;
+export declare function workshopTaskDescription(input: WorkshopOutputInput, workshopPath: string): string;
 interface Delegation {
     projectId: string;
     accountId: string;

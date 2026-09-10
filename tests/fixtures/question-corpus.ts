@@ -1,3 +1,4 @@
+/** Deterministic retrieval evaluation data; not part of the runtime package. */
 export type CorpusLanguage = 'ko' | 'en' | 'mixed';
 
 export interface CorpusNote {

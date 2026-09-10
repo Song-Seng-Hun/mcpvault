@@ -63,8 +63,8 @@ describe('progressive agent instruction budgets', () => {
   });
 
   test('documents scheme-local authority shelves without making them a second source of truth', async () => {
-    const [readme, schema] = await Promise.all([rootFile('README.md'), rootFile('_wiki/SCHEMA.md')]);
-    for (const document of [readme, schema]) {
+    const schema = await rootFile('_wiki/SCHEMA.md');
+    for (const document of [schema]) {
       expect(document).toContain('authority_scheme');
       expect(document).toContain('authority_id');
       expect(document).toContain('aroundAuthorityId');
@@ -85,6 +85,17 @@ describe('progressive agent instruction budgets', () => {
       expect(document).toMatch(/(?:stale|redundant)\s+inspection/);
       expect(document).not.toContain('one extra inspect');
     }
-    expect(readme.match(/Authentication also caches the derived principal list/g)).toHaveLength(1);
+  });
+
+  test('README is an execution and architecture guide linking canonical contracts, not a duplicate API handbook', async () => {
+    const readme = await rootFile('README.md');
+    expect(readme.length).toBeLessThanOrEqual(16000);
+    for (const path of ['_wiki/SCHEMA.md', 'docs/enterprise-deployment.md', 'docs/creative-workspace.md', 'docs/quest-economy.md', 'docs/roleplay.md', 'docs/skill-evolution.md', 'docs/context-aware-collaboration.md']) {
+      expect(readme).toContain(path); expect((await rootFile(path)).length).toBeGreaterThan(0);
+    }
+    for (const id of ['orient_wiki', 'get_agent_pulse', 'list_active_capabilities', 'search_capabilities', 'call_endpoint', 'wiki.search', 'continuity.resume', 'work.review_context', 'wiki.exception_board']) expect(readme).toContain(id);
+    expect(readme).toContain('npm run build'); expect(readme).toContain('src/createServer.ts');
+    expect(readme).toContain('expectedRevision'); expect(readme).toContain('untrusted');
+    expect(readme).not.toContain('### `read_note`');
   });
 });

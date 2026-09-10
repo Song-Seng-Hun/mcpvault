@@ -5,6 +5,7 @@ import { boundSearchResults } from './search-limits.js';
 import { projectGuidance } from './guidance-runtime.js';
 import { STORY_OPERATIONS } from './story-tools.js';
 import { DOCUMENT_TOOL_ENDPOINTS } from './document-tools.js';
+import { createHash } from 'node:crypto';
 
 export interface EndpointDescriptor {
   endpointId: string;
@@ -29,6 +30,10 @@ export interface EndpointAvailabilityContext {
   skillEvolutionEnabled?: boolean;
   capabilities: Set<ScopeCapability>;
   authenticated: boolean;
+  principalKey?: string;
+  roleplayConfigured?: boolean;
+  roleplayWritesConfigured?: boolean;
+  economyConfigured?: boolean;
 }
 
 const CONTROL_TOOLS = new Set(['orient_wiki', 'get_agent_pulse', 'list_active_capabilities', 'search_capabilities', 'call_endpoint']);
@@ -411,6 +416,8 @@ const EXPLICIT_ROUTES: Record<string, { method: 'GET' | 'POST'; url: string }> =
 };
 
 const ENDPOINT_ALIASES: Record<string, string[]> = {
+  search_notes: ['search', 'search notes', 'knowledge search', '지식 검색', '검색'],
+  read_work_review_context: ['work review', 'task review', '작업 검토', '업무 검토'],
   get_wiki_bridge_candidates: ['research', 'bridge', 'analogy', 'cross-domain'],
   manage_community_participation: ['participation', 'community goals', 'pause', 'heartbeat'],
   record_community_participation: ['participation run', 'resume', 'skip', 'defer'],
@@ -429,7 +436,7 @@ const ENDPOINT_ALIASES: Record<string, string[]> = {
   get_reputation: ['reputation', 'level', 'xp', 'experience', 'likes', 'dislikes', 'author level', 'user level'],
   patch_note: ['edit', 'partial', 'harness', 'replace', 'hunk'],
   save_work_state: ['session', 'handoff', 'checkpoint', 'save', 'understanding', 'resume', 'private', '세션', '인계', '이어가기', '이해', '저장'],
-  resume_work_state: ['session', 'handoff', 'checkpoint', 'understanding', 'resume', 'private', '세션', '인계', '이어가기', '이해', '복원'],
+  resume_work_state: ['session', 'handoff', 'checkpoint', 'understanding', 'resume', 'resume work', '작업 재개', 'private', '세션', '인계', '이어가기', '이해', '복원'],
   patch_multiple_notes: ['edit', 'multiple notes', 'change set', 'transaction', 'atomic', 'rollback', 'reciprocal links', 'bulk properties'],
   sync_note_revisions: ['sync', 'delta', 'revision', 'cache', 'changed notes'],
   read_note_lines: ['read', 'partial', 'section', 'range', 'large note'],
@@ -456,7 +463,7 @@ const ENDPOINT_ALIASES: Record<string, string[]> = {
   resolve_wiki_term: ['wiki', 'resolve', 'canonical', 'preferred term', 'alias', 'redirect', 'vocabulary'],
   preview_wiki_merge: ['wiki', 'merge', 'consolidate', 'duplicate', 'compare', 'canonical', 'preview'],
   get_wiki_maintenance_debt: ['wiki', 'maintenance', '5s', 'cleanup', 'stale', 'inbox', 'review', 'moc', 'organization debt'],
-  get_wiki_exception_board: ['wiki', 'exception', 'board', '5s', 'maintenance', 'repair queue', 'health', 'organization', 'visual management'],
+  get_wiki_exception_board: ['wiki', 'exception', 'board', '5s', 'maintenance', '유지보수', 'repair queue', 'health', 'organization', 'visual management'],
   get_wiki_quality_check: ['wiki', 'quality', 'checklist', 'rubric', 'note quality', 'atomic', 'literature', 'project', 'moc'],
   capture_wiki_note: ['wiki', 'capture', 'inbox', 'fleeting', 'quick note', 'collect'],
   clarify_wiki_note: ['wiki', 'clarify', 'gtd', 'capture', 'inbox', 'disposition', 'reference', 'project', 'experiment', 'someday', 'delegate'],
@@ -573,43 +580,23 @@ function compactEndpoint(endpoint: EndpointDescriptor & { available: boolean; st
   };
 }
 
-const COMPACT_SCHEMA_KEYS = [
-  'type', 'enum', 'const', 'default', 'format', 'pattern',
-  'minimum', 'maximum', 'exclusiveMinimum', 'exclusiveMaximum', 'multipleOf',
-  'minLength', 'maxLength', 'minItems', 'maxItems', 'uniqueItems',
-] as const;
-
 /**
  * Preserve a callable JSON Schema when prose-heavy tool descriptions do not
  * fit the catalog budget. Field names, types, constraints, nested shape, and
  * required arguments survive; only explanatory prose is omitted.
  */
-function compactInputSchema(input: unknown, depth = 0): unknown {
+function compactInputSchema(input: unknown): unknown {
   if (!input || typeof input !== 'object' || Array.isArray(input)) return input;
-  if (depth > 8) return {};
-  const source = input as Record<string, unknown>;
-  const compact: Record<string, unknown> = {};
-  for (const key of COMPACT_SCHEMA_KEYS) {
-    if (source[key] !== undefined) compact[key] = source[key];
-  }
-  if (Array.isArray(source.required)) compact.required = source.required;
-  if (source.properties && typeof source.properties === 'object' && !Array.isArray(source.properties)) {
-    compact.properties = Object.fromEntries(Object.entries(source.properties as Record<string, unknown>)
-      .map(([name, schema]) => [name, compactInputSchema(schema, depth + 1)]));
-  }
-  if (source.items !== undefined) compact.items = compactInputSchema(source.items, depth + 1);
-  if (source.additionalProperties !== undefined) {
-    compact.additionalProperties = typeof source.additionalProperties === 'boolean'
-      ? source.additionalProperties
-      : compactInputSchema(source.additionalProperties, depth + 1);
-  }
-  for (const key of ['oneOf', 'anyOf', 'allOf'] as const) {
-    if (Array.isArray(source[key])) compact[key] = source[key].map(item => compactInputSchema(item, depth + 1));
-  }
-  for (const key of ['if', 'then', 'else', 'not'] as const) {
-    if (source[key] !== undefined) compact[key] = compactInputSchema(source[key], depth + 1);
-  }
-  return compact;
+  // Traverse schema positions only: a property named description and literal
+  // data inside const/enum/default must survive. Unknown validation keys stay.
+  return Object.fromEntries(Object.entries(input).filter(([key]) => !['description', 'title', 'examples', '$comment'].includes(key)).map(([key, value]) => {
+    if (['properties', 'patternProperties', '$defs', 'definitions', 'dependentSchemas'].includes(key) && value && typeof value === 'object') {
+      return [key, Object.fromEntries(Object.entries(value).map(([name, schema]) => [name, compactInputSchema(schema)]))];
+    }
+    if (['oneOf', 'anyOf', 'allOf', 'prefixItems', 'items'].includes(key) && Array.isArray(value)) return [key, value.map(compactInputSchema)];
+    if (['items', 'additionalItems', 'additionalProperties', 'unevaluatedProperties', 'unevaluatedItems', 'propertyNames', 'contains', 'if', 'then', 'else', 'not'].includes(key)) return [key, compactInputSchema(value)];
+    return [key, value];
+  }));
 }
 
 function compactEndpointSchema(endpoint: EndpointDescriptor & { available: boolean; state: 'ready' | 'locked' | 'disabled'; reason?: string }): Record<string, unknown> {
@@ -701,11 +688,10 @@ export class EndpointRegistry {
     return undefined;
   }
 
-  list(query: unknown, requestedLimit: unknown, requestedMaxChars: unknown, context: EndpointAvailabilityContext, activeOnly: boolean): { endpoints: Array<EndpointDescriptor & { available: boolean; state: 'ready' | 'locked' | 'disabled'; reason?: string }>; total: number; truncated: boolean } {
+  list(query: unknown, requestedLimit: unknown, requestedMaxChars: unknown, context: EndpointAvailabilityContext, activeOnly: boolean, page: { compact?: boolean; cursor?: unknown } = {}): { endpoints: Array<EndpointDescriptor & { available: boolean; state: 'ready' | 'locked' | 'disabled'; reason?: string }>; total: number; truncated: boolean; nextCursor?: string } {
     const text = typeof query === 'string' ? query.trim().toLowerCase() : '';
     const terms = endpointQueryTerms(text);
     const limit = catalogLimit(requestedLimit);
-    const maxChars = catalogMaxChars(requestedMaxChars);
     const descriptors = [...this.descriptors.values()];
     // An explicitly named endpoint is a schema lookup, even when the caller
     // adds intent words. Cross-references in another tool's prose must not
@@ -715,19 +701,25 @@ export class EndpointRegistry {
       : term.replace(/^[`"'(\[]+|[`"')\],;:.]+$/g, '')).filter(term => this.descriptors.has(term)));
     const normalizedQuery = normalizeEndpointAlias(text);
     const exactLegacyToolName = LEGACY_EXACT_TOOL_BY_QUERY.get(normalizedQuery);
+    const maxChars = catalogMaxChars(requestedMaxChars ?? (namedIds.size ? 20000 : undefined));
+    const score = (item: EndpointDescriptor) => endpointScore(item, terms) + ((item.aliases || []).some(alias => normalizeEndpointAlias(alias) === normalizedQuery) ? 200 : 0);
     const endpoints = (namedIds.size ? descriptors.filter(item => namedIds.has(item.endpointId)) : exactLegacyToolName ? descriptors.filter(item => item.toolName === exactLegacyToolName) : descriptors.filter(item => {
         if (terms.length === 0) return true;
         const corpus = `${item.endpointId} ${item.toolName} ${item.description} ${(item.aliases || []).join(' ')} ${item.url}`.toLowerCase();
         return terms.every(term => corpus.includes(term) || corpus.replace(/[_./-]+/g, ' ').includes(term));
       }))
-      .sort((left, right) => endpointScore(right, terms) - endpointScore(left, terms))
+      .sort((left, right) => score(right) - score(left) || left.endpointId.localeCompare(right.endpointId))
       .map(item => {
         const missing = item.requires.filter(required => !context.capabilities.has(required as ScopeCapability));
         const skillDisabled = context.skillEvolutionEnabled === false && item.endpointId.startsWith('skill.') && item.endpointId !== 'skill.resolve';
-        const disabled = context.readOnly && item.mutating || skillDisabled;
+        const roleplayMissing = context.roleplayConfigured === false && item.endpointId.startsWith('roleplay.');
+        const economyMissing = context.economyConfigured === false && /^(economy|quest)\./.test(item.endpointId);
+        const hostMissing = roleplayMissing || economyMissing;
+        const roleplaySetupMissing = context.roleplayWritesConfigured === false && item.endpointId.startsWith('roleplay.') && item.mutating;
+        const disabled = context.readOnly && item.mutating || skillDisabled || hostMissing || roleplaySetupMissing;
         const available = !disabled && (item.requires.length === 0 || context.authenticated && missing.length === 0 || item.endpointId === 'auth.register' || item.endpointId === 'auth.login');
         const state = disabled ? 'disabled' as const : available ? 'ready' as const : 'locked' as const;
-        const reason = skillDisabled ? 'skill evolution is disabled by the host' : disabled ? 'server is read-only' : !context.authenticated && item.requires.length > 0 && item.endpointId !== 'auth.register' && item.endpointId !== 'auth.login' ? 'authentication required' : missing.length > 0 ? `capability required: ${missing.join(', ')}` : undefined;
+        const reason = hostMissing ? 'host configuration is missing' : roleplaySetupMissing ? 'host administrator configuration is missing' : skillDisabled ? 'skill evolution is disabled by the host' : disabled ? 'server is read-only' : !context.authenticated && item.requires.length > 0 && item.endpointId !== 'auth.register' && item.endpointId !== 'auth.login' ? 'authentication required' : missing.length > 0 ? `capability required: ${missing.join(', ')}` : undefined;
         // One mixed-operation endpoint: discovery must not hide its public read
         // just because writes require authority. Dispatch still checks the exact
         // operation, independently of these advisory availability descriptions.
@@ -763,10 +755,13 @@ export class EndpointRegistry {
               ...(item.endpointId === 'work.group' && { join: write, leave: write, archive: write }) } };
         }
         if (['roleplay.world', 'roleplay.character', 'roleplay.scene', 'roleplay.evolution'].includes(item.endpointId)) {
-          const write = { available, state, requires: item.requires, ...(reason && { reason }) };
+          const setupMissing = context.roleplayWritesConfigured === false;
+          const write = { available: available && !setupMissing, state: setupMissing ? 'disabled' as const : state, requires: item.requires, ...(reason || setupMissing ? { reason: reason || 'host administrator configuration is missing' } : {}) };
           const ops = (item.input.properties as Record<string, { enum?: string[] }> | undefined)?.op?.enum ?? [];
-          return { ...item, requires: [], available: true, state: 'ready' as const,
-            operations: Object.fromEntries((ops as string[]).map(op => [op, ['read', 'list'].includes(op) ? { available: true, state: 'ready' as const, requires: [] } : op === 'preview' ? { available: context.authenticated && missing.length === 0, state: context.authenticated && missing.length === 0 ? 'ready' as const : 'locked' as const, requires: item.requires } : write])) };
+          const readAvailable = !roleplayMissing || item.endpointId === 'roleplay.world';
+          const read = { available: readAvailable, state: readAvailable ? 'ready' as const : 'disabled' as const, requires: [] as string[], ...(!readAvailable && { reason: guidanceText('guid-ea5d5a7887df5598', 'host configuration is missing') }) };
+          return { ...item, ...read,
+            operations: Object.fromEntries((ops as string[]).map(op => [op, ['read', 'list'].includes(op) ? read : op === 'preview' && !hostMissing ? { available: context.authenticated && missing.length === 0, state: context.authenticated && missing.length === 0 ? 'ready' as const : 'locked' as const, requires: item.requires } : write])) };
         }
         if (item.endpointId === 'community.participation') {
           const write = { available, state, requires: item.requires, ...(reason && { reason }) };
@@ -777,6 +772,39 @@ export class EndpointRegistry {
         return { ...item, available, state, ...(reason && { reason }) };
       })
       .filter(item => !activeOnly || item.available);
+    if (page.compact) {
+      const fingerprint = createHash('sha256').update(JSON.stringify({ descriptors, context: { ...context, capabilities: [...context.capabilities].sort() }, activeOnly, text })).digest('hex').slice(0, 32);
+      let offset = 0;
+      if (page.cursor !== undefined) {
+        try {
+          if (typeof page.cursor !== 'string' || page.cursor.length > 256) throw new Error();
+          const parsed = JSON.parse(Buffer.from(page.cursor, 'base64url').toString('utf8'));
+          if (parsed.f !== fingerprint || !Number.isInteger(parsed.o) || parsed.o < 0 || parsed.o >= endpoints.length) throw new Error();
+          offset = parsed.o;
+        } catch { throw guidanceError(new Error('Capability cursor is invalid or catalog, authority, or configuration changed; restart the list.'), 'guid-5ed8f32bc6c9612c'); }
+      }
+      const summaries = endpoints.slice(offset, offset + limit).map(item => ({ endpointId: item.endpointId, description: projectGuidance({ description: item.description }).description.slice(0, 120), available: item.available, state: item.state, ...(item.reason && { reason: item.reason }) }));
+      const bounded: typeof summaries = [];
+      const envelope = () => {
+        const next = offset + bounded.length;
+        return { endpoints: bounded as typeof endpoints, total: endpoints.length, truncated: next < endpoints.length,
+          ...(next < endpoints.length && { nextCursor: Buffer.from(JSON.stringify({ f: fingerprint, o: next })).toString('base64url') }) };
+      };
+      for (const summary of summaries) {
+        bounded.push(summary);
+        if (JSON.stringify(envelope()).length <= maxChars) continue;
+        if (bounded.length > 1) { bounded.pop(); break; }
+        // Preserve the first ID/state and continuation. Editable prose can
+        // expand during JSON escaping, so measure the complete envelope.
+        while (JSON.stringify(envelope()).length > maxChars && (summary.reason || summary.description)) {
+          if (summary.reason) summary.reason = summary.reason.slice(0, Math.floor(summary.reason.length / 2));
+          else summary.description = summary.description.slice(0, Math.floor(summary.description.length / 2));
+        }
+        if (JSON.stringify(envelope()).length > maxChars) throw guidanceError(new Error('Capability budget cannot preserve an endpoint and cursor; increase maxChars.'), 'guid-08e4f9d44d503ed5');
+        break;
+      }
+      return envelope();
+    }
     // Reserve a little room for the surrounding { endpoints, total,
     // truncated } envelope so the response-level compactor does not have to
     // discard an otherwise useful input schema.

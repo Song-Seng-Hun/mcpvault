@@ -87,13 +87,13 @@ export function getLlmWikiTools(): Tool[] {
       name: 'manage_wiki_moc_region',
       description: guidanceText('guid-c5b460d011023f59', 'Manage one opt-in server-generated MOC link region. Preview first and replay its revision/fingerprint to register or regenerate; stop requires current revision. Only the registering account controls it. Global/Community same-scope folders only; no manual prose/order/source rewrites. Status reports conflicts or revoked grants. Requires write capability; no document can self-register.'),
       inputSchema: { type: 'object', properties: {
-        path: { type: 'string' }, operation: { type: 'string', enum: ['preview', 'register', 'regenerate', 'stop', 'status'] }, pathPrefix: { type: 'string' },
+        path: { type: 'string' }, operation: { type: 'string', enum: ['preview', 'register', 'regenerate', 'stop', 'status'], description: guidanceText('guid-7fc049b3a213fa37', 'Use wiki.moc_region_status for reads. The status alias is transitional and will be removed after its verified migration deployment.') }, pathPrefix: { type: 'string' },
         expectedRevision: { type: 'string' }, expectedFingerprint: { type: 'string' }, maxChars: { type: 'integer', minimum: 1024, maximum: 20000, default: 12000 }, accessToken, prettyPrint,
       }, required: ['path', 'operation'] },
     },
     {
       name: 'read_wiki_moc_region_status',
-      description: guidanceText('guid-ae605faf249442dc', 'Read one visible public MOC registration status without write capability, including after a ban/revocation or on read-only servers. No mutation or implicit regeneration; compatible with wiki.moc_region operation=status.'),
+      description: guidanceText('guid-d19056c415d76f1d', 'Read one visible public MOC registration status without write capability, including after a ban/revocation or on read-only servers. No mutation or implicit regeneration. This is the canonical status read.'),
       inputSchema: { type: 'object', properties: { path: { type: 'string' }, maxChars: { type: 'integer', minimum: 1024, maximum: 4000, default: 2000 }, accessToken, prettyPrint }, required: ['path'] },
     },
     {

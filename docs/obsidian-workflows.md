@@ -87,7 +87,8 @@ Registrations live in host-only `.mcpvault/moc-regions.json`, not in note
 Properties. Adding similar Properties cannot authorize background writes.
 Only the registered account with a current write grant can manage the region;
 moderation suspensions and account deletion disable automatic writes.
-Use `status` for the exact target and `stop` with its current revision to
+Use `wiki.moc_region_status` for the exact target and `wiki.moc_region` with
+`operation: "stop"` and its current revision to
 disable it. After conflict, inspect the source and obtain a new preview before
 `regenerate`. No unattended overwrite of manual edits is performed.
 

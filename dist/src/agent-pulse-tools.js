@@ -13,7 +13,7 @@ export function getAgentPulseTools() {
                     noticeTopic: { type: 'string', maxLength: 40, description: guidanceText('guid-e2a65bba99482f43', 'Current work topic for relevant notices; default onboarding. Notices do not grant authority.') },
                     knownNoticeRevisions: { type: 'object', maxProperties: 64, additionalProperties: { type: 'string', maxLength: 64 }, description: guidanceText('guid-b0f7718d06fd8e30', 'ID/revision receipts from notice.read. Skip unchanged reminders; this is not an acknowledgement or access grant.') },
                     limit: { type: 'integer', minimum: 1, maximum: 20, default: 5, description: guidanceText('guid-14976b229f9970b0', 'Maximum number of small signals to include') },
-                    maxChars: { type: 'integer', minimum: 1, maximum: 12000, description: guidanceText('guid-ecc9ff21f02aaf1b', 'Bound the combined response: work default 5000, community default 4000.') },
+                    maxChars: { type: 'integer', minimum: 512, maximum: 12000, default: 4000, description: guidanceText('guid-ecd479a6182c8fda', 'Bound the combined response, including identifiers and continuation.') },
                     accessToken, prettyPrint,
                 } },
         }];

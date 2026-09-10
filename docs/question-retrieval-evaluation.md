@@ -7,7 +7,7 @@ by automated corpus tests.
 
 ## Corpus and measurement contract
 
-`src/question-corpus.ts` fixes 20 notes and 40 queries: 20 Korean-labeled,
+`tests/fixtures/question-corpus.ts` fixes 20 notes and 40 queries: 20 Korean-labeled,
 10 English, and 10 mixed. Labels describe the test group; an alias probe in the
 Korean group intentionally uses its English alias. Cases include ambiguity,
 negation/exclusions, conditions, late/multiple passages, missing knowledge,

@@ -1,6 +1,6 @@
 import { guidanceError } from './guidance-runtime.js';
 import { Server, type Tool } from "@modelcontextprotocol/server";
-import { workshopDecisionContext } from './workshop-output.js';
+import { workshopDecisionContext, workshopTaskDescription } from './workshop-output.js';
 import { FileSystemService, MAX_NOTE_CONTENT_BYTES } from "./filesystem.js";
 import { projectNoteOutline, projectNoteLineWindow } from './note-projections.js';
 import { packTaskPage } from './task-page.js';
@@ -81,7 +81,7 @@ import { COMMUNITY_FEATURE_MUTATING_TOOLS, getCommunityFeatureTools } from "./co
 import { ObsidianSearchService } from "./obsidian-search.js";
 import { getObsidianSearchTools } from "./obsidian-search-tools.js";
 import { AgentPulseService } from "./agent-pulse.js";
-import { AGENT_PULSE_DESCRIPTION, getAgentPulseTools } from "./agent-pulse-tools.js";
+import { getAgentPulseTools } from "./agent-pulse-tools.js";
 import { ContextService } from "./context.js";
 import { getContextTools } from "./context-tools.js";
 import { ContinuityService } from "./continuity.js";
@@ -405,20 +405,16 @@ const FIXED_MCP_TOOLS: Tool[] = [
     description: 'Start every session here. It returns exactly one primary action. Execute only that action, then stop tool use and answer the user unless their request explicitly requires more.',
     inputSchema: { type: 'object', properties: { accessToken: { type: 'string', description: 'Optional token from login or registration' }, maxChars: { type: 'integer', minimum: 512, maximum: 20000, default: 3000, description: 'Hard response budget; orientation stays compact even when a larger budget is allowed' }, prettyPrint: { type: 'boolean', default: false } } },
   },
-  {
-    name: 'get_agent_pulse',
-    description: AGENT_PULSE_DESCRIPTION,
-    inputSchema: { type: 'object', properties: { purpose: { type: 'string', enum: ['work', 'community'], default: 'work' }, hostBusy: { type: 'boolean', default: false }, accessToken: { type: 'string', description: 'Token from login_scope' }, limit: { type: 'integer', minimum: 1, maximum: 20, default: 5 }, maxChars: { type: 'integer', minimum: 512, maximum: 12000, default: 4000 }, prettyPrint: { type: 'boolean', default: false } } },
-  },
+  ...getAgentPulseTools(),
   {
     name: 'list_active_capabilities',
-    description: 'Optional permission/status check. List currently available endpoint capabilities and explain locked or disabled ones; it is not required before following orient_wiki.nextActions.',
-    inputSchema: { type: 'object', properties: { limit: { type: 'integer', minimum: 1, maximum: 100, default: 50 }, maxChars: { type: 'integer', minimum: 512, maximum: 20000, default: 12000 }, accessToken: { type: 'string' }, prettyPrint: { type: 'boolean', default: false } } },
+    description: 'Optional compact catalog with availability and nextCursor. Follow pages without changing session/configuration; use an exact ID search for its schema. Availability is permission/host readiness, not proof that task data is ready. Not required before following orientation.',
+    inputSchema: { type: 'object', properties: { cursor: { type: 'string', maxLength: 256 }, limit: { type: 'integer', minimum: 1, maximum: 100, default: 50 }, maxChars: { type: 'integer', minimum: 512, maximum: 20000, default: 12000 }, accessToken: { type: 'string' }, prettyPrint: { type: 'boolean', default: false } } },
   },
   {
     name: 'search_capabilities',
     description: 'Search the endpoint catalog by capability, endpoint id, action, or natural-language description. Use one focused query per intent (limit 3), select a result, then stop searching and call_endpoint with its exact endpointId.',
-    inputSchema: { type: 'object', properties: { query: { type: 'string', description: 'Capability or action to search for' }, limit: { type: 'integer', minimum: 1, maximum: 100, default: 20 }, maxChars: { type: 'integer', minimum: 512, maximum: 20000, default: 12000 }, accessToken: { type: 'string' }, prettyPrint: { type: 'boolean', default: false } } },
+    inputSchema: { type: 'object', properties: { query: { type: 'string', description: 'Capability or action to search for' }, limit: { type: 'integer', minimum: 1, maximum: 100, default: 20 }, maxChars: { type: 'integer', minimum: 512, maximum: 20000, default: 20000 }, accessToken: { type: 'string' }, prettyPrint: { type: 'boolean', default: false } } },
   },
   {
     name: 'call_endpoint',
@@ -644,7 +640,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
     create:async(input,guards,receipt,principal,projectId,assertAccess)=>{
       await assertAccess();
       if(input.type==='task') return work.createWorkshopTask({principal,projectId,taskId:input.path.split('/').at(-1)!.replace(/\.md$/,''),title:input.title,
-        description:guidanceText('guid-08aae50afcb5f8db', `${input.description}\n\nWorkshop: [[${receipt.workshopPath}]]`),completionCriteria:input.completionCriteria,
+        description:workshopTaskDescription(input,receipt.workshopPath),completionCriteria:input.completionCriteria,
         workKind:input.kind as 'general',references:[receipt.workshopPath,...input.evidencePaths],expectedRevision:'missing',requestId:`output-${receipt.payloadFingerprint}`},guards,receipt,assertAccess);
       const context=workshopDecisionContext(input);
       return llmWiki.publishDecisionRecord({principal,path:input.path,title:input.title,context,decision:input.decision!,alternatives:input.alternatives,consequences:input.consequences,
@@ -1371,6 +1367,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         throw guidanceError(new Error(`Direct MCP tool '${requestedToolName}' is not exposed. Use search_capabilities and call_endpoint.`), 'guid-e5b95513008be9fa');
       }
 
+      // Transition-only alias: remove after the canonical read passes NAS deployment.
       if (toolName === 'manage_wiki_moc_region' && rawArgs.operation === 'status') toolName = 'read_wiki_moc_region_status';
       toolName = skillReadAlias(toolName, rawArgs.op) || toolName;
       toolName = storyReadAlias(toolName, rawArgs.op) || toolName;
@@ -1518,10 +1515,11 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
             undefined,
             trimmedArgs.limit,
             trimmedArgs.maxChars,
-            { readOnly, skillEvolutionEnabled: skillEvolution.enabled, authenticated: Boolean(principal), capabilities: new Set(principal?.capabilities || []) },
+            { readOnly, skillEvolutionEnabled: skillEvolution.enabled, authenticated: Boolean(principal), capabilities: new Set(principal?.capabilities || []), principalKey: JSON.stringify(principal), roleplayConfigured: Boolean(options.roleplay), roleplayWritesConfigured: Boolean(options.roleplay?.options.policy.administrators.length), economyConfigured: Boolean(options.economy?.policy.enabled) },
             false,
+            { compact: true, cursor: trimmedArgs.cursor },
           );
-          return jsonResult({ ...result, note: guidanceText('guid-0c8552eb471dcc1f', 'Capability availability reflects this session; data state such as unread mentions is returned by the endpoint itself.') }, trimmedArgs.prettyPrint);
+          return jsonResult(result, false);
         }
 
         case 'memory_recall':
@@ -1537,7 +1535,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
             trimmedArgs.query,
             trimmedArgs.limit,
             trimmedArgs.maxChars,
-            { readOnly, skillEvolutionEnabled: skillEvolution.enabled, authenticated: Boolean(principal), capabilities: new Set(principal?.capabilities || []) },
+            { readOnly, skillEvolutionEnabled: skillEvolution.enabled, authenticated: Boolean(principal), capabilities: new Set(principal?.capabilities || []), roleplayConfigured: Boolean(options.roleplay), roleplayWritesConfigured: Boolean(options.roleplay?.options.policy.administrators.length), economyConfigured: Boolean(options.economy?.policy.enabled) },
             false,
           );
           return jsonResult(result, trimmedArgs.prettyPrint);
@@ -3336,7 +3334,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
       }
       });
       const responseContract = endpointRegistry.resolve(toolName === 'read_work_group' ? 'work.group' : toolName === 'read_work_project' ? 'work.project' : toolName === 'read_community_participation' ? 'community.participation' : endpointIdForTool(toolName))?.input;
-      const responseBudget = trimmedArgs.maxChars ?? (toolName === 'get_wiki_answer_packet' && trimmedArgs.query === undefined ? 7000 : undefined);
+      const responseBudget = trimmedArgs.maxChars ?? (toolName === 'search_capabilities' ? 20000 : toolName === 'get_wiki_answer_packet' && trimmedArgs.query === undefined ? 7000 : undefined);
       return enforceResponseBudget(toolResponse, normalizedResponseBudget(responseBudget, responseContract));
     } catch (error) {
       await audit.record({ tool: toolName, ...(principal && { principal }), args: rawArgs, outcome: 'error', error });
@@ -3724,6 +3722,7 @@ function boundedWikiProjectionResult(value: Record<string, any>, args: Record<st
     // not optional display metadata. Preserve false as well as true.
     ...(typeof value.summaryFresh === 'boolean' && { summaryFresh: value.summaryFresh }),
     ...(typeof value.summaryStale === 'boolean' && { summaryStale: value.summaryStale }),
+    ...(value.synthesisBasis && { synthesisBasis: { state: value.synthesisBasis.state } }),
     ...(value.bodyComplete === false && { bodyComplete: false }),
     ...(dateIssues.length > 0 && { dateIssues }),
     content: '', truncated: true,

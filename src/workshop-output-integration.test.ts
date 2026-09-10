@@ -89,10 +89,15 @@ it.each(scenarios)('normal output services enforce $type persistence and recover
   expect((await update('execute_output',decision,'decision-retry')).path).toBe(first.path);
   const written=await call('read_note',{path:first.path,maxChars:5000});
   expect(written.fm.decision_status).toBe('accepted');expect(written.content).toContain('Latency concern');
-  const task=await execute({outputId:'measure',type:'task',kind:'general',title:'Measure load',description:'Measure response latency within approved local scope.',completionCriteria:['Record timing and limitations'],evidencePaths:[source.path]},'task');
+  const caveats = { alternatives: ['ALTERNATIVE: Keep manual measurement'], consequences: ['CONSEQUENCE: Extra measurement time'], minority: ['MINORITY: Tail latency matters'], uncertainty: ['UNCERTAINTY: Load is unknown'], revisit: ['REVISIT: After representative load'] };
+  const task=await execute({outputId:'measure',type:'task',kind:'general',title:'Measure load',description:'Measure response latency within approved local scope.',completionCriteria:['Record timing and limitations'],evidencePaths:[source.path],...caveats},'task');
   if(!task)return;
   state={...state,revision:task.workshopRevision};
-  expect((await call('read_note',{path:task.path,maxChars:4000})).fm.project_id).toBe('project');
+  const taskNote = await call('read_note',{path:task.path,maxChars:4000});
+  expect(taskNote.fm.project_id).toBe('project');
+  for (const [value] of Object.values(caveats)) expect(taskNote.fm.description).toContain(value);
+  const packet = await call('read_work_packet', { taskId: task.path.split('/').at(-1)!.replace(/\.md$/, ''), maxChars: 12000, limit: 100 });
+  for (const [value] of Object.values(caveats)) expect(JSON.stringify(packet)).toContain(value);
   state=await update('close',{reason:'Decision and proposed follow-up recorded'},'close');
   expect((await call('read_workshop',{workshopId:'meeting'})).workshop.phase).toBe('closed');
  }finally{await client.close();await server.close();await rm(vault,{recursive:true,force:true});}

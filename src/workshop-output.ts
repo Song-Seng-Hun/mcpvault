@@ -18,6 +18,14 @@ export function workshopDecisionContext(input:WorkshopOutputInput):string {
   if(Array.from(context).length>4000)throw guidanceError(new Error('Decision context and caveats exceed 4000 characters; shorten without dropping conditions'), 'guid-dc72116623556fdf');
   return context;
 }
+export function workshopTaskDescription(input:WorkshopOutputInput,workshopPath:string):string {
+  const description=[input.description,...([
+    ['Alternatives',input.alternatives],['Consequences',input.consequences],['Minority views',input.minority],
+    ['Uncertainty',input.uncertainty],['Revisit conditions',input.revisit],
+  ] as const).flatMap(([heading,values])=>values.length?[`## ${heading}`,...values]:[]),`Workshop: [[${workshopPath}]]`].join('\n\n');
+  if(Array.from(description).length>4000)throw guidanceError(new Error('Task description and caveats exceed 4000 characters; shorten without dropping conditions'), 'guid-7bf9a7bcbdc5c88a');
+  return description;
+}
 interface Delegation { projectId:string; accountId:string; grantor:string; decisionKinds:string[]; taskKinds:string[]; scope:string; reason:string; revoked:boolean }
 export interface WorkshopOutputAdapter {
   authorizeProject(principal:ScopePrincipal,projectId:string,owner:boolean,delegate?:string,grantor?:string):Promise<Guard>;
@@ -103,6 +111,7 @@ export class WorkshopOutputService {
       evidencePaths:list(v.evidencePaths,'evidencePaths'),completionCriteria:list(v.completionCriteria,'completionCriteria',v.type==='task'),
       ...(v.type==='decision'?{context:text(v.context,'context',2000),decision:text(v.decision,'decision',2000)}:{description:text(v.description,'description',3000)})};
     if(input.type==='decision')workshopDecisionContext(input);
+    else workshopTaskDescription(input,path);
     const receipt:WorkshopOutputReceipt={workshopPath:path,outputId,payloadFingerprint:fingerprint({input,projectId:d.projectId,scope:d.scope}),actor:actor.accountId};
     // This closure is trusted call context. Never persist it or reconstruct
     // authority from the public reservation or output receipt.

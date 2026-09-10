@@ -40,7 +40,7 @@ test('REST adapter uses the same dynamic endpoint registry and dispatcher', asyn
   const capabilities = await fetch(`http://127.0.0.1:${api.port}/api/capabilities?limit=100&maxChars=20000`);
   expect(capabilities.status).toBe(200);
   const catalog = await capabilities.json() as any;
-  expect(catalog.endpoints.some((endpoint: any) => endpoint.endpointId === 'notes.write')).toBe(true);
+  expect(catalog.endpoints.length).toBeGreaterThan(0);
   const etag = capabilities.headers.get('etag');
   expect(etag).toBeTruthy();
   expect(capabilities.headers.get('cache-control')).toContain('private');
@@ -49,6 +49,20 @@ test('REST adapter uses the same dynamic endpoint registry and dispatcher', asyn
   });
   expect(unchanged.status).toBe(304);
   expect(await unchanged.text()).toBe('');
+  const discovered = new Set(catalog.endpoints.map((endpoint: any) => endpoint.endpointId));
+  let nextCursor = catalog.nextCursor;
+  while (nextCursor) {
+    const response = await fetch(`http://127.0.0.1:${api.port}/api/capabilities?limit=100&maxChars=20000&cursor=${encodeURIComponent(nextCursor)}`);
+    expect(response.status).toBe(200);
+    const page = await response.json() as any;
+    for (const endpoint of page.endpoints) {
+      expect(discovered.has(endpoint.endpointId)).toBe(false);
+      discovered.add(endpoint.endpointId);
+    }
+    nextCursor = page.nextCursor;
+  }
+  expect(discovered.size).toBe(catalog.total);
+  expect(discovered.has('notes.write')).toBe(true);
   // The full catalog is itself bounded, so newly added endpoints may be past
   // the response budget. Probe the generic executor to verify both are
   // registered without asking it to perform a real read.

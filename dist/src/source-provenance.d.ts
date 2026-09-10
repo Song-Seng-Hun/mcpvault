@@ -11,12 +11,13 @@ export declare class SourceProvenanceSession {
     private readonly access;
     private readonly container;
     private readonly principal?;
+    private readonly observedPaths?;
     private readonly notes;
     private readonly attempted;
     private readonly observed;
     private bytes;
     private limited;
-    constructor(fs: FileSystemService, access: ScopeAccessPolicy, container: string, principal?: ScopePrincipal | undefined);
+    constructor(fs: FileSystemService, access: ScopeAccessPolicy, container: string, principal?: ScopePrincipal | undefined, observedPaths?: Set<string> | undefined);
     private physical;
     private allowed;
     observe(path: string, revision: string): void;

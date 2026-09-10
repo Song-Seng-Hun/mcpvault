@@ -25,7 +25,8 @@ export class SourceProvenanceSession {
   private bytes = 0;
   private limited = false;
   constructor(private readonly fs: FileSystemService, private readonly access: ScopeAccessPolicy,
-    private readonly container: string, private readonly principal?: ScopePrincipal) {}
+    private readonly container: string, private readonly principal?: ScopePrincipal,
+    private readonly observedPaths?: Set<string>) {}
 
   private physical(input: string): string {
     if (typeof input !== 'string' || !input.trim() || input.length > 1024) throw Error(UNAVAILABLE);
@@ -45,6 +46,8 @@ export class SourceProvenanceSession {
     const key = path.toLowerCase(), previous = this.observed.get(key);
     if (!this.allowed(path) || (previous && previous.revision !== revision)) throw Error(UNAVAILABLE);
     this.observed.set(key, { path, revision });
+    // Include ancestry even when its identity is omitted from a bounded trace.
+    this.observedPaths?.add(path);
   }
   async load(input: string): Promise<ReadNoteResult | undefined> {
     let path: string;

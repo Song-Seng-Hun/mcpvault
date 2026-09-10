@@ -170,6 +170,7 @@ export async function startRestApi(server, options = {}) {
                     ...(bearer && { accessToken: bearer }),
                     limit: requestUrl.searchParams.get('limit') || undefined,
                     maxChars: requestUrl.searchParams.get('maxChars') || undefined,
+                    cursor: requestUrl.searchParams.get('cursor') ?? undefined,
                 });
                 sendJson(request, response, result.isError ? 400 : 200, resultValue(result), !result.isError);
                 return;

@@ -141,7 +141,9 @@ export class IndependentResearchService {
       const actor = await this.actor(p), w = await this.workshop(p, actor);
       const operation = p.operation;
       if (!operation || !['create', 'submit', 'disclose', 'review', 'close'].includes(operation)) throw guidanceError(new Error('Research operation is invalid'), 'guid-ecb9856cd12cbd91');
-      if (w.note.frontmatter.status === 'closed') throw guidanceError(new Error('Research workshop is closed'), 'guid-bde1a8c5b5212e89');
+      const unresolvedCleanup = operation === 'close' && p.closure && typeof p.closure === 'object'
+        && !Array.isArray(p.closure) && (p.closure as Record<string, unknown>).outcome === 'unresolved';
+      if ((w.note.frontmatter.status === 'closed' || w.note.frontmatter.phase === 'closed') && !unresolvedCleanup) throw guidanceError(new Error('Research workshop is closed'), 'guid-bde1a8c5b5212e89');
       const requestId = textField(p.requestId, 'requestId', 128, true);
       const key = researchFingerprint({ accountId: actor.accountId, requestId });
       const payload = researchFingerprint({ operation, config: p.config ?? null, submission: p.submission ?? null, review: p.review ?? null, closure: p.closure ?? null });

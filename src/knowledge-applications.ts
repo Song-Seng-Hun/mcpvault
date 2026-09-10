@@ -96,7 +96,7 @@ export class KnowledgeApplicationService {
     return { records, guards: [...guards.values()] };
   }
 
-  async read(params: ApplicationReadParams): Promise<Record<string, any>> {
+  async read(params: ApplicationReadParams, validateLater?: Array<() => Promise<void>>, observedPaths?: Set<string>): Promise<Record<string, any>> {
     const maxChars = params.maxChars ?? 4000, limit = params.limit ?? 20;
     if (!Number.isSafeInteger(maxChars) || maxChars < 2000 || maxChars > 12000) throw guidanceError(Error('maxChars must be 2000–12000'), 'guid-625815e9774e58c7');
     if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) throw guidanceError(Error('limit must be 1–100'), 'guid-6afb07ef59b85a17');
@@ -109,7 +109,7 @@ export class KnowledgeApplicationService {
       if (observed.has(p)) return observed.get(p);
       if (observed.size >= 80) throw guidanceError(Error('Application metadata budget reached; narrow the page'), 'guid-d674f310861e46cf');
       const current = await this.metadata(p, principal);
-      if (current) observed.set(p, current);
+      if (current) { observed.set(p, current); observedPaths?.add(p); }
       return current;
     };
     const knowledge = await meta(path);
@@ -176,6 +176,7 @@ export class KnowledgeApplicationService {
           if (!items.length) {
             if (maxChars === 12000) throw guidanceError(Error('Application locator cannot fit; read the observation directly with a bounded notes.read'), 'guid-3760752141a1ed8b');
             await validateObserved();
+            validateLater?.push(validateObserved);
             const retry = { status: 'budget_too_small', warning, truncated: true, nextAction: { endpointId: 'wiki.applications', arguments: { path: publicPath(path), expectedRevision: knowledge.revision, cursor: next, limit, maxChars: 12000 } } };
             return JSON.stringify(retry).length <= maxChars ? retry : { status: 'budget_too_small', warning, truncated: true, retryArguments: { maxChars: 12000 }, instruction: guidanceText('guid-f129d0d8b5eb05ae', 'Repeat the same query with retryArguments merged; no records were delivered.') };
           }
@@ -189,6 +190,9 @@ export class KnowledgeApplicationService {
     if (!stopped && !page.truncated) next = undefined;
     // No multi-file atomic snapshot is claimed. Discard results on observed drift.
     await validateObserved();
+    // Enclosing Answer/Context packets must recheck these same observations
+    // after their remaining reads; keep private metadata out of the response.
+    validateLater?.push(validateObserved);
     const result = envelope();
     if (JSON.stringify(result).length > maxChars) throw guidanceError(Error('Application response budget too small for exact continuation'), 'guid-92518d07e18b3eb9');
     return result;

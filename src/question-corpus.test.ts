@@ -17,7 +17,7 @@ import {
   meanReciprocalRank,
   recallAt5,
   type CorpusQuestion,
-} from './question-corpus.js';
+} from '../tests/fixtures/question-corpus.js';
 
 let vault = '';
 let search: SearchService | undefined;

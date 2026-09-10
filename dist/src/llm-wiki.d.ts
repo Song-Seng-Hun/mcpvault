@@ -2143,7 +2143,7 @@ export declare class LlmWikiService {
         contextBefore?: number;
         contextAfter?: number;
         maxChars?: number;
-    }): Promise<{
+    }, validateLater?: Array<() => Promise<void>>, observedPaths?: Set<string>): Promise<{
         dateIssues?: string[];
         dateRepairAction?: {
             endpointId: string;
@@ -2222,6 +2222,26 @@ export declare class LlmWikiService {
         summaryLayer?: any;
         summaryHighlights?: any[];
         claims?: any[];
+        synthesisBasis?: {
+            state: string;
+            changedInputIds?: never;
+            historicalInputIds?: never;
+            notice?: never;
+        } | {
+            state: string;
+            changedInputIds: string[];
+            historicalInputIds: string[];
+            notice: string;
+        };
+        applicationRead?: {
+            endpointId: string;
+            arguments: {
+                path: string;
+                expectedRevision: string;
+                limit: number;
+                maxChars: number;
+            };
+        };
         nextActions?: any[];
         nextAction?: string | {
             endpointId: string;
@@ -3330,7 +3350,10 @@ export declare class LlmWikiService {
         note: "Increase maxChars to receive the bounded claim argument map.";
     }>;
     private assertCurrentContextSources;
-    answerPacket(principal: ScopePrincipal | undefined, path: string, maxChars?: number, includeSemantic?: boolean, intent?: AnswerPacketIntent): Promise<Record<string, any>>;
+    /** Keep complete authored claims within the enclosing packet budget before
+     * dropping opposing context. Omitted objects remain recoverable at the root revision. */
+    private trimPacketClaims;
+    answerPacket(principal: ScopePrincipal | undefined, path: string, maxChars?: number, includeSemantic?: boolean, intent?: AnswerPacketIntent, validateReuse?: Array<() => Promise<void>>, observedReusePaths?: Set<string>): Promise<Record<string, any>>;
     /**
      * Turn an authored MOC outline into a bounded, dependency-aware reading
      * path. The Markdown order remains authoritative; the topological order is
@@ -3568,16 +3591,7 @@ export declare class LlmWikiService {
      * second index.  The selected note remains the entry point; the existing
      * answer packet supplies the bounded supporting and counterpoint context.
      */
-    contextPack(principal: ScopePrincipal | undefined, path: string, maxChars?: number, includeSemantic?: boolean, intent?: AnswerPacketIntent): Promise<{
-        mode: string;
-        root: {
-            path: any;
-            revision: any;
-        };
-        readOrder: any[];
-        entrypoints: Array<Record<string, any>>;
-        truncated: boolean;
-    }>;
+    contextPack(principal: ScopePrincipal | undefined, path: string, maxChars?: number, includeSemantic?: boolean, intent?: AnswerPacketIntent): Promise<any>;
     /**
      * Present existing organization, graph, and quarantine findings as one
      * bounded visual-management board.  It is intentionally a projection:

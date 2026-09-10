@@ -112,7 +112,7 @@ export class KnowledgeApplicationService {
             throw Error(UNAVAILABLE);
         return { records, guards: [...guards.values()] };
     }
-    async read(params) {
+    async read(params, validateLater, observedPaths) {
         const maxChars = params.maxChars ?? 4000, limit = params.limit ?? 20;
         if (!Number.isSafeInteger(maxChars) || maxChars < 2000 || maxChars > 12000)
             throw guidanceError(Error('maxChars must be 2000–12000'), 'guid-625815e9774e58c7');
@@ -131,8 +131,10 @@ export class KnowledgeApplicationService {
             if (observed.size >= 80)
                 throw guidanceError(Error('Application metadata budget reached; narrow the page'), 'guid-d674f310861e46cf');
             const current = await this.metadata(p, principal);
-            if (current)
+            if (current) {
                 observed.set(p, current);
+                observedPaths?.add(p);
+            }
             return current;
         };
         const knowledge = await meta(path);
@@ -238,6 +240,7 @@ export class KnowledgeApplicationService {
                         if (maxChars === 12000)
                             throw guidanceError(Error('Application locator cannot fit; read the observation directly with a bounded notes.read'), 'guid-3760752141a1ed8b');
                         await validateObserved();
+                        validateLater?.push(validateObserved);
                         const retry = { status: 'budget_too_small', warning, truncated: true, nextAction: { endpointId: 'wiki.applications', arguments: { path: publicPath(path), expectedRevision: knowledge.revision, cursor: next, limit, maxChars: 12000 } } };
                         return JSON.stringify(retry).length <= maxChars ? retry : { status: 'budget_too_small', warning, truncated: true, retryArguments: { maxChars: 12000 }, instruction: guidanceText('guid-f129d0d8b5eb05ae', 'Repeat the same query with retryArguments merged; no records were delivered.') };
                     }
@@ -254,6 +257,9 @@ export class KnowledgeApplicationService {
             next = undefined;
         // No multi-file atomic snapshot is claimed. Discard results on observed drift.
         await validateObserved();
+        // Enclosing Answer/Context packets must recheck these same observations
+        // after their remaining reads; keep private metadata out of the response.
+        validateLater?.push(validateObserved);
         const result = envelope();
         if (JSON.stringify(result).length > maxChars)
             throw guidanceError(Error('Application response budget too small for exact continuation'), 'guid-92518d07e18b3eb9');

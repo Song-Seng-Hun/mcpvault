@@ -32,7 +32,7 @@ export async function inspectSynthesisBasis(value: unknown, container: string,
       const current = await read(path);
       if (current.frontmatter.llm_wiki_type !== 'knowledge') return { state: 'inputs_unavailable' };
       if (current.revision !== input.revision) changedInputIds.push(input.id);
-      if (historicalInput(current.frontmatter)) historicalInputIds.push(input.id);
+      if (input.role === 'historical_context' || historicalInput(current.frontmatter)) historicalInputIds.push(input.id);
     } catch { return { state: 'inputs_unavailable' }; }
   }
   return { state: changedInputIds.length ? 'inputs_changed' : historicalInputIds.length ? 'review_required' : 'current_revisions',

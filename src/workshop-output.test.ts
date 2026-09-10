@@ -44,6 +44,12 @@ it('rejects an oversized assembled decision before persisting a reservation',asy
  await expect(f.service.execute(f.workshopPath,n,f.peer,{...f.output,context:'x'.repeat(2000),minority:Array.from({length:5},(_,i)=>`${i}${'y'.repeat(449)}`)},async()=>{})).rejects.toThrow(/context|4000/);
  expect((await f.fs.readNote(f.workshopPath)).revision).toBe(n.revision);
 });
+it('rejects an oversized assembled task before persisting a reservation instead of dropping caveats',async()=>{
+ const f=await fixture();await f.service.delegate(f.workshopPath,await f.fs.readNote(f.workshopPath),f.owner,f.delegation,async()=>{});
+ const n=await f.fs.readNote(f.workshopPath);
+ await expect(f.service.execute(f.workshopPath,n,f.peer,{...f.output,type:'task',kind:'general',description:'x'.repeat(3000),completionCriteria:['Measure'],minority:Array.from({length:4},(_,i)=>`${i}${'y'.repeat(449)}`)},async()=>{})).rejects.toThrow(/description|4000/);
+ expect((await f.fs.readNote(f.workshopPath)).revision).toBe(n.revision);
+});
 it.each([false,true])('cancels a reservation only with current facilitator authority and proven absence (created=%s)',async(created)=>{
  const f=await fixture();await f.service.delegate(f.workshopPath,await f.fs.readNote(f.workshopPath),f.owner,f.delegation,async()=>{});
  if(created)f.crash();else f.beforeCreate(async()=>{throw new Error('invalid adapter preparation');});

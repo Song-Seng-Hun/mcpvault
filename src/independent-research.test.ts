@@ -139,6 +139,47 @@ async function createRound(roundId = 'first') {
 const read = (who = 'owner', more: Record<string, unknown> = {}) => call('workshop.research', { workshopId: 'research', roundId: 'first', ...more }, who);
 const update = (operation: string, revision: string, who = 'owner', more: Record<string, unknown> = {}) => call('workshop.research_update', { workshopId: 'research', roundId: 'first', operation, expectedRevision: revision, requestId: `${operation}-${who}`, ...more }, who);
 
+test('a closed Workshop permits only its facilitator to close existing research unresolved without disclosure', async () => {
+  let current = await createRound();
+  current = await update('submit', current.revision, 'owner', { submission: submission('CLOSED-PARENT-PRIVATE') });
+  const workshop = await call('workshop.read', { workshopId: 'research' });
+  const parent = await call('workshop.phase', { workshopId: 'research', phase: 'closed', reason: 'No further workshop work', expectedRevision: workshop.workshop.revision });
+  const closure = { outcome: 'unresolved', explanation: 'Parent closed; preserve private independent work.' };
+  await expect(update('submit', current.revision, 'peer', { submission: submission('NEW') })).rejects.toThrow(/closed/i);
+  await expect(update('disclose', current.revision)).rejects.toThrow(/closed/i);
+  await expect(update('close', current.revision, 'owner', { closure: { ...closure, outcome: 'synthesis' } })).rejects.toThrow(/closed/i);
+  await expect(createRound('later')).rejects.toThrow(/closed/i);
+  await expect(update('close', current.revision, 'peer', { closure })).rejects.toThrow(/facilitator/i);
+  const attempts = await Promise.allSettled(['first-close', 'second-close'].map(requestId =>
+    update('close', current.revision, 'owner', { closure, requestId })));
+  expect(attempts.filter(a => a.status === 'fulfilled')).toHaveLength(1);
+  const winner = attempts[0]!.status === 'fulfilled' ? 'first-close' : 'second-close';
+  const retry = await update('close', current.revision, 'owner', { closure, requestId: winner });
+  expect(retry.replay).toBe(true); expect(retry.phase).toBe('closed');
+  const peer = await read('peer');
+  expect(peer.phase).toBe('closed'); expect(JSON.stringify(peer)).not.toContain('CLOSED-PARENT-PRIVATE');
+  expect((await call('workshop.read', { workshopId: 'research' })).workshop.revision).toBe(parent.revision);
+});
+
+test('late parent drift rejects unresolved cleanup without changing the research record', async () => {
+  const current = await createRound();
+  const workshop = await call('workshop.read', { workshopId: 'research' });
+  await call('workshop.phase', { workshopId: 'research', phase: 'closed', reason: 'Closed', expectedRevision: workshop.workshop.revision });
+  const fs = new FileSystemService(vault), original = FileSystemService.prototype.writeNoteWithRevisionGuardsAndReceipt;
+  let changed = false;
+  vi.spyOn(FileSystemService.prototype, 'writeNoteWithRevisionGuardsAndReceipt').mockImplementation(async function(params, guards, policy) {
+    if (params.path.startsWith('_whispers/research/') && !changed) {
+      changed = true;
+      const parent = await fs.readNote('Community/Workshops/research.md');
+      await fs.writeNote({ path: 'Community/Workshops/research.md', content: parent.content + '\nExternal revision', frontmatter: parent.frontmatter, expectedRevision: parent.revision });
+    }
+    return original.call(this, params, guards, policy);
+  });
+  await expect(update('close', current.revision, 'owner', { closure: { outcome: 'unresolved', explanation: 'Close remaining work' } })).rejects.toThrow(/unavailable|changed|revision/i);
+  expect(changed).toBe(true);
+  expect((await fs.readNote('_whispers/research/research/first.md')).revision).toBe(current.revision);
+});
+
 test('independent submissions are private to their authors until an authorized explicit disclosure', async () => {
   const created = await createRound();
   const first = await update('submit', created.revision, 'owner', { submission: submission('HIDDEN-ALTERNATIVE-ALPHA') });

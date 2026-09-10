@@ -4,6 +4,12 @@ The enterprise launcher exposes one MCP Streamable HTTP endpoint over mutual
 TLS. It does not connect the long-lived server to stdio and does not start a
 REST API.
 
+The normal `server.ts` launcher accepts Roleplay, economy and Skill-evolution
+host configuration. This Enterprise CLI does not load those options: shared
+control-plane schemas do not imply that an optional host is provisioned.
+Unconfigured execution is disabled in discovery; status reads remain available
+where implemented. Registry/mTLS/scopes are independent of feature readiness.
+
 Initialize the enterprise registry and register client runtimes first, following
 [enterprise-admin.md](enterprise-admin.md). The --realm value at startup must
 equal the immutable realm stored in that registry.
@@ -131,6 +137,9 @@ service.
 
 ## Public Hub process
 
+For the separate Global knowledge hub, see [Global Sync operation](#global-sync-operation).
+It is not the public conversation Hub described below.
+
 Start `mcpvault-public-hub ABSOLUTE_PRIVATE_CONFIG_PATH`. Its private JSON
 configuration includes `root`, `signingKeyPath`, `keyPath`, `certPath`, `host`,
 `port`, and `credentials` (token keys mapped to `{origin, agentId, role}`).
@@ -147,3 +156,61 @@ Corrupt replica state and linked storage paths fail closed. No automatic timer
 or background process is created by this configuration; clients use the explicit
 federation retry/pull endpoints. Ordinary comments use persistent public post IDs
 and revision-checked edits.
+
+## Global Sync operation
+
+The optional Global Sync hub stores immutable content-addressed objects and a
+signed, append-only event log; its state snapshot is rebuildable. It is not a
+Vault file-copy service or a public conversation federation. The local wiki
+remains usable while it is offline. Keep hub storage outside all Vaults.
+
+After building this fork, run `node dist/global-sync-server.js <hub-storage-root>`.
+Supply proposer `MCPVAULT_GLOBAL_SYNC_AUTH_TOKEN`, reviewer
+`MCPVAULT_GLOBAL_SYNC_REVIEWER_TOKEN`, and at least one distinct extra reviewer
+in the host-private `MCPVAULT_GLOBAL_SYNC_REVIEWER_TOKENS` JSON map. The built-in
+reviewer ID is `reviewer`. Every proposal, including upsert, needs two distinct
+reviewer approvals; no physical delete operation exists. A reused idempotency
+key must describe the same proposal. Do not send reviewer credentials to agents.
+
+Pin the hub's public Ed25519 key in each replica. Protect its private signing
+key (`MCPVAULT_GLOBAL_SYNC_SIGNING_KEY_PATH`, otherwise `signing-key.pem`) with
+owner-only ACLs. Key rotation requires an explicit migration: existing signed
+history must remain verifiable. Startup rebuilds from and verifies the sequenced,
+hash-chained signed event log; missing/corrupt history fails closed.
+
+The process uses an exclusive `hub.lock` (override
+`MCPVAULT_GLOBAL_SYNC_LOCK_PATH`); malformed locks require operator inspection.
+Only validated stale locks can be recovered. Initialization has a separate
+credential lock (`MCPVAULT_GLOBAL_SYNC_CREDENTIAL_LOCK_PATH`).
+
+Optional `MCPVAULT_GLOBAL_SYNC_ADMIN_TOKEN` enables credential rotation and
+revocation. Credential state (`MCPVAULT_GLOBAL_SYNC_CREDENTIAL_STATE_PATH`,
+otherwise `credentials.json`) persists token digests and expiry, not plaintext;
+metadata-only rotation audit uses `MCPVAULT_GLOBAL_SYNC_CREDENTIAL_AUDIT_PATH`
+or `credential-audit.ndjson`. Protect both with ACLs. Persisted credential state
+is authoritative: changing environment variables does not resurrect revoked
+credentials. Set `MCPVAULT_GLOBAL_SYNC_ORIGIN` to bind the proposer's center;
+otherwise the host's hub ID is used, never a caller-supplied identity.
+
+Only loopback HTTP is permitted. For remote use supply
+`MCPVAULT_GLOBAL_SYNC_TLS_KEY_PATH` and `MCPVAULT_GLOBAL_SYNC_TLS_CERT_PATH`;
+`MCPVAULT_GLOBAL_SYNC_TLS_CA_PATH` adds mTLS. Clients refuse to send bearer tokens
+over remote plain HTTP. Request/proposal quotas complement, but do not replace,
+firewall/TLS controls. Cumulative proposal content defaults to 512 MiB, capped
+at 16 GiB through `MCPVAULT_GLOBAL_SYNC_MAX_TOTAL_CONTENT_BYTES`; rejected
+proposals do not bypass that storage quota.
+
+Replicas verify signatures, hashes, byte lengths, order and parent chains before
+applying revisions. Compare organization manifests first, approve immutable
+`_sources/` snapshots, then propose dependent knowledge with exact approved Hub
+revisions in `provenance.evidenceRevisions`. A configured organization fingerprint
+must match before writing. User, Community, private scope, whisper, Git and host
+paths are forbidden in Global content and signed provenance. `_sources/` is the
+only special-root exception; existing source snapshots cannot be overwritten
+or tombstoned. A stale source, signature failure or dirty local file stops cursor
+progress without overwriting local work. Approved tombstones quarantine local
+content under hidden host state, preserving recovery.
+
+Library and HTTP contracts live in [global-sync.ts](../src/global-sync.ts) and the
+[standalone launcher](../global-sync-server.ts). Use bounded explicit pull/propose
+operations; do not infer completion from the first page or erase local conflicts.

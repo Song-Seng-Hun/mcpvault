@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { runDeterministicEconomyPilotSimulation } from './economy-simulation.js';
+import { runDeterministicEconomyPilotSimulation } from '../tests/fixtures/economy-simulation.js';
 
 test('runs 1,000 varied deterministic abuse, concentration, inactivity, and liquidity simulations without automatic payments',()=>{
   const report=runDeterministicEconomyPilotSimulation({runs:1000});

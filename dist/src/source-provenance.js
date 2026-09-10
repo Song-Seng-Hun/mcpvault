@@ -17,16 +17,18 @@ export class SourceProvenanceSession {
     access;
     container;
     principal;
+    observedPaths;
     notes = new Map();
     attempted = new Set();
     observed = new Map();
     bytes = 0;
     limited = false;
-    constructor(fs, access, container, principal) {
+    constructor(fs, access, container, principal, observedPaths) {
         this.fs = fs;
         this.access = access;
         this.container = container;
         this.principal = principal;
+        this.observedPaths = observedPaths;
     }
     physical(input) {
         if (typeof input !== 'string' || !input.trim() || input.length > 1024)
@@ -50,6 +52,8 @@ export class SourceProvenanceSession {
         if (!this.allowed(path) || (previous && previous.revision !== revision))
             throw Error(UNAVAILABLE);
         this.observed.set(key, { path, revision });
+        // Include ancestry even when its identity is omitted from a bounded trace.
+        this.observedPaths?.add(path);
     }
     async load(input) {
         let path;

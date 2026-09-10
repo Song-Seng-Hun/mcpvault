@@ -29,7 +29,7 @@
   ],
   "scripts": {
     "start": "tsx server.ts",
-    "website": "cd website && bun dev",
+    "website": "cd website-shibumi && bun dev",
     "build": "tsc --project tsconfig.build.json",
     "guidance:generate": "tsx scripts/guidance-build.ts --write",
     "guidance:check": "tsx scripts/guidance-build.ts --check",
