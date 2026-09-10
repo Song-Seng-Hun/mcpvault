@@ -231,6 +231,8 @@ function requestFairnessKey(args: Record<string, unknown>): string {
 }
 
 export interface CreateServerOptions {
+  /** Trusted host integrations only; never populated from API arguments or Vault notes. */
+  workCollaboration?: Pick<import('./work-service.js').WorkServiceOptions, 'executionProfiles' | 'readReviewGitSource' | 'verifyReviewExecution'>;
   /** Explicit trusted host registration. Never loaded from a request or Vault note. */
   skillEvolution?: SkillEvolutionHost;
   /** Host-private notice registration/delegation file, reloaded before operations. */
@@ -366,6 +368,7 @@ const CAPABILITY_FOR_TOOL: Partial<Record<string, ScopeCapability>> = {
   claim_work_task: 'task',
   handoff_work_task: 'task',
   review_work_task: 'task',
+  read_work_review_context: 'task', read_work_staffing: 'task',
   update_agent_task: "task",
   save_work_state: "journal",
   report_content: "comment",
@@ -600,6 +603,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
     },
   });
   const work = new WorkService(fileSystem, references, scopeAuth, agentTasks, {
+    ...options.workCollaboration,
     assertTaskMutation: async taskId => {
       await assertEconomyConfigured(resolvedVaultPath,Boolean(options.economy));
       if (options.economy) await new EconomyService(fileSystem, options.economy.ledger, options.economy.policy, { assertActor: async () => {} }).assertFreeTaskMutation(taskId);
@@ -2599,6 +2603,8 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         case 'read_work_coverage': return jsonResult(await work.coverage({ ...trimmedArgs, principal }), false);
         case 'read_work_board': return jsonResult(await work.board({ ...trimmedArgs, principal }), false);
         case 'read_work_packet': return jsonResult(await work.packet({ ...trimmedArgs, principal }), false);
+        case 'read_work_review_context': return jsonResult(await work.reviewContext({ ...trimmedArgs, principal }), false);
+        case 'read_work_staffing': return jsonResult(await work.staffing({ ...trimmedArgs, principal }), false);
         case 'claim_work_task': return jsonResult(await work.claim({ ...trimmedArgs, principal }), false);
         case 'handoff_work_task': return jsonResult(await work.handoff({ ...trimmedArgs, principal }), false);
         case 'review_work_task': return jsonResult(await work.review({ ...trimmedArgs, principal }), false);

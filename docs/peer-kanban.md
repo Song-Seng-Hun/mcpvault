@@ -103,6 +103,14 @@ Models can exchange these roles; task assignment does not define seniority.
 
 ## Review and completion
 
+The following paragraph describes the legacy contract. Projects opting into
+`reviewPolicy.version: 2` use [context-aware review](context-aware-collaboration.md):
+original-range receipts plus structured criterion evidence, upstream drift checks,
+and explicit `self_verify` for ordinary work. General v2 work cannot complete
+without that explicit verification or independent approval. Old history is not
+silently migrated. Read-only `work.staffing` adds advisory allocation without
+starting workers or replacing active ownership.
+
 `work.review` supports request, approve, changes_requested, question, and an
 explicit host-authorized override. General work requires completion criteria,
 verification, and the existing knowledge disposition (durable/negative notes,

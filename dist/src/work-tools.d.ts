@@ -1,6 +1,118 @@
 import type { Tool } from '@modelcontextprotocol/server';
 export declare const WORK_MUTATING_TOOLS: readonly ['manage_work_group', 'manage_work_project', 'claim_work_task', 'handoff_work_task', 'review_work_task'];
 export declare const WORK_TASK_PROPERTIES: {
+    changeContext: {
+        type: string;
+        additionalProperties: boolean;
+        required: string[];
+        properties: {
+            reason: {
+                type: string;
+                maxLength: number;
+            };
+            scope: {
+                type: string;
+                maxLength: number;
+            };
+            constraints: {
+                type: string;
+                maxItems: number;
+                items: {
+                    type: string;
+                    maxLength: number;
+                };
+            };
+            decisions: {
+                type: string;
+                maxItems: number;
+                items: {
+                    type: string;
+                    maxLength: number;
+                };
+            };
+            risks: {
+                type: string;
+                maxItems: number;
+                items: {
+                    type: string;
+                    maxLength: number;
+                };
+            };
+            dissent: {
+                type: string;
+                maxItems: number;
+                items: {
+                    type: string;
+                    maxLength: number;
+                };
+            };
+            unverified: {
+                type: string;
+                maxItems: number;
+                items: {
+                    type: string;
+                    maxLength: number;
+                };
+            };
+            locators: {
+                type: string;
+                maxItems: number;
+                items: {
+                    type: string;
+                    additionalProperties: boolean;
+                    required: string[];
+                    properties: {
+                        id: {
+                            type: string;
+                            maxLength: number;
+                        };
+                        role: {
+                            type: string;
+                            enum: string[];
+                        };
+                        path: {
+                            type: string;
+                            maxLength: number;
+                        };
+                        revision: {
+                            type: string;
+                            maxLength: number;
+                        };
+                        repository: {
+                            type: string;
+                            maxLength: number;
+                        };
+                        commit: {
+                            type: string;
+                            maxLength: number;
+                        };
+                        file: {
+                            type: string;
+                            maxLength: number;
+                        };
+                        startLine: {
+                            type: string;
+                            minimum: number;
+                            maximum: number;
+                        };
+                        endLine: {
+                            type: string;
+                            minimum: number;
+                            maximum: number;
+                        };
+                        required: {
+                            type: string;
+                            default: boolean;
+                        };
+                    };
+                };
+            };
+        };
+    };
+    migrateReviewContract: {
+        type: string;
+        description: string;
+    };
     responsibility: {
         type: string;
         additionalProperties: boolean;

@@ -13,6 +13,8 @@ export interface WorkArtifact {
     files?: string[];
 }
 export interface AgentTaskWorkFields {
+    changeContext?: import('./work-review.js').WorkChangeContext;
+    migrateReviewContract?: boolean;
     responsibility?: WorkResponsibility;
     projectId?: string;
     parentTaskId?: string;

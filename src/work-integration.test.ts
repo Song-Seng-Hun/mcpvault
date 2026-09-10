@@ -6,6 +6,7 @@ import { randomUUID } from 'node:crypto';
 import { Client, InMemoryTransport, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import { createServer } from './createServer.js';
 import { startMcpHttpApi } from './mcp-http.js';
+import { startRestApi } from './rest-api.js';
 
 let vault: string;
 beforeEach(async () => { vault = await mkdtemp(join(tmpdir(), 'mcpvault-work-integration-')); });
@@ -31,6 +32,10 @@ test('peer work is dynamically discoverable without expanding the five MCP tools
   try {
     const names = (await client.listTools()).tools.map(tool => tool.name).sort();
     expect(names).toEqual(['call_endpoint', 'get_agent_pulse', 'list_active_capabilities', 'orient_wiki', 'search_capabilities']);
+    for (const endpoint of ['work.review_context', 'work.staffing']) {
+      const result = await client.callTool({ name: 'search_capabilities', arguments: { query: endpoint, maxChars: 12000 } });
+      expect(JSON.stringify(result.content)).toContain(endpoint);
+    }
     const found = await client.callTool({ name: 'search_capabilities', arguments: { query: 'work.board', maxChars: 12000 } });
     expect((found.content as any[]).map(item => item.text).join('\n')).toContain('"work.board"');
   } finally { await client.close(); await server.close(); }
@@ -140,3 +145,58 @@ test('work project public reads and work mutations have different authority', as
     }
   } finally { await readonly.client.close(); await readonly.server.close(); }
 });
+
+test('v2 MCP and REST share context receipts, approval gates and readonly operation policy', async () => {
+  const { server, client, call } = await connect(); const api = await startRestApi(server, { port: 0 });
+  const ownerPassword = randomUUID();
+  let ownerToken = '', peerToken = '';
+  const must = async (endpoint: string, args: Record<string, unknown>, token = ownerToken) => {
+    const result = await call(endpoint, args, token); expect(result.error, result.text).toBeFalsy(); return result.value;
+  };
+  try {
+    ownerToken = (await must('auth.register', { accountId: 'v2-owner', modelId: 'gpt', password: ownerPassword })).accessToken;
+    peerToken = (await must('auth.register', { accountId: 'v2-peer', modelId: 'claude', password: randomUUID() }, '')).accessToken;
+    await must('work.project', { op: 'create', projectId: 'v2', title: 'V2', goal: 'Exact reviewed change', allowedWork: ['Public parser work'],
+      completionCriteria: ['Parser correct'], participants: ['v2-peer'], reviewPolicy: { version: 2 }, staffingPolicy: { taskType: 'code' }, requestId: 'project' });
+    const locators: any[] = [];
+    for (const role of ['before', 'after', 'test']) {
+      const path = `Knowledge/v2-${role}.md`, content = ['before', 'after'].includes(role) ? `---\nsource_work_id: parser-fixture\n---\n\n${role} parser fixture` : `${role} parser fixture`;
+      const note = await must('notes.write', { path, content, expectedRevision: 'missing' });
+      locators.push({ id: role, role, path, revision: note.revision, startLine: 1, endLine: content.split('\n').length, required: true });
+    }
+    const task = await must('mcp.create_agent_task', { taskId: 'v2-task', projectId: 'v2', title: 'Parser', description: 'Fix parser', completionCriteria: ['Parser correct'],
+      changeContext: { reason: 'Parser correction', scope: 'One function', locators }, verification: 'Focused parser check', requestId: 'create' });
+    const claimed = await must('work.claim', { op: 'start', taskId: 'v2-task', expectedRevision: task.revision, expectedGeneration: 0, requestId: 'start' });
+    const direct = await call('mcp.update_agent_task', { taskId: 'v2-task', status: ' COMPLETED ', expectedRevision: claimed.revision, expectedGeneration: 1,
+      requestId: 'bypass', reason: 'Premature', noReusableKnowledge: true, knowledgeDispositionReason: 'Fixture only' }, ownerToken);
+    expect(direct.error).toBe(true);
+    const requested = await must('work.review', { op: 'request', taskId: 'v2-task', expectedRevision: claimed.revision, expectedGeneration: 1, requestId: 'request', reason: 'Review actual parser' });
+    const requestArgs = { op: 'approve', taskId: 'v2-task', expectedRevision: requested.revision, artifactFingerprint: requested.artifactFingerprint,
+      requestId: 'approve', reason: 'Compared snapshots and parser test' };
+    expect((await call('work.review', requestArgs, peerToken)).error).toBe(true);
+    const contextReceipts: string[] = [];
+    for (const locator of locators) {
+      const response = await fetch(`http://127.0.0.1:${api.port}/api/work/review-context?taskId=v2-task&locatorId=${locator.id}`, { headers: { authorization: `Bearer ${peerToken}` } });
+      expect(response.status).toBe(200);
+      const value: any = await response.json(); expect(value.items[0].text).toContain(`${locator.role} parser fixture`); contextReceipts.push(value.items[0].receipt);
+    }
+    const approved = await must('work.review', { ...requestArgs, contextReceipts, checks: [{ criterion: 'Parser correct', verdict: 'pass', rationale: 'Exact snapshots and focused parser result',
+      evidenceIds: ['before', 'after', 'test'], missingChecks: [], tests: [{ locatorId: 'test', snapshot: locators[1].revision, environment: 'isolated fixture', result: 'pass', missingChecks: [] }] }] }, peerToken);
+    await must('mcp.update_agent_task', { taskId: 'v2-task', status: 'completed', expectedRevision: approved.revision, expectedGeneration: 1, requestId: 'complete',
+      reason: 'Reviewed', noReusableKnowledge: true, knowledgeDispositionReason: 'Fixture only' });
+    expect((await must('mcp.read_agent_task', { taskId: 'v2-task', includeContent: false })).fm.work_review.verification_level).toBe('independently_reviewed');
+    const staff = await fetch(`http://127.0.0.1:${api.port}/api/work/staffing?projectId=v2&taskId=v2-task`, { headers: { authorization: `Bearer ${ownerToken}` } });
+    expect(staff.status).toBe(200); expect(await staff.json()).toMatchObject({ advisory: true });
+    const generic = await call('mcp.update_frontmatter', { path: 'Community/Tasks/v2-task.md', frontmatter: { status: 'completed', work_review_contract: 1 } }, ownerToken);
+    expect(generic.error).toBe(true); expect(generic.text).toMatch(/managed community/i);
+  } finally { await api.close(); await client.close(); await server.close(); }
+  const readonly = await connect(true);
+  try {
+    const login = await readonly.call('auth.login', { accountId: 'v2-owner', password: ownerPassword });
+    expect(login.error, login.text).toBeFalsy(); ownerToken = login.value.accessToken;
+    const result = await readonly.call('work.review', { op: 'self_verify', taskId: 'v2-task', expectedRevision: 'any', requestId: 'readonly', reason: 'Must reject' }, ownerToken);
+    expect(result.error).toBe(true); expect(result.text).toMatch(/read.only/i);
+    const staff = await readonly.call('work.staffing', { projectId: 'v2', maxChars: 4000 }, ownerToken);
+    expect(staff.error, staff.text).toBeFalsy();
+  } finally { await readonly.client.close(); await readonly.server.close(); }
+}, 20000);

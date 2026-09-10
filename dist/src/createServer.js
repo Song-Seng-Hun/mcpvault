@@ -339,6 +339,7 @@ const CAPABILITY_FOR_TOOL = {
     claim_work_task: 'task',
     handoff_work_task: 'task',
     review_work_task: 'task',
+    read_work_review_context: 'task', read_work_staffing: 'task',
     update_agent_task: "task",
     save_work_state: "journal",
     report_content: "comment",
@@ -545,6 +546,7 @@ export function createServer(vaultPath, options = {}) {
         },
     });
     const work = new WorkService(fileSystem, references, scopeAuth, agentTasks, {
+        ...options.workCollaboration,
         assertTaskMutation: async (taskId) => {
             await assertEconomyConfigured(resolvedVaultPath, Boolean(options.economy));
             if (options.economy)
@@ -2425,6 +2427,8 @@ export function createServer(vaultPath, options = {}) {
                     case 'read_work_coverage': return jsonResult(await work.coverage({ ...trimmedArgs, principal }), false);
                     case 'read_work_board': return jsonResult(await work.board({ ...trimmedArgs, principal }), false);
                     case 'read_work_packet': return jsonResult(await work.packet({ ...trimmedArgs, principal }), false);
+                    case 'read_work_review_context': return jsonResult(await work.reviewContext({ ...trimmedArgs, principal }), false);
+                    case 'read_work_staffing': return jsonResult(await work.staffing({ ...trimmedArgs, principal }), false);
                     case 'claim_work_task': return jsonResult(await work.claim({ ...trimmedArgs, principal }), false);
                     case 'handoff_work_task': return jsonResult(await work.handoff({ ...trimmedArgs, principal }), false);
                     case 'review_work_task': return jsonResult(await work.review({ ...trimmedArgs, principal }), false);

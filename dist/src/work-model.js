@@ -15,7 +15,8 @@ function order(value) {
     return value;
 }
 export const fingerprint = (value) => createHash('sha256').update(canonical(value)).digest('hex');
-export const reviewBasis = (fm) => fingerprint({ description: fm.description, completionCriteria: fm.completion_criteria || [], artifacts: fm.artifacts || [], workKind: fm.work_kind, verification: fm.verification || '', ...(fm.responsibility && { responsibility: fm.responsibility }) });
+export const reviewBasis = (fm) => fingerprint({ description: fm.description, completionCriteria: fm.completion_criteria || [], artifacts: fm.artifacts || [], workKind: fm.work_kind, verification: fm.verification || '', ...(fm.responsibility && { responsibility: fm.responsibility }),
+    ...(fm.work_review_contract === 2 && { contract: 2, context: fm.work_context_fingerprint }) });
 export function textField(value, field, max = 500, required = false) {
     if (value !== undefined && typeof value !== 'string')
         throw guidanceError(new Error(`${field} must be a string`), 'guid-9a47fff07b9e2cc5');

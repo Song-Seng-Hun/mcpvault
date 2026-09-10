@@ -1,6 +1,10 @@
 import { guidanceError, guidanceText } from './guidance-runtime.js';
+import { WorkReviewEngine, ReviewBudgetError, changeContext, reviewPolicy, effectiveReviewPolicy, reviewPacketItems } from './work-review.js';
+import { recommendStaffing } from './work-staffing.js';
 import { responsibility, resourceKeys as declaredResourceKeys, assignmentShape } from './work-responsibility.js';
 import { posix } from 'node:path';
+import { MAX_NOTE_CONTENT_BYTES } from './filesystem.js';
+import { SourceReadLimitError } from './bounded-source-read.js';
 import { ScopeAccessPolicy } from './scope-access.js';
 import { normalizeScopeId } from './scopes.js';
 import { isModerationHidden } from './moderation-policy.js';
@@ -17,7 +21,7 @@ const RECEIPTS = 16;
 const EVENTS = 16;
 const TASK_EXTENSION_FIELDS = ['responsibility', 'project_id', 'parent_task_id', 'depends_on', 'completion_criteria', 'artifacts', 'work_kind', 'discussion_slug',
     'verification', 'author_account_id', 'claim_generation', 'started_at', 'last_progress_at', 'assignee_account_id',
-    'work_review', 'work_reviews', 'work_handoff', 'work_changes'];
+    'work_review', 'work_reviews', 'work_handoff', 'work_changes', 'work_review_contract', 'work_review_policy', 'change_context', 'work_context_fingerprint'];
 /** Markdown is the sole durable state, including approvals and retry receipts.
  * No timer, worker token, external executor, or account creation lives here. */
 export class WorkService {
@@ -26,6 +30,7 @@ export class WorkService {
     auth;
     tasks;
     options;
+    reviewEngine;
     access = new ScopeAccessPolicy();
     intents = new WeakMap();
     workshopCreates = new WeakMap();
@@ -35,6 +40,22 @@ export class WorkService {
         this.auth = auth;
         this.tasks = tasks;
         this.options = options;
+        this.reviewEngine = new WorkReviewEngine(async (locator) => {
+            if (!locator.path) {
+                if (!this.options.readReviewGitSource)
+                    throw guidanceError(new Error('Host Git context reader unavailable'), 'guid-b24617ad501213cf');
+                const source = await this.options.readReviewGitSource(locator);
+                if (Buffer.byteLength(source.content, 'utf8') > MAX_NOTE_CONTENT_BYTES)
+                    throw new ReviewBudgetError('Review Git source exceeds byte budget');
+                return source;
+            }
+            const path = this.publicPath(locator.path);
+            const note = await this.visible(path, MAX_NOTE_CONTENT_BYTES);
+            return { content: note.originalContent, revision: note.revision, guard: { path, expectedRevision: note.revision },
+                ...(typeof (note.frontmatter.source_work_id ?? note.frontmatter.source_family) === 'string' && { sourceWorkId: note.frontmatter.source_work_id ?? note.frontmatter.source_family }),
+                ...(note.frontmatter.mcpvault_type === 'agent_task' && { projectId: note.frontmatter.project_id,
+                    relatedTaskIds: [note.frontmatter.parent_task_id, ...(note.frontmatter.depends_on || [])].filter(Boolean) }) };
+        }, options.verifyReviewExecution);
         tasks.attachWorkExtension({ run: (action, params, proceed) => this.runTask(action, params, proceed) });
     }
     async actor(principal) {
@@ -66,16 +87,18 @@ export class WorkService {
         this.workshopCreates.set(params, { guards: structuredClone(guards), receipt: structuredClone(receipt), assertAccess });
         return this.tasks.create(params);
     }
-    async visible(path) {
+    async visible(path, maxBytes = MAX_NOTE_CONTENT_BYTES) {
         if (!this.access.canAccessPhysicalPath(path))
             throw guidanceError(new Error('Work target is unavailable'), 'guid-b4cd42400f6ea6f0');
         try {
-            const note = await this.fileSystem.readNote(path);
+            const note = await this.fileSystem.readNote(path, maxBytes);
             if (isModerationHidden(note.frontmatter))
                 throw guidanceError(new Error('hidden'), 'guid-6b6e4d767b4d2ef8');
             return note;
         }
-        catch {
+        catch (error) {
+            if (maxBytes !== undefined && (error instanceof SourceReadLimitError || error instanceof Error && error.cause instanceof SourceReadLimitError))
+                throw new ReviewBudgetError('Review source exceeds byte budget');
             throw guidanceError(new Error('Work target is unavailable or not visible'), 'guid-0b05d8e6027e0780');
         }
     }
@@ -108,7 +131,7 @@ export class WorkService {
     }
     request(params, action, target) {
         const requestId = textField(params.requestId, 'requestId', 128, true);
-        const fields = ['responsibility', 'groupIds', 'requiredPerspectives', 'teamStatus', 'op', 'projectId', 'taskId', 'title', 'goal', 'allowedWork', 'participants', 'completionCriteria', 'wipLimit', 'personalWipLimit', 'roomId',
+        const fields = ['staffingPolicy', 'reviewPolicy', 'changeContext', 'migrateReviewContract', 'contextReceipts', 'checks', 'responsibility', 'groupIds', 'requiredPerspectives', 'teamStatus', 'op', 'projectId', 'taskId', 'title', 'goal', 'allowedWork', 'participants', 'completionCriteria', 'wipLimit', 'personalWipLimit', 'roomId',
             'parentTaskId', 'dependsOn', 'artifacts', 'workKind', 'discussionSlug', 'verification', 'description', 'assignee', 'references', 'status',
             'reason', 'retrospective', 'knowledgeNotes', 'negativeKnowledgeNotes', 'knowledgeApplications', 'noReusableKnowledge', 'knowledgeDispositionReason',
             'toAccountId', 'completed', 'remaining', 'blocker', 'nextAction', 'artifactFingerprint', 'expectedRevision', 'expectedGeneration'];
@@ -187,6 +210,10 @@ export class WorkService {
         }
         if (['active', 'completed'].includes(note.frontmatter.team_status))
             project.team_status = note.frontmatter.team_status;
+        if (note.frontmatter.review_policy)
+            project.review_policy = reviewPolicy(note.frontmatter.review_policy);
+        if (note.frontmatter.staffing_policy)
+            project.staffing_policy = this.staffingPolicy(note.frontmatter.staffing_policy);
         for (const key of ['allowed_work', 'completion_criteria', 'participants', 'required_perspectives', 'group_ids']) {
             const value = note.frontmatter[key];
             if (!Array.isArray(value)) {
@@ -278,6 +305,10 @@ export class WorkService {
             fm.goal = textField(params.goal ?? fm.goal, 'goal', 2000, true);
             fm.allowed_work = listField(params.allowedWork ?? fm.allowed_work, 'allowedWork', 20, true);
             fm.completion_criteria = listField(params.completionCriteria ?? fm.completion_criteria, 'completionCriteria', 20, true);
+            if (params.reviewPolicy !== undefined)
+                fm.review_policy = reviewPolicy(params.reviewPolicy);
+            if (params.staffingPolicy !== undefined)
+                fm.staffing_policy = this.staffingPolicy(params.staffingPolicy);
             if (params.requiredPerspectives !== undefined)
                 fm.required_perspectives = listField(params.requiredPerspectives, 'requiredPerspectives', 20).map(p => textField(p, 'perspective', 80, true));
             if (params.groupIds !== undefined)
@@ -318,7 +349,7 @@ export class WorkService {
             const receipt = room || groupGuards.length
                 ? await this.fileSystem.writeNoteWithRevisionGuardsAndReceipt(write, [...groupGuards, ...(room ? [{ path: room.path, expectedRevision: room.note.revision }] : [])], { maxGuards: 32 })
                 : await this.fileSystem.writeNoteWithReceipt(write);
-            await this.fileSystem.readNote(path);
+            await this.fileSystem.readNote(path, MAX_NOTE_CONTENT_BYTES);
             return { ...result, revision: receipt.revision };
         });
     }
@@ -465,7 +496,7 @@ export class WorkService {
                 await this.options.assertTaskMutation?.(normalizeScopeId(params.taskId, 'taskId'));
             const requestedProject = prior?.frontmatter.project_id || params.projectId;
             if (!requestedProject) {
-                if (params.responsibility !== undefined)
+                if (params.responsibility !== undefined || params.changeContext !== undefined || params.migrateReviewContract !== undefined)
                     throw guidanceError(new Error('Task responsibility requires an explicit Work project; legacy tasks are not automatically migrated'), 'guid-a7a4967a7d9d677d');
                 if (intent)
                     throw guidanceError(new Error('Work actions require a project-backed task'), 'guid-b17f67cf5c49f2e8');
@@ -513,6 +544,27 @@ export class WorkService {
                 fm.depends_on = [];
                 fm.completion_criteria = [];
                 fm.artifacts = [];
+                if (project.frontmatter.review_policy?.version === 2) {
+                    fm.work_review_contract = 2;
+                    fm.work_review_policy = reviewPolicy(project.frontmatter.review_policy);
+                }
+            }
+            if (params.migrateReviewContract !== undefined) {
+                if (fm.work_review_contract === 2)
+                    throw guidanceError(new Error('Task already uses review contract 2; migration cannot erase existing requirements'), 'guid-8874a5524c617b92');
+                if (params.migrateReviewContract !== true || !prior || fm.requester_account_id !== actor.accountId || finished(fm) || project.frontmatter.review_policy?.version !== 2)
+                    throw guidanceError(new Error('Only the task owner can explicitly migrate active work to project review contract 2'), 'guid-5c0f5e3f08b7eca3');
+                fm.work_review_contract = 2;
+                fm.work_review_policy = reviewPolicy(project.frontmatter.review_policy);
+                delete fm.work_review;
+            }
+            if (params.changeContext !== undefined) {
+                if (fm.work_review_contract !== 2)
+                    throw guidanceError(new Error('Change context requires explicit review contract 2 migration'), 'guid-233d8368e1af6979');
+                fm.change_context = changeContext(params.changeContext);
+                for (const locator of fm.change_context.locators)
+                    if (locator.path)
+                        locator.path = this.publicPath(locator.path);
             }
             const isRequester = fm.requester_account_id === actor.accountId;
             const isAssignee = fm.assignee_account_id === actor.accountId;
@@ -580,8 +632,15 @@ export class WorkService {
                 fm.assignee = displayIdentity(account);
                 params.assignee = displayIdentity(account);
             }
+            let reviewContext;
+            if (fm.work_review_contract === 2) {
+                const state = await this.reviewEngine.state(fm, project.frontmatter, (intent?.kind === 'review' && ['request', 'approve', 'self_verify'].includes(intent.params.op)) || (fm.status === 'completed' && fm.work_review?.decision !== 'override'));
+                fm.work_context_fingerprint = state.fingerprint;
+                guards.push(...state.guards);
+                reviewContext = state.context;
+            }
             if (intent)
-                await this.applyIntent(intent, params, fm, project.frontmatter, actor);
+                await this.applyIntent(intent, params, fm, project.frontmatter, actor, reviewContext);
             // Legacy status/assignee updates get exactly the same readiness and WIP gate.
             if (['accepted', 'in_progress', 'blocked', 'in_review'].includes(fm.status) && !fm.assignee_account_id)
                 throw guidanceError(new Error('Claim an assignee account before starting work'), 'guid-c00c6990b37c6049');
@@ -596,16 +655,17 @@ export class WorkService {
                 await this.ready(fm);
             await this.wip(fm, project.frontmatter, id, prior?.frontmatter);
             await this.resourceAdmission(fm, id);
-            if (prior && reviewBasis(fm) !== reviewBasis(prior.frontmatter))
+            if (prior && reviewBasis(fm) !== reviewBasis(prior.frontmatter) && intent?.kind !== 'review')
                 delete fm.work_review;
             if (fm.status === 'completed') {
                 if (!fm.completion_criteria?.length || !fm.verification)
                     throw guidanceError(new Error('Completion requires completionCriteria and verification'), 'guid-3a811c7a9e77bee9');
                 await this.artifacts(fm.artifacts, actor, guards, true);
-                if (fm.work_kind !== 'general') {
+                if (fm.work_kind !== 'general' || fm.work_review_contract === 2) {
                     const approval = fm.work_review;
-                    if (!approval || !['approve', 'override'].includes(approval.decision) || approval.fingerprint !== reviewBasis(fm))
-                        throw guidanceError(new Error('High-risk completion requires current independent approval'), 'guid-545d3ddced904170');
+                    const decisions = fm.work_kind === 'general' && fm.work_review_contract === 2 ? ['approve', 'override', 'self_verify'] : ['approve', 'override'];
+                    if (!approval || !decisions.includes(approval.decision) || approval.fingerprint !== reviewBasis(fm))
+                        throw guidanceError(new Error('Completion requires current review approval or explicit permitted self verification'), 'guid-545d3ddced904170');
                 }
             }
             params.status = fm.status;
@@ -635,7 +695,7 @@ export class WorkService {
                         throw guidanceError(new Error('Related revision changed during work mutation'), 'guid-cdb273014178bb3a');
                     // The existing filesystem supports nine locked related revisions.
                     // Fail closed rather than drop guards from a larger mutation.
-                    if (unique.length > (workshopCreate ? 128 : 9))
+                    if (unique.length > (workshopCreate || fm.work_review_contract === 2 ? 128 : 9))
                         throw guidanceError(new Error('Work mutation exceeds related revision guard budget; split the dependency/artifact change'), 'guid-fd006d893a9a3fc2');
                     result = { success: true, taskId: id, path: write.path, status: fm.status, generation: fm.claim_generation,
                         claimGeneration: fm.claim_generation, ...(fm.assignee_account_id && { assigneeAccountId: fm.assignee_account_id }),
@@ -656,9 +716,12 @@ export class WorkService {
                         const stored = write.frontmatter.work_receipts.at(-1);
                         stored.state = this.receiptState(write.frontmatter, write.content);
                     }
-                    const receipt = await this.fileSystem.writeNoteWithRevisionGuardsAndReceipt(write, unique, workshopCreate ? { maxGuards: 128, assertAccess: workshopCreate.assertAccess } : {});
+                    const receipt = await this.fileSystem.writeNoteWithRevisionGuardsAndReceipt(write, unique, {
+                        ...(workshopCreate ? { maxGuards: 128, assertAccess: workshopCreate.assertAccess } : fm.work_review_contract === 2 ? { maxGuards: 128 } : {}),
+                        ...(fm.work_review_contract === 2 && { maxBytes: MAX_NOTE_CONTENT_BYTES }),
+                    });
                     result = { ...result, revision: receipt.revision };
-                    await this.fileSystem.readNote(write.path);
+                    await this.fileSystem.readNote(write.path, MAX_NOTE_CONTENT_BYTES);
                     return receipt;
                 },
             };
@@ -666,7 +729,7 @@ export class WorkService {
             return result;
         });
     }
-    async applyIntent(intent, params, fm, project, actor) {
+    async applyIntent(intent, params, fm, project, actor, context) {
         const generation = Number(fm.claim_generation || 0);
         const own = fm.assignee_account_id === actor.accountId;
         if (intent.kind === 'claim') {
@@ -743,6 +806,10 @@ export class WorkService {
                 if (!this.auth.hasCapability(actor, 'moderate'))
                     throw guidanceError(new Error('Only a host moderator can explicitly override review'), 'guid-0518e4d6bc2421fa');
             }
+            else if (op === 'self_verify') {
+                if (fm.work_review_contract !== 2 || fm.work_kind !== 'general' || !own)
+                    throw guidanceError(new Error('Explicit self verification requires ordinary v2 work and its assignee; high-risk work needs independent review'), 'guid-d71df9c654d05d06');
+            }
             else {
                 this.member(project, actor);
                 if ([fm.author_account_id, fm.requester_account_id, fm.assignee_account_id].includes(actor.accountId))
@@ -754,7 +821,14 @@ export class WorkService {
             if (!intent.params.artifactFingerprint || intent.params.artifactFingerprint !== reviewBasis(fm))
                 throw guidanceError(new Error('Review artifactFingerprint does not match the current basis'), 'guid-74fba1d52f5f41d3');
             await this.artifacts(fm.artifacts || [], actor, [], true);
-            fm.work_review = { decision: op, fingerprint: reviewBasis(fm), account_id: actor.accountId, reason, at: timestamp() };
+            let evidence = {};
+            if (fm.work_review_contract === 2 && op !== 'override')
+                evidence = await this.reviewEngine.validate({ taskId: params.taskId, accountId: actor.accountId,
+                    basis: reviewBasis(fm), context: context || fm.change_context, criteria: fm.completion_criteria, policy: effectiveReviewPolicy(fm, project), artifacts: fm.artifacts,
+                    ...(intent.params.contextReceipts !== undefined && { receipts: intent.params.contextReceipts }),
+                    ...(intent.params.checks !== undefined && { checks: intent.params.checks }), approve: op === 'approve' || op === 'self_verify' });
+            fm.work_review = { decision: op, fingerprint: reviewBasis(fm), account_id: actor.accountId, reason, at: timestamp(),
+                ...(fm.work_review_contract === 2 && { contract: 2, verification_level: op === 'override' ? 'host_override' : op === 'self_verify' ? 'self_verified' : op === 'approve' ? 'independently_reviewed' : 'pending', ...evidence }) };
             if (op === 'changes_requested' || op === 'question')
                 fm.status = 'in_progress';
         }
@@ -788,7 +862,7 @@ export class WorkService {
         return this.mutate({ kind: 'handoff', params });
     }
     async review(params) {
-        if (!['request', 'approve', 'changes_requested', 'question', 'override'].includes(params.op))
+        if (!['request', 'approve', 'self_verify', 'changes_requested', 'question', 'override'].includes(params.op))
             throw guidanceError(new Error('Invalid review operation'), 'guid-c35b8c849912b588');
         return this.mutate({ kind: 'review', params });
     }
@@ -921,10 +995,14 @@ export class WorkService {
                 rows.push({ ...base, kind: 'unassigned' });
             if (!declared.get(task.path)?.deliverables?.length && !fm.artifacts?.length)
                 rows.push({ ...base, kind: 'missing_deliverable' });
-            if (fm.work_kind !== 'general' || fm.status === 'in_review') {
-                const approved = ['approve', 'override'].includes(fm.work_review?.decision) && fm.work_review?.fingerprint === reviewBasis(fm);
+            if (fm.work_kind !== 'general' || fm.status === 'in_review' || fm.work_review_contract === 2) {
+                const current = await this.currentReview(fm, project.frontmatter);
+                const approved = current.current;
                 if (!approved)
-                    rows.push({ ...base, kind: fm.work_review ? 'review_pending_or_stale' : 'missing_review' });
+                    rows.push({ ...base, kind: fm.work_review ? 'review_pending_or_stale' : 'missing_review', ...(current.diagnostic && { diagnostic: current.diagnostic }) });
+                if (fm.work_review_contract === 2)
+                    rows.push({ ...base, kind: 'verification_coverage', declared: Boolean(fm.responsibility),
+                        verified: current.verified, exception: approved && fm.work_review?.decision === 'override', verificationLevel: approved ? fm.work_review.verification_level : 'pending' });
             }
             if (fm.work_review && ['question', 'changes_requested'].includes(fm.work_review.decision))
                 rows.push({ ...base, kind: 'unresolved_review' });
@@ -954,6 +1032,7 @@ export class WorkService {
         const taskIds = new Set(tasks.map(n => n.fm.task_id));
         const selected = inventory.filter(n => n.fm.mcpvault_type === 'agent_task' || (!linked.has(n.path) && !taskIds.has(n.fm.task_id)));
         const paid = await this.options.paidProjection?.(tasks.map(n => n.fm.task_id), params.principal) || {};
+        const currentReviews = new Map(await Promise.all(tasks.map(async (n) => [n.path, await this.currentReview(n.fm, project.frontmatter)])));
         const rows = selected.map(n => ({ path: n.path, taskId: n.fm.task_id, title: String(n.fm.title || posix.basename(n.path)).slice(0, 180),
             status: n.fm.status || n.fm.task_status || 'open', kind: n.fm.mcpvault_type === 'agent_task' ? 'task' : 'knowledge',
             assigneeAccountId: n.fm.assignee_account_id, generation: n.fm.claim_generation,
@@ -963,7 +1042,8 @@ export class WorkService {
             ...(this.blocker(n.fm) && { blockedReason: this.blocker(n.fm) }),
             ...(n.fm.work_review && { review: { decision: String(n.fm.work_review.decision || '').slice(0, 32),
                     accountId: String(n.fm.work_review.account_id || '').slice(0, 64), reason: String(n.fm.work_review.reason || '').slice(0, 200),
-                    current: n.fm.work_review.fingerprint === reviewBasis(n.fm) } }),
+                    current: currentReviews.get(n.path)?.current || false } }),
+            ...(currentReviews.get(n.path)?.diagnostic && { reviewDiagnostic: currentReviews.get(n.path).diagnostic }),
             stale: started(n.fm) && Date.now() - Date.parse(n.fm.last_progress_at || n.fm.updated_at || '') > 86400000,
             ...(n.fm.next_action && { nextAction: String(n.fm.next_action).slice(0, 200) }),
             ...([...resources.get(n.path)].some(resource => {
@@ -975,13 +1055,102 @@ export class WorkService {
         const sig = fingerprint({ project: project.revision, inventory: selected, wip, paid, ...(wip && { accountId: params.principal?.accountId }) });
         return page(rows, { projectId: id, projectRevision: project.revision, fingerprint: sig, ...(wip && { wip }) }, sig, params, `board:${id}`);
     }
+    async currentReview(fm, project) {
+        const state = { ...fm };
+        try {
+            if (fm.work_review_contract === 2)
+                state.work_context_fingerprint = (await this.reviewEngine.state(fm, project)).fingerprint;
+        }
+        catch (error) {
+            if (!(error instanceof ReviewBudgetError))
+                throw error;
+            return { current: false, verified: false, basis: reviewBasis({ ...state, work_context_fingerprint: 'unavailable' }), diagnostic: 'context_budget_exceeded' };
+        }
+        const allowed = fm.work_kind === 'general' && fm.work_review_contract === 2 ? ['approve', 'override', 'self_verify'] : ['approve', 'override'];
+        const current = allowed.includes(fm.work_review?.decision) && fm.work_review?.fingerprint === reviewBasis(state);
+        return { current, verified: current && fm.work_review_contract === 2 && ['approve', 'self_verify'].includes(fm.work_review?.decision), basis: reviewBasis(state) };
+    }
+    staffingPolicy(value) {
+        if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).some(k => !['taskType', 'factualVerification', 'requiredTools', 'requiredCapabilities', 'minimumTier', 'budget', 'preferences'].includes(k)))
+            throw guidanceError(new Error('Invalid project staffing policy'), 'guid-580e8e0d8a5ae714');
+        const policy = structuredClone(value);
+        recommendStaffing({ ...policy, candidates: [], eligibleAccountIds: [], workKind: 'general', authorAccountIds: [], currentAssignments: [], workload: {}, personalWipLimit: 1 });
+        return policy;
+    }
+    async staffing(params) {
+        const actor = await this.actor(params.principal), id = normalizeScopeId(params.projectId, 'projectId');
+        const project = await this.projectNote(id);
+        this.member(project.frontmatter, actor);
+        const inventory = await this.inventory();
+        const projectTasks = inventory.filter(n => n.fm.project_id === id);
+        let selected = projectTasks;
+        if (params.taskId) {
+            const taskId = normalizeScopeId(params.taskId, 'taskId');
+            selected = projectTasks.filter(n => n.fm.task_id === taskId);
+            if (selected.length !== 1)
+                throw guidanceError(new Error('Staffing target unavailable'), 'guid-0a1a381d8076f396');
+        }
+        const registered = await this.auth.listPrincipals();
+        const eligible = [];
+        for (const account of registered.filter(p => project.frontmatter.participants.includes(p.accountId))) {
+            try {
+                eligible.push(await this.actor(account));
+            }
+            catch { /* Hidden, banned, or unauthorized candidates are excluded before output. */ }
+        }
+        const ids = new Set(eligible.map(p => p.accountId));
+        const profiles = (await this.options.executionProfiles?.() || []).filter(p => ids.has(p.accountId));
+        const workload = Object.fromEntries([...ids].map(account => [account, inventory.filter(n => started(n.fm) && n.fm.assignee_account_id === account).length]));
+        const currentAssignments = [];
+        for (const task of selected) {
+            const fm = task.fm, review = await this.currentReview(fm, project.frontmatter);
+            if (ids.has(fm.assignee_account_id) && fm.responsibility?.perspective && !finished(fm))
+                currentAssignments.push({ accountId: fm.assignee_account_id,
+                    perspective: textField(fm.responsibility.perspective, 'perspective', 80, true), active: true, verified: review.verified });
+            if (review.current && fm.work_review?.decision === 'approve' && ids.has(fm.work_review.account_id))
+                currentAssignments.push({ accountId: fm.work_review.account_id,
+                    perspective: 'independent_review', active: true, verified: true });
+        }
+        const occupied = new Set(selected.filter(n => started(n.fm)).map(n => n.fm.assignee_account_id));
+        const noProjectSlot = projectTasks.filter(n => started(n.fm)).length >= project.frontmatter.wip_limit;
+        const result = recommendStaffing({ ...this.staffingPolicy(project.frontmatter.staffing_policy || { taskType: 'code' }), candidates: profiles,
+            eligibleAccountIds: [...ids].filter(account => !noProjectSlot || occupied.has(account)),
+            ...(project.frontmatter.required_perspectives?.length && { requiredPerspectives: project.frontmatter.required_perspectives }),
+            workKind: selected.find(n => n.fm.work_kind !== 'general')?.fm.work_kind || 'general',
+            authorAccountIds: [...new Set(selected.map(n => n.fm.author_account_id).filter(Boolean))],
+            requesterAccountIds: [...new Set(selected.map(n => n.fm.requester_account_id).filter(Boolean))],
+            assigneeAccountIds: [...new Set(selected.map(n => n.fm.assignee_account_id).filter(Boolean))],
+            currentAssignments, workload, personalWipLimit: project.frontmatter.personal_wip_limit });
+        const items = [...result.rows.map(row => ({ kind: 'staffing', ...row })), ...result.unfilled.map(row => ({ kind: 'unfilled', ...row })),
+            ...result.explanations.map(text => ({ kind: 'explanation', text })), ...(noProjectSlot ? [{ kind: 'explanation', text: guidanceText('guid-8286904df029a470', 'Project WIP is full; finish or explicitly hand off existing work first.') }] : [])];
+        return page(items, { projectId: id, projectRevision: project.revision, advisory: true, summary: result.summary }, fingerprint({ account: actor.accountId, project: project.revision, task: params.taskId, inventory, items }), params, `staffing:${id}`);
+    }
+    async reviewContext(params) {
+        const actor = await this.actor(params.principal);
+        const id = normalizeScopeId(params.taskId, 'taskId'), note = await this.visible(taskPath(id));
+        const project = await this.projectNote(note.frontmatter.project_id);
+        this.member(project.frontmatter, actor);
+        if (note.frontmatter.work_review_contract !== 2)
+            throw guidanceError(new Error('Review context requires contract 2'), 'guid-1c7994c2e1691567');
+        const fm = { ...note.frontmatter }, state = await this.reviewEngine.state(fm, project.frontmatter, true);
+        fm.work_context_fingerprint = state.fingerprint;
+        const result = await this.reviewEngine.read({ ...params, taskId: id, accountId: actor.accountId, basis: reviewBasis(fm),
+            ...(state.context && { context: state.context }), project: project.frontmatter, criteria: fm.completion_criteria });
+        await this.actor(params.principal);
+        const latest = await this.visible(taskPath(id)), latestProject = await this.projectNote(fm.project_id);
+        if (latest.revision !== note.revision || latestProject.revision !== project.revision || (await this.reviewEngine.state(fm, latestProject.frontmatter, true)).fingerprint !== state.fingerprint)
+            throw guidanceError(new Error('Review context changed during delivery; reread current context'), 'guid-ef74e59f5bdaf2f0');
+        return result;
+    }
     async packet(params) {
         const id = normalizeScopeId(params.taskId, 'taskId');
         const n = await this.visible(taskPath(id));
         if (n.frontmatter.mcpvault_type !== 'agent_task' || !n.frontmatter.project_id)
             throw guidanceError(new Error('Packet requires a project-backed task'), 'guid-77495db18b810d46');
         const project = await this.projectNote(n.frontmatter.project_id);
-        const fm = n.frontmatter;
+        const fm = { ...n.frontmatter };
+        if (fm.work_review_contract === 2)
+            fm.work_context_fingerprint = (await this.reviewEngine.state(fm, project.frontmatter)).fingerprint;
         const artifactFingerprint = reviewBasis(fm);
         const locators = [];
         if (fm.discussion_slug) {
@@ -1021,8 +1190,10 @@ export class WorkService {
             catch { /* Do not expose a now-private or moderated artifact locator. */ }
         }
         const paid = (await this.options.paidProjection?.([id], params.principal))?.[id];
-        const nextActions = paid?.freeMutationBlocked ? [paid] : await this.packetActions(id, n, project.frontmatter, params.principal);
+        const nextActions = paid?.freeMutationBlocked ? [paid] : await this.packetActions(id, { ...n, frontmatter: fm }, project.frontmatter, params.principal);
         const items = [
+            ...(fm.work_review_contract === 2 ? [{ kind: 'reviewContract', version: 2, nextAction: { endpoint: 'work.review_context', args: { taskId: id } },
+                    current: fm.work_review?.fingerprint === artifactFingerprint, verificationLevel: fm.work_review?.verification_level || 'pending' }] : []),
             { kind: 'task', title: String(fm.title || id).slice(0, 180), status: fm.status, assigneeAccountId: fm.assignee_account_id,
                 requesterAccountId: fm.requester_account_id, generation: fm.claim_generation, workKind: fm.work_kind },
             ...(this.blocker(fm) ? [{ kind: 'blocker', text: this.blocker(fm) }] : []),
@@ -1035,7 +1206,7 @@ export class WorkService {
             ...(fm.completion_criteria || []).map((text) => ({ kind: 'criterion', text })),
             ...locators,
             ...(fm.verification ? [{ kind: 'verification', text: fm.verification }] : []),
-            ...(fm.work_review ? [{ kind: 'review', ...fm.work_review }] : []),
+            ...(fm.work_review ? reviewPacketItems(fm.work_review) : []),
             ...(fm.work_handoff ? Object.entries(fm.work_handoff).filter(([k]) => k !== 'artifacts').map(([key, value]) => ({ kind: 'handoff', key, value })) : []),
             ...(fm.work_changes || []).slice(-5).reverse().map((change) => ({ kind: 'change', ...change })),
         ];
@@ -1063,6 +1234,9 @@ export class WorkService {
         if (fm.work_handoff?.state === 'proposed' && fm.work_handoff.to_account_id === actor.accountId)
             return [action('work.handoff', 'accept')];
         if (fm.status === 'in_review' && fm.work_review?.decision === 'request' && ![fm.requester_account_id, fm.assignee_account_id, fm.author_account_id].includes(actor.accountId)) {
+            if (fm.work_review_contract === 2)
+                return [{ kind: 'nextAction', tool: 'work.review_context', arguments: { taskId: id },
+                        requiredInput: ['Read original context ranges, then supply contextReceipts and structured criterion checks to work.review'], advisory: true }];
             return [action('work.review', 'approve', ['reason']), action('work.review', 'changes_requested', ['reason']), action('work.review', 'question', ['reason'])];
         }
         if (!fm.assignee_account_id) {
@@ -1092,7 +1266,8 @@ export class WorkService {
                 return [action('work.claim', 'start')];
             if (fm.verification && fm.completion_criteria?.length) {
                 const approval = fm.work_review;
-                if (fm.work_kind === 'general' || (approval && ['approve', 'override'].includes(approval.decision) && approval.fingerprint === reviewBasis(fm))) {
+                const approved = approval && (fm.work_kind === 'general' && fm.work_review_contract === 2 ? ['approve', 'override', 'self_verify'] : ['approve', 'override']).includes(approval.decision) && approval.fingerprint === reviewBasis(fm);
+                if ((fm.work_kind === 'general' && fm.work_review_contract !== 2) || approved) {
                     return [{ kind: 'nextAction', tool: endpointIdForTool('update_agent_task'),
                             arguments: { taskId: id, status: 'completed', expectedRevision: note.revision, expectedGeneration: fm.claim_generation,
                                 requestId: `work-${fingerprint({ actor: actor.accountId, id, revision: note.revision, status: 'completed' }).slice(0, 24)}` },
@@ -1101,6 +1276,9 @@ export class WorkService {
                 }
                 if (fm.status !== 'in_review')
                     return [action('work.review', 'request')];
+                if (fm.work_review_contract === 2 && fm.work_kind === 'general')
+                    return [{ kind: 'nextAction', tool: 'work.review_context', arguments: { taskId: id },
+                            reason: guidanceText('guid-e548d27483d6b949', 'Ordinary work may explicitly self_verify after reading context and supplying criterion evidence; this is not independent review.'), advisory: true }];
             }
             return [{ kind: 'nextAction', tool: endpointIdForTool('update_agent_task'), arguments: { taskId: id, expectedRevision: note.revision, expectedGeneration: fm.claim_generation,
                         requestId: `work-${fingerprint({ actor: actor.accountId, id, revision: note.revision }).slice(0, 24)}` }, requiredInput: ['verification or progress fields'], advisory: true }];

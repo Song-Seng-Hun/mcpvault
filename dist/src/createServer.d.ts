@@ -9,6 +9,8 @@ import { EndpointRegistry } from "./endpoint-registry.js";
 import { type EconomyLedger } from './economy-ledger.js';
 import type { EconomyPolicy } from './economy-model.js';
 export interface CreateServerOptions {
+    /** Trusted host integrations only; never populated from API arguments or Vault notes. */
+    workCollaboration?: Pick<import('./work-service.js').WorkServiceOptions, 'executionProfiles' | 'readReviewGitSource' | 'verifyReviewExecution'>;
     /** Explicit trusted host registration. Never loaded from a request or Vault note. */
     skillEvolution?: SkillEvolutionHost;
     /** Host-private notice registration/delegation file, reloaded before operations. */

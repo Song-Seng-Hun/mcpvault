@@ -15,6 +15,7 @@ import { responsibility, type WorkResponsibility } from './work-responsibility.j
 
 export interface WorkArtifact { path?: string; revision?: string; repository?: string; branch?: string; commit?: string; files?: string[] }
 export interface AgentTaskWorkFields {
+  changeContext?: import('./work-review.js').WorkChangeContext; migrateReviewContract?: boolean;
   responsibility?: WorkResponsibility;
   projectId?: string; parentTaskId?: string; dependsOn?: string[]; completionCriteria?: string[];
   artifacts?: WorkArtifact[]; workKind?: 'general' | 'security' | 'permissions' | 'shared_policy' | 'destructive';
@@ -142,6 +143,9 @@ export class AgentTaskService {
     if (note.frontmatter.mcpvault_type !== 'agent_task') throw guidanceError(new Error(`Not an agent task: ${taskId}`), 'guid-9ad8c35d257ae412');
     if (isModerationHidden(note.frontmatter)) throw guidanceError(new Error('Task is unavailable because moderation has hidden it'), 'guid-0869b6b64a63118b');
     const projectedFrontmatter = { ...note.frontmatter };
+    // Review packages may reference a source that was hidden since creation.
+    // Deliver their locators only through WorkService's current visibility gate.
+    delete projectedFrontmatter.change_context;
     if (note.frontmatter.responsibility !== undefined) {
       try {
         const declared = responsibility(note.frontmatter.responsibility);

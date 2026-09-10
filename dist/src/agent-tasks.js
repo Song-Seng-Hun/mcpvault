@@ -127,6 +127,9 @@ export class AgentTaskService {
         if (isModerationHidden(note.frontmatter))
             throw guidanceError(new Error('Task is unavailable because moderation has hidden it'), 'guid-0869b6b64a63118b');
         const projectedFrontmatter = { ...note.frontmatter };
+        // Review packages may reference a source that was hidden since creation.
+        // Deliver their locators only through WorkService's current visibility gate.
+        delete projectedFrontmatter.change_context;
         if (note.frontmatter.responsibility !== undefined) {
             try {
                 const declared = responsibility(note.frontmatter.responsibility);

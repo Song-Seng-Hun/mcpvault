@@ -1,4 +1,6 @@
-import type { FileSystemService } from './filesystem.js';
+import { type HostExecutionVerifier, type ContextReader } from './work-review.js';
+import { type WorkExecutionProfile } from './work-staffing.js';
+import { type FileSystemService } from './filesystem.js';
 import type { ReferenceService } from './references.js';
 import type { ScopeAuthService, ScopePrincipal } from './scope-auth.js';
 import { type AgentTaskService } from './agent-tasks.js';
@@ -9,6 +11,9 @@ type Guard = {
     expectedRevision: string;
 };
 export interface WorkServiceOptions {
+    executionProfiles?: () => Promise<WorkExecutionProfile[]>;
+    verifyReviewExecution?: HostExecutionVerifier;
+    readReviewGitSource?: ContextReader;
     assertActor?: (principal: ScopePrincipal) => Promise<void>;
     assertTaskMutation?: (taskId: string) => Promise<void>;
     paidProjection?: (taskIds: string[], principal?: ScopePrincipal) => Promise<Record<string, Properties>>;
@@ -21,6 +26,7 @@ export declare class WorkService {
     private readonly auth;
     private readonly tasks;
     private readonly options;
+    private readonly reviewEngine;
     private readonly access;
     private readonly intents;
     private readonly workshopCreates;
@@ -64,6 +70,14 @@ export declare class WorkService {
     private responsibilityItems;
     coverage(params: WorkBoardParams): Promise<import("./work-model.js").WorkPage>;
     board(params: WorkBoardParams): Promise<import("./work-model.js").WorkPage>;
+    private currentReview;
+    private staffingPolicy;
+    staffing(params: WorkBoardParams & {
+        taskId?: string;
+    }): Promise<import("./work-model.js").WorkPage>;
+    reviewContext(params: WorkPacketParams & {
+        locatorId?: string;
+    }): Promise<import("./work-model.js").WorkPage>;
     packet(params: WorkPacketParams): Promise<import("./work-model.js").WorkPage>;
     private packetActions;
     pulse(principal?: ScopePrincipal, limit?: number, maxChars?: number): Promise<{

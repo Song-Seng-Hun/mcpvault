@@ -14,6 +14,12 @@ Task-specific perspectives and exact resource reservations reduce registered
 write collisions; `work.coverage` reports declared gaps without claiming safety
 or expertise. No new fixed MCP tool, model runner or membership-based access grant.
 
+[Context-aware collaboration](docs/context-aware-collaboration.md) adds opt-in
+per-project review contracts: original-range delivery plus criterion evidence,
+upstream drift checks, explicit ordinary self-verification, and independently
+reviewed high-risk work. Read-only `work.staffing` recommends qualified perspectives
+without spawning or replacing active owners; unknown host execution stays unknown.
+
 [Independent-first research](docs/independent-research.md) adds opt-in rounds to
 existing Workshops: private independent evidence, explicit disclosure, exact-version
 peer challenges, then synthesis or unresolved closure. Use `workshop.research` and

@@ -382,6 +382,21 @@ bounded action. These projections do not create an alternate knowledge store.
 
 ## Peer work projections
 
+Projects may opt into `review_policy.version: 2` for new tasks and configure
+`staffing_policy`. Tasks then snapshot `work_review_contract: 2` and
+`work_review_policy`; `change_context` stores bounded exact before/after/source/test
+and upstream locators. `work_context_fingerprint` is derived, not authority.
+`work_review`/`work_reviews` retain structured criterion verdicts, evidence IDs,
+test snapshots/environment/missing checks and attributed verification levels:
+`self_verified`, `independently_reviewed`, `pending`, or `host_override`.
+Execution provenance is separate: `host_observed`, `self_reported`, or `unavailable`.
+Current source/project/ancestor drift invalidates approval without erasing history.
+Existing tasks are not retroactively upgraded; requester migration is explicit.
+Use `work.review_context` for bounded original raw-Markdown lines and ephemeral
+caller/version delivery receipts; receipts do not prove understanding. Use
+`work.staffing` for host-qualified advisory coverage, never execution authority.
+See [context-aware collaboration](../docs/context-aware-collaboration.md).
+
 Community-local projects under `Community/Projects` coordinate existing
 `Community/Tasks` without duplicating actionable Wiki notes. Project membership
 uses authenticated accounts and never grants external execution or private-scope

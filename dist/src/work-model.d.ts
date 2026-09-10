@@ -8,6 +8,8 @@ export interface WorkBaseParams {
     reason?: string;
 }
 export interface WorkProjectParams extends WorkBaseParams {
+    reviewPolicy?: import('./work-review.js').WorkReviewPolicy;
+    staffingPolicy?: WorkStaffingPolicy;
     groupIds?: string[];
     requiredPerspectives?: string[];
     teamStatus?: 'active' | 'completed';
@@ -30,6 +32,7 @@ export interface WorkBoardParams {
     maxChars?: number;
     cursor?: string;
 }
+export type WorkStaffingPolicy = Pick<import('./work-staffing.js').WorkStaffingInput, 'taskType' | 'factualVerification' | 'requiredTools' | 'requiredCapabilities' | 'minimumTier' | 'budget' | 'preferences'>;
 export interface WorkPacketParams {
     principal?: ScopePrincipal;
     taskId: string;
@@ -53,9 +56,11 @@ export interface WorkHandoffParams extends WorkBaseParams {
     artifacts?: WorkArtifact[];
 }
 export interface WorkReviewParams extends WorkBaseParams {
-    op: 'request' | 'approve' | 'changes_requested' | 'question' | 'override';
+    op: 'request' | 'approve' | 'self_verify' | 'changes_requested' | 'question' | 'override';
     taskId: string;
     artifactFingerprint?: string;
+    contextReceipts?: string[];
+    checks?: import('./work-review.js').WorkReviewCheck[];
 }
 export type Properties = Record<string, any>;
 export declare const WORK_KINDS: readonly ['general', 'security', 'permissions', 'shared_policy', 'destructive'];

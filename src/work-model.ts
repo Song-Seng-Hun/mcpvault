@@ -6,11 +6,14 @@ import type { WorkArtifact } from './agent-tasks.js';
 
 export interface WorkBaseParams { principal?: ScopePrincipal; requestId?: string; expectedRevision?: string; expectedGeneration?: number; reason?: string }
 export interface WorkProjectParams extends WorkBaseParams {
+  reviewPolicy?: import('./work-review.js').WorkReviewPolicy;
+  staffingPolicy?: WorkStaffingPolicy;
   groupIds?: string[]; requiredPerspectives?: string[]; teamStatus?: 'active' | 'completed';
   op?: 'read' | 'create' | 'update'; projectId: string; title?: string; goal?: string; allowedWork?: string[];
   participants?: string[]; completionCriteria?: string[]; wipLimit?: number; personalWipLimit?: number; roomId?: string; maxChars?: number;
 }
 export interface WorkBoardParams { principal?: ScopePrincipal; projectId: string; limit?: number; maxChars?: number; cursor?: string }
+export type WorkStaffingPolicy = Pick<import('./work-staffing.js').WorkStaffingInput, 'taskType' | 'factualVerification' | 'requiredTools' | 'requiredCapabilities' | 'minimumTier' | 'budget' | 'preferences'>;
 export interface WorkPacketParams { principal?: ScopePrincipal; taskId: string; limit?: number; maxChars?: number; cursor?: string; knownRevision?: string }
 export interface WorkClaimParams extends WorkBaseParams { op: 'claim' | 'start' | 'release'; taskId: string }
 export interface WorkHandoffParams extends WorkBaseParams {
@@ -18,7 +21,8 @@ export interface WorkHandoffParams extends WorkBaseParams {
   blocker?: string; nextAction?: string; artifacts?: WorkArtifact[];
 }
 export interface WorkReviewParams extends WorkBaseParams {
-  op: 'request' | 'approve' | 'changes_requested' | 'question' | 'override'; taskId: string; artifactFingerprint?: string;
+  op: 'request' | 'approve' | 'self_verify' | 'changes_requested' | 'question' | 'override'; taskId: string; artifactFingerprint?: string;
+  contextReceipts?: string[]; checks?: import('./work-review.js').WorkReviewCheck[];
 }
 export type Properties = Record<string, any>;
 export const WORK_KINDS = ['general', 'security', 'permissions', 'shared_policy', 'destructive'] as const;
@@ -33,7 +37,8 @@ function order(value: any): any {
   return value;
 }
 export const fingerprint = (value: unknown) => createHash('sha256').update(canonical(value)).digest('hex');
-export const reviewBasis = (fm: Properties) => fingerprint({ description: fm.description, completionCriteria: fm.completion_criteria || [], artifacts: fm.artifacts || [], workKind: fm.work_kind, verification: fm.verification || '', ...(fm.responsibility && { responsibility: fm.responsibility }) });
+export const reviewBasis = (fm: Properties) => fingerprint({ description: fm.description, completionCriteria: fm.completion_criteria || [], artifacts: fm.artifacts || [], workKind: fm.work_kind, verification: fm.verification || '', ...(fm.responsibility && { responsibility: fm.responsibility }),
+  ...(fm.work_review_contract === 2 && { contract: 2, context: fm.work_context_fingerprint }) });
 export function textField(value: unknown, field: string, max = 500, required = false): string {
   if (value !== undefined && typeof value !== 'string') throw guidanceError(new Error(`${field} must be a string`), 'guid-9a47fff07b9e2cc5');
   const text = String(value ?? '').trim();

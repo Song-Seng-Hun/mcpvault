@@ -98,5 +98,18 @@ Contract: [Context economy](2026-09-10-context-economy.md).
 
 Contract: [Context-aware collaboration](2026-09-10-context-aware-collaboration.md).
 
-- Status: queued; do not implement before Plan 1 is delivered.
-- Verification/deployment/commit: pending.
+- Status: implemented after the user explicitly requested Plan 2, following the
+  native/OCR deployment. Opt-in context-bound review gates, structured evidence,
+  current-upstream invalidation and advisory diverse staffing are available.
+- Independent SPEC then QUALITY reviews approved both modules after regression
+  fixes. Final full suite: 363 files passed, 4,966 tests passed and two skipped
+  using `--maxWorkers=4 --testTimeout=15000`. The initial default five-second run
+  had two known integration timeouts; isolated reruns passed.
+- NAS-backed runtime deployed with original Vault/world/economy state and OCR
+  configuration preserved. Live new-endpoint discovery and service routing passed;
+  no live test project or automatic v2 migration was introduced. Source and dist
+  delivery are recorded by the containing user-fork commit.
+- [Implementation and deployment evidence](2026-09-10-context-aware-collaboration-implementation.md)
+  and [protocol controls](../context-aware-collaboration-validation.md) distinguish
+  tested approval gates from model comprehension, collusion prevention and real
+  execution attestation. Optional trusted host integrations remain unconfigured.
