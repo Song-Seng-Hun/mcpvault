@@ -56,22 +56,33 @@ test of a newer hypothesis without checking the change.
 
 ## Review the original claim
 
-`wiki.knowledge_gaps` offers a bounded metadata projection:
+`wiki.knowledge_gaps` offers a bounded investigation projection:
 
 - `plan_recorded`: criteria exist, not permission to run;
 - `targets_changed` / `evidence_changed`: inspect drift before reuse;
 - `result_requires_review`: a reported result, not verified truth;
+- `result_reviewed`: this result is linked to an existing review for every
+  target and its semantic basis is unchanged; this is not truth approval;
 - `inputs_unavailable`: required context cannot be exposed or read;
 - `invalid_record` / `unassessed`: repair the record or narrow the query.
 
 Use the returned exact `notes.read` action, compare the observation and saved
 criteria, then use existing `wiki.review` / `wiki.review_claim` after reading
-their requirements. Do not blindly approve, refute or retire the original.
+their requirements. Include optional `investigationEvidence: { path, revision }`
+pointing to the current reported-result note. The service validates the saved
+plan, declared target and evidence, guards related revisions and records this
+link in the existing note/Claim review Properties. Old unlinked reviews are
+never presumed to have reviewed this result. Ordinary review bookkeeping
+updates preserve the receipt; substantive body, claim or relation changes
+invalidate it. A changed result revision or evidence also requires reassessment.
+Do not blindly approve, refute or retire the original.
 The server never changes target claims, creates tasks or executes experiments.
 Missing criteria in a note do not prove no linked experiment exists: inspect
 existing `tests` and discussion references before creating another run.
 
-The queue adds at most 64 related metadata reads and rechecks their revisions;
+The queue adds at most 64 related metadata reads plus eight bounded target-body
+reads when matching review receipts need semantic-basis checks, and rechecks
+their revisions. An exhausted read budget is `unassessed`, never reviewed;
 it does not copy the experiment text into the response. Existing whole-response
 limits and recall priority still apply. Snapshot paths support move/delete
 integrity but do not become navigation/support edges or proof of causality.

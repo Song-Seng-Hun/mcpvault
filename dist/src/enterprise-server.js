@@ -298,19 +298,19 @@ export async function startEnterpriseServer(config) {
     let runtime;
     let http;
     try {
-        const globalImport = globalImportConfig
-            ? await new GlobalSyncReplica({
-                vaultPath: profile.vaultPath,
-                client: new GlobalSyncReadClient({ baseUrl: globalImportConfig.baseUrl, readToken: globalImportConfig.readToken }),
-                trustedPublicKey: globalImportConfig.trustedPublicKey,
-            }).pull(100)
-            : undefined;
         const [cert, key, ca] = await Promise.all([
             readFile(canonicalCertPath),
             readFile(canonicalKeyPath),
             readFile(canonicalCaPath),
         ]);
         validateTls(cert, key, ca);
+        const globalImport = globalImportConfig
+            ? await new GlobalSyncReplica({
+                vaultPath: profile.vaultPath,
+                client: new GlobalSyncReadClient({ baseUrl: globalImportConfig.baseUrl, readToken: globalImportConfig.readToken }),
+                trustedPublicKey: globalImportConfig.trustedPublicKey,
+            }).pullPages()
+            : undefined;
         runtime = createServer(profile.vaultPath, {
             enterpriseRegistryPath: canonicalRegistryPath,
             commandCenterId: profile.realmId,

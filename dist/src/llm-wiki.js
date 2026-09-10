@@ -4,7 +4,7 @@ import { fingerprint as workFingerprintForOutput } from './work-model.js';
 import { KnowledgeApplicationService } from './knowledge-applications.js';
 import { prepareKnowledgeSynthesis, inspectSynthesisBasis } from './knowledge-synthesis.js';
 import { normalizeKnowledgeSynthesis } from './knowledge-synthesis-model.js';
-import { prepareKnowledgeInvestigation, inspectInvestigation } from './knowledge-investigation.js';
+import { prepareKnowledgeInvestigation, inspectInvestigation, investigationReviewBasis, writeInvestigationReview } from './knowledge-investigation.js';
 import { SourceProvenanceSession, prepareSourceDerivations, sourceWorkIdentity } from './source-provenance.js';
 import { authoringAssist, hostPluginBundle, propertyContractFingerprint } from './authoring-assist.js';
 import { posix } from 'node:path';
@@ -2953,6 +2953,22 @@ export class LlmWikiService {
         // A later external edit is still possible; returned revisions guard writes.
         const investigationInputs = new Map();
         let investigationReads = 0;
+        const investigationBases = new Map();
+        let investigationBodyReads = 0;
+        const readInvestigationBasis = async (meta) => {
+            if (investigationBases.has(meta.path))
+                return investigationBases.get(meta.path);
+            if (++investigationBodyReads > 8)
+                return undefined;
+            if (!canAccess(meta.path))
+                throw changed();
+            const body = await this.fileSystem.readNote(meta.path, MAX_NOTE_CONTENT_BYTES);
+            if (body.revision !== meta.revision || isModerationHidden(body.frontmatter) || !canAccess(meta.path))
+                throw changed();
+            const basis = investigationReviewBasis(body.content, body.frontmatter);
+            investigationBases.set(meta.path, basis);
+            return basis;
+        };
         const readInvestigationInput = async (path) => {
             if (investigationInputs.has(path))
                 return investigationInputs.get(path);
@@ -2970,14 +2986,16 @@ export class LlmWikiService {
             if (note.frontmatter.knowledge_investigation !== undefined) {
                 candidate.item.investigation = investigationReads + 8 > 64
                     ? { state: 'unassessed', reason: guidanceText('guid-81e06fca16e88d84', 'Request metadata budget reached; narrow the queue limit.') }
-                    : await inspectInvestigation(note.frontmatter.knowledge_investigation, candidate.path, readInvestigationInput, this.access, principal);
+                    : await inspectInvestigation(note.frontmatter.knowledge_investigation, candidate.path, readInvestigationInput, this.access, principal, { revision: candidate.revision, readBasis: readInvestigationBasis });
                 if (!candidate.item.reasons.includes('recall_due') && !candidate.item.recallUnavailable) {
                     candidate.item.suggestedAction = 'Inspect investigation.nextAction when available, then review the original claim using the recorded result and evidence. Do not automatically approve a claim or execute an experiment without user authorization.';
+                    if (candidate.item.investigation.state === 'result_reviewed')
+                        candidate.item.suggestedAction = 'Review of this reported result is already recorded. Address other queue reasons independently; substantive target or evidence drift requires a new review, not automatic approval.';
                     if (['invalid_record', 'unassessed'].includes(candidate.item.investigation.state)) {
                         candidate.item.investigation.nextAction = { endpointId: 'notes.read', arguments: { path: this.access.toPublicPath(candidate.path), expectedRevision: candidate.revision, property: 'knowledge_investigation', maxChars: 3000 } };
                         candidate.item.suggestedAction = candidate.item.investigation.state === 'invalid_record'
                             ? 'Read and repair the invalid investigation record using the current revision and actual evidence; do not invent a saved plan or approve its conclusions.'
-                            : 'The metadata budget was reached. Read this one investigation record, then check its targets and evidence with current revisions in smaller reads; the raw record is not a validated review result.';
+                            : 'The investigation read budget was reached. Read this one investigation record, then check its targets and evidence with current revisions in smaller reads; the raw record is not a validated review result.';
                     }
                 }
             }
@@ -4347,30 +4365,25 @@ export class LlmWikiService {
         const reviewAt = explicitReviewAt || (effectiveReviewIntervalDays !== undefined && outcome !== 'superseded'
             ? new Date(Date.parse(timestamp) + effectiveReviewIntervalDays * 24 * 60 * 60 * 1000).toISOString()
             : undefined);
-        const updated = await this.fileSystem.updateFrontmatterWithReceipt({
-            path: params.path,
-            frontmatter: {
-                review_basis_content_sha256: hash(note.content),
-                review_basis_links: reviewBasisLinks,
-                review_basis_upstream: reviewBasisUpstream,
-                last_review_outcome: outcome,
-                last_reviewed_by: boundedText(params.reviewedBy, 200),
-                last_reviewed_at: timestamp,
-                last_reviewed_revision: note.revision,
-                last_review_trigger: reviewTrigger,
-                review_count: reviewCount,
-                review_reopen_count: reviewReopenCount,
-                ...(reviewAt && { review_at: reviewAt }),
-                ...(effectiveReviewIntervalDays !== undefined && { review_interval_days: effectiveReviewIntervalDays }),
-                ...(nextLifecycle && { lifecycle: nextLifecycle }),
-                ...(reviewNote && { review_note: reviewNote }),
-                ...(reviewChecks && { review_checks: reviewChecks }),
-                ...(reviewOpenItems && { review_open_items: reviewOpenItems }),
-                updated_by: params.reviewedBy,
-                updated_at: timestamp,
-            },
-            merge: true,
-            expectedRevision: params.expectedRevision,
+        const updated = await writeInvestigationReview(this.fileSystem, this.access, params, note, {
+            review_basis_content_sha256: hash(note.content),
+            review_basis_links: reviewBasisLinks,
+            review_basis_upstream: reviewBasisUpstream,
+            last_review_outcome: outcome,
+            last_reviewed_by: boundedText(params.reviewedBy, 200),
+            last_reviewed_at: timestamp,
+            last_reviewed_revision: note.revision,
+            last_review_trigger: reviewTrigger,
+            review_count: reviewCount,
+            review_reopen_count: reviewReopenCount,
+            ...(reviewAt && { review_at: reviewAt }),
+            ...(effectiveReviewIntervalDays !== undefined && { review_interval_days: effectiveReviewIntervalDays }),
+            ...(nextLifecycle && { lifecycle: nextLifecycle }),
+            ...(reviewNote && { review_note: reviewNote }),
+            ...(reviewChecks && { review_checks: reviewChecks }),
+            ...(reviewOpenItems && { review_open_items: reviewOpenItems }),
+            updated_by: params.reviewedBy,
+            updated_at: timestamp,
         });
         const followUpRequired = String(updated.frontmatter.lifecycle || '').toLowerCase() === 'review' && !nextLifecycle;
         // When an upstream note is retired or disputed, point at the notes whose
@@ -4435,18 +4448,14 @@ export class LlmWikiService {
             ? { ...note.frontmatter.claim_reviews }
             : {};
         existingReviews[String(claim.id)] = {
+            ...(existingReviews[String(claim.id)]?.investigation_evidence && { investigation_evidence: existingReviews[String(claim.id)].investigation_evidence }),
             status: params.status,
             ...(params.confidence !== undefined && { confidence: params.confidence }),
             reviewed_by: boundedText(params.reviewedBy, 200),
             reviewed_at: reviewedAt,
             ...(params.reviewNote?.trim() && { review_note: boundedText(params.reviewNote, 1000) }),
         };
-        const updated = await this.fileSystem.updateFrontmatterWithReceipt({
-            path: params.path,
-            frontmatter: { claims, claim_reviews: existingReviews, updated_by: params.reviewedBy, updated_at: reviewedAt },
-            merge: true,
-            expectedRevision: params.expectedRevision,
-        });
+        const updated = await writeInvestigationReview(this.fileSystem, this.access, params, note, { claims, claim_reviews: existingReviews, updated_by: params.reviewedBy, updated_at: reviewedAt }, String(claim.id));
         const downstream = ['disputed', 'superseded'].includes(params.status)
             ? await this.collectClaimDownstreamKnowledgePaths(params.path, String(claim.id), claim, params.principal, 8)
             : { total: 0, paths: [], truncated: false };

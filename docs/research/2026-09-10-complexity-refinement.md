@@ -34,27 +34,27 @@ permanent duplicate implementation or unfinished temporary alias at closure.
 
 | ID | Change / retained value | Classification | Replacement / owner | State |
 | --- | --- | --- | --- | --- |
-| R01 | Pulse public/internal schema drift, repeat notices | Merge duplicate contract | Existing pulse tool definition and caller revision receipts | Targeted tests passed; deployment pending |
-| R02 | Answer claims incorrectly use summary bullets | Merge duplicate projection | Structured claim projection; summaries stay distinct | Targeted tests and quality review passed; rollout pending |
-| R03 | Broken website command | Repair dead entrypoint | Existing `website-shibumi` app | Targeted tests passed; deployment pending |
+| R01 | Pulse public/internal schema drift, repeat notices | Merge duplicate contract | Existing pulse tool definition and caller revision receipts | Verified NAS deployment and fork push ebf45d87 |
+| R02 | Answer claims incorrectly use summary bullets | Merge duplicate projection | Structured claim projection; summaries stay distinct | Verified NAS deployment and fork push ebf45d87 |
+| R03 | Broken website command | Repair dead entrypoint | Existing `website-shibumi` app | Verified build and fork push ebf45d87 |
 | R04 | Economy simulation and question corpus in production build | Move evaluation assets | Test fixtures, preserving all evaluations | Targeted tests and fresh build passed; absent from staged release |
-| R05 | Capability search, schema budgets, listing continuation | Reduce navigation | Existing five tools, exact-ID schemas, bounded catalog pages | Targeted tests passed; review/deployment pending |
-| R06 | Unconfigured host operations advertised ready | Reduce exposure | Operation-level configured/auth/data status | Targeted tests passed; review/deployment pending |
-| R07 | README repeats schemas and long feature references | Prune documentation | Short guide to existing executable schemas and topic docs | Guide/route tests passed; review pending |
-| R08 | Closed Workshop strands independent research | Repair terminal path | Authorized unresolved closure; embargo remains | 25 targeted tests and SPEC passed; main quality review, rollout pending |
-| R09 | Work handoff invalidates Story writer | Reconcile ownership | Explicit showrunner resume using accepted Work revision/generation | Pending |
-| R10 | Workshop task output loses caveats | Preserve accepted contract | Existing Work description/context, no output database | 28 targeted tests and main review passed; rollout pending |
-| R11 | Story/Quest results lack precise Work completion handoff | Reuse workflow | Existing Work packet with exact evidence; no automatic approval | Pending |
-| R12 | Synthesis basis checking absent during reuse | Reuse existing check | Projection and Answer/Context packets | Targeted tests and quality review passed; rollout pending |
-| R13 | Investigation review cannot distinguish reviewed results | Reconcile review evidence | Existing note/claim review records, result revision binding | Pending |
-| R14 | Bridge candidates trapped in alphabetical sample | Share candidate selection | Authorized common retrieval, bounded partial-result continuation | Pending |
-| R15 | Application feedback underused by review/reuse | Reuse reverse references | Existing application records, no automatic contradiction | Targeted tests and quality review passed; rollout pending |
-| R16 | Packet/health/dashboard overlap | Compare before removing | Preserve different outputs; consolidate proven duplicate computation | Pending |
-| R17 | Duplicate MOC status read on the mutating region endpoint | Migrate then remove | Canonical wiki.moc_region_status; legacy operation forwards only | Callers/guidance migrated; compatibility deployment then removal pending |
+| R05 | Capability search, schema budgets, listing continuation | Reduce navigation | Existing five tools, exact-ID schemas, bounded catalog pages | Verified NAS deployment and fork push ebf45d87 |
+| R06 | Unconfigured host operations advertised ready | Reduce exposure | Operation-level configured/auth/data status | Verified NAS deployment and fork push ebf45d87 |
+| R07 | README repeats schemas and long feature references | Prune documentation | Short guide to existing executable schemas and topic docs | Guide/route tests and fork push ebf45d87 |
+| R08 | Closed Workshop strands independent research | Repair terminal path | Authorized unresolved closure; embargo remains | Verified NAS deployment and fork push; formerly missing independent review now passed |
+| R09 | Work handoff invalidates Story writer | Reconcile ownership | Explicit showrunner resume using accepted Work revision/generation | Verified tests, independent reviews and refinement-2 NAS deployment; fork receipt below |
+| R10 | Workshop task output loses caveats | Preserve accepted contract | Existing Work description/context, no output database | Verified tests, independent reviews and refinement-2 NAS deployment; fork receipt below |
+| R11 | Story/Quest results lack precise Work completion handoff | Reuse workflow | Existing Work packet with exact evidence; no automatic approval | Verified tests, independent reviews and refinement-2 NAS deployment; fork receipt below |
+| R12 | Synthesis basis checking absent during reuse | Reuse existing check | Projection and Answer/Context packets | Verified NAS deployment and fork push ebf45d87 |
+| R13 | Investigation review cannot distinguish reviewed results | Reconcile review evidence | Existing note/claim review records, result revision binding | Verified tests, independent reviews and refinement-2 NAS deployment; fork receipt below |
+| R14 | Bridge candidates trapped in alphabetical sample | Share candidate selection | Authorized common retrieval, bounded partial-result continuation | Verified tests, independent reviews and refinement-2 NAS deployment; fork receipt below |
+| R15 | Application feedback underused by review/reuse | Reuse reverse references | Existing application records, no automatic contradiction | Verified NAS deployment and fork push ebf45d87 |
+| R16 | Packet/health/dashboard overlap | Retain distinct contracts | Existing shared projections/collectors; comparison below | Compared implementations, authorization and consumers; no additional equivalent endpoint approved for removal |
+| R17 | Duplicate MOC status read on the mutating region endpoint | Migrate then remove | Canonical wiki.moc_region_status | Verified tests, independent reviews and refinement-2 NAS deployment; fork receipt below |
 | R18 | Merged skill-evolution branch | Remove merged refs only | Verify ancestry, remote tip and no checked-out worktree | Removed local/remote refs; merged code remains in main |
-| R19 | Enterprise support differs from general launcher | Clarify boundary | No automatic optional-host enablement | Guide and capability checks passed; rollout pending |
-| R20 | Enterprise import stops after one page | Reuse host continuation | Bounded sequential pulls, explicit partial/conflict/stall result | Pending |
-| R21 | Whole-system repeat audit | Re-evaluate all axes/seams | Two consecutive change-free complete passes | Pending |
+| R19 | Enterprise support differs from general launcher | Clarify boundary | No automatic optional-host enablement | Verified NAS deployment and fork push ebf45d87 |
+| R20 | Enterprise import stops after one page | Reuse host continuation | Bounded sequential pulls, explicit partial/conflict/stall result | Verified tests, independent reviews and refinement-2 NAS deployment; fork receipt below |
+| R21 | Whole-system repeat audit | Re-evaluate all axes/seams | Two consecutive change-free complete passes | Two complete change-free passes; same 1001-input fingerprint |
 
 Explicitly retain resource-bundle host, skill-library host and Roleplay
 recovery: they have script consumers. Preserve independent meanings of
@@ -65,14 +65,14 @@ federation/company memory. File splitting alone is not a measured improvement.
 ## Verification and deployment gates
 
 - [x] Baseline full suite in an isolated fixture environment.
-- [ ] Regression first: red result recorded before behavior changes.
-- [ ] Targeted tests, build, full tests, guidance consistency and diff checks.
-- [ ] Specification review, followed by independent quality review.
-- [ ] Preserve prior release and operator launch configuration for rollback.
-- [ ] Deploy runnable batch; verify actual MCP and read-only NAS scenarios.
+- [x] Regression first: red result recorded before behavior changes.
+- [x] Targeted tests, build, full tests, guidance consistency and diff checks.
+- [x] Specification review, followed by independent quality review.
+- [x] Preserve prior release and operator launch configuration for rollback.
+- [x] Deploy runnable batch; verify actual MCP and read-only NAS scenarios.
 - [ ] Commit source and corresponding generated output together; push user fork.
-- [ ] Retire migrated compatibility paths only after the transition deployment.
-- [ ] Recheck every ledger item and complete two change-free audit passes.
+- [x] Retire migrated compatibility paths only after the transition deployment.
+- [x] Recheck every ledger item and complete two change-free audit passes.
 
 Commands: `npm test -- <target> --maxWorkers=1`, `npm run build`,
 `npm test -- --maxWorkers=4 --testTimeout=15000`, `npm run guidance:check`,
@@ -188,9 +188,110 @@ MOC status and its temporary alias returning the same result. Roleplay and Skill
 remained enabled. World sequence 2 and economy sequence 1 retained the exact
 pre-deployment canonical hashes; no Vault, task, world or ledger test mutations.
 
-This verifies the first deployment for R01–R08 (except no R09), R10, R12, R15,
+Commit `ebf45d8709c19083bb4cf51ee4e92eeb6cb82885` is verified at local HEAD and
+the user's remote `main`. Pre-existing untracked operator/research files remain
+excluded. This verifies the first deployment for R01–R08, R10, R12, R15,
 R19 and R17's transition only. R17 alias removal is now eligible in the next
 unit, not complete. R09, R11, R13, R14, R16, R20 and both final audits remain.
+
+### Second refinement unit in progress
+
+The previously quota-limited R10 specification review was completed in this
+unit and found a Unicode counting mismatch: the assembled task preflight used
+code points while Work uses UTF-16 length. A supplementary-character regression
+failed before reservation as expected only after replacing the duplicate check
+with Work's existing `textField` validator. The Decision context contract is
+different and remains unchanged. This removes a validation disagreement rather
+than truncating accepted caveats or weakening the Work limit.
+
+R14 now asks common retrieval over the authorized search space before retaining
+candidate metadata. It preserves the 64-metadata/eight-body bounds and existing
+fallback; bounded discovery stays explicitly partial and continues to normal
+search rather than repeating the same sample. It adds no index or model router.
+
+The first main whole-system pass added an actual Search/Collaboration/Retrieval
+integration fixture beyond the stubbed admission test. It reproduced an empty
+candidate list because `searchContent: false` also left Properties search off
+by default. Explicit `searchFrontmatter: true` now preserves metadata matching
+both in Bridge discovery and its ordinary-search continuation. Omitted and
+explicit queries find the methods-only match beyond 70 alphabetically earlier
+notes; Community candidates remain excluded. All 29 Bridge/Work tests passed.
+The in-progress full run was intentionally cancelled before this fix; it is
+not a verification receipt. Consecutive change-free audits reset to zero.
+Independent quality review then reproduced configured retrieval collapsing
+outward discovery to near-only hits. To preserve the prior two-near/one-distant
+scenario, outward requests for three leads reserve eight slots inside the same
+metadata budget for an additional bounded common retrieval of contrasting
+authored domains. Search matches alone do not classify these contrast hits as
+near; current domain/relationship evidence still determines the lane. Partial
+search remains explicit. The real configured-retrieval regression failed before
+the fix, then all 30 Bridge/Work tests passed. This adds no path-first inventory
+sample, index or state and keeps 64 metadata/eight body limits. The full run in
+progress was cancelled before editing; audit streak remains zero.
+
+R20 continues the existing replica pull with at most ten 100-entry pages. It
+distinguishes completion, budget exhaustion, conflict, no progress and interrupted
+I/O; the persisted cursor remains authoritative. A failed page does not pretend
+its applied list is complete. Signed 101-entry import, conflict preservation,
+partial restart, interrupted restart and nonterminal empty responses passed.
+TLS is validated before import, and startup logs the actual synchronization state.
+Independent specification review also identified a checkpoint-write failure
+leaving the same replica object's in-memory cursor ahead of disk. A red-first
+fixture reproduced the skipped retry entry. Interrupted imports now invalidate
+only in-memory state so the next existing load reads the durable checkpoint.
+Failures before the first checkpoint and after one saved entry both recover;
+all 42 import/Global Sync/Enterprise tests passed. No Vault rewrite or new
+recovery store was introduced. The second pre-final full run was cancelled
+before this fix and is not counted as verification.
+
+R09 exposes only an explicit resume option with exact Work revision/generation.
+It verifies an accepted handoff from the prior writer, the new assignee's current
+membership and showrunner authority; source/editor history is retained. Ordinary
+resume cannot silently change the writer. R11 retains exact decision artifacts
+in the existing Story session result and derives the Work handoff on read; settled
+Quest results remain in the existing paid projection with visible pinned sources.
+Neither domain changes Work status, verification or approval automatically.
+
+R11's first implementation misread raw file results as including a path; final
+input revalidation consequently dropped both result projections. The fixture
+packet exposed this cause. Keeping the exact input path alongside each observed
+revision fixed all five result cases, and the fresh build passed. Expanded
+visibility/concurrency regressions then passed all 156 tests in six files,
+including one-winner reconnection and hidden settlement/Story evidence. R13,
+full verification and rollout remain.
+
+R13 adds an optional exact `investigationEvidence` reference to existing note
+and Claim review contracts. It records the current reported-result revision
+and a semantic target basis inside the existing review Properties, preserving
+ordinary review metadata updates without inferring completion from old unlinked
+reviews. Substantive body/claim/relation changes, changed result revisions and
+changed/hidden evidence require reassessment. The related-note CAS writer,
+scope checks and immutable-source rules are reused; there is no approval store.
+Four first failing cases became green; later failure/visibility/drift cases
+passed. Specification review identified duplicate metadata reads for repeated
+prose references: a red-first test proved two reads instead of one, then an
+access-checked request-local cache fixed the duplicate while retaining final
+revision guards. The complete 31-test file passed after this correction.
+
+### R16 contract comparison
+
+All reads below use the caller's scope predicate; similarity of names does not
+make their response meaning or continuation contracts equivalent.
+
+| Family | Preserved output/consumer | Existing shared calculation / reason retained |
+| --- | --- | --- |
+| Answer / Context | One-note evidence/claims/contradictions versus MOC reading order and a live shelf | `contextPack` calls `answerPacket`; both reuse `readProjection`, synthesis/application validation and final revision checks. Context's additional traversal requires its later revalidation. |
+| Review queue / dashboard / packet | Evidence/lifecycle review candidates versus Reflect's sectioned inventory versus prioritized next action | `collectReviewQueue` feeds the queue and `collectReviewDashboard`; the dashboard collector feeds `reviewPacket`. Pulse calls the packet, not all three endpoints. Different response budgets and attention/snooze behavior remain. |
+| Graph / organization health | Relationship/MOC connectivity versus property/lint, quarantine and collection repair | Graph health is consumed by Reflect and review packet; organization health reuses `lint` and `CollectionHealthProjection`. A missing graph sample can require a larger bounded read; this is a budget continuation, not a second implementation. |
+| Flow / next actions / project packet | WIP/dependency forecasts versus executable actions versus one project's completion context | All use `workDependencySnapshot`; shared resolution and cycle classification remain single implementations. Different thresholds, body requirements and returned evidence are not aliases. |
+| Work packet / knowledge review packet | Authenticated assignment/review/completion versus advisory knowledge maintenance | Work role authority and task generation cannot be inferred from knowledge health. Story and economy contribute evidence to Work, never automatic approval. |
+
+The MCP adapters still dispatch these distinct operations; `agent-pulse.ts`
+uses the single maintenance `reviewPacket` route. The inspected pairs already
+share their business calculations rather than maintaining parallel state.
+No name-only merge, file split or new cross-request cache is warranted. The
+proven equivalent MOC-region status alias follows R17's deployed transition
+and removal; that is the only additional public-path deletion in this unit.
 
 Report each unit's retained value, removed complexity, handwritten-source
 additions/deletions, separate tests/generated/docs delta, verification and
@@ -206,3 +307,112 @@ complexity, two complete change-free audits and final verified deployment plus
 fork push. Any implementation change resets the consecutive audit count.
 Unknown external consumers or missing authority remain explicit blockers,
 never silent completion. No whole feature island is presumed unused.
+
+## Final audit record
+
+Following the metadata-read, real retrieval, contrast-lane, checkpoint-retry
+and Unicode-preflight corrections, specification and independent quality
+reviews passed. The formerly incomplete R08/R10 independent review gates were
+also completed; their earlier limitation remains historical, not an open gate.
+Target receipts include 156 cross-domain, 133 knowledge/review/control, 30
+Bridge/Work, 42 Global/Enterprise and 47 Workshop/independent-research tests.
+Fresh guidance generation (4,470 entries, zero pending bindings), build and
+guidance check passed before the final full-suite run.
+
+### Complete pass 1 — main audit, 2026-09-10
+
+Reconciled the original inventory, every ledger row, live deployment profile,
+remaining callers and the ten axes below after the last implementation fix.
+No additional unhandled value-preserving removal or broken seam was identified.
+The 1,001-file audit snapshot is
+`f87a3cd3f280fe3da373c5a82e6e17bb64b20c6afd08ef8a326b1748c4ad64d3`.
+It includes tracked source/tests/contracts plus the new import regression;
+excludes generated dist/guidance, research receipts and the unchanged companion
+website. Generated artifacts are checked separately by build/stage hashes.
+
+| Axis and seams revisited | Retained requirement / disposition |
+| --- | --- |
+| Data/trust → every domain | Normalization, PathFilter, scope predicates, immutable sources and revision guards stay authoritative. Review receipt paths join move/delete integrity, not graph support. |
+| Capture/evidence/knowledge → reuse/review | Claims are separate from summaries. Synthesis/application drift checks feed reuse. Investigation receipts suppress only repeated review; drift/hidden evidence remain actionable. |
+| Retrieval/organization → packets/maintenance | Primary intent routes and exact schemas remain accessible; catalog is paged. Bridge uses common primary/contrast retrieval with explicit partial coverage. R16 records distinct retained views. |
+| Memory/continuity/guidance → session work | Private memory is not public knowledge; continuity retains exact pending-edit/learning guards. One pulse schema and caller notice revisions replace duplicate/reminder paths. |
+| Community/Workshop/research → decisions/Work | Legacy discussions stay history. Closed parents allow only authorized unresolved research cleanup. Accepted caveats survive Work creation under the same downstream validator. |
+| Work → Story/Quest/completion | Work owns accepted assignment and generation. Explicit reconnect and exact result locators bridge domains; Work completion/independent review are not inferred. |
+| Story/Roleplay → evidence/Skill/Quest | Writer/editor/showrunner stay distinct. Fiction/adoption is not factual approval. Host administration and recovery remain explicit, with operational script consumers. |
+| Economy/Quest → Work | Host owners, escrow, idempotency, conservation and signed private receipts remain distinct from reputation or narrative money. Settled results hand off evidence, not automatic Work approval. |
+| Skill/evolution → reuse/host execution | Imported resources stay data; host provenance, approved evaluation and promotion/rollback remain. Evaluation assets moved out of runtime retain their tests. |
+| Deployment/Enterprise/Global/federation | Optional hosts stay opt-in. Enterprise imports are bounded/resumable with explicit incomplete states. Global/private/company/public-conversation boundaries stay distinct. |
+
+Removal recheck: the merged branch refs are absent locally; only the canonical
+MOC status adapter invokes internal status. The removed public status option
+has negative regression coverage; its transition was already NAS-verified.
+Runtime `dist` contains neither evaluation fixture. All retained host utilities
+have source/script consumers; no new orchestrator, persistent index or cache
+was introduced. Current live runtime remains the first verified release until
+the final full suite and second complete pass finish.
+
+### Complete pass 2 — independent audit, 2026-09-10
+
+The second reviewer revisited all ten axes and seams, the removal inventory,
+retained host consumers, discovery/schema fixtures and the signed import path.
+No additional concrete defect, broken handoff or equivalent removal with clear
+preserved value was found. All 1,001 audit inputs remained unchanged. The
+previous snapshot hash was rechecked by main after the verdict. R21 therefore
+has two consecutive complete change-free passes; this is not a claim of perfect
+code or production performance measurement. Any implementation fix resets both.
+
+The prepared-session discovery route remains intent search, optional exact
+schema lookup, then endpoint invocation: at most three calls, excluding
+required approvals and original-evidence verification. Eight representative
+Korean/English queries and every default-budget exact schema are fixture-tested;
+actual NAS traversal/query verification is repeated at deployment.
+
+Final full-suite completion, deployment verification and fork push are separate
+gates, not implied by these audit verdicts.
+
+### Complexity accounting
+
+Handwritten operational TypeScript in this unit adds/deletes 310/65 lines
+(net +245); across both units it is 544/141 (net +403). Evaluation-asset moves
+are reported separately rather than counted as deleted functionality. The
+growth repairs accepted-handoff reconnect, exact result reuse, review receipt
+freshness, bounded import recovery and full-space/contrast discovery; it is
+not presented as a net reduction in operational source lines.
+
+Removed complexity: one duplicate Pulse schema, summary-as-Claim interpretation,
+the broken website entrypoint, two evaluation assets from runtime deployment,
+the migrated public MOC status option and adapter branch, one merged branch,
+repeated notice/schema/catalog discovery paths, and the Workshop/Work length
+validator disagreement. Existing review/result records hold the new references;
+no new persistent result/approval/ownership store was added. Five MCP tools and
+269 endpoint IDs are retained; the public status option is removed, not an
+entire endpoint. New reconnect/review inputs extend existing operations only.
+
+### Verified final runtime
+
+The unchanged final implementation passed 368 test files: 5,063 tests passed,
+two skipped, zero failed (453.90 seconds). Guidance generation/check, build and
+`git diff --check` passed. Both complete audits remained valid. The deployment
+stage contained 747 files with hashes matching the generated runtime.
+
+At 2026-09-10T14:16:40.166571Z the NAS-backed server switched to refinement-2.
+Read-only verification through the new MCP process passed: five fixed tools,
+269 endpoints across five catalog pages, eight Korean/English discovery queries,
+exact schemas, unchanged notice suppression, canonical MOC status, rejected
+retired alias, new investigation-review and Story-reconnect contracts. Existing
+Roleplay and Skill hosts remained enabled. World sequence 2 and economy
+sequence 1 retained their exact canonical hashes. OCR opt-in/configuration,
+Vault content, journals and credentials were preserved; no live test mutations.
+Both prior runtime and launcher are retained for rollback. Enterprise import
+was verified with signed isolated fixtures, not by enabling Enterprise on this
+normal-server NAS profile.
+
+This unit's separate deltas before closing receipt-only documentation are:
+handwritten TypeScript 310/65, tests 393/10, generated guidance 1202/1052,
+generated dist 1664/1172 (added/deleted lines). Evaluation assets remain under
+`tests/fixtures`; none were deleted to improve these counts. Document pruning
+and the complete research receipt are separately visible in the commit diff.
+
+Runtime verification is complete. The source/dist commit and matching fork
+push are the remaining publication gate; the closing receipt below records
+the actual verified commit rather than predicting its hash.

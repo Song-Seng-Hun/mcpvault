@@ -108,7 +108,31 @@ export class EconomyService {
             if (old && old.status !== 'settled')
                 continue;
             const divergence = c.workBinding && current.revision !== c.workBinding.revision;
+            const artifacts = [];
+            const observed = [];
+            for (const item of [...(c.submission?.artifacts || []).map(a => ({ ...a, kind: 'submission' })), ...(c.review ? [{ ...c.review.artifact, kind: 'review' }] : [])]) {
+                try {
+                    const note = await this.visible(item.path, actor);
+                    observed.push({ path: item.path, revision: note.revision });
+                    artifacts.push({ ...item, currentRevision: note.revision, stale: note.revision !== item.revision });
+                }
+                catch { /* Do not expose unavailable settlement evidence. */ }
+            }
+            if ((await this.task(c, actor, false)).revision !== current.revision)
+                continue;
+            let stable = true;
+            for (const note of observed)
+                try {
+                    if ((await this.visible(note.path, actor)).revision !== note.revision)
+                        stable = false;
+                }
+                catch {
+                    stable = false;
+                }
+            if (!stable)
+                continue;
             result[c.terms.taskId] = { kind: 'paidContract', contractId: c.id, status: c.status, reward: c.terms.reward, revision: economyRevision(c), generation: c.generation,
+                artifacts, workStatusIndependent: true,
                 ...(divergence && c.status !== 'settled' ? { warning: guidanceText('guid-3088de795374c765', 'paid_work_divergence'), paymentHeld: true } : {}),
                 attention: questAttention(c, new Date().toISOString()), freeMutationBlocked: !['settled', 'cancelled'].includes(c.status),
                 nextAction: { endpointId: 'quest.market', arguments: { contractId: c.id, maxChars: 4000 } }, authority: 'Budget is not external execution authority' };

@@ -31,6 +31,7 @@ export interface FrontmatterReferenceValue {
  * edges would duplicate authored relations and pollute backlinks.
  */
 const NON_NAVIGATIONAL_REFERENCE_ROOTS = new Set([
+  'review_investigation_evidence', 'claim_reviews',
   'memory_basis', 'memory_corrects', 'memory_entries',
   'review_basis_links', 'review_basis_upstream', 'pending_edits', 'research_trail',
   'learning_progress', 'learning_understanding', 'knowledge_applications', 'source_derivations', 'knowledge_synthesis', 'knowledge_investigation',
@@ -42,6 +43,8 @@ export function isNavigationalFrontmatterReference(reference: FrontmatterReferen
 
 /** Captured file paths are Vault-relative identities or durable scope URIs, not authored wikilinks. */
 export function isReferenceSnapshotPath(segments: Array<string | number>): boolean {
+  if (segments[0] === 'review_investigation_evidence') return segments.length === 2 && segments[1] === 'path';
+  if (segments[0] === 'claim_reviews') return segments.length === 4 && segments[2] === 'investigation_evidence' && segments[3] === 'path';
   if (segments[0] === 'memory_basis' || segments[0] === 'memory_corrects') {
     return segments.length === 3 && typeof segments[1] === 'number' && segments[2] === 'path';
   }

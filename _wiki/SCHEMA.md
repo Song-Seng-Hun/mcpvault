@@ -317,7 +317,11 @@ path/revision snapshots, conditions, 2-4 alternatives, 1-4 decision-changing rul
 and executionBoundary. Optional result records observed/outcome/interpretation/
 limitations and 1-4 evidence snapshots. Its planRevision identifies a previously
 saved plan; criteria cannot change together with results. Target drift requires
-review rather than changing old pins. Read the [investigation workflow](../docs/knowledge-investigation.md)
+review rather than changing old pins. Existing `wiki.review` / `wiki.review_claim`
+accept optional `investigationEvidence: {path, revision}` for a current reported
+result. Its receipt remains in existing review Properties; bookkeeping-only
+updates preserve it, substantive target/result/evidence drift requires review,
+and old unlinked reviews never imply completion. Read the [investigation workflow](../docs/knowledge-investigation.md)
 for limits, scope and review rules. No note or result grants execution authority.
 
 `source_derivations` is optional immutable source metadata: at most eight

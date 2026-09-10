@@ -74,17 +74,32 @@ test.each(['research','mechanical','recovery'] as const)('three authenticated ow
   await expect(call('bob','quest.contract',{op:'submit',contractId:'q',requestId:'revoked-submit',expectedRevision:claimed.revision,expectedGeneration:1,artifacts:[{path:'Knowledge/Result.md',revision:result.revision}]})).rejects.toThrow(/Work|generation|binding/);
   await writeFile(taskPath,original);
   const submitted=await call('bob','quest.contract',{op:'submit',contractId:'q',requestId:'submit',expectedRevision:claimed.revision,expectedGeneration:1,artifacts:[{path:'Knowledge/Result.md',revision:result.revision}]});
+  const assertWorkResult = async (reviewRevision?: string) => {
+    const packet = await call('bob','work.packet',{taskId:'paid-one',maxChars:12000,limit:100});
+    const settled = packet.items.find((item:any)=>item.kind==='paidContract');
+    expect(settled, JSON.stringify(packet)).toMatchObject({status:'settled',freeMutationBlocked:false,workStatusIndependent:true,
+      artifacts:expect.arrayContaining([{kind:'submission',path:'Knowledge/Result.md',revision:result.revision,currentRevision:result.revision,stale:false}])});
+    if(reviewRevision)expect(settled.artifacts).toContainEqual({kind:'review',path:'Knowledge/Review.md',revision:reviewRevision,currentRevision:reviewRevision,stale:false});
+    expect(packet.items.find((item:any)=>item.kind==='task').status).toBe('in_progress');
+    expect(packet.items).toContainEqual(expect.objectContaining({kind:'nextAction',tool:'mcp.update_agent_task',requiredInput:['verification or progress fields']}));
+  };
   if(kind==='mechanical') {
     expect((await call('bob','quest.market',{contractId:'q'})).items[0].status).toBe('settled');
     expect(await call('bob','quest.contract',{op:'submit',contractId:'q',requestId:'submit',expectedRevision:claimed.revision,expectedGeneration:1,artifacts:[{path:'Knowledge/Result.md',revision:result.revision}]})).toEqual(submitted);
     expect((await call('bob','economy.wallet')).availableXp).toBe(100);
     expect((await call('carol','economy.wallet')).availableXp).toBe(0);
-    expect((await ledger.snapshot()).issued).toBe(5000);return;
+    expect((await ledger.snapshot()).issued).toBe(5000);await assertWorkResult();return;
   }
   const market=await call('carol','quest.market',{contractId:'q'});
   const review=await call('carol','notes.write',{path:'Knowledge/Review.md',content:'# Review\nChecked the original result; contrary condition is explicit.',expectedRevision:'missing'});
   const payload={op:'review',contractId:'q',requestId:'review',expectedRevision:submitted.revision,expectedGeneration:1,basis:market.items[0].submissionBasis,verdict:'approve',reason:'Exact source and uncertainty checked',reviewArtifact:{path:'Knowledge/Review.md',revision:review.revision}};
   const paid=await call('carol','quest.review',payload);expect(paid.status).toBe('settled');
+  await assertWorkResult(review.revision);
+  const reviewFile = join(vault,'Knowledge/Review.md');
+  const reviewRaw = await readFile(reviewFile,'utf8');
+  await writeFile(reviewFile, `---\nmoderation_status: hidden\n---\n${reviewRaw}`);
+  const hiddenPacket = await call('bob','work.packet',{taskId:'paid-one',maxChars:12000,limit:100});
+  expect(hiddenPacket.items.find((item:any)=>item.kind==='paidContract').artifacts).not.toContainEqual(expect.objectContaining({path:'Knowledge/Review.md'}));
   expect(await call('carol','quest.review',payload)).toEqual(paid);
   expect((await call('bob','economy.wallet')).availableXp).toBe(100);
   expect((await call('carol','economy.wallet')).availableXp).toBe(5);

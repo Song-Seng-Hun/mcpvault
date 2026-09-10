@@ -88,7 +88,7 @@ federation as disabled.
 
 ## Company Global import
 
-A company-mode registry may pull one bounded page from a Global Sync hub before
+A company-mode registry may pull bounded sequential pages from a Global Sync hub before
 the MCP listener opens:
 
     mcpvault-enterprise --registry D:\MCPVault\private\company-enterprise.json --realm company-acme --host 10.0.0.10 --port 8443 --cert D:\MCPVault\private\tls\server.crt --key D:\MCPVault\private\tls\server.key --ca D:\MCPVault\private\tls\clients-ca.crt --global-import-config D:\MCPVault\private\global-import.json
@@ -103,11 +103,16 @@ The host-private JSON file contains read credentials only:
 
 The file must contain exactly baseUrl, readToken, and trustedPublicKey. Write,
 reviewer, and administrator credentials are rejected. The launcher acquires the
-Vault lifetime lock, constructs a read-only Global Sync client and replica, and
-pulls at most 100 manifest entries before opening MCP. Startup returns the
-bounded pull status, including hasMore and conflicts, so the service supervisor
-can surface incomplete or quarantined imports. A transport or configuration
-failure aborts startup and releases the Vault lock.
+Vault lifetime lock, validates TLS, then constructs a read-only Global Sync client
+and replica. Startup pulls at most ten pages of 100 manifest entries before
+opening MCP. The returned status and CLI log distinguish `complete`, `partial`
+(page budget exhausted), `conflict`, `stalled` (no cursor progress) and
+`interrupted` (transport/storage failure). Only `complete` means synchronization
+finished. The durable cursor, `hasMore`, page count and conflicts remain explicit;
+an interrupted page marks its applied list incomplete because some entries may
+already be committed. Restart resumes the existing persisted cursor. Do not
+delete replica state or overwrite local edits to clear conflicts. Configuration
+or TLS failures abort startup and release the Vault lock before any import.
 
 Public-mode registries reject this option. Global imports do not grant a company
 instance permission to publish to the Global hub.

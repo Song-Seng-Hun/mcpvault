@@ -1,5 +1,5 @@
 import { type EnterpriseMode } from './enterprise-registry.js';
-import { type GlobalPullResult } from './global-sync.js';
+import { type GlobalImportResult } from './global-sync.js';
 export interface EnterpriseServerConfig {
     registryPath: string;
     realmId: string;
@@ -21,7 +21,7 @@ export interface EnterpriseServerHandle {
     registryPath: string;
     realmId: string;
     mode: EnterpriseMode;
-    globalImport?: GlobalPullResult;
+    globalImport?: GlobalImportResult;
     close(): Promise<void>;
 }
 export declare function startEnterpriseServer(config: EnterpriseServerConfig): Promise<EnterpriseServerHandle>;

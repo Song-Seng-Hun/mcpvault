@@ -83,20 +83,29 @@ export declare class ResearchBridgeService {
         nextAction: {
             endpointId: string;
             arguments: {
-                path: string;
-                startLine: number;
-                endLine: number;
-                expectedRevision: string;
+                query: string;
+                searchFrontmatter: boolean;
+                limit: number;
                 maxChars: number;
             };
-        } | {
-            endpointId: string;
-            arguments: {
-                path: string;
-                expectedRevision: string;
-                maxChars: number;
-            };
-        } | undefined;
+        };
+    } | {
+        mode: string;
+        interpretation: string;
+        semantic: {
+            state: string;
+        };
+        status: string;
+        candidates: never[];
+        sources: never[];
+        nextAction: undefined;
+        coverage: {
+            metadataRetained: number;
+            bodyReads: number;
+            totalUnknown: boolean;
+            partial: boolean;
+        };
+        notice: string;
     }>;
     private discover;
 }

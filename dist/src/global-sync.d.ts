@@ -219,6 +219,12 @@ export interface GlobalPullResult {
     cursor: number;
     hasMore: boolean;
 }
+export interface GlobalImportResult extends GlobalPullResult {
+    status: 'complete' | 'partial' | 'conflict' | 'stalled' | 'interrupted';
+    pages: number;
+    /** A failed page may have committed entries before returning its receipt. */
+    appliedListComplete: boolean;
+}
 /** Pull-only replica. Local edits are never overwritten; remote tombstones are recoverable moves. */
 export declare class GlobalSyncReplica {
     private readonly vaultPath;
@@ -237,6 +243,8 @@ export declare class GlobalSyncReplica {
     private currentContent;
     private backup;
     pull(limit?: number): Promise<GlobalPullResult>;
+    /** Host startup continuation over the existing durable, signed pull protocol. */
+    pullPages(maxPages?: number, pageSize?: number): Promise<GlobalImportResult>;
     proposeLocal(documentId: string, author: string, reason: string, origin: string, provenance?: GlobalProvenance, idempotencyKey?: string): Promise<GlobalProposal>;
     proposeTombstone(documentId: string, author: string, reason: string, origin: string): Promise<GlobalProposal>;
 }

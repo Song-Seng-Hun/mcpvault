@@ -8,7 +8,7 @@ import { ensureFederationDirectory } from './public-federation-storage.js';
 import { createServer } from './createServer.js';
 import type { PublicFederationHostConfig } from './enterprise-federation.js';
 import { EnterpriseRegistry, type EnterpriseMode } from './enterprise-registry.js';
-import { GlobalSyncReadClient, GlobalSyncReplica, type GlobalPullResult } from './global-sync.js';
+import { GlobalSyncReadClient, GlobalSyncReplica, type GlobalImportResult } from './global-sync.js';
 import { startMcpHttpApi, type McpHttpHandle } from './mcp-http.js';
 import { normalizeScopeId } from './scopes.js';
 
@@ -40,7 +40,7 @@ export interface EnterpriseServerHandle {
   registryPath: string;
   realmId: string;
   mode: EnterpriseMode;
-  globalImport?: GlobalPullResult;
+  globalImport?: GlobalImportResult;
   close(): Promise<void>;
 }
 
@@ -334,19 +334,19 @@ export async function startEnterpriseServer(config: EnterpriseServerConfig): Pro
   let runtime: ReturnType<typeof createServer> | undefined;
   let http: McpHttpHandle | undefined;
   try {
-    const globalImport = globalImportConfig
-      ? await new GlobalSyncReplica({
-          vaultPath: profile.vaultPath,
-          client: new GlobalSyncReadClient({ baseUrl: globalImportConfig.baseUrl, readToken: globalImportConfig.readToken }),
-          trustedPublicKey: globalImportConfig.trustedPublicKey,
-        }).pull(100)
-      : undefined;
     const [cert, key, ca] = await Promise.all([
       readFile(canonicalCertPath),
       readFile(canonicalKeyPath),
       readFile(canonicalCaPath),
     ]);
     validateTls(cert, key, ca);
+    const globalImport = globalImportConfig
+      ? await new GlobalSyncReplica({
+          vaultPath: profile.vaultPath,
+          client: new GlobalSyncReadClient({ baseUrl: globalImportConfig.baseUrl, readToken: globalImportConfig.readToken }),
+          trustedPublicKey: globalImportConfig.trustedPublicKey,
+        }).pullPages()
+      : undefined;
     runtime = createServer(profile.vaultPath, {
       enterpriseRegistryPath: canonicalRegistryPath,
       commandCenterId: profile.realmId,

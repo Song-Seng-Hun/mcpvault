@@ -1,7 +1,7 @@
 import { guidanceError, guidanceText } from './guidance-runtime.js';
 import { KNOWLEDGE_APPLICATIONS_SCHEMA } from './knowledge-application-model.js';
 import { KNOWLEDGE_SYNTHESIS_SCHEMA } from './knowledge-synthesis-model.js';
-import { KNOWLEDGE_INVESTIGATION_SCHEMA } from './knowledge-investigation-model.js';
+import { KNOWLEDGE_INVESTIGATION_SCHEMA, INVESTIGATION_EVIDENCE_SCHEMA } from './knowledge-investigation-model.js';
 import { ANSWER_PACKET_INTENTS, BASES_VIEW_IDS, CATALOG_ORDERS, CLAIM_ROLES, CLAIM_STATUSES, CONFIDENCE_LEVELS, ISSUE_KINDS, NOTE_TEMPLATE_IDS, RECIPROCAL_RELATIONS, RELATION_FIELDS, TEMPORAL_VALIDITY_STATES, WIKI_PROJECTION_VIEWS, getOrganizationPropertyContract, } from './organization.js';
 import { WIKI_POLICY_TOPICS } from './wiki-policy.js';
 const organizationPropertyContracts = new Map(getOrganizationPropertyContract().map(contract => [contract.name, contract]));
@@ -73,7 +73,7 @@ export function getLlmWikiTools() {
             name: 'manage_wiki_moc_region',
             description: guidanceText('guid-c5b460d011023f59', 'Manage one opt-in server-generated MOC link region. Preview first and replay its revision/fingerprint to register or regenerate; stop requires current revision. Only the registering account controls it. Global/Community same-scope folders only; no manual prose/order/source rewrites. Status reports conflicts or revoked grants. Requires write capability; no document can self-register.'),
             inputSchema: { type: 'object', properties: {
-                    path: { type: 'string' }, operation: { type: 'string', enum: ['preview', 'register', 'regenerate', 'stop', 'status'], description: guidanceText('guid-7fc049b3a213fa37', 'Use wiki.moc_region_status for reads. The status alias is transitional and will be removed after its verified migration deployment.') }, pathPrefix: { type: 'string' },
+                    path: { type: 'string' }, operation: { type: 'string', enum: ['preview', 'register', 'regenerate', 'stop'] }, pathPrefix: { type: 'string' },
                     expectedRevision: { type: 'string' }, expectedFingerprint: { type: 'string' }, maxChars: { type: 'integer', minimum: 1024, maximum: 20000, default: 12000 }, accessToken, prettyPrint,
                 }, required: ['path', 'operation'] },
         },
@@ -432,6 +432,7 @@ export function getLlmWikiTools() {
             name: 'review_wiki_note',
             description: guidanceText('guid-a5b7d7f5877a88a9', 'Record completion of an evidence review without resubmitting the Markdown body. Refreshes the body/link review baseline, records the reviewer and outcome, and can schedule the next review; non-manual policies without an explicit interval use a bounded adaptive cadence. Returned revision and reviewer fields describe this write; re-read the target to detect intervening edits.'),
             inputSchema: { type: 'object', properties: {
+                    investigationEvidence: INVESTIGATION_EVIDENCE_SCHEMA,
                     path: { type: 'string' }, reviewOutcome: organizationPropertySchema('last_review_outcome'), reviewedBy: { type: 'string' }, reviewAt: { type: 'string', description: guidanceText('guid-49148b2d3eebd44d', 'Optional next review ISO date/time; if omitted, reviewIntervalDays is used when present') }, reviewIntervalDays: { type: 'integer', minimum: 1, maximum: 3650, description: guidanceText('guid-f22ff870cb2f6bd0', 'Optional cadence in days; completed reviews schedule the next review automatically') }, nextLifecycle: organizationPropertySchema('lifecycle', { enum: [...ACTIVE_LIFECYCLES], description: guidanceText('guid-fce15f7e611415bd', 'Optional active lifecycle after review; retirement or reactivation uses wiki.lifecycle_transition') }), reviewReason: { type: 'string', maxLength: 120, description: guidanceText('guid-2a6b5f066b8a63db', 'Why this review was entered, such as source_changed, link_changed, note_edited, or manual_review') }, reviewChecks: organizationPropertySchema('review_checks', { maxItems: 7, description: guidanceText('guid-fbfefc56f6933823', 'Quality dimensions actually checked during this review') }), reviewOpenItems: { type: 'array', items: { type: 'string', maxLength: 500 }, maxItems: 8, description: guidanceText('guid-643a50f13d48d510', 'Bounded follow-up items left by the review') }, reviewNote: { type: 'string', maxLength: 1000 }, expectedRevision: { type: 'string' }, accessToken, prettyPrint,
                 }, required: ['path', 'reviewOutcome', 'expectedRevision'] },
         },
@@ -439,6 +440,7 @@ export function getLlmWikiTools() {
             name: 'review_wiki_claim',
             description: guidanceText('guid-7027c1486d984582', 'Review one persisted claim inside a knowledge note without rewriting the Markdown body. Updates only that claim status/confidence and records a bounded reviewer note with the expected revision; evidence remains unchanged and must still be verified separately. Disputed or superseded claims return bounded downstream notes found through claim dependencies/support/contradiction so their conclusions can be re-read rather than silently changed. Returned revision identifies this write; re-read the target to detect intervening edits.'),
             inputSchema: { type: 'object', properties: {
+                    investigationEvidence: INVESTIGATION_EVIDENCE_SCHEMA,
                     path: { type: 'string' }, claimId: { type: 'string', maxLength: 80 }, status: { type: 'string', enum: [...CLAIM_STATUSES] }, confidence: { type: 'string', enum: [...CONFIDENCE_LEVELS] }, reviewedBy: { type: 'string', maxLength: 200 }, reviewNote: { type: 'string', maxLength: 1000 }, expectedRevision: { type: 'string' }, accessToken, prettyPrint,
                 }, required: ['path', 'claimId', 'status', 'reviewedBy', 'expectedRevision'] },
         },

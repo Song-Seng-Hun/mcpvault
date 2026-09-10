@@ -23,6 +23,12 @@ const pathSchema = { type: 'string', minLength: 1, maxLength: 500, pattern: path
 const closed = <T extends Record<string, unknown>>(properties: T, required = Object.keys(properties)) => ({ type: 'object', additionalProperties: false, required, properties });
 const interpretationSchema = { type: 'string', enum: ['supports', 'challenges', 'inconclusive'] };
 const referenceSchema = closed({ path: pathSchema, revision: revisionSchema });
+export const INVESTIGATION_EVIDENCE_SCHEMA = { ...referenceSchema, description: 'Optional exact reported investigation used in this review. Records review, never automatic truth; the target and evidence must remain current.' };
+
+export function normalizeInvestigationEvidence(value: unknown) {
+  const row = record(value, ['path', 'revision'], 'investigation evidence');
+  return { path: exactPath(row.path, 'investigation evidence.path'), revision: revision(row.revision, 'investigation evidence.revision') };
+}
 
 export const KNOWLEDGE_INVESTIGATION_SCHEMA = {
   ...closed({

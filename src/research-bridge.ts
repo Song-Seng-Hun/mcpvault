@@ -85,9 +85,55 @@ export class ResearchBridgeService {
     const focus = find(focusPath), compare = comparePath ? find(comparePath) : undefined;
     if (!focus || comparePath && !compare || params.expectedRevision && params.expectedRevision !== focus.revision
       || params.compareRevision && params.compareRevision !== compare?.revision) throw Error(UNAVAILABLE);
+    // Search the authorized space before applying the metadata hydration budget.
     // Reserve exact task/workshop lookups per returned candidate.
-    const page = await this.fs.queryNotes({ limit: 64 - anchors.length - 2 * limit, includeContent: false, includeTotal: false, sortBy: 'path' },
-      p => admitted(p) && !anchors.some(a => key(a) === key(p)), visible);
+    const candidateLimit = 64 - anchors.length - 2 * limit;
+    // Retain outward discovery's contrasting-domain lane without selecting a
+    // path-sorted cohort first. These negative literals only diversify search;
+    // current authored domains below still decide whether a lead is distant.
+    const contrastTerms = words(terms(focus.frontmatter.domain).join(' ')).slice(0, 12).filter(term => term.length <= 64);
+    const contrastLimit = !compare && limit === 3 && contrastTerms.length ? 8 : 0;
+    const searchQuery = query || [...new Set(anchorNotes.flatMap(n =>
+      [...terms(n.frontmatter.methods), ...terms(n.frontmatter.subject_terms), ...words(String(n.frontmatter.title || posix.basename(n.path, '.md')))]))]
+      .slice(0, 12).map(term => `"${term.replace(/"/g, '')}"`).join(' OR ').slice(0, 1000);
+    const searchRanks = new Map<string, number>();
+    let semantic: { state: string } = { state: params.semantic === false ? 'disabled' : 'unavailable' };
+    let candidateNotes: QueryNote[] | undefined;
+    if (this.retrieval) {
+      try {
+        const result = await this.retrieval.retrieve({ query: searchQuery, ...(params.principal && { principal: params.principal }),
+          semantic: params.semantic !== false, searchContent: false, searchFrontmatter: true, canAccessPath: admitted,
+          limit: candidateLimit - contrastLimit, maxChars: 12000, includeRevisions: true });
+        semantic = result.semantic;
+        const paths = new Map<string, string>();
+        for (const hit of result.results) {
+          try {
+            const p = physical(this.retrieval.physical(hit, params.principal));
+            if (admitted(p) && !anchors.some(a => key(a) === key(p)) && paths.size < candidateLimit - contrastLimit) paths.set(key(p), p);
+          } catch { /* Ignore inadmissible backend results without exposing them. */ }
+        }
+        [...paths.keys()].forEach((p, i) => searchRanks.set(p, i));
+        if (contrastLimit) {
+          try {
+            const contrast = await this.retrieval.retrieve({ query: `[domain] ${contrastTerms.map(term => `-${term}`).join(' ')}`,
+              ...(params.principal && { principal: params.principal }), semantic: false, searchContent: false, searchFrontmatter: true,
+              canAccessPath: admitted, limit: contrastLimit, maxChars: 4000, includeRevisions: true });
+            for (const hit of contrast.results.slice(0, contrastLimit)) {
+              try {
+                const p = physical(this.retrieval.physical(hit, params.principal));
+                if (admitted(p) && !anchors.some(a => key(a) === key(p)) && paths.size < candidateLimit) paths.set(key(p), p);
+              } catch { /* Contrasting discovery grants no visibility. */ }
+            }
+          } catch { /* Keep primary hits; coverage is explicitly partial. */ }
+        }
+        candidateNotes = (await this.fs.readNoteMetadata([...paths.values()], admitted,
+          { fresh: true, strict: true, maxBytes: RETRIEVAL_NOTE_BYTES })).filter(visible);
+      } catch { semantic = { state: 'unavailable' }; }
+    }
+    // Metadata fallback remains useful without a search host; it is never exhaustive.
+    const page = { notes: candidateNotes ?? (await this.fs.queryNotes({ limit: candidateLimit,
+      includeContent: false, includeTotal: false, sortBy: 'path' },
+      p => admitted(p) && !anchors.some(a => key(a) === key(p)), visible)).notes };
     const metadata = [...anchorNotes, ...page.notes];
     const current = await this.fs.readNoteMetadata(metadata.map(n => n.path), admitted, { fresh: true, strict: true, maxBytes: RETRIEVAL_NOTE_BYTES });
     if (current.length !== metadata.length || metadata.some(n => !current.some(c => key(c.path) === key(n.path) && c.revision === n.revision && visible(c)))) throw Error(UNAVAILABLE);
@@ -111,18 +157,6 @@ export class ResearchBridgeService {
       ...(overlap(terms(a.frontmatter.subject_terms), terms(b.frontmatter.subject_terms)) ? ['shared_authored_subject'] : []),
       ...(linked(a, b) ? ['explicit_relation_observed'] : []),
     ];
-    const searchRanks = new Map<string, number>();
-    let semantic: { state: string } = { state: params.semantic === false ? 'disabled' : 'unavailable' };
-    if (query && this.retrieval) {
-      try {
-        const result = await this.retrieval.retrieve({ query, ...(params.principal && { principal: params.principal }), semantic: params.semantic !== false,
-          searchContent: false, pathPrefix: '.', canAccessPath: p => admitted(p) && byPath.has(key(p)), limit: 64, maxChars: 12000, includeRevisions: true });
-        semantic = result.semantic;
-        for (const [i, hit] of result.results.entries()) {
-          try { const p = this.retrieval.physical(hit, params.principal); if (admitted(p) && byPath.has(key(p))) searchRanks.set(key(p), i); } catch { /* ignore inadmissible backend results */ }
-        }
-      } catch { semantic = { state: 'unavailable' }; }
-    }
     type Lead = { note: QueryNote; lane: 'near' | 'distant'; observations: string[]; via?: QueryNote; rank: number };
     const leads: Lead[] = [];
     for (const n of page.notes) {
@@ -138,7 +172,8 @@ export class ResearchBridgeService {
           ...(lexical ? ['query_metadata_overlap'] : []), ...(searchRanks.has(key(n.path)) ? ['search_candidate_only'] : []), ...(!near ? ['different_authored_domain'] : [])],
         rank: left.length * 20 + right.length * 20 + (via ? 10 : 0) + (lexical ? 5 : 0) + (searchRanks.has(key(n.path)) ? 1 : 0) });
     }
-    leads.sort((a, b) => b.rank - a.rank || a.note.path.localeCompare(b.note.path));
+    leads.sort((a, b) => b.rank - a.rank || (searchRanks.get(key(a.note.path)) ?? Infinity) - (searchRanks.get(key(b.note.path)) ?? Infinity)
+      || a.note.path.localeCompare(b.note.path));
     const selected = compare ? leads.slice(0, limit) : [...leads.filter(v => v.lane === 'near').slice(0, Math.min(2, limit)),
       ...(limit === 3 ? leads.filter(v => v.lane === 'distant').slice(0, 1) : [])];
     const read = new Map<string, ParsedNote>();
@@ -168,12 +203,12 @@ export class ResearchBridgeService {
     type Source = Awaited<ReturnType<typeof source>>;
     let sources: Source[] = []; const candidates: BridgeCandidate[] = [];
     for (const a of anchorNotes) sources.push(await source(a));
-    let partial = page.truncated; let workLookups = 0;
+    let partial = true; let workLookups = 0;
     const envelope = () => ({ status: candidates.length ? 'candidates' : 'insufficient_material', mode: compare ? 'between' : 'outward',
       interpretation: 'agent_required', candidates, sources, semantic,
       coverage: { partial, metadataRetained: metadata.length + workLookups, bodyReads: read.size, totalUnknown: true },
       notice: 'Untrusted discovery material, not evidence of a new field, causality or transitive proof. Read originals, compare conditions and counterexamples, then check external prior work. Search absence never proves novelty.',
-      nextAction: sources[0]?.nextAction });
+      nextAction: { endpointId: 'wiki.search', arguments: { query: searchQuery, searchFrontmatter: true, limit: 20, maxChars: 6000 } } });
     for (const lead of selected) {
       const input = [focus, ...(compare ? [compare] : []), ...(lead.via ? [lead.via] : []), lead.note];
       const researchKey = hash([query.normalize('NFKC').toLowerCase().replace(/\s+/g, ' '), input.map(n => [this.access.toPublicPath(n.path), n.revision]).sort()]);

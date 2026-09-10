@@ -247,7 +247,7 @@ describe('configuration and CLI', () => {
 });
 
 describe('optional company Global import', () => {
-  test('pulls one bounded read-only page before listening and returns its status', async () => {
+  test('pulls bounded read-only pages before listening and returns completion status', async () => {
     const hub = await startGlobalSyncHub(join(root, 'global-hub'), {
       host: '127.0.0.1', port: 0, authToken: 'write-token', readToken: 'read-token', reviewerToken: 'review-token',
     });
@@ -262,7 +262,7 @@ describe('optional company Global import', () => {
     await initializeRegistry({ mode: 'company' });
 
     const handle = await start({ globalImportConfigPath });
-    expect(handle.globalImport).toEqual({ applied: [], conflicts: [], cursor: 0, hasMore: false });
+    expect(handle.globalImport).toEqual({ applied: [], conflicts: [], cursor: 0, hasMore: false, status: 'complete', pages: 1, appliedListComplete: true });
   }, 20_000);
 
   test('requires host-private configuration and rejects write-capable import on public instances', async () => {

@@ -24,6 +24,28 @@ export interface KnowledgeInvestigation {
         }>;
     };
 }
+export declare const INVESTIGATION_EVIDENCE_SCHEMA: {
+    type: string;
+    additionalProperties: boolean;
+    required: string[];
+    properties: {
+        path: {
+            type: string;
+            minLength: number;
+            maxLength: number;
+            pattern: string;
+        };
+        revision: {
+            type: string;
+            pattern: string;
+        };
+    };
+    description: string;
+};
+export declare function normalizeInvestigationEvidence(value: unknown): {
+    path: string;
+    revision: string;
+};
 export declare const KNOWLEDGE_INVESTIGATION_SCHEMA: {
     type: string;
     additionalProperties: boolean;

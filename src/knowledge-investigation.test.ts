@@ -8,6 +8,7 @@ import { LlmWikiService } from './llm-wiki.js';
 import { ReferenceService } from './references.js';
 import { organizationNoteTemplate, organizationLintIssues } from './organization.js';
 import { collectPlainFrontmatterReferences, isNavigationalFrontmatterReference } from './property-references.js';
+import { prepareKnowledgeInvestigation, investigationReviewBasis } from './knowledge-investigation.js';
 
 let root: string, fs: FileSystemService, access: ScopeAccessPolicy, wiki: LlmWikiService;
 beforeEach(async () => {
@@ -30,10 +31,129 @@ async function fixture(prefix = '') {
 function result(f: Awaited<ReturnType<typeof fixture>>, planRevision: string) {
   return { planRevision, observed: 'A lost one write.', outcome: 'challenges', interpretation: 'Concurrent safety needs review.', limitations: 'One workload only.', evidence: [{ path: f.source.path, revision: f.source.revision! }] };
 }
+
+async function reportedFixture() {
+  const f = await fixture();
+  await fs.updateFrontmatter({ path: 'Hypothesis.md', frontmatter: { claims: [{ id: 'safety', text: 'A is safe', status: 'unverified' }] }, merge: true });
+  f.knowledgeInvestigation.targets[0]!.revision = (await fs.readNoteRevision('Hypothesis.md'))!;
+  const planned = await wiki.publishKnowledge(f.publish);
+  const reported = await wiki.publishKnowledge({ ...f.publish, expectedRevision: planned.revision, knowledgeInvestigation: { ...f.knowledgeInvestigation, result: result(f, planned.revision) } });
+  return { ...f, investigationEvidence: { path: reported.path, revision: reported.revision } };
+}
+async function investigationState() {
+  const gaps = await wiki.knowledgeGaps(undefined, 20, 16000);
+  return (gaps.items.find((item: any) => item.path === 'Experiment.md') as any).investigation;
+}
+test.each(['note', 'claim'])('linked %s review closes the result loop, not substantive drift', async kind => {
+  const f = await reportedFixture();
+  const args = { path: 'Hypothesis.md', reviewedBy: 'reviewer', expectedRevision: (await fs.readNoteRevision('Hypothesis.md'))!, investigationEvidence: f.investigationEvidence };
+  const reviewed = kind === 'note'
+    ? await wiki.review({ ...args, reviewOutcome: 'disputed' })
+    : await wiki.reviewClaim({ ...args, claimId: 'safety', status: 'disputed' });
+  expect(await investigationState()).toMatchObject({ state: 'result_reviewed', resultReported: true });
+  expect((await investigationState()).nextAction).toBeUndefined();
+  await wiki.review({ path: 'Hypothesis.md', reviewedBy: 'reviewer', expectedRevision: reviewed.revision, reviewOutcome: 'disputed', reviewNote: 'Clarify review receipt only.' });
+  expect((await investigationState()).state).toBe('result_reviewed');
+  await fs.updateFrontmatter({ path: 'Hypothesis.md', frontmatter: { claims: [{ id: 'safety', text: 'New claim', status: 'disputed' }] }, merge: true });
+  expect((await investigationState()).state).toBe('targets_changed');
+});
+test('unlinked reviews and stale result references cannot complete the investigation', async () => {
+  const f = await reportedFixture();
+  const args = { path: 'Hypothesis.md', reviewedBy: 'reviewer', expectedRevision: (await fs.readNoteRevision('Hypothesis.md'))!, reviewOutcome: 'disputed' };
+  await expect(wiki.review({ ...args, investigationEvidence: { ...f.investigationEvidence, revision: 'a'.repeat(64) } } as any)).rejects.toThrow(/unavailable|changed/i);
+  expect(await fs.readNoteRevision('Hypothesis.md')).toBe(args.expectedRevision);
+  await wiki.review(args);
+  expect((await investigationState()).state).not.toBe('result_reviewed');
+});
+test('linked review guards the result and visibility at write time', async () => {
+  const f = await reportedFixture(); const expectedRevision = (await fs.readNoteRevision('Hypothesis.md'))!;
+  const write = fs.writeNoteWithRevisionGuardsAndReceipt.bind(fs);
+  vi.spyOn(fs, 'writeNoteWithRevisionGuardsAndReceipt').mockImplementation(async (...args) => {
+    await writeFile(join(root, 'Experiment.md'), '# Changed result'); return write(...args);
+  });
+  await expect(wiki.review({ path: 'Hypothesis.md', reviewedBy: 'reviewer', expectedRevision, reviewOutcome: 'disputed', investigationEvidence: f.investigationEvidence } as any)).rejects.toThrow(/revision|conflict|changed/i);
+  expect(await fs.readNoteRevision('Hypothesis.md')).toBe(expectedRevision);
+});
+test.each(['permission', 'hidden', 'wrong_target', 'plan_only'])('linked reviews reject %s without changing the target', async scenario => {
+  const f = await reportedFixture(); const expectedRevision = (await fs.readNoteRevision('Hypothesis.md'))!;
+  let investigationEvidence = f.investigationEvidence;
+  if (scenario === 'hidden') {
+    await fs.updateFrontmatter({ path: 'Experiment.md', frontmatter: { moderation_status: 'hidden' }, merge: true });
+    investigationEvidence = { path: 'Experiment.md', revision: (await fs.readNoteRevision('Experiment.md'))! };
+  } else if (scenario === 'wrong_target' || scenario === 'plan_only') {
+    const other = await fs.writeNoteWithReceipt({ path: 'Other.md', content: 'Other', frontmatter: { llm_wiki_type: 'knowledge' } });
+    const criteria = { ...f.knowledgeInvestigation, targets: [{ path: 'Other.md', revision: other.revision }] };
+    const plan = await wiki.publishKnowledge({ ...f.publish, path: 'OtherExperiment.md', knowledgeInvestigation: criteria });
+    const evidence = scenario === 'plan_only' ? plan : await wiki.publishKnowledge({ ...f.publish, path: plan.path, expectedRevision: plan.revision, knowledgeInvestigation: { ...criteria, result: result(f, plan.revision) } });
+    investigationEvidence = { path: evidence.path, revision: evidence.revision };
+  } else {
+    const can = access.canAccessPhysicalPath.bind(access); let revoked = false;
+    vi.spyOn(access, 'canAccessPhysicalPath').mockImplementation((path, principal) => !revoked && can(path, principal));
+    const write = fs.writeNoteWithRevisionGuardsAndReceipt.bind(fs);
+    vi.spyOn(fs, 'writeNoteWithRevisionGuardsAndReceipt').mockImplementation(async (...args) => { revoked = true; return write(...args); });
+  }
+  await expect(wiki.reviewClaim({ path: 'Hypothesis.md', claimId: 'safety', status: 'disputed', reviewedBy: 'reviewer', expectedRevision, investigationEvidence })).rejects.toThrow(/unavailable|changed/i);
+  expect(await fs.readNoteRevision('Hypothesis.md')).toBe(expectedRevision);
+});
+test.each(['body', 'result', 'evidence', 'hidden_evidence'])('recorded review requires reassessment after %s drift', async scenario => {
+  const f = await reportedFixture();
+  await wiki.review({ path: 'Hypothesis.md', reviewOutcome: 'disputed', reviewedBy: 'reviewer', expectedRevision: (await fs.readNoteRevision('Hypothesis.md'))!, investigationEvidence: f.investigationEvidence });
+  expect((await investigationState()).state).toBe('result_reviewed');
+  if (scenario === 'body') {
+    const target = await fs.readNote('Hypothesis.md');
+    await fs.writeNote({ path: 'Hypothesis.md', content: '# Changed substantive claim', frontmatter: target.frontmatter });
+  } else if (scenario === 'result') {
+    await fs.updateFrontmatter({ path: 'Experiment.md', frontmatter: { description: 'New result context' }, merge: true });
+  } else {
+    const source = await fs.readNote(f.source.path);
+    // External drift fixture, never the immutable-source writer.
+    await writeFile(join(root, f.source.path), scenario === 'evidence' ? source.originalContent + '\nChanged evidence' : source.originalContent.replace('llm_wiki_type:', 'moderation_status: hidden\nllm_wiki_type:'));
+  }
+  const state = await investigationState();
+  expect(state.state).toBe(scenario === 'body' || scenario === 'result' ? 'targets_changed' : scenario === 'evidence' ? 'evidence_changed' : 'inputs_unavailable');
+  if (scenario === 'hidden_evidence') expect(JSON.stringify(state)).not.toContain(f.source.path);
+});
+test('investigation review receipts retain exact paths for integrity but create no graph support', async () => {
+  const f = await reportedFixture();
+  await wiki.reviewClaim({ path: 'Hypothesis.md', claimId: 'safety', status: 'disputed', reviewedBy: 'reviewer', expectedRevision: (await fs.readNoteRevision('Hypothesis.md'))!, investigationEvidence: f.investigationEvidence });
+  const target = await fs.readNote('Hypothesis.md');
+  const references = collectPlainFrontmatterReferences(target.frontmatter);
+  expect(references).toContainEqual(expect.objectContaining({ value: 'Experiment.md', propertyPath: 'claim_reviews.safety.investigation_evidence.path' }));
+  expect(references.every(r => !isNavigationalFrontmatterReference(r))).toBe(true);
+  const next = await wiki.reviewClaim({ path: 'Hypothesis.md', claimId: 'safety', status: 'disputed', reviewedBy: 'reviewer2', expectedRevision: target.revision! });
+  expect(next.revision).not.toBe(target.revision);
+  expect((await investigationState()).state).toBe('result_reviewed');
+});
 test('publishes a bounded investigation through the existing writer without changing the target', async () => {
   const f = await fixture(); const written = await wiki.publishKnowledge(f.publish);
   expect((await fs.readNote(written.path)).frontmatter.knowledge_investigation).toEqual(f.knowledgeInvestigation);
   expect(await fs.readNoteRevision('Hypothesis.md')).toBe(f.target.revision);
+});
+test('investigation validation reuses metadata for repeated prose references', async () => {
+  const f = await fixture();
+  f.knowledgeInvestigation.conditions += ' Inspect [[Hypothesis.md]] and [[Hypothesis.md]].';
+  const metadata = vi.spyOn(fs, 'readNoteMetadata');
+  const prepared = await prepareKnowledgeInvestigation(fs, access, f.knowledgeInvestigation, 'Experiment.md', undefined);
+  expect(prepared.guards).toHaveLength(1);
+  expect(metadata.mock.calls.flatMap(call => call[0]).filter(path => path === 'Hypothesis.md')).toHaveLength(1);
+});
+test('review inspection caps body reads and never calls an unassessed result complete', async () => {
+  const f = await fixture();
+  for (let index = 0; index < 9; index++) {
+    const path = `Target-${index}.md`, experiment = `Run-${index}.md`;
+    const target = await fs.writeNoteWithReceipt({ path, content: 'Claim', frontmatter: { llm_wiki_type: 'knowledge' } });
+    const saved = await fs.writeNoteWithReceipt({ path: experiment, content: 'Reported', frontmatter: { llm_wiki_type: 'knowledge', note_kind: 'experiment', epistemic_status: 'completed', knowledge_investigation: {
+      ...f.knowledgeInvestigation, targets: [{ path, revision: target.revision }], result: result(f, 'a'.repeat(64)),
+    } } });
+    const note = await fs.readNote(path);
+    await fs.updateFrontmatter({ path, frontmatter: { review_investigation_evidence: { path: experiment, revision: saved.revision, target_basis_sha256: investigationReviewBasis(note.content, note.frontmatter) } }, merge: true });
+  }
+  const reads = vi.spyOn(fs, 'readNote');
+  const gaps: any = await wiki.knowledgeGaps(undefined, 30, 16000);
+  expect(reads.mock.calls.filter(call => call[0].startsWith('Target-'))).toHaveLength(8);
+  expect(gaps.items.filter((item: any) => item.investigation?.state === 'result_reviewed')).toHaveLength(8);
+  expect(gaps.items.find((item: any) => item.path === 'Run-8.md').investigation.state).toBe('unassessed');
+  expect(JSON.stringify(gaps).length).toBeLessThanOrEqual(16000);
 });
 test('planned targets must be current and concurrent changes fail the related revision guard', async () => {
   const f = await fixture(); const write = fs.writeNoteWithRevisionGuardsAndReceipt.bind(fs);

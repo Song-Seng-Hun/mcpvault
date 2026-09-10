@@ -1,4 +1,5 @@
 import { guidanceError, guidanceText } from './guidance-runtime.js';
+import { storyWorkResults } from './story-session.js';
 import { WorkReviewEngine, ReviewBudgetError, changeContext, reviewPolicy, effectiveReviewPolicy, reviewPacketItems, type HostExecutionVerifier, type ContextReader } from './work-review.js';
 import { recommendStaffing, type WorkExecutionProfile, type WorkStaffingInput } from './work-staffing.js';
 import { responsibility, resourceKeys as declaredResourceKeys, assignmentShape } from './work-responsibility.js';
@@ -966,7 +967,7 @@ export class WorkService {
       } catch { /* Do not expose a now-private or moderated artifact locator. */ }
     }
     const paid=(await this.options.paidProjection?.([id],params.principal))?.[id];
-    const nextActions = paid?.freeMutationBlocked?[paid]:await this.packetActions(id, { ...n, frontmatter: fm }, project.frontmatter, params.principal);
+    const nextActions = paid?.freeMutationBlocked?[]:await this.packetActions(id, { ...n, frontmatter: fm }, project.frontmatter, params.principal);
     const items: Properties[] = [
       ...(fm.work_review_contract === 2 ? [{ kind: 'reviewContract', version: 2, nextAction: { endpoint: 'work.review_context', args: { taskId: id } },
         current: fm.work_review?.fingerprint === artifactFingerprint, verificationLevel: fm.work_review?.verification_level || 'pending' }] : []),
@@ -974,6 +975,8 @@ export class WorkService {
         requesterAccountId: fm.requester_account_id, generation: fm.claim_generation, workKind: fm.work_kind },
       ...(this.blocker(fm) ? [{ kind: 'blocker', text: this.blocker(fm) }] : []),
       ...nextActions,
+      ...(paid ? [paid] : []),
+      ...await storyWorkResults(this.fileSystem, id, fm.project_id, path => this.visible(this.publicPath(path)), path => this.access.canAccessPhysicalPath(path)),
       ...String(project.frontmatter.goal || '').match(/.{1,400}/gs)?.map(text => ({ kind: 'goal', text })) || [],
       ...(project.frontmatter.allowed_work || []).map((text: string) => ({ kind: 'allowedWork', text })),
       { kind: 'authority', text: guidanceText('guid-f23e84610cfaea5b', 'Task participation grants no external execution authority.') },

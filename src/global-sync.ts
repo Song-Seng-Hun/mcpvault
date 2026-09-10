@@ -1015,6 +1015,13 @@ export interface GlobalPullResult {
   hasMore: boolean;
 }
 
+export interface GlobalImportResult extends GlobalPullResult {
+  status: 'complete' | 'partial' | 'conflict' | 'stalled' | 'interrupted';
+  pages: number;
+  /** A failed page may have committed entries before returning its receipt. */
+  appliedListComplete: boolean;
+}
+
 /** Pull-only replica. Local edits are never overwritten; remote tombstones are recoverable moves. */
 export class GlobalSyncReplica {
   private readonly vaultPath: string;
@@ -1148,7 +1155,45 @@ export class GlobalSyncReplica {
       await this.save();
       applied.push(entry.documentId);
     }
-    return { applied, conflicts, cursor: this.state.cursor, hasMore: manifest.hasMore || conflicts.length > 0 };
+    return { applied, conflicts, cursor: this.state.cursor, hasMore: manifest.hasMore || manifest.latestSequence > this.state.cursor || conflicts.length > 0 };
+  }
+
+  /** Host startup continuation over the existing durable, signed pull protocol. */
+  async pullPages(maxPages = 10, pageSize = 100): Promise<GlobalImportResult> {
+    if (!Number.isInteger(maxPages) || maxPages < 1 || maxPages > 10) throw guidanceError(new Error('Global import pages must be from 1 through 10'), 'guid-3185d1e9f1ff052d');
+    if (!Number.isInteger(pageSize) || pageSize < 1 || pageSize > MAX_BATCH_LIMIT) throw guidanceError(new Error('Global import page size must be from 1 through 200'), 'guid-d4eabd7a104091a9');
+    await this.load();
+    const result: GlobalImportResult = { applied: [], conflicts: [], cursor: this.state.cursor,
+      hasMore: true, status: 'partial', pages: 0, appliedListComplete: true };
+    for (; result.pages < maxPages;) {
+      const before = result.cursor;
+      result.pages++;
+      try {
+        const page = await this.pull(pageSize);
+        result.applied.push(...page.applied);
+        result.conflicts.push(...page.conflicts);
+        result.cursor = page.cursor;
+        result.hasMore = page.hasMore;
+        if (page.conflicts.length) { result.status = 'conflict'; break; }
+        if (!page.hasMore) { result.status = 'complete'; break; }
+        if (page.cursor <= before) { result.status = 'stalled'; break; }
+      } catch {
+        // The persisted cursor, not an uncommitted in-memory assignment, is progress.
+        try {
+          const saved = JSON.parse(await readFile(this.statePath, 'utf8'));
+          if (saved.version === 1 && Number.isSafeInteger(saved.cursor) && saved.cursor >= before) result.cursor = saved.cursor;
+        } catch { /* Keep the last confirmed page cursor. */ }
+        // A failed save may have advanced this instance's mutable state. The
+        // next operation must reload the persisted checkpoint, including when
+        // the first save failed and no checkpoint file exists yet.
+        this.state = { version: 1, cursor: 0, documents: {} };
+        this.loaded = false;
+        result.status = 'interrupted';
+        result.appliedListComplete = false;
+        break;
+      }
+    }
+    return result;
   }
 
   async proposeLocal(documentId: string, author: string, reason: string, origin: string, provenance?: GlobalProvenance, idempotencyKey?: string): Promise<GlobalProposal> {

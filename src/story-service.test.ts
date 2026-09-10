@@ -148,7 +148,7 @@ test('external Markdown edits invalidate stale receipts instead of replaying fal
   await expect(f.execute('artifact', request)).rejects.toThrow(/external|receipt|changed/i);
 });
 
-test('writer sessions use real Work assignments, two revision rounds, explicit decisions and bounded pause/resume', async () => {
+test.each(['adopt', 'reject'])('writer sessions preserve exact %s evidence in Work without automatically completing it', async decision => {
   const f = await fixture(); await f.project(); await f.put('scene');
   let p = await f.current();
   let s = await f.execute('session', { op: 'start', projectId: 'novel', sessionId: 'room', artifactId: 'scene',
@@ -180,9 +180,95 @@ test('writer sessions use real Work assignments, two revision rounds, explicit d
   const scene = await f.execute('artifact', { projectId: 'novel', artifactId: 'scene' });
   await f.execute('adopt', { projectId: 'novel', artifactId: 'scene', sourceRevision: scene.revision, reviewIds: ['pass-2'],
     reason: 'Approved final revision.', expectedRevision: 'missing', expectedProjectRevision: (await f.current()).revision, requestId: 'session-adopt' });
-  await change('decide', { decision: 'adopt', sourceRevision: scene.revision, reason: 'Selected snapshot verified.' });
-  expect(s.stage).toBe('completed');
+  await change('decide', { decision, sourceRevision: scene.revision, reason: 'Selected snapshot verified.' });
+  expect(s.stage).toBe(decision === 'adopt' ? 'completed' : 'rejected');
   expect(s.hostExecutionOnly).toBe(true);
+  const packet = await f.work.packet({ taskId: s.taskId, principal: f.actors.writer, maxChars: 12000, limit: 100 });
+  const result = packet.items.find((item: any) => item.kind === 'storyResult');
+  expect(result, JSON.stringify(packet)).toMatchObject({ path: s.path, revision: s.revision, decision, workStatusIndependent: true,
+    artifacts: expect.arrayContaining([{ kind: 'manuscript', path: scene.path, revision: scene.revision, currentRevision: scene.revision, stale: false },
+      expect.objectContaining({ kind: 'review', path: 'Community/Stories/novel/Reviews/pass-2.md', revision: expect.stringMatching(/^[a-f0-9]{64}$/) })]) });
+  if (decision === 'adopt') expect(result.artifacts).toContainEqual(expect.objectContaining({ kind: 'adoption', revision: expect.stringMatching(/^[a-f0-9]{64}$/) }));
+  expect((await f.fs.readNote(`Community/Tasks/${s.taskId}.md`)).frontmatter.status).not.toBe('completed');
+  const raw = await readFile(join(f.root, scene.path), 'utf8');
+  await writeFile(join(f.root, scene.path), raw.replace('Revision 2', 'Changed after decision'));
+  const changed = await f.work.packet({ taskId: s.taskId, maxChars: 12000, limit: 100 });
+  expect(changed.items.find((item: any) => item.kind === 'storyResult').artifacts).toContainEqual(expect.objectContaining({ kind: 'manuscript', stale: true }));
+  await writeFile(join(f.root, scene.path), raw.replace('mcpvault_type:', 'moderation_status: hidden\nmcpvault_type:'));
+  const hidden = await f.work.packet({ taskId: s.taskId, maxChars: 12000, limit: 100 });
+  expect(hidden.items.some((item: any) => item.kind === 'storyResult')).toBe(false);
+});
+
+async function handedOffSession(accept = true) {
+  const f = await fixture(); await f.project();
+  const workProject = await f.fs.readNote('Community/Projects/novel.md');
+  await f.work.project({ op: 'update', projectId: 'novel', participants: ['owner', 'writer', 'outsider'],
+    principal: f.actors.owner, expectedRevision: workProject.revision, requestId: 'add-recipient' });
+  await f.execute('project', { op: 'update', projectId: 'novel', participants: ['writer', 'outsider'],
+    expectedRevision: (await f.current()).revision, requestId: 'story-recipient' });
+  const artifact = await f.put('handoff-scene'); const p = await f.current();
+  let session = await f.execute('session', { op: 'start', projectId: 'novel', sessionId: 'handoff', artifactId: 'handoff-scene',
+    writerAccountId: 'writer', editorAccountId: 'owner', expectedRevision: 'missing', expectedProjectRevision: p.revision, requestId: 'handoff-start' });
+  const taskPath = `Community/Tasks/${session.taskId}.md`;
+  let task = await f.fs.readNote(taskPath);
+  await f.work.claim({ op: 'claim', taskId: session.taskId, principal: f.actors.writer,
+    expectedRevision: task.revision, expectedGeneration: task.frontmatter.claim_generation, requestId: 'writer-claim' });
+  session = await f.execute('session', { op: 'pause', projectId: 'novel', sessionId: 'handoff', reason: 'Transfer drafting responsibility.',
+    expectedRevision: session.revision, expectedProjectRevision: p.revision, requestId: 'handoff-pause' });
+  task = await f.fs.readNote(taskPath);
+  await f.work.handoff({ op: 'propose', taskId: session.taskId, principal: f.actors.writer, toAccountId: 'outsider',
+    nextAction: 'Continue the pinned scene.', expectedRevision: task.revision, expectedGeneration: task.frontmatter.claim_generation, requestId: 'offer' });
+  task = await f.fs.readNote(taskPath);
+  if (accept) {
+    await f.work.handoff({ op: 'accept', taskId: session.taskId, principal: f.actors.outsider,
+      expectedRevision: task.revision, expectedGeneration: task.frontmatter.claim_generation, requestId: 'accept-offer' });
+    task = await f.fs.readNote(taskPath);
+  }
+  const resume = { op: 'resume', projectId: 'novel', sessionId: 'handoff', reconnectWriter: true,
+    expectedWorkRevision: task.revision, expectedWorkGeneration: task.frontmatter.claim_generation,
+    expectedRevision: session.revision, expectedProjectRevision: p.revision, requestId: 'reconnect' };
+  return { ...f, artifact, session, task, resume };
+}
+
+test('showrunner explicitly reconnects a paused Story to accepted Work handoff without changing editor or artifacts', async () => {
+  const f = await handedOffSession();
+  await expect(f.execute('session', { ...f.resume, reconnectWriter: false })).rejects.toThrow(/assignment|closed/i);
+  const resumed = await f.execute('session', f.resume);
+  expect(resumed).toMatchObject({ stage: 'draft', writerAccountId: 'outsider', editorAccountId: 'owner', taskId: f.session.taskId });
+  expect(await f.execute('session', f.resume)).toMatchObject({ revision: resumed.revision, replayed: true });
+  expect((await f.fs.readNote(f.artifact.path)).revision).toBe(f.artifact.revision);
+  const submit = { op: 'submit', projectId: 'novel', sessionId: 'handoff', sourceRevision: f.artifact.revision,
+    expectedRevision: resumed.revision, expectedProjectRevision: f.resume.expectedProjectRevision, requestId: 'new-writer-submit' };
+  await expect(f.execute('session', submit, f.actors.writer)).rejects.toThrow(/role|writer/i);
+  expect(await f.execute('session', submit, f.actors.outsider)).toMatchObject({ stage: 'review', writerAccountId: 'outsider' });
+});
+
+test('Story reconnection rejects unaccepted handoff, non-showrunner and stale Work bindings', async () => {
+  const pending = await handedOffSession(false);
+  await expect(pending.execute('session', pending.resume)).rejects.toThrow(/accepted.*handoff/i);
+  const f = await handedOffSession();
+  await expect(f.execute('session', f.resume, f.actors.writer)).rejects.toThrow(/showrunner/i);
+  for (const change of [{ expectedWorkRevision: 'a'.repeat(64) }, { expectedWorkGeneration: 99 }, { expectedWorkRevision: undefined }]) {
+    await expect(f.execute('session', { ...f.resume, ...change })).rejects.toThrow(/Work|revision|generation/i);
+  }
+  expect((await f.fs.readNote(f.session.path)).revision).toBe(f.session.revision);
+});
+
+test('Story reconnection rejects a recipient removed from creative membership after accepting Work', async () => {
+  const f = await handedOffSession();
+  const updated = await f.execute('project', { op: 'update', projectId: 'novel', participants: ['writer'],
+    expectedRevision: (await f.current()).revision, requestId: 'remove-recipient' });
+  await expect(f.execute('session', { ...f.resume, expectedProjectRevision: updated.revision })).rejects.toThrow(/membership|participant/i);
+  expect((await f.fs.readNote(f.session.path)).revision).toBe(f.session.revision);
+});
+
+test('concurrent Story reconnections have one revision-guarded winner', async () => {
+  const f = await handedOffSession();
+  const results = await Promise.allSettled(['reconnect-a', 'reconnect-b'].map(requestId => f.execute('session', { ...f.resume, requestId })));
+  expect(results.filter(r => r.status === 'fulfilled')).toHaveLength(1);
+  expect(results.filter(r => r.status === 'rejected')).toHaveLength(1);
+  expect((await f.fs.readNote(f.session.path)).frontmatter.writer_account_id).toBe('outsider');
+  expect((await f.fs.readNote(`Community/Tasks/${f.session.taskId}.md`)).revision).toBe(f.task.revision);
 });
 
 test('selected manuscript exports retain exact sources and old output becomes stale after upstream edit', async () => {

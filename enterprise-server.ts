@@ -63,6 +63,10 @@ export async function runEnterpriseServer(
   }
   if (argv.length === 0) throw new Error(enterpriseServerHelp());
   const handle = await startEnterpriseServer(parseEnterpriseServerArgs(argv));
+  if (handle.globalImport) {
+    const progress = handle.globalImport;
+    io.stderr(`Global import: ${progress.status}; cursor=${progress.cursor}; pages=${progress.pages}; hasMore=${progress.hasMore}; conflicts=${progress.conflicts.length}; appliedListComplete=${progress.appliedListComplete}`);
+  }
   io.stderr(`MCPVault enterprise server listening on https://${handle.host}:${handle.port}${handle.path} (realm ${handle.realmId})`);
   return handle;
 }

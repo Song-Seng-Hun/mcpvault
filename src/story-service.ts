@@ -22,7 +22,7 @@ const fields: Record<string, string[]> = {
   context: ['branchId', 'artifactId', 'characterId', 'query'],
   review: ['reviewId', 'artifactId', 'branchId', 'sourceRevision', 'content', 'findings', 'pass'],
   adopt: ['artifactId', 'sourceRevision', 'reviewIds', 'reason'],
-  session: ['sessionId', 'artifactId', 'writerAccountId', 'editorAccountId', 'sourceRevision', 'reviewId', 'decision', 'reason', 'choiceIds', 'initialState', 'maxSteps'],
+  session: ['sessionId', 'artifactId', 'writerAccountId', 'editorAccountId', 'sourceRevision', 'reviewId', 'decision', 'reason', 'choiceIds', 'initialState', 'maxSteps', 'reconnectWriter', 'expectedWorkRevision', 'expectedWorkGeneration'],
   export: ['format', 'selection', 'branchId', 'exportId'],
   visual: ['modelId', 'branchId', 'view', 'eventIds', 'sourceRevision', 'intent', 'fingerprint', 'replacements', 'artifactId', 'title'],
 };

@@ -47,7 +47,7 @@ test('MOC registration rejects anonymous and read-only clients', async () => {
   }
 });
 
-test('transition-only MOC status alias delegates to the canonical read with identical access', async () => {
+test('retired MOC status option rejects calls while the canonical read preserves access', async () => {
   await writeFile(join(vault, 'Map.md'), '---\nnote_kind: moc\n---\n# Map');
   await writeFile(join(vault, 'Hidden.md'), '---\nnote_kind: moc\nmoderation_status: hidden\n---\nPRIVATE BODY');
   for (const readOnly of [false, true]) {
@@ -56,9 +56,10 @@ test('transition-only MOC status alias delegates to the canonical read with iden
       for (const path of ['Map.md', 'Hidden.md', 'scope://agent/another/Private.md']) {
         const canonical = await call('wiki.moc_region_status', { path });
         const legacy = await call('wiki.moc_region', { path, operation: 'status' });
-        expect(Boolean(legacy.error)).toBe(Boolean(canonical.error));
-        if (!canonical.error) expect(legacy.value).toEqual(canonical.value);
-        else expect(legacy.text).not.toContain('PRIVATE BODY');
+        expect(legacy.error).toBe(true);
+        expect(legacy.text).not.toContain('PRIVATE BODY');
+        if (path === 'Map.md') expect(canonical.value.status).toBe('unregistered');
+        else expect(canonical.error).toBe(true);
       }
     } finally { await client.close(); await server.close(); }
   }

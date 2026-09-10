@@ -1,5 +1,8 @@
 import { guidanceError, guidanceText } from './guidance-runtime.js';
 import type { ScopePrincipal } from './scope-auth.js';
+import type { FileSystemService } from './filesystem.js';
+import type { ParsedNote } from './types.js';
+import { isModerationHidden } from './moderation-policy.js';
 import { page } from './work-model.js';
 import { runStoryBranch } from './story-branch.js';
 import { storyAccount, storyHash, storyId, storyReviewPath, storyRevision, storyRoot, storyText, type StoryGuard, type StoryNote, type StoryParams } from './story-model.js';
@@ -21,6 +24,9 @@ export class StorySessions {
 
   async execute(params: StoryParams, principal?: ScopePrincipal): Promise<StoryParams> {
     const projectId = storyId(params.projectId), project = await this.w.project(projectId, principal), op = params.op ?? 'read';
+    if (params.reconnectWriter !== undefined && typeof params.reconnectWriter !== 'boolean') throw guidanceError(new Error('reconnectWriter must be boolean'), 'guid-c501d2c71b56b24e');
+    const reconnect = params.reconnectWriter === true;
+    if (reconnect && op !== 'resume') throw guidanceError(new Error('Writer reconnection requires explicit resume'), 'guid-7ddbf916eb50b510');
     if (op === 'list') {
       const notes = await this.w.inventory(projectId, 'Sessions', principal);
       const items = notes.filter(n => n.frontmatter.mcpvault_type === 'story_session').map(n => this.view(n));
@@ -34,7 +40,8 @@ export class StorySessions {
       return this.w.detail({ ...this.view(prior), ...await this.w.stale(prior, principal) }, params, principal);
     }
     if (!['start', 'submit', 'review', 'pause', 'resume', 'decide', 'rehearse'].includes(op)) throw guidanceError(new Error('Invalid story session operation'), 'guid-483aa010b6cf04dc');
-    const workGuard = await this.w.authorize(project, principal, ['start', 'decide'].includes(op) ? 'showrunner' : 'member', op === 'pause');
+    const role = reconnect || ['start', 'decide'].includes(op) ? 'showrunner' : 'member';
+    const workGuard = await this.w.authorize(project, principal, role, op === 'pause');
     const actor = principal!, request = this.w.store.request(`session.${op}`, params, actor);
     const retry = this.w.store.retry(prior, request); if (retry) return retry;
     this.w.projectRevision(project, params.expectedProjectRevision);
@@ -101,11 +108,21 @@ export class StorySessions {
           if (fm.stage !== 'waiting') fm.resume_stage = fm.stage;
           fm.stage = 'waiting'; fm.waiting_for = 'Project step budget exhausted; owner must raise the explicit project budget before resume.';
         } else {
+          let task = (await this.w.store.read(`Community/Tasks/${storyId(fm.task_id)}.md`, actor))!;
+          if (reconnect) {
+            const handoff = task.frontmatter.work_handoff;
+            if (fm.stage !== 'waiting') throw guidanceError(new Error('Writer reconnection requires a waiting session'), 'guid-64b1afaceec8fbf9');
+            if (storyRevision(params.expectedWorkRevision) !== task.revision
+              || !Number.isSafeInteger(params.expectedWorkGeneration) || params.expectedWorkGeneration !== task.frontmatter.claim_generation) throw guidanceError(new Error('Work revision or generation changed'), 'guid-23e57fcb4fd5172d');
+            if (handoff?.state !== 'accepted' || handoff.from_account_id !== fm.writer_account_id
+              || handoff.to_account_id !== task.frontmatter.assignee_account_id || !handoff.to_account_id
+              || handoff.generation + 1 !== task.frontmatter.claim_generation) throw guidanceError(new Error('An accepted Work handoff from the current writer is required'), 'guid-8649cbf7fc6011b0');
+            fm.writer_account_id = handoff.to_account_id;
+          }
           for (const account of [fm.writer_account_id, fm.editor_account_id]) {
             if (!project.frontmatter.participants.includes(account)) throw guidanceError(new Error('Session participant membership revoked; pause and request owner direction'), 'guid-5c11f7cf1eff4a01');
             await this.w.work.authorizeWorkshopProject(actor, project.frontmatter.work_project_id, false, account, project.frontmatter.owner_account_id);
           }
-          let task = (await this.w.store.read(`Community/Tasks/${storyId(fm.task_id)}.md`, actor))!;
           if (task.frontmatter.project_id !== project.frontmatter.work_project_id || (task.frontmatter.assignee_account_id && task.frontmatter.assignee_account_id !== fm.writer_account_id)
             || ['cancelled', 'completed'].includes(task.frontmatter.status)) throw guidanceError(new Error('Work assignment changed or closed; pause the story session'), 'guid-80a816c8e1722a90');
           const artifact = await this.w.artifact(projectId, fm.artifact_id, actor, fm.branch_id);
@@ -133,12 +150,18 @@ export class StorySessions {
             if (review.frontmatter.mcpvault_type !== 'story_review' || review.frontmatter.project_id !== projectId || review.frontmatter.artifact_id !== fm.artifact_id
               || review.frontmatter.source_revision !== artifact.revision || review.frontmatter.reviewer_account_id !== actor.accountId || (await this.w.stale(review, actor)).stale) throw guidanceError(new Error('Session review must match current source and assigned editor'), 'guid-81a64ba219bfd612');
             if (!['changes_requested', 'ready'].includes(params.decision)) throw guidanceError(new Error('Review decision requires changes_requested or ready'), 'guid-15b6ac4ba1411d83');
-            guards.push({ path: review.path, expectedRevision: review.revision }); fm.review_id = reviewId;
+            guards.push({ path: review.path, expectedRevision: review.revision }); fm.review_id = reviewId; fm.review_revision = review.revision;
             if (params.decision === 'changes_requested' && fm.revision_round < 2) { fm.revision_round++; fm.stage = 'revise'; } else fm.stage = 'decision';
           } else if (op === 'decide') {
             if (fm.stage !== 'decision') throw guidanceError(new Error('Final selection requires decision stage'), 'guid-3d5a2c0b90bcb4aa');
             if (!['adopt', 'reject', 'hold', 'adjust_scope'].includes(params.decision) || !reason) throw guidanceError(new Error('Explicit adopt/reject/hold/adjust_scope decision and reason required'), 'guid-7762bc4c4040a964');
             if (storyRevision(params.sourceRevision) !== artifact.revision || fm.source_revision !== artifact.revision) throw guidanceError(new Error('Decision source revision changed'), 'guid-6384f0cc8f0ae872');
+            const resultArtifacts = [{ kind: 'manuscript', path: artifact.path, revision: artifact.revision }];
+            const review = (await this.w.store.read(storyReviewPath(projectId, storyId(fm.review_id)), actor))!;
+            if (review.frontmatter.source_revision !== artifact.revision || review.frontmatter.reviewer_account_id !== fm.editor_account_id
+              || fm.review_revision && fm.review_revision !== review.revision || (await this.w.stale(review, actor)).stale) throw guidanceError(new Error('Decision review revision changed'), 'guid-eda772c56cd4a9d9');
+            guards.push({ path: review.path, expectedRevision: review.revision });
+            resultArtifacts.push({ kind: 'review', path: review.path, revision: review.revision });
             if (params.decision === 'adopt') {
               const selected = project.frontmatter.adopted?.[fm.branch_id]?.[fm.artifact_id];
               if (!selected || selected.sourceRevision !== artifact.revision) throw guidanceError(new Error('Use story.adopt to select the exact snapshot before completing the session'), 'guid-2dffd8189b3411cd');
@@ -146,10 +169,14 @@ export class StorySessions {
               if (snapshot.revision !== selected.revision || snapshot.frontmatter.mcpvault_type !== 'story_adoption' || snapshot.frontmatter.project_id !== projectId
                 || snapshot.frontmatter.artifact_id !== fm.artifact_id || snapshot.frontmatter.source_revision !== artifact.revision) throw guidanceError(new Error('Selected adoption snapshot changed'), 'guid-88d1842edfa6d960');
               guards.push({ path: snapshot.path, expectedRevision: snapshot.revision });
+              resultArtifacts.push({ kind: 'adoption', path: snapshot.path, revision: snapshot.revision });
             }
             if (['hold', 'adjust_scope'].includes(params.decision)) {
               fm.stage = 'waiting'; fm.resume_stage = 'decision'; fm.waiting_for = reason;
-            } else fm.stage = params.decision === 'adopt' ? 'completed' : 'rejected';
+            } else {
+              fm.stage = params.decision === 'adopt' ? 'completed' : 'rejected';
+              fm.result = { decision: params.decision, artifacts: resultArtifacts };
+            }
             fm.decision_reason = reason;
           }
           guards.push({ path: task.path, expectedRevision: task.revision });
@@ -160,6 +187,44 @@ export class StorySessions {
     const content = `# Story session ${sessionId}\n\nStage: ${fm.stage}\n\n[[Community/Tasks/${fm.task_id}|Assigned Work task]]\n\n${fm.waiting_for ?? fm.decision_reason ?? 'Host-driven drafting and editorial coordination; Work task lifecycle remains explicit.'}\n`;
     const result = this.view({ path, revision: '', frontmatter: fm, content } as StoryNote); delete result.revision;
     return this.w.store.write(path, fm, content, params.expectedRevision, request, result, guards,
-      async () => { await this.w.authorize(project, actor, ['start', 'decide'].includes(op) ? 'showrunner' : 'member', op === 'pause'); }, prior);
+      async () => {
+        await this.w.authorize(project, actor, role, op === 'pause');
+        if (reconnect) for (const account of [fm.writer_account_id, fm.editor_account_id]) {
+          await this.w.work.authorizeWorkshopProject(actor, project.frontmatter.work_project_id, false, account, project.frontmatter.owner_account_id);
+        }
+      }, prior);
   }
+}
+
+/** Read-only Work handoff from existing session records, never Work approval. */
+export async function storyWorkResults(fs: FileSystemService, taskId: string, projectId: string,
+  readVisible: (path: string) => Promise<ParsedNote>, admitted: (path: string) => boolean): Promise<StoryParams[]> {
+  if (!taskId.startsWith('story-') || !/^[a-z0-9][a-z0-9-]{0,63}$/.test(projectId)) return [];
+  const root = storyRoot(projectId);
+  const found = await fs.queryNotes({ pathPrefix: `${root}/Sessions/`, limit: 8, includeContent: false, includeTotal: false }, admitted,
+    n => n.frontmatter.mcpvault_type === 'story_session' && n.frontmatter.project_id === projectId
+      && n.frontmatter.task_id === taskId && ['completed', 'rejected'].includes(String(n.frontmatter.stage)) && !isModerationHidden(n.frontmatter));
+  const items: StoryParams[] = [];
+  for (const meta of found.notes) {
+    try {
+      const session = await readVisible(meta.path), fm = session.frontmatter;
+      if (session.revision !== meta.revision || taskId !== `story-${storyHash({ projectId, sessionId: storyId(fm.session_id) }).slice(0, 32)}`) continue;
+      const observed = [{ path: meta.path, revision: session.revision }];
+      const artifacts: StoryParams[] = [];
+      for (const item of Array.isArray(fm.result?.artifacts) ? fm.result.artifacts.slice(0, 3) : []) {
+        if (!['manuscript', 'review', 'adoption'].includes(item.kind) || typeof item.path !== 'string' || !item.path.startsWith(`${root}/`)) continue;
+        const revision = storyRevision(item.revision), current = await readVisible(item.path);
+        observed.push({ path: item.path, revision: current.revision });
+        artifacts.push({ kind: item.kind, path: item.path, revision, currentRevision: current.revision, stale: revision !== current.revision });
+      }
+      // Recheck all emitted inputs after hydration; no hidden names or stale cursor.
+      for (const note of observed) if ((await readVisible(note.path)).revision !== note.revision) throw guidanceError(new Error('Story result changed'), 'guid-2d2383388c77154f');
+      items.push({ kind: 'storyResult', path: meta.path, revision: session.revision,
+        decision: fm.stage === 'completed' ? 'adopt' : 'reject', artifacts, workStatusIndependent: true,
+        ...(!fm.result && { legacyUnpinned: true }),
+        nextAction: { endpointId: 'notes.read', arguments: { path: meta.path, expectedRevision: session.revision, maxChars: 4000 } } });
+    } catch { /* Changed, hidden, and missing outputs disclose no locators. */ }
+  }
+  if (found.truncated) items.push({ kind: 'storyResultsPartial', nextAction: { endpointId: 'story.session', arguments: { projectId, op: 'list' } } });
+  return items;
 }

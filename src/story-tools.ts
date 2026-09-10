@@ -95,6 +95,8 @@ const fields: Record<string, Record<string, Schema>> = {
     pass: { ...enumeration('structure', 'line', 'continuity', 'reader'), default: 'structure' } },
   adopt: { artifactId: id, sourceRevision: revision, reviewIds: ids(8), reason: text(2000, 1) },
   session: { sessionId: id, artifactId: id, writerAccountId: account, editorAccountId: account, sourceRevision: revision, reviewId: id,
+    reconnectWriter: { type: 'boolean', description: 'Explicit showrunner-only resume after an accepted Work handoff. Requires current expectedWorkRevision and expectedWorkGeneration; preserves editor and prior evidence.' },
+    expectedWorkRevision: revision, expectedWorkGeneration: integer(0, Number.MAX_SAFE_INTEGER),
     decision: enumeration('ready', 'changes_requested', 'adopt', 'reject', 'hold', 'adjust_scope'), reason: text(2000, 1),
     choiceIds: array(branchKey, 4096), initialState: { type: 'object', additionalProperties: false, maxProperties: 128,
       patternProperties: { '^(?!(__proto__|prototype|constructor)$)(?!\\s)(?!.*\\s$)[^\\u0000-\\u001f\\u007f]{1,128}$': branchValue } }, maxSteps: { ...integer(1, 128), description: 'Rehearsal steps; defaults to and cannot exceed the current project maxSteps budget.' } },

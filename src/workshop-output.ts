@@ -3,7 +3,7 @@ import type { FileSystemService } from './filesystem.js';
 import type { ScopePrincipal } from './scope-auth.js';
 import type { ParsedNote } from './types.js';
 import { normalizeScopeId } from './scopes.js';
-import { fingerprint } from './work-model.js';
+import { fingerprint, textField } from './work-model.js';
 import { isModerationHidden } from './moderation-policy.js';
 
 export interface WorkshopOutputReceipt { workshopPath:string; outputId:string; payloadFingerprint:string; actor:string }
@@ -23,8 +23,7 @@ export function workshopTaskDescription(input:WorkshopOutputInput,workshopPath:s
     ['Alternatives',input.alternatives],['Consequences',input.consequences],['Minority views',input.minority],
     ['Uncertainty',input.uncertainty],['Revisit conditions',input.revisit],
   ] as const).flatMap(([heading,values])=>values.length?[`## ${heading}`,...values]:[]),`Workshop: [[${workshopPath}]]`].join('\n\n');
-  if(Array.from(description).length>4000)throw guidanceError(new Error('Task description and caveats exceed 4000 characters; shorten without dropping conditions'), 'guid-7bf9a7bcbdc5c88a');
-  return description;
+  return textField(description, 'Task description and caveats', 4000, true);
 }
 interface Delegation { projectId:string; accountId:string; grantor:string; decisionKinds:string[]; taskKinds:string[]; scope:string; reason:string; revoked:boolean }
 export interface WorkshopOutputAdapter {

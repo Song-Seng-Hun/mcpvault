@@ -1278,7 +1278,7 @@ export function createServer(vaultPath, options = {}) {
         const request = { params: { name: requestedToolName, arguments: requestArgs } };
         let toolName = requestedToolName;
         let args = request.params.arguments;
-        if (readOnly && MUTATING_TOOLS.has(toolName) && !storyReadAlias(toolName, args?.op) && !skillReadAlias(toolName, args?.op) && !(toolName === 'manage_wiki_moc_region' && args?.operation === 'status') && !(['manage_work_project', 'manage_work_group', 'manage_community_participation'].includes(toolName) && (args?.op === undefined || args?.op === 'read'))) {
+        if (readOnly && MUTATING_TOOLS.has(toolName) && !storyReadAlias(toolName, args?.op) && !skillReadAlias(toolName, args?.op) && !(['manage_work_project', 'manage_work_group', 'manage_community_participation'].includes(toolName) && (args?.op === undefined || args?.op === 'read'))) {
             await audit.record({ tool: toolName, ...(args && typeof args === 'object' ? { args: args } : {}), outcome: 'error', error: 'read-only mode' });
             return {
                 content: [{
@@ -1311,9 +1311,6 @@ export function createServer(vaultPath, options = {}) {
             else if (!FIXED_MCP_TOOL_NAMES.has(requestedToolName) && !ALLOW_HIDDEN_DIRECT_TOOLS_IN_TESTS) {
                 throw guidanceError(new Error(`Direct MCP tool '${requestedToolName}' is not exposed. Use search_capabilities and call_endpoint.`), 'guid-e5b95513008be9fa');
             }
-            // Transition-only alias: remove after the canonical read passes NAS deployment.
-            if (toolName === 'manage_wiki_moc_region' && rawArgs.operation === 'status')
-                toolName = 'read_wiki_moc_region_status';
             toolName = skillReadAlias(toolName, rawArgs.op) || toolName;
             toolName = storyReadAlias(toolName, rawArgs.op) || toolName;
             if (toolName === 'manage_work_project' && (rawArgs.op === undefined || rawArgs.op === 'read'))
@@ -1825,6 +1822,7 @@ export function createServer(vaultPath, options = {}) {
                             ...(typeof trimmedArgs.reviewNote === 'string' && { reviewNote: trimmedArgs.reviewNote }),
                             ...(trimmedArgs.reviewChecks !== undefined && { reviewChecks: trimmedArgs.reviewChecks }),
                             ...(trimmedArgs.reviewOpenItems !== undefined && { reviewOpenItems: trimmedArgs.reviewOpenItems }),
+                            ...(trimmedArgs.investigationEvidence !== undefined && { investigationEvidence: trimmedArgs.investigationEvidence }),
                             expectedRevision: trimmedArgs.expectedRevision,
                         }), trimmedArgs.prettyPrint);
                     }
@@ -1835,6 +1833,7 @@ export function createServer(vaultPath, options = {}) {
                             path: trimmedArgs.path,
                             claimId: trimmedArgs.claimId,
                             status: trimmedArgs.status,
+                            ...(trimmedArgs.investigationEvidence !== undefined && { investigationEvidence: trimmedArgs.investigationEvidence }),
                             ...(typeof trimmedArgs.confidence === 'string' && { confidence: trimmedArgs.confidence }),
                             reviewedBy: actorName(principal, trimmedArgs.reviewedBy),
                             ...(typeof trimmedArgs.reviewNote === 'string' && { reviewNote: trimmedArgs.reviewNote }),
@@ -2095,7 +2094,10 @@ export function createServer(vaultPath, options = {}) {
                         return jsonResult(llmWiki.noteTemplate(trimmedArgs.noteKind, trimmedArgs.maxChars, trimmedArgs.authoring), trimmedArgs.prettyPrint);
                     }
                     case 'read_wiki_saved_view': return jsonResult(await wikiViews.read(principal, trimmedArgs), trimmedArgs.prettyPrint);
-                    case 'manage_wiki_moc_region': return jsonResult(await mocRegions.run(principal, trimmedArgs), trimmedArgs.prettyPrint);
+                    case 'manage_wiki_moc_region':
+                        if (!['preview', 'register', 'regenerate', 'stop'].includes(trimmedArgs.operation))
+                            throw guidanceError(new Error('Invalid MOC management operation'), 'guid-408ffbf31af2a8a6');
+                        return jsonResult(await mocRegions.run(principal, trimmedArgs), trimmedArgs.prettyPrint);
                     case 'read_wiki_moc_region_status': return jsonResult(await mocRegions.run(principal, { path: trimmedArgs.path, operation: 'status' }), trimmedArgs.prettyPrint);
                     case "get_wiki_vocabulary_health": {
                         return jsonResult(await llmWiki.vocabularyHealth(principal, trimmedArgs.limit, trimmedArgs.maxChars), trimmedArgs.prettyPrint);

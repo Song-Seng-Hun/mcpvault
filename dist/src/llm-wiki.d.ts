@@ -738,6 +738,7 @@ export declare class LlmWikiService {
         nextLifecycle?: string;
         reviewChecks?: unknown;
         reviewOpenItems?: unknown;
+        investigationEvidence?: unknown;
         expectedRevision: string;
     }): Promise<{
         success: boolean;
@@ -770,6 +771,7 @@ export declare class LlmWikiService {
         confidence?: string;
         reviewedBy: string;
         reviewNote?: string;
+        investigationEvidence?: unknown;
         expectedRevision: string;
     }): Promise<{
         success: boolean;

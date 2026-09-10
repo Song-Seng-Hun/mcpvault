@@ -6,6 +6,10 @@ import { FileSystemService } from './filesystem.js';
 import { ScopeAccessPolicy } from './scope-access.js';
 import { ResearchBridgeService } from './research-bridge.js';
 import { researchWorkIds } from './research-bridge-work.js';
+import { SearchService } from './search.js';
+import { PathFilter } from './pathfilter.js';
+import { CollaborationService } from './scopes.js';
+import { RetrievalService } from './retrieval-service.js';
 
 let root: string, fs: FileSystemService, service: ResearchBridgeService;
 beforeEach(async () => {
@@ -85,6 +89,65 @@ test('optional retrieval failure preserves metadata leads and reports its unavai
 test('one anchor alone returns insufficient material without inventing a field or candidate', async () => {
   await note('Focus.md'); const r = await service.candidates({ focusPath: 'Focus.md' });
   expect(r.candidates).toEqual([]); expect(r.status).toBe('insufficient_material');
+});
+
+test('common retrieval selects beyond the old path sample before metadata hydration', async () => {
+  await note('Focus.md', { methods: ['symmetry'] });
+  for (let i = 0; i < 70; i++) await note(`A${i}.md`);
+  await note('ZRelevant.md', { methods: ['symmetry'] });
+  await note('Community/Hidden.md', { methods: ['symmetry'] });
+  const retrieve = vi.fn(async (params: any) => {
+    expect(params.canAccessPath('ZRelevant.md')).toBe(true);
+    expect(params.canAccessPath('Community/Hidden.md')).toBe(false);
+    return { results: [{ p: 'ZRelevant.md' }, { p: 'Community/Hidden.md' }], semantic: { state: 'disabled' } };
+  });
+  const r = await new ResearchBridgeService(fs, new ScopeAccessPolicy(), { retrieve, physical: (hit: any) => hit.p } as any)
+    .candidates({ focusPath: 'Focus.md', query: 'symmetry', semantic: false });
+  expect(retrieve).toHaveBeenCalledTimes(2);
+  expect(retrieve.mock.calls[1]![0].query).toBe('[domain] -math');
+  expect(r.candidates.map(c => c.target)).toContain('ZRelevant.md');
+  expect(JSON.stringify(r)).not.toContain('Hidden.md');
+  expect(r.coverage.partial).toBe(true);
+  expect(r.nextAction?.endpointId).toBe('wiki.search');
+  expect(r.coverage.metadataRetained).toBeLessThanOrEqual(64);
+});
+
+test('limited fallback continues to ordinary search, not the same research sample', async () => {
+  await sample();
+  const r = await service.candidates({ focusPath: 'Focus.md' });
+  expect(r.coverage.partial).toBe(true);
+  expect(r.nextAction?.endpointId).toBe('wiki.search');
+  expect(r.nextAction?.arguments).toMatchObject({ query: expect.stringContaining('symmetry') });
+});
+test('real shared retrieval finds metadata matches beyond the old alphabetical window', async () => {
+  await note('Focus.md', { methods: ['symmetry'] });
+  for (let index = 0; index < 70; index++) await note(`A-${index}.md`, { methods: ['unrelated'] });
+  await note('ZRelevant.md', { methods: ['symmetry'] });
+  await note('Community/Hidden.md', { methods: ['symmetry'] });
+  const access = new ScopeAccessPolicy(), search = new SearchService(root, new PathFilter());
+  const retrieval = new RetrievalService(search, new CollaborationService(fs, search), { search: async () => ({ available: false, results: [] }) }, access, fs);
+  for (const query of [undefined, 'symmetry']) {
+    const result = await new ResearchBridgeService(fs, access, retrieval).candidates({ focusPath: 'Focus.md', ...(query && { query }), semantic: false });
+    expect(result.candidates.map(candidate => candidate.target)).toContain('ZRelevant.md');
+    expect(JSON.stringify(result)).not.toContain('Hidden.md');
+    expect(result.coverage.partial).toBe(true);
+    expect(result.nextAction?.arguments.searchFrontmatter).toBe(true);
+  }
+});
+test('configured real retrieval preserves two near leads and one unexplained distant-domain lead', async () => {
+  await sample();
+  for (let index = 0; index < 70; index++) await note(`A-${index}.md`, { domain: 'math' });
+  await note('Community/Hidden.md', { domain: 'music' });
+  const access = new ScopeAccessPolicy(), search = new SearchService(root, new PathFilter());
+  const retrieval = new RetrievalService(search, new CollaborationService(fs, search), { search: async () => ({ available: false, results: [] }) }, access, fs);
+  const reads = vi.spyOn(fs, 'readNote');
+  const result = await new ResearchBridgeService(fs, access, retrieval).candidates({ focusPath: 'Focus.md', semantic: false });
+  expect(result.candidates.map(candidate => candidate.lane)).toEqual(['near', 'near', 'distant']);
+  expect(result.candidates.at(-1)).toMatchObject({ target: 'Distant.md', status: 'unverified_hypothesis', gaps: expect.arrayContaining(['connection_not_explained']) });
+  expect(result.sources.every(source => source.revision.length === 64)).toBe(true);
+  expect(result.coverage.metadataRetained).toBeLessThanOrEqual(64);
+  expect(reads.mock.calls.length).toBeLessThanOrEqual(8);
+  expect(JSON.stringify(result)).not.toContain('Hidden.md');
 });
 test('research identity is stable for the same question and revisions and changes with new observations', async () => {
   await sample(); const first = await service.candidates({ focusPath: 'Focus.md', query: 'Symmetry?' });

@@ -1,6 +1,6 @@
 import { guidanceError } from './guidance-runtime.js';
 import { normalizeScopeId } from './scopes.js';
-import { fingerprint } from './work-model.js';
+import { fingerprint, textField } from './work-model.js';
 import { isModerationHidden } from './moderation-policy.js';
 export function workshopDecisionContext(input) {
     const context = [input.context, '## Minority views', ...input.minority, '## Uncertainty', ...input.uncertainty, '## Revisit conditions', ...input.revisit].join('\n');
@@ -13,9 +13,7 @@ export function workshopTaskDescription(input, workshopPath) {
             ['Alternatives', input.alternatives], ['Consequences', input.consequences], ['Minority views', input.minority],
             ['Uncertainty', input.uncertainty], ['Revisit conditions', input.revisit],
         ].flatMap(([heading, values]) => values.length ? [`## ${heading}`, ...values] : []), `Workshop: [[${workshopPath}]]`].join('\n\n');
-    if (Array.from(description).length > 4000)
-        throw guidanceError(new Error('Task description and caveats exceed 4000 characters; shorten without dropping conditions'), 'guid-7bf9a7bcbdc5c88a');
-    return description;
+    return textField(description, 'Task description and caveats', 4000, true);
 }
 function object(value) {
     if (!value || typeof value !== 'object' || Array.isArray(value))
