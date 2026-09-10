@@ -2,6 +2,7 @@ import { guidanceError } from './guidance-runtime.js';
 import { boundSearchResults, normalizeSearchMaxChars, normalizeSearchLimit } from './search-limits.js';
 import { isModerationHidden } from './moderation-policy.js';
 import { selectContextPassages } from './context-passages.js';
+import { STRUCTURED_DOCUMENTS_ENABLED } from './document-chunks.js';
 import { endpointIdForTool } from './endpoint-registry.js';
 import { posix } from 'node:path';
 import { positiveSearchTerms, memoryCandidateLimit } from './search.js';
@@ -23,6 +24,8 @@ export function bodyStartLine(note) {
     return note.originalContent.slice(0, Math.max(0, suffix)).split('\n').length;
 }
 export function passageAction(path, revision, startLine, endLine) {
+    if (STRUCTURED_DOCUMENTS_ENABLED)
+        return { endpointId: 'documents.read', arguments: { path, startLine, endLine, expectedRevision: revision, maxChars: 4000 } };
     return { endpointId: endpointIdForTool('read_note_lines'), arguments: { path, startLine, endLine, expectedRevision: revision, maxChars: 4000 } };
 }
 /** Shared adapter-independent retrieval. Indexes discover; current Markdown
@@ -270,7 +273,8 @@ export class RetrievalService {
                 const publicPath = this.access.toPublicPath(path);
                 expanded.push({ ...hit, p: publicPath, rv: note.revision,
                     ex: passage?.text || '', ln: passage?.startLine || 0,
-                    context: { headingPath: passage?.headingPath || [], truncated: chosen.truncated, ...(passage && { endLine: passage.endLine }) },
+                    context: { headingPath: passage?.headingPath || [], truncated: chosen.truncated, ...(passage && { endLine: passage.endLine }),
+                        ...(passage?.sourceRanges && { sourceRanges: passage.sourceRanges, gaps: passage.gaps }) },
                     nextAction: passage ? passageAction(publicPath, note.revision, passage.startLine, passage.endLine)
                         : { endpointId: endpointIdForTool('get_note_outline'), arguments: { path: publicPath, expectedRevision: note.revision } },
                 });

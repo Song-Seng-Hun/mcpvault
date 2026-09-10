@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { chunkSemanticNote } from './semantic-chunks.js';
+import { chunkSemanticNote, chunkDocumentForEmbedding } from './semantic-chunks.js';
 
 // Previous text/ID contract, deliberately independent of the new locator math.
 function legacyTexts(path: string, raw: string) {
@@ -49,6 +49,11 @@ test('synthetic title anchors the first body content rather than frontmatter or 
 
 test('chunk count remains bounded', () => {
   expect(chunkSemanticNote('Note.md', 'long'.repeat(100000))).toHaveLength(64);
+});
+test('structured embedding is opt-in and removes the legacy silent tail cap', () => {
+  const raw = 'long'.repeat(10000);
+  expect(chunkDocumentForEmbedding('Note.md', raw, false)).toEqual(chunkSemanticNote('Note.md', raw));
+  expect(chunkDocumentForEmbedding('Note.md', raw, true).length).toBeGreaterThan(64);
 });
 
 test('mixed whitespace fixtures keep physical line counts for every emitted anchor', () => {

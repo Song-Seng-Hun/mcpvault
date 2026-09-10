@@ -139,11 +139,12 @@ const POLICY_TOPICS: Record<Exclude<WikiPolicyTopicId, 'overview'>, WikiPolicyTo
       'Use wiki.canvas_view only when spatial arrangement materially helps; export through wiki.canvas_export so source and output revisions remain checked and the derived Canvas stays in the root scope.',
       'Before relying on an older managed map, use wiki.canvas_health or its exception-board entry; an unmanaged user Canvas is valid but makes no source-freshness claim.',
       'Semantic hits, including cached candidates, recheck source hashes and moderation. An absent hit can mean stale or unavailable vectors, not missing knowledge; use lexical results during semantic cooldown.',
+      'Resources: documents.search -> revision-pinned documents.read. Keep semantic context/gaps; expand exact ranges or neighbors only as needed. PDF citations use original page/bbox. resources.manifest/export preserve bytes without execution. Details: documents endpoint schemas.',
       'wiki.view runs bounded Markdown wiki_view definitions, never scripts or DQL. Replay nextAction with its definition revision. wiki.bases_view savedViewPath exports a host display, not permissions.',
       'wiki.read_projection optionally includes authored navigation and up to five related locators/reasons. Semantic discovery is separately opt-in.',
       'Question packets default to 4000 characters (max 12000), inspect at most 20 candidates and read at most 8 documents. Search fresh means index/source agreement, not knowledge validity. Check separate summary, lifecycle, review and integrity fields. Social leads are not evidence; clipped passages are incomplete quotations.',
     ],
-    routes: ['wiki.answer_packet', 'wiki.search', 'wiki.home', 'wiki.read_projection', 'wiki.neighborhood', 'wiki.context_pack', 'wiki.authority_map', 'wiki.canvas_view', 'wiki.canvas_health'],
+    routes: ['wiki.answer_packet', 'wiki.search', 'documents.search', 'documents.read', 'documents.outline', 'resources.manifest', 'resources.export', 'wiki.home', 'wiki.read_projection', 'wiki.neighborhood', 'wiki.context_pack', 'wiki.authority_map', 'wiki.canvas_view', 'wiki.canvas_health'],
     avoid: ['loading whole documents for a single section', 'treating vector similarity or Canvas proximity as evidence', 'following an ambiguous identity'],
   },
   knowledge: {

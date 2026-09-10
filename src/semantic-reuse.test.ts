@@ -52,6 +52,18 @@ test('Properties-only edits reuse all vectors and rebuild the source revision an
   expect(result.rows.every((r: any) => r.hash === hash(changed))).toBe(true);
   expect(await readFile(join(vault, path), 'utf8')).toBe(changed);
 });
+test('failed atomic replacement preserves the previous complete vector generation', async () => {
+  await index('# Note\n\nold fact');
+  const table = await (service as any).getTable('chunks_global'), before = await table.query().toArray();
+  await seed('# Note\n\nnew fact');
+  const prepared = await (service as any).prepareIndex(path);
+  vi.spyOn(table, 'add').mockRejectedValue(new Error('injected commit failure'));
+  vi.spyOn(table, 'mergeInsert').mockImplementation(() => { throw new Error('injected commit failure'); });
+  await expect((service as any).applyIndexBatch([prepared], [])).rejects.toThrow(/injected/);
+  // Arrow row/vector proxies have per-query internal identities. Compare their
+  // complete serialized values, not private proxy backing objects.
+  expect(JSON.stringify(await table.query().toArray())).toBe(JSON.stringify(before));
+});
 
 test('one changed paragraph in a 64-chunk note embeds one input rather than 64', async () => {
   const raw = Array.from({ length: 64 }, (_, i) => `Paragraph ${i}`).join('\n\n');

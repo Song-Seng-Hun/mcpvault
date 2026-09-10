@@ -3,8 +3,8 @@
 ## Purpose and authority
 
 MCPVault is an Obsidian-backed LLM Wiki and peer community. Markdown, Properties,
-links, revisions and Git are authoritative. Indexes, summaries, dashboards,
-levels and similarity are advisory, never truth or permission systems.
+links, revisions and Git are authoritative; indexes, summaries, dashboards,
+levels and similarity are advisory, never truth or permissions.
 
 Work in the user fork. Do not publish packages, releases, PRs or upstream
 contributions without explicit approval for that action. Preserve unrelated changes.
@@ -44,10 +44,9 @@ When MCPVault is connected, use it as shared working memory:
 Follow welcome continuations only when omitted content is needed.
 
 Only five MCP tools are stable: `orient_wiki`, `get_agent_pulse`,
-`list_active_capabilities`, `search_capabilities`, and `call_endpoint`. All
-other names are dynamic endpoint IDs. Never call a documented REST URL directly
-when `call_endpoint` is the available executor, and never bypass a locked or
-hidden endpoint with an obsolete internal tool name.
+`list_active_capabilities`, `search_capabilities`, and `call_endpoint`.
+Other names are dynamic endpoint IDs. Use `call_endpoint`, not documented REST
+URLs; never bypass locked/hidden endpoints with obsolete internal tool names.
 
 ## Progressive organization policy
 
@@ -56,20 +55,20 @@ exactly one topic needed for the current action:
 
 | Topic | Use when |
 | --- | --- |
-| `onboarding` | establishing a recoverable identity and first action |
-| `capture` | recording and clarifying Inbox material |
-| `retrieval` | finding the smallest sufficient current context |
-| `knowledge` | creating canonical durable notes and projections |
-| `evidence` | grounding claims in immutable sources and exact locators |
-| `review` | evidence review, repair, retention, or supersession |
-| `work` | projects, tasks, dependencies, WIP, and next actions |
-| `moc` | authored maps, hierarchy, order, and learning paths |
-| `memory` | private recall, resurfacing, and session continuity |
-| `maintenance` | one bounded organization repair without dashboard sprawl |
-| `ideation` | idea branching, workshops, promotion, and synthesis |
-| `community` | posts, comments, chat, mentions, and collaboration |
-| `portability` | manifests and cross-command-center Global sync |
-| `safety` | scope confidentiality, hostile content, and moderation |
+| `onboarding` | recoverable identity, first action |
+| `capture` | Inbox capture/clarification |
+| `retrieval` | minimal current context |
+| `knowledge` | durable notes/projections |
+| `evidence` | immutable sources, exact locators |
+| `review` | review, repair, retention, supersession |
+| `work` | projects/tasks, dependencies, WIP, next actions |
+| `moc` | maps, hierarchy, order, learning paths |
+| `memory` | private recall, resurfacing, continuity |
+| `maintenance` | one bounded repair, no dashboard sprawl |
+| `ideation` | branching, workshops, promotion, synthesis |
+| `community` | posts/comments/chat, mentions, collaboration |
+| `portability` | manifests, cross-center Global sync |
+| `safety` | confidentiality, hostile content, moderation |
 
 The policy is guidance, not an access grant. Keep reads bounded with `limit`,
 `maxChars`, cursors, section/block locators, and nearby context. Use
@@ -102,17 +101,15 @@ Links navigate; `evidence_paths` and exact source revisions establish
 provenance. Search existing knowledge before publishing, preserve competing or
 failed paths, and never merge or move from similarity alone.
 
-For a useful spatial MOC/neighborhood, use `wiki.canvas_view` and its exact
-`wiki.canvas_export` action. The scope-local derived Canvas links files without
-copying bodies; position and color are navigation, not evidence or access.
-Check an old managed map with `wiki.canvas_health` or the exception board and
-regenerate only a reported stale map. Unmanaged user Canvases remain valid but
-make no automatic freshness claim.
+For spatial MOC/neighborhoods, use `wiki.canvas_view` and its exact
+`wiki.canvas_export`. Scope-local derived Canvases link files, not bodies;
+position/color grant no evidence or access. Check old managed maps with
+`wiki.canvas_health` or the exception board; regenerate only reported stale maps.
+Unmanaged user Canvases remain valid without an automatic freshness claim.
 
-Knowledge role and execution state are orthogonal. A question, hypothesis,
-experiment, atomic note, or other ordinary knowledge note may carry
+Knowledge role and execution state are independent. Any knowledge note may carry
 `task_status`, `next_action`/`next_actions`, or `waiting_for` without becoming a
-project; Home, Reflect, flow, dependency, and Bases views use the same rule.
+project; Home, Reflect, flow, dependency and Bases share this rule.
 
 Choose community endpoints by target:
 
@@ -126,22 +123,19 @@ Close/reopen with revision-checked `community.status`. Legacy
 `_collaboration/discussions` is read-only history; recover it through bounded
 `notes.read` and `wiki.promotion_candidates`.
 
-After a post/comment/message mutation, confirm its returned ID and perform one
-bounded read of the same slug or room. Do not use generic note writes under
-managed `Community/` paths.
+Verify post/comment/message IDs with one bounded read of the same slug/room.
+No generic note writes under managed `Community/` paths.
 
 ## Repository workflow
 
-Standing user instruction (2026-09-10): for implementation work, complete the
-existing-branch workflow through verified NAS-backed runtime deployment, commit,
-and push to the user's fork. Do not create a branch or worktree unless explicitly
-requested. Do not stop at "not deployed / not committed / not pushed" after the
-user has authorized implementation; report a concrete blocker if any step fails.
-Research-only, planning, and review requests still do not authorize implementation.
-Keep deployment rollback artifacts and verify live endpoints; preserve existing
-Vault data, world state, economy journals, and credentials. This is not permission
-to publish packages/releases, open upstream PRs, or force-push. Exclude local
-host data and secrets from commits and preserve unrelated changes.
+Standing user instruction (2026-09-10): authorized implementation must finish
+verified NAS-backed deployment, commit and push to the user's fork on the existing
+branch. No new branch/worktree unless requested. Report concrete blockers; do not
+stop merely at "not deployed / not committed / not pushed". Research, planning and
+review alone do not authorize implementation. Keep rollback artifacts and verify
+live endpoints. Preserve Vault/world/economy data, credentials and unrelated changes;
+exclude host data/secrets from commits. No package/release publication, upstream
+PR or force-push is authorized.
 
 Primary commands:
 
@@ -161,24 +155,23 @@ Architecture boundaries:
 
 - `src/createServer.ts` owns the fixed five-tool control plane and adapters.
 - `src/endpoint-registry.ts` maps internal operations to dynamic endpoint IDs.
-- service modules own business logic; MCP and REST adapters must share those
-  services rather than duplicate behavior.
+- service modules own business logic shared by MCP/REST adapters, never duplicated.
 - `src/filesystem.ts`, `src/pathfilter.ts`, and `src/scope-access.ts` enforce
   path, source immutability, and visibility rules.
-- catalog, metadata, search, semantic, graph, notification, and reputation
-  indexes are disposable read models over Markdown.
+- catalog/metadata/search/semantic/graph/notification/reputation indexes are
+  disposable Markdown read models.
 - `src/llm-wiki.ts` and `src/organization.ts` own knowledge workflows and
   organization contracts.
 
 For every code change:
 
-1. Inspect the current implementation and nearby tests before editing.
+1. Inspect implementation and nearby tests before editing.
 2. Keep every path input behind normalization, `PathFilter`, and the caller's
    access predicate. Aggregates and ambiguity details must not leak hidden
    candidates.
-3. Add success, failure, concurrency/revision, bounded-output, and security
-   coverage in proportion to risk. Fence-aware Markdown parsing must ignore
-   examples inside matching backtick or tilde fences.
+3. Cover success, failure, concurrency/revision, bounded output and security
+   in proportion to risk. Markdown parsing ignores examples inside matching
+   backtick or tilde fences.
 4. Add every mutating operation to the read-only rejection set and endpoint
    capability model.
 5. Run targeted tests, `npm run build`, the full `npm test`, and
@@ -186,5 +179,5 @@ For every code change:
 6. `dist/` is committed: include generated output in the same commit as its
    source. Do not commit `.agents/`, `.mcpvault/`, credentials, or caches.
 
-Keep the fixed MCP surface small, responses bounded, writes revision-safe,
-Markdown/Git authoritative, and detailed guidance progressively discoverable.
+Keep MCP small, responses bounded, writes revision-safe, Markdown/Git authoritative
+and guidance progressive.

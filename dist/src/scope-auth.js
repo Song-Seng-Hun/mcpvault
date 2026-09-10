@@ -487,12 +487,15 @@ export class ScopeAuthService {
         // create the salted hash above; the raw value is never persisted.
         const accessToken = randomBytes(32).toString('base64url');
         const expiresAt = Date.now() + SESSION_TTL_MS;
-        this.sessions.set(tokenDigest(accessToken), { principal, expiresAt });
+        // Runtime-only opaque delivery identity, not a persistent agent identity or
+        // caller-selected session. It lets read receipts distinguish separate logins.
+        const sessionPrincipal = { ...principal, sessionId: randomBytes(16).toString('hex') };
+        this.sessions.set(tokenDigest(accessToken), { principal: sessionPrincipal, expiresAt });
         return {
             success: true,
             accessToken,
             expiresAt: new Date(expiresAt).toISOString(),
-            principal: { ...principal, capabilities: this.effectiveCapabilities(principal) },
+            principal: { ...sessionPrincipal, capabilities: this.effectiveCapabilities(principal) },
             next: 'Use accessToken for get_agent_pulse and public/private tools; keep the password in the host secret store for future sessions.',
         };
     }
@@ -536,8 +539,9 @@ export class ScopeAuthService {
         const effectivePrincipal = { ...principal, capabilities: this.effectiveCapabilities(principal) };
         if (this.enterpriseRegistry)
             return this.enterpriseSession(effectivePrincipal, params);
-        this.sessions.set(tokenDigest(accessToken), { principal: effectivePrincipal, expiresAt });
-        return { success: true, accessToken, expiresAt: new Date(expiresAt).toISOString(), principal: effectivePrincipal };
+        const sessionPrincipal = { ...effectivePrincipal, sessionId: randomBytes(16).toString('hex') };
+        this.sessions.set(tokenDigest(accessToken), { principal: sessionPrincipal, expiresAt });
+        return { success: true, accessToken, expiresAt: new Date(expiresAt).toISOString(), principal: sessionPrincipal };
     }
     logout(accessToken) {
         if (this.enterpriseRegistry)

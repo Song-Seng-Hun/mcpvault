@@ -319,10 +319,17 @@ test('a failed vector write preserves manifest and retries the batch idempotentl
     schema,
     delete: async () => { storedRows = []; },
     add: async (values: any[]) => { if (failAdd) throw new Error('native write failure'); storedRows.push(...values); },
+    mergeInsert: () => {
+      const builder = { whenMatchedUpdateAll: () => builder, whenNotMatchedInsertAll: () => builder,
+        whenNotMatchedBySourceDelete: () => builder,
+        execute: async (values: any[]) => { if (failAdd) throw new Error('native write failure'); storedRows = [...values]; } };
+      return builder;
+    },
   };
   vi.spyOn(service as any, 'getDb').mockResolvedValue({});
   vi.mocked((service as any).getTable).mockResolvedValue(table);
   await expect((service as any).drain(4)).rejects.toThrow('native write failure');
+  expect(storedRows).toEqual(rows);
   expect((service as any).manifest['Area/Note.md']).toEqual(before);
   expect((service as any).pending.get('Area/Note.md')).toMatchObject({ kind: 'upsert', attempt: 1 });
   failAdd = false;

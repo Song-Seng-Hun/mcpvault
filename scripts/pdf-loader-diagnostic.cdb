@@ -1,0 +1,9 @@
+.reload /f ntdll.dll
+!gflag +sls
+bp ntdll!NtRaiseHardError ".echo HARD_ERROR; r rcx; kv; g"
+bp ntdll!NtTerminateProcess ".echo TERMINATE; r rdx; kv; g"
+sxe -c ".echo DLL_INIT_FAILURE; .exr -1; kv; lm; q" 0xc0000142
+sxe -c ".echo TARGET_EXIT; q" epr
+sxe -c ".echo BREAKPOINT_EVENT; g" bpe
+sxn ld
+g

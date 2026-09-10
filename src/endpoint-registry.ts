@@ -4,6 +4,7 @@ import type { ScopeCapability } from './scope-auth.js';
 import { boundSearchResults } from './search-limits.js';
 import { projectGuidance } from './guidance-runtime.js';
 import { STORY_OPERATIONS } from './story-tools.js';
+import { DOCUMENT_TOOL_ENDPOINTS } from './document-tools.js';
 
 export interface EndpointDescriptor {
   endpointId: string;
@@ -89,6 +90,7 @@ function endpointScore(endpoint: EndpointDescriptor, terms: string[]): number {
 }
 
 const EXPLICIT_IDS: Record<string, string> = {
+  ...DOCUMENT_TOOL_ENDPOINTS,
   list_guidance_catalog: 'guidance.catalog',
   manage_roleplay_world: 'roleplay.world', manage_roleplay_character: 'roleplay.character', manage_roleplay_scene: 'roleplay.scene',
   list_notices: 'notice.list', read_notice: 'notice.read', preview_notice: 'notice.preview', revise_notice: 'notice.revise',
@@ -543,6 +545,7 @@ export function endpointIdForTool(toolName: string): string {
 }
 
 function routeFor(tool: Tool, mutating: boolean): { method: 'GET' | 'POST'; url: string } {
+  if (Object.hasOwn(DOCUMENT_TOOL_ENDPOINTS, tool.name)) return { method: 'GET', url: `/api/endpoint/${endpointIdForTool(tool.name)}` };
   // The generic executor has no path-bound projectId for a body to override.
   if (Object.values(STORY_OPERATIONS).some(spec => spec.tool === tool.name)) return { method: mutating ? 'POST' : 'GET', url: `/api/endpoint/${endpointIdForTool(tool.name)}` };
   const explicit = EXPLICIT_ROUTES[tool.name];

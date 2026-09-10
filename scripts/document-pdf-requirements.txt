@@ -1,0 +1,24 @@
+# Optional worker environment only. Nothing in the Node install depends on this.
+# Python 3.10-3.13; reviewed against upstream releases on 2026-09-10.
+# Native text: no inference models, OCR extra, or model download is needed.
+docling-slim[convert-core,format-pdf]==2.126.0
+docling-core==2.95.0
+docling-parse==7.18.0
+pypdfium2==5.13.0
+
+# Opt-in layout/table environment, provision separately; do not uncomment in the
+# default native-only install without deciding to provision the model bundle.
+# docling-slim[models-local]==2.126.0
+# docling-ibm-models==4.0.2
+# torch==2.10.0
+
+# Additional Korean PP-OCRv5 ONNX opt-in; a hash-verified local model manifest is
+# mandatory. 1.23.2 deliberately retains Python 3.10 compatibility (Docling's
+# upstream extra requires onnxruntime<1.24 on Python 3.10).
+# rapidocr==3.9.2
+# onnxruntime==1.23.2
+
+# This is a reviewed set of direct pins, NOT a resolved, hash-locked environment.
+# Before production provisioning, resolve/freeze transitive dependencies and
+# platform wheel hashes in the operator's isolated environment. No installer or
+# dependency/model downloads run from document_pdf_worker.py or --check.

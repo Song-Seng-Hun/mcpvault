@@ -10,6 +10,7 @@ import { PathFilter } from './pathfilter.js';
 import { assertRoleplayMutationBoundary } from './roleplay-boundary.js';
 import { assertSkillEvolutionMutationBoundary } from './skill-evolution-boundary.js';
 import { assertStoryMutationBoundary } from './story-boundary.js';
+import { assertResourceBundleMutationBoundary } from './resource-bundle.js';
 import { generateObsidianUri } from './uri.js';
 import { extractObsidianLinkOccurrences } from './backlinks.js';
 import { buildDailyNotePath, resolveDailyDate } from './daily.js';
@@ -801,6 +802,7 @@ export class FileSystemService {
         assertRoleplayMutationBoundary(relativePathToVault);
         assertSkillEvolutionMutationBoundary(relativePathToVault);
         assertStoryMutationBoundary(relativePathToVault);
+        assertResourceBundleMutationBoundary(relativePathToVault);
         this.assertNoticeMutation(relativePathToVault);
         assertEnterpriseStorageAccess(relativePathToVault, true);
         // Guard the canonical vault-relative destination for every service write,

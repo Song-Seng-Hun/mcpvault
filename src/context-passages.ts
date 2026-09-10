@@ -1,5 +1,7 @@
 import { buildMarkdownLiteralMask } from './backlinks.js';
 import { positiveSearchTerms } from './search.js';
+import { selectStructuredContextPassages, type ContextSourceRange } from './document-context.js';
+import { STRUCTURED_DOCUMENTS_ENABLED } from './document-chunks.js';
 
 export interface ContextPassage {
   text: string;
@@ -7,6 +9,9 @@ export interface ContextPassage {
   endLine: number;
   headingPath: string[];
   truncated: boolean;
+  sourceRanges?: ContextSourceRange[];
+  gaps?: string[];
+  requestedRange?: { startLine: number; endLine: number };
 }
 
 export interface ContextPassageSelection {
@@ -16,6 +21,7 @@ export interface ContextPassageSelection {
 
 export interface SelectContextPassagesParams {
   content: string;
+  format?: 'markdown' | 'text';
   query: string;
   maxChars: number;
   maxPassages?: number;
@@ -54,6 +60,7 @@ const LIST_PATTERN = /^( {0,3})(?:[-+*]|\d+[.)])[ \t]+\S/;
  * bounded context packet. It never reads files or changes source text.
  */
 export function selectContextPassages(params: SelectContextPassagesParams): ContextPassageSelection {
+  if (STRUCTURED_DOCUMENTS_ENABLED || params.format === 'text') return selectStructuredContextPassages(params);
   const content = String(params.content ?? '');
   const terms = queryTerms(String(params.query ?? ''));
   const maxChars = boundedInteger(params.maxChars, 0, Number.MAX_SAFE_INTEGER);

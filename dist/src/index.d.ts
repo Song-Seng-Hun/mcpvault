@@ -32,4 +32,6 @@ export { previewMemoryMigration } from './enterprise-migration.js';
 export type { GlobalAuditResult, GlobalManifest, GlobalManifestEntry, GlobalProposal, GlobalProposalList, GlobalProposalStatus, GlobalRevision, GlobalRevisionWithContent, GlobalSyncChangeInput, GlobalSyncClientOptions, GlobalSyncHubHttpHandle, GlobalSyncHubHttpOptions, GlobalSyncHubOptions, GlobalSyncOperation, GlobalSyncReplicaOptions, GlobalPullResult, } from './global-sync.js';
 export { LlmWikiService } from './llm-wiki.js';
 export * from './types.js';
+export { documentRecords, toLangChainDocument, toLlamaIndexNode } from './document-adapters.js';
+export type { DocumentRecord } from './document-adapters.js';
 //# sourceMappingURL=index.d.ts.map

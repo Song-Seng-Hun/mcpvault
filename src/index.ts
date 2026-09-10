@@ -49,3 +49,5 @@ export type {
 } from './global-sync.js';
 export { LlmWikiService } from './llm-wiki.js';
 export * from './types.js';
+export { documentRecords, toLangChainDocument, toLlamaIndexNode } from './document-adapters.js';
+export type { DocumentRecord } from './document-adapters.js';

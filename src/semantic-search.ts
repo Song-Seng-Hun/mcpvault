@@ -15,7 +15,8 @@ import { VaultIoCoordinator } from './vault-io.js';
 import { isMissingVaultPath, VaultReadUnavailableError } from './vault-read-errors.js';
 import { readSnapshotBytes } from './snapshot-read.js';
 import { writeGzipSnapshot } from './snapshot-write.js';
-import { chunkSemanticNote } from './semantic-chunks.js';
+import { chunkDocumentForEmbedding } from './semantic-chunks.js';
+import { STRUCTURED_DOCUMENTS_ENABLED, MAX_STRUCTURED_CHUNKS, assertDocumentEmbeddingTokens } from './document-chunks.js';
 import { isMarkdownModerationHidden } from './moderation-policy.js';
 import { createDerivedCacheOwner, derivedCacheBudget, estimateCacheBytes } from './cache-budget.js';
 import { SEMANTIC_MODEL_ID as MODEL_ID, SEMANTIC_MODEL_OPTIONS, SEMANTIC_EMBEDDING_PROFILE } from './semantic-profile.js';
@@ -119,6 +120,7 @@ type LanceDb = {
 
 type Embedder = ((text: string | string[], options?: { pooling?: 'mean'; normalize?: boolean }) => Promise<{ tolist(): unknown }>) & {
   dispose?: () => void | Promise<void>;
+  tokenizer?: { encode(text: string, options?: { add_special_tokens?: boolean }): number[] };
 };
 
 interface SharedEmbedderEntry {
@@ -248,7 +250,7 @@ async function resultFromRow(row: SemanticResultRow, vaultPath: string, includeR
     // Legacy rows carry lines from a synthetic title/body string. The same
     // text/ordinal contract resolves their actual source anchor without a
     // schema change, reembedding, or trusting persisted display metadata.
-    const chunk = chunkSemanticNote(row.path, raw).find(value => value.id === row.id);
+    const chunk = chunkDocumentForEmbedding(row.path, raw).find(value => value.id === row.id);
     if (!chunk) return undefined;
     const start = Math.max(chunk.bodyOffset, chunk.offset - 120);
     const wiki = isWikiPath(row.path, raw);
@@ -1194,6 +1196,7 @@ export class SemanticSearchService {
   }
 
   private async embedDirect(embedder: Embedder, text: string, prefix: 'query' | 'passage'): Promise<number[]> {
+    if (STRUCTURED_DOCUMENTS_ENABLED) assertDocumentEmbeddingTokens(`${prefix}: ${text}`, embedder.tokenizer);
     const output = await embedder(`${prefix}: ${text}`, { pooling: 'mean', normalize: true });
     const values: unknown = output.tolist();
     const valueList = values as unknown[];
@@ -1242,6 +1245,7 @@ export class SemanticSearchService {
     if (texts.length === 0) return [];
     return this.withInference(prefix === 'query' ? 'foreground' : 'background', async () => {
       const embedder = await this.getEmbedder();
+      if (STRUCTURED_DOCUMENTS_ENABLED) for (const text of texts) assertDocumentEmbeddingTokens(`${prefix}: ${text}`, embedder.tokenizer);
       try {
         const output = await embedder(texts.map(text => `${prefix}: ${text}`), { pooling: 'mean', normalize: true });
         const values = output.tolist() as unknown;
@@ -1270,7 +1274,7 @@ export class SemanticSearchService {
     if (info.size !== afterRead.size || info.mtimeMs !== afterRead.mtimeMs) throw new VaultReadUnavailableError();
     const contentHash = hashContent(content);
     const scope = scopeForPath(path);
-    const chunks = chunkSemanticNote(path, content);
+    const chunks = chunkDocumentForEmbedding(path, content);
     const title = path.split('/').pop()?.replace(/\.md$/i, '') || path;
     const wiki = isWikiPath(path, content);
     const reusable = await this.reusableVectors(path, scope);
@@ -1312,11 +1316,12 @@ export class SemanticSearchService {
       const table = await this.getTable(name);
       const fields = (await table.schema()).fields.map((field: { name: string }) => field.name);
       if (!fields.includes('chunkHash') || !fields.includes('embeddingProfile')) return reusable;
+      const maxReusableChunks = STRUCTURED_DOCUMENTS_ENABLED ? MAX_STRUCTURED_CHUNKS : 64;
       const rows = await table.query()
         .where(`path = '${path.replace(/'/g, "''")}' AND embeddingProfile = '${SEMANTIC_EMBEDDING_PROFILE}'`)
-        .select(['path', 'chunkHash', 'embeddingProfile', 'vector']).limit(65).toArray();
+        .select(['path', 'chunkHash', 'embeddingProfile', 'vector']).limit(maxReusableChunks + 1).toArray();
       // A damaged table must not cause an unbounded scan or bless partial state.
-      if (rows.length > 64) return reusable;
+      if (rows.length > maxReusableChunks) return reusable;
       for (const row of rows) {
         if (row.path !== path || row.embeddingProfile !== SEMANTIC_EMBEDDING_PROFILE || typeof row.chunkHash !== 'string' || !/^[a-f0-9]{64}$/.test(row.chunkHash)) continue;
         const values = row.vector;
@@ -1365,14 +1370,20 @@ export class SemanticSearchService {
         const missing = ['chunkHash', 'embeddingProfile'].filter(field => !fields.includes(field));
         if (missing.length) await table.addColumns(missing.map(name => ({ name, valueSql: 'CAST(NULL AS STRING)' })));
       }
-      if (table && group.paths.size > 0) {
+      if (table && group.paths.size > 0 && group.rows.length === 0) {
         const predicate = [...group.paths]
           .map(path => `path = '${path.replace(/'/g, "''")}'`)
           .join(' OR ');
         await table.delete(predicate);
       }
       if (group.rows.length > 0) {
-        if (table) await table.add(group.rows);
+        if (table) {
+          const predicate = [...group.paths].map(path => `path = '${path.replace(/'/g, "''")}'`).join(' OR ');
+          // One Lance transaction replaces the complete path generation. A
+          // failed insert can never leave a successfully deleted old generation.
+          await table.mergeInsert('id').whenMatchedUpdateAll().whenNotMatchedInsertAll()
+            .whenNotMatchedBySourceDelete({ where: predicate }).execute(group.rows);
+        }
         else {
           table = await db.createTable(name, group.rows);
           names.add(name);
@@ -1384,7 +1395,7 @@ export class SemanticSearchService {
 
     // The manifest is committed only after every table operation succeeds.
     // If LanceDB fails midway, drain() requeues the whole batch and a retry is
-    // idempotent because each path is deleted before its replacement is added.
+    // idempotent because complete path generations merge in one transaction.
     for (const path of effectiveDeleted) delete this.manifest[path];
     for (const item of prepared) {
       this.manifest[item.path] = {

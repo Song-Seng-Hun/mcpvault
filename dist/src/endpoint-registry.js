@@ -2,6 +2,7 @@ import { guidanceError, guidanceText } from './guidance-runtime.js';
 import { boundSearchResults } from './search-limits.js';
 import { projectGuidance } from './guidance-runtime.js';
 import { STORY_OPERATIONS } from './story-tools.js';
+import { DOCUMENT_TOOL_ENDPOINTS } from './document-tools.js';
 const CONTROL_TOOLS = new Set(['orient_wiki', 'get_agent_pulse', 'list_active_capabilities', 'search_capabilities', 'call_endpoint']);
 const ENDPOINT_QUERY_STOP_WORDS = new Set([
     'a', 'an', 'and', 'are', 'as', 'at', 'be', 'by', 'can', 'could', 'do', 'for', 'from', 'get', 'give', 'i', 'in', 'into', 'is', 'it', 'me', 'of', 'on', 'or', 'please', 'show', 'that', 'the', 'to', 'use', 'want', 'with', 'would',
@@ -55,6 +56,7 @@ function endpointScore(endpoint, terms) {
         + (corpus.includes(term) ? 1 : 0), 0);
 }
 const EXPLICIT_IDS = {
+    ...DOCUMENT_TOOL_ENDPOINTS,
     list_guidance_catalog: 'guidance.catalog',
     manage_roleplay_world: 'roleplay.world', manage_roleplay_character: 'roleplay.character', manage_roleplay_scene: 'roleplay.scene',
     list_notices: 'notice.list', read_notice: 'notice.read', preview_notice: 'notice.preview', revise_notice: 'notice.revise',
@@ -506,6 +508,8 @@ export function endpointIdForTool(toolName) {
     return EXPLICIT_IDS[toolName] || `mcp.${toolName}`;
 }
 function routeFor(tool, mutating) {
+    if (Object.hasOwn(DOCUMENT_TOOL_ENDPOINTS, tool.name))
+        return { method: 'GET', url: `/api/endpoint/${endpointIdForTool(tool.name)}` };
     // The generic executor has no path-bound projectId for a body to override.
     if (Object.values(STORY_OPERATIONS).some(spec => spec.tool === tool.name))
         return { method: mutating ? 'POST' : 'GET', url: `/api/endpoint/${endpointIdForTool(tool.name)}` };

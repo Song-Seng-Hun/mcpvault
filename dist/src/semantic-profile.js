@@ -3,6 +3,8 @@ import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { availableParallelism } from 'node:os';
+import { DOCUMENT_CHUNK_PROFILE, STRUCTURED_DOCUMENTS_ENABLED } from './document-chunks.js';
+import { DOCUMENT_STRUCTURE_PROFILE } from './document-structure.js';
 export const SEMANTIC_MODEL_ID = 'Xenova/multilingual-e5-small';
 export const SEMANTIC_MODEL_OPTIONS = {
     revision: '761b726dd34fb83930e26aab4e9ac3899aa1fa78',
@@ -39,4 +41,5 @@ export const SEMANTIC_EMBEDDING_PROFILE = createHash('sha256').update(JSON.strin
     model: SEMANTIC_MODEL_ID, ...SEMANTIC_MODEL_OPTIONS,
     runtimes: ['@huggingface/transformers', '@huggingface/tokenizers', 'onnxruntime-node'].map(runtimeVersion),
     pooling: 'mean', normalize: true, dimensions: 384, inputContract: 'e5-prefix-v1',
+    ...(STRUCTURED_DOCUMENTS_ENABLED && { chunking: DOCUMENT_CHUNK_PROFILE, parser: DOCUMENT_STRUCTURE_PROFILE }),
 })).digest('hex');

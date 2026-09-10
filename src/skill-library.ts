@@ -25,7 +25,7 @@ function projectionDigest(content: string, frontmatter: Record<string, unknown>)
   const { skill_projection_sha256: _, ...rest } = frontmatter;
   return digest(JSON.stringify(canonical({ content: content.trimEnd(), frontmatter: rest })));
 }
-function safeText(value: string, max: number): void {
+export function safeText(value: string, max: number): void {
   if (typeof value !== 'string' || value.length > max || value.includes('\0')) throw guidanceError(new Error('Skill input limit exceeded'), 'guid-621127670e42e363');
   if (/(?:[a-z]:[\\/]Users[\\/](?!<|\{|\$)|\/Users\/[^<$\s]|\/home\/[^<$\s]|-----BEGIN (?:[A-Z]+ )?PRIVATE KEY-----|(?:ghp_|github_pat_|sk-proj-)[A-Za-z0-9_\-]{20,}|https?:\/\/[^/\s]+:[^/\s]+@)/i.test(value)) throw guidanceError(new Error('Skill source quarantined: sensitive content requires host review'), 'guid-dae530fd426ff274');
 }

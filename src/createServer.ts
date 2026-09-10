@@ -58,6 +58,12 @@ import { getSkillEvolutionTools, SKILL_MUTATING_TOOLS, skillReadAlias } from './
 import { WorkGroupService } from './work-groups.js';
 import { getRoleplayTools, ROLEPLAY_MUTATING_TOOLS } from './roleplay-tools.js';
 import { getStoryTools, STORY_MUTATING_TOOLS, storyReadAlias, storyEndpointForTool, assertStoryOperation } from './story-tools.js';
+import { getDocumentTools, DOCUMENT_TOOL_ENDPOINTS, dispatchDocumentTool } from './document-tools.js';
+import { DocumentResourceReader } from './document-resource.js';
+import { DocumentIndex } from './document-index.js';
+import { configuredPdfProvider } from './document-pdf-host.js';
+import { DocumentService } from './document-service.js';
+import { DocumentSearch } from './document-search.js';
 import { StoryService } from './story-service.js';
 import { getNoticeTools } from './notice-tools.js';
 import { NoticeRegistry, NoticeService } from './notices.js';
@@ -517,6 +523,12 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
   const gitHistory = new GitHistoryService(resolvedVaultPath, pathFilter);
   const collaboration = new CollaborationService(fileSystem, searchService);
   const retrieval = new RetrievalService(searchService, collaboration, semanticSearch, scopeAccess, fileSystem);
+  const documentCacheDir = process.env.MCPVAULT_DOCUMENT_CACHE_DIR;
+  const pdfHostConfig = process.env.MCPVAULT_PDF_HOST_CONFIG;
+  const documentIndex = new DocumentIndex(new DocumentResourceReader(fileSystem, pathFilter, scopeAccess, path => retrieval.skillDiscoveryAllowed(path)), fileCatalog,
+    { ...(documentCacheDir && { cacheDir: documentCacheDir }), ...(pdfHostConfig && { pdf: configuredPdfProvider(pdfHostConfig) }) });
+  const documents = new DocumentService(documentIndex);
+  const documentSearch = new DocumentSearch(documentIndex, retrieval);
   const layeredMemory = new LayeredMemoryService(fileSystem, retrieval, scopeAccess);
   const researchBridge = new ResearchBridgeService(fileSystem, scopeAccess, retrieval);
   const questionPacket = new QuestionPacketService(fileSystem, scopeAccess, retrieval);
@@ -943,6 +955,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         ...getChatTools(),
         ...getRoleplayTools(),
         ...getStoryTools(),
+        ...getDocumentTools(),
         ...getNoticeTools(),
         ...getReferenceTools(),
         ...getWhisperTools(),
@@ -1449,6 +1462,11 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
       if (federation && new Set(['publish_blog_post', 'delete_blog_post', 'comment_on_blog_post', 'edit_blog_comment', 'delete_blog_comment', 'update_agent_profile', 'get_agent_profile', 'list_agent_profiles', 'list_blog_posts', 'read_blog_post', 'list_blog_comments', 'public_federation_pull', 'public_federation_retry', 'public_federation_get', 'public_federation_list']).has(toolName)) {
         const { accessToken: _token, password: _password, invitationToken: _invitation, principal: _claimedPrincipal, ...publicArgs } = trimmedArgs;
         return jsonResult(await federation.dispatch(toolName, publicArgs, principal), trimmedArgs.prettyPrint);
+      }
+      if (Object.hasOwn(DOCUMENT_TOOL_ENDPOINTS, toolName)) {
+        // This service owns scope URI resolution. trimPaths has already expanded
+        // legacy adapter paths and must not feed private physical paths back in.
+        return jsonResult(await dispatchDocumentTool(toolName, rawArgs, principal, documents, documentSearch), false);
       }
       const storyEndpoint = storyEndpointForTool(toolName);
       if (storyEndpoint) {
@@ -3362,6 +3380,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
   const closeServer = server.close.bind(server);
   server.close = async () => {
     readModelCatalogUnsubscribe();
+    documentIndex.close();
     await mocRegions.close();
     await metadataIndex.close();
     await searchService.close();

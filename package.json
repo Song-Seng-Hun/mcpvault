@@ -50,7 +50,11 @@
     "@lancedb/lancedb": "^0.38.0",
     "@modelcontextprotocol/server": "^2.0.0",
     "gray-matter": "^4.0.3",
+    "remark-frontmatter": "^5.0.0",
+    "remark-gfm": "^4.0.1",
+    "remark-parse": "^11.0.0",
     "trash": "^10.1.1",
+    "unified": "^11.0.5",
     "yaml": "^2.9.0"
   },
   "devDependencies": {

@@ -1,5 +1,11 @@
+import { parseDocumentStructure } from './document-structure.js';
+import { chunkStructuredDocument, STRUCTURED_DOCUMENTS_ENABLED } from './document-chunks.js';
 const MAX_CHUNK_CHARS = 1200;
 const MAX_CHUNKS_PER_NOTE = 64;
+/** The legacy default is retained until the quality/economy gate is measured. */
+export function chunkDocumentForEmbedding(path, raw, structured = STRUCTURED_DOCUMENTS_ENABLED) {
+    return structured ? chunkStructuredDocument(parseDocumentStructure({ path, raw })) : chunkSemanticNote(path, raw);
+}
 /** Preserve legacy embedding text/IDs while mapping anchors to raw Markdown. */
 export function chunkSemanticNote(path, raw) {
     const frontmatter = /^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/.exec(raw)?.[0] || '';

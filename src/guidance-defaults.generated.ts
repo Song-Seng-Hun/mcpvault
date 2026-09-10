@@ -42,7 +42,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1034
+        "line": 1047
       }
     ]
   },
@@ -370,7 +370,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 2854
+        "line": 2856
       }
     ]
   },
@@ -475,7 +475,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 2928
+        "line": 2930
       }
     ]
   },
@@ -702,7 +702,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3484
+        "line": 3503
       }
     ]
   },
@@ -968,7 +968,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 784
+        "line": 796
       }
     ]
   },
@@ -1044,7 +1044,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 147
+        "line": 148
       }
     ]
   },
@@ -1120,7 +1120,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2703
+        "line": 2721
       }
     ]
   },
@@ -1248,7 +1248,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 265
+        "line": 266
       }
     ]
   },
@@ -1478,7 +1478,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1207
+        "line": 1220
       }
     ]
   },
@@ -1643,7 +1643,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1045
+        "line": 1058
       }
     ]
   },
@@ -1861,6 +1861,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-06bd12959a15944e",
+    "kind": "error",
+    "template": "PDF host process unavailable",
+    "parts": [
+      "PDF host process unavailable"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/document-pdf-host.ts",
+        "line": 94
+      }
+    ]
+  },
+  {
     "id": "guid-06c6a7cd5a902925",
     "kind": "error",
     "template": "Skill local edit conflict; no writes performed",
@@ -1991,7 +2006,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 926
+        "line": 928
       }
     ]
   },
@@ -2232,7 +2247,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 666
+        "line": 670
       }
     ]
   },
@@ -2264,7 +2279,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 992
+        "line": 994
       }
     ]
   },
@@ -2279,7 +2294,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2742
+        "line": 2760
       }
     ]
   },
@@ -2405,7 +2420,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 631
+        "line": 643
       }
     ]
   },
@@ -2435,7 +2450,22 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 806
+        "line": 818
+      }
+    ]
+  },
+  {
+    "id": "guid-091f4d87a1c234e0",
+    "kind": "error",
+    "template": "maxChars is too small for the next document metadata item",
+    "parts": [
+      "maxChars is too small for the next document metadata item"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/document-page.ts",
+        "line": 37
       }
     ]
   },
@@ -2450,7 +2480,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 3170
+        "line": 3172
       }
     ]
   },
@@ -2545,7 +2575,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 2133
+        "line": 2135
       }
     ]
   },
@@ -2561,11 +2591,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 792
+        "line": 793
       },
       {
         "file": "src/filesystem.ts",
-        "line": 808
+        "line": 809
       }
     ]
   },
@@ -2663,7 +2693,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 3065
+        "line": 3067
       }
     ]
   },
@@ -2784,7 +2814,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 176
+        "line": 177
       }
     ]
   },
@@ -2901,7 +2931,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3785
+        "line": 3804
       }
     ]
   },
@@ -3057,7 +3087,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3839
+        "line": 3858
       }
     ]
   },
@@ -3119,6 +3149,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/llm-wiki.ts",
         "line": 6788
+      }
+    ]
+  },
+  {
+    "id": "guid-0b146645728f3c14",
+    "kind": "error",
+    "template": "Document cache directory unavailable",
+    "parts": [
+      "Document cache directory unavailable"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/document-index.ts",
+        "line": 90
       }
     ]
   },
@@ -3380,7 +3425,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 2832
+        "line": 2834
       }
     ]
   },
@@ -3545,7 +3590,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 294
+        "line": 295
       }
     ]
   },
@@ -3616,7 +3661,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1502
+        "line": 1520
       }
     ]
   },
@@ -3722,7 +3767,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1301
+        "line": 1314
       }
     ]
   },
@@ -3963,7 +4008,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 249
+        "line": 250
       }
     ]
   },
@@ -3993,7 +4038,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1182
+        "line": 1195
       }
     ]
   },
@@ -4159,7 +4204,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 690
+        "line": 702
       }
     ]
   },
@@ -4204,11 +4249,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1427
+        "line": 1440
       },
       {
         "file": "src/createServer.ts",
-        "line": 2333
+        "line": 2351
       }
     ]
   },
@@ -4363,7 +4408,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 777
+        "line": 789
       }
     ]
   },
@@ -4439,6 +4484,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/organization.ts",
         "line": 324
+      }
+    ]
+  },
+  {
+    "id": "guid-0fbf1b0b1724f127",
+    "kind": "error",
+    "template": "Unknown document endpoint",
+    "parts": [
+      "Unknown document endpoint"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/document-tools.ts",
+        "line": 59
       }
     ]
   },
@@ -4556,6 +4616,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-103351980d6bc629",
+    "kind": "error",
+    "template": "Resource text encoding requires host review",
+    "parts": [
+      "Resource text encoding requires host review"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/resource-bundle-host.ts",
+        "line": 45
+      }
+    ]
+  },
+  {
     "id": "guid-104794ecf89c266a",
     "kind": "prose",
     "template": "A bounded project-planning packet. Separate purpose/outcome/support from the independent next-action list; this is advisory and does not replace Git history.",
@@ -4642,7 +4717,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/semantic-search.ts",
-        "line": 636
+        "line": 638
       }
     ]
   },
@@ -4657,7 +4732,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 191
+        "line": 192
       }
     ]
   },
@@ -4853,7 +4928,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 2021
+        "line": 2023
       }
     ]
   },
@@ -4869,6 +4944,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/story-exports.ts",
         "line": 387
+      }
+    ]
+  },
+  {
+    "id": "guid-11817392abd86c2b",
+    "kind": "error",
+    "template": "lineCount must be 1..1000",
+    "parts": [
+      "lineCount must be 1..1000"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/document-ranges.ts",
+        "line": 38
       }
     ]
   },
@@ -4913,7 +5003,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 315
+        "line": 316
       }
     ]
   },
@@ -5063,7 +5153,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 2825
+        "line": 2827
       }
     ]
   },
@@ -5123,7 +5213,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 3511
+        "line": 3513
       }
     ]
   },
@@ -5153,7 +5243,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1136
+        "line": 1138
       }
     ]
   },
@@ -5214,7 +5304,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 160
+        "line": 161
       }
     ]
   },
@@ -5246,7 +5336,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1647
+        "line": 1649
       }
     ]
   },
@@ -5394,7 +5484,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1554
+        "line": 1572
       }
     ]
   },
@@ -5576,7 +5666,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 189
+        "line": 190
       }
     ]
   },
@@ -5591,7 +5681,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 2763
+        "line": 2765
       }
     ]
   },
@@ -5637,7 +5727,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 270
+        "line": 271
       }
     ]
   },
@@ -5736,6 +5826,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-149d3433c2c003fb",
+    "kind": "error",
+    "template": "Neighbor reads use lineCount, not absolute ranges",
+    "parts": [
+      "Neighbor reads use lineCount, not absolute ranges"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/document-ranges.ts",
+        "line": 42
+      }
+    ]
+  },
+  {
     "id": "guid-149da456ff9c7a57",
     "kind": "error",
     "template": "An active legal_hold can be released only by an authorized human at the server host, not through MCP.",
@@ -5761,7 +5866,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1178
+        "line": 1191
       }
     ]
   },
@@ -5784,35 +5889,35 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       },
       {
         "file": "src/createServer.ts",
-        "line": 3096
+        "line": 3114
       },
       {
         "file": "src/createServer.ts",
-        "line": 3130
+        "line": 3148
       },
       {
         "file": "src/createServer.ts",
-        "line": 3190
+        "line": 3208
       },
       {
         "file": "src/endpoint-registry.ts",
-        "line": 67
+        "line": 68
       },
       {
         "file": "src/filesystem.ts",
-        "line": 1842
+        "line": 1844
       },
       {
         "file": "src/filesystem.ts",
-        "line": 2449
+        "line": 2451
       },
       {
         "file": "src/filesystem.ts",
-        "line": 3127
+        "line": 3129
       },
       {
         "file": "src/filesystem.ts",
-        "line": 3374
+        "line": 3376
       },
       {
         "file": "src/git-history.ts",
@@ -5934,7 +6039,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 607
+        "line": 611
       }
     ]
   },
@@ -6293,11 +6398,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 597
+        "line": 609
       },
       {
         "file": "src/createServer.ts",
-        "line": 611
+        "line": 623
       }
     ]
   },
@@ -6342,7 +6447,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 327
+        "line": 328
       }
     ]
   },
@@ -6417,11 +6522,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 2836
+        "line": 2838
       },
       {
         "file": "src/filesystem.ts",
-        "line": 2857
+        "line": 2859
       }
     ]
   },
@@ -6513,7 +6618,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 911
+        "line": 923
       }
     ]
   },
@@ -6544,7 +6649,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1270
+        "line": 1283
       }
     ]
   },
@@ -6590,7 +6695,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 143
+        "line": 144
       }
     ]
   },
@@ -6929,7 +7034,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1367
+        "line": 1380
       }
     ]
   },
@@ -6974,7 +7079,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 256
+        "line": 257
       }
     ]
   },
@@ -7085,7 +7190,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 972
+        "line": 985
       }
     ]
   },
@@ -7245,6 +7350,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-19dc5cf9da4af6da",
+    "kind": "error",
+    "template": "Document chunk context exhausted the input budget",
+    "parts": [
+      "Document chunk context exhausted the input budget"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/document-chunks.ts",
+        "line": 73
+      }
+    ]
+  },
+  {
     "id": "guid-19e9477a9c3a1ba9",
     "kind": "error",
     "template": "{arg0} must be an ISO timestamp",
@@ -7345,7 +7465,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 173
+        "line": 174
       }
     ]
   },
@@ -7390,7 +7510,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 953
+        "line": 955
       }
     ]
   },
@@ -7525,7 +7645,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 280
+        "line": 281
       }
     ]
   },
@@ -7619,7 +7739,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2781
+        "line": 2799
       }
     ]
   },
@@ -7711,7 +7831,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 778
+        "line": 790
       }
     ]
   },
@@ -7909,7 +8029,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 930
+        "line": 942
       }
     ]
   },
@@ -8049,7 +8169,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 2183
+        "line": 2185
       }
     ]
   },
@@ -8065,7 +8185,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 2551
+        "line": 2553
       },
       {
         "file": "src/vault-graph.ts",
@@ -8225,7 +8345,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3504
+        "line": 3523
       }
     ]
   },
@@ -8270,7 +8390,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 214
+        "line": 215
       }
     ]
   },
@@ -8317,7 +8437,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 310
+        "line": 311
       }
     ]
   },
@@ -8347,7 +8467,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2562
+        "line": 2580
       }
     ]
   },
@@ -8637,7 +8757,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 227
+        "line": 228
       }
     ]
   },
@@ -8739,7 +8859,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 873
+        "line": 885
       }
     ]
   },
@@ -8769,11 +8889,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3092
+        "line": 3110
       },
       {
         "file": "src/filesystem.ts",
-        "line": 3123
+        "line": 3125
       }
     ]
   },
@@ -8863,7 +8983,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1013
+        "line": 1026
       }
     ]
   },
@@ -8957,7 +9077,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1560
+        "line": 1578
       }
     ]
   },
@@ -9109,7 +9229,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 213
+        "line": 214
       }
     ]
   },
@@ -9171,6 +9291,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/llm-wiki-tools.ts",
         "line": 775
+      }
+    ]
+  },
+  {
+    "id": "guid-2081e7bc429f4258",
+    "kind": "error",
+    "template": "Unsafe resource staging cleanup",
+    "parts": [
+      "Unsafe resource staging cleanup"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/resource-bundle-host.ts",
+        "line": 124
       }
     ]
   },
@@ -9262,6 +9397,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-20d1a3d896de6ed5",
+    "kind": "error",
+    "template": "Invalid document line range",
+    "parts": [
+      "Invalid document line range"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/document-ranges.ts",
+        "line": 56
+      }
+    ]
+  },
+  {
     "id": "guid-20d1cd55181791bc",
     "kind": "error",
     "template": "Permission denied: {arg0}. The directory exists but cannot be read due to filesystem permissions.",
@@ -9273,7 +9423,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1714
+        "line": 1716
       }
     ]
   },
@@ -9471,7 +9621,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 511
+        "line": 512
       }
     ]
   },
@@ -9502,7 +9652,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 268
+        "line": 269
       }
     ]
   },
@@ -9601,7 +9751,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 202
+        "line": 203
       }
     ]
   },
@@ -9631,7 +9781,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 230
+        "line": 231
       }
     ]
   },
@@ -9762,7 +9912,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 796
+        "line": 797
       }
     ]
   },
@@ -9792,7 +9942,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2750
+        "line": 2768
       }
     ]
   },
@@ -9838,7 +9988,22 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1140
+        "line": 1142
+      }
+    ]
+  },
+  {
+    "id": "guid-225f68ff2c734005",
+    "kind": "error",
+    "template": "maxChars is too small for the next source range; increase maxChars",
+    "parts": [
+      "maxChars is too small for the next source range; increase maxChars"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/document-service.ts",
+        "line": 164
       }
     ]
   },
@@ -9913,7 +10078,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 203
+        "line": 204
       }
     ]
   },
@@ -9993,6 +10158,36 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-22ce2a1bdff8d193",
+    "kind": "error",
+    "template": "Reading receipts require an authenticated session",
+    "parts": [
+      "Reading receipts require an authenticated session"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/document-service.ts",
+        "line": 98
+      }
+    ]
+  },
+  {
+    "id": "guid-22d46ae5063dc341",
+    "kind": "error",
+    "template": "Document AST depth budget exceeded",
+    "parts": [
+      "Document AST depth budget exceeded"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/document-structure.ts",
+        "line": 108
+      }
+    ]
+  },
+  {
     "id": "guid-22dee94832897d90",
     "kind": "error",
     "template": "Research context changed; restart the read",
@@ -10049,7 +10244,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 802
+        "line": 814
       }
     ]
   },
@@ -10217,7 +10412,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 516
+        "line": 517
       }
     ]
   },
@@ -10263,7 +10458,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 397
+        "line": 403
       }
     ]
   },
@@ -10278,7 +10473,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1257
+        "line": 1270
       }
     ]
   },
@@ -10384,7 +10579,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1519
+        "line": 1521
       }
     ]
   },
@@ -10399,7 +10594,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3495
+        "line": 3514
       }
     ]
   },
@@ -10540,7 +10735,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 2939
+        "line": 2941
       }
     ]
   },
@@ -10684,7 +10879,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 2231
+        "line": 2233
       }
     ]
   },
@@ -10969,7 +11164,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2746
+        "line": 2764
       }
     ]
   },
@@ -11049,47 +11244,43 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3110
+        "line": 3128
       },
       {
         "file": "src/filesystem.ts",
-        "line": 1067
+        "line": 1069
       },
       {
         "file": "src/filesystem.ts",
-        "line": 1093
+        "line": 1095
       },
       {
         "file": "src/filesystem.ts",
-        "line": 1501
+        "line": 1503
       },
       {
         "file": "src/filesystem.ts",
-        "line": 1840
+        "line": 1842
       },
       {
         "file": "src/filesystem.ts",
-        "line": 2446
+        "line": 2448
       },
       {
         "file": "src/filesystem.ts",
-        "line": 2447
+        "line": 2449
       },
       {
         "file": "src/filesystem.ts",
-        "line": 2604
+        "line": 2606
       },
       {
         "file": "src/filesystem.ts",
-        "line": 2822
+        "line": 2824
       },
       {
         "file": "src/filesystem.ts",
-        "line": 2826
-      },
-      {
-        "file": "src/filesystem.ts",
-        "line": 2882
+        "line": 2828
       },
       {
         "file": "src/filesystem.ts",
@@ -11097,11 +11288,15 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       },
       {
         "file": "src/filesystem.ts",
-        "line": 3182
+        "line": 2886
       },
       {
         "file": "src/filesystem.ts",
-        "line": 3190
+        "line": 3184
+      },
+      {
+        "file": "src/filesystem.ts",
+        "line": 3192
       },
       {
         "file": "src/llm-wiki.ts",
@@ -11274,7 +11469,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1078
+        "line": 1091
       }
     ]
   },
@@ -11289,7 +11484,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 209
+        "line": 210
       }
     ]
   },
@@ -11429,7 +11624,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1509
+        "line": 1527
       }
     ]
   },
@@ -11538,7 +11733,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 659
+        "line": 671
       }
     ]
   },
@@ -11628,7 +11823,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 261
+        "line": 262
       }
     ]
   },
@@ -11643,7 +11838,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 878
+        "line": 890
       }
     ]
   },
@@ -11697,7 +11892,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 864
+        "line": 876
       }
     ]
   },
@@ -11791,7 +11986,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 158
+        "line": 159
       }
     ]
   },
@@ -11836,7 +12031,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3770
+        "line": 3789
       }
     ]
   },
@@ -12008,7 +12203,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 244
+        "line": 245
       }
     ]
   },
@@ -12023,7 +12218,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1135
+        "line": 1148
       }
     ]
   },
@@ -12038,7 +12233,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 847
+        "line": 859
       }
     ]
   },
@@ -12068,7 +12263,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 456
+        "line": 462
       }
     ]
   },
@@ -12177,7 +12372,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 229
+        "line": 230
       }
     ]
   },
@@ -12207,7 +12402,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1385
+        "line": 1387
       }
     ]
   },
@@ -12429,7 +12624,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 301
+        "line": 302
       }
     ]
   },
@@ -12489,11 +12684,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/retrieval-service.ts",
-        "line": 232
+        "line": 234
       },
       {
         "file": "src/retrieval-service.ts",
-        "line": 235
+        "line": 237
       }
     ]
   },
@@ -12635,7 +12830,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 162
+        "line": 163
       }
     ]
   },
@@ -12666,6 +12861,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/llm-wiki.ts",
         "line": 11792
+      }
+    ]
+  },
+  {
+    "id": "guid-2d7bcb11e2ab795a",
+    "kind": "error",
+    "template": "Document exceeds structured chunk budget; no partial generation published",
+    "parts": [
+      "Document exceeds structured chunk budget; no partial generation published"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/document-chunks.ts",
+        "line": 66
       }
     ]
   },
@@ -12878,7 +13088,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 417
+        "line": 423
       }
     ]
   },
@@ -12909,7 +13119,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 2168
+        "line": 2170
       }
     ]
   },
@@ -13079,6 +13289,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/enterprise-vault-marker.ts",
         "line": 34
+      }
+    ]
+  },
+  {
+    "id": "guid-2ef51abb71a90177",
+    "kind": "error",
+    "template": "Imported resource bundles are immutable; host-import a new revision",
+    "parts": [
+      "Imported resource bundles are immutable; host-import a new revision"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/resource-bundle.ts",
+        "line": 45
       }
     ]
   },
@@ -13429,6 +13654,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-308737e370565166",
+    "kind": "error",
+    "template": "PDF host timeout or output budget exceeded",
+    "parts": [
+      "PDF host timeout or output budget exceeded"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/document-pdf-host.ts",
+        "line": 99
+      }
+    ]
+  },
+  {
     "id": "guid-3088de795374c765",
     "kind": "prose",
     "template": "paid_work_divergence",
@@ -13484,7 +13724,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 679
+        "line": 680
       }
     ]
   },
@@ -13500,7 +13740,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 2322
+        "line": 2324
       }
     ]
   },
@@ -13515,7 +13755,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 242
+        "line": 243
       }
     ]
   },
@@ -13576,7 +13816,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1052
+        "line": 1065
       }
     ]
   },
@@ -13849,7 +14089,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1469
+        "line": 1471
       }
     ]
   },
@@ -13987,7 +14227,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1992
+        "line": 1994
       }
     ]
   },
@@ -14047,7 +14287,22 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 726
+        "line": 738
+      }
+    ]
+  },
+  {
+    "id": "guid-32c2dc90208f32a4",
+    "kind": "error",
+    "template": "Cursor invalidated by changed document generation or context",
+    "parts": [
+      "Cursor invalidated by changed document generation or context"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/document-page.ts",
+        "line": 24
       }
     ]
   },
@@ -14278,7 +14533,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 812
+        "line": 813
       }
     ]
   },
@@ -14308,7 +14563,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2700
+        "line": 2718
       }
     ]
   },
@@ -14338,7 +14593,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 150
+        "line": 151
       }
     ]
   },
@@ -14369,7 +14624,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/semantic-search.ts",
-        "line": 1201
+        "line": 1204
       }
     ]
   },
@@ -14390,6 +14645,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-344d9f292b5abd6b",
+    "kind": "error",
+    "template": "Document reading blocks overlap",
+    "parts": [
+      "Document reading blocks overlap"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/document-structure.ts",
+        "line": 245
+      }
+    ]
+  },
+  {
     "id": "guid-34510887d73d3ea7",
     "kind": "error",
     "template": "knownRevisions['{arg0}'] must be a non-empty revision string",
@@ -14401,7 +14671,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2985
+        "line": 3003
       }
     ]
   },
@@ -14418,7 +14688,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 44
+        "line": 45
       }
     ]
   },
@@ -14508,7 +14778,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 205
+        "line": 206
       }
     ]
   },
@@ -14568,11 +14838,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3787
+        "line": 3806
       },
       {
         "file": "src/createServer.ts",
-        "line": 3840
+        "line": 3859
       }
     ]
   },
@@ -14729,7 +14999,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1525
+        "line": 1527
       }
     ]
   },
@@ -14744,7 +15014,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 3298
+        "line": 3300
       }
     ]
   },
@@ -14776,7 +15046,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1324
+        "line": 1326
       }
     ]
   },
@@ -15003,7 +15273,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 171
+        "line": 172
       }
     ]
   },
@@ -15018,7 +15288,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 300
+        "line": 301
       }
     ]
   },
@@ -15063,7 +15333,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 318
+        "line": 319
       }
     ]
   },
@@ -15567,7 +15837,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1812
+        "line": 1814
       }
     ]
   },
@@ -15802,7 +16072,22 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1396
+        "line": 1398
+      }
+    ]
+  },
+  {
+    "id": "guid-39dfffe5719de3a3",
+    "kind": "error",
+    "template": "Resource bundle manifest unavailable",
+    "parts": [
+      "Resource bundle manifest unavailable"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/resource-bundle.ts",
+        "line": 23
       }
     ]
   },
@@ -15862,7 +16147,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 291
+        "line": 292
       }
     ]
   },
@@ -15892,7 +16177,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 234
+        "line": 235
       }
     ]
   },
@@ -16013,7 +16298,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1537
+        "line": 1555
       }
     ]
   },
@@ -16168,7 +16453,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 225
+        "line": 226
       }
     ]
   },
@@ -16188,6 +16473,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-3b570d741924b9b6",
+    "kind": "error",
+    "template": "Document match budget exceeded; narrow the query or target path",
+    "parts": [
+      "Document match budget exceeded; narrow the query or target path"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/document-search.ts",
+        "line": 68
+      }
+    ]
+  },
+  {
     "id": "guid-3b5e788a250ee078",
     "kind": "prose",
     "template": "Restored {arg0} from {arg1} as a pending change. Use commit_changes with a restoration reason to save the revision.",
@@ -16200,7 +16500,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3227
+        "line": 3245
       }
     ]
   },
@@ -16342,11 +16642,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1255
+        "line": 1268
       },
       {
         "file": "src/createServer.ts",
-        "line": 1273
+        "line": 1286
       }
     ]
   },
@@ -16446,7 +16746,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3497
+        "line": 3516
       }
     ]
   },
@@ -16569,6 +16869,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-3c8ea2c73e83b0c4",
+    "kind": "error",
+    "template": "Stale document parent fragment",
+    "parts": [
+      "Stale document parent fragment"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/document-service.ts",
+        "line": 80
+      }
+    ]
+  },
+  {
     "id": "guid-3c8f92a40a80bd6b",
     "kind": "prose",
     "template": "Stable lowercase owning model family, such as codex or claude. A self-registered model can claim this only once.",
@@ -16609,7 +16924,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 3317
+        "line": 3319
       }
     ]
   },
@@ -16674,15 +16989,15 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 587
+        "line": 599
       },
       {
         "file": "src/createServer.ts",
-        "line": 601
+        "line": 613
       },
       {
         "file": "src/createServer.ts",
-        "line": 1439
+        "line": 1452
       }
     ]
   },
@@ -16697,7 +17012,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 804
+        "line": 816
       }
     ]
   },
@@ -16712,7 +17027,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 161
+        "line": 167
       }
     ]
   },
@@ -16847,7 +17162,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1390
+        "line": 1392
       }
     ]
   },
@@ -17046,7 +17361,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1069
+        "line": 1071
       }
     ]
   },
@@ -17129,6 +17444,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-3f434b864145afc9",
+    "kind": "error",
+    "template": "Document canonical aliases and symbolic links are not permitted",
+    "parts": [
+      "Document canonical aliases and symbolic links are not permitted"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/document-resource.ts",
+        "line": 62
+      }
+    ]
+  },
+  {
     "id": "guid-3f4a96f70573f427",
     "kind": "error",
     "template": "Existing Work task does not match the requested story session",
@@ -17174,6 +17504,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-3fc1b15902289614",
+    "kind": "error",
+    "template": "Document search visibility changed; repeat the query",
+    "parts": [
+      "Document search visibility changed; repeat the query"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/document-search.ts",
+        "line": 75
+      }
+    ]
+  },
+  {
     "id": "guid-3fed642cdeee15e2",
     "kind": "error",
     "template": "Research submission is immutable; use a new round for revised independent work",
@@ -17199,7 +17544,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1055
+        "line": 1068
       }
     ]
   },
@@ -17214,7 +17559,22 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1412
+        "line": 1425
+      }
+    ]
+  },
+  {
+    "id": "guid-4009a30550b5eaa1",
+    "kind": "error",
+    "template": "Document changed during snapshot read",
+    "parts": [
+      "Document changed during snapshot read"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/document-resource.ts",
+        "line": 91
       }
     ]
   },
@@ -17275,7 +17635,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 188
+        "line": 189
       }
     ]
   },
@@ -17336,11 +17696,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3114
+        "line": 3132
       },
       {
         "file": "src/filesystem.ts",
-        "line": 3183
+        "line": 3185
       }
     ]
   },
@@ -17495,6 +17855,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-418ee0f34dd7203f",
+    "kind": "prose",
+    "template": "Bounded source-revision document structure, extractive descriptions and reading-order links. Markdown, plain text/scripts; optional local PDF. Parent and cursor reads require expectedRevision. Children are read with parentId; no script execution.",
+    "parts": [
+      "Bounded source-revision document structure, extractive descriptions and reading-order links. Markdown, plain text/scripts; optional local PDF. Parent and cursor reads require expectedRevision. Children are read with parentId; no script execution."
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/document-tools.ts",
+        "line": 24
+      }
+    ]
+  },
+  {
     "id": "guid-4191b0b83f8d8dc6",
     "kind": "prose",
     "template": "Use source work and edition lineage so multiple snapshots of one work are not mistaken for independent corroboration.",
@@ -17505,7 +17880,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 174
+        "line": 175
       }
     ]
   },
@@ -17520,7 +17895,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1345
+        "line": 1358
       }
     ]
   },
@@ -17604,7 +17979,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 554
+        "line": 557
       }
     ]
   },
@@ -17634,15 +18009,34 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/retrieval-service.ts",
-        "line": 59
-      },
-      {
-        "file": "src/retrieval-service.ts",
         "line": 61
       },
       {
         "file": "src/retrieval-service.ts",
-        "line": 62
+        "line": 63
+      },
+      {
+        "file": "src/retrieval-service.ts",
+        "line": 64
+      }
+    ]
+  },
+  {
+    "id": "guid-4227bee1a646d713",
+    "kind": "error",
+    "template": "Invalid document path",
+    "parts": [
+      "Invalid document path"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/document-resource.ts",
+        "line": 47
+      },
+      {
+        "file": "src/document-resource.ts",
+        "line": 50
       }
     ]
   },
@@ -17674,6 +18068,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/scope-auth-tools.ts",
         "line": 46
+      }
+    ]
+  },
+  {
+    "id": "guid-4232ba617b00c527",
+    "kind": "error",
+    "template": "Invalid final document range",
+    "parts": [
+      "Invalid final document range"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/document-ranges.ts",
+        "line": 74
       }
     ]
   },
@@ -17870,7 +18279,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1572
+        "line": 1574
       }
     ]
   },
@@ -17915,7 +18324,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 239
+        "line": 240
       }
     ]
   },
@@ -17945,7 +18354,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 177
+        "line": 178
       }
     ]
   },
@@ -18005,7 +18414,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1341
+        "line": 1354
       }
     ]
   },
@@ -18080,7 +18489,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 190
+        "line": 191
       }
     ]
   },
@@ -18140,7 +18549,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1928
+        "line": 1930
       }
     ]
   },
@@ -18201,7 +18610,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 3132
+        "line": 3134
       }
     ]
   },
@@ -18246,7 +18655,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 918
+        "line": 930
       }
     ]
   },
@@ -18261,7 +18670,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 748
+        "line": 760
       }
     ]
   },
@@ -18396,7 +18805,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 195
+        "line": 196
       }
     ]
   },
@@ -18591,7 +19000,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 142
+        "line": 143
       }
     ]
   },
@@ -18636,7 +19045,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 304
+        "line": 305
       }
     ]
   },
@@ -18651,7 +19060,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 973
+        "line": 986
       }
     ]
   },
@@ -18667,7 +19076,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1602
+        "line": 1604
       }
     ]
   },
@@ -18728,7 +19137,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 739
+        "line": 751
       }
     ]
   },
@@ -18895,15 +19304,15 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1104
-      },
-      {
-        "file": "src/createServer.ts",
         "line": 1117
       },
       {
         "file": "src/createServer.ts",
-        "line": 1131
+        "line": 1130
+      },
+      {
+        "file": "src/createServer.ts",
+        "line": 1144
       }
     ]
   },
@@ -18919,6 +19328,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/agent-pulse.ts",
         "line": 257
+      }
+    ]
+  },
+  {
+    "id": "guid-47832b1d2a7e0408",
+    "kind": "error",
+    "template": "PDF generation region budget exceeded",
+    "parts": [
+      "PDF generation region budget exceeded"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/document-pdf.ts",
+        "line": 34
       }
     ]
   },
@@ -19275,7 +19699,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       },
       {
         "file": "src/createServer.ts",
-        "line": 402
+        "line": 408
       },
       {
         "file": "src/moderation-tools.ts",
@@ -19429,7 +19853,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 315
+        "line": 316
       }
     ]
   },
@@ -19568,7 +19992,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 283
+        "line": 284
       }
     ]
   },
@@ -19583,7 +20007,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 861
+        "line": 873
       }
     ]
   },
@@ -19628,7 +20052,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 741
+        "line": 753
       }
     ]
   },
@@ -19643,7 +20067,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 967
+        "line": 980
       }
     ]
   },
@@ -19658,27 +20082,23 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 661
+        "line": 673
       },
       {
         "file": "src/createServer.ts",
-        "line": 714
+        "line": 726
       },
       {
         "file": "src/createServer.ts",
-        "line": 752
+        "line": 764
       },
       {
         "file": "src/createServer.ts",
-        "line": 765
+        "line": 777
       },
       {
         "file": "src/createServer.ts",
-        "line": 866
-      },
-      {
-        "file": "src/createServer.ts",
-        "line": 892
+        "line": 878
       },
       {
         "file": "src/createServer.ts",
@@ -19686,11 +20106,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       },
       {
         "file": "src/createServer.ts",
-        "line": 931
+        "line": 916
       },
       {
         "file": "src/createServer.ts",
-        "line": 976
+        "line": 943
       },
       {
         "file": "src/createServer.ts",
@@ -19698,31 +20118,31 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       },
       {
         "file": "src/createServer.ts",
-        "line": 1001
+        "line": 1002
       },
       {
         "file": "src/createServer.ts",
-        "line": 1009
+        "line": 1014
       },
       {
         "file": "src/createServer.ts",
-        "line": 1023
+        "line": 1022
       },
       {
         "file": "src/createServer.ts",
-        "line": 1038
+        "line": 1036
       },
       {
         "file": "src/createServer.ts",
-        "line": 1058
+        "line": 1051
       },
       {
         "file": "src/createServer.ts",
-        "line": 1068
+        "line": 1071
       },
       {
         "file": "src/createServer.ts",
-        "line": 1093
+        "line": 1081
       },
       {
         "file": "src/createServer.ts",
@@ -19730,43 +20150,47 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       },
       {
         "file": "src/createServer.ts",
-        "line": 1120
+        "line": 1119
       },
       {
         "file": "src/createServer.ts",
-        "line": 1136
+        "line": 1133
       },
       {
         "file": "src/createServer.ts",
-        "line": 1153
+        "line": 1149
       },
       {
         "file": "src/createServer.ts",
-        "line": 1168
+        "line": 1166
       },
       {
         "file": "src/createServer.ts",
-        "line": 1197
+        "line": 1181
       },
       {
         "file": "src/createServer.ts",
-        "line": 1211
+        "line": 1210
       },
       {
         "file": "src/createServer.ts",
-        "line": 1226
+        "line": 1224
       },
       {
         "file": "src/createServer.ts",
-        "line": 1242
+        "line": 1239
       },
       {
         "file": "src/createServer.ts",
-        "line": 1258
+        "line": 1255
       },
       {
         "file": "src/createServer.ts",
-        "line": 1275
+        "line": 1271
+      },
+      {
+        "file": "src/createServer.ts",
+        "line": 1288
       }
     ]
   },
@@ -19811,7 +20235,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2317
+        "line": 2335
       }
     ]
   },
@@ -19856,7 +20280,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 2369
+        "line": 2371
       }
     ]
   },
@@ -19932,7 +20356,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1951
+        "line": 1953
       }
     ]
   },
@@ -20260,7 +20684,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1061
+        "line": 1063
       }
     ]
   },
@@ -20303,6 +20727,10 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ],
     "binding": "call",
     "sources": [
+      {
+        "file": "src/document-service.ts",
+        "line": 28
+      },
       {
         "file": "src/notices.ts",
         "line": 24
@@ -20442,6 +20870,25 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-4c0fcf219c4b0240",
+    "kind": "error",
+    "template": "Resource bundle inventory budget exceeded",
+    "parts": [
+      "Resource bundle inventory budget exceeded"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/resource-bundle-host.ts",
+        "line": 28
+      },
+      {
+        "file": "src/resource-bundle-host.ts",
+        "line": 38
+      }
+    ]
+  },
+  {
     "id": "guid-4c2b4de17c38f30e",
     "kind": "prose",
     "template": "Failed to move file: {arg0}",
@@ -20453,7 +20900,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 2360
+        "line": 2362
       }
     ]
   },
@@ -20563,7 +21010,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 3504
+        "line": 3506
       }
     ]
   },
@@ -20578,7 +21025,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/retrieval-service.ts",
-        "line": 76
+        "line": 78
       }
     ]
   },
@@ -20654,6 +21101,22 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/global-sync.ts",
         "line": 256
+      }
+    ]
+  },
+  {
+    "id": "guid-4d0593fac56fdfd5",
+    "kind": "error",
+    "template": "{arg0} must be a bounded JSON array",
+    "parts": [
+      "",
+      " must be a bounded JSON array"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/document-tools.ts",
+        "line": 48
       }
     ]
   },
@@ -20839,7 +21302,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3627
+        "line": 3646
       }
     ]
   },
@@ -21008,7 +21471,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 514
+        "line": 515
       }
     ]
   },
@@ -21083,7 +21546,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 542
+        "line": 545
       }
     ]
   },
@@ -21145,7 +21608,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 212
+        "line": 213
       }
     ]
   },
@@ -21175,7 +21638,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1091
+        "line": 1104
       }
     ]
   },
@@ -21390,7 +21853,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 178
+        "line": 179
       }
     ]
   },
@@ -21435,7 +21898,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1035
+        "line": 1048
       }
     ]
   },
@@ -21572,7 +22035,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1548
+        "line": 1566
       }
     ]
   },
@@ -21720,7 +22183,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 820
+        "line": 832
       }
     ]
   },
@@ -21795,7 +22258,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 195
+        "line": 196
       }
     ]
   },
@@ -21811,6 +22274,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/llm-wiki-tools.ts",
         "line": 125
+      }
+    ]
+  },
+  {
+    "id": "guid-512f75342bd222c5",
+    "kind": "error",
+    "template": "Document cache must remain outside the Vault",
+    "parts": [
+      "Document cache must remain outside the Vault"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/document-index.ts",
+        "line": 92
       }
     ]
   },
@@ -21856,7 +22334,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1460
+        "line": 1462
       }
     ]
   },
@@ -21901,7 +22379,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3045
+        "line": 3063
       }
     ]
   },
@@ -22199,7 +22677,22 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1415
+        "line": 1428
+      }
+    ]
+  },
+  {
+    "id": "guid-520715b0cd13c871",
+    "kind": "error",
+    "template": "Invalid read cursor range",
+    "parts": [
+      "Invalid read cursor range"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/document-service.ts",
+        "line": 116
       }
     ]
   },
@@ -22338,7 +22831,26 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 657
+        "line": 669
+      }
+    ]
+  },
+  {
+    "id": "guid-52b9823c46dde6f9",
+    "kind": "error",
+    "template": "Document AST node budget exceeded",
+    "parts": [
+      "Document AST node budget exceeded"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/document-structure.ts",
+        "line": 107
+      },
+      {
+        "file": "src/document-structure.ts",
+        "line": 112
       }
     ]
   },
@@ -22369,6 +22881,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/llm-wiki.ts",
         "line": 6709
+      }
+    ]
+  },
+  {
+    "id": "guid-52cf9e0d542ef2b3",
+    "kind": "error",
+    "template": "Immutable resource bundle manifest conflict",
+    "parts": [
+      "Immutable resource bundle manifest conflict"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/resource-bundle-host.ts",
+        "line": 91
       }
     ]
   },
@@ -22413,7 +22940,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 834
+        "line": 846
       }
     ]
   },
@@ -22459,7 +22986,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1419
+        "line": 1432
       }
     ]
   },
@@ -22629,6 +23156,22 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-53dc7576cf9b1d6f",
+    "kind": "error",
+    "template": "Stale or invalid {arg0}; repeat the current read",
+    "parts": [
+      "Stale or invalid ",
+      "; repeat the current read"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/document-service.ts",
+        "line": 73
+      }
+    ]
+  },
+  {
     "id": "guid-53e0414dbe2dfcc8",
     "kind": "prose",
     "template": "Preflight only unless explicitly false",
@@ -22639,7 +23182,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 788
+        "line": 800
       }
     ]
   },
@@ -22837,7 +23380,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 285
+        "line": 286
       }
     ]
   },
@@ -23052,7 +23595,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 204
+        "line": 205
       }
     ]
   },
@@ -23082,7 +23625,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 975
+        "line": 988
       }
     ]
   },
@@ -23097,7 +23640,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 293
+        "line": 294
       }
     ]
   },
@@ -23127,11 +23670,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 833
+        "line": 845
       },
       {
         "file": "src/createServer.ts",
-        "line": 850
+        "line": 862
       }
     ]
   },
@@ -23161,7 +23704,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1491
+        "line": 1493
       }
     ]
   },
@@ -23192,6 +23735,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/community-participation.ts",
         "line": 314
+      }
+    ]
+  },
+  {
+    "id": "guid-565020a9fd732ccd",
+    "kind": "error",
+    "template": "PDF generation fragment budget exceeded",
+    "parts": [
+      "PDF generation fragment budget exceeded"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/document-pdf.ts",
+        "line": 56
       }
     ]
   },
@@ -23236,7 +23794,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1256
+        "line": 1269
       }
     ]
   },
@@ -23251,7 +23809,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 206
+        "line": 207
       }
     ]
   },
@@ -23431,7 +23989,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 159
+        "line": 160
       }
     ]
   },
@@ -23740,7 +24298,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 3199
+        "line": 3201
       }
     ]
   },
@@ -23755,7 +24313,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3014
+        "line": 3032
       }
     ]
   },
@@ -23801,7 +24359,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/semantic-search.ts",
-        "line": 170
+        "line": 172
       }
     ]
   },
@@ -23861,7 +24419,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 849
+        "line": 861
       }
     ]
   },
@@ -23906,7 +24464,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 192
+        "line": 193
       }
     ]
   },
@@ -24011,7 +24569,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 3389
+        "line": 3391
       }
     ]
   },
@@ -24042,31 +24600,31 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1269
+        "line": 1271
       },
       {
         "file": "src/filesystem.ts",
-        "line": 1924
+        "line": 1926
       },
       {
         "file": "src/filesystem.ts",
-        "line": 2057
+        "line": 2059
       },
       {
         "file": "src/filesystem.ts",
-        "line": 2066
+        "line": 2068
       },
       {
         "file": "src/filesystem.ts",
-        "line": 2240
+        "line": 2242
       },
       {
         "file": "src/filesystem.ts",
-        "line": 2249
+        "line": 2251
       },
       {
         "file": "src/filesystem.ts",
-        "line": 2597
+        "line": 2599
       }
     ]
   },
@@ -24096,7 +24654,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 2049
+        "line": 2051
       }
     ]
   },
@@ -24571,6 +25129,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-5ae513f3edc753f9",
+    "kind": "error",
+    "template": "Resource manifest cursor requires a bundle manifest target",
+    "parts": [
+      "Resource manifest cursor requires a bundle manifest target"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/document-service.ts",
+        "line": 189
+      }
+    ]
+  },
+  {
     "id": "guid-5ae8a9458d133d50",
     "kind": "prose",
     "template": "Move validation failed: {arg0}",
@@ -24582,7 +25155,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 2264
+        "line": 2266
       }
     ]
   },
@@ -24662,6 +25235,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-5b30a7ed175e4d64",
+    "kind": "error",
+    "template": "Resource bundle entry invalid",
+    "parts": [
+      "Resource bundle entry invalid"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/resource-bundle.ts",
+        "line": 31
+      }
+    ]
+  },
+  {
     "id": "guid-5b30b3771ccf56a7",
     "kind": "error",
     "template": "Invalid screenplay block type.",
@@ -24703,6 +25291,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/independent-research.ts",
         "line": 156
+      }
+    ]
+  },
+  {
+    "id": "guid-5b50eca9b77681cc",
+    "kind": "error",
+    "template": "maxChars is too small for the export envelope",
+    "parts": [
+      "maxChars is too small for the export envelope"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/document-service.ts",
+        "line": 211
       }
     ]
   },
@@ -24798,6 +25401,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-5bb83cbb07355a8b",
+    "kind": "error",
+    "template": "Structured embedding token budget exceeded; no truncated vectors published",
+    "parts": [
+      "Structured embedding token budget exceeded; no truncated vectors published"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/document-chunks.ts",
+        "line": 12
+      }
+    ]
+  },
+  {
     "id": "guid-5bdedaa3e1d6cd21",
     "kind": "prose",
     "template": "Nearby items after the target.",
@@ -24823,7 +25441,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 746
+        "line": 758
       }
     ]
   },
@@ -25024,6 +25642,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-5c944d79d84db6a0",
+    "kind": "error",
+    "template": "Document unavailable: access denied",
+    "parts": [
+      "Document unavailable: access denied"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/document-resource.ts",
+        "line": 51
+      }
+    ]
+  },
+  {
     "id": "guid-5cce74932957a272",
     "kind": "error",
     "template": "World already initialized",
@@ -25054,6 +25687,29 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-5d0fa2a802028c72",
+    "kind": "error",
+    "template": "Document index is closed",
+    "parts": [
+      "Document index is closed"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/document-index.ts",
+        "line": 100
+      },
+      {
+        "file": "src/document-index.ts",
+        "line": 106
+      },
+      {
+        "file": "src/document-index.ts",
+        "line": 122
+      }
+    ]
+  },
+  {
     "id": "guid-5d256bca0104cb60",
     "kind": "error",
     "template": "Turn is not bound to this approved quest",
@@ -25079,7 +25735,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 659
+        "line": 663
       }
     ]
   },
@@ -25184,7 +25840,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 725
+        "line": 737
       }
     ]
   },
@@ -25340,7 +25996,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 664
+        "line": 668
       }
     ]
   },
@@ -25355,7 +26011,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 237
+        "line": 238
       }
     ]
   },
@@ -25401,7 +26057,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1457
+        "line": 1459
       }
     ]
   },
@@ -25501,6 +26157,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/roleplay-tools.ts",
         "line": 87
+      }
+    ]
+  },
+  {
+    "id": "guid-5e7cd6b3768d99ab",
+    "kind": "error",
+    "template": "Resource bundle entry hash or size invalid",
+    "parts": [
+      "Resource bundle entry hash or size invalid"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/resource-bundle.ts",
+        "line": 34
       }
     ]
   },
@@ -25664,7 +26335,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1085
+        "line": 1098
       }
     ]
   },
@@ -25730,7 +26401,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3941
+        "line": 3960
       }
     ]
   },
@@ -25765,6 +26436,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-5fa1120c58291289",
+    "kind": "error",
+    "template": "Invalid document revision",
+    "parts": [
+      "Invalid document revision"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/document-resource.ts",
+        "line": 72
+      }
+    ]
+  },
+  {
     "id": "guid-5fa3568695bfd16a",
     "kind": "error",
     "template": "An active session holds this agent; explicit handoff expectedGeneration={arg0} is required",
@@ -25791,7 +26477,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 934
+        "line": 936
       }
     ]
   },
@@ -25822,6 +26508,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/llm-wiki.ts",
         "line": 3824
+      }
+    ]
+  },
+  {
+    "id": "guid-5ffca210c6cbab4b",
+    "kind": "error",
+    "template": "Document byte budget exceeded",
+    "parts": [
+      "Document byte budget exceeded"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/document-resource.ts",
+        "line": 85
       }
     ]
   },
@@ -25947,7 +26648,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 835
+        "line": 847
       }
     ]
   },
@@ -25962,7 +26663,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 147
+        "line": 148
       }
     ]
   },
@@ -25977,7 +26678,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 241
+        "line": 242
       }
     ]
   },
@@ -26022,7 +26723,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1119
+        "line": 1132
       }
     ]
   },
@@ -26067,7 +26768,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 215
+        "line": 216
       }
     ]
   },
@@ -26161,7 +26862,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 267
+        "line": 268
       }
     ]
   },
@@ -26300,7 +27001,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 250
+        "line": 251
       }
     ]
   },
@@ -26336,7 +27037,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3519
+        "line": 3538
       }
     ]
   },
@@ -26401,11 +27102,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 700
+        "line": 701
       },
       {
         "file": "src/filesystem.ts",
-        "line": 703
+        "line": 704
       }
     ]
   },
@@ -26577,7 +27278,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1278
+        "line": 1280
       }
     ]
   },
@@ -26837,7 +27538,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 824
+        "line": 825
       }
     ]
   },
@@ -26912,7 +27613,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 688
+        "line": 700
       }
     ]
   },
@@ -27038,6 +27739,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-65d724cd13118818",
+    "kind": "prose",
+    "template": "Search current semantic fragments and return bounded descriptions, exact revision/locators and read actions. Specify path for exhaustive target coverage. Global discovery is a bounded partial candidate window; optional vector discovery is advisory. Hidden data is excluded.",
+    "parts": [
+      "Search current semantic fragments and return bounded descriptions, exact revision/locators and read actions. Specify path for exhaustive target coverage. Global discovery is a bounded partial candidate window; optional vector discovery is advisory. Hidden data is excluded."
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/document-tools.ts",
+        "line": 29
+      }
+    ]
+  },
+  {
     "id": "guid-65e104485abd704e",
     "kind": "prose",
     "template": "Add optional semantic discovery only in neighborhood mode; lexical links and scope rules remain authoritative",
@@ -27128,7 +27844,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 822
+        "line": 823
       }
     ]
   },
@@ -27148,6 +27864,25 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-66554315e040b071",
+    "kind": "error",
+    "template": "expectedRevision is required for a fragment or cursor",
+    "parts": [
+      "expectedRevision is required for a fragment or cursor"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/document-service.ts",
+        "line": 78
+      },
+      {
+        "file": "src/document-service.ts",
+        "line": 93
+      }
+    ]
+  },
+  {
     "id": "guid-665a80df3a8cb596",
     "kind": "prose",
     "template": "After preview, explicitly permit visible inbound references to break; never overrides an inaccessible-scope barrier",
@@ -27158,7 +27893,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 727
+        "line": 739
       }
     ]
   },
@@ -27173,7 +27908,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 658
+        "line": 670
       }
     ]
   },
@@ -27257,7 +27992,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 590
+        "line": 594
       }
     ]
   },
@@ -27288,7 +28023,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 2208
+        "line": 2210
       }
     ]
   },
@@ -27685,7 +28420,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 860
+        "line": 862
       }
     ]
   },
@@ -27765,7 +28500,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 983
+        "line": 985
       }
     ]
   },
@@ -27825,7 +28560,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 210
+        "line": 211
       }
     ]
   },
@@ -27916,7 +28651,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 264
+        "line": 265
       }
     ]
   },
@@ -27931,7 +28666,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 168
+        "line": 169
       }
     ]
   },
@@ -27963,7 +28698,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1940
+        "line": 1942
       }
     ]
   },
@@ -27978,7 +28713,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 690
+        "line": 691
       }
     ]
   },
@@ -28009,6 +28744,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/organization.ts",
         "line": 1302
+      }
+    ]
+  },
+  {
+    "id": "guid-69eeb1066a43b102",
+    "kind": "error",
+    "template": "Invalid document range mode or relation",
+    "parts": [
+      "Invalid document range mode or relation"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/document-ranges.ts",
+        "line": 37
       }
     ]
   },
@@ -28099,7 +28849,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1456
+        "line": 1458
       }
     ]
   },
@@ -28114,7 +28864,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 221
+        "line": 222
       }
     ]
   },
@@ -28280,7 +29030,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1438
+        "line": 1440
       }
     ]
   },
@@ -28340,7 +29090,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 832
+        "line": 844
       }
     ]
   },
@@ -28475,7 +29225,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1127
+        "line": 1129
       }
     ]
   },
@@ -28490,7 +29240,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 356
+        "line": 357
       }
     ]
   },
@@ -28507,7 +29257,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1475
+        "line": 1477
       }
     ]
   },
@@ -28537,7 +29287,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 458
+        "line": 464
       }
     ]
   },
@@ -28552,11 +29302,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3628
+        "line": 3647
       },
       {
         "file": "src/createServer.ts",
-        "line": 3786
+        "line": 3805
       }
     ]
   },
@@ -28571,7 +29321,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1000
+        "line": 1013
       }
     ]
   },
@@ -28601,7 +29351,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 297
+        "line": 298
       }
     ]
   },
@@ -28721,7 +29471,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1049
+        "line": 1062
       }
     ]
   },
@@ -28902,7 +29652,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 406
+        "line": 412
       }
     ]
   },
@@ -28917,7 +29667,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1433
+        "line": 1446
       }
     ]
   },
@@ -28947,7 +29697,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 259
+        "line": 260
       }
     ]
   },
@@ -29068,11 +29818,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 974
+        "line": 976
       },
       {
         "file": "src/filesystem.ts",
-        "line": 989
+        "line": 991
       }
     ]
   },
@@ -29179,7 +29929,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 304
+        "line": 305
       }
     ]
   },
@@ -29347,7 +30097,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 784
+        "line": 785
       },
       {
         "file": "src/git-history.ts",
@@ -29446,7 +30196,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 639
+        "line": 640
       }
     ]
   },
@@ -29536,7 +30286,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 656
+        "line": 668
       }
     ]
   },
@@ -29566,7 +30316,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 304
+        "line": 305
       }
     ]
   },
@@ -29885,7 +30635,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3629
+        "line": 3648
       }
     ]
   },
@@ -30036,11 +30786,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 2087
+        "line": 2089
       },
       {
         "file": "src/filesystem.ts",
-        "line": 2284
+        "line": 2286
       }
     ]
   },
@@ -30116,7 +30866,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 288
+        "line": 289
       }
     ]
   },
@@ -30225,7 +30975,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 382
+        "line": 383
       }
     ]
   },
@@ -30319,7 +31069,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1819
+        "line": 1837
       }
     ]
   },
@@ -30474,7 +31224,22 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1249
+        "line": 1262
+      }
+    ]
+  },
+  {
+    "id": "guid-729cb7d6bf713fd9",
+    "kind": "error",
+    "template": "Resource target escaped the admitted Vault",
+    "parts": [
+      "Resource target escaped the admitted Vault"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/resource-bundle-host.ts",
+        "line": 61
       }
     ]
   },
@@ -30490,7 +31255,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1459
+        "line": 1461
       }
     ]
   },
@@ -30535,7 +31300,22 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1017
+        "line": 1030
+      }
+    ]
+  },
+  {
+    "id": "guid-72e11f6f6df3addd",
+    "kind": "error",
+    "template": "Use lines or offsets, not both",
+    "parts": [
+      "Use lines or offsets, not both"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/document-ranges.ts",
+        "line": 41
       }
     ]
   },
@@ -30610,7 +31390,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 256
+        "line": 257
       }
     ]
   },
@@ -30893,7 +31673,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1070
+        "line": 1072
       }
     ]
   },
@@ -31013,7 +31793,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/semantic-search.ts",
-        "line": 1248
+        "line": 1252
       }
     ]
   },
@@ -31059,6 +31839,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/workshop-facilitation.ts",
         "line": 651
+      }
+    ]
+  },
+  {
+    "id": "guid-74c0445baa417ec7",
+    "kind": "prose",
+    "template": "Read exact lines/UTF-16 offsets or semantic fragments with structural headings, table/list context. Previous defaults to tail N lines, next to head. Revision-pin fragment/cursor reads. Follow nextAction while ranges remain. Meaning completeness is not guaranteed. Optional caller/session-bound knownReads receipts suppress duplicates; forceRead rereads. Never executes source text.",
+    "parts": [
+      "Read exact lines/UTF-16 offsets or semantic fragments with structural headings, table/list context. Previous defaults to tail N lines, next to head. Revision-pin fragment/cursor reads. Follow nextAction while ranges remain. Meaning completeness is not guaranteed. Optional caller/session-bound knownReads receipts suppress duplicates; forceRead rereads. Never executes source text."
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/document-tools.ts",
+        "line": 26
       }
     ]
   },
@@ -31511,7 +32306,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1345
+        "line": 1347
       }
     ]
   },
@@ -31651,6 +32446,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-76db0472d3aaea0f",
+    "kind": "error",
+    "template": "Document cache cannot use symbolic links or junctions",
+    "parts": [
+      "Document cache cannot use symbolic links or junctions"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/document-index.ts",
+        "line": 86
+      }
+    ]
+  },
+  {
     "id": "guid-76e115eb11cd87e9",
     "kind": "prose",
     "template": "Review the assembled draft and identify your contribution before synthesis.",
@@ -31676,7 +32486,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 240
+        "line": 241
       }
     ]
   },
@@ -31708,6 +32518,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/independent-research.ts",
         "line": 87
+      }
+    ]
+  },
+  {
+    "id": "guid-7700dcabd791a704",
+    "kind": "error",
+    "template": "Resource bundle inventory or byte budget exceeded",
+    "parts": [
+      "Resource bundle inventory or byte budget exceeded"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/resource-bundle-host.ts",
+        "line": 22
       }
     ]
   },
@@ -31782,7 +32607,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 697
+        "line": 701
       }
     ]
   },
@@ -31873,7 +32698,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 269
+        "line": 270
       }
     ]
   },
@@ -31889,6 +32714,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/independent-research-model.ts",
         "line": 79
+      }
+    ]
+  },
+  {
+    "id": "guid-77a46a4da95b1c28",
+    "kind": "error",
+    "template": "Document is not valid UTF-8; retrieve its original bytes instead",
+    "parts": [
+      "Document is not valid UTF-8; retrieve its original bytes instead"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/document-resource.ts",
+        "line": 108
       }
     ]
   },
@@ -32028,7 +32868,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 459
+        "line": 465
       }
     ]
   },
@@ -32138,7 +32978,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 2353
+        "line": 2355
       }
     ]
   },
@@ -32231,7 +33071,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 3191
+        "line": 3193
       }
     ]
   },
@@ -32386,6 +33226,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-79cedcf187331f49",
+    "kind": "error",
+    "template": "Reserved bundle license path",
+    "parts": [
+      "Reserved bundle license path"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/resource-bundle-host.ts",
+        "line": 33
+      }
+    ]
+  },
+  {
     "id": "guid-79cf26c11bcd0ca9",
     "kind": "prose",
     "template": "Default premise. Explicit historical_context is required for retired, rejected or disputed inputs; this permits discussion of failure, not endorsement.",
@@ -32426,7 +33281,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 144
+        "line": 145
       }
     ]
   },
@@ -32441,7 +33296,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 323
+        "line": 324
       }
     ]
   },
@@ -32516,7 +33371,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 987
+        "line": 1000
       }
     ]
   },
@@ -32546,7 +33401,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 218
+        "line": 219
       }
     ]
   },
@@ -32668,6 +33523,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-7af70b534d73999c",
+    "kind": "error",
+    "template": "Document parser unavailable for this binary format; original bytes remain available through resources.export",
+    "parts": [
+      "Document parser unavailable for this binary format; original bytes remain available through resources.export"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/document-index.ts",
+        "line": 109
+      }
+    ]
+  },
+  {
     "id": "guid-7af83ba2b399ec59",
     "kind": "prose",
     "template": "Created vault revision {arg0}: {arg1}",
@@ -32764,6 +33634,22 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-7b786ef02448eb8c",
+    "kind": "error",
+    "template": "Document {arg0} neighbor unavailable",
+    "parts": [
+      "Document ",
+      " neighbor unavailable"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/document-ranges.ts",
+        "line": 50
+      }
+    ]
+  },
+  {
     "id": "guid-7b7f66e148bd35f2",
     "kind": "prose",
     "template": "Include denied/error events (default: false)",
@@ -32819,7 +33705,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1118
+        "line": 1131
       }
     ]
   },
@@ -32965,6 +33851,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/public-federation.ts",
         "line": 303
+      }
+    ]
+  },
+  {
+    "id": "guid-7c7b5ef7be85b983",
+    "kind": "error",
+    "template": "Resource target cannot use junctions or symbolic links",
+    "parts": [
+      "Resource target cannot use junctions or symbolic links"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/resource-bundle-host.ts",
+        "line": 65
       }
     ]
   },
@@ -33175,7 +34076,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 412
+        "line": 418
       }
     ]
   },
@@ -33190,7 +34091,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 262
+        "line": 263
       }
     ]
   },
@@ -33269,7 +34170,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 689
+        "line": 701
       }
     ]
   },
@@ -33315,7 +34216,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 986
+        "line": 988
       }
     ]
   },
@@ -33360,7 +34261,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1386
+        "line": 1388
       }
     ]
   },
@@ -33420,7 +34321,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 291
+        "line": 292
       }
     ]
   },
@@ -33552,7 +34453,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1402
+        "line": 1404
       }
     ]
   },
@@ -33582,7 +34483,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2741
+        "line": 2759
       }
     ]
   },
@@ -33713,7 +34614,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 925
+        "line": 937
       }
     ]
   },
@@ -33792,7 +34693,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 3392
+        "line": 3394
       }
     ]
   },
@@ -33901,7 +34802,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3548
+        "line": 3567
       }
     ]
   },
@@ -34228,7 +35129,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 675
+        "line": 687
       }
     ]
   },
@@ -34243,7 +35144,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 187
+        "line": 188
       }
     ]
   },
@@ -34383,7 +35284,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 263
+        "line": 264
       }
     ]
   },
@@ -34433,6 +35334,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-81fd4ae9bb4a207e",
+    "kind": "error",
+    "template": "Resource bundle directory depth exceeded",
+    "parts": [
+      "Resource bundle directory depth exceeded"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/resource-bundle-host.ts",
+        "line": 26
+      }
+    ]
+  },
+  {
     "id": "guid-8215839d11fe2918",
     "kind": "error",
     "template": "Canvas projection requires one root note first",
@@ -34458,7 +35374,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2981
+        "line": 2999
       }
     ]
   },
@@ -34565,7 +35481,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/retrieval-service.ts",
-        "line": 90
+        "line": 92
       },
       {
         "file": "src/search.ts",
@@ -34573,7 +35489,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       },
       {
         "file": "src/semantic-search.ts",
-        "line": 482
+        "line": 484
       }
     ]
   },
@@ -34633,7 +35549,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 663
+        "line": 664
       }
     ]
   },
@@ -34678,7 +35594,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1033
+        "line": 1046
       }
     ]
   },
@@ -34768,7 +35684,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 747
+        "line": 759
       }
     ]
   },
@@ -34888,7 +35804,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 256
+        "line": 257
       }
     ]
   },
@@ -35010,7 +35926,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1518
+        "line": 1520
       }
     ]
   },
@@ -35025,7 +35941,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 789
+        "line": 801
       }
     ]
   },
@@ -35056,6 +35972,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/llm-wiki-tools.ts",
         "line": 702
+      }
+    ]
+  },
+  {
+    "id": "guid-845d6969ab706ac8",
+    "kind": "error",
+    "template": "Invalid document UTF-16 offset range",
+    "parts": [
+      "Invalid document UTF-16 offset range"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/document-ranges.ts",
+        "line": 61
       }
     ]
   },
@@ -35166,6 +36097,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-84acd7979e2f09ec",
+    "kind": "error",
+    "template": "Document input exceeds the 8 MiB input budget",
+    "parts": [
+      "Document input exceeds the 8 MiB input budget"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/document-structure.ts",
+        "line": 81
+      }
+    ]
+  },
+  {
     "id": "guid-84c62fc4b2af599f",
     "kind": "prose",
     "template": "Return a bounded live register of visible Decision Records with structured state, revisions, predecessor/successor lineage, legacy migration warnings, active-target conflicts, ambiguous links, and supersession cycles. It derives from Markdown, never auto-rewrites records, and treats decision_status as authoritative.",
@@ -35177,6 +36123,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/llm-wiki-tools.ts",
         "line": 174
+      }
+    ]
+  },
+  {
+    "id": "guid-84c98edf49f577e4",
+    "kind": "error",
+    "template": "Search supports at most 32 terms",
+    "parts": [
+      "Search supports at most 32 terms"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/document-search.ts",
+        "line": 18
       }
     ]
   },
@@ -35281,7 +36242,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1134
+        "line": 1147
       }
     ]
   },
@@ -35387,7 +36348,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1423
+        "line": 1436
       }
     ]
   },
@@ -35462,7 +36423,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 803
+        "line": 815
       }
     ]
   },
@@ -35492,7 +36453,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 848
+        "line": 860
       }
     ]
   },
@@ -35601,6 +36562,10 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
         "line": 22
       },
       {
+        "file": "src/document-tools.ts",
+        "line": 49
+      },
+      {
         "file": "src/ideation.ts",
         "line": 135
       },
@@ -35621,7 +36586,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 396
+        "line": 402
       }
     ]
   },
@@ -35681,7 +36646,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 938
+        "line": 940
       }
     ]
   },
@@ -35711,11 +36676,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1167
+        "line": 1180
       },
       {
         "file": "src/createServer.ts",
-        "line": 1180
+        "line": 1193
       }
     ]
   },
@@ -35775,7 +36740,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 200
+        "line": 201
       }
     ]
   },
@@ -35791,7 +36756,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1193
+        "line": 1195
       }
     ]
   },
@@ -35996,7 +36961,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 234
+        "line": 235
       }
     ]
   },
@@ -36056,7 +37021,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 3379
+        "line": 3381
       }
     ]
   },
@@ -36103,7 +37068,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3219
+        "line": 3237
       }
     ]
   },
@@ -36137,7 +37102,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 4129
+        "line": 4148
       }
     ]
   },
@@ -36217,6 +37182,22 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-889032af05f2a862",
+    "kind": "error",
+    "template": "{arg0} query budget exceeded",
+    "parts": [
+      "",
+      " query budget exceeded"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/document-tools.ts",
+        "line": 47
+      }
+    ]
+  },
+  {
     "id": "guid-889b03065d856ea2",
     "kind": "prose",
     "template": "Source path is a directory: {arg0}. move_file currently supports files only.",
@@ -36228,7 +37209,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 2275
+        "line": 2277
       }
     ]
   },
@@ -36304,7 +37285,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1513
+        "line": 1515
       }
     ]
   },
@@ -36368,7 +37349,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 298
+        "line": 299
       }
     ]
   },
@@ -36554,7 +37535,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1499
+        "line": 1501
       }
     ]
   },
@@ -36743,7 +37724,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1106
+        "line": 1108
       }
     ]
   },
@@ -36789,19 +37770,19 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1195
+        "line": 1208
       },
       {
         "file": "src/createServer.ts",
-        "line": 1209
+        "line": 1222
       },
       {
         "file": "src/createServer.ts",
-        "line": 1224
+        "line": 1237
       },
       {
         "file": "src/createServer.ts",
-        "line": 1240
+        "line": 1253
       }
     ]
   },
@@ -36817,7 +37798,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 2606
+        "line": 2608
       }
     ]
   },
@@ -36834,7 +37815,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1015
+        "line": 1017
       }
     ]
   },
@@ -36879,7 +37860,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/retrieval-service.ts",
-        "line": 80
+        "line": 82
       }
     ]
   },
@@ -36909,7 +37890,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1435
+        "line": 1448
       }
     ]
   },
@@ -36955,7 +37936,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 311
+        "line": 312
       }
     ]
   },
@@ -37121,7 +38102,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 879
+        "line": 891
       }
     ]
   },
@@ -37181,7 +38162,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 163
+        "line": 164
       }
     ]
   },
@@ -37272,7 +38253,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 211
+        "line": 212
       }
     ]
   },
@@ -37332,7 +38313,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 223
+        "line": 224
       }
     ]
   },
@@ -37393,7 +38374,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 3204
+        "line": 3206
       }
     ]
   },
@@ -37423,7 +38404,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3216
+        "line": 3234
       }
     ]
   },
@@ -37438,7 +38419,22 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 2095
+        "line": 2097
+      }
+    ]
+  },
+  {
+    "id": "guid-8d16e38bd08327c2",
+    "kind": "error",
+    "template": "PDF extracted document exceeds structure budget",
+    "parts": [
+      "PDF extracted document exceeds structure budget"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/document-pdf.ts",
+        "line": 32
       }
     ]
   },
@@ -37568,6 +38564,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-8e08bab8645c5c2c",
+    "kind": "error",
+    "template": "Document cache directory must be private (0700)",
+    "parts": [
+      "Document cache directory must be private (0700)"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/document-index.ts",
+        "line": 93
+      }
+    ]
+  },
+  {
     "id": "guid-8e0e3400fb6d52b1",
     "kind": "error",
     "template": "Target activity revision changed; reread before starting",
@@ -37595,7 +38606,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1464
+        "line": 1466
       }
     ]
   },
@@ -37655,7 +38666,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2754
+        "line": 2772
       }
     ]
   },
@@ -37805,7 +38816,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 397
+        "line": 403
       }
     ]
   },
@@ -37866,7 +38877,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 3195
+        "line": 3197
       }
     ]
   },
@@ -38355,6 +39366,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-91281247fdc2071e",
+    "kind": "error",
+    "template": "Resource bundle manifest budget exceeded",
+    "parts": [
+      "Resource bundle manifest budget exceeded"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/resource-bundle.ts",
+        "line": 20
+      }
+    ]
+  },
+  {
     "id": "guid-914379dee1656a85",
     "kind": "error",
     "template": "Moderation-hidden notes cannot be linked by this planner",
@@ -38427,7 +39453,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 168
+        "line": 169
       }
     ]
   },
@@ -38443,7 +39469,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3329
+        "line": 3347
       }
     ]
   },
@@ -38458,7 +39484,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 2045
+        "line": 2047
       }
     ]
   },
@@ -38843,7 +39869,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 231
+        "line": 232
       }
     ]
   },
@@ -38948,7 +39974,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 312
+        "line": 313
       }
     ]
   },
@@ -38964,6 +39990,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/ideation.ts",
         "line": 679
+      }
+    ]
+  },
+  {
+    "id": "guid-9402b7f77e4ef543",
+    "kind": "error",
+    "template": "Resource original changed during staging",
+    "parts": [
+      "Resource original changed during staging"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/resource-bundle-host.ts",
+        "line": 113
       }
     ]
   },
@@ -39147,7 +40188,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1149
+        "line": 1162
       }
     ]
   },
@@ -39208,7 +40249,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1094
+        "line": 1096
       }
     ]
   },
@@ -39223,7 +40264,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 660
+        "line": 672
       }
     ]
   },
@@ -39302,7 +40343,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 2123
+        "line": 2125
       }
     ]
   },
@@ -39484,7 +40525,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 181
+        "line": 182
       }
     ]
   },
@@ -39671,7 +40712,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3755
+        "line": 3774
       }
     ]
   },
@@ -39776,6 +40817,10 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "binding": "call",
     "sources": [
       {
+        "file": "src/document-service.ts",
+        "line": 69
+      },
+      {
         "file": "src/economy-model.ts",
         "line": 50
       },
@@ -39847,6 +40892,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-977488c7dda55b0a",
+    "kind": "error",
+    "template": "Markdown AST is missing source offsets",
+    "parts": [
+      "Markdown AST is missing source offsets"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/document-structure.ts",
+        "line": 65
+      }
+    ]
+  },
+  {
     "id": "guid-978b748c0ffab0dd",
     "kind": "error",
     "template": "status must be open or completed",
@@ -39857,11 +40917,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3116
+        "line": 3134
       },
       {
         "file": "src/filesystem.ts",
-        "line": 3184
+        "line": 3186
       }
     ]
   },
@@ -39926,6 +40986,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-97bdfe49267bc68d",
+    "kind": "error",
+    "template": "Document unavailable; verify path and source availability",
+    "parts": [
+      "Document unavailable; verify path and source availability"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/document-tools.ts",
+        "line": 62
+      }
+    ]
+  },
+  {
     "id": "guid-97cb65629393748f",
     "kind": "prose",
     "template": "Exact strings from project completionCriteria; advisory coverage, not completion evidence.",
@@ -39966,7 +41041,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1375
+        "line": 1377
       }
     ]
   },
@@ -40041,7 +41116,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 927
+        "line": 929
       }
     ]
   },
@@ -40090,7 +41165,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 750
+        "line": 762
       }
     ]
   },
@@ -40135,7 +41210,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 181
+        "line": 182
       }
     ]
   },
@@ -40165,7 +41240,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 228
+        "line": 229
       }
     ]
   },
@@ -40195,7 +41270,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 751
+        "line": 763
       }
     ]
   },
@@ -40225,7 +41300,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1133
+        "line": 1146
       }
     ]
   },
@@ -40850,7 +41925,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1057
+        "line": 1070
       }
     ]
   },
@@ -40942,7 +42017,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 315
+        "line": 316
       }
     ]
   },
@@ -40972,7 +42047,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 798
+        "line": 810
       }
     ]
   },
@@ -41113,7 +42188,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1432
+        "line": 1445
       }
     ]
   },
@@ -41420,7 +42495,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2444
+        "line": 2462
       }
     ]
   },
@@ -41466,7 +42541,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 246
+        "line": 247
       }
     ]
   },
@@ -41542,6 +42617,37 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/story-workspace.ts",
         "line": 170
+      }
+    ]
+  },
+  {
+    "id": "guid-9ef06b8861d9b3c6",
+    "kind": "error",
+    "template": "Document unavailable",
+    "parts": [
+      "Document unavailable"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/document-resource.ts",
+        "line": 59
+      },
+      {
+        "file": "src/document-resource.ts",
+        "line": 63
+      },
+      {
+        "file": "src/document-resource.ts",
+        "line": 111
+      },
+      {
+        "file": "src/document-search.ts",
+        "line": 25
+      },
+      {
+        "file": "src/document-tools.ts",
+        "line": 63
       }
     ]
   },
@@ -41722,7 +42828,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1295
+        "line": 1297
       }
     ]
   },
@@ -41738,7 +42844,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1509
+        "line": 1511
       }
     ]
   },
@@ -41784,7 +42890,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1954
+        "line": 1956
       }
     ]
   },
@@ -41889,7 +42995,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 168
+        "line": 169
       }
     ]
   },
@@ -41907,6 +43013,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/enterprise-registry.ts",
         "line": 217
+      }
+    ]
+  },
+  {
+    "id": "guid-a0e5ab972fa620d2",
+    "kind": "prose",
+    "template": "Resources: documents.search -> revision-pinned documents.read. Keep semantic context/gaps; expand exact ranges or neighbors only as needed. PDF citations use original page/bbox. resources.manifest/export preserve bytes without execution. Details: documents endpoint schemas.",
+    "parts": [
+      "Resources: documents.search -> revision-pinned documents.read. Keep semantic context/gaps; expand exact ranges or neighbors only as needed. PDF citations use original page/bbox. resources.manifest/export preserve bytes without execution. Details: documents endpoint schemas."
+    ],
+    "binding": "projection",
+    "sources": [
+      {
+        "file": "src/wiki-policy.ts",
+        "line": 142
       }
     ]
   },
@@ -42030,7 +43151,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1019
+        "line": 1032
       }
     ]
   },
@@ -42060,7 +43181,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1090
+        "line": 1103
       }
     ]
   },
@@ -42075,7 +43196,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 279
+        "line": 280
       }
     ]
   },
@@ -42124,7 +43245,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1489
+        "line": 1507
       }
     ]
   },
@@ -42154,7 +43275,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 827
+        "line": 839
       }
     ]
   },
@@ -42291,7 +43412,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2704
+        "line": 2722
       }
     ]
   },
@@ -42321,7 +43442,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 913
+        "line": 915
       }
     ]
   },
@@ -42366,7 +43487,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 274
+        "line": 275
       }
     ]
   },
@@ -42420,7 +43541,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/semantic-search.ts",
-        "line": 1251
+        "line": 1255
       }
     ]
   },
@@ -42470,6 +43591,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-a2dcb20d9c437cb5",
+    "kind": "error",
+    "template": "Resource bundle symbolic links or junctions require review",
+    "parts": [
+      "Resource bundle symbolic links or junctions require review"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/resource-bundle-host.ts",
+        "line": 29
+      }
+    ]
+  },
+  {
     "id": "guid-a2eaa2e3182fe943",
     "kind": "error",
     "template": "6-3-5 builds on actual peers from the immediately previous cycle",
@@ -42510,7 +43646,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1238
+        "line": 1251
       }
     ]
   },
@@ -42542,7 +43678,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 3197
+        "line": 3199
       }
     ]
   },
@@ -42634,7 +43770,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 382
+        "line": 383
       }
     ]
   },
@@ -42649,7 +43785,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 3299
+        "line": 3301
       }
     ]
   },
@@ -42789,7 +43925,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 921
+        "line": 923
       }
     ]
   },
@@ -42804,7 +43940,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1507
+        "line": 1509
       }
     ]
   },
@@ -42909,7 +44045,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 382
+        "line": 383
       }
     ]
   },
@@ -43169,7 +44305,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 243
+        "line": 244
       }
     ]
   },
@@ -43335,7 +44471,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1056
+        "line": 1069
       }
     ]
   },
@@ -43380,7 +44516,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 224
+        "line": 225
       }
     ]
   },
@@ -43501,7 +44637,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 712
+        "line": 724
       }
     ]
   },
@@ -43531,7 +44667,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 557
+        "line": 560
       }
     ]
   },
@@ -43592,6 +44728,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/roleplay-service.ts",
         "line": 80
+      }
+    ]
+  },
+  {
+    "id": "guid-a69c78412feab0c8",
+    "kind": "error",
+    "template": "Resource bundle preview fingerprint changed",
+    "parts": [
+      "Resource bundle preview fingerprint changed"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/resource-bundle-host.ts",
+        "line": 103
       }
     ]
   },
@@ -43800,7 +44951,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 247
+        "line": 248
       }
     ]
   },
@@ -43897,11 +45048,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1361
+        "line": 1363
       },
       {
         "file": "src/filesystem.ts",
-        "line": 1448
+        "line": 1450
       }
     ]
   },
@@ -43916,7 +45067,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1221
+        "line": 1234
       }
     ]
   },
@@ -44021,7 +45172,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1594
+        "line": 1596
       }
     ]
   },
@@ -44066,7 +45217,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 327
+        "line": 328
       }
     ]
   },
@@ -44081,7 +45232,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 164
+        "line": 165
       }
     ]
   },
@@ -44180,39 +45331,39 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 967
+        "line": 969
       },
       {
         "file": "src/filesystem.ts",
-        "line": 1157
+        "line": 1159
       },
       {
         "file": "src/filesystem.ts",
-        "line": 2376
+        "line": 2378
       },
       {
         "file": "src/filesystem.ts",
-        "line": 2495
+        "line": 2497
       },
       {
         "file": "src/filesystem.ts",
-        "line": 2540
+        "line": 2542
       },
       {
         "file": "src/filesystem.ts",
-        "line": 2996
+        "line": 2998
       },
       {
         "file": "src/filesystem.ts",
-        "line": 3007
+        "line": 3009
       },
       {
         "file": "src/filesystem.ts",
-        "line": 3109
+        "line": 3111
       },
       {
         "file": "src/filesystem.ts",
-        "line": 3115
+        "line": 3117
       }
     ]
   },
@@ -44258,7 +45409,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1164
+        "line": 1166
       }
     ]
   },
@@ -44318,7 +45469,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 673
+        "line": 685
       }
     ]
   },
@@ -44378,7 +45529,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 252
+        "line": 253
       }
     ]
   },
@@ -44424,7 +45575,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1147
+        "line": 1149
       }
     ]
   },
@@ -44596,7 +45747,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 226
+        "line": 227
       }
     ]
   },
@@ -44626,7 +45777,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 683
+        "line": 695
       }
     ]
   },
@@ -44778,6 +45929,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/layered-memory.ts",
         "line": 70
+      }
+    ]
+  },
+  {
+    "id": "guid-ab1318a8fc1cef67",
+    "kind": "error",
+    "template": "Invalid export byte range",
+    "parts": [
+      "Invalid export byte range"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/document-service.ts",
+        "line": 201
       }
     ]
   },
@@ -45018,7 +46184,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 277
+        "line": 278
       }
     ]
   },
@@ -45166,7 +46332,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 743
+        "line": 755
       }
     ]
   },
@@ -45227,7 +46393,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 676
+        "line": 688
       }
     ]
   },
@@ -45392,7 +46558,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 411
+        "line": 417
       }
     ]
   },
@@ -45471,7 +46637,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1054
+        "line": 1067
       }
     ]
   },
@@ -45487,7 +46653,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1717
+        "line": 1719
       }
     ]
   },
@@ -45564,6 +46730,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/community-participation-activities.ts",
         "line": 51
+      }
+    ]
+  },
+  {
+    "id": "guid-ae671ae1cd8a7579",
+    "kind": "error",
+    "template": "Resource bundle original hash mismatch or unavailable member",
+    "parts": [
+      "Resource bundle original hash mismatch or unavailable member"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/document-resource.ts",
+        "line": 102
       }
     ]
   },
@@ -45714,7 +46895,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/retrieval-service.ts",
-        "line": 221
+        "line": 223
       }
     ]
   },
@@ -45909,7 +47090,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1222
+        "line": 1235
       }
     ]
   },
@@ -45925,6 +47106,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/work-service.ts",
         "line": 258
+      }
+    ]
+  },
+  {
+    "id": "guid-afa5c582f7abea57",
+    "kind": "error",
+    "template": "A current fragment is required for neighbor reading",
+    "parts": [
+      "A current fragment is required for neighbor reading"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/document-ranges.ts",
+        "line": 47
       }
     ]
   },
@@ -46049,7 +47245,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 711
+        "line": 723
       }
     ]
   },
@@ -46064,7 +47260,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 697
+        "line": 709
       }
     ]
   },
@@ -46079,7 +47275,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1008
+        "line": 1021
       }
     ]
   },
@@ -46387,6 +47583,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-b163194a801ea493",
+    "kind": "prose",
+    "template": "Inspect authoritative original resource bytes: hash, media type, size and export action. An imported bundle manifest.md pages original members, rejected entries and licensing. Scripts and licenses are data, never executed. Do not infer licensing permission.",
+    "parts": [
+      "Inspect authoritative original resource bytes: hash, media type, size and export action. An imported bundle manifest.md pages original members, rejected entries and licensing. Scripts and licenses are data, never executed. Do not infer licensing permission."
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/document-tools.ts",
+        "line": 31
+      }
+    ]
+  },
+  {
     "id": "guid-b169fc1f9b0acea4",
     "kind": "error",
     "template": "Linked output is missing; inspect it before further action",
@@ -46457,7 +47668,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1100
+        "line": 1113
       }
     ]
   },
@@ -46472,7 +47683,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 165
+        "line": 166
       }
     ]
   },
@@ -46611,6 +47822,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-b223e2ea79b50a01",
+    "kind": "prose",
+    "template": "Read original resource bytes in bounded base64 chunks without conversion or execution. Reassemble chunks and verify the source SHA-256 revision. Continuations require expectedRevision; never returns a host filesystem path.",
+    "parts": [
+      "Read original resource bytes in bounded base64 chunks without conversion or execution. Reassemble chunks and verify the source SHA-256 revision. Continuations require expectedRevision; never returns a host filesystem path."
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/document-tools.ts",
+        "line": 33
+      }
+    ]
+  },
+  {
     "id": "guid-b238b33007d37840",
     "kind": "prose",
     "template": "loading whole documents for a single section",
@@ -46621,7 +47847,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 147
+        "line": 148
       }
     ]
   },
@@ -46636,7 +47862,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 899
+        "line": 911
       }
     ]
   },
@@ -46681,7 +47907,22 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 184
+        "line": 185
+      }
+    ]
+  },
+  {
+    "id": "guid-b27abdaedca1a1f6",
+    "kind": "error",
+    "template": "forceRead must be boolean",
+    "parts": [
+      "forceRead must be boolean"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/document-service.ts",
+        "line": 95
       }
     ]
   },
@@ -46789,7 +48030,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1021
+        "line": 1023
       }
     ]
   },
@@ -46804,7 +48045,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1286
+        "line": 1288
       }
     ]
   },
@@ -46962,7 +48203,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2740
+        "line": 2758
       }
     ]
   },
@@ -47026,7 +48267,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 296
+        "line": 297
       }
     ]
   },
@@ -47071,7 +48312,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 772
+        "line": 784
       }
     ]
   },
@@ -47147,11 +48388,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 831
+        "line": 843
       },
       {
         "file": "src/createServer.ts",
-        "line": 986
+        "line": 999
       }
     ]
   },
@@ -47211,7 +48452,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 218
+        "line": 219
       }
     ]
   },
@@ -47306,6 +48547,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/llm-wiki-tools.ts",
         "line": 269
+      }
+    ]
+  },
+  {
+    "id": "guid-b4ec86101e05b32c",
+    "kind": "error",
+    "template": "Resource bundle preview changed before publication",
+    "parts": [
+      "Resource bundle preview changed before publication"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/resource-bundle-host.ts",
+        "line": 116
       }
     ]
   },
@@ -47434,7 +48690,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 218
+        "line": 219
       }
     ]
   },
@@ -47606,7 +48862,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 207
+        "line": 208
       }
     ]
   },
@@ -47760,7 +49016,22 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 661
+        "line": 665
+      }
+    ]
+  },
+  {
+    "id": "guid-b609b40e5e87ac09",
+    "kind": "error",
+    "template": "ranges must contain 1..8 selections",
+    "parts": [
+      "ranges must contain 1..8 selections"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/document-service.ts",
+        "line": 90
       }
     ]
   },
@@ -47810,7 +49081,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 887
+        "line": 899
       }
     ]
   },
@@ -47870,7 +49141,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 309
+        "line": 310
       }
     ]
   },
@@ -47916,7 +49187,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1073
+        "line": 1075
       }
     ]
   },
@@ -47992,7 +49263,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 982
+        "line": 995
       }
     ]
   },
@@ -48373,6 +49644,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-b823edb9533582c6",
+    "kind": "error",
+    "template": "Invalid document range",
+    "parts": [
+      "Invalid document range"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/document-service.ts",
+        "line": 37
+      }
+    ]
+  },
+  {
     "id": "guid-b831f8da84d5fe29",
     "kind": "prose",
     "template": "Authoring-structure hints only, not factual/source verification or a publication gate. Read before editing; never blindly certify a fingerprint.",
@@ -48398,7 +49684,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1074
+        "line": 1087
       }
     ]
   },
@@ -48476,7 +49762,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 208
+        "line": 209
       }
     ]
   },
@@ -48491,7 +49777,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 154
+        "line": 155
       }
     ]
   },
@@ -48566,7 +49852,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2978
+        "line": 2996
       }
     ]
   },
@@ -48657,7 +49943,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 846
+        "line": 858
       }
     ]
   },
@@ -48979,7 +50265,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 608
+        "line": 609
       },
       {
         "file": "src/skill-evolution-recovery.ts",
@@ -49075,7 +50361,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1051
+        "line": 1064
       }
     ]
   },
@@ -49090,7 +50376,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 248
+        "line": 249
       }
     ]
   },
@@ -49170,6 +50456,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-bb917d49bb354304",
+    "kind": "error",
+    "template": "Resource bundle byte inventory mismatch",
+    "parts": [
+      "Resource bundle byte inventory mismatch"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/resource-bundle-host.ts",
+        "line": 75
+      }
+    ]
+  },
+  {
     "id": "guid-bb94cf9972d6f60d",
     "kind": "prose",
     "template": "Additional Obsidian links for adjacent knowledge",
@@ -49211,11 +50512,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1171
+        "line": 1173
       },
       {
         "file": "src/filesystem.ts",
-        "line": 2511
+        "line": 2513
       },
       {
         "file": "src/frontmatter.ts",
@@ -49295,7 +50596,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 742
+        "line": 754
       }
     ]
   },
@@ -49522,7 +50823,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 728
+        "line": 740
       }
     ]
   },
@@ -49537,7 +50838,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 153
+        "line": 154
       }
     ]
   },
@@ -49754,7 +51055,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3513
+        "line": 3532
       }
     ]
   },
@@ -49769,7 +51070,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1053
+        "line": 1066
       }
     ]
   },
@@ -49830,7 +51131,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1403
+        "line": 1405
       }
     ]
   },
@@ -49991,7 +51292,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1968
+        "line": 1970
       }
     ]
   },
@@ -50006,7 +51307,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 699
+        "line": 711
       }
     ]
   },
@@ -50160,7 +51461,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 299
+        "line": 300
       }
     ]
   },
@@ -50221,6 +51522,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/economy-model.ts",
         "line": 93
+      }
+    ]
+  },
+  {
+    "id": "guid-c06d934164e04bc6",
+    "kind": "error",
+    "template": "Document byte budget exceeded or not a regular file",
+    "parts": [
+      "Document byte budget exceeded or not a regular file"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/document-resource.ts",
+        "line": 78
       }
     ]
   },
@@ -50311,7 +51627,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 274
+        "line": 275
       }
     ]
   },
@@ -50372,7 +51688,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 2688
+        "line": 2690
       }
     ]
   },
@@ -50542,7 +51858,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 320
+        "line": 321
       }
     ]
   },
@@ -50653,7 +51969,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1453
+        "line": 1455
       }
     ]
   },
@@ -50728,11 +52044,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1166
+        "line": 1179
       },
       {
         "file": "src/createServer.ts",
-        "line": 1179
+        "line": 1192
       }
     ]
   },
@@ -50777,7 +52093,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 677
+        "line": 678
       }
     ]
   },
@@ -50927,11 +52243,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1018
+        "line": 1031
       },
       {
         "file": "src/createServer.ts",
-        "line": 1050
+        "line": 1063
       }
     ]
   },
@@ -51067,7 +52383,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/endpoint-registry.ts",
-        "line": 73
+        "line": 74
       },
       {
         "file": "src/search-limits.ts",
@@ -51102,7 +52418,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 133
+        "line": 139
       }
     ]
   },
@@ -51152,6 +52468,22 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-c370bf27449dcd3f",
+    "kind": "error",
+    "template": "PDF cleanup failed ({arg0}); host recovery required",
+    "parts": [
+      "PDF cleanup failed (",
+      "); host recovery required"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/document-pdf-host.ts",
+        "line": 220
+      }
+    ]
+  },
+  {
     "id": "guid-c38c986e97a176e3",
     "kind": "prose",
     "template": "Preservation hint; never an automatic delete instruction",
@@ -51163,6 +52495,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/organization.ts",
         "line": 303
+      }
+    ]
+  },
+  {
+    "id": "guid-c39b2e371d6c3767",
+    "kind": "error",
+    "template": "Explicit host admission to Community is required for all resource bytes",
+    "parts": [
+      "Explicit host admission to Community is required for all resource bytes"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/resource-bundle-host.ts",
+        "line": 15
       }
     ]
   },
@@ -51222,7 +52569,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 155
+        "line": 156
       }
     ]
   },
@@ -51628,6 +52975,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-c5a49801a6dd4e7b",
+    "kind": "error",
+    "template": "Stale document revision; reread the current outline",
+    "parts": [
+      "Stale document revision; reread the current outline"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/document-resource.ts",
+        "line": 95
+      }
+    ]
+  },
+  {
     "id": "guid-c5a8dd67d69eb5e2",
     "kind": "error",
     "template": "Current password is incorrect",
@@ -51638,7 +53000,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 701
+        "line": 705
       }
     ]
   },
@@ -51828,7 +53190,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 321
+        "line": 322
       }
     ]
   },
@@ -51920,7 +53282,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 2005
+        "line": 2007
       }
     ]
   },
@@ -51950,7 +53312,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 3383
+        "line": 3385
       }
     ]
   },
@@ -52012,7 +53374,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1327
+        "line": 1340
       }
     ]
   },
@@ -52140,27 +53502,27 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 713
+        "line": 725
       },
       {
         "file": "src/createServer.ts",
-        "line": 1196
+        "line": 1209
       },
       {
         "file": "src/createServer.ts",
-        "line": 1210
+        "line": 1223
       },
       {
         "file": "src/createServer.ts",
-        "line": 1225
+        "line": 1238
       },
       {
         "file": "src/createServer.ts",
-        "line": 1241
+        "line": 1254
       },
       {
         "file": "src/createServer.ts",
-        "line": 1274
+        "line": 1287
       }
     ]
   },
@@ -52180,6 +53542,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-c771d764e17354ae",
+    "kind": "error",
+    "template": "maxChars is too small for the resource manifest",
+    "parts": [
+      "maxChars is too small for the resource manifest"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/document-service.ts",
+        "line": 194
+      }
+    ]
+  },
+  {
     "id": "guid-c77bcfb24eefe6e6",
     "kind": "error",
     "template": "Character is not in this room location",
@@ -52195,6 +53572,36 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-c7831f79ed22840d",
+    "kind": "error",
+    "template": "Resource bundle source hash mismatch",
+    "parts": [
+      "Resource bundle source hash mismatch"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/resource-bundle-host.ts",
+        "line": 79
+      }
+    ]
+  },
+  {
+    "id": "guid-c795b680dbeb02fd",
+    "kind": "error",
+    "template": "Requested range is outside the selected fragment",
+    "parts": [
+      "Requested range is outside the selected fragment"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/document-ranges.ts",
+        "line": 63
+      }
+    ]
+  },
+  {
     "id": "guid-c7a4b791d819a87f",
     "kind": "prose",
     "template": "The exact next action does not fit this response budget. Retry the pulse with the larger bounded budget.",
@@ -52205,7 +53612,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 4019
+        "line": 4038
       }
     ]
   },
@@ -52295,7 +53702,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 974
+        "line": 987
       }
     ]
   },
@@ -52310,7 +53717,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 198
+        "line": 199
       }
     ]
   },
@@ -52400,7 +53807,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2685
+        "line": 2703
       }
     ]
   },
@@ -52534,11 +53941,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 2100
+        "line": 2102
       },
       {
         "file": "src/filesystem.ts",
-        "line": 2303
+        "line": 2305
       }
     ]
   },
@@ -52599,7 +54006,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 720
+        "line": 732
       }
     ]
   },
@@ -52614,7 +54021,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 865
+        "line": 877
       }
     ]
   },
@@ -52874,7 +54281,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1029
+        "line": 1042
       }
     ]
   },
@@ -52904,7 +54311,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1237
+        "line": 1250
       }
     ]
   },
@@ -52964,7 +54371,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 691
+        "line": 703
       }
     ]
   },
@@ -53146,7 +54553,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3532
+        "line": 3551
       }
     ]
   },
@@ -53163,7 +54570,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 523
+        "line": 524
       }
     ]
   },
@@ -53268,7 +54675,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1089
+        "line": 1102
       }
     ]
   },
@@ -53283,7 +54690,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 284
+        "line": 285
       }
     ]
   },
@@ -53313,7 +54720,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 706
+        "line": 718
       }
     ]
   },
@@ -53525,6 +54932,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-cc1aa6398d7ba677",
+    "kind": "error",
+    "template": "expectedRevision requires a target path",
+    "parts": [
+      "expectedRevision requires a target path"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/document-search.ts",
+        "line": 16
+      }
+    ]
+  },
+  {
     "id": "guid-cc1e2494212fc2d5",
     "kind": "error",
     "template": "Roleplay transition integrity failed",
@@ -53565,11 +54987,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3541
+        "line": 3560
       },
       {
         "file": "src/filesystem.ts",
-        "line": 3262
+        "line": 3264
       },
       {
         "file": "src/query-page.ts",
@@ -53706,7 +55128,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 282
+        "line": 283
       }
     ]
   },
@@ -53790,7 +55212,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/endpoint-registry.ts",
-        "line": 641
+        "line": 644
       }
     ]
   },
@@ -53850,7 +55272,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 281
+        "line": 282
       }
     ]
   },
@@ -53941,7 +55363,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1162
+        "line": 1175
       }
     ]
   },
@@ -53956,7 +55378,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 707
+        "line": 708
       }
     ]
   },
@@ -54054,7 +55476,22 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 863
+        "line": 875
+      }
+    ]
+  },
+  {
+    "id": "guid-cdfa2e99ee0ecb4d",
+    "kind": "error",
+    "template": "knownReads must contain at most 16 receipts",
+    "parts": [
+      "knownReads must contain at most 16 receipts"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/document-service.ts",
+        "line": 94
       }
     ]
   },
@@ -54129,7 +55566,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 288
+        "line": 289
       }
     ]
   },
@@ -54160,7 +55597,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1127
+        "line": 1140
       }
     ]
   },
@@ -54242,6 +55679,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/work-responsibility.ts",
         "line": 15
+      }
+    ]
+  },
+  {
+    "id": "guid-cec762064aefbf9b",
+    "kind": "error",
+    "template": "Invalid PDF extraction protocol or provenance",
+    "parts": [
+      "Invalid PDF extraction protocol or provenance"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/document-pdf.ts",
+        "line": 6
       }
     ]
   },
@@ -54385,7 +55837,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 693
+        "line": 705
       }
     ]
   },
@@ -54445,7 +55897,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1037
+        "line": 1050
       }
     ]
   },
@@ -54476,6 +55928,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/workshop-output.ts",
         "line": 54
+      }
+    ]
+  },
+  {
+    "id": "guid-cfd4d5b99b1b3c9b",
+    "kind": "error",
+    "template": "Invalid document byte budget",
+    "parts": [
+      "Invalid document byte budget"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/document-resource.ts",
+        "line": 71
       }
     ]
   },
@@ -54689,7 +56156,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3747
+        "line": 3766
       }
     ]
   },
@@ -54791,23 +56258,19 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 655
+        "line": 667
       },
       {
         "file": "src/createServer.ts",
-        "line": 672
+        "line": 684
       },
       {
         "file": "src/createServer.ts",
-        "line": 687
+        "line": 699
       },
       {
         "file": "src/createServer.ts",
-        "line": 724
-      },
-      {
-        "file": "src/createServer.ts",
-        "line": 903
+        "line": 736
       },
       {
         "file": "src/createServer.ts",
@@ -54815,11 +56278,15 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       },
       {
         "file": "src/createServer.ts",
-        "line": 1253
+        "line": 927
       },
       {
         "file": "src/createServer.ts",
-        "line": 1269
+        "line": 1266
+      },
+      {
+        "file": "src/createServer.ts",
+        "line": 1282
       }
     ]
   },
@@ -54925,15 +56392,15 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1559
+        "line": 1577
       },
       {
         "file": "src/createServer.ts",
-        "line": 1564
+        "line": 1582
       },
       {
         "file": "src/createServer.ts",
-        "line": 1565
+        "line": 1583
       }
     ]
   },
@@ -55138,7 +56605,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 710
+        "line": 722
       }
     ]
   },
@@ -55168,7 +56635,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 988
+        "line": 1001
       }
     ]
   },
@@ -55184,7 +56651,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3311
+        "line": 3329
       }
     ]
   },
@@ -55398,7 +56865,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1467
+        "line": 1469
       }
     ]
   },
@@ -55489,7 +56956,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3324
+        "line": 3342
       }
     ]
   },
@@ -55572,11 +57039,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 939
+        "line": 941
       },
       {
         "file": "src/filesystem.ts",
-        "line": 946
+        "line": 948
       }
     ]
   },
@@ -55591,7 +57058,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 805
+        "line": 817
       }
     ]
   },
@@ -55651,7 +57118,22 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 674
+        "line": 686
+      }
+    ]
+  },
+  {
+    "id": "guid-d3c832557d2625c7",
+    "kind": "error",
+    "template": "query must contain 1..500 characters",
+    "parts": [
+      "query must contain 1..500 characters"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/document-search.ts",
+        "line": 15
       }
     ]
   },
@@ -55792,6 +57274,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-d4bfa73981e51a5c",
+    "kind": "error",
+    "template": "Immutable resource bundle original conflict",
+    "parts": [
+      "Immutable resource bundle original conflict"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/resource-bundle-host.ts",
+        "line": 94
+      }
+    ]
+  },
+  {
     "id": "guid-d4d43a67c7644230",
     "kind": "prose",
     "template": "String not found in note: \"{arg0}{arg1}\"",
@@ -55804,7 +57301,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1314
+        "line": 1316
       }
     ]
   },
@@ -55834,7 +57331,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 857
+        "line": 869
       }
     ]
   },
@@ -56029,7 +57526,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1143
+        "line": 1156
       }
     ]
   },
@@ -56104,7 +57601,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 234
+        "line": 235
       }
     ]
   },
@@ -56142,7 +57639,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 274
+        "line": 275
       }
     ]
   },
@@ -56238,7 +57735,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3506
+        "line": 3525
       }
     ]
   },
@@ -56268,7 +57765,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 274
+        "line": 275
       }
     ]
   },
@@ -56351,7 +57848,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 416
+        "line": 422
       }
     ]
   },
@@ -56426,7 +57923,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1022
+        "line": 1035
       }
     ]
   },
@@ -56487,7 +57984,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1254
+        "line": 1267
       }
     ]
   },
@@ -56562,7 +58059,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 234
+        "line": 235
       }
     ]
   },
@@ -56607,7 +58104,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 195
+        "line": 196
       }
     ]
   },
@@ -56622,7 +58119,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 749
+        "line": 761
       }
     ]
   },
@@ -56701,7 +58198,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 392
+        "line": 393
       }
     ]
   },
@@ -56807,11 +58304,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/endpoint-registry.ts",
-        "line": 767
+        "line": 770
       },
       {
         "file": "src/endpoint-registry.ts",
-        "line": 769
+        "line": 772
       }
     ]
   },
@@ -56933,7 +58430,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 764
+        "line": 776
       }
     ]
   },
@@ -56993,7 +58490,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 842
+        "line": 854
       }
     ]
   },
@@ -57023,7 +58520,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 971
+        "line": 984
       }
     ]
   },
@@ -57053,7 +58550,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 698
+        "line": 710
       }
     ]
   },
@@ -57114,7 +58611,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1193
+        "line": 1206
       }
     ]
   },
@@ -57300,7 +58797,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1720
+        "line": 1722
       }
     ]
   },
@@ -57364,7 +58861,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 626
+        "line": 638
       }
     ]
   },
@@ -57379,7 +58876,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 3185
+        "line": 3187
       }
     ]
   },
@@ -57394,7 +58891,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 274
+        "line": 275
       }
     ]
   },
@@ -57484,7 +58981,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1916
+        "line": 1918
       }
     ]
   },
@@ -57499,7 +58996,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 651
+        "line": 663
       }
     ]
   },
@@ -57515,6 +59012,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/llm-wiki-tools.ts",
         "line": 59
+      }
+    ]
+  },
+  {
+    "id": "guid-db47ae5e62242469",
+    "kind": "error",
+    "template": "Structured embedding tokenizer unavailable; no truncated vectors published",
+    "parts": [
+      "Structured embedding tokenizer unavailable; no truncated vectors published"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/document-chunks.ts",
+        "line": 10
       }
     ]
   },
@@ -57579,7 +59091,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 322
+        "line": 323
       }
     ]
   },
@@ -57640,7 +59152,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1616
+        "line": 1618
       }
     ]
   },
@@ -57746,7 +59258,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1980
+        "line": 1982
       }
     ]
   },
@@ -57866,7 +59378,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1265
+        "line": 1278
       }
     ]
   },
@@ -57897,7 +59409,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 671
+        "line": 675
       }
     ]
   },
@@ -57962,7 +59474,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 251
+        "line": 252
       }
     ]
   },
@@ -58037,19 +59549,19 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1194
+        "line": 1207
       },
       {
         "file": "src/createServer.ts",
-        "line": 1208
+        "line": 1221
       },
       {
         "file": "src/createServer.ts",
-        "line": 1223
+        "line": 1236
       },
       {
         "file": "src/createServer.ts",
-        "line": 1239
+        "line": 1252
       }
     ]
   },
@@ -58174,7 +59686,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 2602
+        "line": 2604
       }
     ]
   },
@@ -58280,7 +59792,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 161
+        "line": 162
       }
     ]
   },
@@ -58295,7 +59807,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 880
+        "line": 892
       }
     ]
   },
@@ -58341,7 +59853,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 3386
+        "line": 3388
       }
     ]
   },
@@ -58418,7 +59930,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 342
+        "line": 343
       }
     ]
   },
@@ -58433,7 +59945,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 785
+        "line": 797
       }
     ]
   },
@@ -58478,7 +59990,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 288
+        "line": 289
       }
     ]
   },
@@ -58557,7 +60069,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3159
+        "line": 3177
       }
     ]
   },
@@ -58765,7 +60277,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 195
+        "line": 196
       }
     ]
   },
@@ -59008,7 +60520,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 382
+        "line": 383
       }
     ]
   },
@@ -59023,7 +60535,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 735
+        "line": 747
       }
     ]
   },
@@ -59072,7 +60584,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 307
+        "line": 308
       }
     ]
   },
@@ -59102,7 +60614,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 745
+        "line": 757
       }
     ]
   },
@@ -59149,7 +60661,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1092
+        "line": 1094
       }
     ]
   },
@@ -59315,7 +60827,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 253
+        "line": 254
       }
     ]
   },
@@ -59427,6 +60939,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-e2546364ac0e35fc",
+    "kind": "error",
+    "template": "Resource bundle manifest hash or schema mismatch",
+    "parts": [
+      "Resource bundle manifest hash or schema mismatch"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/resource-bundle.ts",
+        "line": 28
+      }
+    ]
+  },
+  {
     "id": "guid-e258953bfae18f1a",
     "kind": "prose",
     "template": "Repeat the same endpoint and arguments, merging retryArguments. No content was consumed.",
@@ -59437,7 +60964,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3745
+        "line": 3764
       }
     ]
   },
@@ -59512,7 +61039,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1105
+        "line": 1118
       }
     ]
   },
@@ -59572,7 +61099,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 916
+        "line": 928
       }
     ]
   },
@@ -59816,7 +61343,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 2028
+        "line": 2030
       }
     ]
   },
@@ -59831,7 +61358,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 156
+        "line": 157
       }
     ]
   },
@@ -59861,7 +61388,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1947
+        "line": 1949
       }
     ]
   },
@@ -59907,7 +61434,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 271
+        "line": 272
       }
     ]
   },
@@ -60191,7 +61718,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1272
+        "line": 1285
       }
     ]
   },
@@ -60207,11 +61734,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1012
+        "line": 1014
       },
       {
         "file": "src/filesystem.ts",
-        "line": 1247
+        "line": 1249
       }
     ]
   },
@@ -60247,6 +61774,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-e5a07abfc6bd10c3",
+    "kind": "error",
+    "template": "expectedRevision is required for continuation exports",
+    "parts": [
+      "expectedRevision is required for continuation exports"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/document-service.ts",
+        "line": 202
+      }
+    ]
+  },
+  {
     "id": "guid-e5b95513008be9fa",
     "kind": "error",
     "template": "Direct MCP tool '{arg0}' is not exposed. Use search_capabilities and call_endpoint.",
@@ -60258,7 +61800,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1354
+        "line": 1367
       }
     ]
   },
@@ -60382,7 +61924,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 759
+        "line": 771
       }
     ]
   },
@@ -60413,6 +61955,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/story-workspace.ts",
         "line": 149
+      }
+    ]
+  },
+  {
+    "id": "guid-e6833ec64f3ace02",
+    "kind": "error",
+    "template": "Use ranges or a single selection, not both",
+    "parts": [
+      "Use ranges or a single selection, not both"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/document-service.ts",
+        "line": 91
       }
     ]
   },
@@ -60525,7 +62082,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1036
+        "line": 1049
       }
     ]
   },
@@ -60555,7 +62112,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 3155
+        "line": 3157
       }
     ]
   },
@@ -60695,7 +62252,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1113
+        "line": 1126
       }
     ]
   },
@@ -60738,6 +62295,10 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ],
     "binding": "call",
     "sources": [
+      {
+        "file": "src/document-service.ts",
+        "line": 133
+      },
       {
         "file": "src/work-model.ts",
         "line": 108
@@ -60985,7 +62546,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 3133
+        "line": 3135
       }
     ]
   },
@@ -61000,7 +62561,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3023
+        "line": 3041
       }
     ]
   },
@@ -61015,7 +62576,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 917
+        "line": 929
       }
     ]
   },
@@ -61090,7 +62651,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2494
+        "line": 2512
       }
     ]
   },
@@ -61196,7 +62757,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 327
+        "line": 328
       }
     ]
   },
@@ -61317,7 +62878,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1468
+        "line": 1470
       }
     ]
   },
@@ -61497,7 +63058,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2866
+        "line": 2884
       }
     ]
   },
@@ -61587,7 +63148,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1376
+        "line": 1378
       }
     ]
   },
@@ -61662,7 +63223,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 668
+        "line": 680
       }
     ]
   },
@@ -61783,7 +63344,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 877
+        "line": 889
       }
     ]
   },
@@ -62036,6 +63597,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-ecd3d2156880361a",
+    "kind": "error",
+    "template": "Stale or unavailable document fragment; reread outline",
+    "parts": [
+      "Stale or unavailable document fragment; reread outline"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/document-ranges.ts",
+        "line": 45
+      }
+    ]
+  },
+  {
     "id": "guid-ecd4feb0387a91d1",
     "kind": "error",
     "template": "Invalid skill record id",
@@ -62186,6 +63762,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/llm-wiki-tools.ts",
         "line": 480
+      }
+    ]
+  },
+  {
+    "id": "guid-ed66bc161c65360b",
+    "kind": "error",
+    "template": "Global document discovery unavailable; provide path",
+    "parts": [
+      "Global document discovery unavailable; provide path"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/document-search.ts",
+        "line": 28
       }
     ]
   },
@@ -62407,7 +63998,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 740
+        "line": 752
       }
     ]
   },
@@ -62686,6 +64277,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-ef125b6691cbb06c",
+    "kind": "error",
+    "template": "An explicit public path is required",
+    "parts": [
+      "An explicit public path is required"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/document-adapters.ts",
+        "line": 17
+      }
+    ]
+  },
+  {
     "id": "guid-ef41ec74a3771f43",
     "kind": "prose",
     "template": "Return a current, visibility-filtered preservation queue with revisions and bounded notes.read actions. Legal hold and preserve-until override disposition advice. Malformed retention/preservation dates require preserve_and_review_metadata, never inferred expiry. Replacement links resolve only to readable targets and carry their revisions. maxChars covers the complete report, including retry guidance. Inspect before changing anything; this read never archives or deletes.",
@@ -62780,6 +64386,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-efa4f50204f1dca0",
+    "kind": "error",
+    "template": "Resource bundle rejection reason invalid",
+    "parts": [
+      "Resource bundle rejection reason invalid"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/resource-bundle.ts",
+        "line": 35
+      }
+    ]
+  },
+  {
     "id": "guid-efd363f9f27d6246",
     "kind": "error",
     "template": "expectedRevision is required for an understanding checkpoint update; resume first.",
@@ -62850,7 +64471,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 201
+        "line": 202
       }
     ]
   },
@@ -62895,7 +64516,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 152
+        "line": 153
       }
     ]
   },
@@ -62940,7 +64561,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 245
+        "line": 246
       }
     ]
   },
@@ -62955,7 +64576,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 2115
+        "line": 2117
       }
     ]
   },
@@ -63075,7 +64696,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 266
+        "line": 267
       }
     ]
   },
@@ -63107,7 +64728,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1142
+        "line": 1144
       }
     ]
   },
@@ -63197,7 +64818,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 157
+        "line": 158
       }
     ]
   },
@@ -63272,7 +64893,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3266
+        "line": 3284
       }
     ]
   },
@@ -63317,7 +64938,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 763
+        "line": 775
       }
     ]
   },
@@ -63423,7 +65044,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 3020
+        "line": 3022
       }
     ]
   },
@@ -63607,7 +65228,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 617
+        "line": 629
       }
     ]
   },
@@ -63654,7 +65275,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 2291
+        "line": 2293
       }
     ]
   },
@@ -63851,7 +65472,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 996
+        "line": 1009
       }
     ]
   },
@@ -63912,7 +65533,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 2014
+        "line": 2016
       }
     ]
   },
@@ -63927,7 +65548,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1021
+        "line": 1034
       }
     ]
   },
@@ -64077,7 +65698,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 324
+        "line": 325
       }
     ]
   },
@@ -64122,7 +65743,22 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3213
+        "line": 3231
+      }
+    ]
+  },
+  {
+    "id": "guid-f4abd5ae54cb10c3",
+    "kind": "error",
+    "template": "Document fragment node budget exceeded",
+    "parts": [
+      "Document fragment node budget exceeded"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/document-structure.ts",
+        "line": 123
       }
     ]
   },
@@ -64212,7 +65848,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 175
+        "line": 176
       }
     ]
   },
@@ -64230,6 +65866,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/organization.ts",
         "line": 774
+      }
+    ]
+  },
+  {
+    "id": "guid-f4d91181977e148f",
+    "kind": "error",
+    "template": "Invalid receipt range",
+    "parts": [
+      "Invalid receipt range"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/document-service.ts",
+        "line": 101
       }
     ]
   },
@@ -64336,7 +65987,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1181
+        "line": 1194
       }
     ]
   },
@@ -64396,7 +66047,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1092
+        "line": 1105
       }
     ]
   },
@@ -64411,7 +66062,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2676
+        "line": 2694
       }
     ]
   },
@@ -64431,6 +66082,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-f561038c0f652993",
+    "kind": "error",
+    "template": "Resource bundle member unavailable",
+    "parts": [
+      "Resource bundle member unavailable"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/document-resource.ts",
+        "line": 98
+      }
+    ]
+  },
+  {
     "id": "guid-f562b6c2bcf192b1",
     "kind": "error",
     "template": "accessToken is required",
@@ -64441,11 +66107,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 582
+        "line": 586
       },
       {
         "file": "src/scope-auth.ts",
-        "line": 690
+        "line": 694
       }
     ]
   },
@@ -64461,6 +66127,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/llm-wiki-tools.ts",
         "line": 673
+      }
+    ]
+  },
+  {
+    "id": "guid-f5bc80be10ab15d1",
+    "kind": "error",
+    "template": "Invalid or excessive document parent graph",
+    "parts": [
+      "Invalid or excessive document parent graph"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/document-ranges.ts",
+        "line": 89
       }
     ]
   },
@@ -64505,7 +66186,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 929
+        "line": 941
       }
     ]
   },
@@ -64645,7 +66326,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1202
+        "line": 1204
       }
     ]
   },
@@ -64765,7 +66446,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 3131
+        "line": 3133
       },
       {
         "file": "src/tag-page.ts",
@@ -64814,7 +66495,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1492
+        "line": 1494
       }
     ]
   },
@@ -64844,7 +66525,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 181
+        "line": 182
       }
     ]
   },
@@ -64859,7 +66540,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 814
+        "line": 826
       }
     ]
   },
@@ -64874,7 +66555,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 891
+        "line": 903
       }
     ]
   },
@@ -65024,7 +66705,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/endpoint-registry.ts",
-        "line": 622
+        "line": 625
       }
     ]
   },
@@ -65039,7 +66720,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1020
+        "line": 1033
       }
     ]
   },
@@ -65058,7 +66739,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       },
       {
         "file": "src/semantic-search.ts",
-        "line": 577
+        "line": 579
       }
     ]
   },
@@ -65074,7 +66755,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1620
+        "line": 1622
       }
     ]
   },
@@ -65242,7 +66923,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1059
+        "line": 1061
       }
     ]
   },
@@ -65292,7 +66973,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1711
+        "line": 1713
       }
     ]
   },
@@ -65432,7 +67113,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 950
+        "line": 952
       }
     ]
   },
@@ -65553,7 +67234,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1064
+        "line": 1077
       }
     ]
   },
@@ -65751,7 +67432,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 219
+        "line": 220
       }
     ]
   },
@@ -65781,7 +67462,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1271
+        "line": 1284
       }
     ]
   },
@@ -65968,7 +67649,22 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 744
+        "line": 756
+      }
+    ]
+  },
+  {
+    "id": "guid-fb524306d47279ef",
+    "kind": "error",
+    "template": "Document cache must be an absolute host-local directory outside the authoritative Vault",
+    "parts": [
+      "Document cache must be an absolute host-local directory outside the authoritative Vault"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/document-index.ts",
+        "line": 72
       }
     ]
   },
@@ -66066,7 +67762,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1174
+        "line": 1187
       }
     ]
   },
@@ -66173,6 +67869,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/global-sync.ts",
         "line": 244
+      }
+    ]
+  },
+  {
+    "id": "guid-fc70410eb9a4352a",
+    "kind": "error",
+    "template": "PDF source generation mismatch",
+    "parts": [
+      "PDF source generation mismatch"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/document-index.ts",
+        "line": 104
       }
     ]
   },
@@ -66297,7 +68008,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1512
+        "line": 1514
       }
     ]
   },
@@ -66656,7 +68367,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 304
+        "line": 305
       }
     ]
   },
@@ -66981,7 +68692,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 862
+        "line": 874
       }
     ]
   },
@@ -66996,7 +68707,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1132
+        "line": 1145
       }
     ]
   },
@@ -67026,7 +68737,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 295
+        "line": 296
       }
     ]
   },
@@ -67071,7 +68782,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 186
+        "line": 187
       }
     ]
   },
@@ -67147,7 +68858,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 692
+        "line": 704
       }
     ]
   },

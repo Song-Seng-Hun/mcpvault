@@ -22,3 +22,4 @@ export { PublicFederationReplica } from './public-federation-replica.js';
 export { previewMemoryMigration } from './enterprise-migration.js';
 export { LlmWikiService } from './llm-wiki.js';
 export * from './types.js';
+export { documentRecords, toLangChainDocument, toLlamaIndexNode } from './document-adapters.js';

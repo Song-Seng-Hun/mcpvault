@@ -1,0 +1,4 @@
+# Keep bootstrap budgets and YAML checks stable on Windows (core.autocrlf=true).
+/AGENTS.md text eol=lf
+/plugins/mcpvault-local/skills/mcpvault-agent/SKILL.md text eol=lf
+/plugins/mcpvault-local/skills/mcpvault-agent/resources/DOCUMENTS.md text eol=lf

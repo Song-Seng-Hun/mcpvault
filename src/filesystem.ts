@@ -10,6 +10,7 @@ import { PathFilter } from './pathfilter.js';
 import { assertRoleplayMutationBoundary } from './roleplay-boundary.js';
 import { assertSkillEvolutionMutationBoundary } from './skill-evolution-boundary.js';
 import { assertStoryMutationBoundary } from './story-boundary.js';
+import { assertResourceBundleMutationBoundary } from './resource-bundle.js';
 import { generateObsidianUri } from './uri.js';
 import type { ParsedNote, DirectoryListing, NoteWriteParams, DeleteNoteParams, DeleteResult, DeleteNotePreviewParams, DeleteNotePreviewResult, MoveNoteParams, MoveNotePreviewParams, MoveNotePreviewResult, MoveFileParams, MoveResult, BatchReadParams, BatchReadResult, UpdateFrontmatterParams, NoteInfo, TagManagementParams, TagManagementResult, PatchNoteParams, PatchNoteResult, PatchMultipleNotesParams, PatchMultipleNotesResult, NoteChangeSetResultItem, VaultStats, NoteHeading, ReadNoteLinesParams, BacklinksResult, OutlinksResult, UnresolvedLinksResult, OrphanNotesResult, DailyNoteResult, ListTasksParams, ListTasksResult, TaskItem, UpdateTaskParams, UpdateTaskResult, QueryNotesParams, QueryNotesResult, QueryNote, QueryNotesCursor, AuthorityShelfResult } from './types.js';
 import { extractObsidianLinkOccurrences } from './backlinks.js';
@@ -845,6 +846,7 @@ export class FileSystemService {
     assertRoleplayMutationBoundary(relativePathToVault);
     assertSkillEvolutionMutationBoundary(relativePathToVault);
     assertStoryMutationBoundary(relativePathToVault);
+    assertResourceBundleMutationBoundary(relativePathToVault);
     this.assertNoticeMutation(relativePathToVault);
     assertEnterpriseStorageAccess(relativePathToVault, true);
     // Guard the canonical vault-relative destination for every service write,

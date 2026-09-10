@@ -25,6 +25,7 @@ export interface SkillHostEntry {
     root: string;
     licensePath?: string;
 }
+export declare function safeText(value: string, max: number): void;
 export declare function readSkillSource(entry: SkillHostEntry): Promise<SkillSource>;
 export declare function projectSkill(source: SkillSource): SkillProjection[];
 export declare function previewSkills(fs: FileSystemService, notes: SkillProjection[]): Promise<{
