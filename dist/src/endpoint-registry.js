@@ -3,6 +3,8 @@ import { boundSearchResults } from './search-limits.js';
 import { projectGuidance } from './guidance-runtime.js';
 import { STORY_OPERATIONS } from './story-tools.js';
 import { DOCUMENT_TOOL_ENDPOINTS } from './document-tools.js';
+import { EXPLANATION_ENDPOINTS } from './explanation-tools.js';
+import { BENCHMARK_TOOL_ENDPOINTS } from './benchmark-tools.js';
 import { createHash } from 'node:crypto';
 const CONTROL_TOOLS = new Set(['orient_wiki', 'get_agent_pulse', 'list_active_capabilities', 'search_capabilities', 'call_endpoint']);
 const ENDPOINT_QUERY_STOP_WORDS = new Set([
@@ -58,12 +60,16 @@ function endpointScore(endpoint, terms) {
 }
 const EXPLICIT_IDS = {
     ...DOCUMENT_TOOL_ENDPOINTS,
+    ...EXPLANATION_ENDPOINTS,
+    ...BENCHMARK_TOOL_ENDPOINTS,
+    check_reusable_configuration: 'configuration.check',
     list_guidance_catalog: 'guidance.catalog',
     manage_roleplay_world: 'roleplay.world', manage_roleplay_character: 'roleplay.character', manage_roleplay_scene: 'roleplay.scene',
     list_notices: 'notice.list', read_notice: 'notice.read', preview_notice: 'notice.preview', revise_notice: 'notice.revise',
     read_roleplay_context: 'roleplay.context', submit_roleplay_action: 'roleplay.action', resolve_roleplay_action: 'roleplay.resolve',
     read_roleplay_history: 'roleplay.history', correct_roleplay_turn: 'roleplay.correct',
     manage_roleplay_evolution: 'roleplay.evolution',
+    manage_roleplay_trpg: 'roleplay.trpg',
     public_federation_pull: 'federation.pull',
     public_federation_retry: 'federation.retry',
     public_federation_get: 'federation.get',
@@ -677,7 +683,8 @@ export class EndpointRegistry {
             const skillDisabled = context.skillEvolutionEnabled === false && item.endpointId.startsWith('skill.') && item.endpointId !== 'skill.resolve';
             const roleplayMissing = context.roleplayConfigured === false && item.endpointId.startsWith('roleplay.');
             const economyMissing = context.economyConfigured === false && /^(economy|quest)\./.test(item.endpointId);
-            const hostMissing = roleplayMissing || economyMissing;
+            const hostMissing = roleplayMissing || economyMissing || context.explanationsConfigured === false && item.endpointId.startsWith('explanations.')
+                || context.benchmarksConfigured === false && item.endpointId.startsWith('benchmark.');
             const roleplaySetupMissing = context.roleplayWritesConfigured === false && item.endpointId.startsWith('roleplay.') && item.mutating;
             const disabled = context.readOnly && item.mutating || skillDisabled || hostMissing || roleplaySetupMissing;
             const available = !disabled && (item.requires.length === 0 || context.authenticated && missing.length === 0 || item.endpointId === 'auth.register' || item.endpointId === 'auth.login');
@@ -720,14 +727,14 @@ export class EndpointRegistry {
                     operations: { read: { available: true, state: 'ready', requires: [] }, create: write, update: write,
                         ...(item.endpointId === 'work.group' && { join: write, leave: write, archive: write }) } };
             }
-            if (['roleplay.world', 'roleplay.character', 'roleplay.scene', 'roleplay.evolution'].includes(item.endpointId)) {
+            if (['roleplay.world', 'roleplay.character', 'roleplay.scene', 'roleplay.evolution', 'roleplay.trpg'].includes(item.endpointId)) {
                 const setupMissing = context.roleplayWritesConfigured === false;
                 const write = { available: available && !setupMissing, state: setupMissing ? 'disabled' : state, requires: item.requires, ...(reason || setupMissing ? { reason: reason || 'host administrator configuration is missing' } : {}) };
                 const ops = item.input.properties?.op?.enum ?? [];
                 const readAvailable = !roleplayMissing || item.endpointId === 'roleplay.world';
                 const read = { available: readAvailable, state: readAvailable ? 'ready' : 'disabled', requires: [], ...(!readAvailable && { reason: guidanceText('guid-ea5d5a7887df5598', 'host configuration is missing') }) };
                 return { ...item, ...read,
-                    operations: Object.fromEntries(ops.map(op => [op, ['read', 'list'].includes(op) ? read : op === 'preview' && !hostMissing ? { available: context.authenticated && missing.length === 0, state: context.authenticated && missing.length === 0 ? 'ready' : 'locked', requires: item.requires } : write])) };
+                    operations: Object.fromEntries(ops.map(op => [op, ['read', 'list', ...(item.endpointId === 'roleplay.trpg' ? ['export'] : [])].includes(op) ? read : ['preview', 'respec_preview'].includes(op) && !hostMissing ? { available: context.authenticated && missing.length === 0, state: context.authenticated && missing.length === 0 ? 'ready' : 'locked', requires: item.requires } : write])) };
             }
             if (item.endpointId === 'community.participation') {
                 const write = { available, state, requires: item.requires, ...(reason && { reason }) };

@@ -1,8 +1,9 @@
 import { describe, expect, test } from 'vitest';
-import { getRoleplayTools, ROLEPLAY_MUTATING_TOOLS } from './roleplay-tools.js';
+import { getRoleplayTools, ROLEPLAY_MUTATING_TOOLS, ROLEPLAY_TRPG_ENDPOINT } from './roleplay-tools.js';
 
 type Schema = {
   type?: string;
+  pattern?: string;
   description?: string;
   required?: string[];
   properties?: Record<string, Schema>;
@@ -25,11 +26,11 @@ const properties = (name: string): Record<string, Schema> => schema(name).proper
 
 describe('bounded roleplay schema sidecar', () => {
   test('transfer destinations accept owner references without making move destinations owners', () => {
-    const effect = properties('manage_roleplay_world').effects.items as any;
+    const effect = properties('manage_roleplay_world').effects!.items as any;
     expect(effect.properties.to.anyOf.some((s: any) => new RegExp(s.pattern).test('character:iris'))).toBe(true);
     expect(effect.allOf).toBeDefined();
   });
-  test('exposes nine dynamic endpoint tools and seven mutating tools', () => {
+  test('exposes ten dynamic endpoint tools and eight mutating tools', () => {
     expect(getRoleplayTools().map(tool => tool.name)).toEqual([
       'manage_roleplay_world',
       'manage_roleplay_character',
@@ -40,6 +41,7 @@ describe('bounded roleplay schema sidecar', () => {
       'read_roleplay_history',
       'correct_roleplay_turn',
       'manage_roleplay_evolution',
+      'manage_roleplay_trpg',
     ]);
     expect([...ROLEPLAY_MUTATING_TOOLS]).toEqual([
       'manage_roleplay_world',
@@ -49,7 +51,25 @@ describe('bounded roleplay schema sidecar', () => {
       'resolve_roleplay_action',
       'correct_roleplay_turn',
       'manage_roleplay_evolution',
+      'manage_roleplay_trpg',
     ]);
+  });
+
+  test('TRPG configuration is declarative, bounded and separates reads from authenticated writes', () => {
+    const s = schema('manage_roleplay_trpg');
+    expect(s.required).toEqual(['op']); expect(s.additionalProperties).toBe(false);
+    expect(s.properties?.rolls).toBeUndefined(); expect(s.properties?.ruleset?.additionalProperties).toBe(false);
+    expect(s.properties?.participants?.maxItems).toBe(20);
+    expect(s.properties?.op?.enum).toContain('respec_preview'); expect(s.properties?.op?.enum).toContain('encounter_start');
+    expect(s.allOf?.some(c => c.then?.required?.includes('expectedRevision'))).toBe(true);
+    expect(ROLEPLAY_TRPG_ENDPOINT.aliases).toEqual({ read_roleplay_trpg: ['read', 'export'], preview_roleplay_trpg: ['respec_preview'] });
+    expect(ROLEPLAY_TRPG_ENDPOINT.operationMap.act).toBe('trpg_act');
+    expect(ROLEPLAY_TRPG_ENDPOINT.authenticatedCapability).toBe('chat');
+    expect(ROLEPLAY_TRPG_ENDPOINT.projectionOperations).toEqual(['project']);
+    expect(ROLEPLAY_TRPG_ENDPOINT.readOperations).not.toContain('project');
+    expect(s.properties?.op?.enum).toContain('project');
+    expect(s.properties?.expectedArtifacts?.required).toEqual(['sheet', 'canvas', 'base']);
+    expect(s.allOf?.some(c => c.if?.properties?.op?.const === 'project' && c.then?.required?.includes('expectedArtifacts'))).toBe(true);
   });
 
   test('uses flat authenticated command fields without an actor argument', () => {
@@ -99,19 +119,19 @@ describe('bounded roleplay schema sidecar', () => {
 
   test('bounds world declarations and keeps item and rule data declarative', () => {
     const p = properties('manage_roleplay_world');
-    expect(p.op.enum).toEqual(['read', 'initialize', 'settings', 'delegates', 'item', 'rule']);
+    expect(p.op!.enum).toEqual(['read', 'initialize', 'settings', 'delegates', 'item', 'rule']);
     expect(p.title).toMatchObject({ type: 'string', maxLength: 180 });
     expect(p.places).toMatchObject({ type: 'object', maxProperties: 100, additionalProperties: expect.any(Object) });
-    expect(p.places.items).toBeUndefined();
+    expect(p.places!.items).toBeUndefined();
     expect(p.accounts).toMatchObject({ type: 'array', maxItems: 50 });
     expect(p.id).toMatchObject({ type: 'string', maxLength: 64 });
     expect(p.owner).toMatchObject({ type: 'string', pattern: '^(place|character):[a-z0-9][a-z0-9-]{0,63}$' });
     expect(p.quantity).toMatchObject({ type: 'integer', minimum: 1, maximum: 1_000_000 });
     expect(p.conditions).toMatchObject({ type: 'array', maxItems: 20 });
     expect(p.effects).toMatchObject({ type: 'array', maxItems: 20 });
-    expect(p.effects.items?.properties?.op?.enum).toEqual(['flag', 'stat', 'relation', 'move', 'transfer']);
-    expect(p.effects.items?.properties?.from?.pattern).toContain('character:\\$actor');
-    expect(p.conditions.items?.properties?.characterId?.pattern).toContain('\\$actor');
+    expect(p.effects!.items?.properties?.op?.enum).toEqual(['flag', 'stat', 'relation', 'move', 'transfer']);
+    expect(p.effects!.items?.properties?.from?.pattern).toContain('character:\\$actor');
+    expect(p.conditions!.items?.properties?.characterId?.pattern).toContain('\\$actor');
     expect(p.questId).toMatchObject({ type: 'string', maxLength: 64 });
     for (const name of [
       'manage_roleplay_character', 'manage_roleplay_scene', 'read_roleplay_context',
@@ -122,21 +142,21 @@ describe('bounded roleplay schema sidecar', () => {
 
   test('covers character, scene, action, resolution, correction, context, and history fields', () => {
     const character = properties('manage_roleplay_character');
-    expect(character.op.enum).toEqual(['read', 'character', 'definition', 'handoff', 'remember']);
+    expect(character.op!.enum).toEqual(['read', 'character', 'definition', 'handoff', 'remember']);
     for (const field of ['id', 'characterId', 'controller', 'location', 'toAccountId']) expect(character[field]).toBeDefined();
     expect(character.definition).toMatchObject({ type: 'string', maxLength: 4000 });
     expect(character.coreMemory).toMatchObject({ type: 'string', maxLength: 600 });
     expect(character.lore).toMatchObject({ type: 'array', maxItems: 8 });
-    expect(character.lore.items).toMatchObject({ type: 'string' });
-    expect(character.lore.items?.description).toContain('Exact note reference');
-    expect(character.kind.enum).toEqual(['known', 'witnessed', 'heard', 'inferred']);
+    expect(character.lore!.items).toMatchObject({ type: 'string' });
+    expect(character.lore!.items?.description).toContain('Exact note reference');
+    expect(character.kind!.enum).toEqual(['known', 'witnessed', 'heard', 'inferred']);
 
     const scene = properties('manage_roleplay_scene');
-    expect(scene.op.enum).toEqual(['read', 'scene']);
+    expect(scene.op!.enum).toEqual(['read', 'scene']);
     for (const field of ['roomId', 'location', 'title', 'gm']) expect(scene[field]).toBeDefined();
 
     const action = properties('submit_roleplay_action');
-    expect(action.op.enum).toEqual(['speak', 'ooc', 'move', 'take', 'give', 'use', 'attempt', 'cancel']);
+    expect(action.op!.enum).toEqual(['speak', 'ooc', 'move', 'take', 'give', 'use', 'attempt', 'cancel']);
     for (const field of ['characterId', 'roomId', 'generation', 'content', 'to', 'itemId', 'amount', 'toCharacterId', 'ruleId', 'replyTo']) expect(action[field]).toBeDefined();
     expect(action.generation).toMatchObject({ type: 'integer', minimum: 1 });
     expect(action.content).toMatchObject({ type: 'string', maxLength: 560 });

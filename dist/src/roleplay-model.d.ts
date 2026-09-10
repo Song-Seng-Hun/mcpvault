@@ -1,4 +1,5 @@
 import { type RoleplayEvolution } from './roleplay-evolution-model.js';
+import { ROLEPLAY_REGISTERED_ROUTE, type RoleplayTrpg, type TrpgOutcome } from './roleplay-trpg.js';
 export interface RoleplayPolicy {
     administrators: string[];
     maxCharacters?: number;
@@ -71,6 +72,7 @@ export interface RoleplayCommand {
     requestId: string;
     expectedRevision: string;
     data: Record<string, any>;
+    rolls?: number[];
 }
 export interface RoleplayReceipt {
     id: string;
@@ -86,6 +88,8 @@ export interface RoleplayReceipt {
     witnesses: string[];
     questId?: string;
     dependencies?: string[];
+    mechanics?: TrpgOutcome;
+    route?: typeof ROLEPLAY_REGISTERED_ROUTE;
 }
 export interface Pending {
     id: string;
@@ -95,8 +99,10 @@ export interface Pending {
     roomId: string;
     characterFingerprint: string;
     content: string;
+    trpgBasis?: string;
 }
 export interface RoleplayState {
+    trpg?: RoleplayTrpg;
     evolution?: RoleplayEvolution;
     sequence: number;
     title?: string;

@@ -1,4 +1,5 @@
 import type { Character, RoleplayState } from './roleplay-model.js';
+import { trpgRows } from './roleplay-trpg-projections.js';
 
 export function textRows(kind: string, text: string): Array<Record<string, any>> {
   const characters = Array.from(text);
@@ -9,6 +10,7 @@ export function textRows(kind: string, text: string): Array<Record<string, any>>
 export function characterItems(c: Character, state: RoleplayState, availableTurns: ReadonlySet<string>): Array<Record<string, any>> {
   const identity = { characterId: c.id };
   const rows: Array<Record<string, any>> = [{ kind: 'character', ...identity, name: c.name, controller: c.controller, generation: c.generation, location: c.location }];
+  rows.push(...trpgRows(state, c.id));
   for (const kind of ['stats', 'flags', 'relations'] as const) for (const [key, value] of Object.entries(c[kind])) rows.push({ kind, ...identity, key, value });
   for (const [id, owners] of Object.entries(state.items)) if (owners[`character:${c.id}`]) rows.push({ kind: 'inventory', ...identity, id, quantity: owners[`character:${c.id}`] });
   for (const [kind, text] of [['coreMemory', c.coreMemory], ['definition', c.definition]] as const) {
@@ -21,6 +23,7 @@ export function characterItems(c: Character, state: RoleplayState, availableTurn
 
 export function worldItems(state: RoleplayState): Array<Record<string, any>> {
   return [
+    ...(state.trpg ? [{ kind: 'ruleset', id: state.trpg.ruleset.id, version: state.trpg.ruleset.version, fingerprint: state.trpg.fingerprint }] : []),
     ...textRows('worldDefinition', state.definition ?? ''),
     ...Object.entries(state.places).map(([id, links]) => ({ kind: 'place', id, links })),
     ...Object.values(state.rules).flatMap(rule => [

@@ -7,7 +7,7 @@ import { FrontmatterHandler } from './frontmatter.js';
 import { assertLegacyEconomyStorage, bindEconomyStorage } from './economy-storage.js';
 import { ensureFederationDirectory, readFederationFile, writeFederationFileAtomic } from './public-federation-storage.js';
 import { applyEconomyCommand, economyRevision, initialEconomy, validateEconomyPolicy,
-  type EconomyCommand, type EconomyPolicy, type EconomyReceipt, type EconomyState } from './economy-model.js';
+  type EconomyCommand, type EconomyPolicy, type EconomyReceipt, type EconomyState, type BenchmarkAwardProof } from './economy-model.js';
 
 export interface EconomyLedgerOptions {
   vaultPath: string;
@@ -20,6 +20,12 @@ export interface EconomyLedgerOptions {
   storageVerified: boolean;
   policy: EconomyPolicy;
   now?: () => Date;
+  /** Host-only adapters, never constructed from endpoint input. Proof validation
+   * must re-read current sealed adjudication and sources inside this ledger queue. */
+  benchmarkAuthority?: {
+    assertHumanOperator:(actor:string)=>Promise<void>;
+    validateAward:(proof:BenchmarkAwardProof,state:EconomyState)=>Promise<void>;
+  };
 }
 interface Event {
   mcpvault_type: 'economy_transaction'; version: 1; sequence: number; previous: string; at: string;
@@ -173,7 +179,9 @@ export class EconomyLedger {
       const event=this.frontmatter.parse(text).frontmatter as Event;
       const {hash,...unsigned}=event;
       if(event.mcpvault_type!=='economy_transaction' || event.version!==1 || event.sequence!==i+1 || event.previous!==previous || economyRevision(unsigned)!==hash) throw guidanceError(new Error('Economy journal integrity failed'), 'guid-888ccad9a2d333ce');
-      const applied=applyEconomyCommand(state,event.command,event.policy,event.at);
+      // Historical authority comes from the externally anchored journal, not a
+      // current source snapshot (which may legitimately have changed since).
+      const applied=applyEconomyCommand(state,event.command,event.policy,event.at,()=>{});
       if(applied.state.sequence!==event.sequence || economyRevision(applied.receipt)!==economyRevision(event.receipt)) throw guidanceError(new Error('Economy journal transition mismatch'), 'guid-40c095b556944c63');
       const expected=this.makeEvent(state,applied.state,event.command,event.policy,event.at,event.previous,applied.receipt);
       if(expected.hash!==hash) throw guidanceError(new Error('Economy postings or contract mismatch'), 'guid-2fcd158dac4841dd');
@@ -221,9 +229,22 @@ export class EconomyLedger {
     return this.serialized(async()=>{
       const {state,checkpoint,bytes}=await this.replay();
       const at=(this.options.now?.()||new Date()).toISOString();
-      const applied=applyEconomyCommand(state,command,this.options.policy,at);
+      const benchmark=['reserve_program','award_program','close_program','cancel_program'].includes(command.op);
+      const validateBenchmarkAuthority=async()=>{if(benchmark) {
+        const authority=this.options.benchmarkAuthority;
+        if(!authority)throw guidanceError(Error('Trusted benchmark authority is not configured'), 'guid-55f88f5698c22a5e');
+        if(command.op==='award_program') {
+          if(!command.award)throw guidanceError(Error('Trusted adjudication proof required'), 'guid-b7d2ae655b21b713');
+          await authority.validateAward(structuredClone(command.award),structuredClone(state));
+        } else await authority.assertHumanOperator(command.actor);
+      }};
+      await validateBenchmarkAuthority();
+      const applied=applyEconomyCommand(state,command,this.options.policy,at,...(benchmark?[()=>{}]:[]));
       // Repeat permission checks even on permanent response-loss retries.
-      await revalidate?.(structuredClone(state)); await this.assertLock();
+      await revalidate?.(structuredClone(state));
+      // A caller callback may discover/change authority. Check trusted host
+      // adjudication again after it, before retry success or durable intent.
+      await validateBenchmarkAuthority(); await this.assertLock();
       if(applied.state===state) return applied.receipt;
       if(state.sequence>=MAX_EVENTS) throw guidanceError(new Error('Economy journal limit reached'), 'guid-c872464fafdc915c');
       const event=this.makeEvent(state,applied.state,command,this.options.policy,at,checkpoint.hash,applied.receipt);

@@ -9,6 +9,8 @@ export interface ParsedCliArgs {
     economyConfig?: string;
     roleplayConfig?: string;
     skillEvolutionConfig?: string;
+    explanationConfig?: string;
+    benchmarkConfig?: string;
     /** Dedicated HTTP process; omitted preserves legacy stdio behavior. */
     stdio?: false;
 }

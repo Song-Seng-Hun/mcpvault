@@ -53,6 +53,7 @@ export declare class RoleplayStore {
     private closing;
     private readonly fm;
     private verified;
+    private preparedUncertain;
     private constructor();
     private get lockPath();
     private get checkpointPath();

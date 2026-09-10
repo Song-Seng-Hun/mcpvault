@@ -1,9 +1,8 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { lstat, mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, readFile, readdir, realpath, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, join, normalize, parse, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const DEFAULT_TARGET = 'E:\\llm_wiki\\llm_wiki';
 const BACKUP_ROOT = '.obsidian/mcpvault-host-plugins/backups';
 const QUICKADD_ID = 'quickadd';
 const METADATA_MENU_ID = 'metadata-menu';
@@ -118,7 +117,19 @@ export async function loadDefaultBundle() {
   return validateBundle(authoringAssist.hostPluginBundle());
 }
 
+function assertCanonicalPathSpelling(value) {
+  if (typeof value !== 'string' || !isAbsolute(value)) throw new Error('target and confirmed target must be absolute paths');
+  // Check the original spelling: resolve/join erase traversal across a junction.
+  if (value.split(/[\\/]/).some(part => part === '..' || part === '.') || /[\x00-\x1f]/.test(value)) {
+    throw new Error('use canonical paths without traversal components');
+  }
+  if (/^(?:[\\/]{2}[?.][\\/]|[\\/]\?\?[\\/])/.test(value)) {
+    throw new Error('use canonical paths without Windows device namespace aliases');
+  }
+}
+
 async function assertOrdinaryPath(absolutePath, expectedType) {
+  assertCanonicalPathSpelling(absolutePath);
   const absolute = resolve(absolutePath);
   let cursor = parse(absolute).root;
   const remaining = absolute.slice(cursor.length).split(sep).filter(Boolean);
@@ -134,14 +145,21 @@ async function assertOrdinaryPath(absolutePath, expectedType) {
 }
 
 /** Confines every mutating action to a user-supplied, exact, pre-existing vault. */
-export async function validateTargetPath(targetPath, expectedTarget = DEFAULT_TARGET) {
-  if (!isAbsolute(targetPath)) throw new Error('target must be an absolute path');
+export async function validateTargetPath(targetPath, expectedTarget) {
+  if (typeof expectedTarget !== 'string' || !expectedTarget) throw new Error('an explicit confirmed target path is required');
+  assertCanonicalPathSpelling(targetPath);
+  assertCanonicalPathSpelling(expectedTarget);
   const target = resolve(targetPath);
   const expected = resolve(expectedTarget);
   if (target !== expected) throw new Error('target must match the exact target path');
-  await assertOrdinaryPath(target, 'directory');
-  await assertOrdinaryPath(join(target, '.obsidian'), 'directory');
-  return target;
+  await assertOrdinaryPath(targetPath, 'directory');
+  await assertOrdinaryPath(expectedTarget, 'directory');
+  const canonicalTarget = await realpath(target);
+  const canonicalExpected = await realpath(expected);
+  if (canonicalTarget !== canonicalExpected) throw new Error('target must match the exact target realpath');
+  await assertOrdinaryPath(canonicalTarget, 'directory');
+  await assertOrdinaryPath(join(canonicalTarget, '.obsidian'), 'directory');
+  return canonicalTarget;
 }
 
 export function buildQuickAddInboxChoice(templatePath) {
@@ -627,7 +645,7 @@ function parseArgs(args) {
   for (let index = 0; index < args.length; index += 2) {
     const flag = args[index];
     const value = args[index + 1];
-    if (!['--action', '--target', '--bundle', '--backup'].includes(flag) || value === undefined) throw new Error('usage: --action install|status|restore --target <exact vault path> [--bundle <generated JSON>] [--backup <backup path>]');
+    if (!['--action', '--target', '--confirm-target', '--bundle', '--backup'].includes(flag) || value === undefined || result[flag.slice(2)] !== undefined) throw new Error('usage: --action install|status|restore --target <exact vault path> --confirm-target <same absolute path> [--bundle <generated JSON>] [--backup <backup path>]');
     result[flag.slice(2)] = value;
   }
   if (!['install', 'status', 'restore'].includes(result.action) || !result.target) throw new Error('an action and exact target are required');
@@ -636,7 +654,7 @@ function parseArgs(args) {
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
-  const options = { vaultPath: args.target, expectedTarget: DEFAULT_TARGET };
+  const options = { vaultPath: args.target, expectedTarget: args['confirm-target'] };
   let report;
   if (args.action === 'status') {
     const bundle = args.bundle ? JSON.parse(await readFile(resolve(args.bundle), 'utf8')) : undefined;

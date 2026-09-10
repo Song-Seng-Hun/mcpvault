@@ -10,6 +10,9 @@ import { EconomyLedger } from './src/economy-ledger.js';
 import { RoleplayStore } from './src/roleplay-store.js';
 import { loadRoleplayHostConfig } from './src/roleplay-host.js';
 import { loadSkillEvolutionHostConfig } from './src/skill-evolution-host.js';
+import { loadExplanationHostConfig } from './src/explanation-host.js';
+import { loadBenchmarkHostConfig } from './src/benchmark-host.js';
+import { acquireBenchmarkWriter } from './src/benchmark-runtime.js';
 import { existsSync, readFileSync } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, join, resolve } from "path";
@@ -61,6 +64,12 @@ Options:
   --skill-evolution-config FILE
                   Opt-in experience and candidate recording with a private host key.
                   No automatic evaluation without host-registered skill profiles.
+  --explanation-config FILE
+                  Explicit source collection and host-verified reviewer profiles.
+                  Pull-only Gemini explanation preference; never calls a model.
+  --benchmark-config FILE
+                  Opt-in private host-approved challenges. Does not open a contest,
+                  create an account, approve rewards or change the supply cap.
   --mcp-http[=PORT]
                   Expose MCP 2026 Stateless Streamable HTTP (default 8788)
   --mcp-http-only[=PORT]
@@ -84,32 +93,66 @@ Examples:
 }
 // Remove runtime options before joining trailing args, preserving support for
 // unquoted vault paths with spaces. When omitted, use the current directory.
-const { vaultPathArg, readOnly, restPort, mcpHttpPort, mcpHttpHost, mcpHttpTlsCert, mcpHttpTlsKey, stdio, economyConfig, roleplayConfig, skillEvolutionConfig } = parseCliArgs(cliArgs);
+const { vaultPathArg, readOnly, restPort, mcpHttpPort, mcpHttpHost, mcpHttpTlsCert, mcpHttpTlsKey, stdio, economyConfig, roleplayConfig, skillEvolutionConfig, explanationConfig, benchmarkConfig } = parseCliArgs(cliArgs);
 const vaultPath = resolve(vaultPathArg || process.cwd());
 if (mcpHttpPort === undefined && (mcpHttpHost || mcpHttpTlsCert || mcpHttpTlsKey)) {
     throw new Error('--mcp-http-host, --mcp-http-cert, and --mcp-http-key require --mcp-http');
 }
 const hostEconomy = economyConfig ? await loadEconomyHostConfig(resolve(economyConfig), vaultPath) : undefined;
+const hostBenchmark = benchmarkConfig ? await loadBenchmarkHostConfig(resolve(benchmarkConfig), vaultPath) : undefined;
+let benchmarkAuthority;
 let economy;
 if (hostEconomy?.policy.enabled) {
     for (const path of [hostEconomy.ledgerPath ?? hostEconomy.vaultPath, hostEconomy.hostPath])
         await probeEconomyStorage(path);
-    economy = { policy: hostEconomy.policy, ledger: await EconomyLedger.open({ ...hostEconomy, storageVerified: true }) };
+    economy = { policy: hostEconomy.policy, ledger: await EconomyLedger.open({ ...hostEconomy, storageVerified: true,
+            ...(hostBenchmark?.enabled && { benchmarkAuthority: {
+                    assertHumanOperator: hostBenchmark.assertHumanOperator,
+                    validateAward: async (proof, state) => {
+                        if (!benchmarkAuthority)
+                            throw Error('Current benchmark adjudication service unavailable');
+                        await benchmarkAuthority.validateAwardProof(proof, state);
+                    },
+                } }),
+        }) };
 }
 let mcpServer;
 let roleplay;
+let benchmarkWriter;
 try {
+    if (hostBenchmark?.enabled && !readOnly)
+        benchmarkWriter = await acquireBenchmarkWriter(hostBenchmark);
     const skillEvolution = skillEvolutionConfig ? await loadSkillEvolutionHostConfig(resolve(skillEvolutionConfig), vaultPath) : undefined;
+    const explanations = explanationConfig ? await loadExplanationHostConfig(resolve(explanationConfig), vaultPath) : undefined;
     if (roleplayConfig)
         roleplay = await RoleplayStore.open(await loadRoleplayHostConfig(resolve(roleplayConfig), vaultPath));
-    mcpServer = createServer(vaultPath, { version: VERSION, readOnly, ...(economy && { economy }), ...(roleplay && { roleplay }), ...(skillEvolution && { skillEvolution }) });
+    mcpServer = createServer(vaultPath, { version: VERSION, readOnly, ...(economy && { economy }), ...(roleplay && { roleplay }), ...(skillEvolution && { skillEvolution }),
+        ...(hostBenchmark?.enabled && { benchmarks: {
+                enabled: true, definitions: hostBenchmark.definitions,
+                accountProfiles: async () => { await benchmarkWriter?.assertHeld(); return hostBenchmark.accountProfiles(); },
+                answerReader: hostBenchmark.answerReader, integrity: hostBenchmark.integrity,
+                assertHumanOperator: async (actor) => { await benchmarkWriter?.assertHeld(); await hostBenchmark.assertHumanOperator(actor); },
+                bindAuthority: (service) => { benchmarkAuthority = service; },
+            } }),
+        ...(explanations?.enabled && { explanations: { sources: explanations.sources }, workCollaboration: { executionProfiles: explanations.executionProfiles } }) });
 }
 catch (error) {
-    await roleplay?.close();
-    await economy?.ledger.close();
+    try {
+        await roleplay?.close();
+    }
+    finally {
+        try {
+            await economy?.ledger.close();
+        }
+        finally {
+            await benchmarkWriter?.close();
+        }
+    }
     throw error;
 }
 const lifecycle = createServerLifecycle(mcpServer);
+if (benchmarkWriter)
+    lifecycle.add(benchmarkWriter);
 if (economy)
     lifecycle.add(economy.ledger);
 if (roleplay)

@@ -1,0 +1,1 @@
+{"version":3,"file":"benchmark-runtime.d.ts","sourceRoot":"","sources":["../../src/benchmark-runtime.ts"],"names":[],"mappings":"AAQA,OAAO,KAAK,EAAC,yBAAyB,EAAC,MAAM,qBAAqB,CAAC;AAEnE,MAAM,WAAW,eAAe;IAAE,KAAK,IAAG,OAAO,CAAC,IAAI,CAAC,CAAC;IAAA,UAAU,IAAG,OAAO,CAAC,IAAI,CAAC,CAAA;CAAC;AAEnF;;iFAEiF;AACjF,wBAAsB,sBAAsB,CAAC,MAAM,EAAC,yBAAyB,GAAE,OAAO,CAAC,eAAe,CAAC,CA+BtG"}

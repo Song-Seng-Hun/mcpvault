@@ -10,6 +10,8 @@ export interface ParsedCliArgs {
   economyConfig?: string;
   roleplayConfig?: string;
   skillEvolutionConfig?: string;
+  explanationConfig?: string;
+  benchmarkConfig?: string;
   /** Dedicated HTTP process; omitted preserves legacy stdio behavior. */
   stdio?: false;
 }
@@ -31,9 +33,21 @@ export function parseCliArgs(args: string[]): ParsedCliArgs {
   let economyConfig:string|undefined;
   let roleplayConfig: string | undefined;
   let skillEvolutionConfig: string | undefined;
+  let explanationConfig: string | undefined;
+  let benchmarkConfig: string | undefined;
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index]!;
+    if (arg === '--benchmark-config' || arg.startsWith('--benchmark-config=')) {
+      const value = arg === '--benchmark-config' ? args[++index] : arg.slice('--benchmark-config='.length);
+      if (!value || !value.trim() || value.startsWith('--') || benchmarkConfig !== undefined) throw guidanceError(Error('--benchmark-config requires one private host configuration file'), 'guid-fed1ae3b67da7da1');
+      benchmarkConfig = value; continue;
+    }
+    if (arg === '--explanation-config' || arg.startsWith('--explanation-config=')) {
+      const value = arg === '--explanation-config' ? args[++index] : arg.slice('--explanation-config='.length);
+      if (!value || !value.trim() || value.startsWith('--') || explanationConfig !== undefined) throw guidanceError(Error('--explanation-config requires one private host configuration file'), 'guid-2fd6b72137024d82');
+      explanationConfig = value; continue;
+    }
     if (arg === '--skill-evolution-config' || arg.startsWith('--skill-evolution-config=')) {
       const value = arg === '--skill-evolution-config' ? args[++index] : arg.slice('--skill-evolution-config='.length);
       if (!value || !value.trim() || value.startsWith('--') || skillEvolutionConfig !== undefined) throw guidanceError(new Error('--skill-evolution-config requires one host configuration file'), 'guid-f1b0524458043f1b');
@@ -171,5 +185,7 @@ export function parseCliArgs(args: string[]): ParsedCliArgs {
     ...(economyConfig!==undefined && {economyConfig}),
     ...(roleplayConfig !== undefined && { roleplayConfig }),
     ...(skillEvolutionConfig !== undefined && { skillEvolutionConfig }),
+    ...(explanationConfig !== undefined && { explanationConfig }),
+    ...(benchmarkConfig !== undefined && { benchmarkConfig }),
   };
 }

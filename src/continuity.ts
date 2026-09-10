@@ -77,6 +77,7 @@ type ResumeState = {
   exists: true; path: string; revision?: string; fm: Record<string, any>;
   content: string; truncated: boolean; learningProgress?: Record<string, any>;
   understanding?: Record<string, any>;
+  route?: { kind: 'verified_resume'; reason: string; skipped: string[] };
   nextAction?: { endpointId: string; arguments: Record<string, unknown> };
 };
 
@@ -88,6 +89,8 @@ function packResumeState(full: ResumeState, maxChars: number, prettyPrint: boole
     ...full, fm: {}, content: '', truncated: true,
     nextAction: { endpointId: 'mcp.read_note_lines', arguments: { path: full.path, expectedRevision: full.revision, startLine: 1, endLine: 40, maxChars: 6000 } },
   };
+  // Route provenance is advisory; never displace safety or executable locators.
+  delete result.route;
   if (full.understanding) result.nextAction = { endpointId: 'continuity.resume', arguments: { maxChars: 12000, prettyPrint: false } };
   // Keep the validated next target before optional history and duplicate prose.
   if (!fits(result) && result.learningProgress?.drift) {
@@ -488,6 +491,9 @@ export class ContinuityService {
       content: note.content,
       truncated: false,
       revision: note.revision,
+      ...((learningProgress || understanding) && (!learningProgress || learningProgress.canResume === true)
+        && (!understanding || understanding.projection.canResume === true) && params.validateLearningProgress !== false
+        ? { route: { kind: 'verified_resume' as const, reason: 'current_checkpoint_references_and_access', skipped: ['global_orientation'] } } : {}),
       ...(learningProgress && { learningProgress }),
       ...(understanding && { understanding: understanding.projection }),
     }, maxChars, params.prettyPrint === true);

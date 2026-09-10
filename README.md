@@ -60,6 +60,23 @@ It is not required for MCP or Obsidian.
 
 ## Five tools, one focused path
 
+Optional extensions remain separate from the canonical knowledge and economy:
+
+- [Portable setup](docs/portable-installation.md): explicit connect-existing versus
+  new-server preparation, preview/confirmed settings merge, read-only diagnostics.
+- [Verified explanations](docs/verified-explanations.md): source-pinned Korean
+  beginner explanations, voluntary drafting/review and current-authority reuse.
+- [TRPG sheets and combat](docs/roleplay-trpg.md): opt-in rules, skill graphs,
+  loadouts and once-recorded host dice; no automatic wallet rewards.
+- [Benchmark challenges](docs/benchmark-challenges.md): sealed submissions and
+  fixed graders/blind reviews; wallet issuance requires separately approved caps.
+- [Reusable configurations](docs/reusable-configurations.md): `configuration.check`
+  reuses the bounded graph validator for supplied learning
+  paths/procedural bundles without executing steps or granting permissions.
+
+Deploying code does not configure models, open contests, adopt game rules or approve
+monetary values. Native OS validation is reported separately from portable tests.
+
 Only these MCP tool names are stable:
 
 | Tool | Purpose |

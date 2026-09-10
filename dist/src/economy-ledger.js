@@ -238,7 +238,9 @@ export class EconomyLedger {
             const { hash, ...unsigned } = event;
             if (event.mcpvault_type !== 'economy_transaction' || event.version !== 1 || event.sequence !== i + 1 || event.previous !== previous || economyRevision(unsigned) !== hash)
                 throw guidanceError(new Error('Economy journal integrity failed'), 'guid-888ccad9a2d333ce');
-            const applied = applyEconomyCommand(state, event.command, event.policy, event.at);
+            // Historical authority comes from the externally anchored journal, not a
+            // current source snapshot (which may legitimately have changed since).
+            const applied = applyEconomyCommand(state, event.command, event.policy, event.at, () => { });
             if (applied.state.sequence !== event.sequence || economyRevision(applied.receipt) !== economyRevision(event.receipt))
                 throw guidanceError(new Error('Economy journal transition mismatch'), 'guid-40c095b556944c63');
             const expected = this.makeEvent(state, applied.state, event.command, event.policy, event.at, event.previous, applied.receipt);
@@ -300,9 +302,28 @@ export class EconomyLedger {
         return this.serialized(async () => {
             const { state, checkpoint, bytes } = await this.replay();
             const at = (this.options.now?.() || new Date()).toISOString();
-            const applied = applyEconomyCommand(state, command, this.options.policy, at);
+            const benchmark = ['reserve_program', 'award_program', 'close_program', 'cancel_program'].includes(command.op);
+            const validateBenchmarkAuthority = async () => {
+                if (benchmark) {
+                    const authority = this.options.benchmarkAuthority;
+                    if (!authority)
+                        throw guidanceError(Error('Trusted benchmark authority is not configured'), 'guid-55f88f5698c22a5e');
+                    if (command.op === 'award_program') {
+                        if (!command.award)
+                            throw guidanceError(Error('Trusted adjudication proof required'), 'guid-b7d2ae655b21b713');
+                        await authority.validateAward(structuredClone(command.award), structuredClone(state));
+                    }
+                    else
+                        await authority.assertHumanOperator(command.actor);
+                }
+            };
+            await validateBenchmarkAuthority();
+            const applied = applyEconomyCommand(state, command, this.options.policy, at, ...(benchmark ? [() => { }] : []));
             // Repeat permission checks even on permanent response-loss retries.
             await revalidate?.(structuredClone(state));
+            // A caller callback may discover/change authority. Check trusted host
+            // adjudication again after it, before retry success or durable intent.
+            await validateBenchmarkAuthority();
             await this.assertLock();
             if (applied.state === state)
                 return applied.receipt;

@@ -1,6 +1,7 @@
 import { guidanceError } from './guidance-runtime.js';
 import { createHash } from 'node:crypto';
 import { applyEvolution, configureEvolution } from './roleplay-evolution-model.js';
+import { applyTrpg, guardTrpgLegacy, newTrpgSheet, trpgOutcome, ROLEPLAY_REGISTERED_ROUTE } from './roleplay-trpg.js';
 export const initialRoleplay = () => ({ sequence: 0, places: {}, delegates: [], characters: {}, scenes: {}, rules: {}, items: {}, pending: {}, requests: {} });
 export const roleplayHash = (value) => createHash('sha256').update(JSON.stringify(value, (_key, item) => item && typeof item === 'object' && !Array.isArray(item) ? Object.fromEntries(Object.keys(item).sort().map(key => [key, item[key]])) : item)).digest('hex');
 // Requests contain receipts with revisions; avoid circular revision definitions.
@@ -183,7 +184,7 @@ export function applyRoleplayCommand(before, command, policy) {
     roleplayId(command.requestId, 'requestId');
     if (Buffer.byteLength(JSON.stringify(command)) > 32768)
         throw guidanceError(new Error('Roleplay command exceeds size limit'), 'guid-88bc4c5dbd0a65c3');
-    const key = roleplayHash([command.actor, command.requestId]), fingerprint = roleplayHash({ ...command, expectedRevision: undefined });
+    const key = roleplayHash([command.actor, command.requestId]), fingerprint = roleplayHash({ ...command, expectedRevision: undefined, rolls: undefined });
     const replay = before.requests[key];
     if (replay) {
         if (replay.fingerprint !== fingerprint)
@@ -217,6 +218,7 @@ export function applyRoleplayCommand(before, command, policy) {
     };
     if (command.op !== 'initialize' && !s.title)
         throw guidanceError(new Error('World is not initialized by its host'), 'guid-67a386b45e3d3f7c');
+    guardTrpgLegacy(s, command);
     switch (command.op) {
         case 'initialize': {
             requireAdmin();
@@ -295,6 +297,8 @@ export function applyRoleplayCommand(before, command, policy) {
                 throw guidanceError(new Error('Existing character requires explicit definition or handoff operation'), 'guid-0cf53f782317b210');
             s.characters[cid] = { id: cid, name: roleplayText(d.name, 120), controller: roleplayAccount(d.controller), generation: 1, location: location(s, d.location),
                 definition: d.definition ? roleplayText(d.definition, 4000) : '', lore: [], coreMemory: '', stats: {}, flags: {}, relations: {}, cognition: [] };
+            if (s.trpg)
+                s.trpg.sheets[cid] = newTrpgSheet(s.trpg.ruleset);
             characterId = cid;
             content = 'Character registered.';
             break;
@@ -413,6 +417,8 @@ export function applyRoleplayCommand(before, command, policy) {
                 if (Object.keys(s.pending).length >= 100)
                     throw guidanceError(new Error('Pending action capacity reached'), 'guid-49d080c8b409111c');
                 s.pending[id] = { id, characterId: c.id, generation: c.generation, location: c.location, roomId: scene.roomId, characterFingerprint: roleplayHash(c), content };
+                if (s.trpg)
+                    s.pending[id].trpgBasis = roleplayHash(s.trpg);
             }
             applyEffects(s, effects, scene.location);
             break;
@@ -472,7 +478,7 @@ export function applyRoleplayCommand(before, command, policy) {
             effects = validateEffects(d.effects);
             const touched = (es) => new Set(es.flatMap(e => e.op === 'transfer' ? [`item:${e.itemId}`, e.from, e.to] : [`character:${e.characterId}`]));
             const affected = touched(target.effects);
-            const later = Object.values(s.requests).map(r => r.receipt).filter(r => r.sequence > target.sequence && r.effects.length > 0 && [...touched(r.effects), ...(r.dependencies ?? [])].some(k => affected.has(k)));
+            const later = Object.values(s.requests).map(r => r.receipt).filter(r => r.sequence > target.sequence && (r.effects.length > 0 || r.kind.startsWith('trpg_')) && [...touched(r.effects), ...(r.dependencies ?? [])].some(k => affected.has(k)));
             if (later.length || Object.values(s.requests).some(r => r.receipt.correctedTurn === target.id))
                 throw guidanceError(new Error('Downstream shared results prevent a simple correction; explicit host reconciliation required'), 'guid-43f6173171a390b0');
             if ([...touched(effects)].some(k => !affected.has(k)))
@@ -494,12 +500,26 @@ export function applyRoleplayCommand(before, command, policy) {
             ({ characterId, roomId, content } = applyEvolution(s, command, id));
             break;
         }
-        default: throw guidanceError(new Error('Unsupported roleplay operation'), 'guid-b96878577d6c0c8d');
+        default:
+            if (command.op.startsWith('trpg_')) {
+                ({ characterId, roomId, content } = applyTrpg(s, command, policy));
+                const affected = roomId ? s.trpg?.encounters[roomId]?.order ?? [] : characterId ? [characterId] : Object.keys(s.characters);
+                dependencies = [...new Set(affected.flatMap(cid => {
+                        const sheet = s.trpg?.sheets[cid];
+                        return [`character:${cid}`, ...(sheet?.loadouts[sheet.active]?.equipment ?? []).map(item => `item:${item}`)];
+                    }))];
+                break;
+            }
+            throw guidanceError(new Error('Unsupported roleplay operation'), 'guid-b96878577d6c0c8d');
     }
     s.sequence++;
     const place = roomId && (before.scenes[roomId] ?? s.scenes[roomId])?.location;
     const witnesses = place ? Object.values(before.characters).filter(c => c.location === place).map(c => c.id) : [];
     const receipt = { id, sequence: s.sequence, actor: command.actor, ...(characterId && { characterId }), ...(roomId && { roomId }), kind: command.op, content, effects, witnesses, ...(dependencies.length && { dependencies }), ...(questId && { questId }), ...(correctedTurn && { correctedTurn }), revision: roleplayRevision(s) };
+    if (s.trpg && (command.op.startsWith('trpg_') || command.op === 'resolve'))
+        receipt.mechanics = trpgOutcome(before, s, command, roomId);
+    if (command.op === 'trpg_act')
+        receipt.route = structuredClone(ROLEPLAY_REGISTERED_ROUTE);
     s.requests[key] = { fingerprint, receipt };
     return { state: s, receipt };
 }

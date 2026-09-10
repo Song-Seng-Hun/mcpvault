@@ -18,6 +18,37 @@ export interface EconomyPolicy {
     openContracts: number;
     /** Host-approved rolling seven-day disbursement cap, not new supply. */
     treasuryWeeklyBudget?: number;
+    /** Optional, explicit human-approved issuance envelopes. Never inferred from quests. */
+    benchmarkPrograms?: BenchmarkIssuanceProgram[];
+}
+export interface BenchmarkIssuanceProgram {
+    id: string;
+    lineage: string;
+    definitionFingerprint: string;
+    criteriaFingerprint: string;
+    participants: string[];
+    reward: number;
+    maxWinners: number;
+    cap: number;
+    closesAt: string;
+}
+export interface BenchmarkAwardProof {
+    programId: string;
+    account: string;
+    definitionFingerprint: string;
+    criteriaFingerprint: string;
+    adjudicationRevision: string;
+}
+export interface BenchmarkReservation {
+    terms: BenchmarkIssuanceProgram;
+    remaining: number;
+    awarded: number;
+    closed: boolean;
+    cancellation?: {
+        actor: string;
+        reason: string;
+        at: string;
+    };
 }
 export interface QuestArtifact {
     path: string;
@@ -81,7 +112,10 @@ export interface QuestContract {
     };
 }
 export interface EconomyCommand {
-    op: 'issue' | 'allocate' | 'draft' | 'fund' | 'claim' | 'recover_claim' | 'submit' | 'cancel' | 'review' | 'dispute' | 'resolve';
+    op: 'issue' | 'allocate' | 'draft' | 'fund' | 'claim' | 'recover_claim' | 'submit' | 'cancel' | 'review' | 'dispute' | 'resolve' | 'reserve_program' | 'award_program' | 'close_program' | 'cancel_program';
+    programId?: string;
+    programFingerprint?: string;
+    award?: BenchmarkAwardProof;
     actor: string;
     requestId: string;
     contractId?: string;
@@ -118,6 +152,11 @@ export interface EconomyState {
         at: string;
         amount: number;
     }[];
+    programs?: Record<string, BenchmarkReservation>;
+    benchmarkAwards?: Record<string, {
+        programId: string;
+        account: string;
+    }>;
 }
 export declare const economyRevision: (value: unknown) => string;
 export declare const initialEconomy: () => EconomyState;
@@ -133,7 +172,7 @@ export declare function questClaimAuthority(contract: QuestContract, worker: str
     workerOwner: string;
     reviewer: string | undefined;
 };
-export declare function applyEconomyCommand(input: EconomyState, command: EconomyCommand, rawPolicy: EconomyPolicy, now: string): {
+export declare function applyEconomyCommand(input: EconomyState, command: EconomyCommand, rawPolicy: EconomyPolicy, now: string, trustedBenchmarkAuthority?: () => void): {
     state: EconomyState;
     receipt: EconomyReceipt;
 };

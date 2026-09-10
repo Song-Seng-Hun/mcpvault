@@ -2,6 +2,7 @@ import { Server } from "@modelcontextprotocol/server";
 import { FrontmatterHandler } from "./frontmatter.js";
 import { PathFilter } from "./pathfilter.js";
 import { type PublicFederationHostConfig } from './enterprise-federation.js';
+import { BenchmarkService, type BenchmarkOptions } from './benchmark-service.js';
 import { type SkillEvolutionHost } from './skill-evolution.js';
 import type { GuidanceDefinition } from './guidance-catalog.js';
 import type { RoleplayStore } from './roleplay-store.js';
@@ -9,6 +10,14 @@ import { EndpointRegistry } from "./endpoint-registry.js";
 import { type EconomyLedger } from './economy-ledger.js';
 import type { EconomyPolicy } from './economy-model.js';
 export interface CreateServerOptions {
+    /** Explicit host-selected sources; no automatic Vault-wide translation. */
+    explanations?: {
+        sources: import('./explanation-service.js').ExplanationSourceConfig[];
+    };
+    benchmarks?: Omit<BenchmarkOptions, 'assertActor' | 'accountAvailable' | 'ledger' | 'access' | 'pathFilter'> & {
+        /** Bind the existing ledger's trusted proof verifier; not an agent endpoint. */
+        bindAuthority?: (service: BenchmarkService) => void;
+    };
     /** Trusted host integrations only; never populated from API arguments or Vault notes. */
     workCollaboration?: Pick<import('./work-service.js').WorkServiceOptions, 'executionProfiles' | 'readReviewGitSource' | 'verifyReviewExecution'>;
     /** Explicit trusted host registration. Never loaded from a request or Vault note. */

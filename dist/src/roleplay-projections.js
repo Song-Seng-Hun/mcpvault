@@ -1,3 +1,4 @@
+import { trpgRows } from './roleplay-trpg-projections.js';
 export function textRows(kind, text) {
     const characters = Array.from(text);
     return Array.from({ length: Math.ceil(characters.length / 400) }, (_, index) => ({ kind, offset: index * 400, text: characters.slice(index * 400, (index + 1) * 400).join(''), continued: (index + 1) * 400 < characters.length }));
@@ -6,6 +7,7 @@ export function textRows(kind, text) {
 export function characterItems(c, state, availableTurns) {
     const identity = { characterId: c.id };
     const rows = [{ kind: 'character', ...identity, name: c.name, controller: c.controller, generation: c.generation, location: c.location }];
+    rows.push(...trpgRows(state, c.id));
     for (const kind of ['stats', 'flags', 'relations'])
         for (const [key, value] of Object.entries(c[kind]))
             rows.push({ kind, ...identity, key, value });
@@ -24,6 +26,7 @@ export function characterItems(c, state, availableTurns) {
 }
 export function worldItems(state) {
     return [
+        ...(state.trpg ? [{ kind: 'ruleset', id: state.trpg.ruleset.id, version: state.trpg.ruleset.version, fingerprint: state.trpg.fingerprint }] : []),
         ...textRows('worldDefinition', state.definition ?? ''),
         ...Object.entries(state.places).map(([id, links]) => ({ kind: 'place', id, links })),
         ...Object.values(state.rules).flatMap(rule => [

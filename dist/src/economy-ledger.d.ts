@@ -1,4 +1,4 @@
-import { type EconomyCommand, type EconomyPolicy, type EconomyReceipt, type EconomyState } from './economy-model.js';
+import { type EconomyCommand, type EconomyPolicy, type EconomyReceipt, type EconomyState, type BenchmarkAwardProof } from './economy-model.js';
 export interface EconomyLedgerOptions {
     vaultPath: string;
     /** Existing private host directory outside the Vault and source checkout. */
@@ -10,6 +10,12 @@ export interface EconomyLedgerOptions {
     storageVerified: boolean;
     policy: EconomyPolicy;
     now?: () => Date;
+    /** Host-only adapters, never constructed from endpoint input. Proof validation
+     * must re-read current sealed adjudication and sources inside this ledger queue. */
+    benchmarkAuthority?: {
+        assertHumanOperator: (actor: string) => Promise<void>;
+        validateAward: (proof: BenchmarkAwardProof, state: EconomyState) => Promise<void>;
+    };
 }
 export declare function assertEconomyConfigured(vaultPath: string, configured: boolean): Promise<void>;
 export declare function admitEconomyEventBytes(existing: number, proposed: number): void;

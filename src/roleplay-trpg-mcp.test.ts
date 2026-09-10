@@ -1,0 +1,47 @@
+import { afterEach, expect, test } from 'vitest';
+import { mkdtemp, mkdir, realpath, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { basename, isAbsolute, join, relative } from 'node:path';
+import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
+import { createServer } from './createServer.js';
+import { RoleplayStore } from './roleplay-store.js';
+import { roleplayRevision } from './roleplay-model.js';
+const cleanup: Array<() => Promise<unknown>> = [];
+afterEach(async () => { for (const close of cleanup.splice(0).reverse()) await close(); });
+test('dynamic TRPG routing preserves public reads, authenticated preview, read-only writes and fixed five tools', async () => {
+  const base = await realpath(tmpdir()), root = await mkdtemp(join(base, 'mcpvault-trpg-wire-'));
+  cleanup.push(async () => { const path = await realpath(root), rel = relative(base, path); if (!rel || rel.startsWith('..') || isAbsolute(rel) || !basename(path).startsWith('mcpvault-trpg-wire-')) throw Error('Unsafe cleanup'); await rm(path, { recursive: true, force: true }); });
+  const vault = join(root, 'vault'), host = join(root, 'host'); await mkdir(vault); await mkdir(host);
+  const store = await RoleplayStore.open({ vaultPath: vault, hostPath: host, policy: { administrators: ['host'] } }); cleanup.push(() => store.close());
+  const connect = async (readOnly: boolean) => {
+    const server = createServer(vault, { roleplay: store, readOnly }); cleanup.push(() => server.close());
+    const [left, right] = InMemoryTransport.createLinkedPair(), client = new Client({ name: 'trpg-wiring', version: '1' }); cleanup.push(() => client.close());
+    await Promise.all([client.connect(left), server.connect(right)]); return client;
+  };
+  const client = await connect(false);
+  const call = async (endpointId: string, args: Record<string, unknown>, target = client) => {
+    const result = await target.callTool({ name: 'call_endpoint', arguments: { endpointId, arguments: args } });
+    if (result.isError) throw Error(JSON.stringify(result.content)); return JSON.parse((result.content[0] as any).text);
+  };
+  expect((await client.listTools()).tools).toHaveLength(5);
+  const tokens: Record<string, string> = {};
+  for (const accountId of ['host', 'player']) tokens[accountId] = (await call('auth.register', { accountId, agentId: accountId, modelId: 'gpt', userId: 'human', password: 'temporary-trpg-wiring-only' })).accessToken;
+  let serial = 0;
+  const mutation = async (endpoint: string, data: Record<string, unknown>, actor = 'host') => call(endpoint, { ...data, expectedRevision: roleplayRevision(await store.snapshot()), requestId: `command-${++serial}`, accessToken: tokens[actor] });
+  await mutation('roleplay.world', { op: 'initialize', title: 'Example', places: { hall: [] } });
+  await mutation('roleplay.character', { op: 'character', id: 'alice', name: 'Alice', controller: 'player', location: 'hall' });
+  expect((await call('roleplay.trpg', { op: 'read' })).mode).toBe('legacy');
+  await mutation('roleplay.trpg', { op: 'adopt', preset: 'mcpvault-adventure@1.0.0' });
+  await mutation('roleplay.trpg', { op: 'learn', characterId: 'alice', generation: 1, skillId: 'guard' }, 'player');
+  expect((await call('roleplay.trpg', { op: 'read', characterId: 'alice', maxChars: 2000 })).mode).toBe('trpg');
+  const readOnly = await connect(true);
+  const readOnlyToken = (await call('auth.login', { accountId: 'player', password: 'temporary-trpg-wiring-only' }, readOnly)).accessToken;
+  expect((await call('roleplay.trpg', { op: 'read' }, readOnly)).mode).toBe('trpg');
+  const preview = await call('roleplay.trpg', { op: 'respec_preview', characterId: 'alice', generation: 1, remove: ['guard'], accessToken: readOnlyToken }, readOnly);
+  expect(preview.previewFingerprint).toMatch(/^[a-f0-9]{64}$/);
+  await expect(call('roleplay.trpg', { op: 'respec', characterId: 'alice', generation: 1, remove: ['guard'], previewFingerprint: preview.previewFingerprint, expectedRevision: roleplayRevision(await store.snapshot()), requestId: 'denied', accessToken: readOnlyToken }, readOnly)).rejects.toThrow(/read.only/i);
+  await expect(call('roleplay.trpg', { op: 'respec_preview', characterId: 'alice', generation: 1, remove: ['guard'] }, readOnly)).rejects.toThrow(/login|auth|capability|required|control/i);
+  const catalog = await readOnly.callTool({ name: 'search_capabilities', arguments: { query: 'roleplay.trpg', maxChars: 12000, accessToken: readOnlyToken } });
+  const entry = JSON.parse((catalog.content[0] as any).text).endpoints.find((e: any) => e.endpointId === 'roleplay.trpg');
+  expect(entry.operations.read.available).toBe(true); expect(entry.operations.adopt.available).toBe(false); expect(entry.operations.respec_preview.available).toBe(true);
+}, 15000);

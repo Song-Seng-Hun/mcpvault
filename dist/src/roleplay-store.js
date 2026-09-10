@@ -1,5 +1,6 @@
 import { guidanceError } from './guidance-runtime.js';
-import { randomUUID, createHash } from 'node:crypto';
+import { randomUUID, randomInt, createHash } from 'node:crypto';
+import { trpgRollCount } from './roleplay-trpg.js';
 import { lstat, open, readdir, unlink } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { roleplayHostIdentity, validateRoleplayStorage } from './roleplay-storage-host.js';
@@ -45,6 +46,7 @@ export class RoleplayStore {
     closing;
     fm = new FrontmatterHandler();
     verified;
+    preparedUncertain = false;
     constructor(options, hostId) {
         this.options = options;
         this.hostId = hostId;
@@ -229,31 +231,81 @@ export class RoleplayStore {
         const checkpoint = { version: 1, vault: cp.vault, sequence: state.sequence, hash: previous };
         if (cp.pending)
             await this.saveCheckpoint(checkpoint);
+        // A crash can occur after the host prepared file is durable but before its
+        // pending checkpoint is durable. Validate that exact successor before making
+        // it an intent; never discard its dice and roll again on a caller retry.
+        if (!cp.pending && (!this.verified || this.preparedUncertain)) {
+            let prepared;
+            try {
+                prepared = await readFederationFile(this.options.hostPath, this.preparedPath, { maxBytes: MAX_BYTES });
+            }
+            catch (error) {
+                if (!missing(error))
+                    throw error;
+            }
+            if (prepared) {
+                const event = this.fm.parse(prepared).frontmatter.roleplay_event;
+                if (event?.sequence === checkpoint.sequence + 1) {
+                    const { hash, ...unsigned } = event;
+                    if (event.version !== 1 || event.previous !== checkpoint.hash || roleplayHash(unsigned) !== hash || this.encode(event) !== prepared)
+                        throw guidanceError(new Error('Prepared successor integrity failure; host repair required'), 'guid-16cb9eb9f76d7b46');
+                    if (!this.options.policy.administrators.length)
+                        throw guidanceError(new Error('Explicit host administrators required for prepared roleplay intent'), 'guid-7165878b7c7326ec');
+                    const candidate = applyRoleplayCommand(state, event.command, event.policy);
+                    if (candidate.state === state || roleplayHash(candidate.receipt) !== roleplayHash(event.receipt))
+                        throw guidanceError(new Error('Prepared successor transition integrity failure'), 'guid-6c32f38afa48b903');
+                    assertRoleplayReplayAdmission(bytes, Buffer.byteLength(prepared));
+                    await this.saveCheckpoint({ ...checkpoint, pending: { sequence: event.sequence, hash } });
+                    return this.replay();
+                }
+            }
+        }
+        this.preparedUncertain = false;
         return this.verified = { state, checkpoint, bytes, records };
     }
     snapshot() { return this.serial(async () => structuredClone((await this.replay()).state)); }
     read() { return this.serial(async () => structuredClone(await this.replay())); }
     async transact(command, revalidate) {
+        if (Object.hasOwn(command, 'rolls') || Object.hasOwn(command.data, 'rolls'))
+            throw guidanceError(new Error('Caller cannot supply recorded dice outcomes'), 'guid-141dc1c59a936e13');
         command = structuredClone(command);
         return this.serial(async () => {
             const { state, checkpoint, bytes, records } = await this.replay();
             // Authenticate again even for an already committed response-loss retry.
             await revalidate?.(structuredClone(state));
             await this.assertWriter();
-            const applied = applyRoleplayCommand(state, command, this.options.policy);
+            const count = trpgRollCount(state, command);
+            // The pure reducer preflights every cost, target, control and revision using
+            // fixed valid outcomes. No random source is consulted by previews or replay.
+            const checked = applyRoleplayCommand(state, count ? { ...command, rolls: Array(count).fill(20) } : command, this.options.policy);
+            let applied = checked;
             if (applied.state === state) {
                 const old = records.find(r => r.event.receipt.id === applied.receipt.id);
                 return { ...applied.receipt, path: old.path, noteRevision: old.revision };
+            }
+            if (count) {
+                // Fixed-width upper-bound encoding also checks storage capacity before RNG.
+                const candidate = { version: 1, sequence: checked.state.sequence, previous: checkpoint.hash, command: { ...command, rolls: Array(count).fill(20) }, policy: this.options.policy, receipt: checked.receipt, at: new Date().toISOString(), hash: ZERO };
+                // Reserve room for a different current-character id / miss boolean in
+                // the actual outcome. Both branches must fit before any entropy is used.
+                const candidateBytes = Buffer.byteLength(this.encode(candidate)) + 1024;
+                if (candidateBytes > MAX_BYTES)
+                    throw guidanceError(new Error('Roleplay turn exceeds storage budget'), 'guid-8bfb189437191955');
+                assertRoleplayReplayAdmission(bytes, candidateBytes);
+                command.rolls = Array.from({ length: count }, () => randomInt(1, 21));
+                applied = applyRoleplayCommand(state, command, this.options.policy);
             }
             const unsigned = { version: 1, sequence: applied.state.sequence, previous: checkpoint.hash, command, policy: this.options.policy, receipt: applied.receipt, at: new Date().toISOString() };
             const event = { ...unsigned, hash: roleplayHash(unsigned) }, text = this.encode(event), path = roleplayTurnPath(event.sequence);
             if (Buffer.byteLength(text) > MAX_BYTES)
                 throw guidanceError(new Error('Roleplay turn exceeds storage budget'), 'guid-8bfb189437191955');
             assertRoleplayReplayAdmission(bytes, Buffer.byteLength(text));
+            this.preparedUncertain = true;
             await writeFederationFileAtomic(this.options.hostPath, this.preparedPath, text, { maxBytes: MAX_BYTES });
             await this.saveCheckpoint({ ...checkpoint, pending: { sequence: event.sequence, hash: event.hash } });
             await writeFederationFileAtomic(this.options.vaultPath, path, text, { maxBytes: MAX_BYTES });
             await this.saveCheckpoint({ version: 1, vault: checkpoint.vault, sequence: event.sequence, hash: event.hash });
+            this.preparedUncertain = false;
             return { ...applied.receipt, path, noteRevision: revision(text) };
         });
     }

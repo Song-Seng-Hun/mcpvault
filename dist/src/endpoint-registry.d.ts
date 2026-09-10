@@ -30,6 +30,8 @@ export interface EndpointAvailabilityContext {
     roleplayConfigured?: boolean;
     roleplayWritesConfigured?: boolean;
     economyConfigured?: boolean;
+    explanationsConfigured?: boolean;
+    benchmarksConfigured?: boolean;
 }
 export declare function endpointIdForTool(toolName: string): string;
 export declare class EndpointRegistry {

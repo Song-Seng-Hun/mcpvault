@@ -16,6 +16,11 @@ type ResumeState = {
     truncated: boolean;
     learningProgress?: Record<string, any>;
     understanding?: Record<string, any>;
+    route?: {
+        kind: 'verified_resume';
+        reason: string;
+        skipped: string[];
+    };
     nextAction?: {
         endpointId: string;
         arguments: Record<string, unknown>;

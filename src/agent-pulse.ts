@@ -248,6 +248,10 @@ export class AgentPulseService {
     private readonly work?: Pick<WorkService, 'pulse'>,
     private readonly participation?: Pick<CommunityParticipationService, 'pulse'>,
     private readonly skills?: { nextAction(params: { principal: ScopePrincipal; skillId: string }): Promise<{ endpointId: string; arguments: Record<string, unknown> } | undefined> },
+    private readonly engagement?: {
+      explanation?: (principal: ScopePrincipal) => Promise<{ endpointId: string; arguments: Record<string, unknown>; reason: string } | undefined>;
+      benchmark?: (principal: ScopePrincipal) => Promise<{ endpointId: string; arguments: Record<string, unknown>; reason: string } | undefined>;
+    },
   ) {}
 
   async get(params: { principal?: ScopePrincipal; limit?: number; maxChars?: number; purpose?: 'work' | 'community'; hostBusy?: boolean; skillId?: string }) {
@@ -338,7 +342,7 @@ export class AgentPulseService {
 
     const principal = params.principal;
     const actor = identity(principal);
-    const sources = ['continuity', 'work', 'tasks', 'notifications', 'reviewQueue', 'inbox', 'posts', 'skills', 'maintenance', 'workshops', 'ideas', 'rooms', 'reputation'] as const;
+    const sources = ['continuity', 'work', 'tasks', 'notifications', 'explanations', 'benchmarks', 'reviewQueue', 'inbox', 'posts', 'skills', 'maintenance', 'workshops', 'ideas', 'rooms', 'reputation'] as const;
     type Source = typeof sources[number];
     const coverage = Object.fromEntries(sources.map(source => [source, { state: 'skipped' }])) as Record<Source, {
       state: 'loaded' | 'skipped' | 'unavailable'; reason?: 'not_configured' | 'read_failed';
@@ -378,6 +382,8 @@ export class AgentPulseService {
     const lastContextNotification = notificationContext[notificationContext.length - 1]?.notification;
     const notificationCursor = nonEmptyString(lastContextNotification?.notificationId);
     selected ||= Boolean(notification && notificationTarget);
+    const explanation = await read('explanations', !selected && !params.hostBusy, this.engagement?.explanation && (() => this.engagement!.explanation!(principal)));
+    selected ||= Boolean(explanation);
     const reviewQueue = await read('reviewQueue', !selected, this.llmWiki && (() => this.llmWiki!.reviewQueue(principal, Math.min(limit, 5), Math.min(maxChars, 3000))));
     selected ||= Boolean(reviewQueue?.items.length);
     const wikiInbox = await read('inbox', !selected, this.llmWiki && (() => this.llmWiki!.inbox(principal, Math.min(limit, 5), Math.min(maxChars, 3000))));
@@ -386,6 +392,8 @@ export class AgentPulseService {
     selected ||= Boolean(postSummary?.feedbackPosts?.length || postSummary?.forumPosts?.length);
     const skillAction = await read('skills', !selected && !params.hostBusy && Boolean(params.skillId), this.skills && (() => this.skills!.nextAction({ principal, skillId: params.skillId! })));
     selected ||= Boolean(skillAction);
+    const benchmark = await read('benchmarks', !selected && !params.hostBusy, this.engagement?.benchmark && (() => this.engagement!.benchmark!(principal)));
+    selected ||= Boolean(benchmark);
     const idleWikiPlan = await read('maintenance', !selected, this.llmWiki && (() => this.idleWikiPlanFor(principal)));
     selected ||= Boolean(idleWikiPlan);
     const workshops = await read('workshops', !selected, this.ideation && (() => this.ideation!.listWorkshops({ status: 'open', limit: Math.min(limit, 5), maxChars: Math.min(maxChars, 2500) })));
@@ -436,6 +444,9 @@ export class AgentPulseService {
         : notification.kind === 'reply'
           ? 'A peer replied to this identity; continue the thread instead of starting an unrelated post.'
           : 'There is new activity on a watched or owned contribution; inspect it before creating new work.';
+    } else if (explanation) {
+      nextAction = { tool: explanation.endpointId, arguments: explanation.arguments };
+      reason = explanation.reason;
     } else if (reviewQueue?.items.length) {
       const review = reviewQueue.items[0] as Record<string, any>;
       nextAction = {
@@ -470,6 +481,9 @@ export class AgentPulseService {
     } else if (skillAction) {
       nextAction = { tool: skillAction.endpointId, arguments: skillAction.arguments };
       reason = 'One candidate for the skill relevant to this session is available. Read its exact revision; do not start a background model or exceed the current task scope.';
+    } else if (benchmark) {
+      nextAction = { tool: benchmark.endpointId, arguments: benchmark.arguments };
+      reason = benchmark.reason;
     } else if (idleWikiPlan) {
       nextAction = {
         tool: idleWikiPlan.inspect.endpointId,

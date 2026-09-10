@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 // Deliberately not a package command or MCP endpoint: this is explicit host-only recovery.
 import { resolve } from 'node:path';
-import { pathToFileURL } from 'node:url';
 
 const [operation, vaultPath, configPath, expectedFingerprint, reason] = process.argv.slice(2);
 const usage = 'Usage: node scripts/roleplay-host.mjs inspect <vaultPath> <privateConfigPath> | recover <vaultPath> <privateConfigPath> <expectedFingerprint> <reason>';
@@ -10,8 +9,8 @@ if (!['inspect', 'recover'].includes(operation) || !vaultPath || !configPath || 
   console.error(usage); process.exitCode = 2;
 } else {
   try {
-    const { loadRoleplayHostConfig } = await import(pathToFileURL(resolve('dist/src/roleplay-host.js')).href);
-    const { inspectRoleplayRecovery, recoverRoleplayWriter } = await import(pathToFileURL(resolve('dist/src/roleplay-recovery.js')).href);
+    const { loadRoleplayHostConfig } = await import(new URL('../dist/src/roleplay-host.js', import.meta.url));
+    const { inspectRoleplayRecovery, recoverRoleplayWriter } = await import(new URL('../dist/src/roleplay-recovery.js', import.meta.url));
     const options = await loadRoleplayHostConfig(resolve(configPath), resolve(vaultPath));
     const result = operation === 'inspect'
       ? await inspectRoleplayRecovery(options)

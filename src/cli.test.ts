@@ -1,6 +1,18 @@
 import { describe, expect, test } from "vitest";
 import { parseCliArgs } from "./cli.js";
 
+test('benchmark opt-in config is explicit, single and independent of wallet enablement', () => {
+  expect(parseCliArgs(['Vault', '--benchmark-config=private.json'])).toEqual({ vaultPathArg: 'Vault', readOnly: false, benchmarkConfig: 'private.json' });
+  expect(parseCliArgs(['--benchmark-config', 'private.json', 'Vault']).vaultPathArg).toBe('Vault');
+  for (const args of [['--benchmark-config'], ['--benchmark-config='], ['--benchmark-config=a', '--benchmark-config=b']]) expect(() => parseCliArgs(args)).toThrow(/benchmark-config/);
+});
+
+test('parses explanation configuration without changing Vault or enabling economy', () => {
+  expect(parseCliArgs(['Vault', '--explanation-config=private.json'])).toEqual({ vaultPathArg: 'Vault', readOnly: false, explanationConfig: 'private.json' });
+  expect(parseCliArgs(['--explanation-config', 'private.json', 'Vault']).vaultPathArg).toBe('Vault');
+  for (const args of [['--explanation-config'], ['--explanation-config='], ['--explanation-config=a', '--explanation-config=b']]) expect(() => parseCliArgs(args)).toThrow(/explanation-config/);
+});
+
 test('parses skill evolution host configuration without consuming the NAS path or enabling other services', () => {
   const vault = '\\\\172.30.1.24\\MCPVault';
   for (const args of [['--skill-evolution-config=C:\\Private\\skill.json'], ['--skill-evolution-config', 'C:\\Private\\skill.json']]) {

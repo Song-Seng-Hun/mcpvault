@@ -25,6 +25,7 @@ export declare class AgentPulseService {
     private readonly work?;
     private readonly participation?;
     private readonly skills?;
+    private readonly engagement?;
     private readonly inFlight;
     private readonly idleWikiPlanCache;
     constructor(notifications: NotificationService, social: SocialService, chat: ChatService, tasks: AgentTaskService, continuity: ContinuityService, reputation: ReputationService, llmWiki?: LlmWikiService | undefined, ideation?: IdeationService | undefined, work?: Pick<WorkService, 'pulse'> | undefined, participation?: Pick<CommunityParticipationService, 'pulse'> | undefined, skills?: {
@@ -34,6 +35,17 @@ export declare class AgentPulseService {
         }): Promise<{
             endpointId: string;
             arguments: Record<string, unknown>;
+        } | undefined>;
+    } | undefined, engagement?: {
+        explanation?: (principal: ScopePrincipal) => Promise<{
+            endpointId: string;
+            arguments: Record<string, unknown>;
+            reason: string;
+        } | undefined>;
+        benchmark?: (principal: ScopePrincipal) => Promise<{
+            endpointId: string;
+            arguments: Record<string, unknown>;
+            reason: string;
         } | undefined>;
     } | undefined);
     get(params: {

@@ -63,6 +63,27 @@ const resolveSchema = (properties) => ({
     type: 'object', additionalProperties: false, required: ['requestId', 'expectedRevision', 'accessToken'],
     properties: { requestId, expectedRevision, accessToken, ...properties },
 });
+const integer = (minimum, maximum) => ({ type: 'integer', minimum, maximum });
+const ids = (maxItems) => ({ type: 'array', uniqueItems: true, maxItems, items: id });
+const object = (properties) => ({ type: 'object', additionalProperties: false, required: Object.keys(properties), properties });
+const keyed = (maxProperties, additionalProperties) => ({ type: 'object', maxProperties, propertyNames: id, additionalProperties });
+const trpgRulesetSchema = object({
+    id, version: { type: 'string', pattern: '^\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}$' },
+    attributes: keyed(12, integer(0, 20)), derived: keyed(16, object({ base: integer(0, 100), terms: keyed(12, integer(0, 10)) })),
+    resources: keyed(8, id),
+    skills: { type: 'array', minItems: 1, maxItems: 64, items: object({ id, requires: ids(16), excludes: ids(16), cost: integer(0, 1000), kind: { type: 'string', enum: ['attack', 'guard', 'heal'] }, attribute: id, power: integer(0, 30), focus: integer(0, 100) }) },
+    initialSkills: ids(8), growth: integer(0, 100), items: keyed(64, object({ slot: id, defense: integer(0, 10) })),
+    slots: ids(8), loadoutSize: integer(1, 8), actionsPerTurn: integer(1, 4), switchCost: integer(1, 4), initiative: id,
+});
+/** Parent wiring: register this tool as roleplay.trpg, dispatch to service.execute('trpg'),
+ * and classify only read/export/respec_preview as reads. */
+export const ROLEPLAY_TRPG_ENDPOINT = {
+    toolName: 'manage_roleplay_trpg', endpointId: 'roleplay.trpg', serviceEndpoint: 'trpg',
+    readOperations: ['read', 'export', 'respec_preview'], publicReadOperations: ['read', 'export'], authenticatedCapability: 'chat',
+    aliases: { read_roleplay_trpg: ['read', 'export'], preview_roleplay_trpg: ['respec_preview'] },
+    projectionOperations: ['project'], // Mutating derived output; not a canonical game command.
+    operationMap: { adopt: 'trpg_adopt', learn: 'trpg_learn', loadout: 'trpg_loadout', switch: 'trpg_switch', respec: 'trpg_respec', rest: 'trpg_rest', growth: 'trpg_growth', encounter_start: 'trpg_encounter_start', encounter_end: 'trpg_encounter_end', turn_end: 'trpg_turn_end', act: 'trpg_act' },
+};
 export const ROLEPLAY_MUTATING_TOOLS = [
     'manage_roleplay_world',
     'manage_roleplay_character',
@@ -71,6 +92,7 @@ export const ROLEPLAY_MUTATING_TOOLS = [
     'resolve_roleplay_action',
     'correct_roleplay_turn',
     'manage_roleplay_evolution',
+    'manage_roleplay_trpg',
 ];
 export function getRoleplayTools() {
     return [
@@ -159,6 +181,36 @@ export function getRoleplayTools() {
                     { if: { properties: { op: { const: 'propose' } } }, then: { required: ['characterId', 'generation', 'roomId', 'sources', 'changes', 'reason'] } },
                     { if: { properties: { op: { const: 'apply' } } }, then: { required: ['proposalId', 'previewFingerprint'] } },
                     { if: { properties: { op: { const: 'reject' } } }, then: { required: ['proposalId', 'reason'] } },
+                ],
+            },
+        },
+        {
+            name: 'manage_roleplay_trpg',
+            description: guidanceText('guid-9353c5b3430a8d7c', 'Optional version-pinned declarative TRPG. Read rules/sheets/encounters, export disposable sheet/Canvas/Bases bytes and target revisions, or preview dependent skill removals. Explicit project persists only managed artifacts with current world and all three target revisions; it is mutating, preserves unmanaged files and creates no game turn. Host explicitly adopts a ruleset and grants fictional growth; controllers learn skills, manage loadouts, respec after fingerprint preview, rest outside combat and act on their turn. Current delegated scene GM starts/ends encounters. Dice are generated only by the host after final validation and replayed from the canonical turn. No executable configuration, wallet issuance or host permission grants. Legacy worlds remain legacy until adoption.'),
+            inputSchema: {
+                type: 'object', additionalProperties: false, required: ['op'],
+                properties: { ...commandBase, ...page,
+                    op: { type: 'string', enum: ['read', 'export', 'respec_preview', 'project', 'adopt', 'learn', 'loadout', 'switch', 'respec', 'rest', 'growth', 'encounter_start', 'encounter_end', 'turn_end', 'act'] },
+                    ruleset: trpgRulesetSchema, preset: { type: 'string', enum: ['mcpvault-adventure@1.0.0'] }, characterId: id, generation, roomId: id, skillId: id, targetId: id,
+                    name: id, skills: ids(8), equipment: ids(8), remove: ids(64), participants: { ...ids(20), minItems: 2 }, amount: integer(1, 100),
+                    expectedArtifacts: object({ sheet: { type: 'string', pattern: '^(missing|[a-f0-9]{64})$' }, canvas: { type: 'string', pattern: '^(missing|[a-f0-9]{64})$' }, base: { type: 'string', pattern: '^(missing|[a-f0-9]{64})$' } }),
+                    previewFingerprint: { type: 'string', pattern: '^[a-f0-9]{64}$' },
+                },
+                allOf: [
+                    { if: { properties: { op: { const: 'project' } } }, then: { required: ['accessToken', 'requestId', 'expectedRevision', 'characterId', 'generation', 'expectedArtifacts'] } },
+                    { if: { properties: { op: { enum: ['adopt', 'learn', 'loadout', 'switch', 'respec', 'rest', 'growth', 'encounter_start', 'encounter_end', 'turn_end', 'act'] } } }, then: { required: ['accessToken', 'requestId', 'expectedRevision'] } },
+                    { if: { properties: { op: { enum: ['learn', 'loadout', 'switch', 'respec', 'rest', 'turn_end', 'act', 'respec_preview'] } } }, then: { required: ['accessToken', 'characterId', 'generation'] } },
+                    { if: { properties: { op: { const: 'adopt' } } }, then: { oneOf: [{ required: ['ruleset'] }, { required: ['preset'] }] } },
+                    { if: { properties: { op: { enum: ['learn', 'act'] } } }, then: { required: ['skillId'] } },
+                    { if: { properties: { op: { const: 'act' } } }, then: { required: ['targetId', 'roomId'] } },
+                    { if: { properties: { op: { enum: ['encounter_start', 'encounter_end', 'turn_end'] } } }, then: { required: ['roomId'] } },
+                    { if: { properties: { op: { const: 'encounter_start' } } }, then: { required: ['participants'] } },
+                    { if: { properties: { op: { enum: ['loadout', 'switch'] } } }, then: { required: ['name'] } },
+                    { if: { properties: { op: { const: 'loadout' } } }, then: { required: ['skills', 'equipment'] } },
+                    { if: { properties: { op: { enum: ['respec', 'respec_preview'] } } }, then: { required: ['remove'] } },
+                    { if: { properties: { op: { const: 'respec' } } }, then: { required: ['previewFingerprint'] } },
+                    { if: { properties: { op: { enum: ['growth', 'export'] } } }, then: { required: ['characterId'] } },
+                    { if: { properties: { op: { const: 'growth' } } }, then: { required: ['amount'] } },
                 ],
             },
         },

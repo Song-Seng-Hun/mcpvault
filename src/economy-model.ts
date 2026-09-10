@@ -11,7 +11,17 @@ export interface EconomyPolicy {
   dailySpend: number; dailyPosts: number; openContracts: number;
   /** Host-approved rolling seven-day disbursement cap, not new supply. */
   treasuryWeeklyBudget?: number;
+  /** Optional, explicit human-approved issuance envelopes. Never inferred from quests. */
+  benchmarkPrograms?: BenchmarkIssuanceProgram[];
 }
+export interface BenchmarkIssuanceProgram {
+  id:string; lineage:string; definitionFingerprint:string; criteriaFingerprint:string;
+  participants:string[]; reward:number; maxWinners:number; cap:number; closesAt:string;
+}
+export interface BenchmarkAwardProof {
+  programId:string; account:string; definitionFingerprint:string; criteriaFingerprint:string; adjudicationRevision:string;
+}
+export interface BenchmarkReservation { terms:BenchmarkIssuanceProgram; remaining:number; awarded:number; closed:boolean; cancellation?:{actor:string;reason:string;at:string} }
 export interface QuestArtifact { path: string; revision: string }
 export interface QuestWorkBinding { revision:string; generation:number; requestId:string }
 export interface QuestTerms {
@@ -31,7 +41,8 @@ export interface QuestContract {
   claimRecovery?:{operator:string;reason:string;at:string;requestId:string};
 }
 export interface EconomyCommand {
-  op: 'issue' | 'allocate' | 'draft' | 'fund' | 'claim' | 'recover_claim' | 'submit' | 'cancel' | 'review' | 'dispute' | 'resolve';
+  op: 'issue' | 'allocate' | 'draft' | 'fund' | 'claim' | 'recover_claim' | 'submit' | 'cancel' | 'review' | 'dispute' | 'resolve' | 'reserve_program' | 'award_program' | 'close_program' | 'cancel_program';
+  programId?:string; programFingerprint?:string; award?:BenchmarkAwardProof;
   actor: string; requestId: string; contractId?: string; expectedRevision?: string; expectedGeneration?: number;
   amount?: number; account?: string; reason?: string; terms?: QuestTerms; artifacts?: QuestArtifact[];
   verdict?: 'approve' | 'changes_requested' | 'dispute'; basis?: string; reviewArtifact?: QuestArtifact;
@@ -43,6 +54,8 @@ export interface EconomyState {
   issued: number; sequence: number; balances: Record<string, number>; contracts: Record<string, QuestContract>;
   requests: Record<string, { payload: string; result: EconomyReceipt }>;
   treasuryDisbursements?: { at: string; amount: number }[];
+  programs?:Record<string,BenchmarkReservation>;
+  benchmarkAwards?:Record<string,{programId:string;account:string}>;
 }
 export const economyRevision = (value: unknown): string => fingerprint(value);
 export const initialEconomy = (): EconomyState => ({ issued: 0, sequence: 0, balances: Object.create(null), contracts: Object.create(null), requests: Object.create(null) });
@@ -76,6 +89,19 @@ export function validateEconomyPolicy(p: EconomyPolicy): EconomyPolicy {
   money(p.postingFee, p.maxSupply); money(p.reviewFee, p.maxSupply); money(p.dailySpend, p.maxSupply, true);
   money(p.dailyPosts, 100, true); money(p.openContracts, 100, true);
   if (p.treasuryWeeklyBudget !== undefined) money(p.treasuryWeeklyBudget, p.maxSupply, true);
+  if (p.benchmarkPrograms !== undefined) {
+    if (!Array.isArray(p.benchmarkPrograms) || p.benchmarkPrograms.length>100) throw guidanceError(Error('Invalid benchmark programs'), 'guid-e662dab5127f217c');
+    const seen=new Set<string>();
+    for(const b of p.benchmarkPrograms) {
+      if(!b||typeof b!=='object'||Object.keys(b).some(k=>!['id','lineage','definitionFingerprint','criteriaFingerprint','participants','reward','maxWinners','cap','closesAt'].includes(k)))throw guidanceError(Error('Invalid benchmark program fields'), 'guid-6bf6c708486cc43e');
+      id(b.id,'program');id(b.lineage,'lineage');if(seen.has(b.id))throw guidanceError(Error('Duplicate benchmark program'), 'guid-ccf3c720ec8e6141');seen.add(b.id);
+      if(!/^[a-f0-9]{64}$/.test(b.definitionFingerprint)||!/^[a-f0-9]{64}$/.test(b.criteriaFingerprint))throw guidanceError(Error('Invalid benchmark fingerprint'), 'guid-adb11cc3fcb264ba');
+      if(!Array.isArray(b.participants)||!b.participants.length||b.participants.length>100||new Set(b.participants).size!==b.participants.length)throw guidanceError(Error('Invalid benchmark participants'), 'guid-0e5f391f7f9b9c26');
+      for(const a of b.participants){id(a,'participant');if(!Object.hasOwn(p.owners,a))throw guidanceError(Error('Unapproved benchmark participant'), 'guid-f9f408bb8d262d53');}
+      money(b.reward,p.maxSupply,true);money(b.maxWinners,b.participants.length,true);money(b.cap,p.maxSupply,true);date(b.closesAt);
+      if(b.reward*b.maxWinners>b.cap)throw guidanceError(Error('Benchmark cap cannot cover declared winners'), 'guid-dbae1e085bb9d2ae');
+    }
+  }
   return structuredClone(p);
 }
 function artifacts(value: unknown): QuestArtifact[] {
@@ -131,16 +157,20 @@ export function questClaimAuthority(contract:QuestContract,worker:string,p:Econo
   if(contract.terms.kind!=='mechanical'&&(!p.subjectiveReview||!reviewer))throw guidanceError(new Error('Independent approved reviewer unavailable'), 'guid-2626531590e33b5c');
   return {workerOwner,reviewer};
 }
-export function applyEconomyCommand(input: EconomyState, command: EconomyCommand, rawPolicy: EconomyPolicy, now: string): { state: EconomyState; receipt: EconomyReceipt } {
+export function applyEconomyCommand(input: EconomyState, command: EconomyCommand, rawPolicy: EconomyPolicy, now: string, trustedBenchmarkAuthority?:()=>void): { state: EconomyState; receipt: EconomyReceipt } {
   const p = validateEconomyPolicy(rawPolicy); const at = date(now);
   if (!p.enabled) throw guidanceError(new Error('Economy is disabled'), 'guid-d182c7129828d67a');
   const actor = id(command.actor, 'actor');
   const requestId = textField(command.requestId, 'requestId', 128, true);
   const payload = fingerprint(command); const key = fingerprint({ actor, requestId });
   const admin = p.operators.includes(actor);
+  if (['reserve_program','award_program','close_program','cancel_program'].includes(command.op)) {
+    if(typeof trustedBenchmarkAuthority!=='function')throw guidanceError(Error('Trusted benchmark authority required'), 'guid-008b7f34aedd8eb3');
+    trustedBenchmarkAuthority();
+  }
   const owner = Object.hasOwn(p.owners, actor) ? p.owners[actor] : undefined;
   if (!owner && !admin) throw guidanceError(new Error('Host-approved economic owner is required'), 'guid-1e74aaa7d6649083');
-  if (['issue','allocate','resolve','recover_claim'].includes(command.op) && !admin) throw guidanceError(new Error('Host operator approval required'), 'guid-6c38064d6f638816');
+  if (['issue','allocate','resolve','recover_claim','reserve_program','close_program','cancel_program'].includes(command.op) && !admin) throw guidanceError(new Error('Host operator approval required'), 'guid-6c38064d6f638816');
   const prior = economyRetry(input,command);
   if (prior) return { state: input, receipt: prior };
   assertEconomyConservation(input);
@@ -151,9 +181,42 @@ export function applyEconomyCommand(input: EconomyState, command: EconomyCommand
     state.balances[account] = money(current + delta);
   };
   let contract: QuestContract | undefined;
+  const reserved=()=>Object.values(state.programs??{}).reduce((sum,b)=>sum+money(b.remaining),0);
   if (command.op === 'issue') {
     const amount = money(command.amount, p.maxSupply, true); textField(command.reason, 'issuance reason', 500, true);
+    if(state.issued+reserved()+amount>p.maxSupply)throw guidanceError(Error('Supply headroom is reserved'), 'guid-e1a56ec813f3d527');
     state.issued = money(state.issued + amount, p.maxSupply); add(p.treasury, amount);
+  } else if (['reserve_program','award_program','close_program','cancel_program'].includes(command.op)) {
+    const programId=id(command.programId,'programId');
+    state.programs??=Object.create(null);state.benchmarkAwards??=Object.create(null);
+    let program=state.programs![programId];
+    if(command.op==='reserve_program') {
+      const terms=p.benchmarkPrograms?.find(b=>b.id===programId);
+      if(!terms||program||command.expectedRevision!=='missing')throw guidanceError(Error('Approved new program and missing revision required'), 'guid-0b1bddb83b217abf');
+      if(command.programFingerprint!==undefined&&command.programFingerprint!==economyRevision(terms))throw guidanceError(Error('Approved program terms fingerprint differs'), 'guid-baf7eb5f4b22bd6c');
+      if(date(terms.closesAt)<=at)throw guidanceError(Error('Program deadline passed'), 'guid-b0efe331df4ba349');
+      if(state.issued+reserved()+terms.cap>p.maxSupply)throw guidanceError(Error('Insufficient supply headroom for reservation'), 'guid-f0c60e11e59b54ed');
+      program={terms:structuredClone(terms),remaining:terms.cap,awarded:0,closed:false};state.programs![programId]=program;
+    } else {
+      if(!program||program.closed)throw guidanceError(Error('Program closed or unavailable'), 'guid-3273516b308e0939');
+      if(command.op==='close_program'||command.op==='cancel_program') {
+        if(command.expectedRevision!==economyRevision(program))throw guidanceError(Error('Program revision conflict'), 'guid-6d1694a08655af0a');
+        if(command.op==='close_program'&&date(program.terms.closesAt)>at)throw guidanceError(Error('Program close deadline not reached'), 'guid-6f788df0a40f2d23');
+        if(command.op==='cancel_program')program.cancellation={actor,at,reason:textField(command.reason,'cancellation reason',1000,true)};
+        program.closed=true;program.remaining=0;
+      } else {
+        const a=command.award,t=program.terms;
+        if(a&&Object.keys(a).some(k=>!['programId','account','definitionFingerprint','criteriaFingerprint','adjudicationRevision'].includes(k)))throw guidanceError(Error('Invalid award proof fields'), 'guid-bdf5076e78db6e33');
+        if(!a||a.programId!==programId||a.account!==actor||a.definitionFingerprint!==t.definitionFingerprint||a.criteriaFingerprint!==t.criteriaFingerprint||!/^[a-f0-9]{64}$/.test(a.adjudicationRevision))throw guidanceError(Error('Invalid trusted award basis'), 'guid-f735762dbea87f28');
+        if(!t.participants.includes(a.account)||!Object.hasOwn(p.owners,a.account))throw guidanceError(Error('Unapproved award participant'), 'guid-f96bc759251195c3');
+        const awardKey=economyRevision({lineage:t.lineage,account:a.account});
+        if(state.benchmarkAwards![awardKey])throw guidanceError(Error('Account already awarded once for lineage'), 'guid-705ad09fba4c0d87');
+        if(program.awarded>=t.maxWinners||program.remaining<t.reward)throw guidanceError(Error('Program reward budget exhausted'), 'guid-30d92b233b5372f8');
+        program.remaining-=t.reward;program.awarded++;state.issued=money(state.issued+t.reward,p.maxSupply);add(a.account,t.reward);
+        state.benchmarkAwards![awardKey]={programId,account:a.account};
+      }
+    }
+    if(state.issued+reserved()>p.maxSupply)throw guidanceError(Error('Supply and reservations exceed approved cap'), 'guid-55ba05422d327dfe');
   } else if (command.op === 'allocate') {
     const account = id(command.account, 'account');
     if (!Object.hasOwn(p.owners,account)) throw guidanceError(new Error('Recipient needs approved owner'), 'guid-6124f4c9b478811a');

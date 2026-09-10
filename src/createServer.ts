@@ -53,6 +53,11 @@ import { getAuditTools } from "./audit-tools.js";
 import { AgentTaskService } from "./agent-tasks.js";
 import { AGENT_TASK_MUTATING_TOOLS, getAgentTaskTools } from "./agent-task-tools.js";
 import { getWorkTools, WORK_MUTATING_TOOLS, WORK_TASK_PROPERTIES } from './work-tools.js';
+import { getExplanationTools, EXPLANATION_MUTATING_TOOLS, EXPLANATION_ENDPOINTS } from './explanation-tools.js';
+import { ExplanationService } from './explanation-service.js';
+import { BenchmarkService, type BenchmarkOptions } from './benchmark-service.js';
+import { getBenchmarkTools, BENCHMARK_MUTATING_TOOLS, benchmarkOperation } from './benchmark-tools.js';
+import { checkReusableConfiguration, getConfigurationTools } from './configuration-tools.js';
 import { SkillEvolutionService, type SkillEvolutionHost } from './skill-evolution.js';
 import { getSkillEvolutionTools, SKILL_MUTATING_TOOLS, skillReadAlias } from './skill-evolution-tools.js';
 import { WorkGroupService } from './work-groups.js';
@@ -231,6 +236,12 @@ function requestFairnessKey(args: Record<string, unknown>): string {
 }
 
 export interface CreateServerOptions {
+  /** Explicit host-selected sources; no automatic Vault-wide translation. */
+  explanations?: { sources: import('./explanation-service.js').ExplanationSourceConfig[] };
+  benchmarks?: Omit<BenchmarkOptions, 'assertActor' | 'accountAvailable' | 'ledger' | 'access' | 'pathFilter'> & {
+    /** Bind the existing ledger's trusted proof verifier; not an agent endpoint. */
+    bindAuthority?: (service: BenchmarkService) => void;
+  };
   /** Trusted host integrations only; never populated from API arguments or Vault notes. */
   workCollaboration?: Pick<import('./work-service.js').WorkServiceOptions, 'executionProfiles' | 'readReviewGitSource' | 'verifyReviewExecution'>;
   /** Explicit trusted host registration. Never loaded from a request or Vault note. */
@@ -258,6 +269,8 @@ export interface CreateServerOptions {
 }
 
 const MUTATING_TOOLS = new Set([
+  ...EXPLANATION_MUTATING_TOOLS,
+  ...BENCHMARK_MUTATING_TOOLS,
   ...STORY_MUTATING_TOOLS,
   ...SKILL_MUTATING_TOOLS,
   ...ENTERPRISE_FEDERATION_MUTATING_TOOLS,
@@ -365,10 +378,13 @@ const CAPABILITY_FOR_TOOL: Partial<Record<string, ScopeCapability>> = {
   revise_notice: 'write', preview_notice: 'write',
   submit_roleplay_action: 'chat', resolve_roleplay_action: 'chat', correct_roleplay_turn: 'chat',
   manage_roleplay_evolution: 'chat', preview_roleplay_evolution: 'chat',
+  manage_roleplay_trpg: 'chat', preview_roleplay_trpg: 'chat',
   claim_work_task: 'task',
   handoff_work_task: 'task',
   review_work_task: 'task',
   read_work_review_context: 'task', read_work_staffing: 'task',
+  list_explanations: 'task', claim_explanation: 'task', release_explanation: 'task', submit_explanation: 'task', review_explanation: 'task',
+  list_benchmarks: 'task', read_benchmark: 'task', submit_benchmark: 'task', review_benchmark: 'task', finalize_benchmark: 'task',
   update_agent_task: "task",
   save_work_state: "journal",
   report_content: "comment",
@@ -661,7 +677,42 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         {revisionGuards:guards,workshopOutput:receipt,assertOutputAccess:assertAccess});
     },
   });
-  const agentPulse = new AgentPulseService(notifications, social, chat, agentTasks, continuity, reputation, llmWiki, ideation, work, participation, skillEvolution);
+  const explanationService = (validate?: () => Promise<ScopePrincipal>) => options.explanations ? new ExplanationService(fileSystem, scopeAccess, {
+    sources: options.explanations.sources,
+    executionProfiles: options.workCollaboration?.executionProfiles ?? (async () => []),
+    assertActor: async actor => {
+      if (validate && (await validate()).accountId !== actor.accountId) throw guidanceError(Error('Explanation actor changed'), 'guid-e1d6de0cb54b65d0');
+      const current = (await scopeAuth.listPrincipals()).find(p => p.accountId === actor.accountId);
+      if (!current || current.agentId !== actor.agentId || current.modelId !== actor.modelId || !scopeAuth.hasCapability(current, 'task')
+        || await moderation.isBanned(current.accountId, current.userId)) throw guidanceError(Error('Current explanation task account required'), 'guid-12316a80ad1a7548');
+    },
+    accountAvailable: async accountId => {
+      const current = (await scopeAuth.listPrincipals()).find(p => p.accountId === accountId);
+      return Boolean(current && scopeAuth.hasCapability(current, 'task') && !await moderation.isBanned(current.accountId, current.userId));
+    },
+    canTakeWork: async actor => !(await agentTasks.listAssignedOpen({ assignee: actor.agentId || actor.modelId, limit: 1, maxChars: 1200 })).tasks.length,
+  }) : undefined;
+  const explanations = explanationService();
+  const benchmarkService = (validate?: () => Promise<ScopePrincipal>) => options.benchmarks?.enabled ? new BenchmarkService(fileSystem, {
+    ...options.benchmarks, access: scopeAccess, pathFilter,
+    ...(options.economy && { ledger: options.economy.ledger }),
+    accountAvailable: async accountId => {
+      const current = (await scopeAuth.listPrincipals()).find(p => p.accountId === accountId);
+      return Boolean(current && scopeAuth.hasCapability(current, 'task') && !await moderation.isBanned(current.accountId, current.userId));
+    },
+    assertActor: async actor => {
+      if (validate && (await validate()).accountId !== actor.accountId) throw guidanceError(Error('Benchmark actor changed'), 'guid-518eea3b4dc4855d');
+      const current = (await scopeAuth.listPrincipals()).find(p => p.accountId === actor.accountId);
+      if (!current || current.agentId !== actor.agentId || current.modelId !== actor.modelId || !scopeAuth.hasCapability(current, 'task')
+        || await moderation.isBanned(current.accountId, current.userId)) throw guidanceError(Error('Current benchmark task account required'), 'guid-e7d63e2af3afffe3');
+      return current;
+    },
+  }) : undefined;
+  const benchmarks = benchmarkService();
+  if (benchmarks) options.benchmarks?.bindAuthority?.(benchmarks);
+  const agentPulse = new AgentPulseService(notifications, social, chat, agentTasks, continuity, reputation, llmWiki, ideation, work, participation, skillEvolution,
+    { ...(explanations && { explanation: (principal: ScopePrincipal) => explanations.nextAction(principal) }),
+      ...(benchmarks && { benchmark: (principal: ScopePrincipal) => benchmarks.pulse(principal) }) });
   const endpointRegistry = new EndpointRegistry();
   const requestGate = new RequestConcurrencyGate();
 
@@ -978,6 +1029,9 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         ...getAuditTools(),
         ...getAgentTaskTools(),
         ...getWorkTools(),
+        ...getExplanationTools(),
+        ...getBenchmarkTools(),
+        ...getConfigurationTools(),
         ...getSkillEvolutionTools(),
         ...getCommunityFeatureTools(),
         ...getObsidianSearchTools(),
@@ -1314,6 +1368,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
       ...(enterpriseProfile.mode === 'public' ? [
         ...getChatTools(), ...getRoleplayTools(), ...getNotificationTools(), ...getAgentTaskTools(),
         ...getCommunityFeatureTools(), ...getReputationTools(), ...getIdeationTools(), ...getEconomyTools(),
+        ...getExplanationTools(), ...getBenchmarkTools(),
       ].map(tool => tool.name) : []),
     ] : []);
     return buildInternalTools().filter(tool => !unavailable.has(tool.name)).map(tool => {
@@ -1387,6 +1442,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
       if (['manage_roleplay_world', 'manage_roleplay_character', 'manage_roleplay_scene'].includes(toolName) && (!rawArgs.op || rawArgs.op === 'read')) toolName = toolName.replace('manage_', 'read_');
       if (toolName === 'correct_roleplay_turn' && rawArgs.op === 'preview') toolName = 'preview_roleplay_correction';
       if (toolName === 'manage_roleplay_evolution' && ['read', 'list', 'preview'].includes(String(rawArgs.op))) toolName = rawArgs.op === 'preview' ? 'preview_roleplay_evolution' : 'read_roleplay_evolution';
+      if (toolName === 'manage_roleplay_trpg' && ['read', 'export', 'respec_preview'].includes(String(rawArgs.op))) toolName = rawArgs.op === 'respec_preview' ? 'preview_roleplay_trpg' : 'read_roleplay_trpg';
       if (toolName === 'manage_community_participation' && (rawArgs.op === undefined || rawArgs.op === 'read')) toolName = 'read_community_participation';
       if (readOnly && MUTATING_TOOLS.has(toolName)) {
         throw guidanceError(new Error(`Endpoint '${toolName}' is disabled because MCPVault is running in read-only mode.`), 'guid-189f788b35f642fb');
@@ -1526,7 +1582,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
             undefined,
             trimmedArgs.limit,
             trimmedArgs.maxChars,
-            { readOnly, skillEvolutionEnabled: skillEvolution.enabled, authenticated: Boolean(principal), capabilities: new Set(principal?.capabilities || []), principalKey: JSON.stringify(principal), roleplayConfigured: Boolean(options.roleplay), roleplayWritesConfigured: Boolean(options.roleplay?.options.policy.administrators.length), economyConfigured: Boolean(options.economy?.policy.enabled) },
+            { readOnly, skillEvolutionEnabled: skillEvolution.enabled, authenticated: Boolean(principal), capabilities: new Set(principal?.capabilities || []), principalKey: JSON.stringify(principal), roleplayConfigured: Boolean(options.roleplay), roleplayWritesConfigured: Boolean(options.roleplay?.options.policy.administrators.length), economyConfigured: Boolean(options.economy?.policy.enabled), explanationsConfigured: Boolean(options.explanations), benchmarksConfigured: Boolean(options.benchmarks?.enabled) },
             false,
             { compact: true, cursor: trimmedArgs.cursor },
           );
@@ -1546,7 +1602,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
             trimmedArgs.query,
             trimmedArgs.limit,
             trimmedArgs.maxChars,
-            { readOnly, skillEvolutionEnabled: skillEvolution.enabled, authenticated: Boolean(principal), capabilities: new Set(principal?.capabilities || []), roleplayConfigured: Boolean(options.roleplay), roleplayWritesConfigured: Boolean(options.roleplay?.options.policy.administrators.length), economyConfigured: Boolean(options.economy?.policy.enabled) },
+            { readOnly, skillEvolutionEnabled: skillEvolution.enabled, authenticated: Boolean(principal), capabilities: new Set(principal?.capabilities || []), roleplayConfigured: Boolean(options.roleplay), roleplayWritesConfigured: Boolean(options.roleplay?.options.policy.administrators.length), economyConfigured: Boolean(options.economy?.policy.enabled), explanationsConfigured: Boolean(options.explanations), benchmarksConfigured: Boolean(options.benchmarks?.enabled) },
             false,
           );
           return jsonResult(result, trimmedArgs.prettyPrint);
@@ -2583,9 +2639,11 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         case 'read_roleplay_context': case 'read_roleplay_history':
         case 'submit_roleplay_action': case 'resolve_roleplay_action':
         case 'manage_roleplay_evolution': case 'read_roleplay_evolution': case 'preview_roleplay_evolution':
+        case 'manage_roleplay_trpg': case 'read_roleplay_trpg': case 'preview_roleplay_trpg':
         case 'correct_roleplay_turn': case 'preview_roleplay_correction': {
           const endpoints: Record<string, string> = { manage_roleplay_world: 'world', read_roleplay_world: 'world', manage_roleplay_character: 'character', read_roleplay_character: 'character', manage_roleplay_scene: 'scene', read_roleplay_scene: 'scene', read_roleplay_context: 'context', read_roleplay_history: 'history', submit_roleplay_action: 'action', resolve_roleplay_action: 'resolve', correct_roleplay_turn: 'correct', preview_roleplay_correction: 'correct' };
           Object.assign(endpoints, { manage_roleplay_evolution: 'evolution', read_roleplay_evolution: 'evolution', preview_roleplay_evolution: 'evolution' });
+          Object.assign(endpoints, { manage_roleplay_trpg: 'trpg', read_roleplay_trpg: 'trpg', preview_roleplay_trpg: 'trpg' });
           const service = new RoleplayService(fileSystem, scopeAccess, references, options.roleplay, {
             assertActor: async () => { await revalidateActor(); }, retrieval,
             changed: path => queueReadModelChange(path, 'upsert'),
@@ -2598,6 +2656,28 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
             } }),
           });
           return jsonResult(await service.execute(endpoints[toolName]!, trimmedArgs, principal), false);
+        }
+        case 'list_explanations': case 'read_explanation': case 'claim_explanation':
+        case 'release_explanation': case 'submit_explanation': case 'review_explanation': {
+          const service = explanationService(principal ? revalidateActor : undefined);
+          if (!service) throw guidanceError(Error('Explanation feature is not configured by the host'), 'guid-82691cbd40ccccde');
+          // This service owns URI normalization. Forward only its contract fields;
+          // authentication material must never participate in durable retry hashes.
+          const params = Object.fromEntries(['sourcePath', 'expectedSourceRevision', 'expectedRevision', 'requestId', 'draft', 'review', 'cursor', 'limit', 'maxChars']
+            .filter(key => rawArgs[key] !== undefined).map(key => [key, rawArgs[key]]));
+          return jsonResult(await service.execute(EXPLANATION_ENDPOINTS[toolName]!.split('.')[1]!, params, principal), false);
+        }
+        case 'list_benchmarks': case 'read_benchmark': case 'submit_benchmark': case 'review_benchmark': case 'finalize_benchmark': {
+          const service = benchmarkService(principal ? revalidateActor : undefined);
+          if (!service) throw guidanceError(Error('Benchmark feature is not configured by the host'), 'guid-77896f1b100b2241');
+          // Never persist authentication tokens or transport-specific fields in receipts.
+          const params = Object.fromEntries(['challengeId', 'field', 'entryId', 'reviewId', 'offset', 'textLimit', 'expectedRevision', 'requestId', 'answer', 'practice', 'review', 'limit', 'maxChars', 'cursor']
+            .filter(key => rawArgs[key] !== undefined).map(key => [key, rawArgs[key]]));
+          return jsonResult(await service.execute(benchmarkOperation(toolName)!, params, principal), false);
+        }
+        case 'check_reusable_configuration': {
+          const { accessToken: _token, ...params } = rawArgs;
+          return jsonResult(checkReusableConfiguration(params), false);
         }
         case 'manage_work_project':
         case 'read_work_project': return jsonResult(await work.project({ ...trimmedArgs, principal }), false);
@@ -3612,7 +3692,8 @@ function boundedNoteReadResult(
   prettyPrint?: boolean,
 ) {
   const maxChars = noteReadMaxChars(requestedMaxChars);
-  const full = { path, fm: note.frontmatter, content: note.content, revision: note.revision };
+  const route = { kind: 'exact_note', reason: 'caller_supplied_path_current_access_checked', skipped: ['search', 'outline'] };
+  const full = { path, fm: note.frontmatter, content: note.content, revision: note.revision, route };
   const fullText = JSON.stringify(full, null, prettyPrint ? 2 : undefined);
   if (fullText.length <= maxChars) return { content: [{ type: 'text' as const, text: fullText }] };
 
@@ -3629,6 +3710,7 @@ function boundedNoteReadResult(
     returnedContentChars: 0,
     truncated: true,
     nextAction,
+    route,
   };
   if (JSON.stringify(base).length > maxChars) {
     // Outline headings exclude YAML. Page the original source from line one

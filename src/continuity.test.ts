@@ -85,12 +85,14 @@ test('learning progress resumes at the next MOC entry and blocks stale paths', a
 
   const resumed = await continuity.read({ principal });
   expect(resumed.learningProgress).toMatchObject({ state: 'ready', canResume: true, completedCount: 1, next: { path: 'Knowledge/B.md' } });
+  expect(resumed.route).toMatchObject({ kind: 'verified_resume', skipped: ['global_orientation'] });
   expect(resumed.fm.learning_progress).toBeUndefined();
   expect(resumed.content).toContain('Progress: 1/3');
   expect(buildLearningPath).toHaveBeenCalledWith(principal, 'Knowledge/MOC.md', 2, 50, 16000);
 
   const pulseView = await continuity.read({ principal, validateLearningProgress: false });
   expect(pulseView.learningProgress).toMatchObject({ state: 'saved_unchecked', revalidateWith: 'continuity.resume' });
+  expect(pulseView.route).toBeUndefined();
 
   entries = entries.map(item => item.path === 'Knowledge/B.md' ? { ...item, revision: 'e'.repeat(64) } : item);
   const stale = await continuity.read({ principal });
@@ -100,6 +102,7 @@ test('learning progress resumes at the next MOC entry and blocks stale paths', a
     nextAction: { endpointId: 'wiki.learning_path' },
   });
   expect(stale.learningProgress.next).toBeUndefined();
+  expect(stale.route).toBeUndefined();
 
   rootRevision = 'f'.repeat(64);
   entries = [...entries].reverse();
