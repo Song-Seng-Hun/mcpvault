@@ -70,7 +70,7 @@ federation/company memory. File splitting alone is not a measured improvement.
 - [x] Specification review, followed by independent quality review.
 - [x] Preserve prior release and operator launch configuration for rollback.
 - [x] Deploy runnable batch; verify actual MCP and read-only NAS scenarios.
-- [ ] Commit source and corresponding generated output together; push user fork.
+- [x] Commit source and corresponding generated output together; push user fork.
 - [x] Retire migrated compatibility paths only after the transition deployment.
 - [x] Recheck every ledger item and complete two change-free audit passes.
 
@@ -413,6 +413,21 @@ generated dist 1664/1172 (added/deleted lines). Evaluation assets remain under
 `tests/fixtures`; none were deleted to improve these counts. Document pruning
 and the complete research receipt are separately visible in the commit diff.
 
-Runtime verification is complete. The source/dist commit and matching fork
-push are the remaining publication gate; the closing receipt below records
-the actual verified commit rather than predicting its hash.
+Runtime verification and source/dist publication are complete; the closing
+receipt records the actual verified commit rather than predicting its hash.
+
+### Closing receipt
+
+Implementation commit `0616a3b68aa186c0b9116eab41ca155009c3aa90` was pushed
+to the user's existing `origin/main`; `git rev-parse HEAD` and `git ls-remote`
+returned that same SHA after the push. The first transition commit is
+`ebf45d8709c19083bb4cf51ee4e92eeb6cb82885`. This final documentation-only
+receipt changes no audited implementation or deployed artifact.
+
+R01–R21 are handled: identified defects and blocked seams are repaired,
+distinct justified contracts retained, approved temporary compatibility removed,
+two unchanged complete audits passed, and final tests/NAS verification/commit/
+fork push completed. Only the expected `main` remote branch remains; the
+unrelated detached checkout and pre-existing untracked operator/research files
+were preserved. No upstream PR, package/release publication, new branch,
+force-push, Vault-wide rewrite or external service activation occurred.
