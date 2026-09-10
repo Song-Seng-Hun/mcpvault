@@ -64,9 +64,9 @@
 
 - [x] 경로/경제/봉인/Git 복구는 구현과 독립된 검토를 통과한다.
 - [x] 기존 NAS runtime/launcher rollback을 보존하고 배포 후 실제 MCP schema/read/대표 탐색을 검증한다. 변경 동작은 격리 fixture에서 검증하며 운영 데이터 시험 변경/Enterprise 자동 활성화는 없다.
-- [ ] source+dist를 같은 commit으로 사용자 fork의 기존 main에 push한다. 패키지/release/upstream PR/force push는 금지한다.
-- [ ] 마지막 배포/push 후 전 축과 접합부를 두 번 재점검한다. 수정 시 검증을 갱신한다.
-- [ ] 최종 운영 코드/테스트/생성물/문서 증감을 분리하고 조회/쓰기 감소 및 복구 시나리오, 의도된 거부와 남은 결함을 구분한다.
+- [x] source+dist를 같은 commit으로 사용자 fork의 기존 main에 push한다. 패키지/release/upstream PR/force push는 금지한다.
+- [x] 마지막 배포/push 후 전 축과 접합부를 두 번 재점검한다. 수정 시 검증을 갱신한다.
+- [x] 최종 운영 코드/테스트/생성물/문서 증감을 분리하고 조회/쓰기 감소 및 복구 시나리오, 의도된 거부와 남은 결함을 구분한다.
 
 ## 실행 기록
 
@@ -77,7 +77,24 @@
 - `20260911-cross-axis-final/release`의 dist 753개와 package를 원본 해시로 대조했다. 기존 refinement-2 runtime과 `launcher-before.ps1`을 호스트 전용 rollback 자료로 보존했다. 정확한 기존 예약 작업·PID·생성 시각·명령을 확인한 뒤 새 PID 18028(2026-09-11 04:35:02 KST)로 전환했다.
 - 실제 NAS MCP 읽기 검증: fixed tools 5, endpoints 269, catalogue pages 5, 한국어/영어 대표 탐색 8, exact schema, notice receipt, canonical status/legacy deny, 기존 optional hosts, Workshop reconcile/unresolved, Research status, Story proof opt-in/authenticated preview 계약 PASS. 인증된 Pulse 세부 동작과 변경 operation은 격리 tests에서만 검증했다.
 - world seq2/turns2와 economy seq1/journals1 및 각 canonical hash는 배포 전후 동일하다. 원장·출력·연구 기록에 시험 쓰기 없음, Enterprise 운영 활성화 없음, 키/설정/PDF opt-in 유지. 런타임/비공개 자료는 커밋하지 않는다.
-- 다음 gate는 source+dist commit/fork push 및 배포 후 두 차례 전 축·접합부 재점검이다. 아래 과거 기록의 미완료 표현은 해당 시점의 기록이며, 최신 상태는 이 최종 기록을 따른다.
+- source+dist 배포 커밋 `a8095eb4aa27411a096b9d8a951629950a4e1202`를 사용자 포크 `Song-Seng-Hun/mcpvault`의 기존 main에 일반 push했고 원격 ref 일치를 확인했다. 패키지/release/upstream PR/new branch/force-push 없음. 기존 미추적 조사 문서 6개와 호스트 자료를 보존했다.
+- 배포·push 후 1차 점검: A–F 및 Work–Economy–Pulse, cursor–sync–projection, fiction–Application–공통 참조, Workshop–Research–Story/Git의 권한·예산·revision 연결부를 재확인했다. 새 결함을 발견하지 못했다. 소스 667개/배포 dist 753개 불변 해시, guidance check, 전체 commit diff check, 실제 NAS MCP 읽기와 world/economy 보존 재검증도 PASS이다.
+- 배포·push 후 독립 2차 점검도 PASS: A–F, 서비스 연결·스키마·read-only/capability와 핵심 생성 JS를 대조했고 새로 입증된 수정 필요 결함은 없었다. 검토자가 직접 HEAD/원격 main=`a8095eb4`, source/dist 무변경, commit diff check를 확인했다. 독립 점검은 정적 감사이며 전체 테스트/live 결과를 재실행한 것으로 주장하지 않는다. 이 완료 기록만 후속 문서 커밋하며 운영 소스·배포는 바꾸지 않는다.
+- 아래 과거 기록의 미완료 표현은 해당 시점의 기록이며, 최신 상태는 이 최종 기록을 따른다.
+
+### 변경량 분리 집계
+
+기준 `f4884bc6` 대비 집계. 운영 소스/테스트/생성물은 배포 커밋 `a8095eb4`로 고정되어 있고, 문서에는 이 완료 기록을 포함한다.
+
+| 구분 | 파일 | 추가 줄 | 삭제 줄 | 순증 |
+| --- | ---: | ---: | ---: | ---: |
+| 운영 TypeScript (테스트·생성 안내 제외) | 36 | 1171 | 334 | 837 |
+| 테스트 | 27 | 2148 | 37 | 2111 |
+| 생성 안내 TypeScript | 1 | 2252 | 1491 | 761 |
+| dist 생성물 | 87 | 3790 | 1888 | 1902 |
+| 문서 | 10 | 375 | 1 | 374 |
+
+운영 코드 순증은 새 서비스/원장/색인이 아니라 제한된 Git 관찰과 연속 인계 증명, Workshop 출력 무결성/재실행 확인, 봉인 연구 최소 상태, 연합 예산·최신성/복구 및 마지막 권한·revision 검증을 기존 서비스에 추가한 결과이다. 공통 경로 경계·금융 변경 판정·링크 검사 중복과 전체 허용 문서 inventory는 제거했다. 아래 호출/쓰기 측정은 이 코드 증가를 처리시간 향상으로 환산하지 않는다.
 
 ### 측정값과 의도된 보수적 거부
 
