@@ -153,6 +153,29 @@ OCR. OCR necessarily uses Docling's local layout stage too. A failed enrichment
 retains native text and marks the page failed. No silent fallback to another
 OCR language, engine, model version, remote service or generative model occurs.
 
+Detection caps the longest side at 960 pixels
+(`Det.limit_type=max`), and recognition/classification batches are one. These
+settings, page-mode policy and classification toggle are included in OCR
+extraction profiles; native-only
+profiles are unchanged. Bounded input scaling can reduce small-text accuracy;
+`ocr_quality_unverified` remains mandatory and a successful process is not an
+accuracy guarantee.
+
+Automatic 180-degree rotation is disabled for the Korean path: the provisioned
+v4 Chinese direction classifier confidently inverted two upright Korean fixture
+lines, destroying recognition before confidence filtering. Pages with no native
+text use full-page OCR instead of narrow layout crops. Pages containing native
+text retain PDF-aware OCR regions and PDF-first merging. Converters are keyed by
+OCR mode so a mixed page never reuses a scan-only policy. Upside-down scan
+recovery is not supported by this configuration.
+
+The operator-only host JSON accepts `ocrMemoryMb: 1024 | 2048` exclusively with
+`ocr: "rapidocr"`. Omission keeps the 1024 MiB default, including OCR. Explicit
+2048 applies to the entire OCR-enabled job, including its initial native pass;
+native-only configurations stay at 1024 MiB. It is not a client/MCP parameter.
+The hard 120-second deadline, single-process limit and zero capabilities remain
+unchanged. No automatic memory escalation or retry is performed.
+
 The selected API supports Korean PP-OCRv5 with ONNX Runtime; current RapidOCR
 defaults have moved to PP-OCRv6, so the worker explicitly configures v5 and local
 paths. A v4 direction classifier is compatible with the v5 detection/recognition
@@ -209,12 +232,23 @@ a successful DLL import, model initialization or PDF extraction test**.
 
 ### Main integration verification (2026-09-10)
 
-The dedicated native environment is provisioned with transitive wheel hashes
-retained in host-local installation evidence. Dependency-independent worker
-tests now pass 32 cases. Native bilingual (two pages) and column/table (one page)
-fixtures passed through the real Windows AppContainer provider with source hash,
-page boxes and cleanup. Scan input reports `ocr_unavailable`; no OCR accuracy,
-layout model or Tesseract comparison result is claimed.
+Dedicated native and opt-in OCR environments are provisioned with transitive
+wheel/model hashes retained in host-local installation evidence. The worker
+contract suite passes 33 cases; the Node PDF suites pass 25. The real OCR-enabled
+Windows AppContainer provider preserved all ten native bilingual statements and
+all six column/table/footnote markers. The scanned fixture preserved all five
+critical sentence bodies (whitespace-normalized), including Korean negation and
+the 5-versus-50 distinction. All five text ranges matched their expected image
+line coordinates. The source hash, page boxes and cleanup were checked.
+
+This is one synthetic scan, not a general OCR accuracy certification: identifiers
+still confuse `0` with `o`, and spacing differs. Automatic 180-degree recovery is
+disabled; mixed-mode multi-page memory, layout/table inference quality, hostile
+PDF and large-document exhaustion matrices, and Tesseract comparison remain
+unverified. The successful scan took about 102 seconds including host ACL setup
+and cleanup, with the explicit 2048 MiB job cap and unchanged 120-second host
+deadline. The 1024 MiB OCR attempt failed allocation; no silent budget escalation
+is implemented. The native-only 1024 MiB configuration remains supported.
 
 The native host alone supplies hidden `--trusted-input-root` and
 `--trusted-model-root` arguments after canonical ancestor pinning. Its caller

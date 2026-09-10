@@ -10,6 +10,8 @@ import { pdfDocumentStructure } from './document-pdf.js';
 export interface PdfHostConfig {
   version: 1; boundaryRoot: string; python: string; worker: string; sandboxHost: string; aclHelper: string; powershell: string;
   modelManifest?: string; ocr?: 'off' | 'rapidocr'; layout?: boolean;
+  /** Explicit operator-only opt-in; never accepted from document requests. */
+  ocrMemoryMb?: 1024 | 2048;
 }
 const fail = (message = 'Local PDF host unavailable or invalid configuration'): never => { throw new Error(message); };
 function local(value: unknown): string {
@@ -30,7 +32,7 @@ export async function assertNoPdfHostLinks(path: string): Promise<void> {
 }
 class PdfProcessExitUnconfirmed extends Error {}
 export function validatePdfHostConfig(input: any): PdfHostConfig {
-  const fields = ['version', 'boundaryRoot', 'python', 'worker', 'sandboxHost', 'aclHelper', 'powershell', 'modelManifest', 'ocr', 'layout'];
+  const fields = ['version', 'boundaryRoot', 'python', 'worker', 'sandboxHost', 'aclHelper', 'powershell', 'modelManifest', 'ocr', 'layout', 'ocrMemoryMb'];
   if (!input || input.version !== 1 || Object.keys(input).some(k => !fields.includes(k))) return fail();
   const boundaryRoot = local(input.boundaryRoot), runtime = win32.join(boundaryRoot, 'runtime');
   if (boundaryRoot.slice(3).split('\\').length < 2) return fail();
@@ -46,6 +48,10 @@ export function validatePdfHostConfig(input: any): PdfHostConfig {
     if (!within(config.modelManifest, win32.join(boundaryRoot, 'models'))) return fail();
   }
   if ((config.layout || config.ocr === 'rapidocr') && !config.modelManifest) return fail();
+  if (input.ocrMemoryMb !== undefined) {
+    if (config.ocr !== 'rapidocr' || ![1024, 2048].includes(input.ocrMemoryMb)) return fail();
+    config.ocrMemoryMb = input.ocrMemoryMb;
+  }
   return config;
 }
 
@@ -66,7 +72,7 @@ export function pdfHostEnvironment(executable: string) {
 }
 export function pdfWorkerArguments(c: PdfHostConfig, profile: string, job: string, input: string, revision: string): string[] {
   return ['--profile', profile, '--python', c.python, '--worker', c.worker, '--runtime-root', win32.join(c.boundaryRoot, 'runtime'), '--job-dir', job,
-    '--max-memory-mb', '1024', '--timeout-seconds', '120', ...(c.modelManifest ? ['--models', win32.join(c.boundaryRoot, 'models')] : []),
+    '--max-memory-mb', String(c.ocr === 'rapidocr' ? c.ocrMemoryMb ?? 1024 : 1024), '--timeout-seconds', '120', ...(c.modelManifest ? ['--models', win32.join(c.boundaryRoot, 'models')] : []),
     '--', '--input', input, '--expected-sha256', revision, '--output-json', 'stdout', '--max-pages', '200', '--timeout-seconds', '120',
     ...(c.layout ? ['--layout'] : []), ...(c.ocr ? ['--ocr', c.ocr] : []), ...(c.modelManifest ? ['--model-manifest', c.modelManifest] : [])];
 }

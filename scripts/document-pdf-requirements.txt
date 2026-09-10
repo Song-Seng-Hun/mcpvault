@@ -17,6 +17,12 @@ pypdfium2==5.13.0
 # upstream extra requires onnxruntime<1.24 on Python 3.10).
 # rapidocr==3.9.2
 # onnxruntime==1.23.2
+# omegaconf==2.3.1
+# antlr4-python3-runtime==4.9.3
+# ANTLR 4.9.3 is pure Python but has only an sdist on PyPI. Build its wheel in
+# the isolated provisioning environment, then install offline. A blanket
+# --only-binary=:all: resolver can backtrack to OmegaConf 2.0.0, which rejects
+# the pathlib model_root_dir used by RapidOCR. Preserve source/wheel hashes.
 
 # This is a reviewed set of direct pins, NOT a resolved, hash-locked environment.
 # Before production provisioning, resolve/freeze transitive dependencies and

@@ -1869,7 +1869,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/document-pdf-host.ts",
-                "line": 94
+                "line": 100
             }
         ]
     },
@@ -13662,7 +13662,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/document-pdf-host.ts",
-                "line": 99
+                "line": 105
             }
         ]
     },
@@ -52477,7 +52477,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/document-pdf-host.ts",
-                "line": 220
+                "line": 226
             }
         ]
     },

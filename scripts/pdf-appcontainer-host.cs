@@ -395,6 +395,9 @@ public static class PdfAppContainerHost
             { "TEMP", job }, { "TMP", job }, { "HOME", job }, { "USERPROFILE", job },
             { "LOCALAPPDATA", job }, { "APPDATA", job },
             { "HF_HOME", Path.Combine(job, "hf") }, { "TORCH_HOME", Path.Combine(job, "torch") },
+            // Torch's import-time Dynamo cache otherwise calls getpass.getuser.
+            // Keep it inside the fresh job without inheriting host identity/cache.
+            { "TORCHINDUCTOR_CACHE_DIR", Path.Combine(job, "torchinductor") },
             { "XDG_CACHE_HOME", Path.Combine(job, "cache") },
             { "HF_HUB_OFFLINE", "1" }, { "TRANSFORMERS_OFFLINE", "1" }, { "HF_DATASETS_OFFLINE", "1" },
             { "HF_HUB_DISABLE_TELEMETRY", "1" }, { "DO_NOT_TRACK", "1" }, { "TOKENIZERS_PARALLELISM", "false" },
@@ -723,6 +726,16 @@ public static class PdfAppContainerHost
 
     static void ContractTests()
     {
+        string inheritedCache = Environment.GetEnvironmentVariable("TORCHINDUCTOR_CACHE_DIR");
+        try
+        {
+            Environment.SetEnvironmentVariable("TORCHINDUCTOR_CACHE_DIR", @"C:\host-private-cache");
+            string environment = EnvironmentBlock(@"C:\runtime", @"C:\private\job");
+            Require(environment.Contains("TORCHINDUCTOR_CACHE_DIR=C:\\private\\job\\torchinductor\0") &&
+                !environment.Contains("host-private-cache") && !environment.Contains("USERNAME="),
+                "contract_private_torch_cache_failed");
+        }
+        finally { Environment.SetEnvironmentVariable("TORCHINDUCTOR_CACHE_DIR", inheritedCache); }
         Require(DiagnosticDenied(10013, 5, 5, 367, true) && DiagnosticDenied(10013, 5, 5, 5, true) &&
             !DiagnosticDenied(10035, 5, 5, 367, true) && !DiagnosticDenied(10061, 5, 5, 367, true) &&
             !DiagnosticDenied(10013, 0, 5, 367, true) && !DiagnosticDenied(10013, 5, 0, 367, true) &&

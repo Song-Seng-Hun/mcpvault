@@ -28,6 +28,17 @@ PINS = {'docling-slim': '2.126.0', 'docling-core': '2.95.0',
         'docling-parse': '7.18.0', 'pypdfium2': '5.13.0'}
 ENRICHMENT_PINS = {'docling-ibm-models': '4.0.2', 'torch': '2.10.0'}
 OCR_PINS = {'rapidocr': '3.9.2', 'onnxruntime': '1.23.2'}
+# RapidOCR defaults upscale the shortest side of narrow crops to 736 pixels,
+# allowing an extremely wide detector tensor. Cap its longest side and internal
+# batches independently of the host's memory budget. Include these in the
+# extraction profile; the backend maps resized coordinates back to PDF points.
+OCR_LIMITS = {'Det.limit_type': 'max', 'Det.limit_side_len': 960,
+              'Rec.rec_batch_num': 1, 'Cls.cls_batch_num': 1}
+# The v4 Chinese direction classifier confidently flips upright Korean lines.
+# Do not apply that destructive rotation; upside-down text is not auto-corrected.
+OCR_USE_CLS = False
+OCR_SCAN_MODE = 'full_page'
+OCR_MIXED_MODE = 'pdf_aware_layout_regions'
 
 
 class WorkerError(Exception):
@@ -254,6 +265,10 @@ def configured_profile(settings, models, report):
     material = {'pins': report, 'layout': settings['layout'], 'ocr': settings['ocr'],
                 'models': models['fingerprint'] if models else None,
                 'python': list(sys.version_info[:2]), 'threads': 2}
+    if settings['ocr']:
+        material['ocrLimits'] = OCR_LIMITS
+        material['ocrUseCls'] = OCR_USE_CLS
+        material['ocrModes'] = [OCR_SCAN_MODE, OCR_MIXED_MODE]
     return PROFILE + ':' + hashlib.sha256(json_bytes(material)).hexdigest()
 
 
@@ -585,6 +600,11 @@ class DoclingBackend:
         if not self._enhanced:
             torch.set_num_interop_threads(1)
         tables = self.settings['layout'] and 'table' in self.models['manifest']
+        # Full-page OCR avoids narrow layout crops on scans. Mixed pages retain
+        # PDF-first merging so recognized pixels cannot replace native text.
+        native_text = any(c['text'].strip() for c in self._native[number]['chunks'])
+        mode = (OCR_MIXED_MODE if native_text else OCR_SCAN_MODE) if ocr else None
+        cache_key = (ocr, mode)
         options = PdfPipelineOptions(artifacts_path=self.models['root'],
             enable_remote_services=False, allow_external_plugins=False,
             do_ocr=ocr, do_table_structure=tables, document_timeout=timeout,
@@ -599,11 +619,11 @@ class DoclingBackend:
             onnxruntime.disable_telemetry_events()
             config = self.models['manifest']['rapidocr']
             paths = self.models['files']
-            options.ocr_options = RapidOcrOptions(backend='onnxruntime', lang=['korean'],
+            options.ocr_options = RapidOcrOptions(backend='onnxruntime', lang=['korean'], mode=mode,
                 det_model_path=paths[config['detection']], cls_model_path=paths[config['classification']],
                 rec_model_path=paths[config['recognition']], rec_keys_path=paths[config['keys']],
-                use_det=True, use_cls=True, use_rec=True, print_verbose=False,
-                rapidocr_params={'Det.ocr_version': OCRVersion.PPOCRV5,
+                use_det=True, use_cls=OCR_USE_CLS, use_rec=True, print_verbose=False,
+                rapidocr_params={**OCR_LIMITS, 'Det.ocr_version': OCRVersion.PPOCRV5,
                                  'Rec.ocr_version': OCRVersion.PPOCRV5,
                                  'Cls.ocr_version': OCRVersion.PPOCRV4,
                                  'Det.model_type': ModelType.MOBILE,
@@ -612,12 +632,12 @@ class DoclingBackend:
                                  'Rec.lang_type': 'korean',
                                  'EngineConfig.onnxruntime.intra_op_num_threads': 2,
                                  'EngineConfig.onnxruntime.inter_op_num_threads': 1})
-        converter = self._enhanced.get(ocr)
+        converter = self._enhanced.get(cache_key)
         if converter is None:
             converter = DocumentConverter(allowed_formats=[self._pdf],
                 format_options={self._pdf: PdfFormatOption(pipeline_options=options,
                     backend_options=ThreadedDoclingParseBackendOptions(parser_threads=2))})
-            self._enhanced[ocr] = converter
+            self._enhanced[cache_key] = converter
         # Keep cached options stable: changing their hash would load models again.
         # The parent hard deadline and run_job's between-page checks still apply.
         converted = converter.convert(self._stream(name='source.pdf', stream=io.BytesIO(self.raw)),

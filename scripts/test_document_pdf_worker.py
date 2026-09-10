@@ -426,8 +426,13 @@ class WorkerTests(unittest.TestCase):
         backend.raw, backend.models, backend._pdf = self.raw, models, 'pdf'
         backend.settings = {'layout': False, 'max_pages': 200}
         backend._enhanced, backend._stream = {}, Options
+        backend._native = {7: {'chunks': []}, 8: {'chunks': [{'text': 'preserve native'}]}}
         page = {'chunks': [{'text': 'Korean', 'bbox': [0, 0, 1, 1], 'kind': 'text'}], 'gaps': [], 'hasImages': False}
-        with patch.dict('sys.modules', modules), patch.object(worker, 'normalize_docling', return_value={7: page}):
+        def normalized(_):
+            return {n: {**page, 'gaps': []} for n in (7, 8)}
+        with patch.dict('sys.modules', modules), patch.object(worker, 'normalize_docling', side_effect=normalized):
+            backend.enhanced_page(7, ocr=True, timeout=30)
+            backend.enhanced_page(8, ocr=True, timeout=30)
             backend.enhanced_page(7, ocr=True, timeout=30)
         options = calls[0]['format_options']['pdf'].pipeline_options
         self.assertEqual(options.accelerator_options.device, 'cpu')
@@ -439,10 +444,35 @@ class WorkerTests(unittest.TestCase):
         self.assertFalse(options.do_formula_enrichment)
         self.assertFalse(options.do_table_structure)
         self.assertEqual(options.ocr_options.lang, ['korean'])
+        self.assertFalse(options.ocr_options.use_cls)
+        self.assertEqual(getattr(options.ocr_options, 'mode', None), 'full_page')
+        self.assertEqual(len(calls), 5)  # two policies, then reuse the scan converter
+        self.assertEqual(calls[2]['format_options']['pdf'].pipeline_options.ocr_options.mode,
+                         'pdf_aware_layout_regions')
         self.assertEqual(options.ocr_options.rapidocr_params['Rec.ocr_version'], 'PP-OCRv5')
         self.assertEqual(options.ocr_options.rapidocr_params['Det.ocr_version'], 'PP-OCRv5')
         self.assertEqual(options.ocr_options.rapidocr_params['EngineConfig.onnxruntime.intra_op_num_threads'], 2)
+        self.assertEqual(options.ocr_options.rapidocr_params.get('Det.limit_type'), 'max')
+        self.assertEqual(options.ocr_options.rapidocr_params.get('Det.limit_side_len'), 960)
+        self.assertEqual(options.ocr_options.rapidocr_params.get('Rec.rec_batch_num'), 1)
+        self.assertEqual(options.ocr_options.rapidocr_params.get('Cls.cls_batch_num'), 1)
         self.assertEqual(calls[1]['page_range'], (7, 7))
+
+    def test_ocr_profile_binds_detector_and_internal_batch_limits(self):
+        settings = {'layout': False, 'ocr': True}
+        models = {'fingerprint': 'a' * 64}
+        before = worker.configured_profile(settings, models, [])
+        native_before = worker.configured_profile({'layout': False, 'ocr': False}, None, [])
+        with patch.object(worker, 'OCR_LIMITS', {'Det.limit_type': 'max', 'Det.limit_side_len': 480,
+                          'Rec.rec_batch_num': 1, 'Cls.cls_batch_num': 1}, create=True):
+            self.assertNotEqual(before, worker.configured_profile(settings, models, []))
+            self.assertEqual(native_before, worker.configured_profile({'layout': False, 'ocr': False}, None, []))
+        with patch.object(worker, 'OCR_USE_CLS', True, create=True):
+            self.assertNotEqual(before, worker.configured_profile(settings, models, []))
+            self.assertEqual(native_before, worker.configured_profile({'layout': False, 'ocr': False}, None, []))
+        with patch.object(worker, 'OCR_SCAN_MODE', 'layout_regions', create=True):
+            self.assertNotEqual(before, worker.configured_profile(settings, models, []))
+            self.assertEqual(native_before, worker.configured_profile({'layout': False, 'ocr': False}, None, []))
 
     def test_json_budget_also_bounds_diagnostics_and_preserves_source_hash(self):
         result = self.run_job(pages=(1,))

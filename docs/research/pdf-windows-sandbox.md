@@ -1,10 +1,14 @@
 # Windows PDF AppContainer host: integration handoff
 
 Current Main verification (2026-09-10): per-job host compiled, contracts passed,
-native bilingual/column-table PDF extraction and cleanup passed. Actual OS probes
+native bilingual/column-table and opt-in Korean OCR extraction and cleanup passed.
+The synthetic scan preserved five critical sentence bodies and their line boxes;
+identifier and spacing errors remain. Actual OS probes on the OCR-enabled host
 passed for the selected remote TCP endpoint, private-file read, runtime write,
-child policy and stdin EOF. OCR/model provisioning and exhaustion/adversarial
-matrices remain unverified; this is not universal isolation certification.
+child policy and stdin EOF. Explicit OCR-only configuration selected a 2048 MiB
+job budget; default/native-only budgets remain 1024 MiB. Exhaustion/adversarial
+matrices and general OCR accuracy remain unverified; this is not universal
+isolation certification.
 
 Historical sidecar handoff: **the original sidecar did not compile or certify the host**.
 This sidecar owns only `scripts/pdf-appcontainer-host.cs` and this document.
@@ -166,6 +170,13 @@ cache roots, offline/telemetry flags and thread settings. No parent environment
 enumeration occurs; API keys, proxies, credentials, PYTHONPATH and DOCLING debug
 overrides are not inherited. Windows Known Folder APIs may still resolve the
 AppContainer's own profile storage rather than these environment paths.
+
+`TORCHINDUCTOR_CACHE_DIR` is explicitly job-local as well. PyTorch's default
+cache lookup can require a username; the host supplies neither a username nor
+an inherited cache path. The Node operator configuration may explicitly select
+2048 MiB for OCR-enabled jobs through `ocrMemoryMb`; all default budgets and
+native-only jobs remain 1024 MiB. This changes committed-memory limits only,
+not capabilities, the 120-second deadline, or the one-process restriction.
 
 ## Explicit host provisioning (not per request)
 
@@ -439,7 +450,7 @@ production extraction readiness is still unproven.
 
 ## Concrete limitations / enablement blockers
 
-1. **Main's 2026-09-10 production-path verification remains blocked.** Approved
+1. **Historical startup blockers, subsequently resolved.** Approved
    child-PID-only WinDbg tracing identified `KERNELBASE!ConsoleAllocate` returning
    `0xc000049d` during `ConsoleInitialize`, followed by DLL initialization failure
    `0xc0000142`, before Python starts. CSR and NLS initialization succeeded.
@@ -456,8 +467,9 @@ production extraction readiness is still unproven.
    worker's checks while the native host retains all-ancestor canonical pins.
    Caller root overrides are rejected. Native bilingual and column/table PDF
    extraction passed, with original hash/page boxes and cleanup. The scan
-   fixture explicitly reports OCR unavailable; OCR/layout provisioning and
-   hostile-PDF, hard-timeout and memory-exhaustion matrices are not certified.
+   fixture initially reported OCR unavailable. Later OCR provisioning and the
+   synthetic scan passed as summarized above; layout quality, hostile-PDF,
+   hard-timeout and memory-exhaustion matrices are not certified.
    No security restriction or ancestor ACL was relaxed.
 2. AppContainer is not a VM/chroot. Ordinary AppContainers can access OS resources
    granted to all application packages and their own per-user persistent package

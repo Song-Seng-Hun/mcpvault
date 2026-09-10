@@ -11,6 +11,8 @@ export interface PdfHostConfig {
     modelManifest?: string;
     ocr?: 'off' | 'rapidocr';
     layout?: boolean;
+    /** Explicit operator-only opt-in; never accepted from document requests. */
+    ocrMemoryMb?: 1024 | 2048;
 }
 export declare function assertNoPdfHostLinks(path: string): Promise<void>;
 export declare function validatePdfHostConfig(input: any): PdfHostConfig;

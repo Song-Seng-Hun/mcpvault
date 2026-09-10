@@ -85,17 +85,22 @@ The private JSON config has `version:1`, `boundaryRoot`, `python`, `worker`,
 Python/worker live below `boundaryRoot/runtime`; models, if configured, live
 below `boundaryRoot/models`. Optional `layout`, `ocr:"rapidocr"` and
 `modelManifest` require separately provisioned, hash-pinned local artifacts.
+`ocrMemoryMb` optionally selects 1024 or 2048 MiB only with `ocr:"rapidocr"`;
+omission keeps the 1024 MiB default. It is operator configuration, never a
+document/MCP argument. The selection applies to the whole OCR-enabled job.
 Never put configuration paths, credentials or runtime caches in public notes.
 
 The provider serializes setup through cleanup, admits at most two requests, uses
 a cross-process fail-closed lock and gives every job a fresh AppContainer identity.
 It establishes a private job DACL before staging source bytes. The native launcher
-pins/audits paths and permissions, attaches a one-process/1024 MiB Job Object before
+pins/audits paths and permissions, attaches a one-process Job Object before
 resume, checks the actual token, denies network capabilities, limits stdout to
 16 MiB and imposes a 120-second parser deadline. No unrestricted Python fallback
 exists. Host helper environment is allowlisted, including `PATHEXT=.EXE` so native
 PowerShell commands are synchronous. The ACL helper changes DACLs, not owners or
 audit policy, and compares SID values without resolving account names.
+The default/native-only memory budget is 1024 MiB; only the explicit OCR opt-in
+may raise it to 2048 MiB. No automatic escalation is performed.
 
 Confirmed worker exit precedes profile deletion, runtime/model grant revocation
 and exact job removal. A cleanup failure blocks the provider and leaves a
@@ -108,7 +113,7 @@ See [worker contract](research/document-pdf-worker-contract.md) and
 The AppContainer is not a VM or a claim that all OS resources are inaccessible.
 Real network/file/process denial and cleanup must be verified on the actual host.
 
-Current verification (2026-09-10): approved child-only debugger tracing identified
+Initial native-host verification (2026-09-10): approved child-only debugger tracing identified
 Windows console allocation returning `0xc000049d` inside `KERNELBASE.dll`, causing
 the original `worker_abnormal_exit_c0000142` before Python. The source fix uses
 `DETACHED_PROCESS` with unchanged AppContainer/Job/child-process restrictions.
@@ -125,8 +130,9 @@ ancestry validation. No ancestor permissions were broadened.
 
 Final native fixtures passed under AppContainer: bilingual PDF (2 pages) and
 columns/table PDF (1 page), with source hashes, original page boxes and cleanup.
-The scan fixture correctly reported `ocr_unavailable` and failed-page gaps;
-**OCR/layout model provisioning and Tesseract comparison remain unverified**.
+At the initial native-only deployment, the scan fixture correctly reported
+`ocr_unavailable` and failed-page gaps. See the later OCR verification below;
+layout/table quality and Tesseract comparison remain unverified.
 Reading order is explicitly unverified for the native-only profile.
 
 Actual OS probes, without the worker socket monkeypatch, verified outbound TCP
@@ -138,7 +144,7 @@ Profiles, runtime grants, jobs and locks were cleaned; Node tests also cover
 failed ledger persistence and unconfirmed-process-exit retention.
 No real PDF was used for debugger tracing, and no machine-wide tracing policy was changed.
 
-Deployment verification (2026-09-10): native-only PDF is enabled on the existing
+Initial deployment verification (2026-09-10): native-only PDF was enabled on the existing
 NAS-backed shared runtime. All 747 deployed dist files matched the build; previous
 release/launcher and native-host backups are retained. World/economy checkpoints
 and journals were preserved through audited writer-lock recovery. Authenticated
@@ -147,6 +153,30 @@ original page boxes, document search, stale-revision refusal and byte-identical
 original export over six bounded calls. Verification used an explicitly imported
 synthetic resource bundle, not private user documents. Existing roleplay/skill
 health checks passed. Final full regression: 4855 pass, 2 skip; Python: 32 pass.
+
+Subsequent OCR verification (2026-09-10): a separately provisioned Korean
+PP-OCRv5 environment passed the real AppContainer test with an explicitly
+approved 2048 MiB job budget. Five critical scan sentence bodies survived
+whitespace-normalized comparison, including negation and 5 versus 50; each
+matched the correct image-line coordinates. Native text and column/table
+markers, cleanup and actual OS network/file/child denial probes passed too.
+Worker tests: 33; Node PDF tests: 25. The Chinese v4 direction classifier's
+incorrect 180-degree rotations are disabled; upside-down text is not repaired.
+Scan-only pages use full-page OCR; mixed pages preserve PDF-first merging.
+Identifier `0/o` errors and spacing differences remain. This is not broad OCR
+accuracy, mixed-mode multi-page memory, or semantic table certification.
+
+OCR deployment/live verification completed on the existing NAS-backed shared
+runtime. All 747 staged build files matched. Authenticated five-tool MCP verified
+scan outline/read/search, the five critical sentence bodies, original page boxes
+and the expected OCR profile. Native and scanned originals both round-tripped
+byte-identically over 12 bounded exports; stale revisions were refused. The new
+writer retained the exact previous world/economy checkpoint hashes and journal
+counts, and roleplay/skill health checks passed. Prior runtime/launcher backups
+are retained. Final four-worker regression had 4854 passes, 2 timeouts and 2 skips;
+both timeout files passed all 8 tests alone without changing their assertions or
+limits. The final guidance/PDF rerun passed 38 tests, and build/catalog checks
+passed. This is not a claim that the parallel run itself was all green.
 
 ## Framework adapters and evaluation
 

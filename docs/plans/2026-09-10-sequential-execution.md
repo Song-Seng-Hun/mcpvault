@@ -8,8 +8,8 @@ Baseline: `ad7db84c` on the user's fork `main`. Unrelated `.agents/`, `.mcpvault
 
 Contract: [Context economy](2026-09-10-context-economy.md).
 
-- Status: native-PDF and document implementation deployed and live-verified.
-  Source delivery is recorded by the containing Git commit. This does not close the remaining OCR
+- Status: native-PDF, opt-in OCR and document implementation deployed and live-verified.
+  Source delivery is recorded by the containing Git commit. This does not close the remaining OCR benchmark
   and context-economy evaluation gates below. Markdown/text
   structure, revision-pinned reads, resource manifests/exports, context/search
   integration, neutral RAG adapters and progressive guidance are implemented.
@@ -73,7 +73,26 @@ Contract: [Context economy](2026-09-10-context-economy.md).
   search, stale revision rejection and full original-byte export equality across
   six bounded calls. Existing roleplay and skill functionality remained enabled.
   Delivery uses the existing `main` and user fork, with no upstream PR, release
-  publication or force push. Do not claim OCR, measured savings or both plans complete.
+  publication or force push. That native baseline did not claim OCR, measured
+  savings or completion of both plans.
+- Later explicit OCR activation and 2048 MiB operator-budget approval: local
+  Korean PP-OCRv5 scan verification passed all five critical sentence bodies
+  with expected image-line coordinates under the real AppContainer provider.
+  Default/native-only budget remains 1024 MiB and the deadline remains 120s.
+  Incorrect v4 direction-classifier rotations are disabled; scan-only full-page
+  OCR is separated from mixed-page PDF-first merging. `0/o` and spacing errors
+  remain, and upside-down recovery is not supported. Native/column-table and
+  actual OS denial/cleanup checks passed; Python 33 and Node PDF 25 tests pass.
+  OCR runtime cutover preserved all world/economy checkpoints and journal files;
+  authenticated live MCP verified scan outline/read/search, all five critical
+  sentence bodies, page boxes and the expected OCR profile. Both native and scan
+  originals were exported byte-identically over 12 bounded calls. Existing
+  roleplay/skill health remained enabled, and rollback artifacts are retained.
+  Full four-worker run: 4854 pass, 2 timeouts, 2 skip across 361 files. Both
+  timeout files passed all 8 tests on a one-worker rerun with unchanged assertions
+  and timeouts. Final guidance/PDF rerun passed 38 tests; build and catalog check
+  passed. Catalog regeneration changed only three source-line locators.
+  This does not satisfy the Tesseract or same-answering-model economy gates.
 
 ## Plan 2
 
