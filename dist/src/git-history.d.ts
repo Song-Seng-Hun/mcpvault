@@ -1,5 +1,13 @@
 import { PathFilter } from './pathfilter.js';
 import type { CommitChangesResult, InitializeRevisionResult, RevisionDiffResult, RevisionEntry, RevisionStatus } from './types.js';
+export interface GitTaskHistory {
+    head: string;
+    observations: Array<{
+        commit: string;
+        blob: string;
+        content: string;
+    }>;
+}
 interface CommitChangesParams {
     reason: string;
     paths?: string[];
@@ -13,6 +21,13 @@ export declare class GitHistoryService {
     private statusPromise;
     private mutationTail;
     constructor(vaultPath: string, pathFilter?: PathFilter);
+    /** Explicit opt-in only. Observations retain first-parent newest-first order,
+     * including older changed-path states (not merely the newest receipt/event).
+     * They are raw historical states, never evidence
+     * that an old receipt describes an accepted handoff; the authenticated caller
+     * must interpret each state and retain its own current-task revision guards. */
+    taskHandoffHistory(pathInput: string, canRead: (path: string) => boolean): Promise<GitTaskHistory>;
+    private readTaskGit;
     private runGit;
     private pathsEqual;
     private repoRoot;

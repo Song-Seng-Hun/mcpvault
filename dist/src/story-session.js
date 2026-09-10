@@ -3,6 +3,7 @@ import { isModerationHidden } from './moderation-policy.js';
 import { page } from './work-model.js';
 import { runStoryBranch } from './story-branch.js';
 import { storyAccount, storyHash, storyId, storyReviewPath, storyRevision, storyRoot, storyText } from './story-model.js';
+import { proveStoryReconnect, storyWorkBinding, verifyStoryReconnectReplay } from './story-reconnect.js';
 /** Durable host-driven coordination. Roles never instantiate or impersonate agents. */
 export class StorySessions {
     w;
@@ -25,6 +26,12 @@ export class StorySessions {
         const reconnect = params.reconnectWriter === true;
         if (reconnect && op !== 'resume')
             throw guidanceError(new Error('Writer reconnection requires explicit resume'), 'guid-7ddbf916eb50b510');
+        if (params.includeGitHistory !== undefined && typeof params.includeGitHistory !== 'boolean')
+            throw guidanceError(new Error('includeGitHistory must be boolean'), 'guid-4f832495599bc0ac');
+        if ((params.includeGitHistory !== undefined || params.reconnectProofFingerprint !== undefined) && op !== 'reconnect_preview' && !reconnect)
+            throw guidanceError(new Error('Reconnect proof controls require reconnect_preview or explicit writer resume'), 'guid-223e180a5655966a');
+        if (params.reconnectProofFingerprint !== undefined)
+            storyRevision(params.reconnectProofFingerprint);
         if (op === 'list') {
             const notes = await this.w.inventory(projectId, 'Sessions', principal);
             const items = notes.filter(n => n.frontmatter.mcpvault_type === 'story_session').map(n => this.view(n));
@@ -38,14 +45,27 @@ export class StorySessions {
                 throw guidanceError(new Error('Story session unavailable'), 'guid-e8860ba50d173e0b');
             return this.w.detail({ ...this.view(prior), ...await this.w.stale(prior, principal) }, params, principal);
         }
+        if (op === 'reconnect_preview') {
+            await this.w.authorize(project, principal, 'showrunner', false, true);
+            if (!prior || prior.frontmatter.mcpvault_type !== 'story_session' || prior.frontmatter.project_id !== projectId)
+                throw guidanceError(new Error('Story session unavailable'), 'guid-e8860ba50d173e0b');
+            const proof = await proveStoryReconnect(this.w, project, prior, principal, params.includeGitHistory === true);
+            return { path, revision: prior.revision, projectId, sessionId, expectedProjectRevision: project.revision,
+                expectedWorkRevision: proof.task.revision, expectedWorkGeneration: proof.task.frontmatter.claim_generation,
+                writerAccountId: proof.task.frontmatter.assignee_account_id, hopCount: proof.chain.length,
+                reconnectProofFingerprint: proof.fingerprint, gitHistoryUsed: proof.gitBasis !== null };
+        }
         if (!['start', 'submit', 'review', 'pause', 'resume', 'decide', 'rehearse'].includes(op))
             throw guidanceError(new Error('Invalid story session operation'), 'guid-483aa010b6cf04dc');
         const role = reconnect || ['start', 'decide'].includes(op) ? 'showrunner' : 'member';
         const workGuard = await this.w.authorize(project, principal, role, op === 'pause');
         const actor = principal, request = this.w.store.request(`session.${op}`, params, actor);
         const retry = this.w.store.retry(prior, request);
-        if (retry)
+        if (retry) {
+            if (reconnect)
+                await verifyStoryReconnectReplay(this.w, project, prior, actor, params);
             return retry;
+        }
         this.w.projectRevision(project, params.expectedProjectRevision);
         const guards = [workGuard, { path: project.path, expectedRevision: project.revision }];
         if (op === 'rehearse') {
@@ -66,7 +86,7 @@ export class StorySessions {
                 session_id: sessionId, artifact_id: params.artifactId, branch_id: artifact.frontmatter.branch_id,
                 source_revision: artifact.revision, source_revisions: sources, result, proposal_only: true, actor_account_id: actor.accountId }, '# Fiction rehearsal\n\nA pinned branch trace; not a canonical adoption or a shared-world mutation.\n', 'missing', request, { path, projectId, sessionId, result, proposalOnly: true, hostExecutionOnly: true }, [...guards, ...sources], async () => { await this.w.authorize(project, actor); });
         }
-        let fm;
+        let fm, reconnectProof;
         if (op === 'start') {
             if (prior || params.expectedRevision !== 'missing')
                 throw guidanceError(new Error('New story session requires expectedRevision=missing'), 'guid-18b5af8b138f047a');
@@ -97,7 +117,7 @@ export class StorySessions {
             guards.push({ path: task.path, expectedRevision: task.revision }, { path: artifact.path, expectedRevision: artifact.revision });
             fm = { mcpvault_type: 'story_session', fiction_domain: 'story', project_id: projectId, session_id: sessionId,
                 artifact_id: params.artifactId, branch_id: artifact.frontmatter.branch_id, writer_account_id: writer,
-                editor_account_id: editor, task_id: taskId, stage: 'draft', revision_round: 0, steps: 1, source_revisions: [], created_at: new Date().toISOString() };
+                editor_account_id: editor, task_id: taskId, work_binding: storyWorkBinding(task), stage: 'draft', revision_round: 0, steps: 1, source_revisions: [], created_at: new Date().toISOString() };
         }
         else {
             if (!prior || prior.frontmatter.mcpvault_type !== 'story_session' || prior.frontmatter.project_id !== projectId)
@@ -122,6 +142,8 @@ export class StorySessions {
             }
             else {
                 if (fm.steps >= project.frontmatter.max_steps) {
+                    if (reconnect)
+                        throw guidanceError(new Error('Raise the explicit project step budget before writer reconnection'), 'guid-0ba1a944a516b685');
                     if (fm.stage !== 'waiting')
                         fm.resume_stage = fm.stage;
                     fm.stage = 'waiting';
@@ -130,17 +152,23 @@ export class StorySessions {
                 else {
                     let task = (await this.w.store.read(`Community/Tasks/${storyId(fm.task_id)}.md`, actor));
                     if (reconnect) {
-                        const handoff = task.frontmatter.work_handoff;
                         if (fm.stage !== 'waiting')
                             throw guidanceError(new Error('Writer reconnection requires a waiting session'), 'guid-64b1afaceec8fbf9');
                         if (storyRevision(params.expectedWorkRevision) !== task.revision
                             || !Number.isSafeInteger(params.expectedWorkGeneration) || params.expectedWorkGeneration !== task.frontmatter.claim_generation)
                             throw guidanceError(new Error('Work revision or generation changed'), 'guid-23e57fcb4fd5172d');
-                        if (handoff?.state !== 'accepted' || handoff.from_account_id !== fm.writer_account_id
-                            || handoff.to_account_id !== task.frontmatter.assignee_account_id || !handoff.to_account_id
-                            || handoff.generation + 1 !== task.frontmatter.claim_generation)
-                            throw guidanceError(new Error('An accepted Work handoff from the current writer is required'), 'guid-8649cbf7fc6011b0');
-                        fm.writer_account_id = handoff.to_account_id;
+                        reconnectProof = await proveStoryReconnect(this.w, project, prior, actor, params.includeGitHistory === true);
+                        if (reconnectProof.task.revision !== task.revision)
+                            throw guidanceError(new Error('Work revision changed during reconnect proof'), 'guid-935a9e0394c206a3');
+                        if ((reconnectProof.chain.length > 1 || reconnectProof.gitBasis) && params.reconnectProofFingerprint === undefined)
+                            throw guidanceError(new Error('Current reconnect proof fingerprint is required'), 'guid-cc133091838aad96');
+                        if (params.reconnectProofFingerprint !== undefined && params.reconnectProofFingerprint !== reconnectProof.fingerprint)
+                            throw guidanceError(new Error('Story reconnect proof changed; preview again'), 'guid-f46f82f68d7d2172');
+                        fm.writer_account_id = task.frontmatter.assignee_account_id;
+                        fm.work_binding = storyWorkBinding(task);
+                        fm.work_reconnect = { requestId: request.id, actor: actor.accountId, taskId: fm.task_id,
+                            workProjectId: project.frontmatter.work_project_id, projectRevision: project.revision,
+                            after: fm.work_binding, fingerprint: reconnectProof.fingerprint, gitBasis: reconnectProof.gitBasis };
                     }
                     for (const account of [fm.writer_account_id, fm.editor_account_id]) {
                         if (!project.frontmatter.participants.includes(account))
@@ -250,6 +278,8 @@ export class StorySessions {
                 for (const account of [fm.writer_account_id, fm.editor_account_id]) {
                     await this.w.work.authorizeWorkshopProject(actor, project.frontmatter.work_project_id, false, account, project.frontmatter.owner_account_id);
                 }
+            if (reconnectProof && (await proveStoryReconnect(this.w, project, prior, actor, params.includeGitHistory === true)).fingerprint !== reconnectProof.fingerprint)
+                throw guidanceError(new Error('Story reconnect proof changed before write'), 'guid-0e2141cac73689e3');
         }, prior);
     }
 }

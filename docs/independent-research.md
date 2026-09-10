@@ -64,6 +64,21 @@ basis; modified/deleted/hidden sources block their reuse as current evidence.
 
 ## Bounded reads and limits
 
+Use `field: status` when changed or unavailable evidence prevents a normal read.
+This projection contains only round identity/revision, phase, and a generic
+`basisState` (`current` or `unavailable_or_changed`). It checks the recorded source
+revision guards, not the truth of the hypotheses. It never returns configuration,
+submission-account lists, private prose, source locators, or closure prose.
+Only the current facilitator receives an unresolved-close action; supply a fresh
+`requestId` and an explicit `closure.explanation` before invoking it. A closed round
+has no closing action. Status works in a read-only runtime, but mutations remain
+disabled there. It is not a disclosure bypass: ordinary detail, disclosure,
+review, and synthesis retain their existing evidence checks.
+
+Status accepts the same 512–12,000 character bounds and optional exact
+`expectedRevision`, without a detail cursor or item index. Increase the budget if
+the exact identifiers and closure route do not fit; no identifier is shortened.
+
 `workshop.research` defaults to 20 items / 4,000 serialized JSON characters and
 caps at 100 / 12,000. These are characters, not tokens. `field: reviews` selects
 peer reviews after disclosure. `cursor` is bound to caller and round revision.

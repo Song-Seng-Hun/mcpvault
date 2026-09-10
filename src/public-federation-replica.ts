@@ -1,3 +1,4 @@
+import { guidanceText } from './guidance-runtime.js';
 import { guidanceError } from './guidance-runtime.js';
 import { assertEnterpriseStorageFresh } from './enterprise-storage-context.js';
 import { createHash } from 'node:crypto';
@@ -105,6 +106,8 @@ export interface PublicFederationListParams {
   postId?: string;
   status?: PublicFederationObjectStatus;
   after?: string;
+  /** Overlap before the next row, including the after row; does not consume limit. */
+  contextBefore?: number;
   limit?: number;
   /** Administrative diagnostics only; ordinary imported reads expose active records. */
   includeUnavailable?: boolean;
@@ -114,6 +117,8 @@ export interface PublicFederationObjectList {
   objects: PublicFederationObjectView[];
   truncated: boolean;
   nextCursor?: string;
+  total: number;
+  contextBefore: number;
 }
 
 function sha256(value: string): string {
@@ -421,17 +426,38 @@ export class PublicFederationReplica {
   private async reconcile(): Promise<{ pending: string[]; hidden: string[] }> {
     const pending: string[] = [];
     const hidden: string[] = [];
+    const projections = [];
     for (const [objectId, object] of Object.entries(this.state.objects)) {
       const origin = actorOrigin(object.base.actorId);
       if (origin === this.identity.origin && object.base.actorId === this.actorId) continue;
-      for (const path of this.possibleImportedPaths(origin, objectId)) await removeFederationFile(this.vaultPath, path);
       const projectionState = this.objectStatus(objectId);
       const categories = { 'origin-tombstone': 'Tombstones', 'global-moderation': 'Moderated', 'local-hide': 'LocallyHidden', 'pending-parent': 'Pending', active: importedCategory(object) };
       const category = categories[projectionState];
       if (projectionState === 'pending-parent') pending.push(objectId);
       else if (projectionState !== 'active') hidden.push(objectId);
       const path = join(this.publicRoot, 'Imported', origin, category, `${federationStorageName(objectId)}.md`);
-      await this.writeAtomic(path, markdownForImported(objectId, object, projectionState));
+      projections.push({ objectId, object, projectionState, path,
+        obsolete: this.possibleImportedPaths(origin, objectId).filter(candidate => candidate !== path) });
+    }
+    // Remove every newly unavailable public copy, including dependent children,
+    // before any marker/unrelated write can fail. A failed pull may roll back its
+    // in-memory cursor, but must not restore removed public bodies.
+    for (const projection of projections) if (projection.projectionState !== 'active') {
+      for (const path of projection.obsolete) await removeFederationFile(this.vaultPath, path);
+    }
+    for (const projection of projections) {
+      const content = markdownForImported(projection.objectId, projection.object, projection.projectionState);
+      let current: string | undefined;
+      try { current = await this.read(projection.path); }
+      catch (error) {
+        if (!(error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT')) throw error;
+      }
+      // Keep an active destination in place until the existing atomic writer
+      // replaces it. Empty feeds still repair missing files and parent arrivals.
+      if (current !== content) await this.writeAtomic(projection.path, content);
+      if (projection.projectionState === 'active') {
+        for (const path of projection.obsolete) await removeFederationFile(this.vaultPath, path);
+      }
     }
     return { pending, hidden };
   }
@@ -462,6 +488,24 @@ export class PublicFederationReplica {
     });
   }
 
+  /** Exact expected projection bytes, not authority to bypass ordinary note-read
+   * access or revision checks. External edits and later hides fail those checks. */
+  async getImportedReadTarget(objectId: string, expectedRevision: number): Promise<{ path: string; revision: string; totalLines: number }> {
+    return this.withMutation(async () => {
+      const object = this.state.objects[objectId];
+      if (!object || object.revision !== expectedRevision || this.objectStatus(objectId) !== 'active'
+        || object.base.actorId === this.actorId) throw guidanceError(new Error('Federation object changed or unavailable; reread its window'), 'guid-72562d6c40c54a58');
+      const content = markdownForImported(objectId, object, 'active');
+      const path = `PublicCommunity/Imported/${actorOrigin(object.base.actorId)}/${importedCategory(object)}/${federationStorageName(objectId)}.md`;
+      try {
+        const persisted = await readFederationFile(this.vaultPath, join(this.vaultPath, path), { maxBytes: 128 * 1024, label: guidanceText('guid-56d63a4c2f891a79', 'public federation projection') });
+        if (persisted !== content) throw guidanceError(new Error('projection changed'), 'guid-55fb28553f1f051c');
+      } catch { throw guidanceError(new Error('Federation projection changed or unavailable; retry synchronization before reading'), 'guid-fe6d6e936d06034e'); }
+      return { path,
+        revision: sha256(content), totalLines: content.split(/\r\n|\n|\r/).length };
+    });
+  }
+
   async listObjects(params: PublicFederationListParams = {}): Promise<PublicFederationObjectList> {
     return this.withMutation(async () => {
       const limit = Number.isSafeInteger(params.limit) && Number(params.limit) > 0 ? Math.min(Number(params.limit), 100) : 50;
@@ -473,11 +517,15 @@ export class PublicFederationReplica {
         .sort((left, right) => left.objectId.localeCompare(right.objectId));
       const start = params.after ? rows.findIndex(row => row.objectId === params.after) + 1 : 0;
       if (params.after && start === 0) throw guidanceError(new Error('public federation list cursor is outside the current snapshot'), 'guid-0cdd8fbf390013db');
-      const objects = rows.slice(start, start + limit);
-      const truncated = start + objects.length < rows.length;
-      return { objects, truncated, ...(truncated && objects.length > 0 && { nextCursor: objects.at(-1)!.objectId }) };
+      const overlap = params.after && Number.isSafeInteger(params.contextBefore) ? Math.min(start, Math.max(0, Math.min(params.contextBefore!, 20))) : 0;
+      const objects = rows.slice(start - overlap, start + limit);
+      const truncated = start + objects.length - overlap < rows.length;
+      return { objects, total: rows.length, contextBefore: overlap, truncated,
+        ...(truncated && objects.length > overlap && { nextCursor: objects.at(-1)!.objectId }) };
     });
   }
+
+  async getCursor(): Promise<number> { return this.withMutation(async () => this.state.cursor); }
 
   async pull(limit = 50): Promise<PublicFederationPullResult> {
     return this.withMutation(async () => {
@@ -490,22 +538,28 @@ export class PublicFederationReplica {
       if (!verifyPublicFederationFeed(feed, this.trustedHubPublicKey)) return { applied: [], pending: [], hidden: [], cursor: this.state.cursor, hasMore: true, errors: ['public federation feed signature validation failed'] };
       if (feed.after !== this.state.cursor) return { applied: [], pending: [], hidden: [], cursor: this.state.cursor, hasMore: true, errors: ['public federation feed cursor mismatch'] };
       if (feed.anchorHash !== this.state.lastEventHash) return { applied: [], pending: [], hidden: [], cursor: this.state.cursor, hasMore: true, errors: ['public federation feed does not continue the trusted hash chain'] };
+      const before = structuredClone(this.state);
       const applied: string[] = [];
-      let expectedSequence = this.state.cursor + 1;
-      let previousHash = this.state.lastEventHash;
-      for (const event of feed.events) {
-        if (event.sequence !== expectedSequence || event.previousHash !== previousHash) {
-          return { applied: [], pending: [], hidden: [], cursor: this.state.cursor, hasMore: true, errors: ['public federation feed is out of order or has a broken hash chain'] };
+      try {
+        let expectedSequence = this.state.cursor + 1;
+        let previousHash = this.state.lastEventHash;
+        for (const event of feed.events) {
+          if (event.sequence !== expectedSequence || event.previousHash !== previousHash) throw guidanceError(new Error('Verified federation feed changed during application'), 'guid-51d8404bd95ef884');
+          applied.push(this.apply(event));
+          this.state.cursor = event.sequence;
+          this.state.lastEventHash = event.eventHash;
+          expectedSequence += 1;
+          previousHash = event.eventHash;
         }
-        applied.push(this.apply(event));
-        this.state.cursor = event.sequence;
-        this.state.lastEventHash = event.eventHash;
-        expectedSequence += 1;
-        previousHash = event.eventHash;
+        const status = await this.reconcile();
+        await this.save();
+        return { applied: Array.from(new Set(applied)), pending: status.pending, hidden: status.hidden, cursor: this.state.cursor, hasMore: feed.hasMore, errors: [] };
+      } catch (error) {
+        // Do not expose a partially applied page as a complete verified cache.
+        // Disposable imported files are repaired from this cursor on the next pull.
+        this.state = before;
+        throw error;
       }
-      const status = await this.reconcile();
-      await this.save();
-      return { applied: Array.from(new Set(applied)), pending: status.pending, hidden: status.hidden, cursor: this.state.cursor, hasMore: feed.hasMore, errors: [] };
     });
   }
 

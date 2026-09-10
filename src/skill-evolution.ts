@@ -261,6 +261,8 @@ export class SkillEvolutionService {
       catch { continue; } // Promoted, stale or changed candidates cannot recur as ready work.
       return { endpointId: 'skill.candidate', arguments: { skillId: p.skillId, candidateId: candidate.candidateId, op: 'read', maxChars: 4000 } };
     }
+    if (list.truncated && typeof list.cursor === 'string') return { endpointId: 'skill.candidate',
+      arguments: { skillId: p.skillId, op: 'list', cursor: list.cursor, limit: 10, maxChars: 4000 } };
     return;
   }
   private async evaluationBasis(p: Params) {

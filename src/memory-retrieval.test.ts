@@ -267,14 +267,20 @@ test('standard search keeps its existing limit and body excerpt contract', async
   expect(result.every(hit => hit.ex.includes('standardneedle'))).toBe(true);
 });
 
-test('fiction admission reaches semantic search before its top-k window', async () => {
+test('retrieval forwards indexed fiction admission and current revision requirements before semantic top-k', async () => {
   const fiction = Array.from({ length: 20 }, (_, i) => ({ p: `Fiction/${i}.md`, t: `Fiction ${i}`, ex: '', mc: 0 }));
   for (const hit of fiction) await note(hit.p, '---\nfiction_domain: roleplay\n---\nUnrelated indexed text.');
   await note('Knowledge/Real.md', 'Unrelated indexed text.');
-  const candidates = [...fiction, { p: 'Knowledge/Real.md', t: 'Real', ex: '', mc: 0 }];
+  const fs = new FileSystemService(vault);
+  const candidates = await Promise.all([...fiction, { p: 'Knowledge/Real.md', t: 'Real', ex: '', mc: 0 }]
+    .map(async hit => ({ ...hit, rv: await fs.readNoteRevision(hit.p), fiction: hit.p.startsWith('Fiction/') })));
   vi.spyOn(semantic, 'search').mockImplementation(async params => {
-    const admitted = params.canAccessPath ? candidates.filter(hit => params.canAccessPath!(hit.p)) : candidates;
-    return { results: admitted.slice(0, 1), available: true, indexed: candidates.length, pending: 0 };
+    expect(params).toMatchObject({ fictionDomain: 'exclude', includeRevisions: true });
+    // This adapter-contract double models the current backend predicate. Real
+    // native vector admission is covered by semantic-reuse.test.ts.
+    const admitted = candidates.filter(hit => (params.fictionDomain !== 'exclude' || !hit.fiction)
+      && (!params.canAccessPath || params.canAccessPath(hit.p)));
+    return { results: admitted.slice(0, 1).map(({ fiction: _fiction, ...hit }) => hit), available: true, indexed: candidates.length, pending: 0 };
   });
   const result = await retrieval.retrieve({ query: 'semanticfictionneedle', semantic: true, fictionDomain: 'exclude', limit: 1 });
   expect(result.results.map(hit => hit.p)).toEqual(['Knowledge/Real.md']);

@@ -4,13 +4,11 @@ import type { FileSystemService } from './filesystem.js';
 import type { ScopeAccessPolicy } from './scope-access.js';
 import type { ScopePrincipal } from './scope-auth.js';
 import { isModerationHidden } from './moderation-policy.js';
-import { ReferenceService } from './references.js';
+import { ReferenceService, type ReadReferenceMetadata } from './references.js';
 import { extractObsidianLinkOccurrences } from './backlinks.js';
-import { parseWikiLink } from './wikilink/resolveWikiLink.js';
 import { normalizeKnowledgeSynthesis } from './knowledge-synthesis-model.js';
 import type { QueryNote } from './types.js';
 
-const BYTES = 8 * 1024 * 1024;
 const UNAVAILABLE = 'Synthesis input unavailable or changed; read current context and retry';
 const INPUT_KINDS = new Set(['atomic', 'knowledge', 'literature', 'question', 'hypothesis', 'experiment', 'assumption', 'decision']);
 const historicalInput = (fm: Record<string, unknown>) => ['archived', 'superseded', 'tombstoned'].includes(String(fm.lifecycle || '').trim().toLowerCase())
@@ -43,8 +41,10 @@ export async function inspectSynthesisBasis(value: unknown, container: string,
  * No separate writer, source promotion, truth score, or automatic input update. */
 export async function prepareKnowledgeSynthesis(
   fs: FileSystemService, access: ScopeAccessPolicy, value: unknown, container: string, principal?: ScopePrincipal,
+  readMetadata?: ReadReferenceMetadata,
 ) {
   const synthesis = normalizeKnowledgeSynthesis(value);
+  const refs = new ReferenceService(fs, access), read = readMetadata ?? refs.createMetadataReader(principal);
   const physical = (value: string): string => {
     const expanded = value.startsWith('scope://') ? access.resolveExternalPath(value, principal) : value.replace(/\\/g, '/');
     if (posix.isAbsolute(expanded) || expanded.includes(':') || /[\u0000-\u001f\u007f]/.test(expanded)) throw Error(UNAVAILABLE);
@@ -62,7 +62,7 @@ export async function prepareKnowledgeSynthesis(
     if (!allowed(path) || path.toLowerCase() === container.toLowerCase()) throw Error(UNAVAILABLE);
     const key = path.toLowerCase();
     if (!guards.has(key) && guards.size >= 8) throw guidanceError(Error('Synthesis may reference at most eight distinct related notes, including prose links'), 'guid-95b66b165911313c');
-    const meta = (await fs.readNoteMetadata([path], allowed, { fresh: true, strict: true, maxBytes: BYTES }))[0];
+    const meta = await read(path, allowed);
     if (!meta?.revision || isModerationHidden(meta.frontmatter)) throw Error(UNAVAILABLE);
     const old = guards.get(key);
     if (old && old.expectedRevision !== meta.revision) throw Error(UNAVAILABLE);
@@ -83,16 +83,10 @@ export async function prepareKnowledgeSynthesis(
     ...synthesis.choices.flatMap(c => [c.when, c.reason]), ...synthesis.counterexamples.map(c => c.description), ...synthesis.unresolvedQuestions];
   const links = fields.flatMap(field => extractObsidianLinkOccurrences(field));
   if (links.length > 16) throw guidanceError(Error('Synthesis prose supports at most sixteen links; put long analysis in a linked note'), 'guid-92462cc3d797c2a0');
-  const refs = new ReferenceService(fs, access);
   try {
-    for (const link of links) {
-      const raw = /^!?\[\[/.test(link.link) ? parseWikiLink(link.link.replace(/^!/, '')).document : link.target;
-      const decoded = decodeURIComponent(raw).replace(/\\/g, '/');
-      const path = decoded.startsWith('scope://') ? physical(decoded)
-        : physical(decoded.startsWith('.') ? posix.join(posix.dirname(container), decoded) : decoded);
-      if (!allowed(path)) throw Error(UNAVAILABLE);
-    }
-    for (const field of fields) for (const path of await refs.validateAndNormalize(undefined, container, principal, field, { strictBodyLinks: true })) await observe(path);
+    for (const path of await refs.validateBodyLinks(links, container, principal, value => {
+      if (!allowed(physical(value))) throw Error(UNAVAILABLE);
+    })) await observe(path);
   } catch { throw Error(UNAVAILABLE); }
   const assertAccess = () => {
     if (!allowed(container) || [...guards.values()].some(g => !allowed(g.path))) throw Error(UNAVAILABLE);

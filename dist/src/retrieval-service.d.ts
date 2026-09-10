@@ -59,9 +59,6 @@ export declare class RetrievalService {
     skillDiscoveryAllowed(path: string): boolean;
     constructor(search: SearchService, collaboration: CollaborationService, semantic: Pick<SemanticSearchService, 'search'> & Partial<Pick<SemanticSearchService, 'memoryCandidates'>>, access: ScopeAccessPolicy, fs: FileSystemService);
     physical(hit: RetrievalHit, principal?: ScopePrincipal): string;
-    /** Capture domain admission before index ranking/limits. This is content
-     * routing only; the caller's existing scope predicate remains authoritative. */
-    private fictionAdmission;
     /** Shared memory discovery only: up to 10,000 metadata hits, ex='', indexed
      * rv, no source hydration and no display/JSON cap. The caller owns bounded
      * current-revision body reads, exact matching and final response serialization.

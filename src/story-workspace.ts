@@ -5,13 +5,14 @@ import type { ScopeAuthService, ScopePrincipal } from './scope-auth.js';
 import type { ReferenceService } from './references.js';
 import type { WorkService } from './work-service.js';
 import type { AgentTaskService } from './agent-tasks.js';
+import type { GitHistoryService } from './git-history.js';
 import { isModerationHidden } from './moderation-policy.js';
 import { extractObsidianLinkOccurrences } from './backlinks.js';
 import type { QueryNotesCursor } from './types.js';
 import { StoryStore } from './story-store.js';
 import { storyArtifactPath, storyHash, storyList, storyPath, storyProjectPath, storyRevision, storyRoot, type StoryGuard, type StoryNote, type StoryParams, type StorySource } from './story-model.js';
 
-export interface StoryOptions { readOnly?: boolean; assertActor?: (principal: ScopePrincipal) => Promise<void>; changed?: (path: string) => void }
+export interface StoryOptions { readOnly?: boolean; assertActor?: (principal: ScopePrincipal) => Promise<void>; changed?: (path: string) => void; gitHistory?: GitHistoryService }
 
 /** Shared security and current-source checks, not a model executor. */
 export class StoryWorkspace {
@@ -21,9 +22,9 @@ export class StoryWorkspace {
     this.store = new StoryStore(fs, access);
   }
 
-  async actor(principal?: ScopePrincipal): Promise<ScopePrincipal> {
+  async actor(principal?: ScopePrincipal, allowReadOnly = false): Promise<ScopePrincipal> {
     if (!principal) throw guidanceError(new Error('Authenticated account required for story mutation'), 'guid-fdcef9cb9054ef89');
-    if (this.options.readOnly) throw guidanceError(new Error('Story server is read-only'), 'guid-ec2e79aa817cec12');
+    if (this.options.readOnly && !allowReadOnly) throw guidanceError(new Error('Story server is read-only'), 'guid-ec2e79aa817cec12');
     const current = (await this.auth.listPrincipals()).find(p => p.accountId === principal.accountId);
     if (!current || current.modelId !== principal.modelId || current.agentId !== principal.agentId || current.role !== principal.role
       || !this.auth.hasCapability(current, 'write') || !this.auth.hasCapability(principal, 'write')
@@ -39,8 +40,8 @@ export class StoryWorkspace {
     return note;
   }
 
-  async authorize(project: StoryNote, principal?: ScopePrincipal, role: 'member' | 'owner' | 'showrunner' = 'member', allowDisabled = false): Promise<StoryGuard> {
-    const actor = await this.actor(principal);
+  async authorize(project: StoryNote, principal?: ScopePrincipal, role: 'member' | 'owner' | 'showrunner' = 'member', allowDisabled = false, allowReadOnly = false): Promise<StoryGuard> {
+    const actor = await this.actor(principal, allowReadOnly);
     const current = await this.project(project.frontmatter.project_id, actor);
     if (current.revision !== project.revision) throw guidanceError(new Error('Story project delegation or revision changed during operation'), 'guid-61d0d9aee9288279');
     const fm = project.frontmatter;

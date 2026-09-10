@@ -1,4 +1,4 @@
-import { afterEach, expect, test } from 'vitest';
+import { afterEach, expect, test, vi } from 'vitest';
 import { mkdtemp, mkdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -40,13 +40,29 @@ test('draft remains private, market is bounded, and funded task cannot use free 
  try {
   const draft=await service.contract(actor('alice'),{op:'draft',requestId:'draft',contractId:'q',expectedRevision:'missing',terms:{taskId:'task',taskRevision:task.revision,title:'Review',criteria:['Keep uncertainty'],exclusions:[],kind:'research',reward:100,deadline:'2027-01-01T00:00:00.000Z',verifier:'independent-review-v1'}});
   expect((await service.market(actor('bob'),{})).items).toHaveLength(0);
+  expect((await service.freeTaskMutations(['task'])).task).toEqual({ state:'allowed', freeMutationBlocked:false });
   await service.contract(actor('alice'),{op:'fund',requestId:'fund',contractId:'q',expectedRevision:draft.revision});
   expect((await service.market(actor('bob'),{maxChars:4000})).items).toHaveLength(1);
   await expect(service.assertFreeTaskMutation('task')).rejects.toThrow(/quest/);
+  expect(await service.workProjection(actor('unapproved'),['task'])).toEqual({});
+  expect(await service.freeTaskMutations(['task','free'])).toEqual({
+    task:{state:'managed',freeMutationBlocked:true}, free:{state:'allowed',freeMutationBlocked:false},
+  });
   await expect(service.contract(actor('alice'),{op:'issue',requestId:'mint',amount:1} as any)).rejects.toThrow(/host|operation/);
   const state=await ledger.snapshot();expect(economyRevision(state.contracts.q)).toBeDefined();
  } finally {await ledger.close();}
 });
+
+test('unavailable ledger produces only fail-closed task eligibility and sanitized guard errors',async()=>{
+ const {service,ledger}=await fixture();
+ try {
+  const spy=vi.spyOn(ledger,'snapshot').mockRejectedValue(new Error('private-host-path/secret-ledger'));
+  expect(await service.freeTaskMutations(['task'])).toEqual({task:{state:'unavailable',freeMutationBlocked:true}});
+  await expect(service.assertFreeTaskMutation('task')).rejects.toThrow('Task management state unavailable');
+  spy.mockRestore();
+ } finally{await ledger.close();}
+});
+
 test('a captured contract cannot disclose its private replacement through market or review',async()=>{
  const {service,ledger,task,fs}=await fixture();
  try {

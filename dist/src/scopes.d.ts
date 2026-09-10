@@ -125,6 +125,7 @@ export declare class CollaborationService {
         caseSensitive?: boolean;
         includeRevisions?: boolean;
         expandAuthority?: boolean;
+        fictionDomain?: import('./fiction-domain.js').FictionDomainSelection;
     }, canAccessPath?: (path: string) => boolean): Promise<any[]>;
 }
 //# sourceMappingURL=scopes.d.ts.map

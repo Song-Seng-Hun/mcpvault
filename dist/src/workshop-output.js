@@ -2,6 +2,10 @@ import { guidanceError } from './guidance-runtime.js';
 import { normalizeScopeId } from './scopes.js';
 import { fingerprint, textField } from './work-model.js';
 import { isModerationHidden } from './moderation-policy.js';
+export function workshopDecisionSeal(frontmatter, content) {
+    const { workshop_output_integrity: _seal, ...state } = frontmatter;
+    return { version: 1, fingerprint: fingerprint({ state, content }) };
+}
 export function workshopDecisionContext(input) {
     const context = [input.context, '## Minority views', ...input.minority, '## Uncertainty', ...input.uncertainty, '## Revisit conditions', ...input.revisit].join('\n');
     if (Array.from(context).length > 4000)
@@ -48,6 +52,131 @@ export class WorkshopOutputService {
     constructor(fs, adapter) {
         this.fs = fs;
         this.adapter = adapter;
+    }
+    async verifyReconciliationReplay(path, note, actor, payload, revalidate) {
+        const v = object(payload), outputId = normalizeScopeId(text(v.outputId, 'outputId', 64), 'outputId');
+        const targetId = `meeting-${fingerprint({ path, outputId }).slice(0, 32)}`;
+        const records = note.frontmatter.workshop_outputs;
+        const record = Array.isArray(records) ? records.find(r => r.outputId === outputId) : undefined;
+        if (!record || ![`Community/Knowledge/Decisions/${targetId}.md`, `Community/Tasks/${targetId}.md`].includes(record.path) || !this.adapter.assertReadable)
+            throw guidanceError(Error('Reconciled output unavailable'), 'guid-5fb306842305da44');
+        await revalidate();
+        await this.adapter.assertReadable(actor, record.path, path);
+        const output = await this.fs.readNote(record.path, 8 * 1024 * 1024).catch(() => { throw guidanceError(Error('Reconciled output unavailable'), 'guid-5fb306842305da44'); });
+        if (output.revision !== v.outputRevision || record.revision !== output.revision || isModerationHidden(output.frontmatter) || output.frontmatter.content_status === 'deleted')
+            throw guidanceError(Error('Reconciled output revision or visibility changed'), 'guid-6f5d732996098fd6');
+        await this.current(path, note);
+        await revalidate();
+        await this.adapter.assertReadable(actor, record.path, path);
+        const opposite = record.path.startsWith('Community/Tasks/') ? `Community/Knowledge/Decisions/${targetId}.md` : `Community/Tasks/${targetId}.md`;
+        try {
+            const [outputRevision, workshopRevision, conflict] = await Promise.all([
+                this.fs.readNoteRevision(record.path, 8 * 1024 * 1024), this.fs.readNoteRevision(path, 8 * 1024 * 1024), this.fs.noteExists(opposite),
+            ]);
+            if (conflict || outputRevision !== output.revision || workshopRevision !== note.revision)
+                throw Error();
+        }
+        catch {
+            throw guidanceError(Error('Reconciled output or workshop changed, conflicting or unavailable'), 'guid-53a89ba3bad5f234');
+        }
+        await revalidate();
+    }
+    async reconcile(path, note, actor, payload, revalidate, mutation) {
+        if (note.frontmatter.facilitator_account_id !== actor.accountId)
+            throw guidanceError(Error('Only current facilitator may reconcile a pending output'), 'guid-7202cb9204a614de');
+        const v = object(payload), outputId = normalizeScopeId(text(v.outputId, 'outputId', 64), 'outputId'), reason = text(v.reason, 'reason');
+        if (Object.keys(v).some(k => !['outputId', 'outputRevision', 'reason'].includes(k)) || typeof v.outputRevision !== 'string' || !/^[a-f0-9]{64}$/.test(v.outputRevision))
+            throw guidanceError(Error('Invalid output reconciliation fields or revision'), 'guid-dfeb17e7004ef4b2');
+        const pending = note.frontmatter.workshop_output_pending;
+        if (!pending || pending.receipt?.outputId !== outputId || pending.receipt.workshopPath !== path || !['decision', 'task'].includes(pending.input?.type) || pending.input.outputId !== outputId)
+            throw guidanceError(Error('Pending output receipt does not match'), 'guid-1b41fb0183c04d81');
+        const targetId = `meeting-${fingerprint({ path, outputId }).slice(0, 32)}`;
+        const decision = `Community/Knowledge/Decisions/${targetId}.md`, task = `Community/Tasks/${targetId}.md`;
+        const target = pending.input.type === 'decision' ? decision : task, opposite = target === decision ? task : decision;
+        if (pending.input.path !== target || !this.adapter.assertReadable)
+            throw guidanceError(Error('Output recovery target unavailable'), 'guid-521a97ba8d7b5a6a');
+        const checkedPaths = [];
+        const assertAccess = async () => {
+            await revalidate();
+            await this.adapter.assertReadable(actor, target, path);
+            for (const source of checkedPaths)
+                await this.adapter.assertReadable(actor, source, path);
+        };
+        await assertAccess();
+        let output;
+        try {
+            output = await this.fs.readNote(target, 8 * 1024 * 1024);
+        }
+        catch {
+            throw guidanceError(Error('Output unavailable; use cancel_output only when absent'), 'guid-c73e9523423c0645');
+        }
+        if (output.revision !== v.outputRevision)
+            throw guidanceError(Error('Output revision changed; reread before reconciliation'), 'guid-0aa038bd1e936a26');
+        if (isModerationHidden(output.frontmatter) || output.frontmatter.content_status === 'deleted' || fingerprint(output.frontmatter.workshop_output ?? null) !== fingerprint(pending.receipt))
+            throw guidanceError(Error('Output receipt or visibility changed'), 'guid-df052520fefac925');
+        if (pending.input.type === 'task') {
+            if (!this.adapter.verifyTaskOrigin)
+                throw guidanceError(Error('Output integrity verification unavailable'), 'guid-9d8a6a59874a478f');
+            this.adapter.verifyTaskOrigin(output, pending.input, pending.receipt);
+        }
+        else if (output.frontmatter.llm_wiki_type !== 'knowledge' || output.frontmatter.note_kind !== 'decision'
+            || fingerprint(output.frontmatter.workshop_output_integrity ?? null) !== fingerprint(workshopDecisionSeal(output.frontmatter, output.content))) {
+            throw guidanceError(Error('Output integrity unavailable or changed; preserve the output and reservation'), 'guid-618f8eded4212103');
+        }
+        const records = note.frontmatter.workshop_outputs ?? [];
+        if (!Array.isArray(records) || records.length >= 16 || records.some(r => r.outputId === outputId))
+            throw guidanceError(Error('Output receipt history full or conflicting'), 'guid-e95a0435c33a41c5');
+        if (!Array.isArray(pending.sourceGuards) || pending.sourceGuards.length > 126 || pending.sourceGuards.some((g) => !g || typeof g.path !== 'string' || typeof g.expectedRevision !== 'string' || !/^[a-f0-9]{64}$/.test(g.expectedRevision)))
+            throw guidanceError(Error('Output source guard budget or format is invalid'), 'guid-95bf1b3ef833cb98');
+        let outcome = 'reconciled';
+        try {
+            if (this.basis(path, note, pending.sourceGuards) !== pending.basisFingerprint)
+                outcome = 'unresolved';
+        }
+        catch {
+            outcome = 'unresolved';
+        }
+        const guards = [{ path: target, expectedRevision: output.revision }, { path: opposite, expectedRevision: 'missing' }];
+        for (const guard of pending.sourceGuards) {
+            if (guard.path === path)
+                continue;
+            try {
+                if (typeof guard.path !== 'string' || typeof guard.expectedRevision !== 'string')
+                    throw Error();
+                await this.adapter.assertReadable(actor, guard.path, path);
+                const current = await this.fs.readNote(guard.path, 8 * 1024 * 1024);
+                if (isModerationHidden(current.frontmatter) || current.frontmatter.content_status === 'deleted')
+                    throw Error();
+                if (current.revision !== guard.expectedRevision)
+                    outcome = 'unresolved';
+                guards.push({ path: guard.path, expectedRevision: current.revision });
+                checkedPaths.push(guard.path);
+            }
+            catch {
+                outcome = 'unresolved';
+            }
+        }
+        await assertAccess();
+        await this.current(path, note);
+        const result = { reconciledOutputId: outputId, outcome };
+        const frontmatter = { ...note.frontmatter,
+            workshop_outputs: [...records, { ...pending.receipt, path: target, revision: output.revision, outcome, reconciledBy: actor.accountId, reason }],
+            facilitation_mutation_receipts: [...(note.frontmatter.facilitation_mutation_receipts || []), { request_key: mutation.requestKey, payload_hash: mutation.payloadHash, operation: 'reconcile_output', result }].slice(-16) };
+        delete frontmatter.workshop_output_pending;
+        let written;
+        try {
+            written = await this.fs.writeNoteWithRevisionGuardsAndReceipt({ path, content: `${note.content.trimEnd()}\n\n- Output ${outputId}: [[${target}]] (${outcome})\n`, frontmatter, expectedRevision: note.revision }, guards, { maxGuards: 128, assertAccess });
+        }
+        catch {
+            throw guidanceError(Error('Reconciliation unavailable; recheck current authority, output and workshop revisions'), 'guid-cc7fa45d92059f9f');
+        }
+        return { success: true, ...result, revision: written.revision, authority: 'Existing output preserved; no approval or execution permission changed' };
+    }
+    basis(path, note, sourceGuards) {
+        return fingerprint({ delegation: delegation(note.frontmatter.facilitation_delegation), facilitator: note.frontmatter.facilitator_account_id,
+            facilitatorGeneration: note.frontmatter.facilitator_generation ?? null, facilitation: note.frontmatter.facilitation,
+            phase: note.frontmatter.phase ?? null, contentFingerprint: fingerprint(note.content),
+            sourceGuards: sourceGuards.filter(g => g.path.toLowerCase() !== path.toLowerCase()).sort((a, b) => a.path.localeCompare(b.path)) });
     }
     async cancel(path, note, actor, payload, revalidate, mutation) {
         if (note.frontmatter.facilitator_account_id !== actor.accountId)
@@ -151,10 +280,7 @@ export class WorkshopOutputService {
                 throw guidanceError(new Error('Output source changed during validation'), 'guid-7744274e3ff31889');
             guardMap.set(key, guard);
         }
-        const basisFingerprint = fingerprint({ delegation: d, facilitator: note.frontmatter.facilitator_account_id,
-            facilitatorGeneration: note.frontmatter.facilitator_generation ?? null, facilitation: note.frontmatter.facilitation,
-            phase: note.frontmatter.phase ?? null, contentFingerprint: fingerprint(note.content),
-            sourceGuards: sourceGuards.filter(g => g.path.toLowerCase() !== path.toLowerCase()).sort((a, b) => a.path.localeCompare(b.path)) });
+        const basisFingerprint = this.basis(path, note, sourceGuards);
         const pending = note.frontmatter.workshop_output_pending;
         if (pending && (linked || fingerprint(pending.receipt) !== fingerprint(receipt) || fingerprint(pending.input) !== fingerprint(input) || pending.basisFingerprint !== basisFingerprint)) {
             throw guidanceError(new Error('Pending output conflict: recover the same payload and authority with its unchanged review basis'), 'guid-5ed18b803ee0bdea');

@@ -197,7 +197,7 @@ export class AgentTaskService {
     return { tasks: bounded.items, total, truncated: window.truncated || total > window.notes.length || bounded.truncated };
   }
 
-  async listAssignedOpen(params: { assignee: string; limit?: number; maxChars?: number }) {
+  async listAssignedOpen(params: { assignee: string; limit?: number; maxChars?: number; excludeProjectBacked?: boolean }) {
     const assignee = normalizeScopeId(params.assignee, 'assignee');
     const limit = Math.min(Math.max(Number(params.limit ?? 20), 1), 20);
     const maxChars = Math.min(Math.max(Number(params.maxChars ?? 6000), 512), 20000);
@@ -225,6 +225,9 @@ export class AgentTaskService {
       includeContent: false,
     })) {
       if (isModerationHidden(note.frontmatter)) continue;
+      // WorkService is the sole selector for project tasks when attached to
+      // Pulse; do not resurrect an ineligible task via the legacy route.
+      if (params.excludeProjectBacked && note.frontmatter.project_id) continue;
       const rawStatus = String(note.frontmatter.status || '').trim().toLowerCase();
       if (!(ASSIGNED_OPEN_STATUS_ORDER as readonly string[]).includes(rawStatus)) continue;
       let taskId: string;

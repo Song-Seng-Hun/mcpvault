@@ -1,4 +1,4 @@
-import { afterEach, expect, test } from 'vitest';
+import { afterEach, beforeEach, expect, test } from 'vitest';
 import { mkdtemp, mkdir, rm, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -9,7 +9,7 @@ import { RoleplayStore } from './roleplay-store.js';
 import { roleplayRevision } from './roleplay-model.js';
 const cleanup: Array<() => Promise<unknown>> = [];
 afterEach(async () => { for (const f of cleanup.splice(0).reverse()) await f(); });
-test('nine dynamic endpoints keep five MCP tools; two authenticated players share one state and immutable chat projection', async () => {
+async function setupHarness() {
   const root = await mkdtemp(join(tmpdir(), 'roleplay-mcp-')); cleanup.push(() => rm(root, { recursive: true, force: true }));
   const vaultPath = join(root, 'vault'), hostPath = join(root, 'host'); await mkdir(vaultPath); await mkdir(hostPath);
   const world = await RoleplayStore.open({ vaultPath, hostPath, policy: { administrators: ['host'] } }); cleanup.push(() => world.close());
@@ -23,12 +23,20 @@ test('nine dynamic endpoints keep five MCP tools; two authenticated players shar
     const r = await caller.callTool({ name: 'call_endpoint', arguments: { endpointId, arguments: args } });
     const text = (r.content as any[])[0].text; return { error: r.isError, value: r.isError ? text : JSON.parse(text) };
   };
-  expect((await client.listTools()).tools).toHaveLength(5);
   const tokens: Record<string, string> = {};
   for (const account of ['host', 'alice', 'bob']) {
     const registered = await call('auth.register', { accountId: account, agentId: account, modelId: 'codex', userId: `owner-${account}`, password: 'isolated-roleplay-test-password' });
     expect(registered.error).not.toBe(true); tokens[account] = registered.value.accessToken;
   }
+  return { vaultPath, world, client, second, call, tokens };
+}
+let harness: Awaited<ReturnType<typeof setupHarness>>;
+// Isolated transport/account setup is not the behavior under test. Keep real
+// HTTP/authentication and the existing five-second body limit; setup errors fail.
+beforeEach(async () => { harness = await setupHarness(); });
+test('nine dynamic endpoints keep five MCP tools; two authenticated players share one state and immutable chat projection', async () => {
+  const { vaultPath, world, client, second, call, tokens } = harness;
+  expect((await client.listTools()).tools).toHaveLength(5);
   let serial = 0;
   const act = async (endpoint: string, data: Record<string, unknown>, account = 'host') => call(`roleplay.${endpoint}`, { ...data, requestId: `request-${++serial}`, expectedRevision: roleplayRevision(await world.snapshot()), accessToken: tokens[account] });
   expect((await act('world', { op: 'initialize', title: 'Lantern Archive', places: { hall: ['garden'], garden: ['hall'] } }, 'alice')).error).toBe(true);

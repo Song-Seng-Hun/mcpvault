@@ -48,5 +48,13 @@ test('story catalog has nine bounded contracts with operation-specific public re
     const restricted = registry.list('story.artifact', 1, 20000, { readOnly: false, authenticated: true, capabilities: new Set(['task']) }, false).endpoints[0]!;
     expect(restricted.available).toBe(true);
     expect(restricted.operations!.create).toMatchObject({ available: false, state: 'locked', requires: ['write', 'task'] });
+    const session = registry.resolve('story.session')!.input.properties as any;
+    expect(session.op.enum).toContain('reconnect_preview');
+    expect(session.includeGitHistory.type).toBe('boolean');
+    expect(session.reconnectProofFingerprint.pattern).toBe('^[a-f0-9]{64}$');
+    const anonymous = registry.list('story.session', 1, 20000, { readOnly: true, authenticated: false, capabilities: new Set() }, false).endpoints[0]!;
+    expect(anonymous.operations!.reconnect_preview).toMatchObject({ available: false, state: 'locked', requires: ['write', 'task'] });
+    const authorized = registry.list('story.session', 1, 20000, { readOnly: true, authenticated: true, capabilities: new Set(['write', 'task']) }, false).endpoints[0]!;
+    expect(authorized.operations!.reconnect_preview).toMatchObject({ available: true, state: 'ready', requires: ['write', 'task'] });
   } finally { await server.close(); await rm(root, { recursive: true, force: true }); }
 });

@@ -709,6 +709,10 @@ export class IdeationService {
         const limit = Math.min(Math.max(Number(params.limit ?? 12), 1), 50);
         const maxChars = Math.min(Math.max(Number(params.maxChars ?? 6000), 512), 12000);
         const after = params.cursor === undefined ? undefined : facilitationCursor(params.cursor);
+        if (note.frontmatter.phase === 'closed' && note.frontmatter.facilitation_close_outcome === 'unresolved') {
+            return { workshopId, managed: true, revision: note.revision, phase: 'closed', outcome: 'unresolved',
+                nextAction: { kind: 'closed', message: guidanceText('guid-869a2b475c06801c', 'Meeting closed unresolved; original outputs and approvals were not changed.') }, truncated: false };
+        }
         try {
             facilitation = await this.validateFacilitationSources(facilitation, params.principal, workshopPath(workshopId));
         }
@@ -762,7 +766,9 @@ export class IdeationService {
             const principal = requireLogin(params.principal);
             const workshopId = normalizeScopeId(params.workshopId, 'workshopId');
             const requestId = text(params.requestId, 'requestId', 128, true);
-            const operation = enumValue(params.operation, 'operation', ['configure', 'submit', 'advance', 'handoff', 'revoke', 'pause', 'resume', 'redo', 'synthesize', 'record_output', 'delegate', 'execute_output', 'cancel_output', 'close'], 'configure');
+            const operation = enumValue(params.operation, 'operation', ['configure', 'submit', 'advance', 'handoff', 'revoke', 'pause', 'resume', 'redo', 'synthesize', 'record_output', 'delegate', 'execute_output', 'cancel_output', 'reconcile_output', 'close'], 'configure');
+            const unresolvedClose = operation === 'close' && params.payload !== null && typeof params.payload === 'object' && !Array.isArray(params.payload) && params.payload.outcome === 'unresolved';
+            const recovery = operation === 'cancel_output' || operation === 'reconcile_output' || unresolvedClose;
             const path = workshopPath(workshopId);
             const note = await this.readTyped(path, 'workshop');
             const payloadHash = hashPayload({ operation, payload: params.payload, stepId: params.stepId, structured: params.structured, content: params.content, kind: params.kind, references: params.references });
@@ -772,7 +778,7 @@ export class IdeationService {
             const previousBlock = facilitation ? managedFacilitationMarkdown(facilitation) : undefined;
             const completionGuards = [];
             if (facilitation) {
-                if (operation !== 'cancel_output')
+                if (!recovery)
                     facilitation = await this.validateFacilitationSources(facilitation, principal, path);
                 if (operation === 'submit') {
                     if (!facilitation.participants.includes(principal.accountId))
@@ -789,10 +795,17 @@ export class IdeationService {
                     throw guidanceError(new Error('Only the creator account may configure managed facilitation'), 'guid-abb5cc3bdb73f3e7');
             }
             const receipts = facilitationReceipts(note);
+            if (recovery && owner !== principal.accountId)
+                throw guidanceError(Error('Only the current workshop facilitator may recover or close unresolved'), 'guid-6975cba6e2d650af');
             const prior = receipts.find(receipt => receipt.request_key === requestKey);
             if (prior) {
                 if (prior.operation !== operation || prior.payload_hash !== payloadHash)
                     throw guidanceError(new Error('requestId was already used for a different facilitation mutation or payload'), 'guid-fd709fff9f63123b');
+                if (operation === 'reconcile_output') {
+                    if (!this.outputService)
+                        throw guidanceError(Error('Managed output adapter is unavailable'), 'guid-3c341f947b39bd1b');
+                    await this.outputService.verifyReconciliationReplay(path, note, principal, params.payload, async () => { await revalidateManagedActor(principal, params.revalidateActor); });
+                }
                 await revalidateManagedActor(principal, params.revalidateActor);
                 return { success: true, workshopId, replayed: true, ...(prior.result && typeof prior.result === 'object' && !Array.isArray(prior.result) ? prior.result : {}), revision: note.revision };
             }
@@ -802,6 +815,13 @@ export class IdeationService {
                 if (note.revision !== params.expectedRevision)
                     throw guidanceError(new Error('Workshop revision changed; reread before cancellation'), 'guid-b7370d45502ab43e');
                 return this.outputService.cancel(path, note, principal, params.payload, async () => { await revalidateManagedActor(principal, params.revalidateActor); }, { requestKey, payloadHash });
+            }
+            if (operation === 'reconcile_output') {
+                if (!facilitation || !this.outputService)
+                    throw guidanceError(Error('Managed output adapter is unavailable'), 'guid-3c341f947b39bd1b');
+                if (note.revision !== params.expectedRevision)
+                    throw guidanceError(Error('Workshop revision changed; reread before reconciliation'), 'guid-29e33c1ed37171ee');
+                return this.outputService.reconcile(path, note, principal, params.payload, async () => { await revalidateManagedActor(principal, params.revalidateActor); }, { requestKey, payloadHash });
             }
             if (operation === 'execute_output') {
                 if (!facilitation || !this.outputService)
@@ -865,13 +885,17 @@ export class IdeationService {
                 else if (operation === 'close') {
                     if (note.frontmatter.workshop_output_pending)
                         throw guidanceError(new Error('Recover the pending delegated output before closing'), 'guid-ad6d20f0c683f558');
-                    const submissions = await this.managedWorkshopContributions(workshopId, facilitation, principal);
-                    if (submissions.incomplete || nextFacilitationAction(facilitation, submissions.rows.map(r => r.submission)).kind !== 'record_output')
-                        throw guidanceError(new Error('Finish the final method step before closing'), 'guid-36df650d7a327b54');
-                    if (!facilitation.outputs.some(o => o.type === 'facilitation_synthesis' && (o.round ?? 1) === facilitation.round))
-                        throw guidanceError(new Error('Record synthesis with minority, uncertainty and revisit before closing'), 'guid-717fbe2450843a54');
                     text(payload.reason, 'payload.reason', 500, true);
-                    completionGuards.push(...submissions.rows.flatMap(row => row.guards));
+                    if (payload.outcome !== undefined && payload.outcome !== 'unresolved')
+                        throw guidanceError(Error('Unknown workshop closure outcome'), 'guid-9a7684fd9935070d');
+                    if (!unresolvedClose) {
+                        const submissions = await this.managedWorkshopContributions(workshopId, facilitation, principal);
+                        if (submissions.incomplete || nextFacilitationAction(facilitation, submissions.rows.map(r => r.submission)).kind !== 'record_output')
+                            throw guidanceError(new Error('Finish the final method step before closing'), 'guid-36df650d7a327b54');
+                        if (!facilitation.outputs.some(o => o.type === 'facilitation_synthesis' && (o.round ?? 1) === facilitation.round))
+                            throw guidanceError(new Error('Record synthesis with minority, uncertainty and revisit before closing'), 'guid-717fbe2450843a54');
+                        completionGuards.push(...submissions.rows.flatMap(row => row.guards));
+                    }
                 }
                 else if (operation === 'advance') {
                     const submissions = await this.managedWorkshopContributions(workshopId, facilitation, principal);
@@ -947,12 +971,12 @@ export class IdeationService {
             const result = { operation, currentStepId: facilitation.currentStepId, facilitatorAccountId: facilitation.facilitatorAccountId,
                 ...(operation === 'record_output' ? { outputRecorded: true } : {}),
                 ...(operation === 'synthesize' ? { synthesisStatus: 'proposed', decisionOutput: 'Use the recorded synthesis as input to wiki.decision_record; it is not an approval or implementation.' } : {}),
-                nextAction: nextFacilitationAction(facilitation, []),
+                ...(operation === 'close' ? { outcome: unresolvedClose ? 'unresolved' : 'completed' } : { nextAction: nextFacilitationAction(facilitation, []) }),
             };
             const nextReceipts = [...receipts, { request_key: requestKey, operation, payload_hash: payloadHash, result }].slice(-workshopFacilitationReceiptLimit);
             const synthesisOutput = operation === 'synthesize' ? facilitation.outputs.at(-1) : undefined;
             const content = replaceFacilitationBlock(note.content, previousBlock, managedFacilitationMarkdown(facilitation)) + (synthesisOutput ? `\n\n## Synthesis\n${String(synthesisOutput.synthesis || '')}\n` : '');
-            const allGuards = [...await validateWorkshopReferences(this.fileSystem, this.references, facilitation, path, principal), ...completionGuards];
+            const allGuards = [...(unresolvedClose ? [] : await validateWorkshopReferences(this.fileSystem, this.references, facilitation, path, principal)), ...completionGuards];
             const uniqueGuards = new Map();
             for (const guard of allGuards) {
                 const key = guard.path.toLowerCase();
@@ -965,10 +989,15 @@ export class IdeationService {
             if (relatedGuards.length > 128)
                 throw guidanceError(new Error('Completion exceeds 128 revision guards; narrow this step without discarding its evidence'), 'guid-3e02e5726049a214');
             await revalidateManagedActor(principal, params.revalidateActor);
-            await this.fileSystem.writeNoteWithRevisionGuardsAndReceipt({ path, content, frontmatter: { ...note.frontmatter, facilitation,
+            const write = { path, content, frontmatter: { ...note.frontmatter, facilitation,
                     facilitator_account_id: facilitation.facilitatorAccountId, facilitator_generation: facilitation.facilitatorGeneration,
                     facilitation_mutation_receipts: nextReceipts, ...(operation === 'synthesize' ? { synthesis_status: 'proposed', phase: 'decide', next_action: 'Review this bounded synthesis, then use wiki.decision_record or task generation through their normal authorization.' } : {}),
-                    ...(operation === 'close' ? { phase: 'closed', status: 'closed', facilitation_closed_at: now(), next_action: 'Meeting closed; outputs do not authorize external execution.' } : {}), updated_at: now(), }, expectedRevision: params.expectedRevision }, relatedGuards, { maxGuards: 128 });
+                    ...(operation === 'close' ? { phase: 'closed', status: 'closed', facilitation_closed_at: now(), facilitation_close_outcome: unresolvedClose ? 'unresolved' : 'completed', facilitation_close_reason: params.payload.reason, next_action: 'Meeting closed; outputs do not authorize external execution.' } : {}), updated_at: now(), }, expectedRevision: params.expectedRevision };
+            const policy = { maxGuards: 128, assertAccess: async () => { await revalidateManagedActor(principal, params.revalidateActor); } };
+            if (relatedGuards.length)
+                await this.fileSystem.writeNoteWithRevisionGuardsAndReceipt(write, relatedGuards, policy);
+            else
+                await this.fileSystem.writeNoteWithReceipt(write, policy);
             const updated = await this.fileSystem.readNote(path);
             return { success: true, workshopId, ...result, revision: updated.revision };
         });

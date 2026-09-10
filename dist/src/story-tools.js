@@ -56,7 +56,7 @@ export const STORY_OPERATIONS = {
     context: { tool: 'read_story_context', defaultOp: 'read', reads: ['read'], writes: [] },
     review: { tool: 'manage_story_review', defaultOp: 'read', reads: ['read', 'list'], writes: ['create'] },
     adopt: { tool: 'adopt_story_artifact', defaultOp: 'adopt', reads: [], writes: ['adopt'] },
-    session: { tool: 'manage_story_session', defaultOp: 'read', reads: ['read', 'list'], writes: ['start', 'submit', 'review', 'pause', 'resume', 'decide', 'rehearse'] },
+    session: { tool: 'manage_story_session', defaultOp: 'read', reads: ['read', 'list', 'reconnect_preview'], writes: ['start', 'submit', 'review', 'pause', 'resume', 'decide', 'rehearse'] },
     export: { tool: 'manage_story_export', defaultOp: 'preview', reads: ['read', 'preview', 'health'], writes: ['write'] },
     visual: { tool: 'manage_story_visual', defaultOp: 'read', reads: ['read', 'preview'], writes: ['propose'] },
 };
@@ -94,6 +94,8 @@ const fields = {
     session: { sessionId: id, artifactId: id, writerAccountId: account, editorAccountId: account, sourceRevision: revision, reviewId: id,
         reconnectWriter: { type: 'boolean', description: 'Explicit showrunner-only resume after an accepted Work handoff. Requires current expectedWorkRevision and expectedWorkGeneration; preserves editor and prior evidence.' },
         expectedWorkRevision: revision, expectedWorkGeneration: integer(0, Number.MAX_SAFE_INTEGER),
+        includeGitHistory: { type: 'boolean', description: 'Explicit bounded local Git fallback for reconnect_preview or reconnectWriter resume only. Never initializes, commits, fetches or follows renames.' },
+        reconnectProofFingerprint: { ...revision, description: 'Current reconnect_preview proof; required for multi-hop or Git-assisted writer reconnection.' },
         decision: enumeration('ready', 'changes_requested', 'adopt', 'reject', 'hold', 'adjust_scope'), reason: text(2000, 1),
         choiceIds: array(branchKey, 4096), initialState: { type: 'object', additionalProperties: false, maxProperties: 128,
             patternProperties: { '^(?!(__proto__|prototype|constructor)$)(?!\\s)(?!.*\\s$)[^\\u0000-\\u001f\\u007f]{1,128}$': branchValue } }, maxSteps: { ...integer(1, 128), description: 'Rehearsal steps; defaults to and cannot exceed the current project maxSteps budget.' } },
@@ -110,7 +112,7 @@ const descriptions = {
     context: 'Read bounded story context with branch, character knowledge, source revision and stale-source separation. Public visibility rules still apply.',
     review: 'Read/list editorial reviews or create a new revision-pinned advisory review. Reviews preserve uncertainty and intentional exceptions.',
     adopt: 'Adopt an exact artifact revision into an immutable snapshot. Requires the current showrunner, project revision and a reason. Always mutating.',
-    session: 'Read/list a writer session or start, submit, review, pause, resume, decide or rehearse. Mutations use registered accounts and Work assignments. No agents are spawned; rehearsal stays a proposal.',
+    session: 'Read/list a writer session or start, submit, review, pause, resume, decide or rehearse. Authenticated showrunner reconnect_preview proves accepted Work handoff continuity; includeGitHistory explicitly permits bounded local history fallback. Multi-hop or Git-assisted reconnectWriter resume requires the current proof fingerprint. Mutations use registered accounts and Work assignments. No agents are spawned; rehearsal stays a proposal.',
     export: 'Preview (default), read or check export health without mutation. Only write persists a derived markdown, Fountain, storyboard or Canvas export. Source revisions and explicit sequences remain authoritative.',
     visual: 'Read partial source-linked event/interaction/location projections, preview a selected edit intent, or propose a separate alternative. Requires authored visual_model annotations with exact scene revision and Unicode passage offsets. Proposals require current preview fingerprint, membership, and source/project revisions. No model execution, automatic scene replacement, or Canvas interception.',
 };

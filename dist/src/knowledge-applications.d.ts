@@ -2,6 +2,7 @@ import type { FileSystemService } from './filesystem.js';
 import type { ScopeAccessPolicy } from './scope-access.js';
 import type { ScopePrincipal } from './scope-auth.js';
 import { type KnowledgeApplication } from './knowledge-application-model.js';
+import { type ReadReferenceMetadata } from './references.js';
 type Guard = {
     path: string;
     expectedRevision: string;
@@ -32,7 +33,7 @@ export declare class KnowledgeApplicationService {
     private proseReferences;
     /** Guard current reference visibility while retaining the reported historical revision.
      * Up to eight distinct related documents leaves room for an existing project guard. */
-    prepare(value: unknown, container: string, principal?: ScopePrincipal): Promise<{
+    prepare(value: unknown, container: string, principal?: ScopePrincipal, readMetadata?: ReadReferenceMetadata): Promise<{
         records: KnowledgeApplication[];
         guards: Guard[];
     }>;

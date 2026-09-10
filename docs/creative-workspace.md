@@ -178,6 +178,52 @@ Work assignment and sources. The explicit project step budget defaults to 32
 and is bounded to 128. Budget exhaustion records waiting rather than starting
 more execution. Nothing wakes a model or invents attendance.
 
+### Reconnect after accepted Work handoffs
+
+Ordinary `resume` never changes the writer. When a waiting session's Work task
+has moved through one or more accepted handoffs, its current showrunner can call
+`story.session {op: "reconnect_preview", projectId, sessionId}`. This is an
+authenticated read, available on a read-only server to an otherwise authorized
+showrunner; public session reads do not grant this authority.
+
+The preview proves a consecutive account/generation chain from the saved writer
+to the current Work assignee. Work's existing 16-entry `work_changes` record now
+includes each acceptance's from/to accounts and generations, exact pre-accept
+proposal revision, and accepting account. New sessions pin the observed Work
+revision/generation without pretending that an intended writer already claimed
+an unassigned task. Reconnection updates that pin. An initial self-claim, missing
+edges, repeated legacy origins, release/reclaim gaps and conflicting states are
+not interchangeable with accepted handoffs.
+
+Use the returned `reconnectProofFingerprint`, `expectedWorkRevision`, and
+`expectedWorkGeneration` with explicit `op: "resume", reconnectWriter: true`,
+the current session `expectedRevision`, `expectedProjectRevision` and `requestId`.
+Multi-hop or Git-assisted reconnection requires the preview fingerprint. A
+single directly proven handoff remains compatible without that input. The same
+proof is checked again at the guarded write. Reconnection preserves the editor,
+manuscripts, reviews, selections and Work task; it does not approve or complete
+Work. Retry receipts still require current authority and the exact persisted
+post-reconnection binding; they cannot revive a revoked role or changed task.
+
+If current records have expired, explicitly set `includeGitHistory: true` in
+both preview and resume to allow bounded local history fallback. It reads only
+the exact task path in this Vault's own Git repository, at a fixed HEAD along
+first-parent history: at most 100 changed commits inspected, 32 bodies, 512 KiB
+per body, 8 MiB total and a shared 10-second read deadline. Saturated windows,
+shallow history, unavailable Git, deleted/renamed-away paths and budget failures
+are insufficient evidence, not successful partial proofs. It never initializes,
+commits, fetches, checks out, follows renames or rewrites history.
+
+Historical predecessor and accepted states must agree on task/project identity,
+assignee and consecutive generation. Commit authors/messages and old acceptance
+events merely copied into a later state are not authorization. An uncommitted
+middle transition cannot be invented from a later receipt. Git HEAD/blob
+observations are part of the proof, and a changed HEAD invalidates it. Legacy
+sessions without a saved Work binding need a uniquely provable origin across
+complete interpretable transitions; a lone surviving matching writer is not
+enough. If proof is unavailable, retain the old session and all its results and
+explicitly create a new session rather than rewriting the missing history.
+
 Existing Workshops remain the discussion surface: contributions link the exact
 artifact and review revisions instead of embedding long manuscripts in their
 280-character contribution field. Structure designers and character/readership

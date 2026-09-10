@@ -2,8 +2,8 @@ import { guidanceError } from './guidance-runtime.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { lstat, open, realpath } from 'node:fs/promises';
 import { hostname, platform } from 'node:os';
-import { dirname, isAbsolute, join, parse, relative, sep } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { isAbsolute, join, parse, relative, sep } from 'node:path';
+import { hostSourceRoots } from './host-source-roots.js';
 import { readFederationFile } from './public-federation-storage.js';
 
 export const ROLEPLAY_HOST_IDENTITY_FILE = 'roleplay-host-identity.json';
@@ -34,26 +34,13 @@ export async function canonicalRoleplayPath(path: string, local: boolean, file =
   return canonical;
 }
 
-// Include every enclosing package, so a frozen .mcpvault/deployments/.../dist
-// runtime cannot mistake its own release directory for the only source boundary.
-async function sourceRoots(): Promise<string[]> {
-  const roots: string[] = [];
-  let current = dirname(dirname(fileURLToPath(import.meta.url)));
-  roots.push(await realpath(current));
-  while (true) {
-    try { if ((await lstat(join(current, 'package.json'))).isFile()) roots.push(await realpath(current)); }
-    catch (e) { if (!missing(e)) throw e; }
-    const parent = dirname(current); if (parent === current) break; current = parent;
-  }
-  return roots;
-}
 let sources: Promise<string[]> | undefined;
 export async function validateRoleplayStorage(options: { vaultPath: string; hostPath: string }): Promise<{ vaultPath: string; hostPath: string }> {
   // Reject a network host root before even resolving the Vault.
   const hostPath = await canonicalRoleplayPath(options.hostPath, true);
   const vaultPath = await canonicalRoleplayPath(options.vaultPath, false);
   if (roleplayInside(vaultPath, hostPath) || roleplayInside(hostPath, vaultPath)
-    || (await (sources ??= sourceRoots())).some(source => roleplayInside(source, hostPath))) {
+    || (await (sources ??= hostSourceRoots(import.meta.url))).some(source => roleplayInside(source, hostPath))) {
     throw guidanceError(new Error('Roleplay checkpoint must be local and outside Vault/source'), 'guid-febc054cac933e9e');
   }
   return { vaultPath, hostPath };

@@ -88,6 +88,12 @@ export class WorkService {
         this.workshopCreates.set(params, { guards: structuredClone(guards), receipt: structuredClone(receipt), assertAccess });
         return this.tasks.create(params);
     }
+    verifyWorkshopTaskOrigin(note, input, origin) {
+        const id = input.path.split('/').at(-1).replace(/\.md$/, '');
+        const receipt = (Array.isArray(note.frontmatter.work_receipts) ? note.frontmatter.work_receipts : []).find((r) => r.action === 'task.create' && r.target === id && r.actor === origin.actor && r.requestId === `output-${origin.payloadFingerprint}`);
+        if (note.frontmatter.mcpvault_type !== 'agent_task' || note.frontmatter.task_id !== id || !receipt || !this.receiptMatches(note, receipt))
+            throw guidanceError(Error('Output creation receipt integrity unavailable or changed'), 'guid-292508792e33ca97');
+    }
     async visible(path, maxBytes = MAX_NOTE_CONTENT_BYTES) {
         if (!this.access.canAccessPhysicalPath(path))
             throw guidanceError(new Error('Work target is unavailable'), 'guid-b4cd42400f6ea6f0');
@@ -363,6 +369,17 @@ export class WorkService {
             if (isModerationHidden(n.frontmatter))
                 continue;
             const fm = n.frontmatter;
+            // Managed task identity is its exact canonical path, not editable metadata
+            // in another visible note. Never use a decoy ID to query a private ledger.
+            if (fm.mcpvault_type === 'agent_task') {
+                try {
+                    if (typeof fm.task_id !== 'string' || n.path !== taskPath(fm.task_id) || fm.task_id !== normalizeScopeId(fm.task_id, 'taskId'))
+                        continue;
+                }
+                catch {
+                    continue;
+                }
+            }
             if (fm.mcpvault_type === 'agent_task' || (projectId && isActionableKnowledge(fm) && fm.mcpvault_type !== 'work_project'))
                 result.push({ path: n.path, fm, ...(n.revision && { revision: n.revision }) });
         }
@@ -674,6 +691,11 @@ export class WorkService {
                 params.reason = intent ? textField(intent.params.reason || `${intent.kind} ${intent.params.op}`, 'reason', 500) : params.reason;
             fm.last_progress_at = timestamp();
             this.event(fm, { action: actionId, actor: actor.accountId, reason: textField(params.reason, 'reason', 500), status: fm.status, generation: fm.claim_generation,
+                ...(intent?.kind === 'handoff' && intent.params.op === 'accept' && {
+                    fromAccountId: prior.frontmatter.assignee_account_id, toAccountId: fm.assignee_account_id,
+                    fromGeneration: generation, toGeneration: fm.claim_generation,
+                    proposalRevision: prior.revision, acceptorAccountId: actor.accountId,
+                }),
                 ...(privilegedRelease && prior?.frontmatter.started_at && { releasedStartedAt: prior.frontmatter.started_at, releasedGeneration: generation }) });
             let result = {};
             const context = {
@@ -780,7 +802,9 @@ export class WorkService {
             }
             else {
                 const offer = fm.work_handoff;
-                if (!offer || offer.state !== 'proposed' || offer.to_account_id !== actor.accountId || offer.generation !== generation)
+                if (!offer || offer.state !== 'proposed' || offer.to_account_id !== actor.accountId || offer.generation !== generation
+                    || offer.from_account_id !== fm.assignee_account_id || !Number.isSafeInteger(generation) || generation < 1
+                    || !Number.isSafeInteger(generation + 1))
                     throw guidanceError(new Error('Only the exact handoff recipient can accept the current proposal'), 'guid-e3de119736b9f354');
                 fm.assignee_account_id = actor.accountId;
                 fm.assignee = displayIdentity(actor);
@@ -1032,28 +1056,30 @@ export class WorkService {
         const linked = new Set(tasks.flatMap(n => (n.fm.references || []).filter((p) => typeof p === 'string')));
         const taskIds = new Set(tasks.map(n => n.fm.task_id));
         const selected = inventory.filter(n => n.fm.mcpvault_type === 'agent_task' || (!linked.has(n.path) && !taskIds.has(n.fm.task_id)));
-        const paid = await this.options.paidProjection?.(tasks.map(n => n.fm.task_id), params.principal) || {};
+        const paid = await this.paidTasks(tasks.map(n => n.fm.task_id), params.principal);
         const currentReviews = new Map(await Promise.all(tasks.map(async (n) => [n.path, await this.currentReview(n.fm, project.frontmatter)])));
+        const mutations = await this.taskMutations(tasks.map(n => n.fm.task_id));
         const rows = selected.map(n => ({ path: n.path, taskId: n.fm.task_id, title: String(n.fm.title || posix.basename(n.path)).slice(0, 180),
             status: n.fm.status || n.fm.task_status || 'open', kind: n.fm.mcpvault_type === 'agent_task' ? 'task' : 'knowledge',
             assigneeAccountId: n.fm.assignee_account_id, generation: n.fm.claim_generation,
             ...(typeof n.fm.responsibility?.perspective === 'string' && { perspective: n.fm.responsibility.perspective.slice(0, 80) }),
             ...(['exclusive_write', 'advice', 'alternative'].includes(n.fm.responsibility?.mode) && { participationMode: n.fm.responsibility.mode }),
             ...(paid[n.fm.task_id] && { paidContract: paid[n.fm.task_id] }),
+            ...(mutations[n.fm.task_id] && { taskMutation: mutations[n.fm.task_id] }),
             ...(this.blocker(n.fm) && { blockedReason: this.blocker(n.fm) }),
             ...(n.fm.work_review && { review: { decision: String(n.fm.work_review.decision || '').slice(0, 32),
                     accountId: String(n.fm.work_review.account_id || '').slice(0, 64), reason: String(n.fm.work_review.reason || '').slice(0, 200),
                     current: currentReviews.get(n.path)?.current || false } }),
             ...(currentReviews.get(n.path)?.diagnostic && { reviewDiagnostic: currentReviews.get(n.path).diagnostic }),
             stale: started(n.fm) && Date.now() - Date.parse(n.fm.last_progress_at || n.fm.updated_at || '') > 86400000,
-            ...(n.fm.next_action && { nextAction: String(n.fm.next_action).slice(0, 200) }),
+            ...(n.fm.next_action && !mutations[n.fm.task_id]?.freeMutationBlocked && { nextAction: String(n.fm.next_action).slice(0, 200) }),
             ...([...resources.get(n.path)].some(resource => {
                 const owners = occurrences.get(resource);
                 return owners && (owners.size > 1 || !owners.has(n.path));
             }) && { warning: guidanceText('guid-f3e8a40ffa18c42a', 'Artifact/file overlap is advisory; coordinate with peers') }),
         }));
         const wip = await this.boardWip(project.frontmatter, tasks, params.principal);
-        const sig = fingerprint({ project: project.revision, inventory: selected, wip, paid, ...(wip && { accountId: params.principal?.accountId }) });
+        const sig = fingerprint({ project: project.revision, inventory: selected, wip, paid, mutations, ...(wip && { accountId: params.principal?.accountId }) });
         return page(rows, { projectId: id, projectRevision: project.revision, fingerprint: sig, ...(wip && { wip }) }, sig, params, `board:${id}`);
     }
     async currentReview(fm, project) {
@@ -1146,7 +1172,7 @@ export class WorkService {
     async packet(params) {
         const id = normalizeScopeId(params.taskId, 'taskId');
         const n = await this.visible(taskPath(id));
-        if (n.frontmatter.mcpvault_type !== 'agent_task' || !n.frontmatter.project_id)
+        if (n.frontmatter.mcpvault_type !== 'agent_task' || n.frontmatter.task_id !== id || !n.frontmatter.project_id)
             throw guidanceError(new Error('Packet requires a project-backed task'), 'guid-77495db18b810d46');
         const project = await this.projectNote(n.frontmatter.project_id);
         const fm = { ...n.frontmatter };
@@ -1190,13 +1216,18 @@ export class WorkService {
             }
             catch { /* Do not expose a now-private or moderated artifact locator. */ }
         }
-        const paid = (await this.options.paidProjection?.([id], params.principal))?.[id];
-        const nextActions = paid?.freeMutationBlocked ? [] : await this.packetActions(id, { ...n, frontmatter: fm }, project.frontmatter, params.principal);
+        const paid = (await this.paidTasks([id], params.principal))[id];
+        const before = (await this.taskMutations([id]))[id];
+        let nextActions = before.freeMutationBlocked || paid?.freeMutationBlocked ? [] : await this.packetActions(id, { ...n, frontmatter: fm }, project.frontmatter, params.principal);
+        const taskMutation = (await this.taskMutations([id]))[id];
+        if (taskMutation.freeMutationBlocked)
+            nextActions = [];
         const items = [
             ...(fm.work_review_contract === 2 ? [{ kind: 'reviewContract', version: 2, nextAction: { endpoint: 'work.review_context', args: { taskId: id } },
                     current: fm.work_review?.fingerprint === artifactFingerprint, verificationLevel: fm.work_review?.verification_level || 'pending' }] : []),
             { kind: 'task', title: String(fm.title || id).slice(0, 180), status: fm.status, assigneeAccountId: fm.assignee_account_id,
                 requesterAccountId: fm.requester_account_id, generation: fm.claim_generation, workKind: fm.work_kind },
+            { kind: 'taskMutation', ...taskMutation },
             ...(this.blocker(fm) ? [{ kind: 'blocker', text: this.blocker(fm) }] : []),
             ...nextActions,
             ...(paid ? [paid] : []),
@@ -1216,6 +1247,36 @@ export class WorkService {
         const signature = fingerprint({ revision: n.revision, project: project.revision, artifactFingerprint, locators, nextActions, items });
         return page(items, { taskId: id, revision: n.revision, artifactFingerprint, generation: fm.claim_generation,
             ...(params.knownRevision && { changed: params.knownRevision !== n.revision }) }, signature, params, `packet:${id}`);
+    }
+    async paidTasks(ids, principal) {
+        const result = Object.create(null);
+        if (!ids.length)
+            return result;
+        try {
+            const rows = await this.options.paidProjection?.(ids, principal);
+            for (const id of ids)
+                if (rows && Object.hasOwn(rows, id) && rows[id] && typeof rows[id] === 'object')
+                    result[id] = rows[id];
+        }
+        catch { /* Optional private detail never determines free eligibility. */ }
+        return result;
+    }
+    async taskMutations(ids) {
+        if (!ids.length)
+            return {};
+        const unavailable = { state: 'unavailable', freeMutationBlocked: true };
+        if (!this.options.freeTaskMutations)
+            return Object.fromEntries(ids.map(id => [id, { state: 'allowed', freeMutationBlocked: false }]));
+        let result = {};
+        try {
+            result = await this.options.freeTaskMutations(ids);
+        }
+        catch { /* No raw ledger errors or permissive fallback. */ }
+        return Object.fromEntries(ids.map(id => {
+            const value = Object.hasOwn(result, id) ? result[id] : undefined;
+            const valid = value && ['allowed', 'managed', 'unavailable'].includes(value.state) && value.freeMutationBlocked === (value.state !== 'allowed');
+            return [id, valid ? { state: value.state, freeMutationBlocked: value.freeMutationBlocked } : unavailable];
+        }));
     }
     async packetActions(id, note, project, principal) {
         if (!principal || finished(note.frontmatter) || project.team_status === 'completed')
@@ -1291,14 +1352,16 @@ export class WorkService {
     async pulse(principal, limit = 20, maxChars = 4000) {
         integer(limit, 20, 100, 'limit');
         integer(maxChars, 4000, 12000, 'maxChars');
+        if (maxChars < JSON.stringify({ coverage: 'unavailable' }).length)
+            throw guidanceError(new Error('maxChars cannot fit Work pulse coverage'), 'guid-4b39cd422f5a051e');
         if (!principal)
-            return {};
+            return { coverage: 'unavailable' };
         let actor;
         try {
             actor = await this.actor(principal);
         }
         catch {
-            return {};
+            return { coverage: 'unavailable' };
         }
         const candidates = [];
         const projects = new Map();
@@ -1348,13 +1411,19 @@ export class WorkService {
                 candidates.push({ rank, taskId: fm.task_id, reason });
         }
         candidates.sort((a, b) => a.rank - b.rank || a.taskId.localeCompare(b.taskId));
-        const first = candidates[0];
-        if (!first)
-            return {};
-        const result = { nextAction: { tool: 'work.packet', arguments: { taskId: first.taskId } }, reason: first.reason,
-            summary: { actionable: Math.min(candidates.length, limit), truncated: candidates.length > limit } };
-        if (JSON.stringify(result).length > maxChars)
-            return {};
-        return result;
+        let mutations = await this.taskMutations(candidates.map(c => c.taskId));
+        const paid = await this.paidTasks(candidates.filter(c => mutations[c.taskId].state === 'managed').map(c => c.taskId), actor);
+        if (Object.keys(paid).length)
+            mutations = await this.taskMutations(candidates.map(c => c.taskId));
+        const actionable = candidates.filter(c => !mutations[c.taskId].freeMutationBlocked || (mutations[c.taskId].state === 'managed' && Boolean(paid[c.taskId]?.nextAction)));
+        const first = actionable[0];
+        const result = first ? { nextAction: { tool: 'work.packet', arguments: { taskId: first.taskId } }, reason: mutations[first.taskId].state === 'managed' ? 'Read the separately managed task and authorized contract route' : first.reason,
+            summary: { actionable: Math.min(actionable.length, limit), truncated: actionable.length > limit } }
+            : candidates.length ? { summary: { actionable: 0, managed: candidates.filter(c => mutations[c.taskId].state === 'managed').length,
+                    unavailable: candidates.filter(c => mutations[c.taskId].state === 'unavailable').length } } : {};
+        const covered = { ...result, coverage: 'loaded' };
+        if (JSON.stringify(covered).length > maxChars)
+            return { coverage: 'unavailable' };
+        return covered;
     }
 }

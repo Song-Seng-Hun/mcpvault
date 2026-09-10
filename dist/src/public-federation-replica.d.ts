@@ -48,6 +48,8 @@ export interface PublicFederationListParams {
     postId?: string;
     status?: PublicFederationObjectStatus;
     after?: string;
+    /** Overlap before the next row, including the after row; does not consume limit. */
+    contextBefore?: number;
     limit?: number;
     /** Administrative diagnostics only; ordinary imported reads expose active records. */
     includeUnavailable?: boolean;
@@ -56,6 +58,8 @@ export interface PublicFederationObjectList {
     objects: PublicFederationObjectView[];
     truncated: boolean;
     nextCursor?: string;
+    total: number;
+    contextBefore: number;
 }
 export declare class PublicFederationReplica {
     private readonly vaultPath;
@@ -96,7 +100,15 @@ export declare class PublicFederationReplica {
     getObject(objectId: string, options?: {
         includeUnavailable?: boolean;
     }): Promise<PublicFederationObjectView | undefined>;
+    /** Exact expected projection bytes, not authority to bypass ordinary note-read
+     * access or revision checks. External edits and later hides fail those checks. */
+    getImportedReadTarget(objectId: string, expectedRevision: number): Promise<{
+        path: string;
+        revision: string;
+        totalLines: number;
+    }>;
     listObjects(params?: PublicFederationListParams): Promise<PublicFederationObjectList>;
+    getCursor(): Promise<number>;
     pull(limit?: number): Promise<PublicFederationPullResult>;
     hideLocally(objectId: string, reason: string): Promise<void>;
 }

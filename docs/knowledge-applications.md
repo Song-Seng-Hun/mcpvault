@@ -67,7 +67,10 @@ and current revision, separate from the knowledge's state.
 
 Default output is 20 records / 4,000 characters, maximum 100 / 12,000, including
 warnings and continuation. JSON is compact. Each page checks at most eight
-observation notes from the existing metadata index; the projection retains no
+matching observation owners from the existing metadata index. Exact normalized
+knowledge targets are admitted before this eight-owner budget; unrelated reports
+do not consume it. Selected owners are checked again against current Markdown,
+scope compatibility and related-note visibility. The projection retains no
 full bodies and adds no application-specific index. The existing query backend
 can fall back to a filesystem scan when its metadata index is unavailable.
 Follow `nextAction` even if a partial page has no

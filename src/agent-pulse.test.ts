@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, test } from 'vitest';
+import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -14,6 +14,7 @@ import { ReferenceService } from './references.js';
 import { ScopeAccessPolicy } from './scope-access.js';
 import { ScopeAuthService } from './scope-auth.js';
 import { getAgentPulseTools } from './agent-pulse-tools.js';
+import { SkillEvolutionService } from './skill-evolution.js';
 
 let vault: string;
 
@@ -306,7 +307,14 @@ test('assigned open task outranks onboarding and excludes completed work', async
       signals: { assignedOpenTasks: 1, assignedTaskStatuses: { proposed: 1 } },
     });
     expect(proposedPulse.value.nextAction).not.toHaveProperty('endpointId');
-    expect(proposedPulse.value.signals.unreadNotifications).toBeGreaterThan(0);
+    expect(proposedPulse.value.signals).not.toHaveProperty('unreadNotifications');
+    expect(proposedPulse.value.coverage.notifications).toEqual({ state: 'skipped' });
+    const compactPulse = await json(client, 'get_agent_pulse', { accessToken: worker.value.accessToken, maxChars: 2000 });
+    expect(compactPulse.value).toMatchObject({ truncated: true, coverage: { notifications: { state: 'skipped' }, tasks: { state: 'loaded' } } });
+    expect(JSON.stringify(compactPulse.value).length).toBeLessThanOrEqual(2000);
+    const tinyPulse = await json(client, 'get_agent_pulse', { accessToken: worker.value.accessToken, maxChars: 1000 });
+    expect(tinyPulse.value).toMatchObject({ truncated: true, coverageOmitted: true, nextAction: { tool: 'get_agent_pulse' } });
+    expect(JSON.stringify(tinyPulse.value).length).toBeLessThanOrEqual(1000);
 
     const fileSystem = new FileSystemService(vault, new PathFilter(), new FrontmatterHandler());
     const scopeAccess = new ScopeAccessPolicy();
@@ -488,7 +496,8 @@ test('comment-only identity receives due review repeatedly and after server recr
       const pulse = await json(client, 'get_agent_pulse', { accessToken });
       expect(pulse.value).toMatchObject({
         nextAction: { tool: 'notes.read', target: 'Knowledge/Review pulse.md' },
-        signals: { knowledgeReviewQueue: 1, ownPublishedPosts: 0 },
+        signals: { knowledgeReviewQueue: 1 },
+        coverage: { posts: { state: 'skipped' } },
       });
     }
   } finally {
@@ -501,7 +510,8 @@ test('comment-only identity receives due review repeatedly and after server recr
     const pulse = await json(fresh.client, 'get_agent_pulse', { accessToken: login.value.accessToken });
     expect(pulse.value).toMatchObject({
       nextAction: { tool: 'notes.read', target: 'Knowledge/Review pulse.md' },
-      signals: { knowledgeReviewQueue: 1, ownPublishedPosts: 0 },
+      signals: { knowledgeReviewQueue: 1 },
+      coverage: { posts: { state: 'skipped' } },
     });
   } finally {
     await fresh.client.close();
@@ -750,6 +760,26 @@ test('a tiny pulse retries with a larger budget instead of truncating a long mai
   }
 });
 
+test('a small-budget Pulse retry preserves relevant skill selection and host state', async () => {
+  const skill = vi.spyOn(SkillEvolutionService.prototype, 'nextAction').mockImplementation(async ({ skillId }) => ({
+    endpointId: 'skill.candidate', arguments: { skillId, candidateId: 'bounded-candidate', op: 'read' },
+  }));
+  const { server, client } = await setup();
+  try {
+    const registration = await json(client, 'register_scope_account', { accountId: 'retry-skill', modelId: 'codex', password: 'retry-skill-password-123' });
+    const accessToken = registration.value.accessToken;
+    const tiny = await json(client, 'get_agent_pulse', { skillId: 'safe-edit', hostBusy: false, limit: 2, maxChars: 512, accessToken });
+    expect(tiny.value).toMatchObject({ nextAction: { tool: 'get_agent_pulse', arguments: { skillId: 'safe-edit', hostBusy: false, limit: 2 } } });
+    expect(JSON.stringify(tiny.value).length).toBeLessThanOrEqual(512);
+    const recovered = await json(client, 'get_agent_pulse', { ...tiny.value.nextAction.arguments, accessToken });
+    expect(recovered.value.nextAction).toMatchObject({ tool: 'skill.candidate', arguments: { skillId: 'safe-edit', candidateId: 'bounded-candidate' } });
+    const busy = await json(client, 'get_agent_pulse', { skillId: 'safe-edit', hostBusy: true, maxChars: 512, accessToken });
+    expect(busy.value.nextAction.arguments.hostBusy).toBe(true);
+    await json(client, 'get_agent_pulse', { ...busy.value.nextAction.arguments, accessToken });
+    expect(skill).toHaveBeenCalledTimes(2);
+  } finally { skill.mockRestore(); await client.close(); await server.close(); }
+});
+
 test('a direct obligation suppresses maintenance projection lookup', async () => {
   let reviewPacketCalls = 0;
   const pulse = unitPulseService({
@@ -827,19 +857,22 @@ test('the first actionable notification wins after an unsupported notification',
 });
 
 test('saved work precedes a social notification without consuming it', async () => {
+  let notificationReads = 0;
   const pulse = unitPulseService({
     workState: { exists: true, summary: 'Continue the evidence review.' },
     notifications: [{ notificationId: 'greeting', kind: 'mention', sourceType: 'blog_post', sourcePath: 'Community/Posts/hello.md', sourceId: 'hello' }],
+    onNotificationList: () => { notificationReads++; },
     reviewPacket: async () => { throw new Error('No idle work while a checkpoint exists'); },
   });
   const principal = { accountId: 'checkpoint-worker', modelId: 'codex', role: 'model' } as any;
   for (let attempt = 0; attempt < 2; attempt += 1) {
     expect(await pulse.get({ principal })).toMatchObject({
       nextAction: { tool: 'continuity.resume' },
-      signals: { unreadNotifications: 1 },
-      context: expect.arrayContaining([expect.objectContaining({ kind: 'notification', event: expect.objectContaining({ notificationId: 'greeting' }) })]),
+      coverage: { notifications: { state: 'skipped' } },
+      context: [expect.objectContaining({ kind: 'work_state' })],
     });
   }
+  expect(notificationReads).toBe(0);
 });
 
 test('a blog post notification uses its source id as the post slug', async () => {

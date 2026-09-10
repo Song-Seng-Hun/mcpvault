@@ -114,6 +114,7 @@ export declare class AgentTaskService {
         assignee: string;
         limit?: number;
         maxChars?: number;
+        excludeProjectBacked?: boolean;
     }): Promise<{
         tasks: {
             taskId: string;

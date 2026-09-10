@@ -218,6 +218,10 @@ export class AgentTaskService {
         })) {
             if (isModerationHidden(note.frontmatter))
                 continue;
+            // WorkService is the sole selector for project tasks when attached to
+            // Pulse; do not resurrect an ineligible task via the legacy route.
+            if (params.excludeProjectBacked && note.frontmatter.project_id)
+                continue;
             const rawStatus = String(note.frontmatter.status || '').trim().toLowerCase();
             if (!ASSIGNED_OPEN_STATUS_ORDER.includes(rawStatus))
                 continue;

@@ -87,4 +87,31 @@ records its reason and never deletes a created output. Source drift need not tra
 an absent reservation, but a committed output must be reconciled, not cancelled.
 Oversized assembled decision context is rejected before reservation.
 
+For a committed but unlinked output, the current facilitator may instead use
+`operation: reconcile_output` with `payload: {outputId, outputRevision, reason}`,
+the current workshop `expectedRevision` and a retry `requestId`. Read the output
+first to obtain `outputRevision`. This checks the exact original receipt,
+current visibility and full original-state integrity, then records recovery in
+`workshop_outputs` and clears only the pending reservation. Changed review basis
+is recorded as `unresolved`. Neither output content nor Work/Decision approval
+is changed. A former facilitator or historical delegate has no recovery grant;
+replays still check current authority and the output revision/visibility.
+
+New delegated Decisions include a versioned full Properties-and-body integrity
+witness. Legacy Decisions without that original-state witness cannot be safely
+reconciled: they and their reservations remain intact, with no inferred seal or
+automatic migration. Their existing unchanged-basis/current-delegation retry
+path is retained. Work outputs use their existing creation receipt's current
+state digest; later edits or legitimate Work transitions are not mistaken for
+the original creation state. These local witnesses detect ordinary subsequent
+edits, not forgery by a privileged host able to rewrite both data and witnesses.
+
+The current facilitator can explicitly `close` with
+`payload: {outcome: "unresolved", reason}` even if sources changed or the final
+method is incomplete. Pending outputs must first be cancelled (absent) or
+reconciled (intact and present). The reason and unresolved outcome are retained;
+no old synthesis is approved. Ordinary `close` retains its final-step and
+synthesis gates. Unresolved terminal status does not require reopening stale
+sources, and it contains no stale source bodies or paths.
+
 Protocol tests and actual-model comparisons are separate evidence. See the completion checklist for evaluation and deployment status; structural validation does not prove improved meeting quality.

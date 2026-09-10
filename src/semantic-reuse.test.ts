@@ -23,6 +23,10 @@ beforeEach(async () => {
   vault = await mkdtemp(join(tmpdir(), 'mcpvault-semantic-reuse-'));
   service = new SemanticSearchService(vault, new PathFilter());
   await (service as any).manifestReady; await (service as any).pendingReady;
+  // These are native-database integration tests. Bootstrap the isolated DB as
+  // fixture setup so the first reuse case does not also time cold driver loading.
+  // Keep the same real driver and five-second test-body deadline/assertions.
+  await (service as any).getDb();
   embedded = []; inference();
 });
 afterEach(async () => {
@@ -256,4 +260,71 @@ test('failed manifest publication does not requeue a successful native vector wr
   expect((service as any).lastError).toBeUndefined();
   const stored = await (await (service as any).getTable('chunks_global')).query().toArray();
   expect(stored.every((row: any) => row.hash === hash(raw))).toBe(true);
+});
+
+test('fiction filter runs in the native vector query before its nearest-row limit', async () => {
+  const queryVector = vector('fiction nearest');
+  const prepared = [];
+  for (let i = 0; i < 5; i++) {
+    const target = `Fiction${i}.md`;
+    await seed('---\nfiction_domain: roleplay\n---\nfiction nearest', target);
+    const row = await (service as any).prepareIndex(target);
+    row.rows.forEach((r: any) => { r.vector = queryVector; });
+    prepared.push(row);
+  }
+  await seed('real operating condition', 'Real.md');
+  prepared.push(await (service as any).prepareIndex('Real.md'));
+  await (service as any).applyIndexBatch(prepared, []);
+  vi.spyOn(service as any, 'acquireIndexLease').mockResolvedValue(false);
+  const currentRead = vi.spyOn((service as any).vaultIo, 'readUtf8');
+  const real = await service.search({ query: 'condition', queryVector, fictionDomain: 'exclude', limit: 1 } as any);
+  expect(real.available).toBe(true);
+  expect(real.results.map(r => r.p)).toEqual(['Real.md']);
+  expect(currentRead.mock.calls.every(([path]) => String(path).endsWith('Real.md'))).toBe(true);
+  const fiction = await service.search({ query: 'condition', queryVector, fictionDomain: 'only', limit: 1 } as any);
+  expect(fiction.results).toHaveLength(1);
+  expect(fiction.results[0]!.p).toMatch(/^Fiction/);
+});
+
+test('legacy unclassified semantic rows are withheld, queued unchanged, then repaired without reembedding', async () => {
+  const raw = '---\nfiction_domain: roleplay\n---\n# Note';
+  await index(raw);
+  const table = await (service as any).getTable('chunks_global');
+  if ((await table.schema()).fields.some((f: any) => f.name === 'fiction')) await table.dropColumns(['fiction']);
+  delete (service as any).manifest[path].fiction;
+  await (service as any).saveManifest();
+  await service.close(); vi.restoreAllMocks();
+  service = new SemanticSearchService(vault, new PathFilter());
+  await (service as any).manifestReady; await (service as any).pendingReady; inference(); embedded.length = 0;
+  vi.spyOn(service as any, 'acquireIndexLease').mockResolvedValue(false);
+  const query = { query: 'Note', queryVector: vector('Note'), fictionDomain: 'exclude' } as const;
+  expect((await service.search(query)).results).toEqual([]);
+  expect(embedded).toEqual([]);
+  await (service as any).scanForChanges();
+  expect((service as any).pending.get(path)).toMatchObject({ kind: 'upsert' });
+  await (service as any).drain(1);
+  expect(embedded).toEqual([]);
+  expect((service as any).manifest[path].fiction).toBe(true);
+  expect((await service.search(query)).results).toEqual([]);
+  expect((await service.search({ ...query, fictionDomain: 'only' })).results.map(r => r.p)).toEqual([path]);
+});
+
+test('classification-only edits reuse vectors but replace row classification and source revision', async () => {
+  const raw = '# Note'; await index(raw); embedded.length = 0;
+  const changed = '---\nfiction_domain: roleplay\n---\n' + raw;
+  const updated = await index(changed);
+  expect(embedded).toEqual([]);
+  expect(updated.rows.every((r: any) => r.fiction === true && r.hash === hash(changed))).toBe(true);
+  expect((service as any).manifest[path].fiction).toBe(true);
+});
+
+test('semantic current-source admission rejects a stale or forged nonfiction classification', async () => {
+  const raw = '---\nfiction_domain: roleplay\n---\n# Note';
+  const prepared = await index(raw);
+  const table = await (service as any).getTable('chunks_global');
+  if (!(await table.schema()).fields.some((f: any) => f.name === 'fiction')) await table.addColumns([{ name: 'fiction', valueSql: 'CAST(NULL AS BOOLEAN)' }]);
+  await table.delete('true');
+  await table.add(prepared.rows.map((r: any) => ({ ...r, fiction: false })));
+  vi.spyOn(service as any, 'acquireIndexLease').mockResolvedValue(false);
+  expect((await service.search({ query: 'Note', queryVector: vector('Note'), fictionDomain: 'exclude' } as any)).results).toEqual([]);
 });

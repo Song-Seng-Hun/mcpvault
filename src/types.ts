@@ -133,6 +133,8 @@ export interface PathFilterConfig {
 // Search types
 export interface SearchParams {
   query: string;
+  /** INTERNAL: indexed content routing before top-K, never an access grant. */
+  fictionDomain?: import('./fiction-domain.js').FictionDomainSelection;
   /** INTERNAL: caller-specific path visibility guard. Never cache predicate searches. */
   canAccessPath?: (path: string) => boolean;
   limit?: number;

@@ -1,9 +1,9 @@
 import { guidanceError } from './guidance-runtime.js';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { dirname, isAbsolute, relative, sep, join, basename } from 'node:path';
+import { dirname, isAbsolute, relative, sep, join } from 'node:path';
 import { lstat, realpath } from 'node:fs/promises';
-import { fileURLToPath } from 'node:url';
+import { hostSourceRoots } from './host-source-roots.js';
 import { readFederationFile } from './public-federation-storage.js';
 import { profileFingerprint } from './skill-evaluation.js';
 import { createTrustedSkillEvaluationProfiles } from './skill-evaluation-profiles.js';
@@ -50,8 +50,7 @@ export async function loadSkillEvolutionHostConfig(configPath, expectedVault, re
     if (!local(configPath) || !isAbsolute(expectedVault))
         throw guidanceError(new Error('Skill evolution configuration requires absolute private host and Vault paths'), 'guid-edec5828dc744b3d');
     const directory = dirname(configPath), vault = await realpath(expectedVault);
-    const compiled = dirname(dirname(fileURLToPath(import.meta.url))), source = basename(compiled) === 'dist' ? dirname(compiled) : compiled;
-    if (inside(vault, directory) || inside(source, directory))
+    if (inside(vault, directory) || (await hostSourceRoots(import.meta.url)).some(source => inside(source, directory)))
         throw guidanceError(new Error('Skill evolution configuration must be outside Vault/source in private storage'), 'guid-21c04b7267006371');
     await assertHostPrivateStorage([directory, configPath]);
     let raw;

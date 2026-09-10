@@ -1,6 +1,7 @@
 import { guidanceError, guidanceText } from './guidance-runtime.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { fingerprint as workFingerprintForOutput } from './work-model.js';
+import { workshopDecisionSeal } from './workshop-output.js';
 import { KnowledgeApplicationService } from './knowledge-applications.js';
 import { prepareKnowledgeSynthesis, inspectSynthesisBasis } from './knowledge-synthesis.js';
 import { normalizeKnowledgeSynthesis } from './knowledge-synthesis-model.js';
@@ -2211,14 +2212,15 @@ export class LlmWikiService {
             throw guidanceError(new Error('status must be draft, verified, disputed, or superseded'), 'guid-1344bba25ae6229f');
         const exists = await this.fileSystem.noteExists(params.path);
         const existing = exists ? await this.fileSystem.readNote(params.path) : undefined;
+        const readReferenceMetadata = this.references.createMetadataReader(params.principal);
         const applications = params.knowledgeApplications === undefined ? undefined
-            : await new KnowledgeApplicationService(this.fileSystem, this.access).prepare(params.knowledgeApplications, params.path, params.principal);
+            : await new KnowledgeApplicationService(this.fileSystem, this.access).prepare(params.knowledgeApplications, params.path, params.principal, readReferenceMetadata);
         const synthesis = params.knowledgeSynthesis === undefined ? undefined
-            : await prepareKnowledgeSynthesis(this.fileSystem, this.access, params.knowledgeSynthesis, params.path, params.principal);
+            : await prepareKnowledgeSynthesis(this.fileSystem, this.access, params.knowledgeSynthesis, params.path, params.principal, readReferenceMetadata);
         if (params.knowledgeInvestigation !== undefined && !['hypothesis', 'experiment'].includes(String(params.noteKind ?? existing?.frontmatter.note_kind)))
             throw guidanceError(new Error('knowledgeInvestigation requires a hypothesis or experiment note'), 'guid-b46fa638f36e96a9');
         const investigation = params.knowledgeInvestigation === undefined ? undefined
-            : await prepareKnowledgeInvestigation(this.fileSystem, this.access, params.knowledgeInvestigation, params.path, existing && { path: params.path, ...existing }, params.principal);
+            : await prepareKnowledgeInvestigation(this.fileSystem, this.access, params.knowledgeInvestigation, params.path, existing && { path: params.path, ...existing }, params.principal, readReferenceMetadata);
         const contextPaths = new Set([...(applications?.guards || []), ...(synthesis?.guards || []), ...(investigation?.guards || [])].map(guard => guard.path.toLowerCase()));
         if (contextPaths.size > 8)
             throw guidanceError(new Error('Combined knowledgeSynthesis, knowledgeApplications and knowledgeInvestigation may reference at most eight distinct related notes, including prose links. Reuse shared inputs or link a separate existing observation; do not drop revision guards.'), 'guid-048f9f50b304484d');
@@ -2444,6 +2446,8 @@ export class LlmWikiService {
             },
             expectedRevision: params.expectedRevision,
         };
+        if (internal.workshopOutput)
+            write.frontmatter.workshop_output_integrity = workshopDecisionSeal(write.frontmatter, write.content);
         const allGuards = [...(internal.revisionGuards || []), ...(applications?.guards || []), ...(synthesis?.guards || []), ...(investigation?.guards || [])];
         const guards = [...new Map(allGuards.map(g => [g.path.toLowerCase(), g])).values()];
         if (allGuards.some(g => guards.find(u => u.path.toLowerCase() === g.path.toLowerCase())?.expectedRevision !== g.expectedRevision))

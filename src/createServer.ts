@@ -604,6 +604,12 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
       await assertEconomyConfigured(resolvedVaultPath,Boolean(options.economy));
       if (options.economy) await new EconomyService(fileSystem, options.economy.ledger, options.economy.policy, { assertActor: async () => {} }).assertFreeTaskMutation(taskId);
     },
+    freeTaskMutations:async taskIds=>{
+      await assertEconomyConfigured(resolvedVaultPath,Boolean(options.economy));
+      return options.economy
+        ? new EconomyService(fileSystem,options.economy.ledger,options.economy.policy,{assertActor:async()=>{}}).freeTaskMutations(taskIds)
+        : Object.fromEntries(taskIds.map(id=>[id,{state:'allowed' as const,freeMutationBlocked:false}]));
+    },
     ...(options.economy&&{paidProjection:async(taskIds:string[],principal?:ScopePrincipal)=>new EconomyService(fileSystem,options.economy!.ledger,options.economy!.policy,{
       assertActor:async actor=>{
         if(!(await scopeAuth.listPrincipals()).some(p=>p.accountId===actor.accountId)||await moderation.isBanned(actor.accountId,actor.userId))throw guidanceError(new Error('Current authorized account required'), 'guid-163a12295a1d8545');
@@ -631,6 +637,13 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
   });
   retrieval.attachSkillEvolution(skillEvolution);
   ideation.attachOutputAdapter({
+    assertReadable:async(principal,path,container)=>{
+      try {
+        const paths=await references.validateAndNormalize([path],container,principal);
+        if(paths.length!==1||paths[0]!==path||!scopeAccess.canAccessPhysicalPath(path,principal))throw Error();
+      }catch{throw guidanceError(Error('Output or basis unavailable'), 'guid-619a9c57010ef0a6');}
+    },
+    verifyTaskOrigin:(note,input,receipt)=>work.verifyWorkshopTaskOrigin(note,input,receipt),
     authorizeProject:(principal,projectId,owner,delegate,grantor)=>work.authorizeWorkshopProject(principal,projectId,owner,delegate,grantor),
     assertAccess:async(principal,input)=>{
       const current=(await scopeAuth.listPrincipals()).find(p=>p.accountId===principal.accountId);
@@ -1479,7 +1492,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
           }
         }
         const service = new StoryService(fileSystem, scopeAccess, references, scopeAuth, work, agentTasks, {
-          readOnly, assertActor: async () => { await revalidateActor(); },
+          readOnly, gitHistory, assertActor: async () => { await revalidateActor(); },
           changed: path => queueReadModelChange(path, 'upsert'),
         });
         return jsonResult(await service.execute(storyEndpoint, storyArgs, principal), false);
@@ -3337,7 +3350,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
       });
       const responseContract = endpointRegistry.resolve(toolName === 'read_work_group' ? 'work.group' : toolName === 'read_work_project' ? 'work.project' : toolName === 'read_community_participation' ? 'community.participation' : endpointIdForTool(toolName))?.input;
       const responseBudget = trimmedArgs.maxChars ?? (toolName === 'search_capabilities' ? 20000 : toolName === 'get_wiki_answer_packet' && trimmedArgs.query === undefined ? 7000 : undefined);
-      return enforceResponseBudget(toolResponse, normalizedResponseBudget(responseBudget, responseContract));
+      return enforceResponseBudget(toolResponse, normalizedResponseBudget(responseBudget, responseContract), toolName === 'get_agent_pulse' ? trimmedArgs : undefined);
     } catch (error) {
       await audit.record({ tool: toolName, ...(principal && { principal }), args: rawArgs, outcome: 'error', error });
       const errorLimit = Number.isInteger(rawArgs.maxChars) && Number(rawArgs.maxChars) >= 512 ? Math.min(Number(rawArgs.maxChars), 12000) : 12000;
@@ -3928,7 +3941,7 @@ function boundedLineWindowResult(
   return noteReadBudgetError(serialize(Math.min(64, source.length), true, false).length + 64, revision);
 }
 
-function enforceResponseBudget(response: any, requestedMaxChars: unknown): any {
+function enforceResponseBudget(response: any, requestedMaxChars: unknown, pulseRequest?: Record<string, unknown>): any {
   const maxChars = Number(requestedMaxChars);
   if (!Number.isInteger(maxChars) || maxChars < 1 || !response?.content) return response;
   const textBlocks = response.content.filter((block: any) => block?.type === 'text');
@@ -3945,7 +3958,7 @@ function enforceResponseBudget(response: any, requestedMaxChars: unknown): any {
     const minified = JSON.stringify(value);
     if (minified.length <= maxChars) return { ...response, content: [{ type: 'text' as const, text: minified }] };
   }
-  const compact = compactOverflowValue(value, maxChars);
+  const compact = compactOverflowValue(value, maxChars, pulseRequest);
   let text = JSON.stringify(compact);
   if (text.length > maxChars) text = maxChars >= 2 ? '{"truncated":true}' : '0';
   return {
@@ -3968,7 +3981,7 @@ function normalizedResponseBudget(value: unknown, inputSchema?: Record<string, u
   return parsed;
 }
 
-function compactOverflowValue(value: unknown, maxChars: number): Record<string, unknown> {
+function compactOverflowValue(value: unknown, maxChars: number, pulseRequest?: Record<string, unknown>): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return { truncated: true, maxChars };
   }
@@ -4041,7 +4054,12 @@ function compactOverflowValue(value: unknown, maxChars: number): Record<string, 
   const pulseRetryAction = source.protocol === 'mcpvault-agent-pulse/v1'
     ? {
         tool: 'get_agent_pulse',
-        arguments: { limit: 1, maxChars: Math.min(12000, Math.max(6000, maxChars * 2)) },
+        arguments: {
+          limit: Number.isInteger(pulseRequest?.limit) && Number(pulseRequest!.limit) >= 1 && Number(pulseRequest!.limit) <= 20 ? Number(pulseRequest!.limit) : 1,
+          maxChars: Math.min(12000, Math.max(6000, maxChars * 2)),
+          ...(typeof pulseRequest?.skillId === 'string' && /^[a-z0-9][a-z0-9-]{0,99}$/.test(pulseRequest.skillId) && { skillId: pulseRequest.skillId }),
+          ...(typeof pulseRequest?.hostBusy === 'boolean' && { hostBusy: pulseRequest.hostBusy }),
+        },
         reason: guidanceText('guid-c7a4b791d819a87f', 'The exact next action does not fit this response budget. Retry the pulse with the larger bounded budget.'),
       }
     : undefined;
@@ -4061,6 +4079,7 @@ function compactOverflowValue(value: unknown, maxChars: number): Record<string, 
     compact.identity = Object.fromEntries(['accountId', 'userId', 'familyId', 'modelId', 'agentId', 'commandCenterId', 'level', 'xp', 'levelLabel'].filter(key => identity[key] !== undefined).map(key => [key, identity[key]]));
   }
   if (source.signals && typeof source.signals === 'object' && !Array.isArray(source.signals)) compact.signals = source.signals;
+  if (pulseRetryAction && source.coverage && typeof source.coverage === 'object' && !Array.isArray(source.coverage)) compact.coverage = source.coverage;
   if (source.nextAction && typeof source.nextAction === 'object' && !Array.isArray(source.nextAction)) {
     compact.nextAction = compactAction(source.nextAction) || pulseRetryAction;
   }
@@ -4136,6 +4155,10 @@ function compactOverflowValue(value: unknown, maxChars: number): Record<string, 
     compact.quarantine = { total: quarantine.total, truncated: quarantine.truncated, items: Array.isArray(quarantine.items) ? quarantine.items.slice(0, 8) : [] };
   }
   if (JSON.stringify(compact).length <= maxChars) return compact;
+  if (pulseRetryAction && source.coverage) return {
+    truncated: true, maxChars, coverageOmitted: true, guidanceOmitted: true,
+    nextAction: pulseRetryAction,
+  };
   const tiny: Record<string, unknown> = { truncated: true, maxChars };
   if (compact.cadence) tiny.cadence = compact.cadence;
   for (const key of ['scope', 'path', 'revision', 'contractFingerprint', 'counterpartFingerprint', 'compatible']) if (compact[key] !== undefined) tiny[key] = compact[key];

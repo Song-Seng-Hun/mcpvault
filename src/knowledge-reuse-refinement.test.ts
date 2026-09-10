@@ -228,12 +228,17 @@ test.each(['answer', 'context'])('quality P2 %s budgets whole claims while prese
 test.each(['answer', 'context'].flatMap(mode => ['evidence', 'ancestor'].map(target => ({ mode, target }))))('quality P1 $mode rejects $target access revoked after provenance validation', async ({ mode, target }) => {
   const original = await wiki.ingestSource({ scopeRoot: '', sourceId: 'original', title: 'Original', content: 'Original evidence', capturedBy: 'test', sourceWorkId: 'REVOKED-WORK' });
   const evidence = target === 'evidence' ? [original] : await Promise.all(['a', 'b'].map(sourceId => wiki.ingestSource({ scopeRoot: '', sourceId, title: sourceId, content: `Quote ${sourceId}`, capturedBy: 'test', sourceWorkId: sourceId, sourceDerivations: [{ path: original.path, revision: original.revision, relation: 'quotation' }] })));
-  await write('Root.md', { evidence_paths: evidence.map(source => source.path) });
-  await write('Run.md', { knowledge_applications: [] });
+  const root = await write('Root.md', { evidence_paths: evidence.map(source => source.path) });
+  // Only actual owners enter application validation after metadata admission.
+  // Keep this observation separate from provenance so the final cross-validator
+  // sweep, not an application-local evidence guard, detects the revocation.
+  await write('Run.md', { knowledge_applications: [{ id: 'run-1', knowledge: { path: 'Root.md', revision: root.revision },
+    environment: 'Isolated fixture', conditions: 'Late provenance authorization check', outcome: 'inconclusive', observed: 'Needs inspection' }] });
   // Evidence and ancestry need guards even when neither is selected as a neighbor.
   vi.spyOn(wiki, 'neighborhood').mockResolvedValue({ neighbors: [], totalCandidates: 0, truncated: false } as any);
   const before = await wiki.answerPacket(undefined, 'Root.md', 16000, false, 'review');
   expect(JSON.stringify(before)).toContain('REVOKED-WORK');
+  expect(before.applications?.items).toContainEqual(expect.objectContaining({ id: 'run-1', observation: expect.objectContaining({ path: 'Run.md' }) }));
   let runs = 0, revoked = false;
   const allowed = access.canAccessPhysicalPath.bind(access), revision = fs.readNoteRevision.bind(fs);
   vi.spyOn(access, 'canAccessPhysicalPath').mockImplementation((path, principal) => !(revoked && path === original.path) && allowed(path, principal));
@@ -245,6 +250,7 @@ test.each(['answer', 'context'].flatMap(mode => ['evidence', 'ancestor'].map(tar
   const result = mode === 'answer' ? wiki.answerPacket(undefined, 'Root.md', 16000, false, 'review') : wiki.contextPack(undefined, 'Root.md', 16000, false, 'review');
   await expect(result).rejects.toThrow(/changed|unavailable/);
   expect(revoked).toBe(true);
+  expect(runs).toBe(mode === 'answer' ? 2 : 3);
 });
 
 test.each(['answer', 'context'])('quality P2 %s long-path claim recovery reuses the retained root locator', async mode => {

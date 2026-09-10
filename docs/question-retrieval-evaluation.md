@@ -80,6 +80,30 @@ coverage in existing previews and exact visible identities; compact search
 retains its existing order. No new embedding or generated contextualization is
 introduced.
 
+## Fiction admission regression (2026-09-11)
+
+Filtered retrieval uses a classification bit in the existing lexical and
+semantic indexes before candidate hydration/ranking/top-K. It does not build
+a separate fiction index or enumerate all note metadata on each query. The
+22-fiction-note/one-real-note regression performs zero `queryNotes` inventory
+calls and still returns the real note. A separate 10,001-row *mock advisory
+inventory* reproduces the removed metadata ceiling while the selected note,
+lexical index and final source reads are real; it is not a 10,001-file latency
+benchmark. Selected hits (at most 20), including Skill replacements, are
+checked against fresh Markdown classification, moderation, access and matching
+revision before returning their excerpts.
+
+Lexical snapshot version 8 stores classification without retaining bodies;
+older snapshots rebuild through the existing index path. Semantic rows and
+manifests carry the same classification. Missing legacy classification remains
+unknown (`NULL` in a migrated table), excluded from filtered vector queries
+until the existing bounded idle worker repairs it. A foreground query does not
+reembed the Vault. A classification-only edit reuses unchanged vectors while
+updating the row/source revision. These fixtures use real LanceDB and substitute
+only embedding inference. They are correctness/call-count tests, not new
+Recall@5, NAS throughput or model-quality measurements. Personal-memory
+negative-correction inventories retain their separate completeness contract.
+
 ## Real Codex acceptance (not a protocol simulation)
 
 Two ephemeral Codex CLI runs used Luna Medium and a disposable read-only HTTP

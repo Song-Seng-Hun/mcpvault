@@ -47,10 +47,13 @@ export declare class EnterpriseFederationAdapter {
     private resolveLocalPostId;
     private publishComment;
     private changeComment;
+    private readSync;
+    private readLocalPost;
     private readFederatedPost;
     private listFederatedPosts;
     private listFederatedComments;
     private getFederatedProfile;
+    private getLocalProfile;
     private listFederatedProfiles;
     private localMatches;
     private performIntentLocal;

@@ -22,14 +22,14 @@ const fields: Record<string, string[]> = {
   context: ['branchId', 'artifactId', 'characterId', 'query'],
   review: ['reviewId', 'artifactId', 'branchId', 'sourceRevision', 'content', 'findings', 'pass'],
   adopt: ['artifactId', 'sourceRevision', 'reviewIds', 'reason'],
-  session: ['sessionId', 'artifactId', 'writerAccountId', 'editorAccountId', 'sourceRevision', 'reviewId', 'decision', 'reason', 'choiceIds', 'initialState', 'maxSteps', 'reconnectWriter', 'expectedWorkRevision', 'expectedWorkGeneration'],
+  session: ['sessionId', 'artifactId', 'writerAccountId', 'editorAccountId', 'sourceRevision', 'reviewId', 'decision', 'reason', 'choiceIds', 'initialState', 'maxSteps', 'reconnectWriter', 'expectedWorkRevision', 'expectedWorkGeneration', 'includeGitHistory', 'reconnectProofFingerprint'],
   export: ['format', 'selection', 'branchId', 'exportId'],
   visual: ['modelId', 'branchId', 'view', 'eventIds', 'sourceRevision', 'intent', 'fingerprint', 'replacements', 'artifactId', 'title'],
 };
 const operations: Record<string, string[]> = {
   project: ['read', 'create', 'update'], artifact: ['read', 'list', 'create', 'update'], sequence: ['read', 'update'],
   context: ['read'], review: ['read', 'list', 'create'], adopt: ['adopt'],
-  session: ['read', 'list', 'start', 'submit', 'review', 'pause', 'resume', 'decide', 'rehearse'],
+  session: ['read', 'list', 'reconnect_preview', 'start', 'submit', 'review', 'pause', 'resume', 'decide', 'rehearse'],
   export: ['preview', 'read', 'health', 'write'],
   visual: ['read', 'preview', 'propose'],
 };
@@ -69,7 +69,7 @@ export class StoryService {
       }
       return new StoryContext(w).read(params, principal);
     };
-    const mutating = endpoint === 'adopt' || (params.op !== undefined && !['read', 'list', 'preview', 'health'].includes(params.op));
+    const mutating = endpoint === 'adopt' || (params.op !== undefined && !['read', 'list', 'preview', 'reconnect_preview', 'health'].includes(params.op));
     const result = await (mutating ? coordinate(run) : run());
     if (JSON.stringify(result).length <= maxChars) return result;
     if (!mutating) throw guidanceError(new Error('Story read response exceeded its declared budget'), 'guid-81585a71bd6a6d6c');

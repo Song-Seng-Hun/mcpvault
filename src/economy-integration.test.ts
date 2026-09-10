@@ -41,11 +41,17 @@ test.each(['research','mechanical','recovery'] as const)('three authenticated ow
   const text=(r.content as any[]).map(x=>x.text||'').join('\n');if(r.isError)throw new Error(text);return JSON.parse(text);
  };
  try {
-  for(const account of ['alice','bob','carol'])tokens[account]=(await call(account,'auth.register',{accountId:account,modelId:'codex',agentId:account,password:'test-only-password-1234'})).accessToken;
-  await call('alice','work.project',{op:'create',projectId:'paid',title:'Peer evidence review',goal:'Preserve uncertainty',allowedWork:['Local notes only'],completionCriteria:['Reviewed result'],participants:['alice','bob','carol'],requestId:'project',expectedRevision:'missing'});
+  for(const account of ['alice','bob','carol','visitor'])tokens[account]=(await call(account,'auth.register',{accountId:account,modelId:'codex',agentId:account,password:'test-only-password-1234'})).accessToken;
+  await call('alice','work.project',{op:'create',projectId:'paid',title:'Peer evidence review',goal:'Preserve uncertainty',allowedWork:['Local notes only'],completionCriteria:['Reviewed result'],participants:['alice','bob','carol','visitor'],requestId:'project',expectedRevision:'missing'});
   const task=await call('alice','mcp.create_agent_task',{taskId:'paid-one',projectId:'paid',title:'Check a claim',description:'Consider a contrary condition',completionCriteria:['Preserve contrary evidence'],requestId:'task'});
   const draft=await call('alice','quest.contract',{op:'draft',contractId:'q',requestId:'draft',expectedRevision:'missing',terms:{taskId:'paid-one',taskRevision:task.revision,title:'Counterexample review',criteria:kind==='mechanical'?['literal:contrary case limits']:['Preserve contrary evidence'],exclusions:['No external execution'],reward:100,kind,deadline:'2027-01-01T00:00:00.000Z',verifier:kind==='mechanical'?'markdown-literal-v1':'independent-review-v1'}});
   const funded=await call('alice','quest.contract',{op:'fund',contractId:'q',requestId:'fund',expectedRevision:draft.revision});
+  const visitorPacket=await call('visitor','work.packet',{taskId:'paid-one',maxChars:12000});
+  expect(visitorPacket.items).toContainEqual({kind:'taskMutation',state:'managed',freeMutationBlocked:true});
+  expect(visitorPacket.items).not.toContainEqual(expect.objectContaining({kind:'nextAction',tool:'work.claim'}));
+  const visitorBoard=await call('visitor','work.board',{projectId:'paid',maxChars:12000});
+  expect(visitorBoard.items[0]).toMatchObject({taskMutation:{state:'managed',freeMutationBlocked:true}});
+  expect(JSON.stringify({visitorPacket,visitorBoard})).not.toMatch(/contractId|reward|paidContract|quest\.market/);
   await expect(call('bob','work.claim',{op:'start',taskId:'paid-one',requestId:'bypass',expectedRevision:task.revision,expectedGeneration:0})).rejects.toThrow(/quest/);
   let claimed;
   if(mode==='recovery') {
@@ -81,6 +87,7 @@ test.each(['research','mechanical','recovery'] as const)('three authenticated ow
       artifacts:expect.arrayContaining([{kind:'submission',path:'Knowledge/Result.md',revision:result.revision,currentRevision:result.revision,stale:false}])});
     if(reviewRevision)expect(settled.artifacts).toContainEqual({kind:'review',path:'Knowledge/Review.md',revision:reviewRevision,currentRevision:reviewRevision,stale:false});
     expect(packet.items.find((item:any)=>item.kind==='task').status).toBe('in_progress');
+    expect(packet.items).toContainEqual({kind:'taskMutation',state:'allowed',freeMutationBlocked:false});
     expect(packet.items).toContainEqual(expect.objectContaining({kind:'nextAction',tool:'mcp.update_agent_task',requiredInput:['verification or progress fields']}));
   };
   if(kind==='mechanical') {

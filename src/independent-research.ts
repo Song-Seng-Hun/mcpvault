@@ -29,7 +29,7 @@ export interface ResearchParams {
   expectedRevision?: string; expectedWorkshopRevision?: string; requestId?: string;
   operation?: 'create' | 'submit' | 'disclose' | 'review' | 'close';
   config?: unknown; submission?: unknown; review?: unknown; closure?: unknown;
-  field?: 'submissions' | 'reviews' | 'config' | 'closure' | 'submission' | 'review'; itemIndex?: number;
+  field?: 'status' | 'submissions' | 'reviews' | 'config' | 'closure' | 'submission' | 'review'; itemIndex?: number;
   limit?: number; maxChars?: number; cursor?: string;
   revalidateActor: () => Promise<ScopePrincipal>;
 }
@@ -123,6 +123,52 @@ export class IndependentResearchService {
     const r = this.parse(note.frontmatter.research, w.workshopId, w.roundId);
     if (!w.manager && !r.config.participants.includes(actor.accountId)) throw guidanceError(new Error('Research round unavailable to this participant'), 'guid-806e6583bea4b5ee');
     if (p.expectedRevision && p.expectedRevision !== note.revision) throw guidanceError(new Error('Research revision changed; restart the read'), 'guid-a09f6c14941944d1');
+    const finishRead = async () => {
+      const freshRecord = await this.readRecord(w.record);
+      const freshActor = await this.actor(p), freshWorkshop = await this.workshop(p, freshActor);
+      if (freshWorkshop.note.revision !== w.note.revision || freshRecord.revision !== note.revision) throw guidanceError(new Error('Research context changed; restart the read'), 'guid-22dee94832897d90');
+      const finalActor = await this.actor(p);
+      if (!this.access.canAccessPhysicalPath(w.workshop, finalActor)
+        || (!freshWorkshop.manager && !r.config.participants.includes(finalActor.accountId))) throw guidanceError(new Error('Research round unavailable to this participant'), 'guid-806e6583bea4b5ee');
+      return finalActor;
+    };
+    if (p.field === 'status') {
+      const maxChars = p.maxChars ?? 4000;
+      if (!Number.isInteger(maxChars) || maxChars < 512 || maxChars > 12000 || p.cursor !== undefined || p.itemIndex !== undefined) throw guidanceError(Error('Research status requires maxChars 512..12000 without a detail cursor'), 'guid-a2aa4d155beac6ea');
+      // Never use the normal projection: its envelope includes configuration
+      // and submission-account metadata even when no submission is selected.
+      let basisState: 'current' | 'unavailable_or_changed' = 'current';
+      const observed: Guard[] = [];
+      const admitted = (path: string, principal: ScopePrincipal) => this.access.canAccessPhysicalPath(path, principal)
+        && this.access.canReferenceFrom(w.workshop, path);
+      for (const guard of r.sourceGuards) {
+        try {
+          const paths = await this.refs.validateAndNormalize([guard.path], w.workshop, actor);
+          if (paths.length !== 1 || paths[0] !== guard.path || !admitted(guard.path, actor)) throw Error();
+          const current = (await this.fs.readNoteMetadata(paths, path => admitted(path, actor), { fresh: true, strict: true, maxBytes: 8 * 1024 * 1024 }))[0];
+          if (!current || current.revision !== guard.expectedRevision || isModerationHidden(current.frontmatter)
+            || current.frontmatter.content_status === 'deleted') throw Error();
+          observed.push(guard);
+        } catch { basisState = 'unavailable_or_changed'; break; }
+      }
+      let currentActor = await this.actor(p);
+      for (const guard of observed) {
+        try {
+          if (!admitted(guard.path, currentActor) || await this.fs.readNoteRevision(guard.path, 8 * 1024 * 1024) !== guard.expectedRevision) throw Error();
+        } catch { basisState = 'unavailable_or_changed'; break; }
+      }
+      // Context is the last Markdown read: source I/O must not leave a stale
+      // phase or facilitator-only closure route in this minimal projection.
+      currentActor = await finishRead();
+      if (observed.some(guard => !admitted(guard.path, currentActor))) basisState = 'unavailable_or_changed';
+      const result = { workshopId: w.workshopId, roundId: w.roundId, field: 'status', revision: note.revision, phase: r.phase, basisState,
+        ...(w.manager && r.phase !== 'closed' && { nextAction: { endpointId: 'workshop.research_update', arguments: {
+          workshopId: w.workshopId, roundId: w.roundId, operation: 'close', expectedRevision: note.revision, closure: { outcome: 'unresolved' },
+        }, required: ['requestId', 'closure.explanation'] } }),
+      };
+      if (JSON.stringify(result).length > maxChars) throw guidanceError(Error('Research status exceeds maxChars; request a larger bounded budget'), 'guid-3afc41efee88748a');
+      return result;
+    }
     const { result, selected } = projectResearch(r, note.revision, actor.accountId, p);
     const checked: Guard[] = [];
     for (const value of [r.config, ...(r.closure ? [r.closure] : []), ...selected]) checked.push(...await this.evidence(value, w.workshop, actor));
@@ -130,9 +176,7 @@ export class IndependentResearchService {
       const original = r.sourceGuards.find(g => g.path.toLowerCase() === guard.path.toLowerCase());
       if (!original || original.expectedRevision !== guard.expectedRevision || (await this.readRecord(guard.path)).revision !== guard.expectedRevision) throw guidanceError(new Error('Research source changed; start a new round with current evidence'), 'guid-d160315a1c7b7580');
     }
-    await this.actor(p);
-    const freshWorkshop = await this.workshop(p, actor);
-    if (freshWorkshop.note.revision !== w.note.revision || (await this.readRecord(w.record)).revision !== note.revision) throw guidanceError(new Error('Research context changed; restart the read'), 'guid-22dee94832897d90');
+    await finishRead();
     return result;
   }
 

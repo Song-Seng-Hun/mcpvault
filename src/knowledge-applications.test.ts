@@ -9,6 +9,9 @@ import { LlmWikiService } from './llm-wiki.js';
 import { ReferenceService } from './references.js';
 import { AgentTaskService } from './agent-tasks.js';
 import { ScopeAuthService, type ScopePrincipal } from './scope-auth.js';
+import { VaultMetadataIndex } from './vault-index.js';
+import { FrontmatterHandler } from './frontmatter.js';
+import { PathFilter } from './pathfilter.js';
 
 let vault: string, fs: FileSystemService, access: ScopeAccessPolicy, service: KnowledgeApplicationService;
 const actor: ScopePrincipal = { modelId: 'codex', agentId: 'worker', accountId: 'account', role: 'agent' };
@@ -99,14 +102,59 @@ test('long exact locators cannot overflow the small-budget retry response', asyn
   expect(JSON.stringify(result).length).toBeLessThanOrEqual(2000);
   expect(result.status).toBe('budget_too_small');
 });
-test('bounded observation pages advance past unrelated experiences without falsely reporting completeness', async () => {
+test.each([false, true])('unrelated application owners do not consume the eight-owner current-source budget (indexed=%s)', async indexed => {
   const a = await application();
   await note('Knowledge/Other.md', { llm_wiki_type: 'knowledge' });
   for (let i = 0; i < 9; i++) await note(`Inbox/${i}.md`, { knowledge_applications: [{ ...a, knowledge: { ...a.knowledge, path: i === 8 ? a.knowledge.path : 'Knowledge/Other.md' } }] });
-  const first = await service.read({ path: a.knowledge.path });
-  expect(first.items).toEqual([]); expect(first.truncated).toBe(true);
-  const next = await service.read(first.nextAction.arguments);
-  expect(next.items).toHaveLength(1); expect(next.truncated).toBe(false);
+  const metadata = indexed ? new VaultMetadataIndex(vault, new PathFilter(), new FrontmatterHandler()) : undefined;
+  if (metadata) {
+    fs = new FileSystemService(vault, undefined, undefined, undefined, metadata);
+    service = new KnowledgeApplicationService(fs, access);
+  }
+  try {
+    const reads = vi.spyOn(fs, 'readNoteMetadata');
+    const first = await service.read({ path: a.knowledge.path });
+    expect(first.items).toHaveLength(1); expect(first.truncated).toBe(false);
+    expect(reads.mock.calls.flatMap(call => call[0])).toEqual([a.knowledge.path, 'Inbox/8.md']);
+  } finally { await metadata?.close(); }
+});
+
+test('owner admission normalizes exact scoped targets without admitting hidden or incompatible records', async () => {
+  const path = '_scopes/agents/worker/Knowledge.md';
+  const revision = await note(path, { llm_wiki_type: 'knowledge' });
+  const a = { id: 'scoped', knowledge: { path: 'scope://agent/worker/Knowledge.md', revision }, environment: 'local', conditions: 'one run', outcome: 'failed', observed: 'scoped observation' };
+  await note('_scopes/agents/worker/Owner.md', { knowledge_applications: [a] });
+  await note('Inbox/Public.md', { knowledge_applications: [{ ...a, observed: 'PRIVATE-CANARY' }] });
+  await note('_scopes/agents/worker/Hidden.md', { moderation_status: 'hidden', knowledge_applications: [a] });
+  const result = await service.read({ path: 'scope://agent/worker/Knowledge.md', principal: actor });
+  expect(result.items.map((r: any) => r.observation.path)).toEqual(['scope://agent/worker/Owner.md']);
+  expect(JSON.stringify(result)).not.toContain('PRIVATE-CANARY');
+});
+
+test('matching owners retain the eight-owner continuation and normalize physical dot segments', async () => {
+  const a = await application();
+  for (let i = 0; i < 9; i++) await note(`Inbox/Owner${i}.md`, { knowledge_applications: [{ ...a, id: `run-${i}`, knowledge: { ...a.knowledge, path: 'Knowledge/./Retry.md' } }] });
+  const first = await service.read({ path: a.knowledge.path, maxChars: 12000 });
+  expect(first.items.map((r: any) => r.id)).toEqual(Array.from({ length: 8 }, (_, i) => `run-${i}`));
+  expect(first.truncated).toBe(true);
+  const second = await service.read(first.nextAction.arguments);
+  expect(second.items.map((r: any) => r.id)).toEqual(['run-8']);
+  expect(second.truncated).toBe(false);
+});
+
+test('fresh owner records cannot inherit stale metadata target admission', async () => {
+  const a = await application();
+  const observation = 'Inbox/Run.md';
+  await note(observation, { knowledge_applications: [a] });
+  const query = fs.queryNotes.bind(fs);
+  vi.spyOn(fs, 'queryNotes').mockImplementationOnce(async (...args) => {
+    const candidates = await query(...args);
+    await note(observation, { knowledge_applications: [{ ...a, knowledge: { ...a.knowledge, path: 'Knowledge/Other.md' }, observed: 'STALE-OWNER-CANARY' }] });
+    return candidates;
+  });
+  const result = await service.read({ path: a.knowledge.path });
+  expect(result.items).toEqual([]);
+  expect(JSON.stringify(result)).not.toContain('STALE-OWNER-CANARY');
 });
 test('read projection suppresses hidden verification and malformed records without leaking their text', async () => {
   const a = await application(); const revision = await note('Checks/Hidden.md', { moderation_status: 'hidden' });

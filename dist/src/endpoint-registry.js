@@ -697,8 +697,11 @@ export class EndpointRegistry {
                         : writeMissing.length ? `capability required: ${writeMissing.join(', ')}` : undefined;
                     const write = { available: writeAvailable, state: context.readOnly ? 'disabled' : writeAvailable ? 'ready' : 'locked',
                         requires, ...(writeReason && { reason: writeReason }) };
+                    const proofAvailable = context.authenticated && writeMissing.length === 0;
+                    const proof = { available: proofAvailable, state: proofAvailable ? 'ready' : 'locked', requires,
+                        ...(!proofAvailable && { reason: !context.authenticated ? 'authentication required' : `capability required: ${writeMissing.join(', ')}` }) };
                     return { ...item, ...(spec.reads.length ? read : write), operations: Object.fromEntries([
-                            ...spec.reads.map(op => [op, read]), ...spec.writes.map(op => [op, write]),
+                            ...spec.reads.map(op => [op, op === 'reconnect_preview' ? proof : read]), ...spec.writes.map(op => [op, write]),
                         ]) };
                 }
             }

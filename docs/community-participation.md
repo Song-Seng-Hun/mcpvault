@@ -24,6 +24,19 @@ Existing XP calculations remain unchanged and participation makes no access
 change. Operator authorization remains the source of authority for any host
 action.
 
+The default `purpose="work"` pulse reads priority sources lazily: a private
+checkpoint first, then eligible Work/standalone assigned tasks, notifications,
+review/Inbox and feedback, relevant Skill and Wiki maintenance, then optional
+workshops, ideas, posts and rooms. Once a priority is selected, later sources
+are not read. `coverage` distinguishes `loaded`, `skipped`, and `unavailable`
+(fixed `not_configured`/`read_failed` reasons); omitted counts and reputation
+are unknown, not zero. A compact overflow response can omit details and offers
+a bounded retry when the action/guidance cannot fit. Required work/identity
+read failures do not authorize a lower-priority fallback. Project tasks are
+selected only through Work when it is configured, so blocked/managed tasks
+cannot reappear through legacy assignment ranking. Every suggestion remains
+advisory: read its current packet/revision and recheck authority before acting.
+
 ## Joining and recording
 
 Read the selected template, current Workshop phase, and current revision

@@ -7,9 +7,8 @@ import type { QueryNote, ParsedNoteContent } from './types.js';
 import { FrontmatterHandler } from './frontmatter.js';
 import { fingerprint } from './work-model.js';
 import { isModerationHidden } from './moderation-policy.js';
-import { ReferenceService } from './references.js';
+import { ReferenceService, type ReadReferenceMetadata } from './references.js';
 import { extractObsidianLinkOccurrences } from './backlinks.js';
-import { parseWikiLink } from './wikilink/resolveWikiLink.js';
 import { normalizeKnowledgeInvestigation, normalizeInvestigationEvidence, type KnowledgeInvestigation } from './knowledge-investigation-model.js';
 
 const BYTES = 8 * 1024 * 1024;
@@ -35,8 +34,9 @@ function paths(access: ScopeAccessPolicy, container: string, principal?: ScopePr
 
 /** A result is a report against a saved plan, not permission to execute it. */
 export async function prepareKnowledgeInvestigation(fs: FileSystemService, access: ScopeAccessPolicy, value: unknown,
-  container: string, existing: QueryNote | undefined, principal?: ScopePrincipal) {
+  container: string, existing: QueryNote | undefined, principal?: ScopePrincipal, readMetadata?: ReadReferenceMetadata) {
   const investigation = normalizeKnowledgeInvestigation(value);
+  const refs = new ReferenceService(fs, access), read = readMetadata ?? refs.createMetadataReader(principal);
   const { physical, allowed, container: owner } = paths(access, container, principal);
   let previous: KnowledgeInvestigation | undefined;
   if (existing?.frontmatter.knowledge_investigation !== undefined) previous = normalizeKnowledgeInvestigation(existing.frontmatter.knowledge_investigation);
@@ -51,18 +51,14 @@ export async function prepareKnowledgeInvestigation(fs: FileSystemService, acces
     if (investigation.result.planRevision !== expected) throw guidanceError(Error('Result planRevision must identify the saved plan revision'), 'guid-262914bbf2ddd747');
   } else if (previous?.result) throw guidanceError(Error('Preserve the reported result; use a separate linked experiment for a new plan'), 'guid-ca82eae7ad1e5b34');
   const guards = new Map<string, { path: string; expectedRevision: string }>();
-  const metadata = new Map<string, QueryNote>();
   const observe = async (path: string) => {
     if (!allowed(path) || path.toLowerCase() === owner.toLowerCase()) throw Error(UNAVAILABLE);
-    const cached = metadata.get(path.toLowerCase());
-    if (cached) return cached;
     if (!guards.has(path.toLowerCase()) && guards.size >= 8) throw guidanceError(Error('Investigation may reference at most eight distinct related notes, including prose links'), 'guid-724e69325898fd7d');
-    const meta = (await fs.readNoteMetadata([path], allowed, { fresh: true, strict: true, maxBytes: BYTES }))[0];
+    const meta = await read(path, allowed);
     if (!meta?.revision || isModerationHidden(meta.frontmatter)) throw Error(UNAVAILABLE);
     const old = guards.get(path.toLowerCase());
     if (old && old.expectedRevision !== meta.revision) throw Error(UNAVAILABLE);
     guards.set(path.toLowerCase(), { path, expectedRevision: meta.revision });
-    metadata.set(path.toLowerCase(), meta);
     return meta;
   };
   try {
@@ -82,13 +78,9 @@ export async function prepareKnowledgeInvestigation(fs: FileSystemService, acces
     }
     const fields = prose(investigation), occurrences = fields.flatMap(field => extractObsidianLinkOccurrences(field));
     if (occurrences.length > 16) throw Error(UNAVAILABLE);
-    for (const link of occurrences) {
-      const raw = /^!?\[\[/.test(link.link) ? parseWikiLink(link.link.replace(/^!/, '')).document : link.target;
-      const decoded = decodeURIComponent(raw).replace(/\\/g, '/');
-      if (!allowed(physical(decoded.startsWith('.') ? posix.join(posix.dirname(owner), decoded) : decoded))) throw Error(UNAVAILABLE);
-    }
-    const refs = new ReferenceService(fs, access);
-    for (const field of fields) for (const path of await refs.validateAndNormalize(undefined, owner, principal, field, { strictBodyLinks: true })) await observe(path);
+    for (const path of await refs.validateBodyLinks(occurrences, owner, principal, value => {
+      if (!allowed(physical(value))) throw Error(UNAVAILABLE);
+    })) await observe(path);
   } catch { throw Error(UNAVAILABLE); }
   const assertAccess = () => { if (!allowed(owner) || [...guards.values()].some(guard => !allowed(guard.path))) throw Error(UNAVAILABLE); };
   assertAccess();

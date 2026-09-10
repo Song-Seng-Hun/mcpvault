@@ -39,6 +39,46 @@ test('fixed five MCP tools discover all nine story endpoints and deny anonymous 
   }
 });
 
+test('authenticated reconnect preview uses the same read-only MCP and REST path for multiple handoffs', async () => {
+  const f = await fixture(); const tokens: Record<string, string> = {};
+  for (const accountId of ['owner', 'alice', 'bob', 'carol']) {
+    tokens[accountId] = (await f.ok('auth.register', { accountId, modelId: accountId, password: 'disposable-story-password' })).accessToken;
+  }
+  const project = await f.ok('story.project', { op: 'create', projectId: 'novel', title: 'Novel', brief: { medium: 'novel' },
+    participants: ['alice', 'bob', 'carol'], expectedRevision: 'missing', requestId: 'project', accessToken: tokens.owner });
+  await f.ok('story.artifact', { op: 'create', projectId: 'novel', artifactId: 'scene', kind: 'scene', title: 'Scene', content: 'The scene.',
+    expectedRevision: 'missing', expectedProjectRevision: project.revision, requestId: 'scene', accessToken: tokens.alice });
+  const session = await f.ok('story.session', { op: 'start', projectId: 'novel', sessionId: 'drafting', artifactId: 'scene',
+    writerAccountId: 'alice', editorAccountId: 'owner', expectedRevision: 'missing', expectedProjectRevision: project.revision, requestId: 'session', accessToken: tokens.owner });
+  const packet = () => f.ok('work.packet', { taskId: session.taskId, accessToken: tokens.owner, maxChars: 12000 });
+  let task = await packet();
+  await f.ok('work.claim', { op: 'claim', taskId: session.taskId, expectedRevision: task.revision, expectedGeneration: task.generation,
+    requestId: 'claim', accessToken: tokens.alice });
+  const paused = await f.ok('story.session', { op: 'pause', projectId: 'novel', sessionId: 'drafting', reason: 'Handoff.',
+    expectedRevision: session.revision, expectedProjectRevision: project.revision, requestId: 'pause', accessToken: tokens.owner });
+  for (const [from, to] of [['alice', 'bob'], ['bob', 'carol']]) {
+    task = await packet();
+    await f.ok('work.handoff', { op: 'propose', taskId: session.taskId, toAccountId: to, nextAction: 'Continue scene.',
+      expectedRevision: task.revision, expectedGeneration: task.generation, requestId: `offer-${from}`, accessToken: tokens[from!] });
+    task = await packet();
+    await f.ok('work.handoff', { op: 'accept', taskId: session.taskId, expectedRevision: task.revision,
+      expectedGeneration: task.generation, requestId: `accept-${to}`, accessToken: tokens[to!] });
+  }
+  const readonly = await fixture(f.root, true);
+  const login = await readonly.ok('auth.login', { accountId: 'owner', password: 'disposable-story-password' });
+  const params = { projectId: 'novel', sessionId: 'drafting', op: 'reconnect_preview', accessToken: login.accessToken };
+  const proof = await readonly.ok('story.session', params);
+  expect(proof).toMatchObject({ writerAccountId: 'carol', hopCount: 2, gitHistoryUsed: false });
+  expect((await readonly.call('story.session', { ...params, accessToken: undefined })).error).toBe(true);
+  const api = await startRestApi(readonly.server, { port: 0 }); cleanup.push(() => api.close());
+  const response = await fetch(`http://127.0.0.1:${api.port}/api/endpoint/story.session`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(params) });
+  expect(response.status).toBe(200); expect(await response.json()).toEqual(proof);
+  const denied = await readonly.call('story.session', { ...params, op: 'resume', reconnectWriter: true, expectedRevision: paused.revision,
+    expectedProjectRevision: project.revision, expectedWorkRevision: proof.expectedWorkRevision, expectedWorkGeneration: proof.expectedWorkGeneration,
+    reconnectProofFingerprint: proof.reconnectProofFingerprint, requestId: 'resume' });
+  expect(denied.error).toBe(true); expect(denied.value).toMatch(/read.only/i);
+}, 30000);
+
 test('live story writes preserve revisions, reject private sources and share MCP/REST service', async () => {
   const f = await fixture();
   const account = await f.ok('auth.register', { accountId: 'story-fixture', modelId: 'codex', password: 'disposable-story-password' });

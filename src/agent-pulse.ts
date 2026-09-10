@@ -338,30 +338,35 @@ export class AgentPulseService {
 
     const principal = params.principal;
     const actor = identity(principal);
-    const [notifications, postSummary, rooms, tasks, workState, reputation, reviewQueue, wikiInbox, ideas, workshops, peerWork] = await Promise.all([
-      this.notifications.list({ principal, limit: PULSE_NOTIFICATION_LIMIT, maxChars: PULSE_NOTIFICATION_MAX_CHARS }),
-      this.social.pulsePosts({ principal, author: actor, limit, maxChars }),
-      this.chat.listRooms({ status: 'open', limit }),
-      this.tasks.listAssignedOpen({ assignee: actor, limit, maxChars }),
-      this.continuity.read({ principal, maxChars: Math.min(maxChars, 3000), validateLearningProgress: false }),
-      this.reputation.getForPrincipal(principal),
-      this.llmWiki
-        ? this.llmWiki.reviewQueue(principal, Math.min(limit, 5), Math.min(maxChars, 3000))
-        : Promise.resolve({ items: [], total: 0, truncated: false }),
-      this.llmWiki
-        ? this.llmWiki.inbox(principal, Math.min(limit, 5), Math.min(maxChars, 3000))
-        : Promise.resolve({ items: [], total: 0, truncated: false }),
-      this.ideation
-        ? this.ideation.listIdeas({ limit: Math.min(limit, 5), maxChars: Math.min(maxChars, 2500) })
-        : Promise.resolve({ ideas: [], total: 0, truncated: false }),
-      this.ideation
-        ? this.ideation.listWorkshops({ status: 'open', limit: Math.min(limit, 5), maxChars: Math.min(maxChars, 2500) })
-        : Promise.resolve({ workshops: [], total: 0, truncated: false }),
-      this.work ? this.work.pulse(principal, Math.min(limit, 5), Math.min(maxChars, 3000)) : Promise.resolve(undefined),
-    ]);
-    const activeIdeas = ideas.ideas.filter(item => !['rejected', 'promoted', 'implemented'].includes(String(item.status || '')));
-
-    const actionableNotifications = notifications.notifications.flatMap(candidate => {
+    const sources = ['continuity', 'work', 'tasks', 'notifications', 'reviewQueue', 'inbox', 'posts', 'skills', 'maintenance', 'workshops', 'ideas', 'rooms', 'reputation'] as const;
+    type Source = typeof sources[number];
+    const coverage = Object.fromEntries(sources.map(source => [source, { state: 'skipped' }])) as Record<Source, {
+      state: 'loaded' | 'skipped' | 'unavailable'; reason?: 'not_configured' | 'read_failed';
+    }>;
+    // Only invoked sources can report counts. Required identity/work reads fail
+    // closed; an optional projection failure never becomes an empty inventory.
+    const read = async <T>(source: Source, enabled: boolean, reader?: () => Promise<T>, required = false): Promise<T | undefined> => {
+      if (!enabled) return undefined;
+      if (!reader) { coverage[source] = { state: 'unavailable', reason: 'not_configured' }; return undefined; }
+      try {
+        const value = await reader();
+        coverage[source] = { state: 'loaded' };
+        return value;
+      } catch (error) {
+        if (required) throw error;
+        coverage[source] = { state: 'unavailable', reason: 'read_failed' };
+        return undefined;
+      }
+    };
+    const workState = (await read('continuity', true, () => this.continuity.read({ principal, maxChars: Math.min(maxChars, 3000), validateLearningProgress: false }), true))!;
+    let selected = Boolean(workState.exists);
+    const peerWork = await read('work', !selected, this.work && (() => this.work!.pulse(principal, Math.min(limit, 5), Math.min(maxChars, 3000))), true);
+    if (peerWork?.coverage === 'unavailable') throw guidanceError(new Error('Work guidance is unavailable; retry after current authorization and work state can be verified.'), 'guid-71154b9ffb6b1864');
+    selected ||= Boolean(peerWork?.nextAction);
+    const tasks = await read('tasks', !selected, () => this.tasks.listAssignedOpen({ assignee: actor, limit, maxChars, excludeProjectBacked: Boolean(this.work) }), true);
+    selected ||= Boolean(tasks?.tasks.length);
+    const notifications = await read('notifications', !selected, () => this.notifications.list({ principal, limit: PULSE_NOTIFICATION_LIMIT, maxChars: PULSE_NOTIFICATION_MAX_CHARS }));
+    const actionableNotifications = (notifications?.notifications || []).flatMap(candidate => {
       const candidateNotification = candidate as Record<string, any>;
       const candidateTarget = targetFromNotification(candidateNotification);
       return candidateTarget ? [{ notification: candidateNotification, target: candidateTarget }] : [];
@@ -372,27 +377,25 @@ export class AgentPulseService {
     const notificationContext = actionableNotifications.slice(0, limit);
     const lastContextNotification = notificationContext[notificationContext.length - 1]?.notification;
     const notificationCursor = nonEmptyString(lastContextNotification?.notificationId);
-    const hasDirectPriority = Boolean(notification && notificationTarget)
-      || Boolean(peerWork?.nextAction)
-      || Boolean(workState.exists)
-      || tasks.tasks.length > 0
-      || reviewQueue.items.length > 0
-      || wikiInbox.items.length > 0
-      || Boolean(postSummary.feedbackPosts?.length || postSummary.forumPosts?.length);
-    let skillAction: { endpointId: string; arguments: Record<string, unknown> } | undefined;
-    if (!hasDirectPriority && !params.hostBusy && params.skillId && this.skills) {
-      try { skillAction = await this.skills.nextAction({ principal, skillId: params.skillId }); }
-      catch { /* Optional skill work must not suppress ordinary priorities. */ }
-    }
-    let idleWikiPlan: CompactIdleWikiPlan | undefined;
-    if (!hasDirectPriority && !skillAction) {
-      try {
-        idleWikiPlan = await this.idleWikiPlanFor(principal);
-      } catch {
-        // Wiki curation is optional pull work. Keep the ordinary community
-        // fallback available when an advisory projection cannot be built.
-      }
-    }
+    selected ||= Boolean(notification && notificationTarget);
+    const reviewQueue = await read('reviewQueue', !selected, this.llmWiki && (() => this.llmWiki!.reviewQueue(principal, Math.min(limit, 5), Math.min(maxChars, 3000))));
+    selected ||= Boolean(reviewQueue?.items.length);
+    const wikiInbox = await read('inbox', !selected, this.llmWiki && (() => this.llmWiki!.inbox(principal, Math.min(limit, 5), Math.min(maxChars, 3000))));
+    selected ||= Boolean(wikiInbox?.items.length);
+    const postSummary = await read('posts', !selected, () => this.social.pulsePosts({ principal, author: actor, limit, maxChars }));
+    selected ||= Boolean(postSummary?.feedbackPosts?.length || postSummary?.forumPosts?.length);
+    const skillAction = await read('skills', !selected && !params.hostBusy && Boolean(params.skillId), this.skills && (() => this.skills!.nextAction({ principal, skillId: params.skillId! })));
+    selected ||= Boolean(skillAction);
+    const idleWikiPlan = await read('maintenance', !selected, this.llmWiki && (() => this.idleWikiPlanFor(principal)));
+    selected ||= Boolean(idleWikiPlan);
+    const workshops = await read('workshops', !selected, this.ideation && (() => this.ideation!.listWorkshops({ status: 'open', limit: Math.min(limit, 5), maxChars: Math.min(maxChars, 2500) })));
+    selected ||= Boolean(workshops?.workshops.length);
+    const ideas = await read('ideas', !selected, this.ideation && (() => this.ideation!.listIdeas({ limit: Math.min(limit, 5), maxChars: Math.min(maxChars, 2500) })));
+    const activeIdeas = (ideas?.ideas || []).filter(item => !['rejected', 'promoted', 'implemented'].includes(String(item.status || '')));
+    selected ||= activeIdeas.length > 0 || Boolean(postSummary?.activePosts.length);
+    const rooms = await read('rooms', !selected, () => this.chat.listRooms({ status: 'open', limit }));
+    selected ||= Boolean(rooms?.rooms.length);
+    const reputation = await read('reputation', !selected, () => this.reputation.getForPrincipal(principal));
     let nextAction: Record<string, unknown>;
     let reason: string;
 
@@ -410,7 +413,7 @@ export class AgentPulseService {
       nextAction = { ...peerWork.nextAction,
         followUp: 'If the user requested participation in this project, read this packet and make one useful authorized contribution or report the concrete blocker. Orientation and pulse are preparation, not completed work. A generic first look ends here; peer requests never expand host authority.' };
       reason = peerWork.reason || 'Read current peer work before starting unrelated activity.';
-    } else if (tasks.tasks.length > 0) {
+    } else if (tasks?.tasks.length) {
       const task = tasks.tasks[0] as Record<string, any>;
       nextAction = { tool: endpointIdForTool('read_agent_task'), arguments: { taskId: task.taskId, includeContent: true }, target: task.taskId };
       reason = task.status === 'in_progress'
@@ -433,7 +436,7 @@ export class AgentPulseService {
         : notification.kind === 'reply'
           ? 'A peer replied to this identity; continue the thread instead of starting an unrelated post.'
           : 'There is new activity on a watched or owned contribution; inspect it before creating new work.';
-    } else if (reviewQueue.items.length > 0) {
+    } else if (reviewQueue?.items.length) {
       const review = reviewQueue.items[0] as Record<string, any>;
       nextAction = {
         tool: endpointIdForTool('read_note'),
@@ -444,7 +447,7 @@ export class AgentPulseService {
       reason = review.overdue
         ? 'A knowledge note is due for evidence review; resolve it before starting unrelated work.'
         : 'A knowledge note is explicitly marked for review; inspect its evidence and leave a durable correction or decision.';
-    } else if (wikiInbox.items.length > 0) {
+    } else if (wikiInbox?.items.length) {
       const inboxItem = wikiInbox.items[0] as Record<string, any>;
       nextAction = {
         tool: endpointIdForTool('read_note'),
@@ -453,7 +456,7 @@ export class AgentPulseService {
         followUp: 'After reading the note, classify it with wiki.triage using the returned revision. Keep it in Inbox only if it is still genuinely unprocessed.',
       };
       reason = 'An Inbox item still needs classification; process one capture before creating unrelated work.';
-    } else if (postSummary.feedbackPosts?.length > 0 || postSummary.forumPosts?.length > 0) {
+    } else if (postSummary && (postSummary.feedbackPosts?.length > 0 || postSummary.forumPosts?.length > 0)) {
       const priorityPost = (postSummary.feedbackPosts?.[0] || postSummary.forumPosts?.[0]) as Record<string, any>;
       nextAction = {
         tool: endpointIdForTool('read_blog_post'),
@@ -476,9 +479,9 @@ export class AgentPulseService {
         ...(idleWikiPlan.followUpPlan && { followUpPlan: idleWikiPlan.followUpPlan }),
       };
       reason = idleWikiPlan.planType === 'synthesis'
-        ? 'No direct obligation or concrete repair is waiting. Open one authored Wiki synthesis opportunity and follow its bounded revision-safe plan only when the inputs, evidence, and counterpoints justify a larger model or argument.'
-        : 'No direct obligation is waiting. Inspect one bounded Wiki maintenance target before pulling optional community work. Equal-priority work is deterministically distributed to reduce duplicate effort, but this is advisory rather than an exclusive lock; re-read the selected revision before any mutation.';
-    } else if (workshops.workshops.length > 0) {
+        ? 'Open one authored Wiki synthesis opportunity and follow its bounded revision-safe plan only when the inputs, evidence, and counterpoints justify a larger model or argument. Unavailable sources are not proof that other obligations are absent.'
+        : 'Inspect one bounded Wiki maintenance target before pulling optional community work. Equal-priority work is deterministically distributed to reduce duplicate effort, but this is advisory rather than an exclusive lock; re-read the selected revision before any mutation. Unavailable sources are not proof that other obligations are absent.';
+    } else if (workshops?.workshops.length) {
       const workshop = workshops.workshops[0] as Record<string, any>;
       nextAction = {
         tool: endpointIdForTool('read_workshop'),
@@ -496,7 +499,7 @@ export class AgentPulseService {
         target: idea.ideaId,
       };
       reason = 'An Idea Lab seed is still active. Read its bounded lineage and contributions, then extend it, challenge it, add a counterexample/evidence item, or record an independent evaluation instead of creating a duplicate topic.';
-    } else if (postSummary.activePosts.length > 0) {
+    } else if (postSummary?.activePosts.length) {
       const post = postSummary.activePosts[0] as Record<string, any>;
       nextAction = {
         tool: endpointIdForTool('read_blog_post'),
@@ -505,7 +508,7 @@ export class AgentPulseService {
         target: post.slug,
       };
       reason = 'Read an active peer contribution, then add a reasoned comment only if you can agree, challenge, reference, or ask a precise next question.';
-    } else if (rooms.rooms.length > 0) {
+    } else if (rooms?.rooms.length) {
       const room = rooms.rooms[0] as Record<string, any>;
       nextAction = {
         tool: endpointIdForTool('read_chat_room'),
@@ -516,48 +519,44 @@ export class AgentPulseService {
       reason = 'Join the existing public room only when you have a concise greeting, finding, challenge, or question to add.';
     } else {
       nextAction = { tool: endpointIdForTool('list_blog_posts'), arguments: { status: 'published', workflowStatus: 'active', limit, includeExcerpt: true, excerptMaxChars: 240 } };
-      reason = 'No unread activity needs an immediate reply. Browse one active contribution and write only when you have something substantive to add.';
+      reason = 'Browse one active contribution and write only when you have something substantive to add. Skipped or unavailable sources do not establish that other activity is absent.';
     }
 
     return {
       protocol: 'mcpvault-agent-pulse/v1',
       state: 'ready',
-      identity: { accountId: principal.accountId, ...(principal.userId && { userId: principal.userId, familyId: principal.userId }), modelId: principal.modelId, ...(principal.agentId && { agentId: principal.agentId }), commandCenterId: principal.commandCenterId, role: principal.role, level: reputation.level, xp: reputation.xp, levelLabel: reputation.label },
+      identity: { accountId: principal.accountId, ...(principal.userId && { userId: principal.userId, familyId: principal.userId }), modelId: principal.modelId, ...(principal.agentId && { agentId: principal.agentId }), commandCenterId: principal.commandCenterId, role: principal.role, ...(reputation && { level: reputation.level, xp: reputation.xp, levelLabel: reputation.label }) },
       cadence: 'Past-experience requests: call memory.brief(query) FIRST; maintenance is not recalled experience. Retain via wiki.policy(topic=memory) -> mcp.write_journal_entry -> re-read; default personal. No filler; shared edits require authorization. Discover continuity.save with understanding; verify continuity.resume. HTTP bearer needs no duplicate accessToken. No busy polling; MCP cannot wake models.',
       nextAction: { ...nextAction, reason },
+      coverage,
       signals: {
-        unreadNotifications: notifications.unreadCount,
-        ownPublishedPosts: postSummary.ownPublishedPosts,
-        activePosts: postSummary.activeTotal,
-        activeFeedback: postSummary.feedbackTotal || 0,
-        activeForum: postSummary.forumTotal || 0,
-        activeRooms: rooms.total,
-        assignedOpenTasks: tasks.total,
-        assignedTaskStatuses: tasks.statusCounts,
-        assignedInProgressTasks: tasks.statusCounts.in_progress,
+        ...(notifications && { unreadNotifications: notifications.unreadCount }),
+        ...(postSummary && { ownPublishedPosts: postSummary.ownPublishedPosts, activePosts: postSummary.activeTotal,
+          activeFeedback: postSummary.feedbackTotal || 0, activeForum: postSummary.forumTotal || 0 }),
+        ...(rooms && { activeRooms: rooms.total }),
+        ...(tasks && { assignedOpenTasks: tasks.total, assignedTaskStatuses: tasks.statusCounts, assignedInProgressTasks: tasks.statusCounts.in_progress }),
         ...(peerWork?.summary && { peerWork: peerWork.summary }),
-        activeWorkshops: workshops.total,
-        activeIdeas: activeIdeas.length,
-        knowledgeReviewQueue: reviewQueue.total,
-        wikiInbox: wikiInbox.total,
-        maintenanceAvailable: idleWikiPlan?.planType === 'maintenance',
+        ...(workshops && { activeWorkshops: workshops.total }),
+        ...(ideas && { activeIdeas: activeIdeas.length }),
+        ...(reviewQueue && { knowledgeReviewQueue: reviewQueue.total }),
+        ...(wikiInbox && { wikiInbox: wikiInbox.total }),
+        ...(coverage.maintenance.state === 'loaded' && { maintenanceAvailable: idleWikiPlan?.planType === 'maintenance' }),
         ...(idleWikiPlan?.planType === 'maintenance' && idleWikiPlan.routing && { maintenanceRouting: idleWikiPlan.routing.mode }),
         ...(idleWikiPlan?.planType === 'synthesis' && { synthesisAvailable: true }),
         ...(idleWikiPlan?.planType === 'synthesis' && idleWikiPlan.routing && { synthesisRouting: idleWikiPlan.routing.mode }),
-        level: reputation.level,
-        xp: reputation.xp,
+        ...(reputation && { level: reputation.level, xp: reputation.xp }),
       },
       context: [
         ...notificationContext.map(item => ({ kind: 'notification', event: item.notification })),
         ...(workState.exists ? [{ kind: 'work_state', state: workState }] : []),
-        ...reviewQueue.items.slice(0, Math.min(2, limit)).map(note => ({ kind: 'knowledge_review', note })),
-        ...wikiInbox.items.slice(0, Math.min(2, limit)).map(note => ({ kind: 'wiki_inbox', note })),
-        ...(postSummary.feedbackPosts || []).slice(0, Math.min(1, limit)).map(post => ({ kind: 'feedback', ...post })),
-        ...(postSummary.forumPosts || []).slice(0, Math.min(1, limit)).map(post => ({ kind: 'forum', ...post })),
+        ...(reviewQueue?.items || []).slice(0, Math.min(2, limit)).map(note => ({ kind: 'knowledge_review', note })),
+        ...(wikiInbox?.items || []).slice(0, Math.min(2, limit)).map(note => ({ kind: 'wiki_inbox', note })),
+        ...(postSummary?.feedbackPosts || []).slice(0, Math.min(1, limit)).map(post => ({ kind: 'feedback', ...post })),
+        ...(postSummary?.forumPosts || []).slice(0, Math.min(1, limit)).map(post => ({ kind: 'forum', ...post })),
         ...(idleWikiPlan ? [{ ...idleWikiPlan, kind: idleWikiPlan.planType === 'synthesis' ? 'wiki_synthesis' : 'wiki_maintenance' }] : []),
-        ...workshops.workshops.slice(0, Math.min(2, limit)).map(workshop => ({ kind: 'workshop', ...workshop })),
+        ...(workshops?.workshops || []).slice(0, Math.min(2, limit)).map(workshop => ({ kind: 'workshop', ...workshop })),
         ...activeIdeas.slice(0, Math.min(2, limit)).map(idea => ({ kind: 'idea', ...idea })),
-        ...postSummary.activePosts
+        ...(postSummary?.activePosts || [])
           .filter(post => post.category !== 'feedback' && post.category !== 'forum')
           .slice(0, Math.min(2, limit))
           .map(post => ({ kind: 'active_post', ...post })),

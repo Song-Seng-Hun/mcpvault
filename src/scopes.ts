@@ -183,7 +183,7 @@ export class CollaborationService {
     throw guidanceError(new Error(`Scoped note not found in ${candidates.map(item => item.scope).join(' > ')} precedence: ${logical}`), 'guid-8812af248f36e652');
   }
 
-  async searchScopedNotes(params: { query: string; modelId?: string; agentId?: string; userId?: string; commandCenterId?: string; limit?: number; maxChars?: number; searchContent?: boolean; searchFrontmatter?: boolean; caseSensitive?: boolean; includeRevisions?: boolean; expandAuthority?: boolean }, canAccessPath?: (path: string) => boolean) {
+  async searchScopedNotes(params: { query: string; modelId?: string; agentId?: string; userId?: string; commandCenterId?: string; limit?: number; maxChars?: number; searchContent?: boolean; searchFrontmatter?: boolean; caseSensitive?: boolean; includeRevisions?: boolean; expandAuthority?: boolean; fictionDomain?: import('./fiction-domain.js').FictionDomainSelection }, canAccessPath?: (path: string) => boolean) {
     const limit = normalizeSearchLimit(params.limit);
     const maxChars = normalizeSearchMaxChars(params.maxChars);
     const modelId = await this.inferModelId(params.agentId, params.modelId);
@@ -203,6 +203,7 @@ export class CollaborationService {
         ...(params.caseSensitive !== undefined && { caseSensitive: params.caseSensitive }),
         ...(params.includeRevisions !== undefined && { includeRevisions: params.includeRevisions }),
         ...(params.expandAuthority !== undefined && { expandAuthority: params.expandAuthority }),
+        ...(params.fictionDomain !== undefined && { fictionDomain: params.fictionDomain }),
         ...(item.root ? { pathPrefix: item.root } : { excludePaths: ['_scopes', '_collaboration', '_whispers'] }),
       });
       for (const result of results) {

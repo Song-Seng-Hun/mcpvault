@@ -32,11 +32,13 @@ test('ordinary question packets exclude fiction before the retrieval limit while
   for (let i = 0; i < 22; i++) await note(`Fiction/${String(i).padStart(2, '0')}.md`, `---\nfiction_domain: roleplay\n---\nworldneedle fictional experience ${i}`);
   await note('Knowledge/Real.md', 'worldneedle verified operating condition.');
   await note('Knowledge/Legacy.md', 'legacymarker remains available without fiction metadata.');
+  const inventory = vi.spyOn(fs, 'queryNotes');
   const real = await packet.read({ query: 'worldneedle', includeSemantic: false, maxChars: 12000 });
   const legacy = await packet.read({ query: 'legacymarker', includeSemantic: false });
   expect(real.sources.map((source: any) => source.path)).toContain('Knowledge/Real.md');
   expect(JSON.stringify(real)).not.toContain('Fiction/');
   expect(legacy.sources.map((source: any) => source.path)).toContain('Knowledge/Legacy.md');
+  expect(inventory).not.toHaveBeenCalled();
 });
 
 test('an explicit fiction path remains readable but its linked fiction evidence is not admitted', async () => {

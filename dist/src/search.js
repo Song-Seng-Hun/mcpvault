@@ -11,6 +11,7 @@ import { VaultIoCoordinator } from './vault-io.js';
 import { isMissingVaultPath, VaultReadUnavailableError } from './vault-read-errors.js';
 import { readSnapshotBytes } from './snapshot-read.js';
 import { parse as parseYaml } from 'yaml';
+import { isFictionMarkdown } from './fiction-domain.js';
 const WIKI_TYPES = new Set(['schema', 'source', 'knowledge', 'issue']);
 const SEARCH_CACHE_TTL_MS = 5_000;
 const SEARCH_CACHE_MAX_ENTRIES = 128;
@@ -21,7 +22,7 @@ const MAX_INDEXED_TEXT_BYTES = 64 * 1024 * 1024;
 const NGRAM_SIZE = 3;
 const SEARCH_SNAPSHOT_FILE = '.mcpvault/search-index.snapshot.bin';
 const LEGACY_SEARCH_SNAPSHOT_FILE = '.mcpvault/search-index.snapshot.gz';
-const SEARCH_SNAPSHOT_VERSION = 7;
+const SEARCH_SNAPSHOT_VERSION = 8;
 const SNAPSHOT_SAVE_DEBOUNCE_MS = 1_000;
 const DIRECTORY_CACHE_TTL_MS = 5_000;
 const DIRECTORY_CACHE_MAX_ENTRIES = 1_024;
@@ -341,7 +342,7 @@ function encodeSnapshot(snapshot) {
         for (const cue of document.retrievalCues)
             chunks.push(encodeSnapshotString(cue));
         chunks.push(encodeSnapshotString(document.useWhen || ''));
-        const flags = Buffer.from([(document.isWiki ? 1 : 0) | (document.moderationHidden ? 2 : 0)]);
+        const flags = Buffer.from([(document.isWiki ? 1 : 0) | (document.moderationHidden ? 2 : 0) | (document.fiction ? 4 : 0)]);
         chunks.push(flags, encodeSnapshotString(document.revision));
         const numbers = Buffer.allocUnsafe(40);
         numbers.writeDoubleLE(document.size, 0);
@@ -473,7 +474,7 @@ function decodeSnapshot(buffer) {
         const titleGramIds = readGramIds(titleGramCount);
         if (!bodyGramIds || !frontmatterGramIds || !titleGramIds)
             return undefined;
-        documents.push({ relativePath, title, authorityTerms, authorityIds, sameAsTerms, closeMatchTerms, broaderTerms, relatedTerms, retrievalCues, ...(useWhenValue && { useWhen: useWhenValue }), isWiki: (flags & 1) !== 0, moderationHidden: (flags & 2) !== 0, revision: revisionValue, size, mtimeMs, bodyLength, frontmatterLength, textBytes, bodyGramIds, frontmatterGramIds, titleGramIds });
+        documents.push({ relativePath, title, authorityTerms, authorityIds, sameAsTerms, closeMatchTerms, broaderTerms, relatedTerms, retrievalCues, ...(useWhenValue && { useWhen: useWhenValue }), isWiki: (flags & 1) !== 0, moderationHidden: (flags & 2) !== 0, fiction: (flags & 4) !== 0, revision: revisionValue, size, mtimeMs, bodyLength, frontmatterLength, textBytes, bodyGramIds, frontmatterGramIds, titleGramIds });
     }
     return offset === buffer.length ? { version, grams, documents } : undefined;
 }
@@ -862,6 +863,8 @@ export class SearchService {
         for (const item of snapshot.documents) {
             if (!item || typeof item !== 'object')
                 continue;
+            if (typeof item.fiction !== 'boolean')
+                continue;
             const relativePath = normalizeSubtree(String(item.relativePath || ''));
             if (!relativePath || !this.pathFilter.isAllowed(relativePath))
                 continue;
@@ -885,6 +888,7 @@ export class SearchService {
                 ...(typeof item.useWhen === 'string' && item.useWhen && { useWhen: item.useWhen }),
                 isWiki: item.isWiki === true,
                 moderationHidden: item.moderationHidden === true,
+                fiction: item.fiction,
                 revision: String(item.revision || ''),
                 size: item.size,
                 mtimeMs: item.mtimeMs,
@@ -935,6 +939,7 @@ export class SearchService {
                 ...(document.useWhen && { useWhen: document.useWhen }),
                 isWiki: document.isWiki,
                 moderationHidden: document.moderationHidden,
+                fiction: document.fiction,
                 revision: document.revision,
                 size: document.size,
                 mtimeMs: document.mtimeMs,
@@ -1049,6 +1054,7 @@ export class SearchService {
             maxChars: params.maxChars,
             includeRevisions: params.includeRevisions === true,
             expandAuthority: params.expandAuthority === true,
+            fictionDomain: params.fictionDomain,
         });
         // Delivered filesystem changes must invalidate even the result-cache fast
         // path (including cached misses and notes newly hidden by moderation).
@@ -1089,10 +1095,11 @@ export class SearchService {
             // The server-owned document index has already performed the filesystem
             // reads. Search only the visible in-memory documents on this pass.
             const scopedDocumentIds = this.scopedDocumentIds(normalizedPrefix, normalizedExcludes);
-            const accessibleDocumentIds = hasAccessPredicate
+            const domainMatches = (document) => !params.fictionDomain || document.fiction === (params.fictionDomain === 'only');
+            const accessibleDocumentIds = hasAccessPredicate || params.fictionDomain
                 ? new Set([...scopedDocumentIds].filter(documentId => {
                     const document = this.documentsById.get(documentId);
-                    return document !== undefined && params.canAccessPath(document.relativePath);
+                    return document !== undefined && domainMatches(document) && (!hasAccessPredicate || params.canAccessPath(document.relativePath));
                 }))
                 : scopedDocumentIds;
             const assertDocumentAccess = (document) => {
@@ -1109,7 +1116,7 @@ export class SearchService {
                     assertDocumentAccess(this.documentsById.get(documentId));
                 }
             };
-            const corpusStats = this.getCorpusStats(accessibleDocumentIds, searchContent, searchFrontmatter, normalizedPrefix, normalizedExcludes, !hasAccessPredicate);
+            const corpusStats = this.getCorpusStats(accessibleDocumentIds, searchContent, searchFrontmatter, normalizedPrefix, normalizedExcludes, !hasAccessPredicate && !params.fictionDomain);
             const { totalDocLength, docCount } = corpusStats;
             const candidateIds = this.candidateIds(terms, searchContent, searchFrontmatter, caseSensitive, accessibleDocumentIds);
             const filteredCandidateIds = new Set();
@@ -1122,7 +1129,7 @@ export class SearchService {
                     await this.loadText(document);
                     assertDocumentAccess(document);
                 }
-                if (matchesSearchFilters(document, parsedQuery.filters))
+                if (!document.moderationHidden && domainMatches(document) && matchesSearchFilters(document, parsedQuery.filters))
                     filteredCandidateIds.add(documentId);
             }
             // First pass loads text only as needed and computes corpus document
@@ -1137,6 +1144,10 @@ export class SearchService {
                     assertDocumentAccess(document);
                     await this.loadText(document);
                     assertDocumentAccess(document);
+                }
+                if (document.moderationHidden || !domainMatches(document)) {
+                    filteredCandidateIds.delete(documentId);
+                    continue;
                 }
                 const searchIn = caseSensitive
                     ? searchableTextFor(document, searchContent, searchFrontmatter)
@@ -1157,7 +1168,7 @@ export class SearchService {
             const candidates = (function* () {
                 for (const documentId of filteredCandidateIds) {
                     const document = service.documentsById.get(documentId);
-                    if (!document || !service.pathFilter.isAllowed(document.relativePath) || document.moderationHidden)
+                    if (!document || !service.pathFilter.isAllowed(document.relativePath) || document.moderationHidden || !domainMatches(document))
                         continue;
                     const candidate = rankCandidateFor(document, documentId, terms, scoringTerms, searchContent, searchFrontmatter, caseSensitive, authorityExpansionEnabled);
                     if (candidate)
@@ -1379,6 +1390,7 @@ export class SearchService {
                 ...(retrievalMetadata.useWhen && { useWhen: retrievalMetadata.useWhen }),
                 isWiki: isWikiPath(relativePath) || wikiType(content) !== undefined,
                 moderationHidden: isMarkdownModerationHidden(content),
+                fiction: isFictionMarkdown(content, relativePath),
                 revision: revision(content),
                 size,
                 mtimeMs,
@@ -1626,6 +1638,9 @@ export class SearchService {
             document.bodyStartLine = frontmatterMatch ? frontmatterMatch[0].split('\n').length : 1;
             document.frontmatterText = frontmatterMatch?.[1] || '';
             const parsedFrontmatter = parseSearchFrontmatter(document.frontmatterText);
+            document.fiction = isFictionMarkdown(content, document.relativePath);
+            document.moderationHidden = isMarkdownModerationHidden(content);
+            document.revision = revision(content);
             if (parsedFrontmatter)
                 document.frontmatter = parsedFrontmatter;
             else

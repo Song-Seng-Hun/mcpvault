@@ -2,9 +2,10 @@ import type { FileSystemService } from './filesystem.js';
 import type { ScopeAccessPolicy } from './scope-access.js';
 import type { ScopePrincipal } from './scope-auth.js';
 import type { QueryNote, ParsedNoteContent } from './types.js';
+import { type ReadReferenceMetadata } from './references.js';
 import { type KnowledgeInvestigation } from './knowledge-investigation-model.js';
 /** A result is a report against a saved plan, not permission to execute it. */
-export declare function prepareKnowledgeInvestigation(fs: FileSystemService, access: ScopeAccessPolicy, value: unknown, container: string, existing: QueryNote | undefined, principal?: ScopePrincipal): Promise<{
+export declare function prepareKnowledgeInvestigation(fs: FileSystemService, access: ScopeAccessPolicy, value: unknown, container: string, existing: QueryNote | undefined, principal?: ScopePrincipal, readMetadata?: ReadReferenceMetadata): Promise<{
     investigation: KnowledgeInvestigation;
     guards: {
         path: string;

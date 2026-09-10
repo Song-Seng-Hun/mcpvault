@@ -85,18 +85,50 @@ function assertEnterpriseMentions(content: string): void {
   }
 }
 
-function boundedRows<T>(rows: T[], limitValue: unknown, maxCharsValue: unknown): { rows: T[]; truncated: boolean } {
+function readBudget(value: unknown): number {
+  const max = value === undefined ? 6000 : Number(value);
+  if (!Number.isSafeInteger(max) || max < 1 || max > 20000) throw guidanceError(new Error('maxChars must be an integer from 1 to 20000'), 'guid-94f925e74cea084a');
+  return max;
+}
+
+const responseSize = (value: unknown, pretty?: unknown): number => JSON.stringify(value, null, pretty ? 2 : undefined).length;
+
+function boundedRows<T, R>(rows: T[], limitValue: unknown, maxCharsValue: unknown, envelope: (rows: T[], truncated: boolean) => R, pretty?: unknown): R {
   const limit = Math.min(Math.max(Number(limitValue || 50), 1), 100);
-  const maxChars = Math.min(Math.max(Number(maxCharsValue || 6000), 512), 20_000);
-  const selected: T[] = [];
-  let used = 0;
-  for (const row of rows.slice(0, limit)) {
-    const length = JSON.stringify(row).length;
-    if (used + length > maxChars) break;
-    selected.push(row);
-    used += length;
+  const maxChars = readBudget(maxCharsValue);
+  for (let count = Math.min(limit, rows.length); count >= 0; count--) {
+    const result = envelope(rows.slice(0, count), count < rows.length);
+    if (responseSize(result, pretty) <= maxChars) return result;
   }
-  return { rows: selected, truncated: selected.length < rows.length };
+  throw guidanceError(new Error('maxChars cannot fit the federation response; increase the response budget'), 'guid-0a3bef85c2e19f5a');
+}
+
+type FederationSync = { state: 'caught_up' | 'partial' | 'unavailable'; cursor: number; reasons: Array<'more_events' | 'invalid_feed' | 'hub_unavailable' | 'cache_unavailable'> };
+const absent = (sync: FederationSync) => ({ found: false, absence: sync.state === 'caught_up' ? 'verified' : 'unverified', sync });
+
+function boundedBody<R>(body: string, maxChars: number, envelope: (body: string, truncated: boolean) => R, pretty?: unknown): R {
+  const full = envelope(body, false);
+  if (responseSize(full, pretty) <= maxChars) return full;
+  let low = 0, high = body.length;
+  while (low < high) {
+    const middle = Math.ceil((low + high) / 2);
+    if (responseSize(envelope(body.slice(0, middle), true), pretty) <= maxChars) low = middle;
+    else high = middle - 1;
+  }
+  const result = envelope(body.slice(0, low), true);
+  if (responseSize(result, pretty) > maxChars) throw guidanceError(new Error('maxChars cannot fit the federation response; increase the response budget'), 'guid-0a3bef85c2e19f5a');
+  return result;
+}
+
+function boundedPost(post: Record<string, any>, maxValue: unknown, pretty?: unknown): Record<string, any> {
+  const max = readBudget(maxValue ?? 12000), body = String(post.content || '');
+  let base = post;
+  if (responseSize({ ...post, content: '', truncated: true }, pretty) > max) {
+    base = { path: post.path, revision: post.revision, fm: allowArgs(post.fm, ['mcpvault_type', 'post_id', 'author', 'title', 'status']),
+      commentCount: post.commentCount, sync: post.sync, metadataOmitted: true,
+      ...(post.federation && { federation: post.federation }), ...(post.comments && { commentsTruncated: true }) };
+  }
+  return boundedBody(body, max, (content, truncated) => ({ ...base, content, truncated: truncated || base !== post }), pretty);
 }
 
 function actorParts(actorId: string): { origin: string; agentId: string } {
@@ -183,7 +215,7 @@ export class EnterpriseFederationAdapter {
         || (parsed.deliveries !== undefined && (!isRecord(parsed.deliveries) || Object.values(parsed.deliveries).some(value => value !== 'published' && value !== 'pending')))) throw guidanceError(new Error('enterprise federation state is invalid'), 'guid-3e228eb9c9363db6');
       this.state = parsed;
     } catch (error) {
-      if (!(error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT')) throw error;
+      if (!(error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT')) throw guidanceError(new Error('Enterprise federation state unavailable'), 'guid-6cb3d848338c51ec');
     }
     this.loaded = true;
   }
@@ -426,31 +458,57 @@ export class EnterpriseFederationAdapter {
     return { ...local, federation: { status: federation.status, objectId: targetObjectId, revision: federationRevision(input) } };
   }
 
-  private async readFederatedPost(slug: string, principal?: ScopePrincipal): Promise<unknown> {
-    await this.reader.pull(100);
-    const view = await this.reader.getObject(slug);
+  private async readSync(): Promise<FederationSync> {
+    try {
+      const result = await this.reader.pull(100);
+      const errors = result.errors.length > 0;
+      return { state: errors ? 'unavailable' : result.hasMore ? 'partial' : 'caught_up', cursor: result.cursor,
+        reasons: errors ? [result.errors.some(error => /^public federation feed (signature|cursor|does not continue|is out of order)/.test(error)) ? 'invalid_feed' : 'hub_unavailable']
+          : result.hasMore ? ['more_events'] : [] };
+    } catch {
+      let cursor: number;
+      try { cursor = await this.reader.getCursor(); }
+      catch { throw guidanceError(new Error('Verified federation cache unavailable'), 'guid-f5ad58550b9dba89'); }
+      return { state: 'unavailable', cursor, reasons: ['cache_unavailable'] };
+    }
+  }
+
+  private async readLocalPost(args: Record<string, unknown>, principal: ScopePrincipal | undefined, sync: FederationSync, federationId?: string): Promise<unknown> {
+    const local = await this.social.getBlogPost({ ...(allowArgs(args, ['slug', 'includeComments', 'commentLimit', 'commentMaxChars', 'includeThreadContext']) as Parameters<SocialService['getBlogPost']>[0]), ...(principal && { principal }) });
+    const objectId = objectIdFromActor('post', String(local.fm.author), String(local.fm.post_id));
+    const known = await this.reader.getObject(objectId, { includeUnavailable: true });
+    if (known && known.status !== 'active') return absent(sync);
+    return boundedPost({ ...local, sync, ...(federationId && { federation: { objectId: federationId,
+      status: this.state.deliveries?.[federationId] || 'pending', revision: this.state.revisions[federationId] || 0 } }) }, args.maxChars, args.prettyPrint);
+  }
+
+  private async readFederatedPost(args: Record<string, unknown>, principal?: ScopePrincipal): Promise<unknown> {
+    const slug = String(args.slug).toLowerCase();
+    const sync = await this.readSync();
+    const view = await this.reader.getObject(slug, { includeUnavailable: true });
     if (!view && principal?.agentId && principal.commandCenterId) {
       const prefix = `post:${principal.commandCenterId.toLowerCase()}:${principal.agentId.toLowerCase()}:`;
       if (slug.startsWith(prefix)) {
-        const local = await this.social.getBlogPost({ principal, slug: slug.slice(prefix.length) });
-        return { ...local, federation: { objectId: slug, status: this.state.deliveries?.[slug] || 'pending', revision: this.state.revisions[slug] || 0 } };
+        return this.readLocalPost({ ...args, slug: slug.slice(prefix.length) }, principal, sync, slug);
       }
     }
-    if (!view || view.record.type !== 'post' || view.status !== 'active') throw guidanceError(new Error('federated public post not found'), 'guid-1c48a7c2d4b0e47c');
-    return { path: `PublicCommunity/Imported/${view.origin}/Posts/${federationStorageName(view.objectId)}.md`, fm: { mcpvault_type: 'blog_post', post_id: view.objectId, author: view.record.actorId, title: view.record.title, status: 'published', federation_revision: view.revision }, content: view.record.body, revision: String(view.revision), commentCount: 0 };
+    if (!view || view.record.type !== 'post' || view.status !== 'active') return absent(sync);
+    return boundedPost({ path: `PublicCommunity/Imported/${view.origin}/Posts/${federationStorageName(view.objectId)}.md`, fm: { mcpvault_type: 'blog_post', post_id: view.objectId, author: view.record.actorId, title: view.record.title, status: 'published', federation_revision: view.revision }, content: view.record.body, revision: String(view.revision), commentCount: 0, sync }, args.maxChars, args.prettyPrint);
   }
 
   private async listFederatedPosts(args: Record<string, unknown>, principal?: ScopePrincipal): Promise<unknown> {
-    await this.reader.pull(100);
+    const sync = await this.readSync();
     const requestedLimit = Math.min(Math.max(Number(args.limit || 50), 1), 100);
     const localArgs = allowArgs(args, ['workflowStatus', 'author', 'category', 'seriesId', 'includeExcerpt', 'excerptMaxChars', 'maxChars']);
     const localResult = await this.social.listBlogPosts({ ...(localArgs as Parameters<SocialService['listBlogPosts']>[0]), ...(principal && { principal }), status: 'published', limit: requestedLimit });
-    const localRows = (localResult.posts as Array<Record<string, unknown>>).map(row => {
+    const localRows = (await Promise.all((localResult.posts as Array<Record<string, unknown>>).map(async row => {
       const localSlug = String(row.slug || '');
       const author = String(row.author || '');
       const objectId = objectIdFromActor('post', author, localSlug);
+      const known = await this.reader.getObject(objectId, { includeUnavailable: true });
+      if (known && known.status !== 'active') return undefined;
       return { ...row, federationObjectId: objectId, federationStatus: this.state.deliveries?.[objectId] || 'pending' };
-    });
+    }))).filter((row): row is NonNullable<typeof row> => row !== undefined);
     const listParams: Parameters<PublicFederationReplica['listObjects']>[0] = { type: 'post', status: 'active', limit: 100 };
     if (args.authorOrigin) listParams.origin = String(args.authorOrigin);
     const result = await this.reader.listObjects(listParams);
@@ -461,43 +519,87 @@ export class EnterpriseFederationAdapter {
     });
     const localIds = new Set(localRows.map(row => String(row.federationObjectId)));
     const combined = [...localRows, ...remoteRows.filter(row => !localIds.has(row.slug))];
-    const bounded = boundedRows(combined, requestedLimit, args.maxChars);
-    return { posts: bounded.rows, total: combined.length, truncated: bounded.truncated || result.truncated || localResult.truncated };
+    return boundedRows(combined, requestedLimit, args.maxChars, (posts, truncated) =>
+      ({ posts, total: combined.length, truncated: truncated || result.truncated || localResult.truncated, sync }), args.prettyPrint);
   }
 
   private async listFederatedComments(args: Record<string, unknown>): Promise<unknown> {
     const slug = text(args.slug, 'slug').toLowerCase();
     const postId = slug.startsWith('post:') ? slug : await this.resolveLocalPostId(slug);
-    await this.reader.pull(100);
-    const result = await this.reader.listObjects({ type: 'comment', status: 'active', postId, limit: 100, ...(typeof args.after === 'string' && { after: args.after }) });
+    const maxChars = readBudget(args.maxChars), sync = await this.readSync();
+    const after = typeof args.afterCommentId === 'string' ? args.afterCommentId : undefined;
+    const result = await this.reader.listObjects({ type: 'comment', status: 'active', postId, limit: 100,
+      ...(after && { after, contextBefore: Math.min(Math.max(Number(args.contextBefore ?? 2), 1), 20) }) });
     const limit = Math.min(Math.max(Number(args.limit || 20), 1), 100);
-    const all = result.objects.filter(view => view.record.type === 'comment' && view.record.postId === postId);
-    const comments = all.slice(0, limit).map(view => {
+    const comments = result.objects.map(view => {
       const record = view.record;
       if (record.type !== 'comment') throw guidanceError(new Error('public federation comment view changed during listing'), 'guid-75ba010aa0dabdfb');
       return { commentId: view.objectId, postId: record.postId, content: record.body, author: record.actorId, replyTo: record.replyTo, federationRevision: view.revision };
     });
-    const bounded = boundedRows(comments, limit, args.maxChars);
-    return { comments: bounded.rows, total: all.length, truncated: bounded.truncated || result.truncated };
+    const overlap = comments.slice(0, result.contextBefore), fresh = comments.slice(result.contextBefore);
+    const envelope = (count: number, contextCount: number) => {
+      const rows = fresh.slice(0, count), truncated = count < fresh.length || result.truncated;
+      const nextCursor = rows.at(-1)?.commentId || after;
+      const retry = truncated && count === 0;
+      return { comments: [...overlap.slice(overlap.length - contextCount), ...rows], total: result.total, contextBefore: contextCount,
+        truncated, ...(nextCursor && { nextCursor }), sync, ...(retry && { reason: 'budget_exhausted' }),
+        ...(truncated && { nextAction: { endpointId: 'community.comments', arguments: { slug, limit,
+          maxChars: retry ? Math.min(20000, Math.max(1024, maxChars * 2)) : maxChars,
+          ...(nextCursor && { afterCommentId: nextCursor }), contextBefore: retry ? 1 : Number(args.contextBefore ?? 2),
+          ...(Boolean(args.prettyPrint) && { prettyPrint: true }) } } }) };
+    };
+    // Admit new comments first. Overlap may shrink, but can never consume the
+    // whole budget while pretending to advance through unread comments.
+    for (let count = Math.min(limit, fresh.length); count >= 0; count--) {
+      for (let contextCount = count > 0 || fresh.length === 0 ? overlap.length : 0; contextCount >= 0; contextCount--) {
+        const response = envelope(count, contextCount);
+        if (responseSize(response, args.prettyPrint) <= maxChars) {
+          if (count === 0 && fresh.length > 0 && maxChars === 20000) {
+            const first = fresh[0]!, target = await this.reader.getImportedReadTarget(first.commentId, first.federationRevision);
+            const diagnostic = { ...response, reason: 'oversized_item',
+              nextAction: { endpointId: 'mcp.read_note_lines', arguments: { path: target.path, expectedRevision: target.revision,
+                startLine: 1, endLine: target.totalLines, maxChars: 12000 } },
+              continuationAfterRead: { endpointId: 'community.comments', arguments: { slug, afterCommentId: first.commentId,
+                contextBefore: 1, limit, maxChars, ...(Boolean(args.prettyPrint) && { prettyPrint: true }) } } };
+            if (responseSize(diagnostic, args.prettyPrint) <= maxChars) return diagnostic;
+            break;
+          }
+          return response;
+        }
+      }
+    }
+    throw guidanceError(new Error('maxChars cannot fit the federation response; increase the response budget'), 'guid-0a3bef85c2e19f5a');
   }
 
   private async getFederatedProfile(actorId: string): Promise<unknown> {
     actorParts(actorId);
-    await this.reader.pull(100);
+    const sync = await this.readSync();
     const view = await this.reader.getObject(`profile:${actorId.slice('actor:'.length)}`);
-    if (!view || view.record.type !== 'profile') throw guidanceError(new Error('federated public profile not found'), 'guid-0e3e1e5cdcc6aff3');
-    return { success: true, profile: { identity: actorId, role: 'agent', actorId, displayName: view.record.displayName, bio: view.record.bio || '', origin: view.origin, federationRevision: view.revision } };
+    if (!view || view.record.type !== 'profile') return absent(sync);
+    return { success: true, profile: { identity: actorId, role: 'agent', actorId, displayName: view.record.displayName, bio: view.record.bio || '', origin: view.origin, federationRevision: view.revision }, sync };
+  }
+
+  private async getLocalProfile(args: Record<string, unknown>): Promise<unknown> {
+    const sync = await this.readSync();
+    const local = await this.directory.get({ role: String(args.role || ''), identity: String(args.identity || '') });
+    const actorId = (local.profile as Record<string, unknown>).actorId;
+    if (typeof actorId === 'string') {
+      actorParts(actorId);
+      const known = await this.reader.getObject(`profile:${actorId.slice('actor:'.length)}`, { includeUnavailable: true });
+      if (known && known.status !== 'active') return absent(sync);
+    }
+    return { ...local, sync };
   }
 
   private async listFederatedProfiles(args: Record<string, unknown>): Promise<unknown> {
-    await this.reader.pull(100);
+    const sync = await this.readSync();
     const result = await this.reader.listObjects({ type: 'profile', status: 'active', limit: 100 });
     const rows = result.objects.map(view => {
       if (view.record.type !== 'profile') throw guidanceError(new Error('public federation profile view changed during listing'), 'guid-923455edfe152d14');
       return { identity: view.record.actorId, role: 'agent', actorId: view.record.actorId, displayName: view.record.displayName, bio: view.record.bio || '', origin: view.origin, federationRevision: view.revision };
     });
-    const bounded = boundedRows(rows, args.limit, args.maxChars);
-    return { profiles: bounded.rows, total: rows.length, truncated: bounded.truncated || result.truncated };
+    return boundedRows(rows, args.limit, args.maxChars, (profiles, truncated) =>
+      ({ profiles, total: result.total, truncated: truncated || result.truncated, sync }), args.prettyPrint);
   }
 
   private async localMatches(intent: BridgeIntent, principal: ScopePrincipal): Promise<boolean> {
@@ -605,17 +707,22 @@ export class EnterpriseFederationAdapter {
         case 'public_federation_pull': return this.reader.pull(Number(args.limit || 100));
         case 'public_federation_retry': return this.retry(principal);
         case 'public_federation_get': {
-          await this.reader.pull(100);
+          const sync = await this.readSync();
           const view = await this.reader.getObject(text(args.objectId, 'objectId').toLowerCase());
-          if (!view) return undefined;
-          const maxChars = Math.min(Math.max(Number(args.maxChars || 6000), 512), 20_000);
-          const record = view.record.type === 'post' || view.record.type === 'comment'
-            ? { ...view.record, body: view.record.body.slice(0, maxChars) }
-            : view.record;
-          return { ...view, record, truncated: (view.record.type === 'post' || view.record.type === 'comment') && view.record.body.length > maxChars };
+          const maxChars = readBudget(args.maxChars);
+          if (!view) {
+            const result = absent(sync);
+            if (responseSize(result, args.prettyPrint) > maxChars) throw guidanceError(new Error('maxChars cannot fit the federation response; increase the response budget'), 'guid-0a3bef85c2e19f5a');
+            return result;
+          }
+          if ('body' in view.record) return boundedBody(view.record.body, maxChars,
+            (body, truncated) => ({ ...view, record: { ...view.record, body }, truncated, sync }), args.prettyPrint);
+          const result = { ...view, truncated: false, sync };
+          if (responseSize(result, args.prettyPrint) > maxChars) throw guidanceError(new Error('maxChars cannot fit the federation response; increase the response budget'), 'guid-0a3bef85c2e19f5a');
+          return result;
         }
         case 'public_federation_list': {
-          await this.reader.pull(100);
+          const sync = await this.readSync();
           const params: Parameters<PublicFederationReplica['listObjects']>[0] = { status: 'active', includeUnavailable: false };
           if (['actor', 'profile', 'post', 'comment'].includes(String(args.type))) params.type = args.type as 'actor' | 'profile' | 'post' | 'comment';
           if (args.origin !== undefined) params.origin = String(args.origin);
@@ -625,14 +732,16 @@ export class EnterpriseFederationAdapter {
           const result = await this.reader.listObjects(params);
           const summaries = result.objects.map(view => ({ objectId: view.objectId, origin: view.origin, revision: view.revision, status: view.status, type: view.record.type, actorId: view.record.actorId,
             ...(view.record.type === 'post' && { title: view.record.title }), ...(view.record.type === 'profile' && { displayName: view.record.displayName }) }));
-          const bounded = boundedRows(summaries, params.limit, args.maxChars);
-          return { objects: bounded.rows, truncated: bounded.truncated || result.truncated, ...((bounded.truncated || result.truncated) && bounded.rows.length > 0 && { nextCursor: bounded.rows.at(-1)!.objectId }) };
+          return boundedRows(summaries, params.limit, args.maxChars, (objects, truncated) => ({ objects, sync,
+            truncated: truncated || result.truncated, ...((truncated || result.truncated) && objects.length > 0 && { nextCursor: objects.at(-1)!.objectId }) }), args.prettyPrint);
         }
         case 'list_blog_posts': return this.listFederatedPosts(args, principal);
         case 'read_blog_post':
-        case 'get_blog_post': return String(args.slug || '').startsWith('post:') ? this.readFederatedPost(String(args.slug).toLowerCase(), principal) : this.social.getBlogPost({ ...(allowArgs(args, ['slug', 'includeComments', 'commentLimit', 'commentMaxChars', 'includeThreadContext']) as Parameters<SocialService['getBlogPost']>[0]), ...(principal && { principal }) });
+        case 'get_blog_post': return String(args.slug || '').startsWith('post:') ? this.readFederatedPost(args, principal)
+          : this.readLocalPost(args, principal, await this.readSync());
         case 'list_blog_comments': return this.listFederatedComments(args);
-        case 'get_agent_profile': return String(args.identity || '').startsWith('actor:') ? this.getFederatedProfile(String(args.identity).toLowerCase()) : this.directory.get({ role: String(args.role || ''), identity: String(args.identity || '') });
+        case 'get_agent_profile': return String(args.identity || '').startsWith('actor:') ? this.getFederatedProfile(String(args.identity).toLowerCase())
+          : this.getLocalProfile(args);
         case 'list_agent_profiles':
         case 'list_agents': return this.listFederatedProfiles(args);
         default: throw guidanceError(new Error(`unsupported enterprise federation operation: ${name}`), 'guid-b3545e8027ee3b60');

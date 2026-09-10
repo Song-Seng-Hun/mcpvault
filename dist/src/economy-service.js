@@ -9,6 +9,7 @@ import { applyEconomyCommand, questClaimAuthority, economyRetry, economyRevision
 import { validateMarkdownContract } from './quest-verifier.js';
 import { questAttention } from './economy-operations.js';
 import { matchesParticipationTopic, isParticipationTask } from './community-participation-candidates.js';
+const blocksFreeMutation = (c) => !['draft', 'settled', 'cancelled'].includes(c.status);
 const taskPath = (id) => `Community/Tasks/${normalizeScopeId(id, 'taskId')}.md`;
 const paidTaskLease = new AsyncLocalStorage();
 /** No public mint/transfer/operator adjudication. Host configuration is injected,
@@ -86,9 +87,24 @@ export class EconomyService {
         const lease = paidTaskLease.getStore();
         if (lease?.active && lease.ledger === this.ledger && lease.taskId === taskId)
             return;
-        const state = await this.ledger.snapshot();
-        if (Object.values(state.contracts).some(c => c.terms.taskId === taskId && !['draft', 'settled', 'cancelled'].includes(c.status)))
+        const status = (await this.freeTaskMutations([taskId]))[taskId];
+        if (status.state === 'unavailable')
+            throw guidanceError(new Error('Task management state unavailable; general mutations are blocked'), 'guid-cd324b333413aebf');
+        if (status.freeMutationBlocked)
             throw guidanceError(new Error('Paid task is controlled by quest.contract; free mutation would bypass escrow/claim rules'), 'guid-68f852f2b6594af5');
+    }
+    /** Host-only eligibility for already-visible task IDs. No financial facts or
+     * economic-owner authorization are needed to withhold an impossible action. */
+    async freeTaskMutations(taskIds) {
+        const ids = [...new Set(taskIds.map(id => normalizeScopeId(id, 'taskId')))];
+        try {
+            const state = await this.ledger.snapshot();
+            const blocked = new Set(Object.values(state.contracts).filter(blocksFreeMutation).map(c => c.terms.taskId));
+            return Object.fromEntries(ids.map(id => [id, { state: blocked.has(id) ? 'managed' : 'allowed', freeMutationBlocked: blocked.has(id) }]));
+        }
+        catch {
+            return Object.fromEntries(ids.map(id => [id, { state: 'unavailable', freeMutationBlocked: true }]));
+        }
     }
     async workProjection(principal, taskIds) {
         if (!principal || !Object.hasOwn(this.policy.owners, principal.accountId))
@@ -134,7 +150,7 @@ export class EconomyService {
             result[c.terms.taskId] = { kind: 'paidContract', contractId: c.id, status: c.status, reward: c.terms.reward, revision: economyRevision(c), generation: c.generation,
                 artifacts, workStatusIndependent: true,
                 ...(divergence && c.status !== 'settled' ? { warning: guidanceText('guid-3088de795374c765', 'paid_work_divergence'), paymentHeld: true } : {}),
-                attention: questAttention(c, new Date().toISOString()), freeMutationBlocked: !['settled', 'cancelled'].includes(c.status),
+                attention: questAttention(c, new Date().toISOString()), freeMutationBlocked: blocksFreeMutation(c),
                 nextAction: { endpointId: 'quest.market', arguments: { contractId: c.id, maxChars: 4000 } }, authority: 'Budget is not external execution authority' };
         }
         await this.actor(actor);

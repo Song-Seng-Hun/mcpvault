@@ -58,6 +58,51 @@ export class ReferenceService {
             throw guidanceError(new Error(`Obsidian reference is ambiguous: [[${target}]]. Use a path-qualified link such as [[folder/${name.split('/').at(-1)}]]`), 'guid-9143e01bad625d4f');
         return matches[0];
     }
+    async resolveBodyLink(link, containerPath, principal) {
+        const wiki = /^!?\[\[/.test(link.link);
+        const target = wiki ? parseWikiLink(link.link.replace(/^!/, '')).document : link.target;
+        const path = this.canonicalPath(await this.resolveWikiLinkTarget(target, principal, containerPath, wiki ? undefined : 'markdown'), principal);
+        if (!this.access.canReferenceFrom(containerPath, path)) {
+            throw guidanceError(new Error(`A more-private note cannot be referenced from this note: ${this.access.toPublicPath(path)}`), 'guid-41bb26d8f842bd65');
+        }
+        return path;
+    }
+    /** Strict structured prose only. The domain supplies its authored-path policy
+     * (including scope expansion), occurrence budget and separate field parsing.
+     * Ordinary note-body permissiveness in validateAndNormalize is unchanged. */
+    async validateBodyLinks(links, containerPath, principal, assertPath) {
+        for (const link of links) {
+            const raw = /^!?\[\[/.test(link.link) ? parseWikiLink(link.link.replace(/^!/, '')).document : link.target;
+            const decoded = decodeURIComponent(raw).replace(/\\/g, '/');
+            assertPath(decoded.startsWith('.') ? posix.join(posix.dirname(containerPath), decoded) : decoded);
+        }
+        containerPath = this.lexicalPath(containerPath, principal, false);
+        const paths = new Set();
+        for (const link of links) {
+            const path = await this.resolveBodyLink(link, containerPath, principal);
+            assertPath(path);
+            paths.add(path);
+        }
+        return [...paths];
+    }
+    /** Request-local observations, not cached permissions or a current-state
+     * promise. Callers retain their final access and revision guards. */
+    createMetadataReader(principal) {
+        const observed = new Map();
+        return async (path, canRead) => {
+            const allowed = (p) => this.access.canAccessPhysicalPath(p, principal) && canRead(p);
+            if (!allowed(path))
+                return undefined;
+            const cached = observed.get(path);
+            if (cached)
+                return cached;
+            const note = (await this.fileSystem.readNoteMetadata([path], allowed, { fresh: true, strict: true, maxBytes: 8 * 1024 * 1024 }))[0];
+            if (!allowed(path) || !note?.revision || isModerationHidden(note.frontmatter))
+                return undefined;
+            observed.set(path, note);
+            return note;
+        };
+    }
     /**
      * Validate explicit references and automatically add resolvable Obsidian
      * wikilinks found in the body. Unresolved body links remain ordinary
@@ -87,13 +132,7 @@ export class ReferenceService {
         }
         for (const link of extractObsidianLinkOccurrences(String(content || ''))) {
             try {
-                // Keep authored wikilink spelling, including relative prefixes and
-                // table escapes, through the shared wikilink parser.
-                const target = /^!?\[\[/.test(link.link) ? parseWikiLink(link.link.replace(/^!/, '')).document : link.target;
-                const path = this.canonicalPath(await this.resolveWikiLinkTarget(target, principal, containerPath, /^!?\[\[/.test(link.link) ? undefined : 'markdown'), principal);
-                if (!this.access.canReferenceFrom(containerPath, path)) {
-                    throw guidanceError(new Error(`A more-private note cannot be referenced from this note: ${this.access.toPublicPath(path)}`), 'guid-41bb26d8f842bd65');
-                }
+                const path = await this.resolveBodyLink(link, containerPath, principal);
                 if (!references.includes(path))
                     references.push(path);
             }

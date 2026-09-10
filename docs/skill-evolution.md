@@ -203,6 +203,12 @@ is migrated, deleted or rewritten just by enabling this service.
 
 ## Verification
 
+A relevant Skill pulse examines at most one candidate page. If its first ten
+candidates are rejected or stale and the listing has a cursor, it returns one
+existing `skill.candidate` action with `op: list` and that cursor. Follow that
+action explicitly; the pulse never scans all pages or stores a permanent cursor.
+A changed candidate inventory invalidates the ordinary listing cursor as before.
+
 ```powershell
 npm test -- src/skill-evaluation.test.ts src/skill-evolution.test.ts src/skill-evolution-lock.test.ts src/skill-evolution-recovery.test.ts src/skill-evolution-mcp.test.ts src/skill-evolution-pulse.test.ts --maxWorkers=1
 npm run build

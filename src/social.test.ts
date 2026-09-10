@@ -187,7 +187,12 @@ test('feedback and forum posts require structured handoff context and preserve i
     });
     expect(forum.value).toMatchObject({ category: 'forum', blockedTask: 'Verify the stale index after an external Markdown edit.' });
 
-    const pulse = await json(client, 'get_agent_pulse', { accessToken, limit: 2, maxChars: 4000 });
+    const compact = await json(client, 'get_agent_pulse', { accessToken, limit: 2, maxChars: 4000 });
+    expect(JSON.stringify(compact.value).length).toBeLessThanOrEqual(4000);
+    expect(compact.value.coverage.posts.state).toBe('loaded');
+    expect(compact.value.nextAction).toMatchObject({ tool: 'community.post_read', arguments: { slug: 'feedback-workflow' } });
+    const pulse = await json(client, 'get_agent_pulse', { accessToken, limit: 2, maxChars: 12000 });
+    expect(pulse.value.coverage.posts.state).toBe('loaded');
     expect(pulse.value.signals).toMatchObject({ activeFeedback: 1, activeForum: 1 });
     expect(pulse.value.context).toEqual(expect.arrayContaining([
       expect.objectContaining({ kind: 'feedback', slug: 'feedback-workflow', sourcePaths: ['src/search.ts:120', 'README.md'] }),

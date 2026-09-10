@@ -16,6 +16,7 @@ import { isMarkdownModerationHidden } from './moderation-policy.js';
 import { createDerivedCacheOwner, derivedCacheBudget, estimateCacheBytes } from './cache-budget.js';
 import { SEMANTIC_MODEL_ID as MODEL_ID, SEMANTIC_MODEL_OPTIONS, SEMANTIC_EMBEDDING_PROFILE } from './semantic-profile.js';
 import { semanticInferenceGate, SemanticInferenceBusyError } from './semantic-inference-gate.js';
+import { isFictionMarkdown } from './fiction-domain.js';
 const EMBEDDING_DIMENSIONS = 384;
 const INDEX_DIR = '.mcpvault/semantic-index';
 const MANIFEST_FILE = 'manifest.snapshot.gz';
@@ -144,12 +145,14 @@ function compactExcerpt(text) {
         ? `${compact.slice(0, MAX_EXCERPT_CHARS - 1).replace(/[\uD800-\uDBFF]$/, '')}…`
         : compact;
 }
-async function resultFromRow(row, vaultPath, includeRevision, vaultIo) {
+async function resultFromRow(row, vaultPath, includeRevision, vaultIo, fictionDomain) {
     try {
         const raw = await (vaultIo ? vaultIo.readUtf8(join(vaultPath, row.path)) : readFile(join(vaultPath, row.path), 'utf8'));
         // A vector row is disposable and may lag behind an Obsidian edit. Never
         // return a deleted note or an excerpt ranked from an older revision.
         if (hashContent(raw) !== row.hash || isMarkdownModerationHidden(raw))
+            return undefined;
+        if (fictionDomain && isFictionMarkdown(raw, row.path) !== (fictionDomain === 'only'))
             return undefined;
         // Legacy rows carry lines from a synthetic title/body string. The same
         // text/ordinal contract resolves their actual source anchor without a
@@ -540,6 +543,7 @@ export class SemanticSearchService {
             limit,
             maxChars,
             includeRevision: params.includeRevisions === true,
+            fictionDomain: params.fictionDomain,
             pathPrefix: params.pathPrefix || '',
             excludePaths: params.excludePaths || [],
             principal: params.principal ? {
@@ -606,11 +610,16 @@ export class SemanticSearchService {
                 if (!names.has(name))
                     continue;
                 const table = await this.getTable(name);
-                if (!(await table.schema()).fields.some((field) => field.name === 'embeddingProfile'))
+                const fields = (await table.schema()).fields.map((field) => field.name);
+                if (!fields.includes('embeddingProfile') || (params.fictionDomain && !fields.includes('fiction')))
                     continue;
-                const rows = await table.vectorSearch(vector).where(`embeddingProfile = '${SEMANTIC_EMBEDDING_PROFILE}'`).distanceType('cosine').limit(limit * 2).toArray();
+                const predicate = `embeddingProfile = '${SEMANTIC_EMBEDDING_PROFILE}'`
+                    + (params.fictionDomain ? ` AND fiction = ${params.fictionDomain === 'only' ? 'true' : 'false'}` : '');
+                const rows = await table.vectorSearch(vector).where(predicate).distanceType('cosine').limit(limit * 2).toArray();
                 for (const row of rows) {
                     if (row.embeddingProfile !== SEMANTIC_EMBEDDING_PROFILE)
+                        continue;
+                    if (params.fictionDomain && row.fiction !== (params.fictionDomain === 'only'))
                         continue;
                     const path = normalizePath(row.path);
                     if (!this.pathIsVisible(path, params))
@@ -657,7 +666,7 @@ export class SemanticSearchService {
     }
     async hydrateRows(rows, params) {
         const visible = rows.filter(row => row.path === normalizePath(row.path) && this.pathIsVisible(row.path, params));
-        const hydrated = await Promise.all(visible.map(row => resultFromRow(row, this.vaultPath, params.includeRevisions === true, this.vaultIo)));
+        const hydrated = await Promise.all(visible.map(row => resultFromRow(row, this.vaultPath, params.includeRevisions === true, this.vaultIo, params.fictionDomain)));
         const maxChars = normalizeSearchMaxChars(params.maxChars);
         return boundSearchResults(hydrated.filter((result) => result !== undefined)
             .map(result => fitSemanticExcerpt(result, maxChars)), maxChars);
@@ -712,6 +721,7 @@ export class SemanticSearchService {
             if (typeof item.hash !== 'string' || !/^[a-f0-9]{64}$/.test(item.hash))
                 continue;
             result[path] = { hash: item.hash, scope: scopeForPath(path),
+                ...(typeof item.fiction === 'boolean' && { fiction: item.fiction }),
                 ...(typeof item.embeddingProfile === 'string' && /^[a-f0-9]{64}$/.test(item.embeddingProfile) && { embeddingProfile: item.embeddingProfile }),
                 ...(typeof item.size === 'number' && Number.isFinite(item.size) && item.size >= 0 && { size: item.size }),
                 ...(typeof item.mtimeMs === 'number' && Number.isFinite(item.mtimeMs) && { mtimeMs: item.mtimeMs }) };
@@ -859,7 +869,7 @@ export class SemanticSearchService {
                     if (!info)
                         return { normalized };
                     const entry = this.manifest[normalized];
-                    if (entry && entry.embeddingProfile === SEMANTIC_EMBEDDING_PROFILE && entry.size === info.size && entry.mtimeMs === info.mtimeMs)
+                    if (entry && typeof entry.fiction === 'boolean' && entry.embeddingProfile === SEMANTIC_EMBEDDING_PROFILE && entry.size === info.size && entry.mtimeMs === info.mtimeMs)
                         return { normalized, info, entry };
                     // A pending intent already requires current-source preparation at
                     // drain time. Do not reread/hash it on every reconciliation scan or
@@ -878,13 +888,13 @@ export class SemanticSearchService {
                     if (!observation.info || !observation.hash)
                         continue;
                     const { normalized, info, entry, hash } = observation;
-                    if ((!entry || entry.hash !== hash || entry.embeddingProfile !== SEMANTIC_EMBEDDING_PROFILE) && (this.pending.size < MAX_PENDING_CHANGES || this.pending.has(normalized))) {
+                    if ((!entry || typeof entry.fiction !== 'boolean' || entry.hash !== hash || entry.embeddingProfile !== SEMANTIC_EMBEDDING_PROFILE) && (this.pending.size < MAX_PENDING_CHANGES || this.pending.has(normalized))) {
                         // Preserve an in-flight retry's backoff. Re-scanning the catalog must
                         // not turn one failing note into a hot loop by resetting its attempt.
                         if (!this.pending.has(normalized))
                             this.pending.set(normalized, { kind: 'upsert' });
                     }
-                    else if (entry && entry.hash === hash && entry.embeddingProfile === SEMANTIC_EMBEDDING_PROFILE) {
+                    else if (entry && typeof entry.fiction === 'boolean' && entry.hash === hash && entry.embeddingProfile === SEMANTIC_EMBEDDING_PROFILE) {
                         // Timestamp-only changes do not require a new embedding. Persist the
                         // refreshed metadata so future scans stay stat-only.
                         this.manifest[normalized] = { ...entry, size: info.size, mtimeMs: info.mtimeMs };
@@ -1307,6 +1317,7 @@ export class SemanticSearchService {
         const chunks = chunkDocumentForEmbedding(path, content);
         const title = path.split('/').pop()?.replace(/\.md$/i, '') || path;
         const wiki = isWikiPath(path, content);
+        const fiction = isFictionMarkdown(content, path);
         const reusable = await this.reusableVectors(path, scope);
         const fingerprints = chunks.map(chunk => hashContent(`passage: ${chunk.text}`));
         const vectors = fingerprints.map(fingerprint => reusable.get(fingerprint));
@@ -1328,6 +1339,7 @@ export class SemanticSearchService {
                 title,
                 line: chunk.line,
                 wiki,
+                fiction,
                 updatedAt: new Date().toISOString(),
                 chunkHash: fingerprints[index],
                 embeddingProfile: SEMANTIC_EMBEDDING_PROFILE,
@@ -1337,7 +1349,7 @@ export class SemanticSearchService {
         // with a newer stat fingerprint which would suppress future reconciliation.
         if (hashContent(await this.vaultIo.readUtf8(fullPath, 'background')) !== contentHash)
             throw new VaultReadUnavailableError();
-        return { path, scope, contentHash, size: info.size, mtimeMs: info.mtimeMs, rows };
+        return { path, scope, contentHash, size: info.size, mtimeMs: info.mtimeMs, fiction, rows };
     }
     async reusableVectors(path, scope) {
         const reusable = new Map();
@@ -1407,6 +1419,8 @@ export class SemanticSearchService {
                 const missing = ['chunkHash', 'embeddingProfile'].filter(field => !fields.includes(field));
                 if (missing.length)
                     await table.addColumns(missing.map(name => ({ name, valueSql: 'CAST(NULL AS STRING)' })));
+                if (!fields.includes('fiction'))
+                    await table.addColumns([{ name: 'fiction', valueSql: 'CAST(NULL AS BOOLEAN)' }]);
             }
             if (table && group.paths.size > 0 && group.rows.length === 0) {
                 const predicate = [...group.paths]
@@ -1442,6 +1456,7 @@ export class SemanticSearchService {
                 embeddingProfile: SEMANTIC_EMBEDDING_PROFILE,
                 size: item.size,
                 mtimeMs: item.mtimeMs,
+                fiction: item.fiction,
             };
         }
         this.queryGeneration += 1;

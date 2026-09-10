@@ -7,6 +7,7 @@ import { ScopeAccessPolicy } from './scope-access.js';
 import { ScopeAuthService, type ScopePrincipal } from './scope-auth.js';
 import { ReferenceService } from './references.js';
 import { AgentTaskService } from './agent-tasks.js';
+import { AgentPulseService } from './agent-pulse.js';
 
 const vaults: string[] = [];
 afterEach(async () => { for (const vault of vaults.splice(0)) await rm(vault, { recursive: true, force: true }); });
@@ -36,11 +37,11 @@ test('project task creation fails closed before WorkService attaches its shared 
   await expect(tasks.create({ principal: owner, projectId: 'missing', title: 'Research', description: 'Review evidence.' } as any)).rejects.toThrow(/work service|project guard/i);
 });
 
-async function workFixture() {
+async function workFixture(options: import('./work-service.js').WorkServiceOptions = {}) {
   const f = await fixture();
   const module = await import('./work-service.js').catch(() => ({ WorkService: undefined }));
   expect(module.WorkService, 'WorkService implementation is available').toBeTypeOf('function');
-  const work = new module.WorkService!(f.fs, f.refs, f.auth, f.tasks);
+  const work = new module.WorkService!(f.fs, f.refs, f.auth, f.tasks, options);
   await work.project({ op: 'create', principal: f.owner, projectId: 'alpha', title: 'Alpha', goal: 'Test peer work',
     allowedWork: ['general', 'security'], completionCriteria: ['Evidence verified'], participants: ['peer'], requestId: 'create-alpha' });
   const create = async (taskId: string, extra: Record<string, unknown> = {}) => f.tasks.create({ principal: f.owner,
@@ -348,6 +349,90 @@ test('pulse follows the existing tool/arguments next-action convention', async (
   expect((await work.pulse(peer)).nextAction).toEqual({ tool: 'work.packet', arguments: { taskId: 'ready' } });
 });
 
+test('managed task eligibility suppresses free actions for accounts without financial projections', async () => {
+  const {work,create,peer} = await workFixture({freeTaskMutations: async ids => Object.fromEntries(ids.map(id=>[id,{state:'managed',freeMutationBlocked:true}]))});
+  await create('managed');
+  const packet=await work.packet({taskId:'managed',principal:peer,maxChars:12000});
+  expect(packet.items).not.toContainEqual(expect.objectContaining({kind:'nextAction',tool:'work.claim'}));
+  expect(packet.items).toContainEqual({kind:'taskMutation',state:'managed',freeMutationBlocked:true});
+  const board=await work.board({projectId:'alpha',principal:peer});
+  expect(board.items[0]).toMatchObject({taskMutation:{state:'managed',freeMutationBlocked:true}});
+  expect(JSON.stringify({packet,board})).not.toMatch(/contractId|reward|paidContract|quest\.market/);
+  expect((await work.pulse(peer)).nextAction).toBeUndefined();
+});
+
+test('Pulse cannot resurface managed project tasks through the legacy assigned list', async () => {
+  let managed = false;
+  const { work, tasks, create, claim, peer } = await workFixture({ freeTaskMutations: async ids =>
+    Object.fromEntries(ids.map(id => [id, { state: managed ? 'managed' : 'allowed', freeMutationBlocked: managed }])) });
+  await create('managed-assignment');
+  await claim('managed-assignment', peer);
+  const legacy = await tasks.create({ principal: peer, taskId: 'legacy-assignment', title: 'Standalone', description: 'Inspect legacy evidence', assignee: peer.modelId });
+  managed = true;
+  expect((await tasks.listAssignedOpen({ assignee: peer.modelId })).total).toBe(2);
+  const service = new AgentPulseService(
+    { list: async () => ({ notifications: [], unreadCount: 0 }) } as any,
+    { pulsePosts: async () => ({ activePosts: [], activeTotal: 0, ownPublishedPosts: 0 }) } as any,
+    { listRooms: async () => ({ rooms: [], total: 0 }) } as any, tasks,
+    { read: async () => ({ exists: false }) } as any,
+    { getForPrincipal: async () => ({ level: 0, xp: 0, label: 'Newcomer' }) } as any,
+    undefined, undefined, work,
+  );
+  const pulse = await service.get({ principal: peer });
+  expect(pulse.nextAction).toMatchObject({ tool: 'mcp.read_agent_task', arguments: { taskId: legacy.taskId } });
+  expect(pulse.signals).toMatchObject({ assignedOpenTasks: 1, assignedTaskStatuses: { proposed: 1, in_progress: 0 } });
+  expect(JSON.stringify(pulse)).not.toContain('managed-assignment');
+  expect((await work.pulse(peer)).coverage).toBe('loaded');
+});
+
+test('task eligibility is fail closed on read failure and refreshed after preparing actions', async () => {
+  let fail=false,calls=0;
+  const {work,create,peer}=await workFixture({freeTaskMutations:async ids=>{
+    if(fail)throw new Error('private-ledger-location');
+    calls++;return Object.fromEntries(ids.map(id=>[id,{state:calls===1?'allowed':'managed',freeMutationBlocked:calls!==1}]));
+  }});
+  await create('changing');
+  expect((await work.packet({taskId:'changing',principal:peer})).items).not.toContainEqual(expect.objectContaining({kind:'nextAction',tool:'work.claim'}));
+  fail=true;
+  const packet=await work.packet({taskId:'changing',principal:peer});
+  expect(packet.items).toContainEqual({kind:'taskMutation',state:'unavailable',freeMutationBlocked:true});
+  expect(JSON.stringify(packet)).not.toContain('private-ledger-location');
+  expect((await work.pulse(peer)).nextAction).toBeUndefined();
+});
+
+test.each(['missing','failure','invalid'] as const)('prototype-named tasks fail closed on %s eligibility', async mode => {
+  const {work,create,peer}=await workFixture({freeTaskMutations:async()=>{
+    if(mode==='failure')throw new Error('unavailable');
+    return mode==='invalid'?{constructor:{state:'unavailable',freeMutationBlocked:false}} as any:{};
+  }});
+  await create('constructor');
+  const packet=await work.packet({taskId:'constructor',principal:peer});
+  expect(packet.items).toContainEqual({kind:'taskMutation',state:'unavailable',freeMutationBlocked:true});
+  expect(packet.items).not.toContainEqual(expect.objectContaining({kind:'nextAction',tool:'work.claim'}));
+  expect((await work.pulse(peer)).nextAction).toBeUndefined();
+});
+
+test('mismatched task metadata cannot select a hidden task management state',async()=>{
+  const queried:string[]=[];
+  const {work,create,peer,fs,read}=await workFixture({freeTaskMutations:async ids=>{
+    queried.push(...ids);return Object.fromEntries(ids.map(id=>[id,{state:'managed',freeMutationBlocked:true}]));
+  }});
+  await create('hidden');await create('decoy');
+  const hidden=await read('hidden'),decoy=await read('decoy');
+  await fs.writeNote({path:'Community/Tasks/hidden.md',content:hidden.content,frontmatter:{...hidden.frontmatter,moderation_status:'hidden'},expectedRevision:hidden.revision});
+  await fs.writeNote({path:'Community/Tasks/decoy.md',content:decoy.content,frontmatter:{...decoy.frontmatter,task_id:'hidden'},expectedRevision:decoy.revision});
+  await work.board({projectId:'alpha',principal:peer});await work.pulse(peer);
+  expect(queried).not.toContain('hidden');
+  await expect(work.packet({taskId:'decoy',principal:peer})).rejects.toThrow(/task/);
+});
+
+test('all-blocked pulse observes the complete response budget',async()=>{
+  const {work,create,peer}=await workFixture({freeTaskMutations:async ids=>Object.fromEntries(ids.map(id=>[id,{state:'managed',freeMutationBlocked:true}]))});
+  await create('blocked');
+  expect(JSON.stringify(await work.pulse(peer,1,32)).length).toBeLessThanOrEqual(32);
+  await expect(work.pulse(peer,1,25)).rejects.toThrow(/maxChars/);
+});
+
 test('host moderator and project owner may release another account with a reason', async () => {
   const { work, create, claim, read, peer, owner, moderator } = await workFixture();
   await create('delegated', { principal: peer }); await claim('delegated', peer);
@@ -480,8 +565,8 @@ test('pulse quietly withholds work guidance from revoked or banned accounts', as
   const { fs, refs, auth, tasks, owner } = await workFixture();
   const { WorkService } = await import('./work-service.js');
   const work = new WorkService(fs, refs, auth, tasks, { assertActor: async () => { throw new Error('Banned'); } });
-  expect(await work.pulse(owner)).toEqual({});
-  expect(await work.pulse({ ...owner, capabilities: ['write'] })).toEqual({});
+  expect(await work.pulse(owner)).toEqual({ coverage: 'unavailable' });
+  expect(await work.pulse({ ...owner, capabilities: ['write'] })).toEqual({ coverage: 'unavailable' });
 });
 
 test('packet supplies a revision and generation bound action for unclaimed work', async () => {

@@ -16,6 +16,10 @@ type PageParams = {
     maxChars?: number;
     cursor?: string;
 };
+export type FreeTaskMutation = {
+    state: 'allowed' | 'managed' | 'unavailable';
+    freeMutationBlocked: boolean;
+};
 /** No public mint/transfer/operator adjudication. Host configuration is injected,
  * not read from a note, a declared family, an agent profile, or a tool argument. */
 export declare class EconomyService {
@@ -33,6 +37,9 @@ export declare class EconomyService {
     /** Called by EVERY free task mutation, not merely work.claim. A private lease
      * is only entered by this service when bridging a paid exclusive claim. */
     assertFreeTaskMutation(taskId: string): Promise<void>;
+    /** Host-only eligibility for already-visible task IDs. No financial facts or
+     * economic-owner authorization are needed to withhold an impossible action. */
+    freeTaskMutations(taskIds: string[]): Promise<Record<string, FreeTaskMutation>>;
     workProjection(principal: ScopePrincipal | undefined, taskIds: string[]): Promise<Record<string, Record<string, unknown>>>;
     /** Read-only host projection for the opt-in participation pulse. Contracts
      * remain ledger-private: this emits only a visible task, its current activity

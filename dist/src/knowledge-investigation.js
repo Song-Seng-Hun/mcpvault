@@ -5,7 +5,6 @@ import { fingerprint } from './work-model.js';
 import { isModerationHidden } from './moderation-policy.js';
 import { ReferenceService } from './references.js';
 import { extractObsidianLinkOccurrences } from './backlinks.js';
-import { parseWikiLink } from './wikilink/resolveWikiLink.js';
 import { normalizeKnowledgeInvestigation, normalizeInvestigationEvidence } from './knowledge-investigation-model.js';
 const BYTES = 8 * 1024 * 1024;
 const UNAVAILABLE = 'Investigation inputs unavailable or changed; read current context and retry';
@@ -30,8 +29,9 @@ function paths(access, container, principal) {
     return { physical, allowed, container };
 }
 /** A result is a report against a saved plan, not permission to execute it. */
-export async function prepareKnowledgeInvestigation(fs, access, value, container, existing, principal) {
+export async function prepareKnowledgeInvestigation(fs, access, value, container, existing, principal, readMetadata) {
     const investigation = normalizeKnowledgeInvestigation(value);
+    const refs = new ReferenceService(fs, access), read = readMetadata ?? refs.createMetadataReader(principal);
     const { physical, allowed, container: owner } = paths(access, container, principal);
     let previous;
     if (existing?.frontmatter.knowledge_investigation !== undefined)
@@ -54,23 +54,18 @@ export async function prepareKnowledgeInvestigation(fs, access, value, container
     else if (previous?.result)
         throw guidanceError(Error('Preserve the reported result; use a separate linked experiment for a new plan'), 'guid-ca82eae7ad1e5b34');
     const guards = new Map();
-    const metadata = new Map();
     const observe = async (path) => {
         if (!allowed(path) || path.toLowerCase() === owner.toLowerCase())
             throw Error(UNAVAILABLE);
-        const cached = metadata.get(path.toLowerCase());
-        if (cached)
-            return cached;
         if (!guards.has(path.toLowerCase()) && guards.size >= 8)
             throw guidanceError(Error('Investigation may reference at most eight distinct related notes, including prose links'), 'guid-724e69325898fd7d');
-        const meta = (await fs.readNoteMetadata([path], allowed, { fresh: true, strict: true, maxBytes: BYTES }))[0];
+        const meta = await read(path, allowed);
         if (!meta?.revision || isModerationHidden(meta.frontmatter))
             throw Error(UNAVAILABLE);
         const old = guards.get(path.toLowerCase());
         if (old && old.expectedRevision !== meta.revision)
             throw Error(UNAVAILABLE);
         guards.set(path.toLowerCase(), { path, expectedRevision: meta.revision });
-        metadata.set(path.toLowerCase(), meta);
         return meta;
     };
     try {
@@ -94,16 +89,11 @@ export async function prepareKnowledgeInvestigation(fs, access, value, container
         const fields = prose(investigation), occurrences = fields.flatMap(field => extractObsidianLinkOccurrences(field));
         if (occurrences.length > 16)
             throw Error(UNAVAILABLE);
-        for (const link of occurrences) {
-            const raw = /^!?\[\[/.test(link.link) ? parseWikiLink(link.link.replace(/^!/, '')).document : link.target;
-            const decoded = decodeURIComponent(raw).replace(/\\/g, '/');
-            if (!allowed(physical(decoded.startsWith('.') ? posix.join(posix.dirname(owner), decoded) : decoded)))
+        for (const path of await refs.validateBodyLinks(occurrences, owner, principal, value => {
+            if (!allowed(physical(value)))
                 throw Error(UNAVAILABLE);
-        }
-        const refs = new ReferenceService(fs, access);
-        for (const field of fields)
-            for (const path of await refs.validateAndNormalize(undefined, owner, principal, field, { strictBodyLinks: true }))
-                await observe(path);
+        }))
+            await observe(path);
     }
     catch {
         throw Error(UNAVAILABLE);

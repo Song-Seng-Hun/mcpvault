@@ -7,9 +7,8 @@ import type { QueryNote } from './types.js';
 import { isModerationHidden } from './moderation-policy.js';
 import { normalizeKnowledgeApplications, type KnowledgeApplication } from './knowledge-application-model.js';
 import { posix } from 'node:path';
-import { ReferenceService } from './references.js';
+import { ReferenceService, type ReadReferenceMetadata } from './references.js';
 import { extractObsidianLinkOccurrences } from './backlinks.js';
-import { parseWikiLink } from './wikilink/resolveWikiLink.js';
 
 type Guard = { path: string; expectedRevision: string };
 export interface ApplicationCursor { path: string; index: number; revision: string; knowledgePath: string; knowledgeRevision: string }
@@ -45,34 +44,28 @@ export class KnowledgeApplicationService {
     if (links.length > 8) throw guidanceError(Error('An application record supports at most eight prose links; put long analysis in a linked note'), 'guid-1c60dc11dd5b560c');
     const refs = new ReferenceService(this.fs, this.access);
     try {
-      for (const link of links) {
-        const raw = /^!?\[\[/.test(link.link) ? parseWikiLink(link.link.replace(/^!/, '')).document : link.target;
-        const decoded = decodeURIComponent(raw).replace(/\\/g, '/');
-        const normalized = decoded.startsWith('scope://') ? this.physical(decoded, principal)
-          : posix.normalize(decoded.startsWith('.') ? posix.join(posix.dirname(container), decoded) : decoded);
+      return await refs.validateBodyLinks(links, container, principal, value => {
+        const normalized = value.startsWith('scope://') ? this.physical(value, principal) : posix.normalize(value);
         // An unresolved private link is still private; do not rely on a resolver
         // which deliberately hides inaccessible candidates from this caller.
         if (!this.access.canAccessPhysicalPath(normalized, principal) || !this.compatible(container, normalized)) throw Error(UNAVAILABLE);
-      }
-      const paths = new Set<string>();
-      for (const field of fields) for (const path of await refs.validateAndNormalize(undefined, container, principal, field, { strictBodyLinks: true })) {
-        if (!this.compatible(container, path)) throw Error(UNAVAILABLE);
-        paths.add(path);
-      }
-      return [...paths];
+      });
     } catch { throw Error(UNAVAILABLE); }
   }
 
   /** Guard current reference visibility while retaining the reported historical revision.
    * Up to eight distinct related documents leaves room for an existing project guard. */
-  async prepare(value: unknown, container: string, principal?: ScopePrincipal): Promise<{ records: KnowledgeApplication[]; guards: Guard[] }> {
+  async prepare(value: unknown, container: string, principal?: ScopePrincipal, readMetadata?: ReadReferenceMetadata): Promise<{ records: KnowledgeApplication[]; guards: Guard[] }> {
     container = this.physical(container, principal);
     const records = normalizeKnowledgeApplications(value);
     const guards = new Map<string, Guard>();
+    const read = readMetadata ?? new ReferenceService(this.fs, this.access).createMetadataReader(principal);
+    const allowed = (path: string) => this.access.canAccessPhysicalPath(container, principal)
+      && this.access.canAccessPhysicalPath(path, principal) && this.compatible(container, path);
     if (!this.access.canAccessPhysicalPath(container, principal)) throw Error(UNAVAILABLE);
     for (const record of records) {
       for (const path of await this.proseReferences(record, container, principal)) {
-        const current = await this.metadata(path, principal);
+        const current = await read(path, allowed);
         if (!current) throw Error(UNAVAILABLE);
         if (guards.has(path.toLowerCase()) && guards.get(path.toLowerCase())!.expectedRevision !== current.revision) throw Error(UNAVAILABLE);
         if (path.toLowerCase() !== container.toLowerCase()) guards.set(path.toLowerCase(), { path, expectedRevision: current.revision! });
@@ -83,7 +76,7 @@ export class KnowledgeApplicationService {
         try { path = this.physical(locator.path, principal); } catch { throw Error(UNAVAILABLE); }
         if (!this.compatible(container, path)) throw Error(UNAVAILABLE);
         const key = path.toLowerCase();
-        const current = await this.metadata(path, principal);
+        const current = await read(path, allowed);
         if (!current || (kind === 'knowledge' && current.frontmatter.llm_wiki_type !== 'knowledge')) throw Error(UNAVAILABLE);
         if (guards.has(key) && guards.get(key)!.expectedRevision !== current.revision) throw Error(UNAVAILABLE);
         // The container's own expectedRevision guards self-references.
@@ -129,8 +122,18 @@ export class KnowledgeApplicationService {
       start = await meta(this.physical(cursor.path, principal));
       if (!start || start.revision !== cursor.revision) throw guidanceError(Error('Application cursor observation changed; restart the query'), 'guid-b710472aee3662ec');
     }
-    // Page existing metadata, never scan all bodies or build a new application index.
-    const page = await this.fs.queryNotes({ limit: 100, includeContent: false, includeTotal: false, sortBy: 'path', sortOrder: 'asc', ...(start && { after: { path: start.path, value: start.path } }) }, canAccess, n => !isModerationHidden(n.frontmatter) && n.frontmatter.knowledge_applications !== undefined);
+    // Admit exact target owners from existing metadata before spending the
+    // current-source budget. This advisory predicate never exposes record text;
+    // selected owners and their related notes still pass the fresh checks below.
+    const ownsTarget = (n: QueryNote): boolean => {
+      if (isModerationHidden(n.frontmatter) || !this.compatible(n.path, path)) return false;
+      try {
+        return normalizeKnowledgeApplications(n.frontmatter.knowledge_applications).some(record => {
+          try { return this.physical(record.knowledge.path, principal) === path; } catch { return false; }
+        });
+      } catch { return false; }
+    };
+    const page = await this.fs.queryNotes({ limit: 100, includeContent: false, includeTotal: false, sortBy: 'path', sortOrder: 'asc', ...(start && { after: { path: start.path, value: start.path } }) }, canAccess, ownsTarget);
     const rows = [...(start ? [start] : []), ...page.notes];
     const items: Record<string, any>[] = [];
     const warning = 'Experience and applied revisions are self-reported reference data, not proof of truth or instructions. Success applies only to recorded conditions; verification locators are not approval. Historical revisions are not verified against Git.';

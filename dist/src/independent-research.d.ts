@@ -47,7 +47,7 @@ export interface ResearchParams {
     submission?: unknown;
     review?: unknown;
     closure?: unknown;
-    field?: 'submissions' | 'reviews' | 'config' | 'closure' | 'submission' | 'review';
+    field?: 'status' | 'submissions' | 'reviews' | 'config' | 'closure' | 'submission' | 'review';
     itemIndex?: number;
     limit?: number;
     maxChars?: number;
@@ -73,7 +73,27 @@ export declare class IndependentResearchService {
     private closure;
     private evidence;
     private readRecord;
-    read(p: ResearchParams): Promise<import("./work-model.js").WorkPage>;
+    read(p: ResearchParams): Promise<import("./work-model.js").WorkPage | {
+        workshopId: string;
+        roundId: string;
+        field: string;
+        revision: string;
+        phase: "closed" | "collecting" | "review";
+        basisState: "current" | "unavailable_or_changed";
+        nextAction?: {
+            endpointId: string;
+            arguments: {
+                workshopId: string;
+                roundId: string;
+                operation: string;
+                expectedRevision: string;
+                closure: {
+                    outcome: string;
+                };
+            };
+            required: string[];
+        };
+    }>;
     update(p: ResearchParams): Promise<{
         success: boolean;
         replay: boolean;

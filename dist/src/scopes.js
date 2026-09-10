@@ -201,6 +201,7 @@ export class CollaborationService {
                 ...(params.caseSensitive !== undefined && { caseSensitive: params.caseSensitive }),
                 ...(params.includeRevisions !== undefined && { includeRevisions: params.includeRevisions }),
                 ...(params.expandAuthority !== undefined && { expandAuthority: params.expandAuthority }),
+                ...(params.fictionDomain !== undefined && { fictionDomain: params.fictionDomain }),
                 ...(item.root ? { pathPrefix: item.root } : { excludePaths: ['_scopes', '_collaboration', '_whispers'] }),
             });
             for (const result of results) {

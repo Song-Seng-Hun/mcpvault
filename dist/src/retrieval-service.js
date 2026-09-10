@@ -61,28 +61,6 @@ export class RetrievalService {
             throw guidanceError(new Error('Search target is unavailable'), 'guid-41fae17fff5e5a9b');
         return path;
     }
-    /** Capture domain admission before index ranking/limits. This is content
-     * routing only; the caller's existing scope predicate remains authoritative. */
-    async fictionAdmission(params, admitted) {
-        if (!params.fictionDomain)
-            return admitted;
-        const accepted = new Set();
-        let after;
-        let count = 0;
-        const prefix = params.pathPrefix ? this.physical({ p: params.pathPrefix }, params.principal) : undefined;
-        do {
-            const batch = await this.fs.queryNotes({ limit: 500, includeContent: false, includeTotal: false, sortBy: 'path', ...(prefix && prefix !== '.' && { pathPrefix: prefix }), ...(after && { after }) }, admitted, note => (params.fictionDomain === 'only') === isFictionDomain(note.frontmatter, note.path));
-            for (const note of batch.notes) {
-                if (++count > 10000)
-                    throw guidanceError(new Error('Fiction-domain metadata window exhausted'), 'guid-4c9fde591525f971');
-                accepted.add(note.path);
-            }
-            after = batch.truncated ? batch.nextCursor : undefined;
-            if (batch.truncated && !after)
-                throw guidanceError(new Error('Fiction-domain metadata changed'), 'guid-8afbb59f1a2fac1f');
-        } while (after);
-        return (path) => admitted(path) && accepted.has(path);
-    }
     /** Shared memory discovery only: up to 10,000 metadata hits, ex='', indexed
      * rv, no source hydration and no display/JSON cap. The caller owns bounded
      * current-revision body reads, exact matching and final response serialization.
@@ -166,14 +144,17 @@ export class RetrievalService {
         return { results: results.slice(0, limit), usedQuery, expanded, semantic, complete };
     }
     async retrieve(params, allowExpansion = false) {
-        const scopeAdmitted = (path) => this.access.canAccessPhysicalPath(path, params.principal) && (!params.canAccessPath || params.canAccessPath(path)) && (this.skillEvolution?.discoveryAllowed(path) ?? true);
-        const admitted = await this.fictionAdmission(params, scopeAdmitted);
+        const admitted = (path) => this.access.canAccessPhysicalPath(path, params.principal) && (!params.canAccessPath || params.canAccessPath(path)) && (this.skillEvolution?.discoveryAllowed(path) ?? true);
         // Runtime payloads are not typed: only the authenticated principal supplies identity.
         const safe = { query: params.query };
-        for (const key of ['limit', 'maxChars', 'searchContent', 'searchFrontmatter', 'caseSensitive', 'includeRevisions', 'expandAuthority', 'excludePaths']) {
+        for (const key of ['limit', 'maxChars', 'searchContent', 'searchFrontmatter', 'caseSensitive', 'includeRevisions', 'expandAuthority', 'excludePaths', 'fictionDomain']) {
             if (params[key] !== undefined)
                 Object.assign(safe, { [key]: params[key] });
         }
+        // Required internally to validate excerpts after discovery/projection. Do
+        // not turn an old index excerpt into a current one by attaching a new hash.
+        if (params.fictionDomain)
+            safe.includeRevisions = true;
         const lexical = async (query) => {
             if (params.pathPrefix) {
                 const prefix = this.physical({ p: params.pathPrefix }, params.principal);
@@ -243,32 +224,64 @@ export class RetrievalService {
         };
         const prefix = params.pathPrefix ? this.physical({ p: params.pathPrefix }, params.principal) : '';
         const exactMatches = constrainedQuery(params.query) ? new Set(results.map(h => this.physical(h, params.principal))) : undefined;
-        const projected = await this.projectSkillDiscovery(results, params.principal, path => admitted(path)
+        let projected = await this.projectSkillDiscovery(results, params.principal, path => admitted(path)
             && (!prefix || prefix === '.' || within(path, prefix))
             && !(params.excludePaths || []).some(exclude => within(path, exclude))
             && (!exactMatches || exactMatches.has(path)));
+        if (params.fictionDomain) {
+            const verified = [];
+            for (const hit of projected.slice(0, normalizeSearchLimit(params.limit))) {
+                const path = this.physical(hit, params.principal);
+                const metadata = (await this.fs.readNoteMetadata([path], admitted, { fresh: true, strict: true, maxBytes: RETRIEVAL_NOTE_BYTES }))[0];
+                if (!metadata || !hit.rv || hit.rv !== metadata.revision || isModerationHidden(metadata.frontmatter)
+                    || isFictionDomain(metadata.frontmatter, path) !== (params.fictionDomain === 'only'))
+                    continue;
+                if (!admitted(path))
+                    throw guidanceError(new Error('Search target is unavailable'), 'guid-41fae17fff5e5a9b');
+                verified.push(hit);
+            }
+            projected = [];
+            for (const hit of verified) {
+                const path = this.physical(hit, params.principal);
+                if (await this.fs.readNoteRevision(path, RETRIEVAL_NOTE_BYTES) !== hit.rv || !admitted(path))
+                    continue;
+                if (params.includeRevisions)
+                    projected.push(hit);
+                else {
+                    const { rv: _revision, ...compact } = hit;
+                    projected.push(compact);
+                }
+            }
+            if (projected.some(hit => !admitted(this.physical(hit, params.principal))))
+                throw guidanceError(new Error('Search target is unavailable'), 'guid-41fae17fff5e5a9b');
+        }
         return { results: boundSearchResults(projected, normalizeSearchMaxChars(params.maxChars)), usedQuery, expanded, semantic };
     }
     async searchNotes(params) {
         if (params.excerptMode !== undefined && !['compact', 'context'].includes(params.excerptMode))
             throw guidanceError(new Error('Invalid excerptMode'), 'guid-aeb6cd862871ecc0');
-        const outcome = await this.retrieve(params);
+        const outcome = await this.retrieve({ ...params, ...(params.fictionDomain && params.excerptMode === 'context' && { includeRevisions: true }) });
         let results = outcome.results;
         if (params.excerptMode === 'context') {
             const expanded = [];
+            const admitted = (path) => this.access.canAccessPhysicalPath(path, params.principal) && (!params.canAccessPath || params.canAccessPath(path)) && this.skillDiscoveryAllowed(path);
             for (const hit of results) {
                 const path = this.physical(hit, params.principal);
-                const metadata = (await this.fs.readNoteMetadata([path], p => this.access.canAccessPhysicalPath(p, params.principal), { fresh: true, strict: true, maxBytes: RETRIEVAL_NOTE_BYTES }))[0];
+                const metadata = (await this.fs.readNoteMetadata([path], admitted, { fresh: true, strict: true, maxBytes: RETRIEVAL_NOTE_BYTES }))[0];
                 if (!metadata || isModerationHidden(metadata.frontmatter))
+                    continue;
+                if (!admitted(path) || (params.fictionDomain && isFictionDomain(metadata.frontmatter, path) !== (params.fictionDomain === 'only')))
                     continue;
                 const note = await this.fs.readNote(path, RETRIEVAL_NOTE_BYTES);
                 if (isModerationHidden(note.frontmatter))
+                    continue;
+                if (!admitted(path) || (params.fictionDomain && isFictionDomain(note.frontmatter, path) !== (params.fictionDomain === 'only')))
                     continue;
                 if (metadata.revision !== note.revision || (hit.rv && hit.rv !== note.revision))
                     throw guidanceError(new Error('Search context changed; repeat the same query'), 'guid-2cb5da2fceb83adc');
                 const chosen = selectContextPassages({ content: note.content, query: params.query, maxChars: 350, maxPassages: 1, startLine: bodyStartLine(note), ...(hit.ln && { preferredLine: hit.ln }) });
                 const passage = chosen.passages[0];
-                if (!this.access.canAccessPhysicalPath(path, params.principal) || await this.fs.readNoteRevision(path, RETRIEVAL_NOTE_BYTES) !== note.revision)
+                if (!admitted(path) || await this.fs.readNoteRevision(path, RETRIEVAL_NOTE_BYTES) !== note.revision || !admitted(path))
                     throw guidanceError(new Error('Search context changed; repeat the same query'), 'guid-2cb5da2fceb83adc');
                 const publicPath = this.access.toPublicPath(path);
                 expanded.push({ ...hit, p: publicPath, rv: note.revision,
@@ -279,6 +292,8 @@ export class RetrievalService {
                         : { endpointId: endpointIdForTool('get_note_outline'), arguments: { path: publicPath, expectedRevision: note.revision } },
                 });
             }
+            if (expanded.some(hit => !admitted(this.physical(hit, params.principal))))
+                throw guidanceError(new Error('Search target is unavailable'), 'guid-41fae17fff5e5a9b');
             results = boundSearchResults(expanded, normalizeSearchMaxChars(params.maxChars));
         }
         this.search.recordUsage(params.principal?.accountId || params.principal?.agentId || 'anonymous', params.query, results.length);

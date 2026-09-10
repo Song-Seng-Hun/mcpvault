@@ -3,6 +3,7 @@ import { execFile } from 'node:child_process';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
+import { performance } from 'node:perf_hooks';
 import { PathFilter } from './pathfilter.js';
 const STATUS_CACHE_TTL_MS = 300;
 export class GitHistoryService {
@@ -14,6 +15,109 @@ export class GitHistoryService {
     constructor(vaultPath, pathFilter = new PathFilter()) {
         this.pathFilter = pathFilter;
         this.vaultPath = resolve(vaultPath);
+    }
+    /** Explicit opt-in only. Observations retain first-parent newest-first order,
+     * including older changed-path states (not merely the newest receipt/event).
+     * They are raw historical states, never evidence
+     * that an old receipt describes an accepted handoff; the authenticated caller
+     * must interpret each state and retain its own current-task revision guards. */
+    async taskHandoffHistory(pathInput, canRead) {
+        const deadline = performance.now() + 10_000;
+        const maxBody = 512 * 1024, maxTotal = 8 * 1024 * 1024;
+        try {
+            // Do not silently repair aliases, traversal, case, whitespace or pathspecs.
+            // Git history must refer to this exact canonical managed task path.
+            if (typeof pathInput !== 'string' || !/^Community\/Tasks\/[a-z0-9][a-z0-9._-]{0,63}\.md$/.test(pathInput))
+                throw Error();
+            const path = this.normalizeVaultPath(pathInput, true);
+            if (path !== pathInput)
+                throw Error();
+            const assertReadable = () => {
+                if (!this.pathFilter.isAllowed(path) || !canRead(path) || performance.now() >= deadline)
+                    throw Error();
+            };
+            const read = async (args, maxBuffer = 64 * 1024) => {
+                assertReadable();
+                const remaining = Math.floor(deadline - performance.now());
+                if (remaining < 1)
+                    throw Error();
+                const output = await this.readTaskGit(args, remaining, maxBuffer);
+                assertReadable();
+                return output;
+            };
+            const decode = (bytes) => new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes);
+            const text = async (args) => decode(await read(args)).trim();
+            const sha = (value) => {
+                if (!/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(value))
+                    throw Error();
+                return value;
+            };
+            // Discovery must not make a vault inside another repository eligible.
+            // A shallow boundary also cannot establish complete path history.
+            const root = (await text(['rev-parse', '--show-toplevel', '--is-shallow-repository'])).split(/\r?\n/);
+            if (root.length !== 2 || root[1] !== 'false' || !this.pathsEqual(root[0], this.vaultPath))
+                throw Error();
+            const head = sha(await text(['rev-parse', '--verify', 'HEAD^{commit}']));
+            const log = await text(['log', '--first-parent', '--full-history', '--diff-merges=first-parent',
+                '--no-patch', '--root', '--no-follow', '--no-renames', '--no-ext-diff', '--no-textconv', '--no-show-signature', '--no-notes',
+                '--max-count=100', '--format=%H', head, '--', this.literalPathspec(path)]);
+            const commits = log ? log.split(/\r?\n/).map(sha) : [];
+            // Never return a clipped prefix as complete history. Exactly 100 may be a
+            // saturated Git window; more than 32 states cannot fit the body budget.
+            if (!commits.length || commits.length >= 100 || commits.length > 32 || new Set(commits).size !== commits.length)
+                throw Error();
+            const states = [];
+            let total = 0;
+            for (const commit of commits) {
+                const tree = decode(await read(['ls-tree', '-z', commit, '--', this.literalPathspec(path)]));
+                const entry = /^(100644|100755) blob ([a-f0-9]{40}|[a-f0-9]{64})\t([^\0]+)\0$/.exec(tree);
+                // Missing/deleted paths, symlinks and renamed-away states are not proof.
+                if (!entry || entry[3] !== path)
+                    throw Error();
+                const blob = sha(entry[2]);
+                const sizeText = await text(['cat-file', '-s', blob]);
+                if (!/^[0-9]+$/.test(sizeText))
+                    throw Error();
+                const size = Number(sizeText);
+                if (!Number.isSafeInteger(size) || size < 1 || size > maxBody || total + size > maxTotal)
+                    throw Error();
+                total += size;
+                states.push({ commit, blob, size });
+            }
+            const observations = [];
+            for (const { commit, blob, size } of states) {
+                // Raw object reads, never show/textconv/filters, and size BEFORE hydration.
+                const body = await read(['cat-file', 'blob', blob], maxBody);
+                if (body.length !== size)
+                    throw Error();
+                const content = decode(body);
+                if (!content.trim() || content.includes('\0'))
+                    throw Error();
+                observations.push({ commit, blob, content });
+            }
+            if (sha(await text(['rev-parse', '--verify', 'HEAD^{commit}'])) !== head)
+                throw Error();
+            assertReadable();
+            return { head, observations };
+        }
+        catch {
+            // Do not leak Git stderr, host paths, hidden identifiers or partial bodies.
+            throw guidanceError(new Error('Task handoff history unresolved or unavailable'), 'guid-55502326e0d81943');
+        }
+    }
+    readTaskGit(args, timeout, maxBuffer) {
+        // Inherited Git overrides must not redirect this read to another repository,
+        // replace objects, inject config, or trigger an implicit promisor fetch.
+        const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.toUpperCase().startsWith('GIT_')));
+        return new Promise((resolvePromise, reject) => {
+            execFile('git', ['--no-pager', '--no-replace-objects', '-c', 'core.fsmonitor=false', ...args], {
+                cwd: this.vaultPath, encoding: 'buffer', windowsHide: true, timeout, killSignal: 'SIGKILL', maxBuffer,
+                env: { ...env, GIT_NO_LAZY_FETCH: '1', GIT_NO_REPLACE_OBJECTS: '1', GIT_OPTIONAL_LOCKS: '0',
+                    GIT_TERMINAL_PROMPT: '0', GIT_CONFIG_NOSYSTEM: '1',
+                    GIT_CONFIG_GLOBAL: process.platform === 'win32' ? 'NUL' : '/dev/null',
+                    GIT_GRAFT_FILE: process.platform === 'win32' ? 'NUL' : '/dev/null', GIT_PAGER: 'cat', PAGER: 'cat' },
+            }, (error, stdout) => error ? reject(guidanceError(new Error('Task history Git read failed'), 'guid-923bd1af5c1eaef9')) : resolvePromise(stdout));
+        });
     }
     runGit(args, options = {}) {
         return new Promise((resolvePromise, reject) => {

@@ -4,12 +4,14 @@ import type { ScopeAuthService, ScopePrincipal } from './scope-auth.js';
 import type { ReferenceService } from './references.js';
 import type { WorkService } from './work-service.js';
 import type { AgentTaskService } from './agent-tasks.js';
+import type { GitHistoryService } from './git-history.js';
 import { StoryStore } from './story-store.js';
 import { type StoryGuard, type StoryNote, type StoryParams, type StorySource } from './story-model.js';
 export interface StoryOptions {
     readOnly?: boolean;
     assertActor?: (principal: ScopePrincipal) => Promise<void>;
     changed?: (path: string) => void;
+    gitHistory?: GitHistoryService;
 }
 /** Shared security and current-source checks, not a model executor. */
 export declare class StoryWorkspace {
@@ -22,9 +24,9 @@ export declare class StoryWorkspace {
     readonly options: StoryOptions;
     readonly store: StoryStore;
     constructor(fs: FileSystemService, access: ScopeAccessPolicy, references: ReferenceService, auth: ScopeAuthService, work: WorkService, tasks: AgentTaskService, options?: StoryOptions);
-    actor(principal?: ScopePrincipal): Promise<ScopePrincipal>;
+    actor(principal?: ScopePrincipal, allowReadOnly?: boolean): Promise<ScopePrincipal>;
     project(projectId: string, principal?: ScopePrincipal): Promise<StoryNote>;
-    authorize(project: StoryNote, principal?: ScopePrincipal, role?: 'member' | 'owner' | 'showrunner', allowDisabled?: boolean): Promise<StoryGuard>;
+    authorize(project: StoryNote, principal?: ScopePrincipal, role?: 'member' | 'owner' | 'showrunner', allowDisabled?: boolean, allowReadOnly?: boolean): Promise<StoryGuard>;
     artifact(projectId: string, artifactId: string, principal?: ScopePrincipal, branchId?: string): Promise<StoryNote>;
     projectRevision(project: StoryNote, value: unknown): void;
     sourceGuards(projectId: string, sources: StorySource[], principal?: ScopePrincipal, branchId?: string): Promise<StoryGuard[]>;

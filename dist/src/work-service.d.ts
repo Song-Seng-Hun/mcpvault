@@ -4,6 +4,8 @@ import { type FileSystemService } from './filesystem.js';
 import type { ReferenceService } from './references.js';
 import type { ScopeAuthService, ScopePrincipal } from './scope-auth.js';
 import { type AgentTaskService } from './agent-tasks.js';
+import type { ParsedNote } from './types.js';
+import type { FreeTaskMutation } from './economy-service.js';
 import { type Properties, type WorkBoardParams, type WorkClaimParams, type WorkHandoffParams, type WorkPacketParams, type WorkProjectParams, type WorkReviewParams } from './work-model.js';
 export type { WorkBaseParams, WorkBoardParams, WorkClaimParams, WorkHandoffParams, WorkPacketParams, WorkProjectParams, WorkReviewParams } from './work-model.js';
 type Guard = {
@@ -16,6 +18,7 @@ export interface WorkServiceOptions {
     readReviewGitSource?: ContextReader;
     assertActor?: (principal: ScopePrincipal) => Promise<void>;
     assertTaskMutation?: (taskId: string) => Promise<void>;
+    freeTaskMutations?: (taskIds: string[]) => Promise<Record<string, FreeTaskMutation>>;
     paidProjection?: (taskIds: string[], principal?: ScopePrincipal) => Promise<Record<string, Properties>>;
 }
 /** Markdown is the sole durable state, including approvals and retry receipts.
@@ -35,6 +38,7 @@ export declare class WorkService {
     /** Server-owned adapter, not an agent-supplied authority or task field. */
     authorizeWorkshopProject(principal: ScopePrincipal, projectId: string, owner: boolean, delegate?: string, grantor?: string): Promise<Guard>;
     createWorkshopTask(params: Parameters<AgentTaskService['create']>[0], guards: Guard[], receipt: import('./workshop-output.js').WorkshopOutputReceipt, assertAccess: () => Promise<void>): Promise<any>;
+    verifyWorkshopTaskOrigin(note: ParsedNote, input: import('./workshop-output.js').WorkshopOutputInput, origin: import('./workshop-output.js').WorkshopOutputReceipt): void;
     private visible;
     private projectNote;
     private communityTarget;
@@ -79,8 +83,11 @@ export declare class WorkService {
         locatorId?: string;
     }): Promise<import("./work-model.js").WorkPage>;
     packet(params: WorkPacketParams): Promise<import("./work-model.js").WorkPage>;
+    private paidTasks;
+    private taskMutations;
     private packetActions;
     pulse(principal?: ScopePrincipal, limit?: number, maxChars?: number): Promise<{
+        coverage: 'loaded' | 'unavailable';
         nextAction?: {
             tool: string;
             arguments: Properties;

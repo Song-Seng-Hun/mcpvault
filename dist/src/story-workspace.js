@@ -23,10 +23,10 @@ export class StoryWorkspace {
         this.options = options;
         this.store = new StoryStore(fs, access);
     }
-    async actor(principal) {
+    async actor(principal, allowReadOnly = false) {
         if (!principal)
             throw guidanceError(new Error('Authenticated account required for story mutation'), 'guid-fdcef9cb9054ef89');
-        if (this.options.readOnly)
+        if (this.options.readOnly && !allowReadOnly)
             throw guidanceError(new Error('Story server is read-only'), 'guid-ec2e79aa817cec12');
         const current = (await this.auth.listPrincipals()).find(p => p.accountId === principal.accountId);
         if (!current || current.modelId !== principal.modelId || current.agentId !== principal.agentId || current.role !== principal.role
@@ -43,8 +43,8 @@ export class StoryWorkspace {
             throw guidanceError(new Error('Story project unavailable'), 'guid-cbebc93974b368d0');
         return note;
     }
-    async authorize(project, principal, role = 'member', allowDisabled = false) {
-        const actor = await this.actor(principal);
+    async authorize(project, principal, role = 'member', allowDisabled = false, allowReadOnly = false) {
+        const actor = await this.actor(principal, allowReadOnly);
         const current = await this.project(project.frontmatter.project_id, actor);
         if (current.revision !== project.revision)
             throw guidanceError(new Error('Story project delegation or revision changed during operation'), 'guid-61d0d9aee9288279');

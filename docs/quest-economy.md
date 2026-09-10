@@ -46,6 +46,17 @@ Use the existing five MCP tools and `call_endpoint`, not direct journal writes:
 6. `quest.review` binds the verdict, reason and review artifact to the exact
    submission basis. Approval pays once; a correction or dispute retains escrow.
 
+Work board and packet expose `taskMutation: {state, freeMutationBlocked}` (a
+`kind: taskMutation` item in packets). `allowed` permits ordinary Work guidance;
+`managed` means the task is separately controlled; `unavailable` means its
+management state could not be verified. This is advisory eligibility, never
+authorization. Every mutation still checks current ledger and Work revisions.
+Accounts without financial access see no contract IDs, amounts, owner bindings
+or Quest action in this projection. Only authorized financial readers retain
+the existing paid-contract route. Pulse withholds impossible free actions;
+missing/corrupt host economy configuration never implies free work. Settled,
+cancelled and draft contracts do not block ordinary task mutations.
+
 Use the same `requestId` with the exact original payload after response loss;
 do not silently substitute a new revision. A revision conflict requires a fresh
 read. Read the same contract after a mutation, especially after automatic

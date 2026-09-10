@@ -30,18 +30,18 @@ let rows: any[];
 const raw = '# Note\n\nsemanticfixture';
 const hash = (value: string) => createHash('sha256').update(value).digest('hex');
 const vector = Array.from({ length: 384 }, (_, i) => i === 0 ? 1 : 0);
-const schema = async () => ({ fields: [{ name: 'embeddingProfile' }, { name: 'chunkHash' }] });
+const schema = async () => ({ fields: [{ name: 'embeddingProfile' }, { name: 'chunkHash' }, { name: 'fiction' }] });
 const params = { query: 'fixture', queryVector: vector, maxChars: 512 };
 beforeEach(async () => {
   vault = await mkdtemp(join(tmpdir(), 'mcpvault-semantic-integrity-'));
   await mkdir(join(vault, 'Area'));
   await writeFile(join(vault, 'Area/Note.md'), raw);
-  rows = [{ id: 'Area/Note.md#0', path: 'Area/Note.md', title: 'Note', hash: hash(raw), line: 1, wiki: false, vector, embeddingProfile: SEMANTIC_EMBEDDING_PROFILE }];
+  rows = [{ id: 'Area/Note.md#0', path: 'Area/Note.md', title: 'Note', hash: hash(raw), line: 1, wiki: false, fiction: false, vector, embeddingProfile: SEMANTIC_EMBEDDING_PROFILE }];
   service = new SemanticSearchService(vault, new PathFilter());
   await (service as any).manifestReady;
   await (service as any).pendingReady;
   const info = await stat(join(vault, 'Area/Note.md'));
-  (service as any).manifest = { 'Area/Note.md': { hash: hash(raw), scope: 'global', size: info.size, mtimeMs: info.mtimeMs, embeddingProfile: SEMANTIC_EMBEDDING_PROFILE } };
+  (service as any).manifest = { 'Area/Note.md': { hash: hash(raw), scope: 'global', size: info.size, mtimeMs: info.mtimeMs, embeddingProfile: SEMANTIC_EMBEDDING_PROFILE, fiction: false } };
   // Isolate only native/model operations. Scans, cache, hydration and batch
   // reconciliation still execute the real service against real Markdown.
   vi.spyOn(service as any, 'acquireIndexLease').mockResolvedValue(false);

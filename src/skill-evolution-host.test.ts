@@ -4,13 +4,19 @@ import { promisify } from 'node:util';
 import { mkdtemp, mkdir, writeFile, chmod, rm, readFile, symlink } from 'node:fs/promises';
 import { tmpdir, userInfo } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { SkillEvaluationProfile } from './skill-evaluation.js';
+
+vi.mock('node:url', async importOriginal => {
+  const actual = await importOriginal<typeof import('node:url')>();
+  return { ...actual, fileURLToPath: vi.fn(actual.fileURLToPath) };
+});
 
 vi.setConfig({ testTimeout: 30000 });
 const roots: string[] = [];
 afterEach(async () => { for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true }); });
-async function fixture() {
-  const root = await mkdtemp(join(tmpdir(), 'skill-evolution-host-')); roots.push(root);
+async function fixture(base = tmpdir()) {
+  const root = await mkdtemp(join(base, 'skill-evolution-host-')); roots.push(root);
   const vault = join(root, 'vault'), host = join(root, 'private');
   await mkdir(vault); await mkdir(host, { mode: 0o700 });
   if (process.platform === 'win32') await promisify(execFile)('icacls.exe', [host, '/inheritance:r', '/grant:r', `${userInfo().username}:(OI)(CI)F`], { windowsHide: true });
@@ -73,4 +79,14 @@ test('rejects a broadly readable private directory', async () => {
   if (process.platform === 'win32') await promisify(execFile)('icacls.exe', [f.host, '/grant', '*S-1-1-0:(OI)(CI)R'], { windowsHide: true });
   else await chmod(f.host, 0o755);
   await expect(f.load(f.path, f.vault)).rejects.toThrow(/private|permission/);
+});
+
+test('a nested release excludes the enclosing checkout before reading otherwise private config', async () => {
+  const f = await fixture(process.cwd());
+  const release = join(f.root, '.mcpvault', 'deployments', 'release');
+  await mkdir(join(release, 'dist', 'src'), { recursive: true });
+  await writeFile(join(f.root, 'package.json'), '{}');
+  await writeFile(join(release, 'package.json'), '{}');
+  vi.mocked(fileURLToPath).mockReturnValueOnce(join(release, 'dist', 'src', 'skill-evolution-host.js'));
+  await expect(f.load(f.path, f.vault)).rejects.toThrow(/outside Vault\/source/);
 });

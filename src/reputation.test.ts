@@ -5,6 +5,8 @@ import { tmpdir } from 'node:os';
 import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
 import { createServer } from './createServer.js';
 import { ReputationService } from './reputation.js';
+import { AgentPulseService } from './agent-pulse.js';
+import { FileSystemService } from './filesystem.js';
 
 let vault = '';
 beforeEach(async () => { vault = await mkdtemp(join(tmpdir(), 'mcpvault-reputation-')); });
@@ -12,7 +14,7 @@ afterEach(async () => { await rm(vault, { recursive: true, force: true }); });
 
 function value(result: any): any { return JSON.parse(result.content[0].text); }
 
-test('reputation derives levels from other identities reactions and appears in pulse and posts', async () => {
+test('reputation derives peer reaction levels in posts while selected-activity Pulse skips its optional read', async () => {
   const server = createServer(vault, { version: 'test' });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   const client = new Client({ name: 'reputation-test', version: '1' });
@@ -49,12 +51,41 @@ test('reputation derives levels from other identities reactions and appears in p
     const postsResult = value(await client.callTool({ name: 'list_blog_posts', arguments: { limit: 1 } }));
     expect(postsResult.posts[0]).toMatchObject({ author: 'author-model', authorLevel: -2, authorLevelLabel: '위험 신호' });
     const pulse = value(await client.callTool({ name: 'get_agent_pulse', arguments: { accessToken: author.accessToken, limit: 1 } }));
-    expect(pulse.identity).toMatchObject({ modelId: 'author-model', level: -2, xp: -20, levelLabel: '위험 신호' });
-    expect(pulse.signals).toMatchObject({ level: -2, xp: -20 });
+    expect(pulse.identity).toMatchObject({ modelId: 'author-model' });
+    expect(pulse.coverage.reputation.state).toBe('skipped');
+    for (const key of ['level', 'xp', 'levelLabel']) expect(pulse.identity).not.toHaveProperty(key);
+    for (const key of ['level', 'xp']) expect(pulse.signals).not.toHaveProperty(key);
   } finally {
     await client.close();
     await server.close();
   }
+});
+
+test('idle fallback Pulse still loads real Markdown-derived reputation', async () => {
+  const author = { accountId: 'author', modelId: 'author-model', role: 'model' as const };
+  const rater = { accountId: 'rater', modelId: 'rater-model', role: 'model' as const };
+  const fs = new FileSystemService(vault);
+  await fs.writeNote({ path: 'Community/Posts/one.md', content: 'Contribution', frontmatter: {
+    mcpvault_type: 'blog_post', post_id: 'one', status: 'published', author: author.modelId,
+  } });
+  await fs.writeNote({ path: 'Community/Reactions/post/one/rater-model.md', content: '', frontmatter: {
+    mcpvault_type: 'reaction', reaction: 'like', target_type: 'post', target_id: 'one', actor: rater.modelId, active: true,
+  } });
+  const reputation = new ReputationService(fs, { listPrincipals: async () => [author, rater] } as any,
+    { listBannedAccountIds: async () => new Set<string>() } as any);
+  // Explicitly empty activity stages isolate the final fallback. Reputation
+  // itself reads real Markdown and performs its real aggregation.
+  const service = new AgentPulseService(
+    { list: async () => ({ notifications: [], unreadCount: 0 }) } as any,
+    { pulsePosts: async () => ({ activePosts: [], feedbackPosts: [], forumPosts: [], ownPublishedPosts: 0, activeTotal: 0 }) } as any,
+    { listRooms: async () => ({ rooms: [], total: 0 }) } as any,
+    { listAssignedOpen: async () => ({ tasks: [], total: 0, statusCounts: {} }) } as any,
+    { read: async () => ({ exists: false }) } as any, reputation,
+  );
+  const result = await service.get({ principal: author });
+  expect(result.coverage.reputation.state).toBe('loaded');
+  expect(result.identity).toMatchObject({ modelId: author.modelId, xp: 2, level: 0 });
+  expect(result.signals).toMatchObject({ xp: 2, level: 0 });
 });
 
 test('refreshes only changed reaction metadata after the initial aggregate build', async () => {

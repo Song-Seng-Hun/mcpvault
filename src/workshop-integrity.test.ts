@@ -24,9 +24,14 @@ async function fixture(){
 }
 test.each(['contribution','evidence'])('completion locks its counted %s through final actor revalidation',async(kind)=>{
  const f=await fixture();const target=kind==='contribution'?'Community/Workshops/proof/Contributions/peer.md':'Supporting.md';
+ let injected=false;
  await expect(f.service.updateWorkshopFacilitation({principal:f.principal,workshopId:'proof',expectedRevision:f.workshop.revision,requestId:'advance',operation:'advance',payload:{reason:'Ready'},revalidateActor:async()=>{
-  const note=await f.fs.readNote(target);await f.fs.writeNote({path:target,content:note.content+'\nChanged',frontmatter:{...note.frontmatter,moderation_status:'hidden'},expectedRevision:note.revision});return f.principal;
+  // Inject one external change before lock acquisition. Subsequent actor
+  // checks are read-only, as the real authentication adapter is; attempting
+  // another write to the already guarded path would wait on its own lock.
+  if(!injected){injected=true;const note=await f.fs.readNote(target);await f.fs.writeNote({path:target,content:note.content+'\nChanged',frontmatter:{...note.frontmatter,moderation_status:'hidden'},expectedRevision:note.revision});}return f.principal;
  }})).rejects.toThrow(/revision|changed|conflict/i);
+ expect(injected).toBe(true);
  expect((await f.fs.readNote(f.path)).revision).toBe(f.workshop.revision);
 });
 test('updating generated facilitation preserves fenced examples and following authored sections',async()=>{

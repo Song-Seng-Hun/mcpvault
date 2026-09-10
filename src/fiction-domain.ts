@@ -1,3 +1,5 @@
+import { FrontmatterHandler } from './frontmatter.js';
+
 export type FictionDomainSelection = 'exclude' | 'only';
 export type FictionDomainOptions = { fictionDomain: FictionDomainSelection };
 
@@ -11,6 +13,12 @@ export function isFictionDomain(frontmatter: Record<string, unknown>, path?: str
   if (typeof value === 'string') return value.length > 0;
   if (Array.isArray(value)) return value.length > 0;
   return value !== undefined && value !== null && value !== false;
+}
+
+/** Index preparation uses the same data-only Markdown parser as current reads,
+ * including BOM and JSON Properties. Classification is never an ACL. */
+export function isFictionMarkdown(raw: string, path: string): boolean {
+  return isFictionDomain(new FrontmatterHandler().parse(raw).frontmatter, path);
 }
 
 /** Roleplay services must opt in explicitly and still enforce normal access. */
