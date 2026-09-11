@@ -212,6 +212,28 @@ test('hidden candidates do not contribute to public listing cursor positions', a
   expect(JSON.stringify(first)).not.toContain(hidden.candidateId);
 });
 
+test('retained historical Skill use is shareable but cannot seed a current-basis candidate', async () => {
+  const f = await fixture(), original = await f.resolve();
+  const c = await f.candidate(), evaluation = await f.evaluate(c);
+  await f.promote(c, evaluation);
+  const version = await f.resolve();
+  const historical = await f.experience({ requestId: 'historical-original', usedVersion: { path: original.path, revision: original.revision } });
+  await expect(f.service.candidate({ skillId: 'safe-edit', principal: f.owner, accessToken: f.ownerToken, op: 'create',
+    requestId: 'candidate-old-use', expectedRevision: 'missing', baseRevision: version.revision, expectedCurrentRevision: version.currentRevision,
+    content: '# New proposal', conditions: 'An authorized edit', reason: 'Use history',
+    experiences: [{ path: historical.path, revision: historical.revision }] })).rejects.toThrow(/basis/i);
+  const args = { skillId: 'safe-edit', principal: f.reviewer, accessToken: f.reviewerToken,
+    expectedRevision: version.currentRevision, reason: 'Observed regression; preserve use history.' };
+  const preview = await f.service.rollback({ ...args, op: 'preview' });
+  await f.service.rollback({ ...args, op: 'apply', fingerprint: preview.fingerprint, requestId: 'historical-rollback' });
+  const usedVersion = { path: version.path, revision: version.revision };
+  const retained = await f.experience({ requestId: 'historical-version', usedVersion });
+  expect((await f.experience({ requestId: 'historical-version', usedVersion })).revision).toBe(retained.revision);
+  await expect(f.experience({ requestId: 'fake-used-note', usedVersion: f.evidence })).rejects.toThrow(/retained|version|skill/i);
+  await f.externalEdit({ path: version.path, content: '# Forged retained version' });
+  await expect(f.experience({ requestId: 'edited-used-version', usedVersion })).rejects.toThrow(/revision|attest/i);
+});
+
 test('a rejected first candidate page returns one explicit continuation to the eligible eleventh candidate', async () => {
   const f = await fixture();
   for (let i = 0; i < 11; i++) await f.candidate({ requestId: `page-${i}` });

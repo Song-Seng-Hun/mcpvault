@@ -185,6 +185,27 @@ test('upstream drift is visible as stale in coverage and board without a mutatio
   expect(coverage.items.some((i: any) => i.kind === 'review_pending_or_stale')).toBe(true);
 });
 
+test.each(['board', 'coverage'] as const)('%s cursor rejects external evidence drift with unchanged project/task inventory', async view => {
+  const f = await fixture(); await f.create(); await f.claim(); await f.review('request'); await f.review('approve', await evidence(f));
+  await f.tasks.create({ principal: f.owner, projectId: 'alpha', taskId: 'second', title: 'Second', description: 'Next work', requestId: 'second' });
+  const params = { projectId: 'alpha', limit: 1, maxChars: 12000 };
+  const first = await f.work[view](params);
+  expect(first.cursor).toBeTypeOf('string');
+  await expect(f.work[view]({ ...params, cursor: first.cursor })).resolves.toBeDefined();
+  const originalTask = (await f.read()).revision;
+  const originalProject = (await f.fs.readNote('Community/Projects/alpha.md')).revision;
+  await f.fs.writeNote({ path: 'Knowledge/upstream.md', content: 'Changed external evidence only' });
+  expect((await f.read()).revision).toBe(originalTask);
+  expect((await f.fs.readNote('Community/Projects/alpha.md')).revision).toBe(originalProject);
+  await expect(f.work[view]({ ...params, cursor: first.cursor })).rejects.toThrow(/cursor.*invalidated/i);
+  const current = await f.work[view]({ projectId: 'alpha', maxChars: 12000 });
+  expect(current.items.some((item: any) => view === 'board' ? item.taskId === 'task' && !item.review.current : item.kind === 'review_pending_or_stale')).toBe(true);
+  expect(JSON.stringify(current)).not.toContain('Changed external evidence only');
+  const stalePage = await f.work[view](params);
+  await f.fs.writeNote({path:'Knowledge/upstream.md',content:'Second evidence change while review stays stale'});
+  await expect(f.work[view]({...params,cursor:stalePage.cursor})).rejects.toThrow(/cursor.*invalidated/i);
+});
+
 test('v2 packet sends reviewers to original context and never suggests unverified general completion', async () => {
   const f = await fixture(); await f.create(); await f.claim();
   const own = await f.work.packet({ taskId: 'task', principal: f.owner, maxChars: 12000 });

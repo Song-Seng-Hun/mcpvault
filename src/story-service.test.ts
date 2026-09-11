@@ -9,6 +9,9 @@ import { ReferenceService } from './references.js';
 import { AgentTaskService } from './agent-tasks.js';
 import { WorkService } from './work-service.js';
 import { IdeationService } from './ideation.js';
+import { RoleplayService } from './roleplay-service.js';
+import { RoleplayStore } from './roleplay-store.js';
+import { roleplayRevision } from './roleplay-model.js';
 
 const roots: string[] = [];
 afterEach(async () => { vi.restoreAllMocks(); for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true }); });
@@ -63,6 +66,40 @@ test('artifact writes are revision-safe, replayable and concurrent updates have 
   const race = await Promise.allSettled(['a', 'b'].map(requestId => f.execute('artifact', { ...request, requestId, expectedRevision: edited.revision }, f.actors.writer)));
   expect(race.filter(r => r.status === 'fulfilled')).toHaveLength(1);
   await expect(f.put('outsider-scene', {}, {}, f.actors.outsider)).rejects.toThrow(/participant|member/i);
+});
+
+test('explicit committed TRPG turn import creates only a fictional Story draft with source pins', async () => {
+  const f = await fixture(); await f.project();
+  const hostPath = await mkdtemp(join(tmpdir(), 'story-trpg-host-')); roots.push(hostPath);
+  const store = await RoleplayStore.open({ vaultPath: f.root, hostPath, policy: { administrators: ['owner'] } });
+  const roleplay = new RoleplayService(f.fs, f.access, f.refs, store, { assertActor: async () => {} });
+  (f.service.workspace.options as any).readRoleplayTurn = (source: any, actor: ScopePrincipal) => (roleplay as any).storyTurn(source, actor);
+  const write = async (endpoint: string, args: Record<string, unknown>) => roleplay.execute(endpoint, { ...args, requestId: `turn-${(await store.snapshot()).sequence}`, expectedRevision: roleplayRevision(await store.snapshot()) }, f.actors.owner);
+  try {
+    await write('world', { op: 'initialize', title: 'Fictional hall', places: { hall: [] } });
+    await f.fs.writeNote({ path: 'Community/ChatRooms/hall.md', content: 'Hall', frontmatter: { mcpvault_type: 'chat_room', status: 'open' } });
+    for (const id of ['iris','moss']) await write('character', { op: 'character', id, name: id, controller: 'owner', location: 'hall' });
+    await write('scene', { op: 'scene', roomId: 'hall', location: 'hall', title: 'Hall', gm: 'owner' });
+    await write('trpg', { op: 'adopt', preset: 'mcpvault-adventure@1.0.0' });
+    const turn = await write('trpg', { op: 'encounter_start', roomId: 'hall', participants: ['iris','moss'] });
+    const before = roleplayRevision(await store.snapshot()), p = await f.current();
+    const params = { op: 'create', projectId: 'novel', artifactId: 'turn-draft', kind: 'scene', title: 'Imported encounter',
+      expectedRevision: 'missing', expectedProjectRevision: p.revision, requestId: 'import-turn',
+      roleplayTurn: { turnId: turn.id, revision: turn.revision, noteRevision: turn.noteRevision, shareable: true } };
+    const imported = await f.execute('artifact', params, f.actors.writer), note = await f.fs.readNote(imported.path);
+    expect(note.frontmatter).toMatchObject({ fiction_domain: 'story', roleplay_source: params.roleplayTurn });
+    expect(note.content).toContain('Fictional TRPG draft');
+    expect(note.frontmatter.source_revisions).toContainEqual({ path: turn.path, expectedRevision: turn.noteRevision });
+    expect(note.frontmatter.source_revisions).toContainEqual({ path: 'Community/ChatRooms/hall.md', expectedRevision: expect.any(String) });
+    expect(note.frontmatter).not.toHaveProperty('accepted');
+    expect(await f.execute('artifact', params, f.actors.writer)).toMatchObject({ revision: imported.revision, replayed: true });
+    await expect(f.execute('artifact', { ...params, artifactId: 'stale-turn', requestId: 'stale', roleplayTurn: { ...params.roleplayTurn, noteRevision: '0'.repeat(64) } }, f.actors.writer)).rejects.toThrow(/revision|changed|unavailable/i);
+    await expect(f.execute('artifact', { ...params, artifactId: 'unapproved', requestId: 'no-share', roleplayTurn: { ...params.roleplayTurn, shareable: false } }, f.actors.writer)).rejects.toThrow(/shareable/i);
+    const room = await f.fs.readNote('Community/ChatRooms/hall.md');
+    await f.fs.writeNote({ path: 'Community/ChatRooms/hall.md', content: room.content, frontmatter: { ...room.frontmatter, status: 'closed' }, expectedRevision: room.revision });
+    await expect(f.execute('artifact', params, f.actors.writer)).rejects.toThrow(/room|unavailable/i);
+    expect(roleplayRevision(await store.snapshot())).toBe(before);
+  } finally { await store.close(); }
 });
 
 test('generic writes cannot forge story governance, accepted snapshots, reviews or ancestor moves', async () => {

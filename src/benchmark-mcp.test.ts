@@ -45,6 +45,18 @@ afterEach(async () => {
 async function register() {
   token = (await call('auth.register', { accountId: principalId, agentId: principalId, modelId: 'gpt', userId: 'human', password: 'temporary-benchmark-test-only' }, false)).accessToken;
 }
+test('learning configuration preview is an authenticated read-only dynamic endpoint', async () => {
+  const fs = new FileSystemService(root);
+  await fs.writeNote({path:'Course.md',content:'[[Problem]]',frontmatter:{note_kind:'moc'},expectedRevision:'missing'});
+  await setup(); await register(); await client.close(); await server.close();
+  await setup(true);
+  token = (await call('auth.login',{accountId:principalId,password:'temporary-benchmark-test-only'},false)).accessToken;
+  const args={rootPath:'Course.md',configuration:{id:'course',version:'1.0.0',selected:['base'],nodes:[{id:'base',requires:[],excludes:[],cost:1}]},mappings:[{nodeId:'base',path:'Problem.md'}],maxChars:6000};
+  await expect(call('configuration.learning_preview',args,false)).rejects.toThrow(/auth|login|capability/i);
+  const preview=await call('configuration.learning_preview',args);
+  expect(preview).toMatchObject({competencyCertified:false,permissionsGranted:false,mappings:[{nodeId:'base',path:'Problem.md',revision:expect.any(String)}]});
+  await expect(call('continuity.save',{topic:'Course',summary:'Begin',nextAction:'Read',learningProgress:preview.checkpointAction.learningProgress})).rejects.toThrow(/read.only/i);
+});
 test('fixed five tools share host-opened benchmark service, with sealed submission and no mint by default', async () => {
   await setup(); expect((await client.listTools()).tools).toHaveLength(5); await register();
   await service.open('demo', 'operator', { expectedRevision: 'missing', requestId: 'open' });

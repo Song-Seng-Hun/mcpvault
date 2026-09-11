@@ -44,6 +44,16 @@ test('rule eligibility precedes candidate cap and hidden diagnostics are absent'
   expect(r.diagnostics.length).toBeLessThanOrEqual(8);
 });
 
+test('plain condition activations survive saturated knowledge ranking and bounded hydration', async () => {
+  for (let i = 0; i < 12; i++) await note(`Knowledge/A${i}.md`, '---\nnote_kind: atomic\n---\nwatcher regular knowledge');
+  for (let i = 0; i < 3; i++) await note(`Knowledge/Z${i}.md`, '---\ncontext_rules:\n  all: [NAS]\n---\nSpecific reconnect prerequisite.');
+  const reads = vi.spyOn(fs, 'readNote');
+  const result = await packet.readSituation({ query: 'watcher', context: 'NAS', intent: 'execute', includeSemantic: false, maxChars: 12000 });
+  expect(paths(result)).toEqual(expect.arrayContaining(['Knowledge/Z0.md', 'Knowledge/Z1.md']));
+  expect(paths(result)).not.toContain('Knowledge/Z2.md');
+  expect(reads.mock.calls.length).toBeLessThanOrEqual(8);
+});
+
 test('explicit counterpoint survives its mismatched rule, with no keyword cascade or second hop', async () => {
   await note('Knowledge/Root.md', '---\nnote_kind: atomic\ncontradicts: ["[[Caution]]"]\ndepends_on: ["[[Prerequisite]]"]\nrelated: ["[[Noise]]"]\n---\nwatcher handles updates. SECRET_TRIGGER');
   await note('Knowledge/Caution.md', '---\nnote_kind: atomic\ncontext_rules:\n  all: [OTHER]\ndepends_on: ["[[SecondHop]]"]\n---\nDo not rely on events when reconnect recovery is untested.');

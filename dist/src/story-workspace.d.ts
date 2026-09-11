@@ -12,6 +12,16 @@ export interface StoryOptions {
     assertActor?: (principal: ScopePrincipal) => Promise<void>;
     changed?: (path: string) => void;
     gitHistory?: GitHistoryService;
+    readRoleplayTurn?: (source: {
+        turnId: string;
+        revision: string;
+        noteRevision: string;
+        shareable: boolean;
+    }, principal: ScopePrincipal) => Promise<{
+        content: string;
+        guards: StoryGuard[];
+        assertCurrent: () => Promise<void>;
+    }>;
 }
 /** Shared security and current-source checks, not a model executor. */
 export declare class StoryWorkspace {

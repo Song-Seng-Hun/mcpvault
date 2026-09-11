@@ -1,4 +1,5 @@
 import { parseWikiLink } from './resolveWikiLink.js';
+import { NoteLinkService } from '../note-link.js';
 /**
  * Handle the `wiki_link` MCP tool call.
  *
@@ -12,7 +13,7 @@ import { parseWikiLink } from './resolveWikiLink.js';
  *   `path` (the resolved pick), and `alternatives` (the other matched paths,
  *   present only when more than one file shares the basename).
  */
-export async function handleWikiLinkTool(fileSystem, args, canAccessPath = () => true) {
+export async function handleWikiLinkTool(fileSystem, args, canAccessPath = () => true, publicPath = path => path) {
     const indent = args.prettyPrint ? 2 : undefined;
     let parsed;
     try {
@@ -26,35 +27,19 @@ export async function handleWikiLinkTool(fileSystem, args, canAccessPath = () =>
             isError: true,
         };
     }
-    const paths = await fileSystem.findPathForWikiLink(parsed.document, canAccessPath);
-    if (paths.length === 0) {
+    try {
+        const result = await new NoteLinkService(fileSystem, canAccessPath, publicPath).legacy(args);
         return {
-            content: [{
-                    type: 'text',
-                    text: `No file found for [[${parsed.document}]]. Use search_notes or list_directory to find the correct name.`,
-                }],
-            structuredContent: {
-                document: parsed.document,
-            },
+            content: [{ type: 'text', text: JSON.stringify(result, null, indent) }],
+            structuredContent: { document: result.document, path: result.path, revision: result.revision, deprecated: true,
+                ...(result.alternatives?.length && { alternatives: result.alternatives }),
+                ...(result.nextAction && { nextAction: result.nextAction }), truncated: result.truncated },
+        };
+    }
+    catch (error) {
+        return { content: [{ type: 'text', text: error instanceof Error ? error.message : 'Link unavailable' }],
+            structuredContent: { document: parsed.document },
             isError: true,
         };
     }
-    const resolvedPath = paths[0];
-    const alternatives = paths.slice(1);
-    const note = await fileSystem.readNote(resolvedPath);
-    return {
-        content: [{
-                type: 'text',
-                text: JSON.stringify({
-                    path: resolvedPath,
-                    fm: note.frontmatter,
-                    content: note.content,
-                }, null, indent),
-            }],
-        structuredContent: {
-            document: parsed.document,
-            path: resolvedPath,
-            ...(alternatives.length > 0 && { alternatives }),
-        },
-    };
 }

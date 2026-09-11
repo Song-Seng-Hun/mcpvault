@@ -31,3 +31,22 @@ test('named learning-path and procedural-bundle adapters share graph/selection v
   }
   expect(input).toEqual(original);
 });
+
+test('advisory diagnostics find direct/transitive unreachable branches without pruning legal alternatives', () => {
+  const nodes = [
+    { id: 'base', requires: [], excludes: [], cost: 0 },
+    { id: 'other', requires: [], excludes: ['base'], cost: 1 },
+    { id: 'direct', requires: ['base'], excludes: ['base'], cost: 1 },
+    { id: 'transitive', requires: ['direct'], excludes: [], cost: 1 },
+    { id: 'joint', requires: ['base', 'other'], excludes: [], cost: 1 },
+  ];
+  const input = { id: 'routes', version: '1.0.0', nodes, selected: ['base'] };
+  const before = structuredClone(input);
+  const result = graph.validateLearningPathConfiguration(input) as any;
+  expect(result.valid).toBe(true);
+  expect(result.diagnostics).toMatchObject({ advisory: true, truncated: false });
+  expect(result.diagnostics.items.map((item: any) => item.nodeId).sort()).toEqual(['direct', 'joint', 'transitive']);
+  expect(result.diagnostics.items.every((item: any) => item.reason === 'prerequisite_exclusion_conflict' && item.conflict.length === 2)).toBe(true);
+  expect(graph.validateCapabilitySelection(nodes, ['other'])).toEqual(['other']);
+  expect(input).toEqual(before);
+});

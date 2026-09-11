@@ -47,3 +47,40 @@ test('aggregate results revalidate earlier sources after later candidates finish
   const search = new DocumentSearch(index, { skillDiscoveryAllowed: () => true, searchNotes: async () => [{ p: 'a.md' }, { p: 'b.md' }] as any });
   await expect(search.search({ query: 'needle' })).rejects.toThrow(/unavailable|changed|revision|hidden/i);
 });
+
+async function resourceSearch(paths: string[]) {
+  const reader = index.reader; index.close();
+  for (const path of paths) await writeFile(join(root, path), 'needle one\n\nneedle two');
+  index = new DocumentIndex(reader, { subscribeBatch: () => () => {}, allPathsSnapshot: async () => paths } as any);
+  return new DocumentSearch(index, { skillDiscoveryAllowed: () => true, searchNotes: async () => [] });
+}
+test('resource windows reach later files independently of fragment pagination and reject catalog/query drift', async () => {
+  const paths = Array.from({ length: 51 }, (_, i) => `file${String(i).padStart(2, '0')}.txt`);
+  const search = await resourceSearch(paths);
+  const first = await search.search({ query: 'needle', limit: 1, maxChars: 4000 });
+  expect(first.cursor).toBeTruthy();
+  expect(first.nextResourceAction).toBeTruthy();
+  const args = (first.nextResourceAction as any).arguments;
+  const next = await search.search(args);
+  expect(next.items[0].path).toBe('file48.txt');
+  expect(next.nextResourceAction).toBeUndefined();
+  const secondFragment = await search.search({ query: 'needle', limit: 1, cursor: first.cursor });
+  expect(secondFragment.items[0].path).toBe('file00.txt');
+  await expect(search.search({ ...args, query: 'different' })).rejects.toThrow(/cursor|changed/i);
+  paths.push('later.txt');
+  await expect(search.search(args)).rejects.toThrow(/cursor|changed/i);
+});
+test('byte-budget continuation starts at the first unprocessed file', async () => {
+  const search = await resourceSearch(['a.txt', 'b.txt', 'c.txt']);
+  const original = index.load.bind(index);
+  vi.spyOn(index, 'load').mockImplementation(async (...args) => {
+    const loaded = await original(...args);
+    // Controlled accounting boundary; no large allocations or parsing fixture.
+    return { ...loaded, snapshot: { ...loaded.snapshot, bytes: { length: 8 * 1024 * 1024 } as Buffer } };
+  });
+  const first = await search.search({ query: 'needle' });
+  expect(first.items.map(row => row.path)).not.toContain('c.txt');
+  expect(first.nextResourceAction).toBeTruthy();
+  const next = await search.search((first.nextResourceAction as any).arguments);
+  expect(next.items.map(row => row.path)).toEqual(['c.txt', 'c.txt']);
+});

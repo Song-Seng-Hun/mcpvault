@@ -25,6 +25,7 @@ export declare function selectSituationCandidates(fs: FileSystemService, access:
         revision: string;
         reason: string;
     }[];
+    activatedPaths: string[];
 }>;
 /** Keep source units intact. A clipped unit becomes an exact continuation rather
  * than a sentence fragment that could hide a qualification. */

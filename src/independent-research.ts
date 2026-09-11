@@ -5,7 +5,7 @@ import type { ScopePrincipal } from './scope-auth.js';
 import { ScopeAccessPolicy } from './scope-access.js';
 import { normalizeScopeId } from './scopes.js';
 import { isModerationHidden } from './moderation-policy.js';
-import { coordinate, textField } from './work-model.js';
+import { coordinate, textField, page, fingerprint } from './work-model.js';
 import { projectResearch } from './independent-research-projection.js';
 import { validateWorkshopReferences } from './workshop-reference-validation.js';
 import {
@@ -29,12 +29,16 @@ export interface ResearchParams {
   expectedRevision?: string; expectedWorkshopRevision?: string; requestId?: string;
   operation?: 'create' | 'submit' | 'disclose' | 'review' | 'close';
   config?: unknown; submission?: unknown; review?: unknown; closure?: unknown;
-  field?: 'status' | 'submissions' | 'reviews' | 'config' | 'closure' | 'submission' | 'review'; itemIndex?: number;
+  field?: 'rounds' | 'status' | 'submissions' | 'reviews' | 'config' | 'closure' | 'submission' | 'review'; itemIndex?: number;
   limit?: number; maxChars?: number; cursor?: string;
   revalidateActor: () => Promise<ScopePrincipal>;
 }
+type ResearchReadParams = Omit<ResearchParams, 'roundId'> & { roundId?: string };
 type Guard = { path: string; expectedRevision: string };
 const digest = /^[a-f0-9]{64}$/;
+// Canonical round JSON is capped at 128,000 characters. Leave bounded UTF-8
+// and Markdown/YAML formatting headroom; oversized host-edited records fail shut.
+const ROUND_INVENTORY_BYTES = 1024 * 1024;
 
 /** Managed Markdown, hidden by the existing _whispers service-path boundary.
  * Embargoed prose never enters ordinary Workshop contribution records. */
@@ -60,10 +64,15 @@ export class IndependentResearchService {
 
   private async workshop(p: ResearchParams, actor: ScopePrincipal) {
     const paths = this.paths(p);
-    if (!this.access.canAccessPhysicalPath(paths.workshop, actor)) throw guidanceError(new Error('Research workshop unavailable'), 'guid-9205c379d60be0a4');
-    const note = await this.fs.readNote(paths.workshop);
-    if (note.frontmatter.mcpvault_type !== 'workshop' || note.frontmatter.workshop_id !== paths.workshopId || isModerationHidden(note.frontmatter)) throw guidanceError(new Error('Research workshop unavailable'), 'guid-9205c379d60be0a4');
-    return { ...paths, note, manager: note.frontmatter.facilitator_account_id === actor.accountId };
+    return { ...paths, ...await this.workshopParent(p.workshopId, actor) };
+  }
+
+  private async workshopParent(rawId: string, actor: ScopePrincipal) {
+    const workshopId = normalizeScopeId(rawId, 'workshopId'), workshop = `Community/Workshops/${workshopId}.md`;
+    if (!this.access.canAccessPhysicalPath(workshop, actor)) throw guidanceError(new Error('Research workshop unavailable'), 'guid-9205c379d60be0a4');
+    const note = await this.fs.readNote(workshop);
+    if (note.frontmatter.mcpvault_type !== 'workshop' || note.frontmatter.workshop_id !== workshopId || isModerationHidden(note.frontmatter)) throw guidanceError(new Error('Research workshop unavailable'), 'guid-9205c379d60be0a4');
+    return { workshopId, workshop, note, manager: note.frontmatter.facilitator_account_id === actor.accountId };
   }
 
   private parse(value: unknown, workshopId: string, roundId: string): Round {
@@ -111,12 +120,53 @@ export class IndependentResearchService {
     return validateWorkshopReferences(this.fs, this.refs, value, path, actor);
   }
 
-  private async readRecord(path: string) {
-    try { return await this.fs.readNote(path); }
+  private async readRecord(path: string, maxBytes?: number) {
+    try { return await this.fs.readNote(path, maxBytes); }
     catch { throw guidanceError(new Error('Research record or source unavailable; restart the read'), 'guid-90f589f177ad6108'); }
   }
 
-  async read(p: ResearchParams) {
+  private async rounds(input: ResearchReadParams) {
+    if (input.roundId !== undefined || input.expectedRevision !== undefined || input.itemIndex !== undefined) throw guidanceError(Error('Round discovery accepts a workshop, not a round/detail locator'), 'guid-354e5d341ee99078');
+    const p = { ...input, roundId: '' }, actor = await this.actor(p), w = await this.workshopParent(p.workshopId, actor);
+    if (p.expectedWorkshopRevision && p.expectedWorkshopRevision !== w.note.revision) throw guidanceError(Error('Research workshop changed; restart discovery'), 'guid-d6603070a0f31d5b');
+    const root = `_whispers/research/${w.workshopId}`;
+    const watched = new Set([this.fs.noteChangeIdentity(w.workshop)]); let changed = false;
+    const dispose = this.fs.observeNoteChanges(path => { if (watched.has(this.fs.noteChangeIdentity(path))) changed = true; });
+    const allowedRecord = (path: string) => path.startsWith(`${root}/`) && /^[a-z0-9][a-z0-9._-]{0,63}\.md$/.test(path.slice(root.length + 1));
+    const authorized = (fm: Record<string, any>) => fm.mcpvault_type === 'independent_research' && !isModerationHidden(fm)
+      && fm.research?.workshopId === w.workshopId && (w.manager || Array.isArray(fm.research?.config?.participants) && fm.research.config.participants.includes(actor.accountId));
+    try {
+      // Only one known Workshop's private records; filter membership BEFORE the
+      // bounded window. No source/configuration/submission metadata is projected.
+      const inventory = await this.fs.queryNotes({ pathPrefix: root, limit: 100, includeContent: false, includeTotal: false, sortBy: 'path' }, allowedRecord, n => authorized(n.frontmatter));
+      const rows: Array<Record<string, unknown>> = [], revisions: Array<{path:string;revision:string}> = [];
+      for (const candidate of inventory.notes) {
+        watched.add(this.fs.noteChangeIdentity(candidate.path));
+        const note = await this.readRecord(candidate.path, ROUND_INVENTORY_BYTES);
+        if (note.revision !== candidate.revision || !authorized(note.frontmatter)) throw guidanceError(Error('Research round inventory changed; restart discovery'), 'guid-5c8b580af3ea20ee');
+        const roundId = candidate.path.slice(root.length + 1, -3), r = this.parse(structuredClone(note.frontmatter.research), w.workshopId, roundId);
+        revisions.push({path:candidate.path,revision:note.revision});
+        rows.push({roundId,phase:r.phase,revision:note.revision,statusAction:{endpointId:'workshop.research',arguments:{workshopId:w.workshopId,roundId,field:'status',expectedRevision:note.revision,maxChars:1000}}});
+      }
+      for (const item of revisions) {
+        let current: string;
+        try { current = await this.fs.readNoteRevision(item.path, ROUND_INVENTORY_BYTES); }
+        catch { throw guidanceError(new Error('Research record or source unavailable; restart the read'), 'guid-90f589f177ad6108'); }
+        if (current !== item.revision) throw guidanceError(Error('Research round inventory changed; restart discovery'), 'guid-5c8b580af3ea20ee');
+      }
+      const currentActor = await this.actor(p), parent = await this.workshopParent(p.workshopId, currentActor);
+      if (parent.note.revision !== w.note.revision || changed) throw guidanceError(Error('Research workshop context changed; restart discovery'), 'guid-7a5842ce70e7d7e8');
+      const finalActor = await this.actor(p);
+      if (changed || !this.access.canAccessPhysicalPath(w.workshop, finalActor)) throw guidanceError(Error('Research workshop unavailable'), 'guid-9205c379d60be0a4');
+      return page(rows, {workshopId:w.workshopId,workshopRevision:w.note.revision,field:'rounds',inventoryComplete:!inventory.truncated},
+        fingerprint({workshop:w.note.revision,account:actor.accountId,rows,partial:inventory.truncated}), p, `research.rounds:${w.workshopId}`);
+    } finally { dispose(); }
+  }
+
+  async read(input: ResearchReadParams) {
+    if (input.field === 'rounds') return this.rounds(input);
+    if (typeof input.roundId !== 'string') throw guidanceError(Error('roundId required for a research round read'), 'guid-681124b9bb507aa0');
+    const p = { ...input, roundId: input.roundId };
     const actor = await this.actor(p), w = await this.workshop(p, actor);
     const note = await this.readRecord(w.record);
     if (note.frontmatter.mcpvault_type !== 'independent_research') throw guidanceError(new Error('Research round unavailable'), 'guid-41a66fd22fc643a5');

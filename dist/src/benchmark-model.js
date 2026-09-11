@@ -34,7 +34,7 @@ function ids(v, min, max) { if (!Array.isArray(v) || v.length < min || v.length 
     throw guidanceError(Error('Invalid bounded benchmark pool'), 'guid-23eeaa50fba8cfc3'); const list = v.map(benchmarkId); if (new Set(list).size !== list.length)
     throw guidanceError(Error('Duplicate benchmark identity'), 'guid-ebbbb8ba1c41f86e'); return list; }
 export function validateBenchmarkDefinition(value) {
-    const v = benchmarkObject(value, ['id', 'lineage', 'version', 'title', 'problem', 'sources', 'rubric', 'deadline', 'allowedTools', 'mode', 'answerKnown', 'grader', 'reward', 'maxWinners', 'cap', 'qualityThreshold', 'participants', 'reviewers', 'allowSameOwnerReview']);
+    const v = benchmarkObject(value, ['id', 'lineage', 'version', 'title', 'problem', 'sources', 'rubric', 'deadline', 'allowedTools', 'mode', 'answerKnown', 'grader', 'reward', 'maxWinners', 'cap', 'qualityThreshold', 'participants', 'reviewers', 'allowSameOwnerReview', 'collectorAccounts', 'collectorOwnerIds']);
     if (!['objective', 'peer'].includes(String(v.mode)) || typeof v.answerKnown !== 'boolean' || typeof v.allowSameOwnerReview !== 'boolean')
         throw guidanceError(Error('Invalid reward mode'), 'guid-219603d7ae9e9b6b');
     if (!v.answerKnown && v.mode !== 'peer')
@@ -47,6 +47,8 @@ export function validateBenchmarkDefinition(value) {
     if (new Set(rubric.map(c => c.id)).size !== rubric.length)
         throw guidanceError(Error('Duplicate criterion'), 'guid-4395dd75f39a3479');
     const participants = ids(v.participants, 1, 32), reviewers = ids(v.reviewers, 0, 16);
+    const collectors = v.collectorAccounts !== undefined || v.collectorOwnerIds !== undefined
+        ? { collectorAccounts: ids(v.collectorAccounts, 1, 32), collectorOwnerIds: ids(v.collectorOwnerIds, 1, 32) } : {};
     if (v.mode === 'peer' && reviewers.length < 2)
         throw guidanceError(Error('Peer mode requires approved reviewers'), 'guid-aaa241712c3887ca');
     const reward = benchmarkInteger(v.reward, 0, 1_000_000_000), maxWinners = benchmarkInteger(v.maxWinners, 1, participants.length), cap = benchmarkInteger(v.cap, 0, 1_000_000_000);
@@ -67,7 +69,33 @@ export function validateBenchmarkDefinition(value) {
     }
     else if (v.grader !== undefined)
         throw guidanceError(Error('Peer mode cannot use an objective grader'), 'guid-3f8c2500031d758d');
-    return { id: benchmarkId(v.id), lineage: benchmarkId(v.lineage), version: benchmarkId(v.version), title: textField(v.title, 'title', 180, true), problem: textField(v.problem, 'problem', 4000, true), sources: benchmarkSources(v.sources), rubric, deadline: v.deadline, allowedTools: ids(v.allowedTools, 0, 32), mode: v.mode, answerKnown: v.answerKnown, ...(grader && { grader }), reward, maxWinners, cap, qualityThreshold: benchmarkInteger(v.qualityThreshold, 0, 100), participants, reviewers, allowSameOwnerReview: v.allowSameOwnerReview };
+    return { id: benchmarkId(v.id), lineage: benchmarkId(v.lineage), version: benchmarkId(v.version), title: textField(v.title, 'title', 180, true), problem: textField(v.problem, 'problem', 4000, true), sources: benchmarkSources(v.sources), rubric, deadline: v.deadline, allowedTools: ids(v.allowedTools, 0, 32), mode: v.mode, answerKnown: v.answerKnown, ...(grader && { grader }), reward, maxWinners, cap, qualityThreshold: benchmarkInteger(v.qualityThreshold, 0, 100), participants, reviewers, allowSameOwnerReview: v.allowSameOwnerReview, ...collectors };
+}
+export function assertBenchmarkCollectorIsolation(definition, lineage, profiles) {
+    const accounts = new Set(), owners = new Set(), pools = new Set();
+    for (const raw of [definition, ...lineage]) {
+        const d = validateBenchmarkDefinition(raw);
+        if (d.lineage !== definition.lineage)
+            continue;
+        for (const account of [...d.participants, ...d.reviewers])
+            pools.add(account);
+        for (const owner of d.collectorOwnerIds ?? [])
+            owners.add(owner);
+        for (const account of d.collectorAccounts ?? []) {
+            const profile = profiles[account];
+            if (!profile || profile.accountId !== account || !d.collectorOwnerIds?.includes(profile.ownerId))
+                throw guidanceError(Error('Collector owner attestation changed or unavailable'), 'guid-5aefa9e39a5f125c');
+            accounts.add(account);
+        }
+    }
+    for (const account of pools) {
+        if (owners.size && (!profiles[account] || profiles[account].accountId !== account))
+            throw guidanceError(Error('Collector lineage account owner binding unavailable'), 'guid-664af21c0e8b7504');
+        if (accounts.has(account))
+            throw guidanceError(Error('Collector account cannot participate or review this problem lineage'), 'guid-916856268fb8df33');
+        if (owners.has(profiles[account]?.ownerId ?? ''))
+            throw guidanceError(Error('Collector owner cannot participate or review this problem lineage'), 'guid-7d0c2d935f7f4754');
+    }
 }
 /** Exact coefficient * 10^exponent. Bound the token and exponent BEFORE any
  * BigInt arithmetic; binary floats must never collapse distinct answers. */

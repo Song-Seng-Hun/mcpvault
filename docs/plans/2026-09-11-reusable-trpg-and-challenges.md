@@ -150,3 +150,66 @@ Rollback code/config separately; never erase committed turns or minted XP using 
   staged whitespace and credential-pattern checks passed. This record accompanies
   the implementation commit; the final task response reports the verified remote
   commit SHA after the ordinary push. No package, release, upstream PR or force push.
+
+## Benchmark worker verification history
+
+Moved from the operator guide on 2026-09-11 without changing the historical
+verification scope. These are historical worker results, not new test executions.
+
+TDD RED runs preceded the ledger, grader/model, host loader, service and tool-map
+implementations. On 2026-09-11 the worker ran:
+
+```text
+npm test -- src/benchmark-model.test.ts src/benchmark-service.test.ts
+  src/benchmark-host.test.ts src/benchmark-ledger.test.ts src/benchmark-tools.test.ts
+  src/benchmark-runtime.test.ts
+  src/economy-model.test.ts src/economy-ledger.test.ts
+8 files passed; 67 tests passed (including the separate-process writer tests).
+```
+
+The subsequent host-entrypoint compatibility export was checked RED → GREEN;
+`benchmark-host.test.ts` and `benchmark-runtime.test.ts` passed together (8 tests).
+
+An owned-entrypoint TypeScript check with `--ignoreConfig --noEmit` and the
+repository's strict flags passed; it included these new sources/tests and
+`economy-model.ts`/`economy-ledger.ts`. `git diff --check` passed for the modified
+tracked economy files. No global build was used to perform this check. The parent
+separately reported four passing benchmark MCP adapter tests; that report is
+parent-owned evidence, not a test execution claimed by this worker.
+
+Global build/full-suite/dist generation, registry
+wiring, host config edits, commit, push, deployment and live actions belong to the
+parent and were not run by this worker.
+
+Known operational boundaries: live monetary values are not approved or enabled;
+host answer/key/config files are not created; no background projection refresh,
+external-agent tool-use attestation or anonymity against self-identifying prose is
+claimed. CLI exposure and shared adapters are implemented; final build, full-suite,
+runtime and deployment evidence is recorded in the execution plan rather than
+inferred from worker-local test results.
+
+### Objective precision follow-up (2026-09-11)
+
+The precision regression RED run reproduced five wrong-account awards through
+the real service and canonical test ledger, not just comparator assertions:
+the incorrect early entrant received 10 test units instead of zero. The fix
+preserves the original test cases and adds exact-decimal, structured-JSON,
+tolerance-boundary, numeric-budget, invalid-host/invalid-submission and paid
+retry fixtures. A separate RED run reproduced six invalid JSON whitespace cases
+before restricting separators to space/tab/CR/LF.
+
+Final targeted verification after both fixes:
+
+```text
+npm test -- src/benchmark-model.test.ts src/benchmark-service.test.ts
+  src/benchmark-ledger.test.ts src/benchmark-host.test.ts --maxWorkers=1
+4 files passed; 92 tests passed.
+```
+
+Strict scoped TypeScript `--ignoreConfig --noEmit` passed for
+`benchmark-model.ts`, `benchmark-model.test.ts`, and `benchmark-service.test.ts`.
+Invalid host answers retain the existing `indeterminate` to `held` service
+contract; no new error field, production service change or ledger schema change
+was introduced. This follow-up changed only those three files and this document;
+no global build/full suite, dist output, TRPG changes or live monetary operations
+were performed.

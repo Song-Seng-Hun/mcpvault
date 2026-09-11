@@ -12,6 +12,8 @@ const MAX_JSON = 1024 * 1024;
 const CORE_ARTIFACTS = ['dist/server.js', 'dist/src/cli.js', 'dist/src/createServer.js'];
 const CONTROL_PLANE = ['orient_wiki', 'get_agent_pulse', 'list_active_capabilities', 'search_capabilities', 'call_endpoint'];
 const PATH_SLOTS = { program: '${PROGRAM}', vault: '${VAULT}', privateState: '${PRIVATE_STATE}', client: '${CLIENT}' };
+const CLIENT_PATH_SLOTS = { privateState: '${PRIVATE_STATE}', client: '${CLIENT}' };
+const clientOnly = options => options.operation === 'connect-existing-server' && options.mode === 'remote-https';
 const hash = bytes => `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
 const object = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 const fingerprint = value => hash(JSON.stringify(value));
@@ -91,17 +93,20 @@ function connection(options) {
 }
 
 async function paths(options) {
-  const program = await ordinaryPath(options.program, 'directory');
-  const vault = await ordinaryPath(options.vault, 'directory');
+  // A remote client has no local server or Vault. If legacy callers explicitly
+  // supply those paths, still validate their storage boundaries rather than
+  // silently ignoring a client located inside a supplied Vault/program.
+  const program = clientOnly(options) && options.program === undefined ? undefined : await ordinaryPath(options.program, 'directory');
+  const vault = clientOnly(options) && options.vault === undefined ? undefined : await ordinaryPath(options.vault, 'directory');
   const state = await ordinaryPath(options.privateState, 'directory');
   const client = await ordinaryPath(options.client, 'file', true);
-  const directories = [program.path, vault.path, state.path];
+  const directories = [program?.path, vault?.path, state.path].filter(Boolean);
   for (let i = 0; i < directories.length; i++) for (let j = i + 1; j < directories.length; j++) {
     if (within(directories[i], directories[j]) || within(directories[j], directories[i])) throw new Error('program, Vault and private state must be separate canonical directories');
   }
-  if (within(program.path, client.path) || within(vault.path, client.path)) throw new Error('client JSON must be outside program and Vault directories');
+  if (program && within(program.path, client.path) || vault && within(vault.path, client.path)) throw new Error('client JSON must be outside program and Vault directories');
   if (client.path.endsWith('.mcpvault-setup.lock')) throw new Error('client path conflicts with the installer lock suffix');
-  return { program: program.path, vault: vault.path, privateState: state.path, client: client.path };
+  return { ...(program && { program: program.path }), ...(vault && { vault: vault.path }), privateState: state.path, client: client.path };
 }
 
 export function platformFeatures(platform = process.platform, requestedPdf = false) {
@@ -167,7 +172,7 @@ async function prepare(options) {
   const next = { ...existing, mcpServers: { ...servers, mcpvault: clientEntry } };
   const bytes = Buffer.from(JSON.stringify(next, null, 2) + '\n');
   if (bytes.length > MAX_JSON) throw new Error('merged client exceeds the 1 MiB bound');
-  const basis = { version: 1, operation: options.operation, mode: options.mode, paths: canonical, clientEntry, launch, buildHash,
+  const basis = { version: clientOnly(options) ? 2 : 1, operation: options.operation, mode: options.mode, paths: canonical, clientEntry, launch, buildHash,
     clientHash: original === null ? null : hash(original), pdfSandbox: Boolean(options.pdfSandbox) };
   return { original, bytes, report: { action: 'preview', ...basis, change: hasEntry ? 'unchanged' : 'merge', fingerprint: fingerprint(basis),
     backupPolicy: 'Byte-exact client JSON backup in private state on change; never part of an export.' } };
@@ -221,13 +226,15 @@ export async function applySetup(options, confirmation) {
 /** Recipe only: do not read local configuration, host identity, checkpoints or Vault bodies. */
 export function exportManifest(options) {
   connection(options);
-  return { format: 'mcpvault-portable-installation', version: 1, operation: options.operation, mode: options.mode, paths: { ...PATH_SLOTS } };
+  return { format: 'mcpvault-portable-installation', version: clientOnly(options) ? 2 : 1, operation: options.operation, mode: options.mode, paths: { ...(clientOnly(options) ? CLIENT_PATH_SLOTS : PATH_SLOTS) } };
 }
 
 function validateManifest(value) {
   const fields = ['format', 'version', 'operation', 'mode', 'paths'];
   if (!object(value) || Object.keys(value).length !== fields.length || Object.keys(value).some(key => !fields.includes(key))
-    || value.format !== 'mcpvault-portable-installation' || value.version !== 1 || !isDeepStrictEqual(value.paths, PATH_SLOTS)) {
+    || value.format !== 'mcpvault-portable-installation'
+    || !(value.version === 1 && isDeepStrictEqual(value.paths, PATH_SLOTS)
+      || value.version === 2 && clientOnly(value) && isDeepStrictEqual(value.paths, CLIENT_PATH_SLOTS))) {
     throw new Error('unsupported manifest; only the versioned installation recipe is accepted');
   }
   return value;

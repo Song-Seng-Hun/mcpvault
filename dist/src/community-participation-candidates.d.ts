@@ -14,6 +14,11 @@ interface CandidateContext {
     notificationPaths: string[];
     now: number;
 }
+/** Absence is a fresh bounded source check, independent of seen/ranking/topics.
+ * Never interpret a partial, unreadable or changing inventory as empty. */
+export declare function discussionSnapshot(fs: FileSystemService, access: ScopeAccessPolicy, principal: ScopePrincipal): Promise<{
+    state: 'empty' | 'active' | 'unknown';
+}>;
 /** Completed tasks remain readable for explicit result confirmation. */
 export declare function isParticipationTask(path: string, frontmatter: Record<string, unknown>): boolean;
 export declare function matchesParticipationTopic(frontmatter: Record<string, unknown>, topic: string): boolean;

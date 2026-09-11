@@ -6,6 +6,7 @@ import {readFederationFile} from './public-federation-storage.js';
 import {assertHostPrivateStorage} from './skill-evolution-host.js';
 import {hostSourceRoots} from './host-source-roots.js';
 import {benchmarkFingerprint,benchmarkId,benchmarkObject,validateBenchmarkDefinition,type BenchmarkDefinition,type BenchmarkProfile} from './benchmark-model.js';
+import { assertBenchmarkCollectorIsolation } from './benchmark-model.js';
 export {acquireBenchmarkWriter,type BenchmarkWriter} from './benchmark-runtime.js';
 
 export interface BenchmarkIntegrity {sign:(record:unknown)=>Promise<string>;verify:(record:unknown,seal:string)=>Promise<boolean>}
@@ -38,6 +39,7 @@ export function validateBenchmarkHostConfig(raw:unknown):BenchmarkHostConfig {
  if(new Set(operators).size!==operators.length||new Set(definitions.map(d=>d.id)).size!==definitions.length||new Set(definitions.map(d=>`${d.lineage}/${d.version}`)).size!==definitions.length)throw guidanceError(Error('Duplicate configured identity/version'), 'guid-3bd8a842f6bdf30a');
  if(operators.some(a=>Object.hasOwn(profiles,a)))throw guidanceError(Error('Human operators cannot be benchmark agent profiles'), 'guid-433afcc2491880ec');
  for(const d of definitions){
+  assertBenchmarkCollectorIsolation(d,definitions,profiles);
   for(const a of [...d.participants,...d.reviewers])if(!profiles[a]?.approved||profiles[a]!.accountId!==a)throw guidanceError(Error('Definition requires explicitly approved canonical accounts'), 'guid-3c38c00cbe6635d0');
   if(d.mode==='peer'&&new Set(d.reviewers.filter(a=>profiles[a]!.modelVerified).map(a=>profiles[a]!.modelFamily)).size<2)throw guidanceError(Error('Two host-verified reviewer model families required'), 'guid-a04ffa120d56beeb');
  }

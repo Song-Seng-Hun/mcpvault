@@ -321,12 +321,13 @@ request IDs are payload-bound. A reserved program left by an interrupted host
 opening can be reused only if its complete approved terms still match. No locks,
 journals, caps or checkpoints are reset automatically.
 
-After its declared close time a human operator can release unused headroom using
-`ledger.transact({ op:'close_program', actor, requestId, programId,
-expectedRevision: economyRevision(snapshot.programs[programId]) })`.
-Closing is explicit and stops unpaid awards; already paid awards remain conserved.
-The parent host should settle the intended winners before closing. No endpoint
-grants generic issuance/opening/release authority to agents.
+After the deadline, use the human host's `executeHost('close')` pathway to release
+unused headroom. Normal close requires a durable decision, even with no winners
+or zero reward. For paid challenges it checks every winner's exact existing ledger
+payment receipt and rechecks settlement inside the ledger writer. An interrupted
+payment must first be resumed through `finalize`; close cannot strand unpaid winners.
+The lower-level ledger close operation is not a substitute for these benchmark
+checks. No endpoint grants generic issuance/opening/release authority to agents.
 
 `cancel_program` is additionally human-operator-only, requires an exact program
 revision and reason, and can release unused headroom before deadline. It never
@@ -367,62 +368,82 @@ anchors historical authority; current callbacks validate new operations and
 retries, not historical source states. Quest accounting and verifier contracts
 remain independent.
 
-## Verification record
+## Verification and operating boundaries
 
-TDD RED runs preceded the ledger, grader/model, host loader, service and tool-map
-implementations. On 2026-09-11 the worker ran:
+### Bounded host initiative
 
-```text
-npm test -- src/benchmark-model.test.ts src/benchmark-service.test.ts
-  src/benchmark-host.test.ts src/benchmark-ledger.test.ts src/benchmark-tools.test.ts
-  src/benchmark-runtime.test.ts
-  src/economy-model.test.ts src/economy-ledger.test.ts
-8 files passed; 67 tests passed (including the separate-process writer tests).
-```
-
-The subsequent host-entrypoint compatibility export was checked RED → GREEN;
-`benchmark-host.test.ts` and `benchmark-runtime.test.ts` passed together (8 tests).
-
-An owned-entrypoint TypeScript check with `--ignoreConfig --noEmit` and the
-repository's strict flags passed; it included these new sources/tests and
-`economy-model.ts`/`economy-ledger.ts`. `git diff --check` passed for the modified
-tracked economy files. No global build was used to perform this check. The parent
-separately reported four passing benchmark MCP adapter tests; that report is
-parent-owned evidence, not a test execution claimed by this worker.
-
-Global build/full-suite/dist generation, registry
-wiring, host config edits, commit, push, deployment and live actions belong to the
-parent and were not run by this worker.
-
-Known operational boundaries: live monetary values are not approved or enabled;
-host answer/key/config files are not created; no background projection refresh,
-external-agent tool-use attestation or anonymity against self-identifying prose is
-claimed. CLI exposure and shared adapters are implemented; final build, full-suite,
-runtime and deployment evidence is recorded in the execution plan rather than
-inferred from worker-local test results.
-
-### Objective precision follow-up (2026-09-11)
-
-The precision regression RED run reproduced five wrong-account awards through
-the real service and canonical test ledger, not just comparator assertions:
-the incorrect early entrant received 10 test units instead of zero. The fix
-preserves the original test cases and adds exact-decimal, structured-JSON,
-tolerance-boundary, numeric-budget, invalid-host/invalid-submission and paid
-retry fixtures. A separate RED run reproduced six invalid JSON whitespace cases
-before restricting separators to space/tab/CR/LF.
-
-Final targeted verification after both fixes:
+The host-only `BenchmarkService.initiativeStatus(operator)` checks global selected
+problem state, not the participant-visible challenge list. Configured-but-unopened
+definitions are pending approval; an open submission/review phase or unfinished
+reward settlement is active. Missing configuration/records/ledger coverage,
+unconfigured retained versions and source drift cannot establish absence. The
+read-only offline CLI is:
 
 ```text
-npm test -- src/benchmark-model.test.ts src/benchmark-service.test.ts
-  src/benchmark-ledger.test.ts src/benchmark-host.test.ts --maxWorkers=1
-4 files passed; 92 tests passed.
+node scripts/benchmark-host.mjs initiative-status <absolute-vault> <absolute-private-config> <human-operator>
 ```
 
-Strict scoped TypeScript `--ignoreConfig --noEmit` passed for
-`benchmark-model.ts`, `benchmark-model.test.ts`, and `benchmark-service.test.ts`.
-Invalid host answers retain the existing `indeterminate` to `held` service
-contract; no new error field, production service change or ledger schema change
-was introduced. This follow-up changed only those three files and this document;
-no global build/full suite, dist output, TRPG changes or live monetary operations
-were performed.
+Rewarded settlement without the live ledger remains unknown. The check never
+returns sealed answers, private identities, problem bodies or record paths.
+
+An existing host may call `BenchmarkService.runInitiative(operator, trigger, host)`
+from its approved `session_start`, `work_completion` or `approved_heartbeat` hook.
+The required `BenchmarkInitiativeHost` adapter is in `src/benchmark-initiative.ts`.
+It must reuse the host's atomic durable execution receipts across all accounts and
+processes: one attempt per UTC day, five minutes, no catch-up, failure/interruption
+counted. Busy work, pending human approval or an in-flight child suppresses a new
+run. The host must keep the in-flight flag until an aborted child really stops.
+
+The adapter searches the existing Wiki, asks the existing public search connector
+for at most three short links, checks those links in the Wiki, then makes one
+ordinary Wiki capture and verifies its revision. No login, paid access, code
+execution, dataset/archive download, corpus enumeration, embedding/index or
+separate candidate bookkeeping is added. Uncertain reuse rights stay link-only
+on hold. The host is responsible for enforcing these restrictions at its connector
+boundary and honoring cancellation at capture's durable write boundary.
+
+This repository does not install a host scheduler, search provider or durable
+host-run store. Without those existing integrations the result is explicitly
+`host_capability_missing`; this is not an activated automatic collector. Optional
+live benchmark hosts remain separately approved/configured. Unchanged suppression
+is quiet; captured suggestions, failures and reconciliation needs are actionable.
+
+Only a human opens a selected problem and approves its pools, deadline, disclosure
+and reward cap. Preserve the collector's host-verified canonical accounts and
+owner IDs in that selected definition (`collectorAccounts`, `collectorOwnerIds`).
+They stay private and immutable, are checked against current host profiles and
+retained lineage versions, and cannot be discarded by a later version. Collectors
+and all attested same-owner accounts are excluded from its participant/reviewer
+pools even when ordinary same-owner peer review is allowed. Legacy definitions
+without this provenance retain their hashes and behavior. Wiki candidate captures
+never include private collector owner IDs; consult the existing private host run
+receipt when approving a selected definition.
+
+### Human-selected result evidence
+
+After a decision and deadline, the host-only `evidence` operation can export one
+exact result revision into a small ordinary Wiki projection. It requires the
+same stopped-writer maintenance workflow as `project`, plus `--entry-id`,
+`--fields outcome,scores` (one or both), and explicit `--shareable true`.
+Keep `--expected-revision`, `--expected-projection-revision missing`, and a
+bounded request ID explicit. The resulting note contains only the selected
+outcome/numeric scores, revision fingerprints and public source locators: never
+sealed text, private identities or reviewer prose. Edited snapshots are preserved
+and rejected on retry. No benchmark record, reward or Skill version is changed.
+
+The returned `skill.experience` action requires an independently supplied Skill,
+its actual used version, application/shareability confirmation and experience
+description. It does not claim the Skill caused the outcome or qualify historical
+use as current-version promotion evidence. No corpus index or candidate database
+is involved.
+
+The [execution record](plans/2026-09-11-reusable-trpg-and-challenges.md#benchmark-worker-verification-history)
+preserves the initial worker tests and objective-precision follow-up. Its main
+execution section records integration, full-suite and NAS deployment evidence;
+worker-local results alone do not establish live readiness.
+
+Live reward amounts and optional host activation require explicit approval.
+Host answer/key/config files are never automatically created. There is no
+background projection refresh, external-agent tool-use attestation, or anonymity
+guarantee against self-identifying prose. Invalid host answers retain the
+`indeterminate` to `held` service contract.

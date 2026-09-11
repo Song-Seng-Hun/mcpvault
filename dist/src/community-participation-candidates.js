@@ -1,7 +1,47 @@
 import { guidanceError } from './guidance-runtime.js';
 import { isModerationHidden } from './moderation-policy.js';
+import { isClosedWorkflowStatus } from './community-status.js';
 import { fingerprint } from './work-model.js';
 const words = (value) => value.normalize('NFKC').toLowerCase().match(/[\p{L}\p{N}]+/gu) || [];
+/** Absence is a fresh bounded source check, independent of seen/ranking/topics.
+ * Never interpret a partial, unreadable or changing inventory as empty. */
+export async function discussionSnapshot(fs, access, principal) {
+    const root = (path) => /^Community\/(Posts|Workshops|Ideas)\/[^/]+\.md$/.test(path);
+    const admitted = (path) => root(path) && access.canAccessPhysicalPath(path, principal);
+    let changed = false, count = 0, active = false;
+    const guards = new Map();
+    const dispose = fs.observeNoteChanges(path => { if (root(path.replace(/\\/g, '/')))
+        changed = true; });
+    try {
+        for await (const note of fs.iterateFreshNoteMetadata(admitted, { maxBytes: 64 * 1024, strictMissing: true })) {
+            if (++count > 128 || !note.revision)
+                return { state: 'unknown' };
+            guards.set(note.path, note.revision);
+            const fm = note.frontmatter;
+            if (isModerationHidden(fm) || fm.content_status === 'deleted')
+                continue;
+            if (fm.mcpvault_type === 'blog_post' && fm.status === 'published' && !isClosedWorkflowStatus(fm.workflow_status)
+                && note.path !== 'Community/Posts/self-introductions.md' && fm.post_id !== 'self-introductions')
+                active = true;
+            if (fm.mcpvault_type === 'workshop' && fm.status === 'open')
+                active = true;
+            if (fm.mcpvault_type === 'idea' && !['rejected', 'parked', 'implemented', 'promoted'].includes(String(fm.status)))
+                active = true;
+        }
+        for (const [path, revision] of guards)
+            if (!admitted(path) || await fs.readNoteRevision(path, 64 * 1024) !== revision)
+                return { state: 'unknown' };
+        if (changed || [...guards.keys()].some(path => !admitted(path)))
+            return { state: 'unknown' };
+        return { state: active ? 'active' : 'empty' };
+    }
+    catch {
+        return { state: 'unknown' };
+    }
+    finally {
+        dispose();
+    }
+}
 /** Completed tasks remain readable for explicit result confirmation. */
 export function isParticipationTask(path, frontmatter) {
     const id = /^Community\/Tasks\/([a-z0-9][a-z0-9._-]*)\.md$/.exec(path)?.[1];

@@ -29,6 +29,137 @@ test('only an opted-in human host can open and definitions cannot drift in place
  await f.open();const changed=new BenchmarkService(f.fs,{...f.options,definitions:[{...f.d,problem:'Changed'}]});await expect(f.read(changed)).rejects.toThrow(/immutable|changed/);
  await expect(new BenchmarkService(f.fs,{...f.options,enabled:false}).execute('list',{},principal('alice'))).rejects.toThrow(/disabled/i);
 });
+
+test('host initiative absence is global, never participant visibility, disabled state or pending approval', async () => {
+ const f=await fixture();
+ expect((f.service as any).initiativeStatus).toBeTypeOf('function');
+ expect((f.service as any).runInitiative).toBeTypeOf('function');
+ expect(await (f.service as any).runInitiative('operator','session_start')).toMatchObject({state:'host_capability_missing'});
+ await expect((f.service as any).initiativeStatus('alice')).rejects.toThrow(/Human/);
+ expect(await (f.service as any).initiativeStatus('operator')).toMatchObject({state:'pending_approval'});
+ const empty=new BenchmarkService(f.fs,{...f.options,definitions:[]});
+ expect(await (empty as any).initiativeStatus('operator')).toMatchObject({state:'empty'});
+ expect(await (new BenchmarkService(f.fs,{...f.options,enabled:false}) as any).initiativeStatus('operator')).toMatchObject({state:'disabled'});
+ await f.open();
+ // A requester outside all pools still cannot turn a globally active challenge into absence.
+ expect(await (f.service as any).initiativeStatus('operator')).toMatchObject({state:'active'});
+ expect(await (empty as any).initiativeStatus('operator')).toMatchObject({state:'unknown'});
+ await f.update('submit',{answer:'HOST-SECRET'}); f.late();
+ expect(await (f.service as any).initiativeStatus('operator')).toMatchObject({state:'active'});
+ await f.update('finalize');
+ expect(await (f.service as any).initiativeStatus('operator')).toMatchObject({state:'empty'});
+ expect(JSON.stringify(await (f.service as any).initiativeStatus('operator'))).not.toMatch(/HOST-SECRET|alice|entries|_whispers/);
+ const original=f.fs.readNoteRevision.bind(f.fs);let changed=false;
+ vi.spyOn(f.fs,'readNoteRevision').mockImplementation(async(path,...args)=>{
+  if(path.startsWith('_whispers/benchmarks/')&&!changed){changed=true;const source=await f.fs.readNote('Evidence.md');await f.fs.writeNote({path:'Evidence.md',content:'Changed basis',expectedRevision:source.revision});}
+  return original(path,...args);
+ });
+ expect(await f.service.initiativeStatus('operator')).toMatchObject({state:'unknown'});
+});
+
+test('collector and attested same-owner accounts cannot enter or review a selected problem lineage', async () => {
+ const f=await fixture('peer');
+ const d={...f.d,collectorAccounts:['r3'],collectorOwnerIds:['same-human']};
+ let service:BenchmarkService;
+ try { service=new BenchmarkService(f.fs,{...f.options,definitions:[d]}); }
+ catch (error) { throw Error(`Collector provenance must be accepted before eligibility is checked: ${error}`); }
+ await expect(service.open(d.id,'operator',{expectedRevision:'missing',requestId:'open-collected'})).rejects.toThrow(/collector|owner/i);
+ // A separate collector owner does not block unrelated participants/reviewers.
+ f.profiles.collector={accountId:'collector',ownerId:'collector-human',modelFamily:'collector-family',approved:true,modelVerified:true};
+ const separate={...f.d,collectorAccounts:['collector'],collectorOwnerIds:['collector-human']};
+ service=new BenchmarkService(f.fs,{...f.options,definitions:[separate]});
+ await expect(service.open(separate.id,'operator',{expectedRevision:'missing',requestId:'open-separate'})).resolves.toMatchObject({state:'open'});
+ expect(JSON.stringify(await f.read(service,'definition'))).not.toMatch(/collector-human|collectorAccounts|collectorOwnerIds/);
+ const revision=(await f.read(service)).revision;
+ // Dropping collector metadata in a later version cannot discard lineage exclusions.
+ const next={...f.d,id:'collected-v2',version:'v2',participants:['collector']};
+ const restarted=new BenchmarkService(f.fs,{...f.options,definitions:[separate,next]});
+ await expect(restarted.open(next.id,'operator',{expectedRevision:revision,requestId:'open-v2'})).rejects.toThrow(/collector|owner/i);
+});
+
+test('host initiative does not mistake an omitted retained active version for global absence', async () => {
+ const f=await fixture();await f.open();
+ const next={...f.d,id:'next',version:'v2'};
+ const both=new BenchmarkService(f.fs,{...f.options,definitions:[f.d,next]});
+ await both.open('next','operator',{expectedRevision:(await f.read()).revision,requestId:'open-next'});
+ await both.execute('submit',{challengeId:'next',expectedRevision:(await f.read(both)).revision,requestId:'submit-next',answer:'HOST-SECRET'},principal('alice'));
+ f.late();
+ await both.execute('finalize',{challengeId:'next',expectedRevision:(await f.read(both)).revision,requestId:'finalize-next'},principal('alice'));
+ const omitted=new BenchmarkService(f.fs,{...f.options,definitions:[next]});
+ expect(await omitted.initiativeStatus('operator')).toMatchObject({state:'unknown'});
+});
+
+test('new collector provenance cannot overlap omitted retained participant or reviewer pools', async () => {
+ const f=await fixture();await f.open();
+ f.profiles.separate={accountId:'separate',ownerId:'separate-owner',modelFamily:'separate-family',approved:true,modelVerified:true};
+ const next={...f.d,id:'collected-next',version:'v2',participants:['separate'],reviewers:[],collectorAccounts:['bob'],collectorOwnerIds:['same-human']};
+ const service=new BenchmarkService(f.fs,{...f.options,definitions:[next]});
+ await expect(service.open(next.id,'operator',{expectedRevision:(await f.read()).revision,requestId:'reverse-lineage'})).rejects.toThrow(/collector|owner/i);
+ const note=await f.fs.readNote('_whispers/benchmarks/problem.md');
+ expect(note.frontmatter.benchmark.versions).toHaveLength(1);
+});
+
+test.each(['direct','same-owner','missing-profile'] as const)('retained collector exclusion independently protects %s', async kind => {
+ const f=await fixture();
+ const older={...f.d,participants:[kind==='direct'?'bob':'alice'],reviewers:[]};
+ const initial=new BenchmarkService(f.fs,{...f.options,definitions:[older]});
+ await initial.open(older.id,'operator',{expectedRevision:'missing',requestId:'isolated-pool'});
+ f.profiles.separate={accountId:'separate',ownerId:'separate-owner',modelFamily:'separate-family',approved:true,modelVerified:true};
+ f.profiles.collector={accountId:'collector',ownerId:kind==='same-owner'?'same-human':'collector-owner',modelFamily:'collector-family',approved:true,modelVerified:true};
+ if(kind==='missing-profile')delete f.profiles.alice;
+ // No aliases of a removed profile remain; this failure concerns the retained pool.
+ if(kind==='missing-profile')delete f.profiles.alias;
+ const collector=kind==='direct'?'bob':'collector';
+ const next={...f.d,id:'separate-next',version:'v2',participants:['separate'],reviewers:[],collectorAccounts:[collector],collectorOwnerIds:[f.profiles[collector]!.ownerId]};
+ const service=new BenchmarkService(f.fs,{...f.options,definitions:[next]});
+ const failure=kind==='direct'?/collector account cannot/i:kind==='same-owner'?/collector owner cannot/i:/owner binding unavailable/i;
+ await expect(service.open(next.id,'operator',{expectedRevision:(await f.fs.readNote('_whispers/benchmarks/problem.md')).revision,requestId:'isolated-exclusion'})).rejects.toThrow(failure);
+ expect((await f.fs.readNote('_whispers/benchmarks/problem.md')).frontmatter.benchmark.versions).toHaveLength(1);
+});
+
+test('global absence rejects conflicting source pins across versions changed by a separate filesystem writer', async () => {
+ const f=await fixture();await f.open();await f.update('submit',{answer:'HOST-SECRET'});f.late();await f.update('finalize');
+ const first=await f.fs.readNote('Evidence.md');
+ const external=new FileSystemService(f.vault);
+ await external.writeNote({path:'Evidence.md',content:'Second revision',expectedRevision:first.revision});
+ const second=await external.readNote('Evidence.md');
+ let now=new Date('2026-10-02T00:00:00Z');
+ const next={...f.d,id:'next-pinned',version:'v2',deadline:'2026-10-03T00:00:00.000Z',sources:[{path:'Evidence.md',revision:second.revision}]};
+ const service=new BenchmarkService(f.fs,{...f.options,definitions:[f.d,next],now:()=>now});
+ await service.open(next.id,'operator',{expectedRevision:(await f.fs.readNote('_whispers/benchmarks/problem.md')).revision,requestId:'open-next-pinned'});
+ now=new Date('2026-10-04T00:00:00Z');
+ await service.execute('finalize',{challengeId:next.id,expectedRevision:(await f.fs.readNote('_whispers/benchmarks/problem.md')).revision,requestId:'empty-next-pinned'},principal('alice'));
+ await external.writeNote({path:'Evidence.md',content:first.content,frontmatter:first.frontmatter,expectedRevision:second.revision});
+ expect((await external.readNote('Evidence.md')).revision).toBe(first.revision);
+ const read=f.fs.readNote.bind(f.fs);let raced=false;
+ vi.spyOn(f.fs,'readNote').mockImplementation(async(path,...args)=>{
+  const note=await read(path,...args);
+  if(path==='Evidence.md'&&!raced){raced=true;await external.writeNote({path,content:second.content,frontmatter:second.frontmatter,expectedRevision:first.revision});}
+  return note;
+ });
+ expect(await service.initiativeStatus('operator')).toMatchObject({state:'unknown'});
+ expect(raced).toBe(true);
+});
+
+test('human selects exact decided result fields as sanitized Wiki evidence without sealed material',async()=>{
+ const f=await fixture();await f.open();await f.update('submit',{answer:'HOST-SECRET'});f.late();await f.update('finalize');
+ const results=await f.read(f.service,'results'),entryId=results.items[0].entryId;
+ const params={challengeId:'challenge',entryId,fields:['outcome','scores'],shareable:true,expectedRevision:results.revision,expectedProjectionRevision:'missing',requestId:'result-evidence'};
+ await expect(f.service.executeHost('evidence' as any,{...params,shareable:false},'operator')).rejects.toThrow(/shareable|approval/i);
+ await expect(f.service.executeHost('evidence' as any,params,'alice')).rejects.toThrow(/Human/i);
+ const exported=await f.service.executeHost('evidence' as any,params,'operator');
+ const note=await f.fs.readNote(exported.path),serialized=JSON.stringify(note);
+ expect(note.frontmatter.benchmark_result).toEqual({outcome:'pass',scores:[100]});
+ expect(note.frontmatter.benchmark_result_revision).toBe(results.revision);
+ expect(serialized).not.toMatch(/HOST-SECRET|alice|same-human|family-0|_whispers|answer/i);
+ expect(exported.nextAction).toMatchObject({endpointId:'skill.experience',requiredArguments:expect.arrayContaining(['skillId','usedVersion','applied','shareable'])});
+ expect((await f.service.executeHost('evidence' as any,params,'operator')).revision).toBe(exported.revision);
+ await expect(f.service.executeHost('evidence' as any,{...params,fields:['answer']},'operator')).rejects.toThrow(/fields/i);
+ await expect(f.service.executeHost('evidence' as any,{...params,expectedRevision:'0'.repeat(64)},'operator')).rejects.toThrow(/revision/i);
+ expect((await f.read()).revision).toBe(results.revision);
+ await f.fs.writeNote({path:exported.path,content:note.content,frontmatter:{...note.frontmatter,benchmark_result:{outcome:'fail'}},expectedRevision:note.revision});
+ await expect(f.service.executeHost('evidence' as any,params,'operator')).rejects.toThrow(/changed|review/i);
+});
 test('backend account revocation invalidates authority independently of still-approved host profiles',async()=>{
  const f=await fixture('peer');await f.open();await f.update('submit',{answer:'candidate'});await f.update('submit',{answer:'another'},'bob');f.late();
  const entries=await f.read(f.service,'entries','r1');for(const [i,e]of entries.items.entries())for(const a of ['r1','r2'])await f.update('review',{requestId:`${a}-${i}`,review:review(e.entryId,f.d.sources)},a);
@@ -98,14 +229,50 @@ test('mint uses the same canonical ledger with current private adjudication reva
  }finally{await ledger.close();}
 });
 
-async function paidPrecisionFixture(grader:BenchmarkGrader,answer:string) {
- const f=await fixture();f.d.grader=grader;f.d.reward=10;f.d.cap=10;f.setAnswer(answer);
+async function paidPrecisionFixture(grader:BenchmarkGrader,answer:string,maxWinners=1) {
+ const f=await fixture();f.d.grader=grader;f.d.reward=10;f.d.maxWinners=maxWinners;f.d.cap=10*maxWinners;f.setAnswer(answer);
  const host=join(f.root,'precision-host');await mkdir(host);let service!:BenchmarkService;
- const policy:EconomyPolicy={version:1,revision:'precision-regression-test-only',enabled:true,treasury:'treasury',operators:['operator'],owners:{treasury:'host',alice:'same',bob:'same'},reviewers:[],subjectiveReview:false,maxSupply:10,minReward:1,maxReward:10,postingFee:0,reviewFee:0,dailySpend:10,dailyPosts:1,openContracts:1,benchmarkPrograms:[BenchmarkService.issuanceProgram(f.d)]};
- const ledger=await EconomyLedger.initialize({vaultPath:f.vault,hostPath:host,policy,storageVerified:true,now:()=>new Date('2026-09-11T00:00:00Z'),benchmarkAuthority:{assertHumanOperator:f.options.assertHumanOperator,validateAward:(proof,state)=>service.validateAwardProof(proof,state)}});
+ const policy:EconomyPolicy={version:1,revision:'precision-regression-test-only',enabled:true,treasury:'treasury',operators:['operator'],owners:{treasury:'host',alice:'same',bob:'same'},reviewers:[],subjectiveReview:false,maxSupply:10*maxWinners,minReward:1,maxReward:10,postingFee:0,reviewFee:0,dailySpend:10,dailyPosts:1,openContracts:1,benchmarkPrograms:[BenchmarkService.issuanceProgram(f.d)]};
+ const ledger=await EconomyLedger.initialize({vaultPath:f.vault,hostPath:host,policy,storageVerified:true,now:f.options.now!,benchmarkAuthority:{assertHumanOperator:f.options.assertHumanOperator,validateAward:(proof,state)=>service.validateAwardProof(proof,state)}});
  service=new BenchmarkService(f.fs,{...f.options,definitions:[f.d],ledger});
  return {...f,service,ledger};
 }
+
+test.each(['objective','peer'] as const)('normal close requires a durable decision even for zero-reward %s challenges', async mode => {
+ const f=await fixture(mode); await f.open(); f.late();
+ const before=await f.read();
+ await expect(f.service.executeHost('close',{challengeId:'challenge',expectedRevision:before.revision,requestId:'close'},'operator')).rejects.toThrow(/decision|settlement/i);
+ if(mode==='objective'){
+  const finalized=await f.service.executeHost('finalize',{challengeId:'challenge',expectedRevision:before.revision,requestId:'final'},'operator');
+  expect(await f.service.executeHost('close',{challengeId:'challenge',expectedRevision:finalized.revision,requestId:'close'},'operator')).toMatchObject({reservation:'closed',state:'decided'});
+ }
+});
+
+test.each(['resume','cancel'] as const)('partial winner payment cannot be normally closed; %s preserves issued XP', async terminal => {
+ const f=await paidPrecisionFixture({kind:'exact'},'HOST-SECRET',2);
+ try {
+  await f.service.open('challenge','operator',{expectedRevision:'missing',requestId:'open'});
+  await f.update('submit',{answer:'HOST-SECRET'},'alice',f.service); await f.update('submit',{answer:'HOST-SECRET'},'bob',f.service); f.late();
+  const transact=f.ledger.transact.bind(f.ledger);
+  const fail=vi.spyOn(f.ledger,'transact').mockImplementation(async(command,revalidate)=>{if(command.op==='award_program'&&command.actor==='bob')throw Error('Interrupted second payment');return transact(command,revalidate);});
+  await expect(f.update('finalize',{},'alice',f.service)).rejects.toThrow('Interrupted second payment'); fail.mockRestore();
+  const current=await f.read(f.service);
+  await expect(f.service.executeHost('close',{challengeId:'challenge',expectedRevision:current.revision,requestId:'close'},'operator')).rejects.toThrow(/payment|receipt|settlement/i);
+  expect((await f.ledger.snapshot()).programs!.challenge!.closed).toBe(false);
+  expect((await f.ledger.snapshot()).issued).toBe(10);
+  if(terminal==='cancel'){
+   await f.service.executeHost('cancel',{challengeId:'challenge',expectedRevision:current.revision,requestId:'cancel',reason:'Human chose to end interrupted event'},'operator');
+   expect((await f.ledger.snapshot()).issued).toBe(10); expect((await f.ledger.snapshot()).balances.alice).toBe(10);
+  } else {
+   const finalized=await f.update('finalize',{requestId:'resume'},'alice',f.service);
+   expect((await f.ledger.snapshot()).issued).toBe(20);
+   const params={challengeId:'challenge',expectedRevision:finalized.revision,requestId:'close'};
+   expect(await f.service.executeHost('close',params,'operator')).toMatchObject({reservation:'closed'});
+   expect(await f.service.executeHost('close',params,'operator')).toMatchObject({reservation:'closed'});
+   expect((await f.ledger.snapshot()).issued).toBe(20);
+  }
+ } finally {await f.ledger.close();}
+});
 
 test.each([
  [{kind:'numeric',absoluteTolerance:0},'9007199254740992','9007199254740993'],

@@ -1,4 +1,5 @@
-import { roleplayAccount, roleplayHash, roleplayId, roleplayRevision, roleplayText, type RoleplayCommand, type RoleplayState } from './roleplay-model.js';
+import { roleplayAccount, roleplayHash, roleplayId, roleplayRevision, roleplayText } from './roleplay-kernel.js';
+import type { RoleplayCommand, RoleplayState } from './roleplay-model.js';
 
 export type EvolutionKind = 'belief' | 'attitude' | 'event_fact' | 'character_core' | 'world_core' | 'character_lore' | 'world_lore' | 'retract';
 export interface EvolutionChange { kind: EvolutionKind; target: string; key: string; text?: string; lore?: string[] }

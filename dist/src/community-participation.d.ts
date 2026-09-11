@@ -31,6 +31,7 @@ export interface ParticipationRun {
     topic: string;
     startedAt: string;
     target?: ParticipationTarget;
+    emptyDiscussion?: true;
     publicAttempt?: {
         operation: string;
         payloadHash: string;
@@ -66,6 +67,7 @@ export interface ParticipationRecordParams extends Base {
     reconcileAbsent?: boolean;
     deferUntil?: string;
     reason?: string;
+    emptyDiscussion?: boolean;
 }
 export interface ParticipationCandidate extends ParticipationTarget {
     lane: 'follow_up' | 'interest' | 'discovery';

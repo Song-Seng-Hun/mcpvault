@@ -1,6 +1,7 @@
 import { guidanceError } from './guidance-runtime.js';
 import { capabilityRemoval, configId, configIds, configKeys, configNumber, validateCapabilityGraph, validateCapabilitySelection, type CapabilityNode } from './capability-graph.js';
-import { roleplayHash, roleplayRevision, type RoleplayCommand, type RoleplayPolicy, type RoleplayState } from './roleplay-model.js';
+import { roleplayHash, roleplayRevision } from './roleplay-kernel.js';
+import type { RoleplayCommand, RoleplayPolicy, RoleplayState } from './roleplay-model.js';
 
 interface Formula { base: number; terms: Record<string, number> }
 interface Skill extends CapabilityNode { kind: 'attack' | 'guard' | 'heal'; attribute: string; power: number; focus: number }

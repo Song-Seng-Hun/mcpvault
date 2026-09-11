@@ -4,6 +4,8 @@ import { ScopeAccessPolicy } from './scope-access.js';
 import { normalizeScopeId } from './scopes.js';
 import { isModerationHidden } from './moderation-policy.js';
 import { inspectUnderstanding, prepareUnderstanding, UNDERSTANDING_READ_BYTES, UNDERSTANDING_UNAVAILABLE } from './continuity-understanding.js';
+import { inspectContinuityPins } from './continuity-pins.js';
+import { prepareLearningConfiguration, isLearningConfigurationState } from './learning-configuration.js';
 const MAX_TEXT = 4000;
 const MAX_LEARNING_ENTRIES = 50;
 const REVISION_PATTERN = /^[a-f0-9]{64}$/;
@@ -68,6 +70,9 @@ function packResumeState(full, maxChars, prettyPrint) {
         result.understanding = { state: result.understanding.state, canResume: false, detailsOmitted: true };
         result.nextAction = { endpointId: 'continuity.resume', arguments: { maxChars: 12000 } };
     }
+    if (!fits(result))
+        result.validation = { detailsOmitted: true,
+            ...(full.validation.selectedPinsCurrent !== undefined && { selectedPinsCurrent: full.validation.selectedPinsCurrent }) };
     if (!fits(result))
         throw guidanceError(new Error('Resume identity and safety state exceed maxChars; retry continuity.resume with maxChars=12000 and prettyPrint=false.'), 'guid-03ff3c9c7205c93a');
     const fitBody = (length) => {
@@ -223,7 +228,7 @@ export class ContinuityService {
         }
         return path;
     }
-    async prepareLearningProgress(principal, value) {
+    async prepareLearningProgress(principal, value, allowUnpinnedConfiguration = false) {
         if (value === undefined)
             return undefined;
         const input = record(value);
@@ -293,6 +298,14 @@ export class ContinuityService {
                 throw guidanceError(new Error('learningProgress.completedThrough must be one entry in the selected learning path'), 'guid-d4b2ae79ac21a3cf');
         }
         const publicRoot = this.access.toPublicPath(rootPath);
+        let configuration;
+        if (input.configuration !== undefined) {
+            const config = record(input.configuration);
+            if (!config || !Array.isArray(config.mappings) || config.mappings.length > 16)
+                throw guidanceError(new Error('Invalid learning configuration mapping'), 'guid-f26673509e7432dc');
+            const mappings = config.mappings.map(raw => ({ ...raw, path: this.access.toPublicPath(this.physicalLearningPath(raw?.path, 'mapping path', principal)) }));
+            configuration = prepareLearningConfiguration({ ...config, mappings }, entries, { rootPath: publicRoot, rootRevision, sourceFingerprint: sourceRevisionFingerprint, order }, allowUnpinnedConfiguration);
+        }
         const savedAt = new Date().toISOString();
         return {
             root_path: publicRoot,
@@ -301,11 +314,29 @@ export class ContinuityService {
             max_depth: maxDepth,
             ...(completedThrough && { completed_through: completedThrough }),
             entries,
-            structure_fingerprint: fingerprint({ root: publicRoot, order, maxDepth, paths: entries.map(item => item.path) }),
-            revision_fingerprint: fingerprint({ root: [publicRoot, rootRevision], entries, sources: sourceRevisionFingerprint }),
+            structure_fingerprint: fingerprint({ root: publicRoot, order, maxDepth, paths: entries.map(item => item.path), ...(configuration && { configuration: configuration.fingerprint }) }),
+            revision_fingerprint: fingerprint({ root: [publicRoot, rootRevision], entries, sources: sourceRevisionFingerprint, ...(configuration && { configuration: configuration.fingerprint }) }),
             source_revision_fingerprint: sourceRevisionFingerprint,
+            ...(configuration && { configuration }),
             saved_at: savedAt,
         };
+    }
+    async previewLearningConfiguration(params) {
+        const principal = requiredPrincipal(params.principal), maxChars = params.maxChars ?? 6000;
+        if (!Number.isSafeInteger(maxChars) || maxChars < 1024 || maxChars > 12000)
+            throw guidanceError(new Error('Preview maxChars must be 1024..12000'), 'guid-3c40a8fffac190c2');
+        const progress = (await this.prepareLearningProgress(principal, { rootPath: params.rootPath, order: params.order, maxDepth: params.maxDepth,
+            configuration: { definition: params.configuration, mappings: params.mappings } }, true));
+        const configured = progress.configuration;
+        const result = { root: { path: progress.root_path, revision: progress.root_revision }, fingerprint: configured.fingerprint,
+            mappings: configured.mappings, executable: false, permissionsGranted: false, competencyCertified: false,
+            checkpointAction: { endpointId: 'continuity.save', requiredArguments: ['topic', 'summary', 'nextAction'], learningProgress: {
+                    rootPath: progress.root_path, order: progress.order, maxDepth: progress.max_depth,
+                    configuration: { definition: configured.definition, mappings: configured.mappings.map(({ nodeId, path }) => ({ nodeId, path })), expectedFingerprint: configured.fingerprint },
+                } } };
+        if (JSON.stringify(result).length > maxChars)
+            throw guidanceError(new Error('Mapped preview exceeds maxChars; increase the budget or narrow the configuration'), 'guid-9a4645382369f7ad');
+        return result;
     }
     compactLearningProgress(progress, state, drift) {
         const completedIndex = progress.completed_through ? progress.entries.findIndex(item => item.path === progress.completed_through) : -1;
@@ -317,6 +348,7 @@ export class ContinuityService {
             maxDepth: progress.max_depth,
             entriesTracked: progress.entries.length,
             completedCount: completedIndex + 1,
+            ...(progress.configuration && { configuration: { fingerprint: progress.configuration.fingerprint, mappedNodes: progress.configuration.mappings.length, competencyCertified: false } }),
             ...(progress.completed_through && { completedThrough: progress.completed_through }),
             ...(state === 'ready' && next && { next: { ...next, endpointId: 'notes.read', arguments: { path: next.path, maxChars: 6000 } } }),
             ...(drift && { drift }),
@@ -347,12 +379,14 @@ export class ContinuityService {
             && REVISION_PATTERN.test(String(candidate.structure_fingerprint || '').toLowerCase())
             && REVISION_PATTERN.test(String(candidate.revision_fingerprint || '').toLowerCase())
             && (candidate.source_revision_fingerprint === undefined || (typeof candidate.source_revision_fingerprint === 'string' && REVISION_PATTERN.test(candidate.source_revision_fingerprint.toLowerCase())))
+            && (candidate.configuration === undefined || isLearningConfigurationState(candidate.configuration))
             ? {
                 root_path: String(candidate.root_path), root_revision: String(candidate.root_revision).toLowerCase(), order, max_depth: maxDepth,
                 ...(candidate.completed_through && { completed_through: String(candidate.completed_through) }), entries,
                 structure_fingerprint: String(candidate.structure_fingerprint).toLowerCase(), revision_fingerprint: String(candidate.revision_fingerprint).toLowerCase(),
                 ...(candidate.source_revision_fingerprint !== undefined && { source_revision_fingerprint: String(candidate.source_revision_fingerprint).toLowerCase() }),
                 saved_at: String(candidate.saved_at || ''),
+                ...(candidate.configuration !== undefined && { configuration: candidate.configuration }),
             }
             : undefined;
         if (!stored || (stored.completed_through !== undefined && !stored.entries.some(item => item.path === stored.completed_through))) {
@@ -366,6 +400,8 @@ export class ContinuityService {
                 order: stored.order,
                 maxDepth: stored.max_depth,
                 ...(stored.completed_through && { completedThrough: stored.completed_through }),
+                ...(stored.configuration && { configuration: { definition: stored.configuration.definition,
+                        mappings: stored.configuration.mappings.map(({ nodeId, path }) => ({ nodeId, path })), expectedFingerprint: stored.configuration.fingerprint } }),
             });
             if (!current)
                 throw guidanceError(new Error('Learning path could not be rebuilt'), 'guid-bee1ead1a6c2dda9');
@@ -445,11 +481,21 @@ export class ContinuityService {
             },
             expectedRevision,
         };
-        const assertAccess = () => { if (!this.access.canAccessPhysicalPath(path, principal))
+        const learningGuards = learningProgress?.configuration ? [{ path: this.physicalLearningPath(learningProgress.root_path, 'root path', principal), expectedRevision: learningProgress.root_revision },
+            ...learningProgress.entries.map(entry => ({ path: this.physicalLearningPath(entry.path, 'entry path', principal), expectedRevision: entry.revision }))] : [];
+        const uniqueGuards = new Map();
+        for (const guard of [...(prepared?.guards ?? []), ...learningGuards]) {
+            const key = this.fileSystem.noteChangeIdentity(guard.path), prior = uniqueGuards.get(key);
+            if (prior && prior.expectedRevision !== guard.expectedRevision)
+                throw guidanceError(new Error('Checkpoint source revisions disagree; repeat the preview'), 'guid-600024eed508eb79');
+            uniqueGuards.set(key, guard);
+        }
+        const guards = [...uniqueGuards.values()];
+        const assertAccess = () => { if (!this.access.canAccessPhysicalPath(path, principal) || learningGuards.some(g => !this.access.canAccessPhysicalPath(g.path, principal)))
             throw Error(UNDERSTANDING_UNAVAILABLE); prepared?.assertAccess(); };
         assertAccess();
-        const receipt = prepared?.guards.length
-            ? await this.fileSystem.writeNoteWithRevisionGuardsAndReceipt(write, prepared.guards, { maxBytes: UNDERSTANDING_READ_BYTES, assertAccess })
+        const receipt = guards.length
+            ? await this.fileSystem.writeNoteWithRevisionGuardsAndReceipt(write, guards, { maxBytes: UNDERSTANDING_READ_BYTES, maxGuards: 128, assertAccess })
             : await this.fileSystem.writeNoteWithReceipt(write, { maxBytes: UNDERSTANDING_READ_BYTES, assertAccess });
         const learningCompletedIndex = learningProgress?.completed_through ? learningProgress.entries.findIndex(item => item.path === learningProgress.completed_through) : -1;
         const learningState = learningProgress && learningCompletedIndex + 1 >= learningProgress.entries.length ? 'complete' : 'ready';
@@ -479,12 +525,19 @@ export class ContinuityService {
                 ? undefined
                 : await this.validateLearningProgress(principal, rawLearningProgress, params.validateLearningProgress !== false);
             const understanding = rawUnderstanding === undefined ? undefined : await inspectUnderstanding(this.fileSystem, this.access, principal, path, rawUnderstanding, params.validateLearningProgress !== false, target => watched.add(this.fileSystem.noteChangeIdentity(target)));
+            const pins = await inspectContinuityPins(this.fileSystem, this.access, principal, frontmatter, params.validatePins, target => watched.add(this.fileSystem.noteChangeIdentity(target)));
             if (await this.fileSystem.readNoteRevision(path, UNDERSTANDING_READ_BYTES) !== note.revision || !this.access.canAccessPhysicalPath(path, principal))
                 throw Error(UNDERSTANDING_UNAVAILABLE);
             await understanding?.revalidate();
+            await pins.revalidate();
             if (changed || !this.access.canAccessPhysicalPath(path, principal))
                 throw Error(UNDERSTANDING_UNAVAILABLE);
             understanding?.assertAccess?.();
+            const validation = { checked: ['checkpoint'], unchecked: ['pendingEdits', 'researchTrail', 'otherSavedFields'],
+                ...(pins.pins.length && { pins: pins.pins, selectedPinsCurrent: pins.pins.every(pin => pin.state === 'current') }) };
+            for (const [field, present] of [['learningProgress', learningProgress], ['understanding', understanding]])
+                if (present)
+                    (params.validateLearningProgress === false ? validation.unchecked : validation.checked).push(field);
             return packResumeState({
                 exists: true,
                 path: this.access.toPublicPath(path),
@@ -492,8 +545,9 @@ export class ContinuityService {
                 content: note.content,
                 truncated: false,
                 revision: note.revision,
+                validation,
                 ...((learningProgress || understanding) && (!learningProgress || learningProgress.canResume === true)
-                    && (!understanding || understanding.projection.canResume === true) && params.validateLearningProgress !== false
+                    && (!understanding || understanding.projection.canResume === true) && params.validateLearningProgress !== false && validation.selectedPinsCurrent !== false
                     ? { route: { kind: 'verified_resume', reason: 'current_checkpoint_references_and_access', skipped: ['global_orientation'] } } : {}),
                 ...(learningProgress && { learningProgress }),
                 ...(understanding && { understanding: understanding.projection }),

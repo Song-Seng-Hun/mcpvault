@@ -739,6 +739,22 @@ test("semantic search is optional and falls back to lexical results", async () =
   }
 });
 
+test('wiki_link replacement resolves exact fragments through the dynamic read-only endpoint', async () => {
+  const { server, client } = await connectClient();
+  try {
+    await writeFile(join(testVaultPath, 'Fragment.md'), '# First\nvalue ^point\n# Last\nother');
+    const call = await client.callTool({ name: 'call_endpoint', arguments: { endpointId: 'notes.resolve_link', arguments: { document: '[[Fragment#^point]]', maxChars: 2000 } } });
+    expect(call.isError).toBeFalsy();
+    const result = JSON.parse((call.content as any)[0].text);
+    expect(result).toMatchObject({ status: 'resolved', readAction: { endpointId: 'mcp.read_note_lines', arguments: { startLine: 2, endLine: 2 } } });
+    const read = await client.callTool({ name: 'call_endpoint', arguments: result.readAction });
+    expect(read.isError).toBeFalsy(); expect((read.content as any)[0].text).toContain('value ^point');
+    await writeFile(join(testVaultPath, 'Fragment.md'), '# New\nchanged');
+    const stale = await client.callTool({ name: 'call_endpoint', arguments: result.readAction });
+    expect((stale.content as any)[0].text).toMatch(/revision_conflict|changed|revision/i);
+  } finally { await client.close(); await server.close(); }
+});
+
 test("wiki_link returns isError on invalid syntax (backslash in parsed)", async () => {
   const { server, client } = await connectClient();
   try {

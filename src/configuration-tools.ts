@@ -1,6 +1,7 @@
 import { guidanceError, guidanceText } from './guidance-runtime.js';
 import type { Tool } from '@modelcontextprotocol/server';
 import { configKeys, configNumber, validateLearningPathConfiguration, validateProceduralBundleConfiguration } from './capability-graph.js';
+import { LEARNING_CONFIGURATION_SCHEMA } from './learning-configuration.js';
 
 export function checkReusableConfiguration(args: Record<string, unknown>) {
   configKeys(args, ['kind', 'configuration', 'maxChars']);
@@ -9,6 +10,9 @@ export function checkReusableConfiguration(args: Record<string, unknown>) {
     : args.kind === 'procedural-bundle' ? validateProceduralBundleConfiguration : undefined;
   if (!checker) throw guidanceError(Error('Supported configuration kind required'), 'guid-eb5a2b6714ad9253');
   const result = checker(args.configuration);
+  while (JSON.stringify(result).length > maxChars && result.diagnostics.items.length) {
+    result.diagnostics.items.pop(); result.diagnostics.truncated = true;
+  }
   if (JSON.stringify(result).length > maxChars) throw guidanceError(Error('Configuration summary exceeds maxChars'), 'guid-27eb1fe63b9c205f');
   return result;
 }
@@ -26,5 +30,12 @@ export function getConfigurationTools(): Tool[] {
           id, requires: ids(16), excludes: ids(16), cost: { type: 'integer', minimum: 0, maximum: 1000 },
         } } },
       } },
+    } } }, { name: 'preview_learning_configuration',
+    description: guidanceText('guid-f847c8048ec236c5', 'Validate an explicit learning-path configuration and at most sixteen selected-node mappings against one current complete MOC route. Returns source/mapping pins and an existing continuity.save draft; human-readable learning progress is not competency certification or an execution grant. Login required; read-only and never edits a MOC.'),
+    inputSchema: { type: 'object', additionalProperties: false, required: ['rootPath', 'configuration', 'mappings'], properties: {
+      rootPath: { type: 'string', minLength: 1, maxLength: 500 }, configuration: LEARNING_CONFIGURATION_SCHEMA.properties.definition,
+      mappings: LEARNING_CONFIGURATION_SCHEMA.properties.mappings,
+      order: { type: 'string', enum: ['authored', 'recommended'], default: 'authored' }, maxDepth: { type: 'integer', minimum: 0, maximum: 6, default: 2 },
+      maxChars: { type: 'integer', minimum: 1024, maximum: 12000, default: 6000 }, accessToken: { type: 'string' },
     } } }];
 }

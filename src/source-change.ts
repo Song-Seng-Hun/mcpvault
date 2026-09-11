@@ -11,6 +11,7 @@ import { bodyStartLine, passageAction, RETRIEVAL_NOTE_BYTES } from './retrieval-
 import { parseWikiLink } from './wikilink/resolveWikiLink.js';
 import { endpointIdForTool } from './endpoint-registry.js';
 import { readSourceMetadataPage } from './source-metadata-page.js';
+import { resolveEvidenceLocator, type EvidenceResolution } from './evidence-locator.js';
 
 export interface SourceChangeParams {
   sourcePath: string; previousSourcePath?: string; expectedRevision?: string;
@@ -107,9 +108,7 @@ export class SourceChangeService {
       if (params.previousExpectedRevision && previous.revision !== params.previousExpectedRevision) throw Error(UNAVAILABLE);
       if (!work(current) || work(current) !== work(previous)) throw new SourceChangeInputError('Selected source snapshots require the same work identifier');
       const delta = compareSourceBodies(previous.content, current.content, { maxChars: 1600, maxHunks: 4 });
-      let totalLines = 1;
-      for (let i = 0; i < previous.content.length; i++) if (previous.content.charCodeAt(i) === 10) totalLines++;
-      const quoteHashes = new Map<string, string>();
+      const locators = new Map<string, EvidenceResolution>();
       const result: Record<string, any> = { status: delta.changed ? 'changed' : 'unchanged', current: sourceView(path, current), previous: sourceView(previousPath, previous),
         delta: { ...delta, lineBasis: 'body; readAction uses physical file lines', hunks: delta.hunks.map(h => {
           const side = (s: typeof h.old, p: string, n: ParsedNote) => ({ ...s, readAction: s.endLine >= s.startLine ? passageAction(publicPath(p), n.revision, s.startLine + bodyStartLine(n) - 1, s.endLine + bodyStartLine(n) - 1) : outline(p, n.revision) });
@@ -160,26 +159,21 @@ export class SourceChangeService {
             const assessments = links.map((linked: any) => {
               const e = typeof linked === 'string' ? {} : linked;
               let locatorState = e.revision ? e.revision === previous.revision ? 'current' : 'stale_revision' : 'unversioned';
-              const range = Number.isSafeInteger(e.startLine) && Number.isSafeInteger(e.endLine) && e.startLine >= 1 && e.endLine >= e.startLine && e.endLine <= totalLines;
-              if (locatorState === 'current' && !range) locatorState = e.startLine !== undefined || e.endLine !== undefined ? 'invalid_range' : 'revision_only';
-              if (range && locatorState === 'current' && e.quoteHash) {
-                const key = `${e.startLine}:${e.endLine}`;
-                if (!quoteHashes.has(key) && quoteHashes.size >= 32) { locatorState = 'locator_not_checked'; markOmitted(n); }
+              let resolved: EvidenceResolution | undefined;
+              if (locatorState === 'current') {
+                const locator = { revision: e.revision, heading: e.heading, blockId: e.blockId, startLine: e.startLine, endLine: e.endLine, quoteHash: e.quoteHash };
+                const key = digest(JSON.stringify(locator));
+                if (!locators.has(key) && locators.size >= 32) { locatorState = 'locator_not_checked'; markOmitted(n); }
                 else {
-                  if (!quoteHashes.has(key)) {
-                    // Bounded extraction avoids splitting a multi-million-line source.
-                    let line = 1, begin = 0, end = previous.content.length;
-                    for (let i = 0; i < previous.content.length; i++) if (previous.content[i] === '\n') {
-                      if (line < e.startLine) begin = i + 1;
-                      if (line === e.endLine) { end = i; break; } line++;
-                    }
-                    quoteHashes.set(key, digest(previous.content.slice(begin, end)));
-                  }
-                  if (quoteHashes.get(key) !== e.quoteHash) locatorState = 'stale_quote';
+                  if (!locators.has(key)) locators.set(key, resolveEvidenceLocator(previous.content, locator, previous.revision));
+                  resolved = locators.get(key)!;
+                  if (!resolved.valid) locatorState = resolved.issue!;
+                  else if (!resolved.startLine) locatorState = 'revision_only';
                 }
               }
-              const overlap = locatorState === 'current' && range && delta.granularity === 'line_hunks' && delta.hunks.some(h => h.old.endLine >= h.old.startLine && h.old.startLine <= e.endLine && h.old.endLine >= e.startLine);
-              return { locatorState, overlap, locator: { ...(range && { startLine: e.startLine, endLine: e.endLine }), ...(typeof e.revision === 'string' && /^[a-f0-9]{64}$/i.test(e.revision) && { citedRevision: e.revision }) } };
+              const range = resolved?.valid && resolved.startLine !== undefined && resolved.endLine !== undefined;
+              const overlap = locatorState === 'current' && Boolean(range) && delta.granularity === 'line_hunks' && delta.hunks.some(h => h.old.endLine >= h.old.startLine && h.old.startLine <= resolved!.endLine! && h.old.endLine >= resolved!.startLine!);
+              return { locatorState, overlap, locator: { ...(range && { startLine: resolved!.startLine, endLine: resolved!.endLine }), ...(typeof e.revision === 'string' && /^[a-f0-9]{64}$/i.test(e.revision) && { citedRevision: e.revision }) } };
             });
             const assessed = assessments.find((a: { overlap: boolean }) => a.overlap) || assessments[0];
             const { locatorState, overlap } = assessed;

@@ -178,6 +178,8 @@ For every code change:
    `git diff --check`.
 6. `dist/` is committed: include generated output in the same commit as its
    source. Do not commit `.agents/`, `.mcpvault/`, credentials, or caches.
+   After staging, run `npm run check:staged` (paths only); review staged content
+   for secrets. Never auto-unstage/delete user data.
 
 Keep MCP small, responses bounded, writes revision-safe, Markdown/Git authoritative
 and guidance progressive.

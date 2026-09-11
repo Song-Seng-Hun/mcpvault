@@ -9,6 +9,7 @@ export interface DocumentSearchParams {
     limit?: number;
     maxChars?: number;
     cursor?: string;
+    resourceCursor?: string;
     semantic?: boolean;
 }
 export declare class DocumentSearch {

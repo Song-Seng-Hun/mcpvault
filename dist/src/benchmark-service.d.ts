@@ -5,6 +5,8 @@ import { PathFilter } from './pathfilter.js';
 import type { EconomyLedger } from './economy-ledger.js';
 import { type BenchmarkAwardProof, type BenchmarkIssuanceProgram, type EconomyState } from './economy-model.js';
 import { type BenchmarkIntegrity } from './benchmark-host.js';
+import { type BenchmarkInitiativeHost } from './benchmark-initiative.js';
+export { runBenchmarkInitiative } from './benchmark-initiative.js';
 import { type BenchmarkDefinition, type BenchmarkProfile } from './benchmark-model.js';
 export interface BenchmarkOptions {
     enabled: boolean;
@@ -23,7 +25,7 @@ export interface BenchmarkOptions {
     now?: () => Date;
 }
 export type BenchmarkOperation = 'list' | 'read' | 'submit' | 'review' | 'finalize';
-export type BenchmarkHostOperation = 'inspect' | 'open' | 'finalize' | 'close' | 'cancel' | 'project';
+export type BenchmarkHostOperation = 'inspect' | 'open' | 'finalize' | 'close' | 'cancel' | 'project' | 'evidence';
 /** Fixed managed private Markdown paths; never expose records through generic notes.
  * Host opening is deliberately separate from the agent operation dispatcher. */
 export declare class BenchmarkService {
@@ -50,6 +52,14 @@ export declare class BenchmarkService {
         expectedRevision: string;
         requestId: string;
     }): Promise<Record<string, unknown>>;
+    /** Host-only global absence proof over configured selected problems and their
+     * existing sealed records. Never a participant list, corpus scan or index. */
+    initiativeStatus(operator: string): Promise<{
+        state: 'disabled' | 'pending_approval' | 'active' | 'empty' | 'unknown';
+    }>;
+    /** Host integration entrypoint; the current runtime's host authentication and
+     * global state are bound here, never supplied by an agent endpoint argument. */
+    runInitiative(operator: string, trigger: 'session_start' | 'work_completion' | 'approved_heartbeat', host?: BenchmarkInitiativeHost): Promise<Record<string, unknown>>;
     private budget;
     private bounded;
     private chunk;
@@ -61,8 +71,10 @@ export declare class BenchmarkService {
      * snapshot/transact the same ledger, which would deadlock its writer queue. */
     validateAwardProof(proof: BenchmarkAwardProof, state: EconomyState): Promise<void>;
     private pay;
+    private assertSettlement;
     /** CLI/host-only pathway. Never map these operations to agent endpoints. */
     executeHost(op: BenchmarkHostOperation, params: Record<string, unknown>, operator: string): Promise<Record<string, any>>;
+    private resultEvidence;
     execute(op: string, params: Record<string, unknown>, principal?: ScopePrincipal): Promise<Record<string, any>>;
     /** Opt-in suggestion only: no enrollment, model call, timer or mutation. */
     pulse(principal: ScopePrincipal): Promise<{

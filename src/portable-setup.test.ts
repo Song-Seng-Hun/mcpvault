@@ -163,6 +163,41 @@ describe('portable setup (synthetic paths only)', () => {
     const p = await preview([...flags, '--url', 'https://example.invalid/mcp']);
     expect(p.launch).toBeNull(); expect(p.clientEntry).toEqual({ url: 'https://example.invalid/mcp' });
   });
+  test('remote client-only preview and apply need no local server or Vault directories', async () => {
+    const root = await realpath(await mkdtemp(join(tmpdir(), 'mcpvault-remote-client-'))); roots.push(root);
+    const privateState = join(root, 'private'); await mkdir(privateState, { mode: 0o700 });
+    const client = join(root, 'client.json');
+    const original = '{"keep":true,"mcpServers":{"other":{"command":"fixture"}}}';
+    await writeFile(client, original);
+    const options = { operation: 'connect-existing-server', mode: 'remote-https', url: 'https://example.invalid/mcp', privateState, client };
+    const { planSetup, applySetup, doctor } = await import('../scripts/mcpvault-setup.mjs');
+    const preview = await planSetup(options);
+    expect(preview).toMatchObject({ version: 2, launch: null, buildHash: null, paths: { privateState, client } });
+    expect(preview.paths).not.toHaveProperty('program'); expect(preview.paths).not.toHaveProperty('vault');
+    const installed = await applySetup(options, preview.fingerprint);
+    expect(await readFile(installed.backup, 'utf8')).toBe(original);
+    expect(JSON.parse(await readFile(client, 'utf8'))).toMatchObject({ keep: true, mcpServers: { other: { command: 'fixture' }, mcpvault: { url: options.url } } });
+    expect(await doctor(options)).toMatchObject({ ok: true, checks: { paths: { status: 'pass' }, build: { status: 'skipped' }, endpoint: { status: 'skipped' } } });
+    expect((await readdir(root)).sort()).toEqual(['client.json', 'private']);
+  });
+  test('remote client-only recipes are versioned, path-free, and accept legacy v1 imports', async () => {
+    const f = await fixture();
+    const { exportManifest, importManifest, planSetup, applySetup } = await import('../scripts/mcpvault-setup.mjs');
+    const options = { operation: 'connect-existing-server', mode: 'remote-https', url: 'https://example.invalid/mcp', privateState: f.state, client: f.client };
+    const manifest = exportManifest(options);
+    expect(manifest).toMatchObject({ version: 2, paths: { privateState: '${PRIVATE_STATE}', client: '${CLIENT}' } });
+    expect(Object.keys(manifest.paths).sort()).toEqual(['client', 'privateState']);
+    expect(JSON.stringify(manifest)).not.toContain('example.invalid');
+    const preview = await importManifest(manifest, options);
+    const legacy = { ...exportManifest(f.options), operation: options.operation, mode: options.mode };
+    expect(legacy.version).toBe(1);
+    expect((await importManifest(legacy, options)).fingerprint).toBe(preview.fingerprint);
+    await expect(importManifest({ ...manifest, paths: { ...manifest.paths, vault: '${VAULT}' } }, options)).rejects.toThrow(/manifest/);
+    expect((await planSetup({ ...options, url: 'https://another.invalid/mcp' })).fingerprint).not.toBe(preview.fingerprint);
+    await writeFile(f.client, '{"changed":true}');
+    await expect(applySetup(options, preview.fingerprint)).rejects.toThrow(/stale/);
+    expect(await readFile(f.client, 'utf8')).toBe('{"changed":true}');
+  });
   test.each([
     ['connect-existing-server', 'stdio', undefined],
     ['install-new-server', 'remote-https', 'https://example.invalid/mcp'],

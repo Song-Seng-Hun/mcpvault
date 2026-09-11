@@ -123,6 +123,13 @@ Community conversion. Shared text requires explicit sharing confirmation and
 rejects private paths, recognizable secrets, unresolved/private links and embeds.
 These checks cannot identify every secret in ordinary prose: review what is shared.
 
+`usedVersion` may be the retained original of that Skill or an exact retained
+version with a verified attestation and committed journal receipt. This preserves
+feedback from a long task that used an older version. Arbitrary notes, edited
+versions and versions of another Skill are not accepted. Current candidate
+creation still requires experiences applying its current basis; historical use
+does not automatically qualify an improvement or promotion.
+
 ## Markdown contract
 
 `Community/Skills/<id>/SKILL.md`, imported references and license remain untouched.

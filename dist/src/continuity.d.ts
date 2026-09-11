@@ -1,6 +1,7 @@
 import type { FileSystemService } from './filesystem.js';
 import { ScopeAccessPolicy } from './scope-access.js';
 import type { ScopePrincipal } from './scope-auth.js';
+import { type ContinuityPinSelection, type ContinuityValidation } from './continuity-pins.js';
 type LearningOrder = 'authored' | 'recommended';
 type LearningPathBuilder = (principal: ScopePrincipal, path: string, maxDepth: number, limit: number, maxChars: number) => Promise<Record<string, any>>;
 export type ContinuityServiceOptions = {
@@ -16,6 +17,7 @@ type ResumeState = {
     truncated: boolean;
     learningProgress?: Record<string, any>;
     understanding?: Record<string, any>;
+    validation: ContinuityValidation;
     route?: {
         kind: 'verified_resume';
         reason: string;
@@ -33,6 +35,46 @@ export declare class ContinuityService {
     constructor(fileSystem: FileSystemService, options?: ContinuityServiceOptions);
     private physicalLearningPath;
     private prepareLearningProgress;
+    previewLearningConfiguration(params: {
+        principal?: ScopePrincipal;
+        rootPath: string;
+        configuration: unknown;
+        mappings: unknown;
+        order?: string;
+        maxDepth?: number;
+        maxChars?: number;
+    }): Promise<{
+        root: {
+            path: string;
+            revision: string;
+        };
+        fingerprint: string;
+        mappings: {
+            nodeId: string;
+            path: string;
+            revision: string;
+        }[];
+        executable: boolean;
+        permissionsGranted: boolean;
+        competencyCertified: boolean;
+        checkpointAction: {
+            endpointId: string;
+            requiredArguments: string[];
+            learningProgress: {
+                rootPath: string;
+                order: LearningOrder;
+                maxDepth: number;
+                configuration: {
+                    definition: Record<string, unknown>;
+                    mappings: {
+                        nodeId: string;
+                        path: string;
+                    }[];
+                    expectedFingerprint: string;
+                };
+            };
+        };
+    }>;
     private compactLearningProgress;
     private validateLearningProgress;
     save(params: {
@@ -66,6 +108,11 @@ export declare class ContinuityService {
             maxDepth: number;
             entriesTracked: number;
             completedCount: number;
+            configuration?: {
+                fingerprint: string;
+                mappedNodes: number;
+                competencyCertified: boolean;
+            };
             completedThrough?: string;
             next?: {
                 path: string;
@@ -95,6 +142,7 @@ export declare class ContinuityService {
         principal?: ScopePrincipal;
         maxChars?: number;
         validateLearningProgress?: boolean;
+        validatePins?: ContinuityPinSelection;
         prettyPrint?: boolean;
     }): Promise<ResumeState | {
         exists: boolean;

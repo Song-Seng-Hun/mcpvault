@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
-import { mkdtemp, realpath, rm } from 'node:fs/promises';
+import { mkdtemp, realpath, rm, appendFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, isAbsolute, join, relative } from 'node:path';
 import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
@@ -65,6 +65,60 @@ function expectMinimal(value: any, revision: string) {
     'participants', 'fingerprint', 'submissions', 'reviews', 'sourceGuards', 'budgetExpired']) expect(serialized).not.toContain(secret);
   expect(serialized.length).toBeLessThanOrEqual(512);
 }
+
+test('round discovery needs only one known workshop and exposes caller-authorized minimal status actions', async () => {
+  const seeded = await seed();
+  const workshop = await call('workshop.read', {workshopId:'research'});
+  await call('workshop.research_update', {workshopId:'research',roundId:'other-round',operation:'create',expectedRevision:'missing',
+    expectedWorkshopRevision:workshop.workshop.revision,requestId:'other-round',config:{question:'OTHER-PRIVATE-QUESTION',participants:['owner','outside'],budgetMinutes:30}});
+  const args = {workshopId:'research',field:'rounds',limit:1,maxChars:1200};
+  const peer = await call('workshop.research',args,'peer');
+  expect(peer.items.map((item:any)=>item.roundId)).toEqual(['round']); expect(peer.total).toBe(1);
+  const owner = await call('workshop.research',args);
+  expect(owner.total).toBe(2); expect(owner.cursor).toBeTypeOf('string');
+  const next = await call('workshop.research',{...args,cursor:owner.cursor});
+  expect(new Set([...owner.items,...next.items].map((item:any)=>item.roundId)).size).toBe(2);
+  for(const value of [peer,owner,next]){
+    expect(JSON.stringify(value).length).toBeLessThanOrEqual(1200);
+    expect(JSON.stringify(value)).not.toMatch(/SEALED-|CONFIG-|OTHER-PRIVATE|participants|submissions|_whispers/);
+    for(const item of value.items) expect(item).toMatchObject({phase:'collecting',revision:expect.any(String),statusAction:{endpointId:'workshop.research',arguments:{workshopId:'research',roundId:item.roundId,field:'status',expectedRevision:item.revision}}});
+  }
+  const record=await seeded.fs.readNote(recordPath);
+  await call('workshop.research_update',{workshopId:'research',roundId:'round',operation:'close',expectedRevision:record.revision,requestId:'close',closure:{outcome:'unresolved',explanation:'Keep alternatives'}});
+  await expect(call('workshop.research',{...args,cursor:owner.cursor})).rejects.toThrow(/cursor|context|changed/i);
+  const currentWorkshop=await seeded.fs.readNote(workshopPath);
+  await seeded.fs.writeNote({path:workshopPath,content:currentWorkshop.content,frontmatter:{...currentWorkshop.frontmatter,status:'closed'},expectedRevision:currentWorkshop.revision});
+  expect((await call('workshop.research',args,'peer')).items[0].phase).toBe('closed');
+});
+
+test('round discovery bounds every private record read and revision scan', async () => {
+  await seed();
+  const bodies = vi.spyOn(FileSystemService.prototype, 'readNote');
+  const revisions = vi.spyOn(FileSystemService.prototype, 'readNoteRevision');
+  await call('workshop.research', { workshopId: 'research', field: 'rounds', maxChars: 1200 });
+  const reads = bodies.mock.calls.filter(([path]) => path === recordPath);
+  const scans = revisions.mock.calls.filter(([path]) => path === recordPath);
+  expect(reads.length).toBeGreaterThan(0); expect(scans.length).toBeGreaterThan(0);
+  for (const [, maxBytes] of [...reads, ...scans]) expect(maxBytes).toBe(1024 * 1024);
+  await appendFile(join(vault, recordPath), '\n' + 'oversized'.repeat(140000));
+  await expect(call('workshop.research', { workshopId: 'research', field: 'rounds', maxChars: 512 })).rejects.toThrow(/unavailable/i);
+});
+
+test('round discovery is authenticated read-only and rejects parent visibility drift', async () => {
+  const seeded=await seed(); const args={workshopId:'research',field:'rounds',maxChars:1200};
+  await client.close(); await server.close(); await connect(true);
+  for (const who of ['peer','outside']) tokens[who]=(await call('auth.login',{accountId:who,password:`disposable-status-${who}-password`},who)).accessToken;
+  expect((await call('workshop.research',args,'peer')).items).toHaveLength(1);
+  expect((await call('workshop.research',args,'outside')).items).toHaveLength(0);
+  await expect(call('workshop.research',args,'anonymous')).rejects.toThrow(/login|token|auth/i);
+  const original=FileSystemService.prototype.readNote; let changed=false;
+  vi.spyOn(FileSystemService.prototype,'readNote').mockImplementation(async function(path,...rest){
+    const result=await original.call(this,path,...rest);
+    if(path===recordPath&&!changed){changed=true;const parent=await seeded.fs.readNote(workshopPath);await seeded.fs.writeNote({path:workshopPath,content:parent.content,frontmatter:{...parent.frontmatter,moderation_status:'hidden'},expectedRevision:parent.revision});}
+    return result;
+  });
+  await expect(call('workshop.research',args,'peer')).rejects.toThrow(/unavailable|changed/i);
+});
 test.each(['changed', 'hidden'])('status remains minimal when config basis becomes %s, while detail stays blocked', async change => {
   const seeded = await seed(), source = await seeded.fs.readNote('STATUS-PRIVATE-LOCATOR.md');
   await seeded.fs.writeNote({ path: 'STATUS-PRIVATE-LOCATOR.md', content: source.content + (change === 'changed' ? '\nChanged' : ''),

@@ -93,6 +93,7 @@ interface IndexBatchGroup {
 
 interface SemanticSearchParams extends SearchParams {
   principal?: ScopePrincipal | undefined;
+  signal?: AbortSignal;
 }
 
 export interface SemanticSearchOutcome {
@@ -344,7 +345,7 @@ export class SemanticSearchService {
   private readonly vectorCacheOwner = createDerivedCacheOwner('semantic.vectors');
   private readonly queryCache = new Map<string, { expiresAt: number; generation: number; rows: SemanticResultRow[] }>();
   private readonly vectorCache = new Map<string, { expiresAt: number; vector: number[] }>();
-  private readonly vectorInFlight = new Map<string, Promise<number[]>>();
+  private readonly vectorInFlight = new Map<string, { promise: Promise<number[]>; controller: AbortController; subscribers: number }>();
   private queryGeneration = 0;
   private readonly indexPath: string;
   private readonly manifestPath: string;
@@ -482,7 +483,7 @@ export class SemanticSearchService {
   /** Query only disposable vector metadata. The caller has already selected
    * visible memory paths; no result/body hydration or predicate-cache reuse is
    * allowed here. Source revision/body verification belongs to its read budget. */
-  async memoryCandidates(params: MemorySearchParams & { principal?: ScopePrincipal }): Promise<MemorySemanticSearchOutcome> {
+  async memoryCandidates(params: MemorySearchParams & { principal?: ScopePrincipal; signal?: AbortSignal }): Promise<MemorySemanticSearchOutcome> {
     // Existing semantic search has no calibrated relevance cutoff. Preserve its
     // maximum 20-neighbor discovery window, independently of lexical's 10k cap.
     const limit = Math.min(memoryCandidateLimit(params.limit), 20);
@@ -516,7 +517,8 @@ export class SemanticSearchService {
       }
       if (!groups.size) return { results: [], available: true, complete };
       const names = await this.getTableNames();
-      const vector = params.queryVector !== undefined ? params.queryVector.slice() : await this.embedQuery(params.query.trim());
+      const vector = params.queryVector !== undefined ? params.queryVector.slice() : await this.embedQuery(params.query.trim(), params.signal);
+      if (params.signal?.aborted) return unavailable();
       if (vector.length !== EMBEDDING_DIMENSIONS || vector.some(value => !Number.isFinite(value))) return unavailable();
       const bestByPath = new Map<string, { result: SearchResult; distance: number }>();
       for (const [name, group] of groups) {
@@ -646,8 +648,9 @@ export class SemanticSearchService {
         }
         vector = params.queryVector.slice();
       } else {
-        vector = await this.embedQuery(params.query.trim());
+        vector = await this.embedQuery(params.query.trim(), params.signal);
       }
+      if (params.signal?.aborted) throw new SemanticInferenceBusyError();
       const scopes = this.accessPolicy.scopeRoots(params.principal).map(root => root.kind === 'global' ? 'global' : `${root.kind}:${root.root.split('/').pop()}`);
       const bestByPath = new Map<string, { row: IndexRow; distance: number }>();
       for (const scope of scopes) {
@@ -1196,15 +1199,15 @@ export class SemanticSearchService {
     this.unloadTimer.unref?.();
   }
 
-  private withInference<T>(priority: SemanticInferencePriority, run: () => Promise<T>): Promise<T> {
-    const task = semanticInferenceGate.run(priority, run, this.inferenceAbort.signal);
+  private withInference<T>(priority: SemanticInferencePriority, run: () => Promise<T>, signal?: AbortSignal): Promise<T> {
+    const task = semanticInferenceGate.run(priority, run, signal ? AbortSignal.any([this.inferenceAbort.signal, signal]) : this.inferenceAbort.signal);
     this.inferenceTasks.add(task);
     void task.then(() => this.inferenceTasks.delete(task), () => this.inferenceTasks.delete(task));
     return task;
   }
 
-  private embed(text: string, prefix: 'query' | 'passage'): Promise<number[]> {
-    return this.withInference(prefix === 'query' ? 'foreground' : 'background', async () => this.embedDirect(await this.getEmbedder(), text, prefix));
+  private embed(text: string, prefix: 'query' | 'passage', signal?: AbortSignal): Promise<number[]> {
+    return this.withInference(prefix === 'query' ? 'foreground' : 'background', async () => this.embedDirect(await this.getEmbedder(), text, prefix), signal);
   }
 
   private async embedDirect(embedder: Embedder, text: string, prefix: 'query' | 'passage'): Promise<number[]> {
@@ -1217,7 +1220,37 @@ export class SemanticSearchService {
     return row as number[];
   }
 
-  private async embedQuery(query: string): Promise<number[]> {
+  private embedQuery(query: string, signal?: AbortSignal): Promise<number[]> {
+    if (signal?.aborted || this.inferenceAbort.signal.aborted) return Promise.reject(new SemanticInferenceBusyError());
+    let entry = this.vectorInFlight.get(query);
+    if (!entry) {
+      const controller = new AbortController();
+      entry = { controller, subscribers: 0, promise: this.computeQuery(query, controller.signal) };
+      this.vectorInFlight.set(query, entry);
+      const current = entry;
+      const cleanup = () => { if (this.vectorInFlight.get(query) === current) this.vectorInFlight.delete(query); };
+      void entry.promise.then(cleanup, cleanup);
+    }
+    const current = entry;
+    current.subscribers++;
+    return new Promise((resolve, reject) => {
+      let finished = false;
+      const finish = () => {
+        if (finished) return false;
+        finished = true; signal?.removeEventListener('abort', cancel);
+        if (--current.subscribers === 0) {
+          current.controller.abort();
+          if (this.vectorInFlight.get(query) === current) this.vectorInFlight.delete(query);
+        }
+        return true;
+      };
+      const cancel = () => { if (finish()) reject(new SemanticInferenceBusyError()); };
+      signal?.addEventListener('abort', cancel, { once: true });
+      void current.promise.then(vector => { if (finish()) resolve(vector.slice()); }, error => { if (finish()) reject(error); });
+    });
+  }
+
+  private async computeQuery(query: string, signal: AbortSignal): Promise<number[]> {
     const cached = this.vectorCache.get(query);
     if (cached && cached.expiresAt > Date.now()) {
       this.vectorCache.delete(query);
@@ -1229,16 +1262,8 @@ export class SemanticSearchService {
       this.vectorCache.delete(query);
       derivedCacheBudget.remove(this.vectorCacheOwner, query);
     }
-    const running = this.vectorInFlight.get(query);
-    if (running) return (await running).slice();
-    const computation = this.embed(query, 'query');
-    this.vectorInFlight.set(query, computation);
-    let vector: number[];
-    try {
-      vector = await computation;
-    } finally {
-      if (this.vectorInFlight.get(query) === computation) this.vectorInFlight.delete(query);
-    }
+    const vector = await this.embed(query, 'query', signal);
+    if (signal.aborted) throw new SemanticInferenceBusyError();
     const entry = { expiresAt: Date.now() + SEMANTIC_VECTOR_CACHE_TTL_MS, vector: vector.slice() };
     this.vectorCache.set(query, entry);
     derivedCacheBudget.register(this.vectorCacheOwner, query, vector.length * 8 + Buffer.byteLength(query, 'utf8') + 64, () => {

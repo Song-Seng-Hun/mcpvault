@@ -3,12 +3,15 @@
 `scripts/mcpvault-setup.mjs` prepares an MCP client entry and reports a launch
 command. It does not download or build the program, copy a Vault, start a process,
 register an account, install a service, modify a firewall, provision TLS, or enable
-economy/roleplay/PDF features. A preinstalled, verified build and Node.js 22 or
-newer are prerequisites. No npm command or runtime configuration format is added.
+economy/roleplay/PDF features. Node.js 22 or newer and this standalone setup script
+are prerequisites; only a new local server needs a preinstalled, verified build.
+No runtime configuration format is added.
 
 ## Explicit storage boundaries
 
-Supply all four absolute paths for preview, apply, import and doctor:
+Local modes require all four absolute paths for preview, apply, import and doctor.
+Remote-HTTPS client-only mode requires only `--private-state`, `--client` and an
+explicit HTTPS `--url`; no local server checkout, build, or Vault is needed.
 
 | Option | Purpose |
 | --- | --- |
@@ -23,8 +26,9 @@ symlinks/junctions, traversal aliases, device aliases and hardlinked client/buil
 files are rejected. Supply real canonical paths, including on macOS where some
 system directory spellings are symlink aliases. No home directory or Vault is
 inferred from the working directory. Setup does not create directories or repair
-permissions. Connect-existing still requires explicit local paths, but does not
-require a local build or inspect Vault contents.
+permissions. If a legacy remote caller supplies program/Vault paths, they are
+still checked for canonical separation and included in the confirmation; omit
+them on a connection-only PC. Connect-existing does not inspect Vault contents.
 
 Provision the private directory separately. POSIX requires current-user ownership
 and no group/other permissions (normally `0700`). Windows checks ACL metadata with
@@ -103,6 +107,12 @@ existing `--mcp-http-only PORT --mcp-http-host 127.0.0.1` CLI switches. Start th
 reported command only after approving the host. For remote connection, use
 `--operation connect-existing-server --mode remote-https --url https://host.example/mcp`.
 
+For example, on a connection-only PC (the two private directories already exist):
+
+```sh
+node /opt/setup/mcpvault-setup.mjs --operation connect-existing-server --mode remote-https --url https://host.example/mcp --private-state /home/alex/private/backups --client /home/alex/private/client.json
+```
+
 Runtime settings remain the existing server CLI options and environment.
 Setup does not read or replace economy/roleplay/skill-evolution private configs,
 capture their credentials, or create a competing runtime config. Review inherited
@@ -112,15 +122,19 @@ other settings can still change runtime behavior and must match the client URL.
 
 ## Secret-free recipe export/import
 
-`--action export` prints a version-1 `mcpvault-portable-installation` JSON recipe
-to stdout. Only `operation`, `mode` and four literal path placeholders are carried
-alongside format/version. Export reads no client configuration, Vault contents,
+`--action export` prints a versioned `mcpvault-portable-installation` JSON recipe
+to stdout. Version 1 retains the four local path placeholders; version 2 is the
+remote-HTTPS recipe with only private-state and client placeholders. Only
+`operation`, `mode` and those placeholders accompany format/version.
+Export reads no client configuration, Vault contents,
 private files, identities or checkpoints. URLs and machine paths are omitted.
 Save stdout as a recipe using your editor or shell. Export needs the operation/mode
 (and a valid explicit URL for remote mode), but does not inspect path options.
 
 On the destination use `--action import --manifest /absolute/recipe.json` plus
-the four new path options and, for remote mode, a newly supplied URL. Operation
+the path options for that mode and, for remote mode, a newly supplied URL. Legacy
+version-1 remote recipes are still accepted with client-only remapping. A remote
+preview uses version 2, so obtain a fresh confirmation after upgrading. Operation
 and mode come from the recipe; supplying conflicting values is rejected. Import
 defaults to a read-only preview including `remap`. Add the exact returned
 `--confirm sha256:...` to the same import command to apply the client merge.

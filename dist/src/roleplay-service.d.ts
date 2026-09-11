@@ -22,6 +22,20 @@ export declare class RoleplayService {
     private visible;
     private current;
     private assertRoom;
+    /** Explicit host adapter for an existing Story draft, never a game mutation. */
+    storyTurn(source: {
+        turnId: string;
+        revision: string;
+        noteRevision: string;
+        shareable: boolean;
+    }, principal: ScopePrincipal): Promise<{
+        content: string;
+        guards: {
+            path: string;
+            expectedRevision: string;
+        }[];
+        assertCurrent: () => Promise<void>;
+    }>;
     private captureGuards;
     private validateEvolutionSources;
     execute(endpoint: string, params: Record<string, any>, principal?: ScopePrincipal): Promise<Record<string, any>>;

@@ -19,6 +19,7 @@ import type { SemanticSearchService } from './semantic-search.js';
 import { endpointIdForTool } from './endpoint-registry.js';
 import { organizationDateTimestamp, workDateState } from './organization.js';
 import { iterateNotes, iterateNoteBodies } from './paged-query.js';
+import { resolveEvidenceLocator } from './evidence-locator.js';
 import { readSourceMetadataPage } from './source-metadata-page.js';
 import { getOrganizationPropertyContract, getOrganizationRelationContract, hasExplicitKnowledgeDisposition, inapplicableOrganizationProperties, isActionableKnowledge, isOpenActionableKnowledge, knowledgeOrganization, normalizeClarifyDisposition, normalizeDecisionStatus, normalizeIsoDate, normalizeKnowledgeDisposition, normalizeLifecycle, normalizeNoteKind, normalizeRecallQuality, normalizeReviewAt, normalizeReviewChecks, normalizeReviewIntervalDays, normalizeReviewOutcome, normalizeTaskStatus, normalizeVolatilityClass, organizationLintIssues, organizationNoteTemplate, organizationPropertyAppliesTo, temporalValidity, ANSWER_PACKET_INTENTS, BASES_VIEW_IDS, CAPTURE_SOURCES, CATALOG_ORDERS, CLAIM_ROLES, CLAIM_STATUSES, COMPLETION_DISPOSITION_REQUIRED_MESSAGE, CONFIDENCE_LEVELS, DECISION_STATUSES, FOCUS_HORIZONS, ISSUE_KINDS, KNOWLEDGE_ROLES, KNOWLEDGE_STATUSES, NOTE_KINDS, NOTE_TEMPLATE_IDS, RECALL_REPAIR_STATUSES, RELATION_FIELDS, RECIPROCAL_RELATIONS, SERVICE_CLASSES, SOURCE_TRUST_LEVELS, TEMPORAL_VALIDITY_STATES, VOLATILITY_CLASSES, LIFECYCLES, TASK_STATUSES, ISSUE_RESOLUTION_STATUSES, ISSUE_RETROSPECTIVE_STATUSES, WIKI_PROJECTION_VIEWS, type AnswerPacketIntent, type CatalogOrder, type KnowledgeDispositionResult, type TemporalValidityState, type WikiProjectionView } from './organization.js';
 import { extractObsidianLinkOccurrences } from './backlinks.js';
@@ -544,26 +545,8 @@ function normalizeEvidenceEntries(value: unknown, fallbackPaths: string[] = []):
 }
 
 function evidenceLocatorError(content: string, evidence: NormalizedEvidence): string | undefined {
-  if (evidence.heading) {
-    const wanted = evidence.heading.replace(/^#+\s*/, '').trim().toLowerCase();
-    const headingFound = content.split('\n').some(line => /^ {0,3}#{1,6}\s+/.test(line) && line.replace(/^ {0,3}#{1,6}\s+/, '').replace(/\s+#+\s*$/, '').trim().toLowerCase() === wanted);
-    if (!headingFound) return `heading '${evidence.heading}' was not found in the source`;
-  }
-  if (evidence.blockId) {
-    const block = evidence.blockId.replace(/^\^/, '');
-    const escapedBlock = block.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&');
-    if (!new RegExp(`(?:^|\\n)[^\\n]*\\^${escapedBlock}(?:\\s|$)`).test(content)) return `block '${evidence.blockId}' was not found in the source`;
-  }
-  if (evidence.startLine !== undefined && evidence.endLine !== undefined) {
-    const lines = content.split('\n');
-    if (evidence.endLine > lines.length) return `line range ${evidence.startLine}-${evidence.endLine} exceeds source length ${lines.length}`;
-    if (evidence.quoteHash) {
-      const selected = lines.slice(evidence.startLine - 1, evidence.endLine).join('\n');
-      const digest = hash(selected);
-      if (digest !== evidence.quoteHash) return `quoteHash does not match source lines ${evidence.startLine}-${evidence.endLine}`;
-    }
-  }
-  return undefined;
+  const result = resolveEvidenceLocator(content, evidence);
+  return result.valid ? undefined : result.issue === 'stale_quote' ? 'quoteHash does not match the selected source lines' : `Invalid evidence locator: ${result.issue}`;
 }
 
 type ReviewBasisLink = { path: string; revision: string };
@@ -4072,27 +4055,33 @@ export class LlmWikiService {
     const boundedLimit = Math.min(Math.max(Number(limit) || 20, 1), 50);
     const boundedChars = Math.min(Math.max(Number(maxChars) || 7000, 512), 16000);
     const canAccess = (path: string) => this.access.canAccessPhysicalPath(path, principal);
-    type DuplicateEntry = { path: string; displayPath: string; title: string; aliases: string[]; stableId?: string; titleWords: Set<string>; words: Set<string> };
+    type DuplicateEntry = { path: string; displayPath: string; revision: string | undefined; title: string; aliases: string[]; stableId?: string; titleWords: Set<string>; words: Set<string> };
     const entries: DuplicateEntry[] = [];
+    let partial = false, scanned = 0;
     const buckets = new Map<string, string[]>();
     const addBucket = (key: string, path: string) => {
       const normalized = key.trim().toLocaleLowerCase();
       if (!normalized) return;
       const existing = buckets.get(normalized) || [];
       if (existing.length < 40 && !existing.includes(path)) existing.push(path);
+      else if (!existing.includes(path)) partial = true;
       buckets.set(normalized, existing);
     };
 
-    for await (const note of iterateNotes(this.fileSystem, { includeContent: true }, canAccess)) {
+    for await (const note of iterateNotes(this.fileSystem, { includeContent: false }, canAccess)) {
+      if (isModerationHidden(note.frontmatter)) continue;
+      if (++scanned > 2000) { partial = true; break; }
       const kind = String(note.frontmatter.note_kind || '').toLowerCase();
       if (note.frontmatter.llm_wiki_type !== 'knowledge' && !['atomic', 'knowledge', 'decision', 'literature'].includes(kind)) continue;
-      const title = String(note.frontmatter.title || note.path.split('/').at(-1) || note.path).trim();
-      const aliases = Array.isArray(note.frontmatter.aliases) ? note.frontmatter.aliases.filter((item: unknown): item is string => typeof item === 'string' && Boolean(item.trim())).slice(0, 20) : [];
-      const compact = [title, ...aliases, typeof note.frontmatter.summary === 'string' ? note.frontmatter.summary : '', (note.content || '').slice(0, 2400)].join(' ');
+      const title = String(note.frontmatter.title || note.path.split('/').at(-1) || note.path).trim().slice(0, 240);
+      const aliases = Array.isArray(note.frontmatter.aliases) ? note.frontmatter.aliases.filter((item: unknown): item is string => typeof item === 'string' && Boolean(item.trim())).slice(0, 20).map((alias: string) => alias.slice(0, 240)) : [];
+      const compact = [title, ...aliases, typeof note.frontmatter.summary === 'string' ? note.frontmatter.summary.slice(0, 2400) : ''].join(' ');
       const titleWords = normalizedWords(title);
       const words = normalizedWords(compact);
       const path = normalizePath(note.path).toLowerCase();
-      entries.push({ path, displayPath: note.path, title, aliases, ...(typeof note.frontmatter.stable_id === 'string' && { stableId: note.frontmatter.stable_id.trim().toLowerCase() }), titleWords, words });
+      const stableId = typeof note.frontmatter.stable_id === 'string' && note.frontmatter.stable_id.length <= 500 ? note.frontmatter.stable_id.trim().toLowerCase() : undefined;
+      entries.push({ path, displayPath: note.path, revision: note.revision, title, aliases, ...(stableId && { stableId }), titleWords, words });
+      if (stableId) addBucket(`stable-id:${stableId}`, path);
       addBucket(normalizedAuthorityTerm(title), path);
       for (const alias of aliases) addBucket(normalizedAuthorityTerm(alias), path);
       for (const word of [...titleWords].slice(0, 12)) addBucket(`word:${word}`, path);
@@ -4101,6 +4090,26 @@ export class LlmWikiService {
     const byPath = new Map(entries.map(entry => [entry.path, entry]));
     const pairKeys = new Set<string>();
     const pairs: Array<Record<string, unknown> & { score: number }> = [];
+    const hydrated = new Map<string, DuplicateEntry | undefined>();
+    const guards = new Map<string, string>();
+    const watched = new Set<string>(); let changed = false;
+    const dispose = this.fileSystem.observeNoteChanges(path => { if (watched.has(this.fileSystem.noteChangeIdentity(path))) changed = true; });
+    const hydrate = async (entry: DuplicateEntry) => {
+      if (hydrated.has(entry.path)) return hydrated.get(entry.path);
+      if (hydrated.size >= 64) { partial = true; return undefined; }
+      hydrated.set(entry.path, undefined);
+      if (!canAccess(entry.displayPath)) throw guidanceError(new Error('Duplicate candidate unavailable'), 'guid-9bcfe590149bcd5a');
+      watched.add(this.fileSystem.noteChangeIdentity(entry.displayPath));
+      let note: ReadNoteResult;
+      try { note = await this.fileSystem.readNote(entry.displayPath, 256 * 1024); }
+      catch { partial = true; return undefined; }
+      if (!note.revision || note.revision !== entry.revision || isModerationHidden(note.frontmatter) || !canAccess(entry.displayPath)) throw guidanceError(new Error('Duplicate candidate changed or unavailable'), 'guid-5734a72d451469ff');
+      guards.set(entry.displayPath, note.revision);
+      const value = { ...entry, words: new Set([...entry.words, ...normalizedWords(note.content.slice(0, 2400))]) };
+      hydrated.set(entry.path, value); return value;
+    };
+    try {
+    candidatePairs:
     for (const members of buckets.values()) {
       for (let leftIndex = 0; leftIndex < members.length; leftIndex += 1) {
         for (let rightIndex = leftIndex + 1; rightIndex < members.length; rightIndex += 1) {
@@ -4108,9 +4117,11 @@ export class LlmWikiService {
           const rightPath = members[rightIndex]!;
           const key = leftPath < rightPath ? `${leftPath}|${rightPath}` : `${rightPath}|${leftPath}`;
           if (pairKeys.has(key)) continue;
+          if (pairKeys.size >= 100) { partial = true; break candidatePairs; }
           pairKeys.add(key);
-          const left = byPath.get(leftPath)!;
-          const right = byPath.get(rightPath)!;
+          const left = await hydrate(byPath.get(leftPath)!);
+          const right = await hydrate(byPath.get(rightPath)!);
+          if (!left || !right) continue;
           const titleScore = jaccard(left.titleWords, right.titleWords);
           const bodyScore = jaccard(left.words, right.words);
           const aliasScore = left.aliases.some(alias => right.aliases.some(other => normalizedAuthorityTerm(alias) === normalizedAuthorityTerm(other))) ? 1 : 0;
@@ -4136,12 +4147,19 @@ export class LlmWikiService {
       }
     }
     pairs.sort((left, right) => right.score - left.score || String(left.source).localeCompare(String(right.source)) || String(left.candidate).localeCompare(String(right.candidate)));
-    const items: Array<Record<string, unknown>> = [];
-    for (const item of pairs.slice(0, boundedLimit)) {
-      if (JSON.stringify([...items, item]).length + 2 > boundedChars) break;
-      items.push(item);
+    for (const [path, revision] of guards) {
+      if (!canAccess(path) || await this.fileSystem.readNoteRevision(path, 256 * 1024) !== revision) throw guidanceError(new Error('Duplicate candidate changed or unavailable'), 'guid-5734a72d451469ff');
     }
-    return { purpose: guidanceText('guid-248153c08d13e5ce', 'Bounded near-duplicate candidates for deliberate review. Similarity is a discovery signal, never permission to merge, delete, or redirect.'), total: pairs.length, items, truncated: pairs.length > items.length, generatedAt: now() };
+    if (changed || [...guards.keys()].some(path => !canAccess(path))) throw guidanceError(new Error('Duplicate candidate changed or unavailable'), 'guid-5734a72d451469ff');
+    const items: Array<Record<string, unknown>> = [];
+    const result = { purpose: guidanceText('guid-248153c08d13e5ce', 'Bounded near-duplicate candidates for deliberate review. Similarity is a discovery signal, never permission to merge, delete, or redirect.'), total: pairs.length, items, truncated: pairs.length > 0, completeInventory: false, partial, generatedAt: now() };
+    for (const item of pairs.slice(0, boundedLimit)) {
+      items.push(item);
+      result.truncated = pairs.length > items.length;
+      if (JSON.stringify(result).length > boundedChars) { items.pop(); result.truncated = true; break; }
+    }
+    return result;
+    } finally { dispose(); }
   }
 
   /** Record an optional active-recall attempt without rewriting the note body. */

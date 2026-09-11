@@ -995,6 +995,7 @@ export class WorkService {
         const inventory = await this.inventory(id);
         const tasks = inventory.filter(n => n.fm.mcpvault_type === 'agent_task' && n.fm.status !== 'cancelled');
         const rows = [];
+        const reviewBases = [];
         const declared = new Map();
         for (const task of tasks) {
             try {
@@ -1022,6 +1023,7 @@ export class WorkService {
                 rows.push({ ...base, kind: 'missing_deliverable' });
             if (fm.work_kind !== 'general' || fm.status === 'in_review' || fm.work_review_contract === 2) {
                 const current = await this.currentReview(fm, project.frontmatter);
+                reviewBases.push({ path: task.path, basis: current.basis, contextSnapshot: current.contextSnapshot ?? null });
                 const approved = current.current;
                 if (!approved)
                     rows.push({ ...base, kind: fm.work_review ? 'review_pending_or_stale' : 'missing_review', ...(current.diagnostic && { diagnostic: current.diagnostic }) });
@@ -1036,7 +1038,9 @@ export class WorkService {
             if (fm.work_handoff && !fm.work_handoff.next_action)
                 rows.push({ ...base, kind: 'handoff_gap' });
         }
-        const sig = fingerprint({ project: project.revision, inventory });
+        // Evidence can drift without changing any project/task revision. Bind the
+        // cursor to the authorized derived rows as well as the Markdown inventory.
+        const sig = fingerprint({ project: project.revision, inventory, rows, reviewBases });
         return page(rows, { projectId: id, projectRevision: project.revision, advisory: true,
             warning: guidanceText('guid-6d673a241b7aa571', 'Only declared visible work is checked. This is not a completeness, expertise or safety certificate.') }, sig, params, `coverage:${id}`);
     }
@@ -1079,14 +1083,20 @@ export class WorkService {
             }) && { warning: guidanceText('guid-f3e8a40ffa18c42a', 'Artifact/file overlap is advisory; coordinate with peers') }),
         }));
         const wip = await this.boardWip(project.frontmatter, tasks, params.principal);
-        const sig = fingerprint({ project: project.revision, inventory: selected, wip, paid, mutations, ...(wip && { accountId: params.principal?.accountId }) });
+        const sig = fingerprint({ project: project.revision, inventory: selected, rows, reviewBases: [...currentReviews].map(([path, review]) => ({ path, basis: review.basis, contextSnapshot: review.contextSnapshot ?? null })), wip, paid, mutations, ...(wip && { accountId: params.principal?.accountId }) });
         return page(rows, { projectId: id, projectRevision: project.revision, fingerprint: sig, ...(wip && { wip }) }, sig, params, `board:${id}`);
     }
     async currentReview(fm, project) {
         const state = { ...fm };
+        let contextSnapshot;
         try {
-            if (fm.work_review_contract === 2)
-                state.work_context_fingerprint = (await this.reviewEngine.state(fm, project)).fingerprint;
+            if (fm.work_review_contract === 2) {
+                const context = await this.reviewEngine.state(fm, project);
+                state.work_context_fingerprint = context.fingerprint;
+                // Keep persisted approval semantics unchanged. The reader records current
+                // authorized guards even when an expected revision is already stale.
+                contextSnapshot = fingerprint(context.guards);
+            }
         }
         catch (error) {
             if (!(error instanceof ReviewBudgetError))
@@ -1095,7 +1105,7 @@ export class WorkService {
         }
         const allowed = fm.work_kind === 'general' && fm.work_review_contract === 2 ? ['approve', 'override', 'self_verify'] : ['approve', 'override'];
         const current = allowed.includes(fm.work_review?.decision) && fm.work_review?.fingerprint === reviewBasis(state);
-        return { current, verified: current && fm.work_review_contract === 2 && ['approve', 'self_verify'].includes(fm.work_review?.decision), basis: reviewBasis(state) };
+        return { current, verified: current && fm.work_review_contract === 2 && ['approve', 'self_verify'].includes(fm.work_review?.decision), basis: reviewBasis(state), contextSnapshot };
     }
     staffingPolicy(value) {
         if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).some(k => !['taskType', 'factualVerification', 'requiredTools', 'requiredCapabilities', 'minimumTier', 'budget', 'preferences'].includes(k)))

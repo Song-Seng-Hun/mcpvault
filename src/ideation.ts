@@ -315,35 +315,69 @@ export class IdeationService {
         content: (item.content || '').slice(0, MAX_CONTRIBUTION_CHARS), references: item.frontmatter.references || [],
         createdAt: item.frontmatter.created_at, replyTo: item.frontmatter.reply_to,
       })),
-      evaluations: evaluationWindow.notes.map(item => ({
-        evaluator: item.frontmatter.evaluator, novelty: item.frontmatter.novelty, usefulness: item.frontmatter.usefulness,
-        feasibility: item.frontmatter.feasibility, risk: item.frontmatter.risk, evidenceQuality: item.frontmatter.evidence_quality,
-        rationale: (item.content || '').slice(0, MAX_CONTRIBUTION_CHARS), createdAt: item.frontmatter.created_at,
-      })),
+      evaluations: evaluationWindow.notes.map(item => {
+        const evaluatedIdeaRevision = typeof item.frontmatter.evaluated_idea_revision === 'string'
+          ? item.frontmatter.evaluated_idea_revision : undefined;
+        const evaluatedIdeaPath = typeof item.frontmatter.evaluated_idea_path === 'string'
+          ? item.frontmatter.evaluated_idea_path : undefined;
+        return {
+          evaluator: item.frontmatter.evaluator, novelty: item.frontmatter.novelty, usefulness: item.frontmatter.usefulness,
+          feasibility: item.frontmatter.feasibility, risk: item.frontmatter.risk, evidenceQuality: item.frontmatter.evidence_quality,
+          rationale: (item.content || '').slice(0, MAX_CONTRIBUTION_CHARS), createdAt: item.frontmatter.created_at,
+          path: item.path, revision: item.revision, evaluatedIdeaPath, evaluatedIdeaRevision,
+          evaluatedIdeaState: !evaluatedIdeaRevision ? 'unpinned' : evaluatedIdeaPath !== path || evaluatedIdeaRevision !== note.revision ? 'stale' : 'current',
+        };
+      }),
     };
     const bounded = boundedProjection(items, maxChars);
     return { ...bounded.value, contributionTotal, evaluationTotal, truncated: contributionWindow.truncated || evaluationWindow.truncated || bounded.truncated };
   }
 
-  async branchIdea(params: { principal?: ScopePrincipal; parentIdeaId: string; ideaId?: string; title: string; seed: string; references?: unknown; expectedParentRevision: string }) {
+  async branchIdea(params: { principal?: ScopePrincipal; parentIdeaId: string; ideaId?: string; title: string; seed: string; references?: unknown; expectedParentRevision: string; requestId?: string }) {
     const principal = requireLogin(params.principal);
     if (!params.expectedParentRevision) throw guidanceError(new Error('expectedParentRevision is required; read the parent idea first'), 'guid-879190b9f39e2454');
     const parentId = normalizeScopeId(params.parentIdeaId, 'parentIdeaId');
-    const parent = await this.readTyped(ideaPath(parentId), 'idea');
-    if (parent.revision !== params.expectedParentRevision) throw guidanceError(new Error('The parent idea changed; reread it before branching'), 'guid-04582bbb86030841');
-    const result = await this.createIdea({
-      principal, ...(params.ideaId && { ideaId: params.ideaId }), title: params.title, seed: params.seed, references: params.references,
-      expectedRevision: 'missing',
+    const title = text(params.title, 'title', 180, true);
+    const seed = text(params.seed, 'seed', MAX_LONG_TEXT_CHARS, true);
+    const requestedIdeaId = params.ideaId ? normalizeScopeId(params.ideaId, 'ideaId') : undefined;
+    const request = preparePublicCreateRequest({
+      principal, requestId: params.requestId, action: 'idea.branch', generatedPrefix: 'idea',
+      ...(requestedIdeaId && { requestedTargetId: requestedIdeaId }),
+      payload: { parentIdeaId: parentId, expectedParentRevision: params.expectedParentRevision, ideaId: requestedIdeaId, title, seed, references: params.references },
     });
-    const child = await this.readTyped(ideaPath(result.ideaId), 'idea');
-    const timestamp = now();
-    await this.fileSystem.writeNote({
-      path: ideaPath(result.ideaId), content: child.content,
-      frontmatter: { ...child.frontmatter, parent_ideas: [parentId], relation: 'branch_of', updated_at: timestamp },
-      expectedRevision: result.revision,
+    const ideaId = request?.targetId || requestedIdeaId || `idea-${randomUUID().slice(0, 12)}`;
+    const path = ideaPath(ideaId);
+    let parentRevision = '';
+    let references: string[] = [];
+    return runPublicCreate({
+      fileSystem: this.fileSystem, principal, request, targetPath: path, participationActions: ['initiate'], topicMetadata: { title },
+      revalidate: async () => {
+        const parent = await this.readTyped(ideaPath(parentId), 'idea');
+        if (parent.revision !== params.expectedParentRevision) throw guidanceError(new Error('The parent idea changed; reread it before branching'), 'guid-04582bbb86030841');
+        parentRevision = parent.revision;
+        references = await this.references.validateAndNormalize(params.references, path, principal, seed);
+        return { parentPaths: [ideaPath(parentId)] };
+      },
+      create: async participationGuard => {
+        const timestamp = now();
+        const body = `${ideaBody({ title, seed, problem: '', constraints: [], successCriteria: [] })}\n`;
+        const frontmatter = attachPublicCreateRequest(request, {
+          mcpvault_type: 'idea', idea_id: ideaId, title, author: identity(principal), status: 'seed', parent_ideas: [parentId],
+          parent_idea_revision: parentRevision, relation: 'branch_of', references, constraints: [], success_criteria: [], created_at: timestamp, updated_at: timestamp,
+        }, body);
+        const guards = [{ path: ideaPath(parentId), expectedRevision: parentRevision }, ...(participationGuard ? [participationGuard] : [])];
+        const receipt = await this.fileSystem.writeNoteWithRevisionGuardsAndReceipt({ path, content: body, frontmatter, expectedRevision: 'missing' }, guards);
+        return { success: true as const, ideaId, path, status: 'seed' as const, parentIdeaId: parentId, revision: receipt.revision };
+      },
+      replay: note => {
+        if (note.frontmatter.mcpvault_type !== 'idea' || note.frontmatter.idea_id !== ideaId || note.frontmatter.relation !== 'branch_of'
+          || !Array.isArray(note.frontmatter.parent_ideas) || note.frontmatter.parent_ideas.length !== 1 || note.frontmatter.parent_ideas[0] !== parentId
+          || note.frontmatter.parent_idea_revision !== params.expectedParentRevision) {
+          throw guidanceError(new Error('Public request result is unavailable'), 'guid-503e43625954dd85');
+        }
+        return { success: true as const, ideaId, path, status: 'seed' as const, parentIdeaId: parentId, revision: note.revision };
+      },
     });
-    const updated = await this.fileSystem.readNote(ideaPath(result.ideaId));
-    return { ...result, parentIdeaId: parentId, revision: updated.revision };
   }
 
   async updateIdeaStatus(params: { principal?: ScopePrincipal; ideaId: string; status: string; reason: string; expectedRevision: string }) {
@@ -414,10 +448,15 @@ export class IdeationService {
     });
   }
 
-  async evaluateIdea(params: { principal?: ScopePrincipal; ideaId: string; novelty: unknown; usefulness: unknown; feasibility: unknown; risk: unknown; evidenceQuality: unknown; rationale: string; references?: unknown; expectedRevision?: string }) {
+  async evaluateIdea(params: { principal?: ScopePrincipal; ideaId: string; novelty: unknown; usefulness: unknown; feasibility: unknown; risk: unknown; evidenceQuality: unknown; rationale: string; references?: unknown; expectedRevision?: string; expectedIdeaRevision?: string }) {
     const principal = requireLogin(params.principal);
     const ideaId = normalizeScopeId(params.ideaId, 'ideaId');
-    await this.readTyped(ideaPath(ideaId), 'idea');
+    const evaluatedIdeaPath = ideaPath(ideaId);
+    const idea = await this.readTyped(evaluatedIdeaPath, 'idea');
+    if (params.expectedIdeaRevision !== undefined && params.expectedIdeaRevision !== idea.revision) {
+      throw guidanceError(new Error('The idea changed; reread it before evaluating'), 'guid-475e226942e14bfa');
+    }
+    const evaluatedIdeaRevision = idea.revision;
     const evaluator = normalizeScopeId(identity(principal), 'evaluatorId');
     const path = ideaEvaluationPath(ideaId, evaluator);
     const exists = await this.fileSystem.noteExists(path);
@@ -426,17 +465,17 @@ export class IdeationService {
     if (!expectedRevision) throw guidanceError(new Error('expectedRevision is required when updating an existing evaluation'), 'guid-ec57f611a5160e56');
     const rationale = text(params.rationale, 'rationale', MAX_CONTRIBUTION_CHARS, true);
     const references = await this.references.validateAndNormalize(params.references ?? current?.frontmatter.references, path, principal, rationale);
-    await this.fileSystem.writeNote({
+    const receipt = await this.fileSystem.writeNoteWithRevisionGuardsAndReceipt({
       path, content: `${rationale}\n`, frontmatter: {
         ...(current?.frontmatter || {}), mcpvault_type: 'idea_evaluation', idea_id: ideaId, evaluator,
         novelty: score(params.novelty, 'novelty'), usefulness: score(params.usefulness, 'usefulness'),
         feasibility: score(params.feasibility, 'feasibility'), risk: score(params.risk, 'risk'),
         evidence_quality: score(params.evidenceQuality, 'evidenceQuality'), references,
+        evaluated_idea_path: evaluatedIdeaPath, evaluated_idea_revision: evaluatedIdeaRevision,
         created_at: current?.frontmatter.created_at || now(), updated_at: now(),
       }, expectedRevision,
-    });
-    const updated = await this.fileSystem.readNote(path);
-    return { success: true, ideaId, evaluator, revision: updated.revision };
+    }, [{ path: evaluatedIdeaPath, expectedRevision: evaluatedIdeaRevision }]);
+    return { success: true, ideaId, evaluator, revision: receipt.revision, evaluatedIdeaRevision };
   }
 
   async createWorkshop(params: { principal?: ScopePrincipal; workshopId?: string; title: string; prompt: string; agenda?: unknown; ideaIds?: unknown; timeboxMinutes?: number; maxContributionsPerAgent?: number; references?: unknown; facilitation?: unknown; requestId?: string; researchWork?: ResearchWorkshopWork; revalidateActor?: () => Promise<ScopePrincipal> }) {

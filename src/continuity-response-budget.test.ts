@@ -96,12 +96,15 @@ test('MCP pretty resume observes the requested budget and exposes a usable priva
     const registered = await call('auth.register', { accountId: 'resume-budget', userId: 'budget-family', modelId: 'codex', agentId: 'resume-budget-agent', password: randomUUID() });
     expect(registered.isError).toBeFalsy();
     const accessToken = JSON.parse((registered.content as any)[0].text).accessToken;
-    const saved = await call('continuity.save', { accessToken, topic: 'MCP resume', summary: 'Read the next evidence.', nextAction: 'Inspect evidence.', cursors: { large: 'q'.repeat(20000) } });
+    const saved = await call('continuity.save', { accessToken, topic: 'MCP resume', summary: 'Read the next evidence.', nextAction: 'Inspect evidence.', cursors: { large: 'q'.repeat(20000) }, pendingEdits:[{path:'New-pin.md',expectedRevision:'missing',endpointId:'notes.write'}] });
     expect(saved.isError, JSON.stringify(saved)).toBeFalsy();
     const result = await call('continuity.resume', { accessToken, maxChars: 1200, prettyPrint: true });
     expect(result.isError).toBeFalsy();
     const text = (result.content as any)[0].text, projection = JSON.parse(text);
     expect(text.length).toBeLessThanOrEqual(1200);
+    const checked = await call('continuity.resume',{accessToken,maxChars:4000,validatePins:{pendingEdits:[0]}});
+    expect(checked.isError).toBeFalsy();
+    expect(JSON.parse((checked.content as any)[0].text).validation.pins).toEqual([{field:'pendingEdits',index:0,state:'current'}]);
     expect(projection.nextAction.endpointId).toBe('mcp.read_note_lines');
     const more = await call(projection.nextAction.endpointId, { ...projection.nextAction.arguments, accessToken });
     expect(more.isError).toBeFalsy();

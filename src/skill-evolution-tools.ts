@@ -1,4 +1,5 @@
 import type { Tool } from '@modelcontextprotocol/server';
+import { operationReadAlias } from './operation-contracts.js';
 
 const string = (maxLength = 2000) => ({ type: 'string', minLength: 1, maxLength });
 const guard = { type: 'object', additionalProperties: false, properties: { path: string(500), revision: { type: 'string', pattern: '^[a-f0-9]{64}$' } }, required: ['path', 'revision'] };
@@ -13,11 +14,7 @@ const promotion = { candidateId: recordId, evaluationId: recordId, mode: { type:
 export const SKILL_MUTATING_TOOLS = ['record_skill_experience', 'manage_skill_candidate', 'evaluate_skill', 'promote_skill', 'rollback_skill'] as const;
 /** Used by both the early read-only gate and the common MCP/REST dispatcher. */
 export function skillReadAlias(tool: string, op: unknown): string | undefined {
-  if (tool === 'manage_skill_candidate' && (op === undefined || op === 'read' || op === 'list')) return 'read_skill_candidate';
-  if (tool === 'evaluate_skill' && (op === undefined || op === 'read')) return 'read_skill_evaluation';
-  if (tool === 'promote_skill' && (op === undefined || op === 'preview')) return 'preview_skill_promotion';
-  if (tool === 'rollback_skill' && (op === undefined || op === 'preview')) return 'preview_skill_rollback';
-  return undefined;
+  return (SKILL_MUTATING_TOOLS as readonly string[]).includes(tool) ? operationReadAlias(tool, op) : undefined;
 }
 function tool(name: string, description: string, properties: Record<string, unknown>, required: string[]): Tool {
   return { name, description, inputSchema: { type: 'object', additionalProperties: false, properties: { ...common, ...properties }, required: ['skillId', ...required] } };
@@ -25,7 +22,7 @@ function tool(name: string, description: string, properties: Record<string, unkn
 export function getSkillEvolutionTools(): Tool[] {
   return [
     tool('resolve_skill', 'Resolve the current usable procedural skill, exact revision and review drift. Imported source remains available. This does not install tools or grant execution permission.', {}, []),
-    tool('record_skill_experience', 'Record one actually applied skill and shareable success/failure/unknown outcome with exact visible evidence. Do not copy private task logs. Requires host opt-in and an authenticated writer; retry the identical requestId after uncertain writes.', {
+    tool('record_skill_experience', 'Record an actually applied current or retained verified version of this Skill with explicit shareable success/failure/unknown outcome and exact visible evidence. Historical use does not qualify as current-basis candidate input. Do not copy private task logs. Requires host opt-in and an authenticated writer; retry the identical requestId after uncertain writes.', {
       ...write, usedVersion: guard, applied: { type: 'boolean', const: true }, shareable: { type: 'boolean', const: true },
       outcome: { type: 'string', enum: ['success', 'failure', 'unknown'] }, context: string(), summary: string(), evidence: guards,
     }, ['expectedRevision', 'requestId', 'usedVersion', 'applied', 'shareable', 'outcome', 'context', 'summary', 'evidence']),

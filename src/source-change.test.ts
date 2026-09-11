@@ -90,7 +90,22 @@ test('out-of-range and heading-only locators are not certified by a matching rev
   ] });
   const r = await service.read({ sourcePath: newPath, previousSourcePath: oldPath, maxChars: 12000 });
   expect(r.claims.find((c: any) => c.claimId === 'invalid').locatorState).toBe('invalid_range');
-  expect(r.claims.find((c: any) => c.claimId === 'heading').locatorState).toBe('revision_only');
+  expect(r.claims.find((c: any) => c.claimId === 'heading').locatorState).toBe('missing_heading');
+});
+
+test('claim locators share fence, containment and unique-block validation', async () => {
+  await source(oldPath, '# Real\nvalue ^point\n~~~\n# Fake\nexample ^fake\n~~~\n# Other\nold\n');
+  await source(newPath, '# Real\nvalue ^point\n~~~\n# Fake\nexample ^fake\n~~~\n# Other\nnew\n');
+  const revision = await fs.readNoteRevision(oldPath);
+  await note('Knowledge/Guards.md', 'Claim', { llm_wiki_type: 'knowledge', claims: [
+    { id: 'fake', evidence: [{ path: oldPath, revision, heading: 'Fake', startLine: 4, endLine: 5 }] },
+    { id: 'outside', evidence: [{ path: oldPath, revision, heading: 'Real', startLine: 8, endLine: 8 }] },
+    { id: 'real', evidence: [{ path: oldPath, revision, heading: 'Other' }] },
+  ] });
+  const r = await service.read({ sourcePath: newPath, previousSourcePath: oldPath, knowledgePath: 'Knowledge/Guards.md', maxChars: 12000 });
+  expect(r.claims.find((c: any) => c.claimId === 'fake')).toMatchObject({ locatorState: 'missing_heading', impact: 'source_reference_requires_review' });
+  expect(r.claims.find((c: any) => c.claimId === 'outside')).toMatchObject({ locatorState: 'outside_heading', impact: 'source_reference_requires_review' });
+  expect(r.claims.find((c: any) => c.claimId === 'real')).toMatchObject({ locatorState: 'current', impact: 'changed_locator_overlap' });
 });
 test('a second citation of the changed range is not hidden by the first unchanged citation', async () => {
   await pair(); const revision = await fs.readNoteRevision(oldPath);

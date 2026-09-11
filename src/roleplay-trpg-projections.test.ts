@@ -5,6 +5,17 @@ import * as projection from './roleplay-trpg-projections.js';
 import { validateJsonCanvasDocument } from './json-canvas.js';
 import { PathFilter } from './pathfilter.js';
 
+test('TRPG read rows expose unreachable branches as advisory without pruning the ruleset', () => {
+  const state = initialRoleplay(), ruleset = defaultTrpgRuleset(), base = ruleset.skills[0]!;
+  ruleset.skills.push({ ...base, id:'unreachable', requires:[base.id], excludes:[base.id] });
+  state.trpg = { ruleset, fingerprint:roleplayHash(ruleset), sheets:{alice:newTrpgSheet(ruleset)}, encounters:{} };
+  const before = roleplayRevision(state);
+  const rows = projection.trpgRows(state, 'alice');
+  expect(rows).toContainEqual(expect.objectContaining({kind:'configuration_diagnostic', nodeId:'unreachable', advisory:true}));
+  expect(rows).toContainEqual(expect.objectContaining({kind:'skill', id:'unreachable', learned:false}));
+  expect(roleplayRevision(state)).toBe(before);
+});
+
 test('sheet, file-linked managed skill Canvas and Bases are deterministic disposable artifacts', () => {
   const state = initialRoleplay(), ruleset = defaultTrpgRuleset();
   state.trpg = { ruleset, fingerprint: roleplayHash(ruleset), sheets: { alice: newTrpgSheet(ruleset) }, encounters: {} };

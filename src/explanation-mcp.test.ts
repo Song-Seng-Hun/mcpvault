@@ -7,9 +7,10 @@ import { createServer } from './createServer.js';
 import { FileSystemService } from './filesystem.js';
 let root: string, base: string, client: Client, server: ReturnType<typeof createServer>;
 let token: string;
-async function setup(readOnly = false, enabled = true, paths = ['Guide.md']) {
+async function setup(readOnly = false, enabled = true, paths = ['Guide.md'], withReviewer = false) {
   server = createServer(root, { readOnly, ...(enabled && { explanations: { sources: paths.map(path => ({ path })) }, workCollaboration: {
-    executionProfiles: async () => [{ accountId: 'writer', family: 'gemini', version: 'test', hostVerified: true, tier: 'standard', capabilities: ['task'], tools: [] }],
+    executionProfiles: async () => [{ accountId: 'writer', family: 'gemini', version: 'test', hostVerified: true, tier: 'standard', capabilities: ['task'], tools: [] },
+      ...(withReviewer ? [{ accountId: 'reviewer', family: 'gpt', version: 'test', hostVerified: true, tier: 'standard', capabilities: ['task'], tools: [] }] : [])],
   } }) } as any);
   const [left, right] = InMemoryTransport.createLinkedPair();
   client = new Client({ name: 'explanation-test', version: '1' });
@@ -41,6 +42,27 @@ test('five-tool plane exposes bounded explanation endpoints with unchanged origi
   const result = await call('explanations.read', { sourcePath: 'Guide.md', maxChars: 1500 }, false);
   expect(JSON.stringify(result).length).toBeLessThanOrEqual(1500);
   expect((await new FileSystemService(root).readNote('Guide.md')).revision).toBe(j.sourceRevision);
+});
+
+test('explicit original and learning reads offer only a current approved explanation, without replacing originals', async () => {
+  await new FileSystemService(root).writeNote({ path: 'Course.md', content: '# Course\n[[Guide]]', frontmatter: { note_kind: 'moc' }, expectedRevision: 'missing' });
+  await setup(false, true, ['Guide.md'], true);
+  token = (await call('auth.register', { accountId: 'writer', agentId: 'writer', modelId: 'gemini', userId: 'writer-family', password: 'temporary-test-password-1' })).accessToken;
+  const j = (await call('explanations.list')).items[0];
+  const c = await call('explanations.claim', { sourcePath: j.sourcePath, expectedSourceRevision: j.sourceRevision, expectedRevision: j.revision, requestId: 'claim' });
+  const d = await call('explanations.draft', { sourcePath: j.sourcePath, expectedSourceRevision: j.sourceRevision, expectedRevision: c.revision, requestId: 'draft', draft: { blocks: [{ text: '비밀번호 공개 금지. Never disclose passwords.', startLine: 1, endLine: 1 }] } });
+  expect((await call('notes.read', { path: 'Guide.md', includeExplanation: true }, false)).explanationAction).toBeUndefined();
+  token = (await call('auth.register', { accountId: 'reviewer', agentId: 'reviewer', modelId: 'gpt', userId: 'reviewer-family', password: 'temporary-test-password-2' }, false)).accessToken;
+  await call('explanations.review', { sourcePath: j.sourcePath, expectedSourceRevision: j.sourceRevision, expectedRevision: d.revision, requestId: 'review', review: { checks: ['fidelity', 'coverage', 'no_invention', 'clarity'].map(criterion => ({ criterion, verdict: 'pass', reason: 'Preserves the full prohibition.', blockIndices: [0] })) } });
+  const plain = await call('notes.read', { path: 'Guide.md' }, false);
+  const hinted = await call('notes.read', { path: 'Guide.md', includeExplanation: true, maxChars: 2000 }, false);
+  expect(plain.explanationAction).toBeUndefined(); expect(hinted.content).toBe(plain.content); expect(hinted.revision).toBe(plain.revision);
+  expect(hinted.explanationAction).toMatchObject({ endpointId: 'explanations.read', arguments: { expectedSourceRevision: plain.revision } });
+  expect(JSON.stringify(hinted)).not.toContain('비밀번호');
+  const learning = await call('wiki.learning_path', { path: 'Course.md', includeExplanation: true, explanationPath: 'Guide.md', maxChars: 16000 }, false);
+  expect(learning.authoredOrder[0].path).toBe('Guide.md'); expect(learning.explanationAction).toEqual(hinted.explanationAction);
+  const explained = await call(hinted.explanationAction.endpointId, hinted.explanationAction.arguments, false);
+  expect(explained.status).toBe('approved');
 });
 test('unconfigured explanation capability fails closed', async () => {
   await setup(false, false);

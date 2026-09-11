@@ -1,5 +1,5 @@
 import { type CapabilityNode } from './capability-graph.js';
-import { type RoleplayCommand, type RoleplayPolicy, type RoleplayState } from './roleplay-model.js';
+import type { RoleplayCommand, RoleplayPolicy, RoleplayState } from './roleplay-model.js';
 interface Formula {
     base: number;
     terms: Record<string, number>;

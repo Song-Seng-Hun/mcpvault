@@ -6,8 +6,7 @@ import { temporalValidity } from './organization.js';
 import { selectContextPassages } from './context-passages.js';
 import { bodyStartLine, passageAction, RETRIEVAL_NOTE_BYTES } from './retrieval-service.js';
 import { endpointIdForTool } from './endpoint-registry.js';
-import { buildMarkdownLiteralMask } from './backlinks.js';
-import { projectNoteBlockLines } from './note-projections.js';
+import { resolveEvidenceLocator } from './evidence-locator.js';
 import { traceSourceOrigins } from './source-provenance-model.js';
 import { sourceWorkIdentity } from './source-provenance.js';
 import { CONTEXT_INTENTS, contextRuleState } from './context-rules.js';
@@ -53,6 +52,7 @@ export class QuestionPacketService {
         const canAccess = (p) => this.access.canAccessPhysicalPath(p, principal);
         const publicPath = (p) => this.access.toPublicPath(p);
         let explicitPath;
+        const activatedPaths = new Set();
         const metadata = new Map();
         const sources = new Map();
         const gaps = new Set();
@@ -195,6 +195,8 @@ export class QuestionPacketService {
                 if (!outcome.complete)
                     gaps.add('retrieval_incomplete');
                 diagnostics.push(...outcome.diagnostics);
+                for (const path of outcome.activatedPaths)
+                    activatedPaths.add(path);
                 hits = await this.retrieval.projectSkillDiscovery(outcome.results, principal, canAccess);
             }
             else {
@@ -218,7 +220,8 @@ export class QuestionPacketService {
                 envelope.nextAction = { ...retry, requiredArguments: ['path'], instruction: guidanceText('guid-b723b7891aaa89fa', 'Select an exact visible candidate path; do not guess the intended meaning.') };
                 return await finish();
             }
-            const ordered = [...candidates].sort((a, b) => Number(knowledge(b.note.frontmatter)) - Number(knowledge(a.note.frontmatter)) || Number(sameIdentity.includes(b)) - Number(sameIdentity.includes(a)));
+            const ordered = [...candidates].sort((a, b) => Number(activatedPaths.has(b.path)) - Number(activatedPaths.has(a.path))
+                || Number(knowledge(b.note.frontmatter)) - Number(knowledge(a.note.frontmatter)) || Number(sameIdentity.includes(b)) - Number(sameIdentity.includes(a)));
             const roots = ordered.filter(c => !social(c.path, c.note.frontmatter)).slice(0, 5);
             const rows = envelope.sources;
             const linked = [];
@@ -241,50 +244,9 @@ export class QuestionPacketService {
                     return existing;
                 }
                 const fm = note.frontmatter;
-                let preferredLine;
-                const specified = locator && ['revision', 'startLine', 'endLine', 'quoteHash', 'heading', 'blockId'].some(key => locator[key] !== undefined);
-                let locatorState = specified ? 'current' : 'unverified';
-                if (locator?.revision !== undefined && locator.revision !== note.revision)
-                    locatorState = 'stale';
-                const lines = note.content.split('\n');
-                const hasRange = locator?.startLine !== undefined || locator?.endLine !== undefined;
-                if (hasRange) {
-                    if (!Number.isSafeInteger(locator?.startLine) || !Number.isSafeInteger(locator?.endLine) || locator.startLine < 1 || locator.endLine < locator.startLine || locator.endLine > lines.length)
-                        locatorState = 'stale';
-                    else
-                        preferredLine = bodyStartLine(note) + locator.startLine - 1;
-                }
-                if (locator?.quoteHash !== undefined && (!hasRange || locatorState === 'stale' || locator.quoteHash !== hash(lines.slice(locator.startLine - 1, locator.endLine).join('\n'))))
-                    locatorState = 'stale';
-                if (locator?.heading !== undefined || locator?.blockId !== undefined) {
-                    const literal = buildMarkdownLiteralMask(note.content);
-                    let offset = 0;
-                    const eligible = lines.map(line => { const start = offset; offset += line.length + 1; return !literal[start]; });
-                    let headingStart = -1, headingEnd = lines.length;
-                    if (locator.heading !== undefined) {
-                        headingStart = typeof locator.heading === 'string' && locator.heading.trim() ? lines.findIndex((line, i) => eligible[i] && /^#{1,6}\s/.test(line) && identity(line.replace(/^#+\s*/, '')) === identity(locator.heading)) : -1;
-                        if (headingStart < 0)
-                            locatorState = 'stale';
-                        else {
-                            const level = lines[headingStart].match(/^#+/)[0].length;
-                            const nextHeading = lines.findIndex((line, i) => i > headingStart && eligible[i] && /^#{1,6}\s/.test(line) && line.match(/^#+/)[0].length <= level);
-                            if (nextHeading >= 0)
-                                headingEnd = nextHeading;
-                            if (hasRange && (locator.startLine - 1 < headingStart || locator.endLine > headingEnd))
-                                locatorState = 'stale';
-                            if (preferredLine === undefined)
-                                preferredLine = bodyStartLine(note) + headingStart;
-                        }
-                    }
-                    if (locator.blockId !== undefined) {
-                        const blocks = typeof locator.blockId === 'string' && /^[A-Za-z0-9_-]+$/.test(locator.blockId) ? projectNoteBlockLines(note.content, locator.blockId) : [];
-                        const block = blocks.length === 1 ? blocks[0] - 1 : -1;
-                        if (block < 0 || (locator.heading !== undefined && (block < headingStart || block >= headingEnd)) || (hasRange && (block + 1 < locator.startLine || block + 1 > locator.endLine)))
-                            locatorState = 'stale';
-                        else
-                            preferredLine = bodyStartLine(note) + block;
-                    }
-                }
+                const resolved = resolveEvidenceLocator(note.content, locator ?? {}, note.revision);
+                const locatorState = !resolved.valid ? 'stale' : resolved.specified ? 'current' : 'unverified';
+                const preferredLine = resolved.valid && resolved.preferredLine ? bodyStartLine(note) + resolved.preferredLine - 1 : undefined;
                 if (locatorState === 'stale')
                     gaps.add('stale_evidence_locator');
                 let selected = selectContextPassages({ content: note.content, query: matchQuery, maxChars: 1200, maxPassages: 2, startLine: bodyStartLine(note), ...(preferredLine && locatorState !== 'stale' && { preferredLine }) });

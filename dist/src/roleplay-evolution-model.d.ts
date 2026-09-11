@@ -1,4 +1,4 @@
-import { type RoleplayCommand, type RoleplayState } from './roleplay-model.js';
+import type { RoleplayCommand, RoleplayState } from './roleplay-model.js';
 export type EvolutionKind = 'belief' | 'attitude' | 'event_fact' | 'character_core' | 'world_core' | 'character_lore' | 'world_lore' | 'retract';
 export interface EvolutionChange {
     kind: EvolutionKind;

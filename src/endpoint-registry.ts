@@ -4,6 +4,8 @@ import type { ScopeCapability } from './scope-auth.js';
 import { boundSearchResults } from './search-limits.js';
 import { projectGuidance } from './guidance-runtime.js';
 import { STORY_OPERATIONS } from './story-tools.js';
+import { operationAvailability } from './operation-contracts.js';
+export { operationReadAlias } from './operation-contracts.js';
 import { DOCUMENT_TOOL_ENDPOINTS } from './document-tools.js';
 import { EXPLANATION_ENDPOINTS } from './explanation-tools.js';
 import { BENCHMARK_TOOL_ENDPOINTS } from './benchmark-tools.js';
@@ -103,6 +105,7 @@ const EXPLICIT_IDS: Record<string, string> = {
   ...EXPLANATION_ENDPOINTS,
   ...BENCHMARK_TOOL_ENDPOINTS,
   check_reusable_configuration: 'configuration.check',
+  preview_learning_configuration: 'configuration.learning_preview',
   list_guidance_catalog: 'guidance.catalog',
   manage_roleplay_world: 'roleplay.world', manage_roleplay_character: 'roleplay.character', manage_roleplay_scene: 'roleplay.scene',
   list_notices: 'notice.list', read_notice: 'notice.read', preview_notice: 'notice.preview', revise_notice: 'notice.revise',
@@ -118,6 +121,7 @@ const EXPLICIT_IDS: Record<string, string> = {
   record_community_participation: 'community.participation_record',
   get_wiki_bridge_candidates: 'wiki.bridge_candidates',
   memory_recall: 'memory.recall',
+  resolve_note_link: 'notes.resolve_link',
   memory_brief: 'memory.brief',
   memory_consolidate: 'memory.consolidate',
   manage_work_group: 'work.group', read_work_coverage: 'work.coverage',
@@ -729,58 +733,8 @@ export class EndpointRegistry {
         const available = !disabled && (item.requires.length === 0 || context.authenticated && missing.length === 0 || item.endpointId === 'auth.register' || item.endpointId === 'auth.login');
         const state = disabled ? 'disabled' as const : available ? 'ready' as const : 'locked' as const;
         const reason = hostMissing ? 'host configuration is missing' : roleplaySetupMissing ? 'host administrator configuration is missing' : skillDisabled ? 'skill evolution is disabled by the host' : disabled ? 'server is read-only' : !context.authenticated && item.requires.length > 0 && item.endpointId !== 'auth.register' && item.endpointId !== 'auth.login' ? 'authentication required' : missing.length > 0 ? `capability required: ${missing.join(', ')}` : undefined;
-        // One mixed-operation endpoint: discovery must not hide its public read
-        // just because writes require authority. Dispatch still checks the exact
-        // operation, independently of these advisory availability descriptions.
-        if (item.endpointId.startsWith('story.')) {
-          const spec = STORY_OPERATIONS[item.endpointId.slice('story.'.length)];
-          if (spec) {
-            const read = { available: true, state: 'ready' as const, requires: [] as string[] };
-            const requires = ['write', 'task'];
-            const writeMissing = requires.filter(required => !context.capabilities.has(required as ScopeCapability));
-            const writeAvailable = !context.readOnly && context.authenticated && writeMissing.length === 0;
-            const writeReason = context.readOnly ? 'server is read-only' : !context.authenticated ? 'authentication required'
-              : writeMissing.length ? `capability required: ${writeMissing.join(', ')}` : undefined;
-            const write = { available: writeAvailable, state: context.readOnly ? 'disabled' as const : writeAvailable ? 'ready' as const : 'locked' as const,
-              requires, ...(writeReason && { reason: writeReason }) };
-            const proofAvailable = context.authenticated && writeMissing.length === 0;
-            const proof = { available: proofAvailable, state: proofAvailable ? 'ready' as const : 'locked' as const, requires,
-              ...(!proofAvailable && { reason: !context.authenticated ? 'authentication required' : `capability required: ${writeMissing.join(', ')}` }) };
-            return { ...item, ...(spec.reads.length ? read : write), operations: Object.fromEntries([
-              ...spec.reads.map(op => [op, op === 'reconnect_preview' ? proof : read]), ...spec.writes.map(op => [op, write]),
-            ]) };
-          }
-        }
-        if (['skill.candidate', 'skill.evaluate', 'skill.promote', 'skill.rollback'].includes(item.endpointId)) {
-          const write = { available, state, requires: item.requires, ...(reason && { reason }) };
-          const publicRead = { available: true, state: 'ready' as const, requires: [] as string[] };
-          const preview = { available: !skillDisabled && context.authenticated && missing.length === 0, state: skillDisabled ? 'disabled' as const : context.authenticated && missing.length === 0 ? 'ready' as const : 'locked' as const, requires: item.requires };
-          const ops = item.endpointId === 'skill.candidate' ? { read: publicRead, list: publicRead, create: write, update: write, reject: write }
-            : item.endpointId === 'skill.evaluate' ? { read: publicRead, run: write } : { preview, apply: write };
-          const read = item.endpointId === 'skill.candidate' || item.endpointId === 'skill.evaluate' ? publicRead : preview;
-          return { ...item, ...read, operations: ops };
-        }
-        if (['work.project', 'work.group'].includes(item.endpointId)) {
-          const write = { available, state, requires: item.requires, ...(reason && { reason }) };
-          return { ...item, requires: [], available: true, state: 'ready' as const,
-            operations: { read: { available: true, state: 'ready' as const, requires: [] }, create: write, update: write,
-              ...(item.endpointId === 'work.group' && { join: write, leave: write, archive: write }) } };
-        }
-        if (['roleplay.world', 'roleplay.character', 'roleplay.scene', 'roleplay.evolution', 'roleplay.trpg'].includes(item.endpointId)) {
-          const setupMissing = context.roleplayWritesConfigured === false;
-          const write = { available: available && !setupMissing, state: setupMissing ? 'disabled' as const : state, requires: item.requires, ...(reason || setupMissing ? { reason: reason || 'host administrator configuration is missing' } : {}) };
-          const ops = (item.input.properties as Record<string, { enum?: string[] }> | undefined)?.op?.enum ?? [];
-          const readAvailable = !roleplayMissing || item.endpointId === 'roleplay.world';
-          const read = { available: readAvailable, state: readAvailable ? 'ready' as const : 'disabled' as const, requires: [] as string[], ...(!readAvailable && { reason: guidanceText('guid-ea5d5a7887df5598', 'host configuration is missing') }) };
-          return { ...item, ...read,
-            operations: Object.fromEntries((ops as string[]).map(op => [op, ['read', 'list', ...(item.endpointId === 'roleplay.trpg' ? ['export'] : [])].includes(op) ? read : ['preview', 'respec_preview'].includes(op) && !hostMissing ? { available: context.authenticated && missing.length === 0, state: context.authenticated && missing.length === 0 ? 'ready' as const : 'locked' as const, requires: item.requires } : write])) };
-        }
-        if (item.endpointId === 'community.participation') {
-          const write = { available, state, requires: item.requires, ...(reason && { reason }) };
-          const read = { available: context.authenticated, state: context.authenticated ? 'ready' as const : 'locked' as const, requires: ['authentication'], ...(!context.authenticated && { reason: guidanceText('guid-d85901f74db50a43', 'authentication required') }) };
-          return { ...item, requires: ['authentication'], available: context.authenticated, state: read.state,
-            operations: { read, update: write }, ...(!context.authenticated && { reason: guidanceText('guid-d85901f74db50a43', 'authentication required') }) };
-        }
+        const operations = operationAvailability(item, context, { available, state, requires: item.requires, ...(reason && { reason }) });
+        if (operations) return { ...item, ...operations };
         return { ...item, available, state, ...(reason && { reason }) };
       })
       .filter(item => !activeOnly || item.available);

@@ -21,6 +21,7 @@ import { SourceComparisonService } from './source-comparison.js';
 import { SourceChangeService } from './source-change.js';
 import { KnowledgeApplicationService } from './knowledge-applications.js';
 import { handleWikiLinkTool } from "./wikilink/index.js";
+import { NoteLinkService } from './note-link.js';
 import { GitHistoryService } from "./git-history.js";
 import { CollaborationService } from "./scopes.js";
 import { COLLABORATION_MUTATING_TOOLS, getCollaborationTools } from "./collaboration-tools.js";
@@ -55,14 +56,16 @@ import { AGENT_TASK_MUTATING_TOOLS, getAgentTaskTools } from "./agent-task-tools
 import { getWorkTools, WORK_MUTATING_TOOLS, WORK_TASK_PROPERTIES } from './work-tools.js';
 import { getExplanationTools, EXPLANATION_MUTATING_TOOLS, EXPLANATION_ENDPOINTS } from './explanation-tools.js';
 import { ExplanationService } from './explanation-service.js';
+import { attachExplanationHint } from './explanation-hint.js';
 import { BenchmarkService } from './benchmark-service.js';
 import { getBenchmarkTools, BENCHMARK_MUTATING_TOOLS, benchmarkOperation } from './benchmark-tools.js';
 import { checkReusableConfiguration, getConfigurationTools } from './configuration-tools.js';
 import { SkillEvolutionService } from './skill-evolution.js';
-import { getSkillEvolutionTools, SKILL_MUTATING_TOOLS, skillReadAlias } from './skill-evolution-tools.js';
+import { getSkillEvolutionTools, SKILL_MUTATING_TOOLS } from './skill-evolution-tools.js';
+import { operationReadAlias } from './operation-contracts.js';
 import { WorkGroupService } from './work-groups.js';
 import { getRoleplayTools, ROLEPLAY_MUTATING_TOOLS } from './roleplay-tools.js';
-import { getStoryTools, STORY_MUTATING_TOOLS, storyReadAlias, storyEndpointForTool, assertStoryOperation } from './story-tools.js';
+import { getStoryTools, STORY_MUTATING_TOOLS, storyEndpointForTool, assertStoryOperation } from './story-tools.js';
 import { getDocumentTools, DOCUMENT_TOOL_ENDPOINTS, dispatchDocumentTool } from './document-tools.js';
 import { DocumentResourceReader } from './document-resource.js';
 import { DocumentIndex } from './document-index.js';
@@ -352,6 +355,7 @@ const CAPABILITY_FOR_TOOL = {
     list_benchmarks: 'task', read_benchmark: 'task', submit_benchmark: 'task', review_benchmark: 'task', finalize_benchmark: 'task',
     update_agent_task: "task",
     save_work_state: "journal",
+    preview_learning_configuration: 'journal',
     report_content: "comment",
     moderate_content: "moderate",
     create_agent_scope: "profile",
@@ -679,6 +683,7 @@ export function createServer(vaultPath, options = {}) {
                 type: "object",
                 properties: {
                     path: { type: "string", description: guidanceText('guid-d0f5144b3c280de2', "Path to the note relative to vault root") },
+                    includeExplanation: { type: "boolean", default: false, description: guidanceText('guid-ea9dc3973b564acf', "Opt in to a current approved explanationAction for this original only; no draft or explanation text is mixed into the source. The optional link is omitted if unavailable or it cannot fit.") },
                     property: { type: "string", minLength: 1, maxLength: 128, description: guidanceText('guid-6f56646f7295c3c3', "Optional exact string Property name, for example recall_prompt. Excludes the body and all other Properties; missing/non-string values return an error.") },
                     offset: { type: "integer", minimum: 0, description: guidanceText('guid-52b5f95b56ba5ee7', "UTF-16 character offset within property only. Nonzero continuations require expectedRevision; use the returned nextAction unchanged.") },
                     knownRevision: { type: "string", description: guidanceText('guid-666034ff3af37e36', "Optional response-cache hint. After reading the current snapshot and checking visibility, unchanged notes return notModified without a body. This saves response tokens, not source reads; it does not reject changed notes.") },
@@ -1169,15 +1174,26 @@ export function createServer(vaultPath, options = {}) {
             }
         },
         {
+            name: "resolve_note_link",
+            description: guidanceText('guid-aa479537cb95b681', "Resolve an Obsidian link to exact revision-pinned bounded read actions, preserving heading/block fragments. Ambiguous visible names require an explicit path; hidden candidates are excluded. Does not return full bodies or select a first guess. Use instead of legacy wiki_link."),
+            inputSchema: { type: "object", additionalProperties: false, properties: {
+                    document: { type: "string", minLength: 1, maxLength: 1000 }, path: { type: "string", maxLength: 500 }, sourcePath: { type: "string", maxLength: 500 },
+                    expectedRevision: { type: "string", pattern: "^[a-f0-9]{64}$" }, maxChars: { type: "integer", minimum: 512, maximum: 12000, default: 4000 }, prettyPrint: { type: "boolean" },
+                }, required: ["document"] },
+        },
+        {
             name: "wiki_link",
-            description: guidanceText('guid-d5902eefb9ff2991', "Read an Obsidian wiki link. Accepts the same syntax as Obsidian: [[Document Name]] or [[Document Name|Display Text]], including table-authored escapes like [[Document Name\\|Display]] and path-qualified links like [[folder/Document Name]]. A #fragment suffix in the input is ignored. Searches the vault for an exact basename match (or exact vault-relative path match when the name contains '/') and returns the file's content. When multiple files share the basename, picks the first (vault root first, then alphabetical by path) and lists the other paths in structuredContent.alternatives. Content is returned bare — ready for direct use in context."),
+            description: guidanceText('guid-da6ba1001ad7adf6', "Deprecated compatibility read; use notes.resolve_link. Still picks the first authorized match (root first, then path order) and ignores fragments. Returns a bounded preview, current revision and exact continuation when truncated; does not promise the complete body. Supports Obsidian brackets, aliases, table escapes and qualified paths."),
             inputSchema: {
                 type: "object",
                 properties: {
                     document: {
                         type: "string",
+                        maxLength: 1000,
                         description: guidanceText('guid-94e2742ac957e114', "The document name — what goes inside [[ ]]. e.g. 'My-Document'. Brackets and display text (|...) are stripped if present. The .md extension is always appended (never include it).")
                     },
+                    maxChars: { type: "integer", minimum: 512, maximum: 12000, default: 4000 },
+                    expectedRevision: { type: "string", pattern: "^[a-f0-9]{64}$" },
                     prettyPrint: {
                         type: "boolean",
                         description: guidanceText('guid-49a10d71224f50bc', "Format JSON response with indentation (default: false)"),
@@ -1348,7 +1364,7 @@ export function createServer(vaultPath, options = {}) {
         const request = { params: { name: requestedToolName, arguments: requestArgs } };
         let toolName = requestedToolName;
         let args = request.params.arguments;
-        if (readOnly && MUTATING_TOOLS.has(toolName) && !storyReadAlias(toolName, args?.op) && !skillReadAlias(toolName, args?.op) && !(['manage_work_project', 'manage_work_group', 'manage_community_participation'].includes(toolName) && (args?.op === undefined || args?.op === 'read'))) {
+        if (readOnly && MUTATING_TOOLS.has(toolName) && !operationReadAlias(toolName, args?.op)) {
             await audit.record({ tool: toolName, ...(args && typeof args === 'object' ? { args: args } : {}), outcome: 'error', error: 'read-only mode' });
             return {
                 content: [{
@@ -1381,22 +1397,7 @@ export function createServer(vaultPath, options = {}) {
             else if (!FIXED_MCP_TOOL_NAMES.has(requestedToolName) && !ALLOW_HIDDEN_DIRECT_TOOLS_IN_TESTS) {
                 throw guidanceError(new Error(`Direct MCP tool '${requestedToolName}' is not exposed. Use search_capabilities and call_endpoint.`), 'guid-e5b95513008be9fa');
             }
-            toolName = skillReadAlias(toolName, rawArgs.op) || toolName;
-            toolName = storyReadAlias(toolName, rawArgs.op) || toolName;
-            if (toolName === 'manage_work_project' && (rawArgs.op === undefined || rawArgs.op === 'read'))
-                toolName = 'read_work_project';
-            if (toolName === 'manage_work_group' && (rawArgs.op === undefined || rawArgs.op === 'read'))
-                toolName = 'read_work_group';
-            if (['manage_roleplay_world', 'manage_roleplay_character', 'manage_roleplay_scene'].includes(toolName) && (!rawArgs.op || rawArgs.op === 'read'))
-                toolName = toolName.replace('manage_', 'read_');
-            if (toolName === 'correct_roleplay_turn' && rawArgs.op === 'preview')
-                toolName = 'preview_roleplay_correction';
-            if (toolName === 'manage_roleplay_evolution' && ['read', 'list', 'preview'].includes(String(rawArgs.op)))
-                toolName = rawArgs.op === 'preview' ? 'preview_roleplay_evolution' : 'read_roleplay_evolution';
-            if (toolName === 'manage_roleplay_trpg' && ['read', 'export', 'respec_preview'].includes(String(rawArgs.op)))
-                toolName = rawArgs.op === 'respec_preview' ? 'preview_roleplay_trpg' : 'read_roleplay_trpg';
-            if (toolName === 'manage_community_participation' && (rawArgs.op === undefined || rawArgs.op === 'read'))
-                toolName = 'read_community_participation';
+            toolName = operationReadAlias(toolName, rawArgs.op) || toolName;
             if (readOnly && MUTATING_TOOLS.has(toolName)) {
                 throw guidanceError(new Error(`Endpoint '${toolName}' is disabled because MCPVault is running in read-only mode.`), 'guid-189f788b35f642fb');
             }
@@ -1507,6 +1508,7 @@ export function createServer(vaultPath, options = {}) {
                     }
                     const service = new StoryService(fileSystem, scopeAccess, references, scopeAuth, work, agentTasks, {
                         readOnly, gitHistory, assertActor: async () => { await revalidateActor(); },
+                        readRoleplayTurn: (source, actor) => new RoleplayService(fileSystem, scopeAccess, references, options.roleplay, { assertActor: async () => { await revalidateActor(); } }).storyTurn(source, actor),
                         changed: path => queueReadModelChange(path, 'upsert'),
                     });
                     return jsonResult(await service.execute(storyEndpoint, storyArgs, principal), false);
@@ -1640,6 +1642,7 @@ export function createServer(vaultPath, options = {}) {
                     case "resume_work_state": {
                         return jsonResult(await continuity.read({
                             ...(principal && { principal }),
+                            ...(trimmedArgs.validatePins !== undefined && { validatePins: trimmedArgs.validatePins }),
                             ...(trimmedArgs.maxChars !== undefined && { maxChars: trimmedArgs.maxChars }),
                             prettyPrint: trimmedArgs.prettyPrint === true,
                         }), trimmedArgs.prettyPrint);
@@ -1836,7 +1839,21 @@ export function createServer(vaultPath, options = {}) {
                         return jsonResult(await llmWiki.contextPack(principal, trimmedArgs.path, trimmedArgs.maxChars, trimmedArgs.includeSemantic === true, trimmedArgs.intent), trimmedArgs.prettyPrint);
                     }
                     case "get_wiki_learning_path": {
-                        return jsonResult(await llmWiki.learningPath(principal, trimmedArgs.path, trimmedArgs.maxDepth, trimmedArgs.limit, trimmedArgs.maxChars, false, trimmedArgs.prettyPrint), trimmedArgs.prettyPrint);
+                        const result = await llmWiki.learningPath(principal, trimmedArgs.path, trimmedArgs.maxDepth, trimmedArgs.limit, trimmedArgs.maxChars, false, trimmedArgs.prettyPrint);
+                        const service = trimmedArgs.includeExplanation === true ? explanationService(principal ? revalidateActor : undefined) : undefined;
+                        if (!service)
+                            return jsonResult(result, trimmedArgs.prettyPrint);
+                        const value = result;
+                        const guards = [value.root, ...(value.authoredOrder ?? [])].filter(item => item?.path && item?.revision)
+                            .map(item => ({ path: scopeAccess.resolveExternalPath(item.path, principal), revision: item.revision }));
+                        const targetPath = typeof trimmedArgs.explanationPath === 'string' ? scopeAccess.resolveExternalPath(trimmedArgs.explanationPath, principal) : trimmedArgs.path;
+                        const target = guards.find(item => item.path === targetPath);
+                        if (!target)
+                            return jsonResult(result, trimmedArgs.prettyPrint);
+                        return jsonResult(await attachExplanationHint({ result: value, target, guards, fs: fileSystem, admitted: canAccessPath,
+                            maxChars: trimmedArgs.maxChars ?? 7000, prettyPrint: trimmedArgs.prettyPrint,
+                            approvedAction: () => service.approvedAction({ sourcePath: scopeAccess.toPublicPath(target.path), expectedSourceRevision: target.revision }, principal),
+                        }), trimmedArgs.prettyPrint);
                     }
                     case "get_wiki_authority_map": {
                         return jsonResult(await llmWiki.authorityMap(principal, {
@@ -2517,6 +2534,9 @@ export function createServer(vaultPath, options = {}) {
                         const { accessToken: _token, ...params } = rawArgs;
                         return jsonResult(checkReusableConfiguration(params), false);
                     }
+                    case 'preview_learning_configuration':
+                        return jsonResult(await continuity.previewLearningConfiguration({ ...rawArgs, ...(principal && { principal }), rootPath: rawArgs.rootPath,
+                            configuration: rawArgs.configuration, mappings: rawArgs.mappings }), false);
                     case 'manage_work_project':
                     case 'read_work_project': return jsonResult(await work.project({ ...trimmedArgs, principal }), false);
                     case 'resolve_skill': return jsonResult(await skillEvolution.resolve({ ...trimmedArgs, principal }), false);
@@ -2591,7 +2611,7 @@ export function createServer(vaultPath, options = {}) {
                         return jsonResult(await ideation.readIdea({ ideaId: trimmedArgs.ideaId, limit: trimmedArgs.limit, maxChars: trimmedArgs.maxChars, includeContent: trimmedArgs.includeContent }), trimmedArgs.prettyPrint);
                     }
                     case "branch_idea": {
-                        return jsonResult(await ideation.branchIdea({ ...(principal && { principal }), parentIdeaId: trimmedArgs.parentIdeaId, ideaId: trimmedArgs.ideaId, title: trimmedArgs.title, seed: trimmedArgs.seed, references: trimmedArgs.references, expectedParentRevision: trimmedArgs.expectedParentRevision }), trimmedArgs.prettyPrint);
+                        return jsonResult(await ideation.branchIdea({ ...(principal && { principal }), parentIdeaId: trimmedArgs.parentIdeaId, ideaId: trimmedArgs.ideaId, title: trimmedArgs.title, seed: trimmedArgs.seed, references: trimmedArgs.references, expectedParentRevision: trimmedArgs.expectedParentRevision, requestId: trimmedArgs.requestId }), trimmedArgs.prettyPrint);
                     }
                     case "update_idea_status": {
                         return jsonResult(await ideation.updateIdeaStatus({ ...(principal && { principal }), ideaId: trimmedArgs.ideaId, status: trimmedArgs.status, reason: trimmedArgs.reason, expectedRevision: trimmedArgs.expectedRevision }), trimmedArgs.prettyPrint);
@@ -2600,7 +2620,7 @@ export function createServer(vaultPath, options = {}) {
                         return jsonResult(await ideation.contributeIdea({ ...(principal && { principal }), ideaId: trimmedArgs.ideaId, kind: trimmedArgs.kind, content: trimmedArgs.content, references: trimmedArgs.references, replyTo: trimmedArgs.replyTo, requestId: trimmedArgs.requestId }), trimmedArgs.prettyPrint);
                     }
                     case "evaluate_idea": {
-                        return jsonResult(await ideation.evaluateIdea({ ...(principal && { principal }), ideaId: trimmedArgs.ideaId, novelty: trimmedArgs.novelty, usefulness: trimmedArgs.usefulness, feasibility: trimmedArgs.feasibility, risk: trimmedArgs.risk, evidenceQuality: trimmedArgs.evidenceQuality, rationale: trimmedArgs.rationale, references: trimmedArgs.references, expectedRevision: trimmedArgs.expectedRevision }), trimmedArgs.prettyPrint);
+                        return jsonResult(await ideation.evaluateIdea({ ...(principal && { principal }), ideaId: trimmedArgs.ideaId, novelty: trimmedArgs.novelty, usefulness: trimmedArgs.usefulness, feasibility: trimmedArgs.feasibility, risk: trimmedArgs.risk, evidenceQuality: trimmedArgs.evidenceQuality, rationale: trimmedArgs.rationale, references: trimmedArgs.references, expectedRevision: trimmedArgs.expectedRevision, expectedIdeaRevision: trimmedArgs.expectedIdeaRevision }), trimmedArgs.prettyPrint);
                     }
                     case "create_workshop": {
                         return jsonResult(await ideation.createWorkshop({ ...(principal && { principal }), workshopId: trimmedArgs.workshopId, title: trimmedArgs.title, prompt: trimmedArgs.prompt, agenda: trimmedArgs.agenda, ideaIds: trimmedArgs.ideaIds, timeboxMinutes: trimmedArgs.timeboxMinutes, maxContributionsPerAgent: trimmedArgs.maxContributionsPerAgent, references: trimmedArgs.references, requestId: trimmedArgs.requestId, facilitation: trimmedArgs.facilitation, revalidateActor, ...(trimmedArgs.researchWork && { researchWork: trimmedArgs.researchWork }) }), trimmedArgs.prettyPrint);
@@ -2716,7 +2736,14 @@ export function createServer(vaultPath, options = {}) {
                                 return noteReadBudgetError(text.length + 64, note.revision);
                             return { content: [{ type: 'text', text }] };
                         }
-                        return boundedNoteReadResult(trimmedArgs.path, note, trimmedArgs.maxChars, trimmedArgs.prettyPrint);
+                        const result = boundedNoteReadResult(trimmedArgs.path, note, trimmedArgs.maxChars, trimmedArgs.prettyPrint);
+                        const service = trimmedArgs.includeExplanation === true ? explanationService(principal ? revalidateActor : undefined) : undefined;
+                        if (!service || 'isError' in result)
+                            return result;
+                        const target = { path: trimmedArgs.path, revision: note.revision };
+                        return jsonResult(await attachExplanationHint({ result: JSON.parse(result.content[0].text), target, guards: [target], fs: fileSystem,
+                            admitted: canAccessPath, maxChars, prettyPrint: trimmedArgs.prettyPrint,
+                            approvedAction: () => service.approvedAction({ sourcePath: scopeAccess.toPublicPath(target.path), expectedSourceRevision: note.revision }, principal), }), trimmedArgs.prettyPrint);
                     }
                     case "write_note": {
                         await requireExpectedRevisionForExisting(fileSystem, trimmedArgs.path, trimmedArgs.expectedRevision, 'write_note');
@@ -3163,7 +3190,9 @@ export function createServer(vaultPath, options = {}) {
                         };
                     }
                     case "wiki_link":
-                        return await handleWikiLinkTool(fileSystem, trimmedArgs, canAccessPath);
+                        return await handleWikiLinkTool(fileSystem, trimmedArgs, canAccessPath, path => scopeAccess.toPublicPath(path));
+                    case "resolve_note_link":
+                        return jsonResult(await new NoteLinkService(fileSystem, canAccessPath, path => scopeAccess.toPublicPath(path)).resolve(trimmedArgs), trimmedArgs.prettyPrint);
                     case "get_backlinks": {
                         const page = navigationPageArgs(trimmedArgs);
                         const backlinks = await fileSystem.getBacklinks(trimmedArgs.path, page.limit, canAccessPath, page.offset, { includeSourceRevision: true, includeSnapshot: true });

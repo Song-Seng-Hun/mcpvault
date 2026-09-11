@@ -6,6 +6,7 @@ import { readFederationFile } from './public-federation-storage.js';
 import { assertHostPrivateStorage } from './skill-evolution-host.js';
 import { hostSourceRoots } from './host-source-roots.js';
 import { benchmarkFingerprint, benchmarkId, benchmarkObject, validateBenchmarkDefinition } from './benchmark-model.js';
+import { assertBenchmarkCollectorIsolation } from './benchmark-model.js';
 export { acquireBenchmarkWriter } from './benchmark-runtime.js';
 export function validateBenchmarkProfiles(raw) {
     if (!raw || typeof raw !== 'object' || Array.isArray(raw) || Object.keys(raw).length > 256)
@@ -35,6 +36,7 @@ export function validateBenchmarkHostConfig(raw) {
     if (operators.some(a => Object.hasOwn(profiles, a)))
         throw guidanceError(Error('Human operators cannot be benchmark agent profiles'), 'guid-433afcc2491880ec');
     for (const d of definitions) {
+        assertBenchmarkCollectorIsolation(d, definitions, profiles);
         for (const a of [...d.participants, ...d.reviewers])
             if (!profiles[a]?.approved || profiles[a].accountId !== a)
                 throw guidanceError(Error('Definition requires explicitly approved canonical accounts'), 'guid-3c38c00cbe6635d0');

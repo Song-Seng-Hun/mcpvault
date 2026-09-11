@@ -275,6 +275,18 @@ changes `Community/Roleplay` or starts a shared world.
 
 ## Integrity and limits
 
+### Import one committed TRPG turn
+
+An explicit `story.artifact` create can supply
+`roleplayTurn: {turnId, revision, noteRevision, shareable: true}` from one
+`roleplay.history` receipt. Choose `scene`, `alternative` or `summary` and omit
+`content`; the adapter creates a marked fictional draft through the same Story
+writer. It does not adopt, publish, replay an action, roll dice or issue XP.
+The source must be a committed `trpg_` event with an accessible currently open
+room. Turn and room revisions are pinned; retries recheck room authority.
+Private/narrower-scope material cannot be imported into a wider Story scope.
+Subsequent editing stays in the existing artifact workflow, preserving provenance.
+
 Every mutation needs live authentication, capabilities, project membership and
 revision guards. Generic note writes/deletes/moves cannot forge managed story
 records. Direct host/Obsidian edits remain possible and are detected as changed

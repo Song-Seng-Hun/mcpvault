@@ -123,6 +123,12 @@ Thumbs.db
 # Codex local settings
 .codex/
 
+# Host-owned runtime, rollback, identities and worker scratch (never publish)
+.agents/
+.mcpvault/
+__pycache__/
+*.py[cod]
+
 # Triage automation data (personal, never published to the public repo)
 .triage/
 

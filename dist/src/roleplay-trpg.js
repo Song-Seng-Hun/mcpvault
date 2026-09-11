@@ -1,6 +1,6 @@
 import { guidanceError } from './guidance-runtime.js';
 import { capabilityRemoval, configId, configIds, configKeys, configNumber, validateCapabilityGraph, validateCapabilitySelection } from './capability-graph.js';
-import { roleplayHash, roleplayRevision } from './roleplay-model.js';
+import { roleplayHash, roleplayRevision } from './roleplay-kernel.js';
 /** Bounded trusted route provenance, never caller-supplied or a permission grant. */
 export const ROLEPLAY_REGISTERED_ROUTE = {
     kind: 'registered_action', reason: 'Registered declarative mechanics resolved under the canonical writer.',

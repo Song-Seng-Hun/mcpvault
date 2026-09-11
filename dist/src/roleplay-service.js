@@ -67,6 +67,38 @@ export class RoleplayService {
         if (note.frontmatter.mcpvault_type !== 'chat_room' || note.frontmatter.status !== 'open' || isModerationHidden(note.frontmatter))
             throw guidanceError(new Error('Scene room unavailable'), 'guid-dfaa39e3ad00bbca');
     }
+    /** Explicit host adapter for an existing Story draft, never a game mutation. */
+    async storyTurn(source, principal) {
+        if (!this.store || !principal)
+            throw guidanceError(Error('Committed TRPG source unavailable'), 'guid-2daeb0d077d98aa7');
+        if (!source || source.shareable !== true)
+            throw guidanceError(Error('Explicit shareable approval required for a Story import'), 'guid-de76fe340ac8f2d1');
+        if (Object.keys(source).some(key => !['turnId', 'revision', 'noteRevision', 'shareable'].includes(key))
+            || !/^[a-f0-9]{64}$/.test(source.revision) || !/^[a-f0-9]{64}$/.test(source.noteRevision))
+            throw guidanceError(Error('Invalid TRPG source revision'), 'guid-d4fc663413bc4bce');
+        roleplayId(source.turnId);
+        await this.options.assertActor(principal);
+        const record = await this.store.committedTurn(source.turnId), receipt = record?.event.receipt;
+        if (!record || !receipt || !receipt.roomId || !receipt.kind.startsWith('trpg_') || receipt.revision !== source.revision
+            || record.revision !== source.noteRevision || !this.visible(record.path, principal) || isModerationHidden(record.frontmatter))
+            throw guidanceError(Error('Committed TRPG source unavailable or changed'), 'guid-84cce34d87943b30');
+        const roomPath = `Community/ChatRooms/${roleplayId(receipt.roomId)}.md`;
+        await this.assertRoom(receipt.roomId, principal);
+        const room = await this.fs.readNote(roomPath, 512000);
+        const guards = [{ path: record.path, expectedRevision: record.revision }, { path: roomPath, expectedRevision: room.revision }];
+        const assertCurrent = async () => {
+            await this.options.assertActor(principal);
+            await this.assertRoom(receipt.roomId, principal);
+            for (const guard of guards)
+                if (!this.visible(guard.path, principal) || await this.fs.readNoteRevision(guard.path, 512000) !== guard.expectedRevision)
+                    throw guidanceError(Error('TRPG source or room revision changed'), 'guid-1dda9fa6a92f23b7');
+            await this.options.assertActor(principal);
+            if (guards.some(g => !this.visible(g.path, principal)))
+                throw guidanceError(Error('TRPG source unavailable'), 'guid-f3c30d3ce5d8a229');
+        };
+        await assertCurrent();
+        return { content: `# Fictional TRPG draft\n\n${roleplayText(receipt.content, 12000)}\n\nImported from one committed fictional turn. Not an adopted Story scene or real-world evidence.\n`, guards, assertCurrent };
+    }
     async captureGuards(paths, principal) {
         if (new Set(paths).size > 128)
             throw guidanceError(new Error('Evolution reference capacity reached'), 'guid-2ce9e54957e7e2d0');

@@ -45,9 +45,14 @@ export async function selectSituationCandidates(fs: FileSystemService, access: S
   } while (after);
   // Reserve eight candidate slots for explicit safety/evidence relations.
   const outcome = await retrieval.memoryCandidates({ query, limit: 12, ...(principal && { principal }), semantic, canAccessPath: p => allowed.has(p) && canAccess(p), candidateRevisions: revisions });
-  const hits = [...outcome.results];
-  for (const hit of activated) if (hits.length < 12 && !hits.some(h => h.p === hit.p)) hits.push(hit);
-  return { ...outcome, results: hits, diagnostics };
+  // Put up to two explicit activations inside the existing retrieval budget and
+  // early enough for downstream bounded hydration. Keep richer retrieved hits
+  // when available; all unused reserved slots return to ordinary ranking.
+  const pathOf = (hit: RetrievalHit) => retrieval.physical(hit, principal);
+  const reserved = activated.slice(0, 2).map(hit => outcome.results.find(h => pathOf(h) === pathOf(hit)) ?? hit);
+  const reservedPaths = new Set(reserved.map(pathOf));
+  const hits = [...reserved, ...outcome.results.filter(hit => !reservedPaths.has(pathOf(hit)))].slice(0, 12);
+  return { ...outcome, results: hits, diagnostics, activatedPaths: [...reservedPaths] };
 }
 
 /** Keep source units intact. A clipped unit becomes an exact continuation rather

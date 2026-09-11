@@ -54,3 +54,31 @@ test('topic tokens avoid substring collisions and own receipts do not trigger se
   expect(matchesParticipationTopic({ title: 'chair repair' }, 'ai')).toBe(false);
   expect(matchesParticipationTopic({ title: 'AI research' }, 'ai')).toBe(true);
 });
+
+test('empty-discussion initiative distinguishes seen activity, rooms, introductions and unknown inventory', async () => {
+  await post('self-introductions', { pinned: true });
+  await fs.writeNote({ path: 'Community/ChatRooms/lobby.md', content: 'hi', expectedRevision: 'missing',
+    frontmatter: { mcpvault_type: 'chat_room', status: 'open', title: 'science' } });
+  const empty = await service.pulse({ principal });
+  expect(empty.discussion).toMatchObject({ state: 'empty' });
+  expect(empty.initiation).toMatchObject({ emptyDiscussion: true, endpointId: 'community.post' });
+  await post('q');
+  const target = (await candidates()).find(c => c.path.endsWith('/q.md'))!;
+  let state = await service.settings({ principal });
+  state = await service.record({ principal, op: 'start', action: 'explore', target, expectedRevision: state.revision, requestId: 'seen-start' });
+  await service.record({ principal, op: 'skip', runId: state.activeRun!.id, expectedRevision: state.revision, requestId: 'seen-skip' });
+  const seen = await service.pulse({ principal });
+  expect(seen.discussion).toMatchObject({ state: 'active' });
+  expect(seen.initiation).toBeUndefined();
+  for (const status of ['closed','resolved','wont_fix','archived']) {
+    const note = await fs.readNote('Community/Posts/q.md');
+    await fs.writeNote({ path: 'Community/Posts/q.md', content: note.content, frontmatter: { ...note.frontmatter, workflow_status: status }, expectedRevision: note.revision });
+    expect((await service.pulse({ principal })).discussion, status).toMatchObject({ state: 'empty' });
+  }
+  await post('oversized');
+  const big = await fs.readNote('Community/Posts/oversized.md');
+  await fs.writeNote({ path: 'Community/Posts/oversized.md', content: 'x'.repeat(70_000), frontmatter: big.frontmatter, expectedRevision: big.revision });
+  const unknown = await service.pulse({ principal });
+  expect(unknown.discussion).toMatchObject({ state: 'unknown' });
+  expect(unknown.initiation).toBeUndefined();
+});

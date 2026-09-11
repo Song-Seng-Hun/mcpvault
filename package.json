@@ -34,6 +34,7 @@
     "guidance:generate": "tsx scripts/guidance-build.ts --write",
     "guidance:check": "tsx scripts/guidance-build.ts --check",
     "guidance:sync": "tsx guidance-host.ts",
+    "check:staged": "node scripts/check-staged-paths.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "prepublishOnly": "npm run build && npm test",

@@ -35,6 +35,11 @@ export class StoryArtifacts {
     if (!['create', 'update'].includes(op)) throw guidanceError(new Error('Invalid story artifact operation'), 'guid-ec40ac46d9976233');
     const workGuard = await this.w.authorize(project, principal), actor = principal!;
     const prior = await this.w.store.read(path, actor, true), request = this.w.store.request(`artifact.${op}`, params, actor);
+    if (params.roleplayTurn !== undefined && (op !== 'create' || params.content !== undefined || !['scene','alternative','summary'].includes(params.kind))) throw guidanceError(new Error('TRPG import requires a new scene/alternative/summary draft without replacement content'), 'guid-7ec552636e01ba0c');
+    const roleplaySource = params.roleplayTurn ?? prior?.frontmatter.roleplay_source;
+    if (roleplaySource && !this.w.options.readRoleplayTurn) throw guidanceError(new Error('TRPG Story import is not configured'), 'guid-279001fc366f6f24');
+    const imported = roleplaySource ? await this.w.options.readRoleplayTurn!(roleplaySource, actor) : undefined;
+    for (const guard of imported?.guards ?? []) if (!this.w.access.canReferenceFrom(path,guard.path)) throw guidanceError(new Error('TRPG source cannot be shared into this Story scope'), 'guid-2b75efb17bb02480');
     const retry = this.w.store.retry(prior, request); if (retry) return retry;
     this.w.projectRevision(project, params.expectedProjectRevision);
     if (op === 'create' && prior) throw guidanceError(new Error('Story artifact already exists; choose a distinct alternative ID'), 'guid-59781fdb2c28b246');
@@ -45,7 +50,7 @@ export class StoryArtifacts {
     if (prior && (prior.frontmatter.kind !== kind || prior.frontmatter.branch_id !== branchId)) throw guidanceError(new Error('Artifact kind and branch are immutable; create an explicit alternative'), 'guid-3581a75ed50dc03d');
     const title = storyText(params.title ?? prior?.frontmatter.title, 'title', 180, true);
     if (/[\r\n]/.test(title)) throw guidanceError(new Error('Story artifact title must be a single line'), 'guid-42c25f66a2e31918');
-    const content = storyText(params.content ?? prior?.content, 'content', 20000);
+    const content = storyText(params.content ?? prior?.content ?? imported?.content, 'content', 20000);
     const data = storyData(params.data ?? prior?.frontmatter.data ?? {});
     if (kind === 'shot' && (!data.sourceSceneId || !data.sourceSceneRevision)) throw guidanceError(new Error('Shot requires source scene ID and revision'), 'guid-d5f6b2083a488a2b');
     if (data.graph !== undefined) {
@@ -89,13 +94,14 @@ export class StoryArtifacts {
       if (image.revision && revision !== image.revision) throw guidanceError(new Error('Story image source revision changed or unavailable'), 'guid-9e58911680ef8724');
       image.path = normalized;
     }
-    const sourceGuards = this.w.mergeGuards([...guards, ...references.guards]);
+    const sourceGuards = this.w.mergeGuards([...guards, ...references.guards, ...(imported?.guards ?? [])]);
     const fm = { ...prior?.frontmatter, mcpvault_type: 'story_artifact', fiction_domain: 'story', project_id: projectId, artifact_id: artifactId,
       kind, branch_id: branchId, title, data, references: references.paths, artifact_sources: sources, source_revisions: sourceGuards,
+      ...(roleplaySource && {roleplay_source:roleplaySource}),
       author_account_id: prior?.frontmatter.author_account_id ?? actor.accountId, last_editor_account_id: actor.accountId,
       created_at: prior?.frontmatter.created_at ?? new Date().toISOString() };
     return this.w.store.write(path, fm, content, params.expectedRevision, request,
       { path, projectId, artifactId, kind, branchId, nextAction: { endpointId: 'story.artifact', arguments: { projectId, artifactId } } },
-      [{ path: project.path, expectedRevision: project.revision }, workGuard, ...sourceGuards], async () => { await this.w.authorize(project, actor); }, prior);
+      [{ path: project.path, expectedRevision: project.revision }, workGuard, ...sourceGuards], async () => { await this.w.authorize(project, actor); await imported?.assertCurrent(); }, prior);
   }
 }

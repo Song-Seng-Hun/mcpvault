@@ -6,6 +6,7 @@ import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
 import { createServer } from './createServer.js';
 import { RoleplayStore } from './roleplay-store.js';
 import { roleplayRevision } from './roleplay-model.js';
+import { FileSystemService } from './filesystem.js';
 const cleanup: Array<() => Promise<unknown>> = [];
 afterEach(async () => { for (const close of cleanup.splice(0).reverse()) await close(); });
 test('dynamic TRPG routing preserves public reads, authenticated preview, read-only writes and fixed five tools', async () => {
@@ -34,6 +35,18 @@ test('dynamic TRPG routing preserves public reads, authenticated preview, read-o
   await mutation('roleplay.trpg', { op: 'adopt', preset: 'mcpvault-adventure@1.0.0' });
   await mutation('roleplay.trpg', { op: 'learn', characterId: 'alice', generation: 1, skillId: 'guard' }, 'player');
   expect((await call('roleplay.trpg', { op: 'read', characterId: 'alice', maxChars: 2000 })).mode).toBe('trpg');
+  const fs = new FileSystemService(vault);
+  await fs.writeNote({path:'Community/ChatRooms/hall.md',content:'Hall',frontmatter:{mcpvault_type:'chat_room',status:'open'}});
+  await mutation('roleplay.character',{op:'character',id:'bob',name:'Bob',controller:'host',location:'hall'});
+  await mutation('roleplay.scene',{op:'scene',roomId:'hall',location:'hall',title:'Hall',gm:'host'});
+  const turn=await mutation('roleplay.trpg',{op:'encounter_start',roomId:'hall',participants:['alice','bob']});
+  const worldRevision=roleplayRevision(await store.snapshot());
+  const project=await call('story.project',{op:'create',projectId:'trpg-story',title:'Fictional story',brief:{medium:'novel'},participants:['player'],expectedRevision:'missing',requestId:'story-project',accessToken:tokens.host});
+  const imported=await call('story.artifact',{op:'create',projectId:'trpg-story',artifactId:'encounter',kind:'scene',title:'Encounter',expectedRevision:'missing',expectedProjectRevision:project.revision,requestId:'turn-import',accessToken:tokens.player,
+    roleplayTurn:{turnId:turn.id,revision:turn.revision,noteRevision:turn.noteRevision,shareable:true}});
+  expect((await fs.readNote(imported.path)).content).toContain('Fictional TRPG draft');
+  expect(roleplayRevision(await store.snapshot())).toBe(worldRevision);
+  await mutation('roleplay.trpg',{op:'encounter_end',roomId:'hall'});
   const readOnly = await connect(true);
   const readOnlyToken = (await call('auth.login', { accountId: 'player', password: 'temporary-trpg-wiring-only' }, readOnly)).accessToken;
   expect((await call('roleplay.trpg', { op: 'read' }, readOnly)).mode).toBe('trpg');

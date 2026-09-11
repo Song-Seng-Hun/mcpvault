@@ -7,7 +7,7 @@ import { participationPath, type ParticipationAction } from './community-partici
 import { ScopeAccessPolicy } from './scope-access.js';
 import type { ScopePrincipal } from './scope-auth.js';
 import type { ParsedNote } from './types.js';
-import { matchesParticipationTopic } from './community-participation-candidates.js';
+import { discussionSnapshot, matchesParticipationTopic } from './community-participation-candidates.js';
 
 const REQUEST_FIELDS = [
   'community_request_id', 'community_request_actor', 'community_request_action',
@@ -189,6 +189,12 @@ async function reserveParticipationAttempt(params: {
     if (!params.topicMetadata || !matchesParticipationTopic(params.topicMetadata, run.topic)) {
       throw guidanceError(new Error('Public creation metadata does not match the authorized participation topic'), 'guid-1a36909fedfbc832');
     }
+    // Executed under the existing public-create coordinator, after replay lookup.
+    // A losing run keeps its consumed budget. Reconcile before the next pulse;
+    // never auto-clear a receipt or silently start a second public action.
+    if (run.emptyDiscussion === true && (await discussionSnapshot(params.fileSystem, access, params.principal)).state !== 'empty') {
+      throw guidanceError(Error('Discussion is no longer confirmed empty; read community.participation, then skip this run with noMutation=true and its exact revision before the next participation pulse. If a publicAttempt already exists, reconcile that exact result first'), 'guid-bdc63e99155bf936');
+    }
   } else if (!run.target?.path) {
     let topicMatches = false;
     for (const parentPath of params.parentPaths) {
@@ -265,7 +271,6 @@ export async function runPublicCreate<T>(params: {
       return params.replay(raced);
     }
   };
-  if (!params.request) return execute();
   const previous = coordinator;
   let release!: () => void;
   coordinator = new Promise<void>(resolve => { release = resolve; });

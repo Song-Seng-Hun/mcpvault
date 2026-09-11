@@ -2,6 +2,7 @@ import { guidanceError } from './guidance-runtime.js';
 import { roleplayId, roleplayRevision } from './roleplay-model.js';
 import { trpgCombat, trpgStats } from './roleplay-trpg.js';
 import { createHash } from 'node:crypto';
+import { diagnoseCapabilityGraph } from './capability-graph.js';
 const EMPTY_DIGEST = '0'.repeat(64);
 /** Escape only platform device basenames; '_' cannot occur in a canonical ID,
  * so this mapping cannot collide with another character's ordinary filename. */
@@ -54,6 +55,10 @@ export function trpgRows(s, characterId) {
     if (characterId)
         roleplayId(characterId);
     const rows = [{ kind: 'ruleset', id: r.id, version: r.version, fingerprint: t.fingerprint, actionsPerTurn: r.actionsPerTurn, switchCost: r.switchCost }];
+    const diagnostics = diagnoseCapabilityGraph(r.skills.map(({ id, requires, excludes, cost }) => ({ id, requires, excludes, cost })));
+    rows.push(...diagnostics.items.map(item => ({ kind: 'configuration_diagnostic', advisory: true, ...item })));
+    if (diagnostics.truncated)
+        rows.push({ kind: 'configuration_diagnostics_truncated', advisory: true });
     for (const [id, c] of Object.entries(t.sheets).filter(([id]) => !characterId || id === characterId)) {
         rows.push({ kind: 'sheet', characterId: id, growth: c.growth, active: c.active });
         for (const [key, value] of Object.entries(c.attributes))

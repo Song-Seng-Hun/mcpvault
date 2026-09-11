@@ -2,6 +2,7 @@ import { guidanceError } from './guidance-runtime.js';
 import { roleplayId, roleplayRevision, type RoleplayState } from './roleplay-model.js';
 import { trpgCombat, trpgStats } from './roleplay-trpg.js';
 import { createHash } from 'node:crypto';
+import { diagnoseCapabilityGraph } from './capability-graph.js';
 
 export interface TrpgArtifact { path: string; content: string }
 const EMPTY_DIGEST = '0'.repeat(64);
@@ -50,6 +51,9 @@ export function trpgRows(s: RoleplayState, characterId?: string): Array<Record<s
   const t = s.trpg, r = t.ruleset;
   if (characterId) roleplayId(characterId);
   const rows: Array<Record<string, any>> = [{ kind: 'ruleset', id: r.id, version: r.version, fingerprint: t.fingerprint, actionsPerTurn: r.actionsPerTurn, switchCost: r.switchCost }];
+  const diagnostics = diagnoseCapabilityGraph(r.skills.map(({id, requires, excludes, cost}) => ({id, requires, excludes, cost})));
+  rows.push(...diagnostics.items.map(item => ({ kind:'configuration_diagnostic', advisory:true, ...item })));
+  if (diagnostics.truncated) rows.push({kind:'configuration_diagnostics_truncated', advisory:true});
   for (const [id, c] of Object.entries(t.sheets).filter(([id]) => !characterId || id === characterId)) {
     rows.push({ kind: 'sheet', characterId: id, growth: c.growth, active: c.active });
     for (const [key, value] of Object.entries(c.attributes)) rows.push({ kind: 'attribute', characterId: id, key, value });

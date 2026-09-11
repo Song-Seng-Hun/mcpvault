@@ -14,6 +14,17 @@ test('host inspect is read-only and requires explicit absolute paths and operato
   expect(() => parseBenchmarkHostArgs(['inspect', 'relative', config, 'operator', 'demo'])).toThrow(/absolute/i);
   expect(() => parseBenchmarkHostArgs(['award', vault, config, 'operator', 'demo'])).toThrow(/operation|usage/i);
 });
+
+test('global initiative status is a read-only host command without a participant or challenge filter', () => {
+ expect(parseBenchmarkHostArgs(['initiative-status',vault,config,'operator'])).toMatchObject({operation:'initiative-status',params:{}});
+ expect(()=>parseBenchmarkHostArgs(['initiative-status',vault,config,'operator','demo'])).toThrow();
+});
+test('result evidence CLI requires explicit selected fields and shareable approval', () => {
+  const args = ['evidence', vault, config, 'operator', 'demo', '--expected-revision', 'a'.repeat(64), '--request-id', 'export', '--expected-projection-revision', 'missing', '--entry-id', 'entry', '--fields', 'outcome,scores'];
+  expect(() => parseBenchmarkHostArgs(args)).toThrow(/shareable/i);
+  expect(parseBenchmarkHostArgs([...args, '--shareable', 'true']).params).toMatchObject({ entryId: 'entry', fields: ['outcome', 'scores'], shareable: true });
+  expect(() => parseBenchmarkHostArgs([...args, '--shareable', 'false'])).toThrow(/shareable/i);
+});
 test('mutation CLI never invents revision, request ID, projection overwrite or wallet config', () => {
   const head = ['open', vault, config, 'operator', 'demo'];
   expect(() => parseBenchmarkHostArgs(head)).toThrow(/revision|request/i);

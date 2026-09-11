@@ -265,6 +265,13 @@ export class RoleplayStore {
     }
     snapshot() { return this.serial(async () => structuredClone((await this.replay()).state)); }
     read() { return this.serial(async () => structuredClone(await this.replay())); }
+    /** Exact retained receipt only; do not clone the whole world for an import. */
+    committedTurn(turnId) {
+        return this.serial(async () => {
+            const record = (await this.replay()).records.find(r => r.event.receipt.id === turnId);
+            return record ? structuredClone(record) : undefined;
+        });
+    }
     async transact(command, revalidate) {
         if (Object.hasOwn(command, 'rolls') || Object.hasOwn(command.data, 'rolls'))
             throw guidanceError(new Error('Caller cannot supply recorded dice outcomes'), 'guid-141dc1c59a936e13');

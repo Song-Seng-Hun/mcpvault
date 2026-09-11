@@ -85,6 +85,9 @@ describe('progressive Wiki policy', () => {
     expect(retrieval.rules.join(' ')).toContain('cached candidates');
     expect(retrieval.rules.join(' ')).toContain('source hashes and moderation');
     expect(retrieval.rules.join(' ')).toContain('not missing knowledge');
+    expect(retrieval.rules.join(' ')).toContain('notes.resolve_link');
+    expect(retrieval.rules.join(' ')).toContain('exact revision-pinned readAction');
+    expect(JSON.stringify(retrieval).length).toBeLessThanOrEqual(4000);
   });
 
   test('retrieval guidance uses physical source lines and revision checks for search hits', () => {

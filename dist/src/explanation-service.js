@@ -3,6 +3,7 @@ import { posix } from 'node:path';
 import { FrontmatterHandler } from './frontmatter.js';
 import { isModerationHidden } from './moderation-policy.js';
 import { coordinate, fingerprint, page, textField } from './work-model.js';
+import { explanationEligibility } from './explanation-eligibility.js';
 import { explanationKey, explanationApproval, explanationProfileFingerprint, validateExplanationDraft, validateExplanationReview, verifiedExplanationProfile } from './explanation-model.js';
 const unavailable = () => guidanceError(Error('Explanation source unavailable'), 'guid-599da163ef09f089');
 const canonicalPath = (path) => {
@@ -177,6 +178,33 @@ export class ExplanationService {
             return this.observedRead(principal, visible => this.executeInternal(op, params, principal, visible));
         return this.executeInternal(op, params, principal);
     }
+    /** Explicit opt-in navigation only: no draft text, work suggestion or generation. */
+    async approvedAction(params, principal) {
+        let config;
+        try {
+            config = this.config(params.sourcePath, principal);
+        }
+        catch {
+            return undefined;
+        }
+        if (principal && !principal.capabilities?.includes('task'))
+            return undefined;
+        return this.observedRead(principal, async (visible) => {
+            await this.options.executionProfiles();
+            const source = await this.source(config, principal);
+            visible.add(config.path);
+            if (source.revision !== params.expectedSourceRevision)
+                throw guidanceError(new Error('Explanation source changed; reread the original'), 'guid-ce09ffc89ae149b2');
+            const record = await this.record(source, config);
+            const approved = await this.approved(record.value, source);
+            await this.fresh(source, config, record.revision, principal);
+            if (!approved)
+                return undefined;
+            if (!await this.approved(record.value, source))
+                throw guidanceError(Error('Explanation review authority changed'), 'guid-0eca92cf4f67980c');
+            return { endpointId: 'explanations.read', arguments: { sourcePath: this.external(source.path), expectedSourceRevision: source.revision, expectedRevision: record.revision, maxChars: 4000 } };
+        });
+    }
     async executeInternal(op, params, principal, visible) {
         await this.options.executionProfiles();
         if (op === 'list') {
@@ -228,14 +256,8 @@ export class ExplanationService {
                 canReadDraft = Boolean(profile);
             }
             const items = approved || canReadDraft ? record.value?.draft?.blocks ?? [] : [];
-            const status = !approved && record.value?.status === 'approved' ? 'review_required' : record.value?.status ?? 'queued';
-            const authorBasisCurrent = Boolean(record.value?.authorProfileFingerprint && record.value.authorProfileFingerprint === explanationProfileFingerprint(profiles, record.value.author));
-            let operation = !canReadDraft || approved ? undefined : ['queued', 'released'].includes(status) ? 'claim'
-                : record.value?.author === principal?.accountId && (['claimed', 'changes_requested', 'review_required'].includes(status) || status === 'draft' && !authorBasisCurrent) ? 'draft'
-                    : record.value?.author !== principal?.accountId && authorBasisCurrent && ['draft', 'changes_requested', 'review_required'].includes(status) ? 'review' : undefined;
-            if (operation === 'review' && explanationApproval({ sourceRevision: source.revision, currentRevision: source.revision, author: record.value.author,
-                reviewer: principal.accountId, profiles, review: { checks: [] } }).reason === 'independent_verified_family_required')
-                operation = undefined;
+            const eligible = explanationEligibility(record.value, approved, principal?.accountId, profiles);
+            let operation = eligible.claim ? 'claim' : eligible.draft ? 'draft' : eligible.review ? 'review' : undefined;
             if (operation === 'claim' && ((this.options.canTakeWork && !await this.options.canTakeWork(principal)) || await this.hasOwnWork(principal)))
                 operation = undefined;
             const response = page(items, { id: record.id, revision: record.revision, sourcePath: this.external(source.path), sourceRevision: source.revision,
@@ -379,17 +401,15 @@ export class ExplanationService {
                 continue;
             }
             const record = await this.record(source, config);
-            const status = record.value?.status === 'approved' && !await this.approved(record.value, source) ? 'review_required' : record.value?.status ?? 'queued';
-            const author = verifiedExplanationProfile(profiles, record.value?.author ?? '');
-            const authorBasisCurrent = Boolean(record.value?.authorProfileFingerprint && record.value.authorProfileFingerprint === explanationProfileFingerprint(profiles, record.value.author));
-            const review = !hasOwnWork && authorBasisCurrent && ['draft', 'changes_requested', 'review_required'].includes(status) && record.value?.author !== principal.accountId && author?.family && author.family.toLowerCase() !== own.family.toLowerCase();
-            const drafting = !hasOwnWork && ['queued', 'released'].includes(status) && own.family.toLowerCase() === 'gemini';
-            const continuing = ['claimed', 'draft', 'changes_requested', 'review_required'].includes(status) && record.value?.author === principal.accountId;
+            const eligible = explanationEligibility(record.value, await this.approved(record.value, source), principal.accountId, profiles);
+            const review = !hasOwnWork && eligible.review;
+            const drafting = !hasOwnWork && eligible.claim && own.family.toLowerCase() === 'gemini';
+            const continuing = eligible.continuing;
             if (review || drafting || continuing) {
                 visible.add(config.path);
                 await this.fresh(source, config, record.revision, principal);
                 return { endpointId: 'explanations.read', arguments: { sourcePath: this.external(source.path), expectedSourceRevision: source.revision, expectedRevision: record.revision, maxChars: 6000 },
-                    reason: review ? 'Review a source-pinned explanation; no model execution requested.' : status === 'draft' && continuing
+                    reason: review ? 'Review a source-pinned explanation; no model execution requested.' : eligible.status === 'draft' && continuing
                         ? 'Your explanation is waiting for independent review; do not claim another job or start an optional challenge.'
                         : 'Gemini explanation preference; voluntary work, not an empirical ranking or execution grant.' };
             }

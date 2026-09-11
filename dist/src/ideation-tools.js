@@ -31,7 +31,7 @@ export function getIdeationTools() {
         {
             name: 'branch_idea',
             description: guidanceText('guid-a603f5eb2def7cab', 'Create a new idea as an explicit branch of an existing one. This preserves divergent thinking and parent provenance; it never overwrites the parent.'),
-            inputSchema: { type: 'object', properties: { parentIdeaId: { type: 'string' }, ideaId: { type: 'string' }, title: { type: 'string', maxLength: 180 }, seed: { type: 'string', maxLength: 4000 }, references, expectedParentRevision: { type: 'string' }, accessToken, prettyPrint }, required: ['parentIdeaId', 'title', 'seed', 'expectedParentRevision', 'accessToken'] },
+            inputSchema: { type: 'object', properties: { parentIdeaId: { type: 'string' }, ideaId: { type: 'string' }, title: { type: 'string', maxLength: 180 }, seed: { type: 'string', maxLength: 4000 }, requestId, references, expectedParentRevision: { type: 'string' }, accessToken, prettyPrint }, required: ['parentIdeaId', 'title', 'seed', 'expectedParentRevision', 'accessToken'] },
         },
         {
             name: 'update_idea_status',
@@ -46,7 +46,7 @@ export function getIdeationTools() {
         {
             name: 'evaluate_idea',
             description: guidanceText('guid-e385a84bef46212b', 'Record or revise one evaluator\'s bounded assessment. Score novelty, usefulness, feasibility, risk, and evidence quality separately so radical ideas are not discarded only for being hard to implement.'),
-            inputSchema: { type: 'object', properties: { ideaId: { type: 'string' }, novelty: { type: 'integer', minimum: 1, maximum: 5 }, usefulness: { type: 'integer', minimum: 1, maximum: 5 }, feasibility: { type: 'integer', minimum: 1, maximum: 5 }, risk: { type: 'integer', minimum: 1, maximum: 5 }, evidenceQuality: { type: 'integer', minimum: 1, maximum: 5 }, rationale: { type: 'string', maxLength: 280 }, references, expectedRevision: { type: 'string', description: guidanceText('guid-7e3d53592e733fea', 'Required when this evaluator already has an evaluation; omit for the first evaluation.') }, accessToken, prettyPrint }, required: ['ideaId', 'novelty', 'usefulness', 'feasibility', 'risk', 'evidenceQuality', 'rationale', 'accessToken'] },
+            inputSchema: { type: 'object', properties: { ideaId: { type: 'string' }, novelty: { type: 'integer', minimum: 1, maximum: 5 }, usefulness: { type: 'integer', minimum: 1, maximum: 5 }, feasibility: { type: 'integer', minimum: 1, maximum: 5 }, risk: { type: 'integer', minimum: 1, maximum: 5 }, evidenceQuality: { type: 'integer', minimum: 1, maximum: 5 }, rationale: { type: 'string', maxLength: 280 }, references, expectedRevision: { type: 'string', description: guidanceText('guid-7e3d53592e733fea', 'Required when this evaluator already has an evaluation; omit for the first evaluation.') }, expectedIdeaRevision: { type: 'string', description: guidanceText('guid-17a1b5cf7e212e9a', 'Optional source idea revision. Omit to pin the server-read current idea revision.') }, accessToken, prettyPrint }, required: ['ideaId', 'novelty', 'usefulness', 'feasibility', 'risk', 'evidenceQuality', 'rationale', 'accessToken'] },
         },
         {
             name: 'create_workshop',

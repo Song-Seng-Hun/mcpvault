@@ -12,7 +12,10 @@ import type { QueryNotesCursor } from './types.js';
 import { StoryStore } from './story-store.js';
 import { storyArtifactPath, storyHash, storyList, storyPath, storyProjectPath, storyRevision, storyRoot, type StoryGuard, type StoryNote, type StoryParams, type StorySource } from './story-model.js';
 
-export interface StoryOptions { readOnly?: boolean; assertActor?: (principal: ScopePrincipal) => Promise<void>; changed?: (path: string) => void; gitHistory?: GitHistoryService }
+export interface StoryOptions {
+  readOnly?: boolean; assertActor?: (principal: ScopePrincipal) => Promise<void>; changed?: (path: string) => void; gitHistory?: GitHistoryService;
+  readRoleplayTurn?: (source: {turnId:string;revision:string;noteRevision:string;shareable:boolean}, principal: ScopePrincipal) => Promise<{content:string;guards:StoryGuard[];assertCurrent:()=>Promise<void>}>;
+}
 
 /** Shared security and current-source checks, not a model executor. */
 export class StoryWorkspace {

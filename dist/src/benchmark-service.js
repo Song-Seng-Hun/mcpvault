@@ -3,8 +3,11 @@ import { ScopeAccessPolicy } from './scope-access.js';
 import { PathFilter } from './pathfilter.js';
 import { isModerationHidden } from './moderation-policy.js';
 import { coordinate, page, textField } from './work-model.js';
-import { economyRevision } from './economy-model.js';
+import { economyRevision, economyRetry } from './economy-model.js';
 import { validateBenchmarkProfiles } from './benchmark-host.js';
+import { assertBenchmarkCollectorIsolation } from './benchmark-model.js';
+import { runBenchmarkInitiative } from './benchmark-initiative.js';
+export { runBenchmarkInitiative } from './benchmark-initiative.js';
 import { BENCHMARK_MAX_TEXT, benchmarkFingerprint, benchmarkId, benchmarkInteger, benchmarkObject, validateBenchmarkDefinition, validateBenchmarkReview, gradeBenchmark, evaluateBenchmarkPeer, rankBenchmark } from './benchmark-model.js';
 const OPERATIONS = ['list', 'read', 'submit', 'review', 'finalize'];
 const unavailable = () => guidanceError(Error('Benchmark record or source unavailable'), 'guid-406f6e5b477288d0');
@@ -108,6 +111,7 @@ export class BenchmarkService {
     }
     async profilesCurrent(d, r) {
         const profiles = await this.profiles();
+        assertBenchmarkCollectorIsolation(d, [...this.definitions, ...r.versions.map(v => v.definition)], profiles);
         for (const a of [...new Set([...d.participants, ...d.reviewers])])
             if (!profiles[a]?.approved || profiles[a].accountId !== a || !await this.options.accountAvailable(a))
                 throw guidanceError(Error('Benchmark approved profile or current account unavailable'), 'guid-0453353c6f1a9814');
@@ -164,6 +168,93 @@ export class BenchmarkService {
             return { challengeId: id, revision, state: 'open' };
         });
     }
+    /** Host-only global absence proof over configured selected problems and their
+     * existing sealed records. Never a participant list, corpus scan or index. */
+    async initiativeStatus(operator) {
+        await this.options.assertHumanOperator(operator);
+        if (!this.options.enabled)
+            return { state: 'disabled' };
+        return coordinate(async () => {
+            const directory = '_whispers/benchmarks';
+            const inventory = async () => {
+                try {
+                    return await this.fs.listDirectory(directory);
+                }
+                catch (error) {
+                    if (error instanceof Error && error.message.startsWith('Directory not found:'))
+                        return { files: [], directories: [] };
+                    throw error;
+                }
+            };
+            let changed = false;
+            const sourcePaths = new Set(this.definitions.flatMap(d => d.sources.map(s => this.fs.noteChangeIdentity(s.path))));
+            const dispose = this.fs.observeNoteChanges(path => { if (path.replace(/\\/g, '/').startsWith(`${directory}/`) || sourcePaths.has(this.fs.noteChangeIdentity(path)))
+                changed = true; });
+            try {
+                const before = await inventory(), paths = new Set(this.definitions.map(d => `${d.lineage}.md`));
+                if (before.files.length > 100 || before.directories.length || before.files.some(path => !paths.has(path)))
+                    return { state: 'unknown' };
+                const guards = new Map();
+                const pin = (path, revision) => {
+                    const key = this.fs.noteChangeIdentity(path), prior = guards.get(key);
+                    if (prior && prior.revision !== revision)
+                        return false;
+                    if (!prior)
+                        guards.set(key, { path, revision });
+                    return true;
+                };
+                for (const d of this.definitions) {
+                    if (!before.files.includes(`${d.lineage}.md`))
+                        return { state: 'pending_approval' };
+                    const loaded = await this.load(d), r = loaded.record, v = r.versions.find(v => v.definition.id === d.id);
+                    if (r.versions.some(previous => !this.definitions.some(configured => configured.id === previous.definition.id && benchmarkFingerprint(configured) === benchmarkFingerprint(previous.definition))))
+                        return { state: 'unknown' };
+                    if (!v)
+                        return { state: 'pending_approval' };
+                    this.version(r, d);
+                    await this.sources(d);
+                    await this.profilesCurrent(d, r);
+                    if (!pin(this.path(d), loaded.revision) || d.sources.some(source => !pin(source.path, source.revision)))
+                        return { state: 'unknown' };
+                    if (v.phase === 'open')
+                        return { state: 'active' };
+                    if (v.phase === 'decided' && !v.decision)
+                        return { state: 'unknown' };
+                    if (d.reward > 0) {
+                        if (!this.options.ledger)
+                            return { state: 'unknown' };
+                        const program = (await this.options.ledger.snapshot()).programs?.[d.id];
+                        if (!program || !program.closed)
+                            return { state: 'active' };
+                    }
+                }
+                // An incomplete reservation may exist before its selected record is written.
+                if (this.options.ledger && Object.values((await this.options.ledger.snapshot()).programs ?? {}).some(program => !program.closed))
+                    return { state: 'active' };
+                for (const { path, revision } of guards.values())
+                    if (await this.fs.readNoteRevision(path, 4 * 1024 * 1024) !== revision)
+                        return { state: 'unknown' };
+                if (benchmarkFingerprint(before) !== benchmarkFingerprint(await inventory()) || changed)
+                    return { state: 'unknown' };
+                await this.options.assertHumanOperator(operator);
+                if (changed)
+                    return { state: 'unknown' };
+                return { state: 'empty' };
+            }
+            catch {
+                return { state: 'unknown' };
+            }
+            finally {
+                dispose();
+            }
+        });
+    }
+    /** Host integration entrypoint; the current runtime's host authentication and
+     * global state are bound here, never supplied by an agent endpoint argument. */
+    async runInitiative(operator, trigger, host) {
+        await this.options.assertHumanOperator(operator);
+        return runBenchmarkInitiative({ ...(host && { host }), trigger, inspect: () => this.initiativeStatus(operator), now: () => Date.parse(this.now()) });
+    }
     budget(params) { return benchmarkInteger(params.maxChars ?? 4000, 512, 12000); }
     bounded(result, params) { if (JSON.stringify(result).length > this.budget(params))
         throw guidanceError(Error('Benchmark response exceeds maxChars'), 'guid-52be862c10914dc3'); return result; }
@@ -200,7 +291,7 @@ export class BenchmarkService {
             if (!current)
                 throw unavailable();
             if (field === 'definition') {
-                const { participants: _p, reviewers: _r, ...definition } = d;
+                const { participants: _p, reviewers: _r, collectorAccounts: _collectors, collectorOwnerIds: _owners, ...definition } = d;
                 result = { ...common, definition };
                 if (JSON.stringify(result).length > this.budget(params)) {
                     const { problem: _problem, rubric: _rubric, sources: _sources, ...summary } = definition;
@@ -328,10 +419,27 @@ export class BenchmarkService {
             await this.options.ledger.transact({ op: 'award_program', actor: entry.account, requestId: `benchmark-award:${d.lineage}:${entry.account}`, programId: d.id, award: this.proof(d, decision, entry.account) }, async () => { await assertAuthority(); await this.sources(d); });
         }
     }
+    assertSettlement(d, r, state) {
+        const decision = this.version(r, d).decision, program = state.programs?.[d.id];
+        if (!program || program.cancellation || economyRevision(program.terms) !== economyRevision(BenchmarkService.issuanceProgram(d)))
+            throw guidanceError(Error('Benchmark settlement program unavailable or changed'), 'guid-9d5f35413073ec77');
+        if (program.awarded !== decision.winners.length)
+            throw guidanceError(Error('Benchmark settlement requires every winner payment receipt'), 'guid-3a4d42df39ad5296');
+        for (const id of decision.winners) {
+            const entry = r.entries.find(e => e.id === id && e.definitionId === d.id);
+            if (!entry)
+                throw guidanceError(Error('Benchmark settlement entry unavailable'), 'guid-a523a479033088a7');
+            const award = state.benchmarkAwards?.[economyRevision({ lineage: d.lineage, account: entry.account })];
+            const receipt = economyRetry(state, { op: 'award_program', actor: entry.account, requestId: `benchmark-award:${d.lineage}:${entry.account}`, programId: d.id, award: this.proof(d, decision, entry.account) });
+            if (!receipt || award?.programId !== d.id || award.account !== entry.account)
+                throw guidanceError(Error('Benchmark settlement requires every winner payment receipt'), 'guid-3a4d42df39ad5296');
+        }
+        return program;
+    }
     /** CLI/host-only pathway. Never map these operations to agent endpoints. */
     async executeHost(op, params, operator) {
         params = structuredClone(params);
-        benchmarkObject(params, ['challengeId', 'expectedRevision', 'expectedProjectionRevision', 'requestId', 'maxChars', 'reason']);
+        benchmarkObject(params, ['challengeId', 'expectedRevision', 'expectedProjectionRevision', 'requestId', 'maxChars', 'reason', ...(op === 'evidence' ? ['entryId', 'fields', 'shareable'] : [])]);
         this.budget(params);
         const d = this.definition(params.challengeId);
         await this.options.assertHumanOperator(operator);
@@ -385,6 +493,8 @@ export class BenchmarkService {
             await this.sources(d);
             await this.profilesCurrent(d, r);
             const assertCurrent = async () => { await this.options.assertHumanOperator(operator); await this.sources(d); await this.profilesCurrent(d, r); };
+            if (op === 'evidence')
+                return this.resultEvidence(d, loaded, params, assertCurrent);
             const key = benchmarkFingerprint({ actor: operator, requestId }), payload = benchmarkFingerprint({ op: `host-${op}`, challengeId: d.id });
             const prior = r.receipts.find(e => e.key === key);
             if (prior && prior.payload !== payload)
@@ -409,15 +519,20 @@ export class BenchmarkService {
             if (op === 'close') {
                 if (this.now() < d.deadline)
                     throw guidanceError(Error('Benchmark close deadline not reached'), 'guid-efaa3e1720508488');
+                if (v.phase !== 'decided' || !v.decision)
+                    throw guidanceError(Error('Normal close requires a durable decision; use reasoned human cancellation to abandon a benchmark'), 'guid-1f9f9228cafaa893');
+                const assertDecision = async () => { await assertCurrent(); if ((await this.load(d)).revision !== loaded.revision)
+                    throw guidanceError(Error('Benchmark decision changed during settlement'), 'guid-5bc9673c582fb149'); };
                 if (d.reward) {
                     if (!this.options.ledger)
                         throw guidanceError(Error('Approved ledger unavailable'), 'guid-84a14277563138e2');
-                    const state = await this.options.ledger.snapshot(), program = state.programs?.[d.id];
-                    if (!program)
-                        throw guidanceError(Error('Program unavailable'), 'guid-dbd5e1abe1f9b42f');
+                    const program = this.assertSettlement(d, r, await this.options.ledger.snapshot());
+                    // Validate the actual serialized ledger state again; never snapshot this
+                    // ledger from its callback or replace existing payment/replay records.
                     if (!program.closed)
-                        await this.options.ledger.transact({ op: 'close_program', actor: operator, requestId: `benchmark-close:${d.id}`, programId: d.id, expectedRevision: economyRevision(program) }, assertCurrent);
+                        await this.options.ledger.transact({ op: 'close_program', actor: operator, requestId: `benchmark-close:${d.id}`, programId: d.id, expectedRevision: economyRevision(program) }, async (state) => { this.assertSettlement(d, r, state); await assertDecision(); });
                 }
+                await assertDecision();
                 return this.bounded({ challengeId: d.id, revision: loaded.revision, state: v.phase, reservation: 'closed' }, params);
             }
             if (op !== 'project')
@@ -445,6 +560,46 @@ export class BenchmarkService {
                 throw guidanceError(Error('Benchmark projection unavailable; recheck revision and current authority'), 'guid-38380c683d25e219');
             }
         });
+    }
+    async resultEvidence(d, loaded, params, assertCurrent) {
+        if (params.shareable !== true)
+            throw guidanceError(Error('Explicit human shareable approval required'), 'guid-d9c6ec868f0c53b1');
+        if (params.expectedRevision !== loaded.revision)
+            throw guidanceError(Error('Benchmark result revision conflict'), 'guid-00f51008079ff095');
+        const v = this.version(loaded.record, d);
+        if (v.phase !== 'decided' || !v.decision || this.now() < d.deadline)
+            throw guidanceError(Error('A completed decided benchmark result is required'), 'guid-5e6c7d88091330ca');
+        const fields = params.fields;
+        if (!Array.isArray(fields) || !fields.length || fields.length > 2 || new Set(fields).size !== fields.length || fields.some(f => !['outcome', 'scores'].includes(f)))
+            throw guidanceError(Error('Only explicitly selected outcome/scores fields can be shared'), 'guid-59d2bf4bbdc369f2');
+        const entry = v.decision.entries.find(e => e.entryId === benchmarkId(params.entryId));
+        if (!entry)
+            throw unavailable();
+        const result = { ...(fields.includes('outcome') && { outcome: entry.outcome }), ...(fields.includes('scores') && { scores: [...entry.scores] }) };
+        const snapshot = benchmarkFingerprint({ challengeId: d.id, revision: loaded.revision, entryId: entry.entryId, result });
+        const path = `${this.access.getCommunityRoot()}/Benchmarks/${d.id}-result-${snapshot.slice(0, 24)}.md`;
+        if (!this.filter.isAllowed(path) || !d.sources.every(s => this.access.canReferenceFrom(path, s.path)))
+            throw unavailable();
+        const existing = await this.fs.noteExists(path) ? await this.fs.readNote(path, 64 * 1024) : undefined;
+        const frontmatter = { mcpvault_type: 'benchmark_projection', benchmark_id: d.id, benchmark_result_revision: loaded.revision, benchmark_snapshot: snapshot,
+            benchmark_result: result, shareable: true, evidence_paths: d.sources.map(s => s.path), evidence_revisions: d.sources, freshness: 'snapshot_requires_revalidation' };
+        const content = `# Selected benchmark result\n\n${JSON.stringify(result)}\n\nHuman-approved field selection from one fixed result revision. This observation is not general model quality, current approval, Skill promotion or payment authority.\n`;
+        const finish = async (revision, replay = false) => {
+            await assertCurrent();
+            if ((await this.load(d)).revision !== loaded.revision || await this.fs.readNoteRevision(path, 64 * 1024) !== revision)
+                throw unavailable();
+            await assertCurrent();
+            return this.bounded({ challengeId: d.id, path, revision, ...(replay && { replay: true }), nextAction: { endpointId: 'skill.experience', arguments: { evidence: [{ path, revision }], expectedRevision: 'missing' }, requiredArguments: ['skillId', 'usedVersion', 'applied', 'shareable', 'outcome', 'context', 'summary', 'requestId'] } }, params);
+        };
+        if (existing) {
+            if (isModerationHidden(existing.frontmatter) || Object.entries(frontmatter).some(([key, value]) => benchmarkFingerprint(existing.frontmatter[key] ?? null) !== benchmarkFingerprint(value)) || existing.content !== content)
+                throw guidanceError(Error('Result evidence changed; preserve it for review'), 'guid-ef470de25d923708');
+            return finish(existing.revision, true);
+        }
+        if (params.expectedProjectionRevision !== 'missing')
+            throw guidanceError(Error('Result evidence projection revision conflict'), 'guid-e618673a51675bde');
+        const receipt = await this.fs.writeNoteWithRevisionGuardsAndReceipt({ path, content, frontmatter, expectedRevision: 'missing' }, [{ path: this.path(d), expectedRevision: loaded.revision }, ...d.sources.map(s => ({ path: s.path, expectedRevision: s.revision }))], { maxBytes: 64 * 1024, maxGuards: 128, assertAccess: assertCurrent });
+        return finish(receipt.revision);
     }
     async execute(op, params, principal) {
         params = structuredClone(params);

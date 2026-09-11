@@ -3,6 +3,8 @@ import type { FileSystemService } from '../filesystem.js';
 export interface WikiLinkToolArgs {
     document: string;
     prettyPrint?: boolean;
+    maxChars?: number;
+    expectedRevision?: string;
 }
 /**
  * Handle the `wiki_link` MCP tool call.
@@ -17,5 +19,5 @@ export interface WikiLinkToolArgs {
  *   `path` (the resolved pick), and `alternatives` (the other matched paths,
  *   present only when more than one file shares the basename).
  */
-export declare function handleWikiLinkTool(fileSystem: FileSystemService, args: WikiLinkToolArgs, canAccessPath?: (path: string) => boolean): Promise<CallToolResult>;
+export declare function handleWikiLinkTool(fileSystem: FileSystemService, args: WikiLinkToolArgs, canAccessPath?: (path: string) => boolean, publicPath?: (path: string) => string): Promise<CallToolResult>;
 //# sourceMappingURL=wikiLinkTool.d.ts.map

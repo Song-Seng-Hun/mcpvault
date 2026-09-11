@@ -14,6 +14,7 @@ import { getIdeationTools } from './ideation-tools.js';
 import { CommunityParticipationService, participationPath } from './community-participation.js';
 import { SocialService } from './social.js';
 import { getSocialTools } from './social-tools.js';
+import { runPublicCreate } from './community-public-retry.js';
 
 let vault: string;
 let fileSystem: FileSystemService;
@@ -43,12 +44,64 @@ function social(fs = fileSystem) {
   return new SocialService(fs, scopeAccess, new ReferenceService(fs, scopeAccess), {} as ReputationService);
 }
 
+test('requestless public creates share the coordinator before revalidation and actual file writes', async () => {
+  const events:string[]=[];
+  let release!:()=>void, entered!:()=>void;
+  const gate=new Promise<void>(resolve=>{release=resolve;});
+  const firstEntered=new Promise<void>(resolve=>{entered=resolve;});
+  const create=(name:string)=>runPublicCreate({fileSystem,principal:alice,request:undefined,targetPath:`Community/Posts/${name}.md`,participationActions:['initiate'],
+    revalidate:async()=>{events.push(`${name}-validate`);return {};},
+    create:async()=>{events.push(`${name}-create`);if(name==='first'){entered();await gate;}return fileSystem.writeNote({path:`Community/Posts/${name}.md`,content:name,expectedRevision:'missing'});},
+    replay:()=>{throw Error('No receipt to replay');}});
+  const first=create('first');await firstEntered;
+  const second=create('second');
+  try {
+    await Promise.resolve();await Promise.resolve();
+    expect(events).toEqual(['first-validate','first-create']);
+  } finally {release();await Promise.all([first,second]);}
+  expect(events).toEqual(['first-validate','first-create','second-validate','second-create']);
+  expect((await fileSystem.readNote('Community/Posts/first.md')).content).toBe('first');
+  expect((await fileSystem.readNote('Community/Posts/second.md')).content).toBe('second');
+});
+
 async function seedRoom(roomId = 'retry-room') {
   await fileSystem.writeNote({
     path: `Community/ChatRooms/${roomId}.md`, content: '# Retry room\n', expectedRevision: 'missing',
     frontmatter: { mcpvault_type: 'chat_room', room_id: roomId, title: 'Retry room', tags: ['science'], status: 'open', created_by: 'alice-worker' },
   });
 }
+
+test('concurrent empty-discussion initiators converge on the first public topic without a second write', async () => {
+  const participation = new CommunityParticipationService(fileSystem);
+  const begin = async (principal: ScopePrincipal) => {
+    let state = await participation.settings({ principal, op: 'update', requestId: 'enable-empty', expectedRevision: 'missing',
+      settings: { enabled: true, allowedTopics: ['science'], allowedActions: ['initiate'] } });
+    return participation.record({ principal, op: 'start', action: 'initiate', topic: 'science', emptyDiscussion: true,
+      requestId: 'empty-start', expectedRevision: state.revision } as any);
+  };
+  const a = await begin(alice), b = await begin(bob);
+  const create = (principal: ScopePrincipal, state: any) => ideation().createWorkshop({ principal, title: 'science question',
+    prompt: 'Which result should we test? Evidence: prior observations. Desired response: a counterexample.',
+    tags: ['science'], requestId: state.activeRun.publicRequestId });
+  const results = await Promise.allSettled([create(alice, a), create(bob, b)]);
+  expect(results.filter(r => r.status === 'fulfilled')).toHaveLength(1);
+  const rejected = results.find(r => r.status === 'rejected') as PromiseRejectedResult;
+  expect(rejected.reason.message).toMatch(/discussion.*(active|empty)|existing.*topic/i);
+  expect(rejected.reason.message).toMatch(/skip.*noMutation=true.*pulse/i);
+  const notes = await fileSystem.queryNotes({ pathPrefix: 'Community/Workshops', includeContent: false });
+  expect(notes.notes).toHaveLength(1);
+  // Exact retry of the winning public request still succeeds; no new run or reward.
+  const winner = results[0]!.status === 'fulfilled' ? [alice, a] as const : [bob, b] as const;
+  await expect(create(...winner)).resolves.toBeDefined();
+  const loser = results[0]!.status === 'rejected' ? alice : bob;
+  const current = await participation.settings({ principal: loser });
+  expect(current.activeRun?.publicAttempt).toBeUndefined();
+  await participation.record({ principal:loser,op:'skip',runId:current.activeRun!.id,expectedRevision:current.revision,requestId:'converge-skip',noMutation:true });
+  const pulse = await participation.pulse({principal:loser});
+  expect(pulse.discussion).toMatchObject({state:'active'});
+  expect((pulse.candidates as any[]).map(c=>c.path)).toContain(notes.notes[0]!.path);
+  expect(pulse.daily).toMatchObject({initiations:1,runs:1});
+});
 
 async function seedIdea(ideaId = 'parent-idea') {
   await fileSystem.writeNote({

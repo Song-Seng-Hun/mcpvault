@@ -50,6 +50,19 @@ export declare class ExplanationService {
      * This is not a cross-process filesystem snapshot/transaction guarantee. */
     private observedRead;
     execute(op: string, params: ExplanationParams, principal?: ScopePrincipal): Promise<Record<string, any>>;
+    /** Explicit opt-in navigation only: no draft text, work suggestion or generation. */
+    approvedAction(params: {
+        sourcePath: string;
+        expectedSourceRevision: string;
+    }, principal?: ScopePrincipal): Promise<{
+        endpointId: string;
+        arguments: {
+            sourcePath: string;
+            expectedSourceRevision: string;
+            expectedRevision: string;
+            maxChars: number;
+        };
+    } | undefined>;
     private executeInternal;
     nextAction(principal: ScopePrincipal): Promise<{
         endpointId: string;

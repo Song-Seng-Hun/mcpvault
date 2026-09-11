@@ -79,6 +79,39 @@ export function capabilityRemoval(nodes, learned, requested) {
     }
     return learned.filter(id => remove.has(id));
 }
+/** One deterministic witness per unreachable node, at most eight rows. Legal
+ * alternative branches and selections remain valid; this never edits a graph. */
+export function diagnoseCapabilityGraph(input) {
+    const graph = validateCapabilityGraph(input).sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+    const map = new Map(graph.map(node => [node.id, node]));
+    const result = { advisory: true, truncated: false, items: [] };
+    for (const node of graph) {
+        const closure = new Set(), pending = [node.id];
+        while (pending.length) {
+            const id = pending.pop();
+            if (closure.has(id))
+                continue;
+            closure.add(id);
+            pending.push(...map.get(id).requires);
+        }
+        let conflict;
+        for (const id of [...closure].sort()) {
+            const excluded = [...map.get(id).excludes].sort().find(other => closure.has(other));
+            if (excluded) {
+                conflict = [id, excluded];
+                break;
+            }
+        }
+        if (!conflict)
+            continue;
+        if (result.items.length === 8) {
+            result.truncated = true;
+            break;
+        }
+        result.items.push({ nodeId: node.id, reason: 'prerequisite_exclusion_conflict', conflict });
+    }
+    return result;
+}
 /** Input is exactly {id, version, nodes: CapabilityNode[], selected: string[]}.
  * Return only a compact validation summary, never source bodies or executable steps. */
 function checkConfiguration(kind, input) {
@@ -91,7 +124,8 @@ function checkConfiguration(kind, input) {
     const nodes = graph.map(n => ({ id: n.id, requires: [...n.requires].sort(), excludes: [...n.excludes].sort(), cost: n.cost })).sort((a, b) => a.id < b.id ? -1 : 1);
     const fingerprint = createHash('sha256').update(JSON.stringify({ kind, id, version, nodes, selected })).digest('hex');
     return { kind, id, version, valid: true, nodeCount: nodes.length, selectedCount: selected.length,
-        totalCost: nodes.filter(n => selected.includes(n.id)).reduce((sum, n) => sum + n.cost, 0), fingerprint, executable: false, permissionsGranted: false };
+        totalCost: nodes.filter(n => selected.includes(n.id)).reduce((sum, n) => sum + n.cost, 0), fingerprint, executable: false, permissionsGranted: false,
+        diagnostics: diagnoseCapabilityGraph(nodes) };
 }
 export function validateLearningPathConfiguration(input) { return checkConfiguration('learning-path', input); }
 export function validateProceduralBundleConfiguration(input) { return checkConfiguration('procedural-bundle', input); }

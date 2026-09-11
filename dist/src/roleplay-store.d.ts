@@ -69,6 +69,8 @@ export declare class RoleplayStore {
     private replay;
     snapshot(): Promise<RoleplayState>;
     read(): Promise<Replay>;
+    /** Exact retained receipt only; do not clone the whole world for an import. */
+    committedTurn(turnId: string): Promise<Replay['records'][number] | undefined>;
     transact(command: RoleplayCommand, revalidate?: (state: RoleplayState) => Promise<void>): Promise<RoleplayReceipt & {
         path: string;
         noteRevision: string;

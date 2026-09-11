@@ -47,13 +47,16 @@ export interface ResearchParams {
     submission?: unknown;
     review?: unknown;
     closure?: unknown;
-    field?: 'status' | 'submissions' | 'reviews' | 'config' | 'closure' | 'submission' | 'review';
+    field?: 'rounds' | 'status' | 'submissions' | 'reviews' | 'config' | 'closure' | 'submission' | 'review';
     itemIndex?: number;
     limit?: number;
     maxChars?: number;
     cursor?: string;
     revalidateActor: () => Promise<ScopePrincipal>;
 }
+type ResearchReadParams = Omit<ResearchParams, 'roundId'> & {
+    roundId?: string;
+};
 type Guard = {
     path: string;
     expectedRevision: string;
@@ -69,11 +72,13 @@ export declare class IndependentResearchService {
     private paths;
     private actor;
     private workshop;
+    private workshopParent;
     private parse;
     private closure;
     private evidence;
     private readRecord;
-    read(p: ResearchParams): Promise<import("./work-model.js").WorkPage | {
+    private rounds;
+    read(input: ResearchReadParams): Promise<import("./work-model.js").WorkPage | {
         workshopId: string;
         roundId: string;
         field: string;

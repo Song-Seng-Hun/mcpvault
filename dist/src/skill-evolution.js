@@ -215,13 +215,22 @@ export class SkillEvolutionService {
             throw guidanceError(Error('Invalid experience outcome'), 'guid-89daebd163be4d47');
         const b = await this.basis(id, actor);
         const used = await this.store.evidence([p.usedVersion], path, actor, 1);
-        if (used[0].path !== b.path || used[0].revision !== b.revision)
-            throw guidanceError(Error('Used skill revision is not the current version; preserve older use privately for review'), 'guid-2a1983dd15288e20');
+        const usedGuard = used[0];
+        if (usedGuard.path !== b.source.path) {
+            const prefix = `${rootPath(id)}_evolution/versions/`;
+            if (!usedGuard.path.startsWith(prefix) || !/^[a-f0-9]{24}\.md$/.test(usedGuard.path.slice(prefix.length)))
+                throw guidanceError(Error('Used version must be a retained verified version of this Skill'), 'guid-16902eeab4541379');
+            const retained = await this.store.record(usedGuard.path, actor);
+            if (retained.data.kind !== 'version' || retained.data.skillId !== id || retained.revision !== usedGuard.revision)
+                throw guidanceError(Error('Retained Skill version changed'), 'guid-e8c83c69080bae20');
+        }
+        else if (usedGuard.revision !== b.source.revision)
+            throw guidanceError(Error('Retained Skill source revision changed'), 'guid-a5c7ef994ba69bef');
         const evidence = await this.store.evidence(p.evidence, path, actor);
         const context = text(p.context, 'context'), summary = text(p.summary, 'summary');
         const data = { kind: 'experience', id: recordId, skillId: id, actor: actor.accountId, request: req, outcome: p.outcome,
             applied: true, shareable: true, usedVersion: used[0], evidence, context, summary };
-        const record = await this.save(path, `# Skill use experience\n\n${context}\n\n${summary}\n`, data, p, [...used, ...evidence], actor, 'missing');
+        const record = await this.save(path, `# Skill use experience\n\n${context}\n\n${summary}\n`, data, p, [...b.sourceGuards, ...used, ...evidence], actor, 'missing');
         return this.result(record, p);
     }
     async candidate(p) {

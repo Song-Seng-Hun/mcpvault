@@ -7,6 +7,7 @@ import { VaultIoCoordinator } from './vault-io.js';
 type ChangeKind = 'upsert' | 'delete';
 interface SemanticSearchParams extends SearchParams {
     principal?: ScopePrincipal | undefined;
+    signal?: AbortSignal;
 }
 export interface SemanticSearchOutcome {
     results: SearchResult[];
@@ -92,6 +93,7 @@ export declare class SemanticSearchService {
      * allowed here. Source revision/body verification belongs to its read budget. */
     memoryCandidates(params: MemorySearchParams & {
         principal?: ScopePrincipal;
+        signal?: AbortSignal;
     }): Promise<MemorySemanticSearchOutcome>;
     search(params: SemanticSearchParams): Promise<SemanticSearchOutcome>;
     private searchCurrent;
@@ -127,6 +129,7 @@ export declare class SemanticSearchService {
     private embed;
     private embedDirect;
     private embedQuery;
+    private computeQuery;
     private embedMany;
     private prepareIndex;
     private reusableVectors;

@@ -101,13 +101,14 @@ export class RetrievalService {
       else {
         let timer: ReturnType<typeof setTimeout> | undefined;
         let outcome: MemorySemanticSearchOutcome | undefined;
+        const cancellation = new AbortController();
         try {
           if (this.semantic.memoryCandidates) outcome = await Promise.race([
-            this.semantic.memoryCandidates({ ...safe,
+            this.semantic.memoryCandidates({ ...safe, signal: cancellation.signal,
               ...(params.queryVector !== undefined && { queryVector: params.queryVector }),
               ...(params.principal && { principal: params.principal }),
             }),
-            new Promise<undefined>(resolve => { timer = setTimeout(() => resolve(undefined), 2000); timer.unref?.(); }),
+            new Promise<undefined>(resolve => { timer = setTimeout(() => { cancellation.abort(); resolve(undefined); }, 2000); timer.unref?.(); }),
           ]);
         } catch { /* Only bounded states escape the backend boundary. */ }
         finally { if (timer) clearTimeout(timer); }
@@ -160,10 +161,11 @@ export class RetrievalService {
       else {
         let timer: ReturnType<typeof setTimeout> | undefined;
         let outcome: SemanticSearchOutcome | undefined;
+        const cancellation = new AbortController();
         try {
           outcome = await Promise.race([
-            this.semantic.search({ ...safe, canAccessPath: admitted, ...(params.pathPrefix !== undefined && { pathPrefix: this.physical({ p: params.pathPrefix } as RetrievalHit, params.principal) }), ...(params.queryVector !== undefined && { queryVector: params.queryVector }), ...(params.principal && { principal: params.principal }) }),
-            new Promise<undefined>(resolve => { timer = setTimeout(() => resolve(undefined), 2000); timer.unref?.(); }),
+            this.semantic.search({ ...safe, signal: cancellation.signal, canAccessPath: admitted, ...(params.pathPrefix !== undefined && { pathPrefix: this.physical({ p: params.pathPrefix } as RetrievalHit, params.principal) }), ...(params.queryVector !== undefined && { queryVector: params.queryVector }), ...(params.principal && { principal: params.principal }) }),
+            new Promise<undefined>(resolve => { timer = setTimeout(() => { cancellation.abort(); resolve(undefined); }, 2000); timer.unref?.(); }),
           ]);
         } catch { /* Optional backend failures never erase lexical results. */ }
         finally { if (timer) clearTimeout(timer); }

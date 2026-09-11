@@ -661,6 +661,8 @@ export declare class LlmWikiService {
         total: number;
         items: Record<string, unknown>[];
         truncated: boolean;
+        completeInventory: boolean;
+        partial: boolean;
         generatedAt: string;
     }>;
     /** Record an optional active-recall attempt without rewriting the note body. */

@@ -39,6 +39,9 @@ export interface BenchmarkDefinition {
     participants: string[];
     reviewers: string[];
     allowSameOwnerReview: boolean;
+    /** Human-attested provenance for a selected host-collected problem only. */
+    collectorAccounts?: string[];
+    collectorOwnerIds?: string[];
 }
 export interface BenchmarkProfile {
     accountId: string;
@@ -70,6 +73,7 @@ export declare function benchmarkInteger(v: unknown, min: number, max: number): 
 export declare function benchmarkPath(value: unknown): string;
 export declare function benchmarkSources(value: unknown): BenchmarkSource[];
 export declare function validateBenchmarkDefinition(value: unknown): BenchmarkDefinition;
+export declare function assertBenchmarkCollectorIsolation(definition: BenchmarkDefinition, lineage: readonly BenchmarkDefinition[], profiles: Record<string, BenchmarkProfile>): void;
 export declare function gradeBenchmark(grader: BenchmarkGrader, answer: unknown, submission: unknown): BenchmarkGrade;
 export declare function validateBenchmarkReview(value: unknown, d: BenchmarkDefinition): Pick<BenchmarkReview, 'entryId' | 'criteria' | 'resolutionOf'>;
 export declare function benchmarkPass(d: BenchmarkDefinition, scores: number[]): boolean;

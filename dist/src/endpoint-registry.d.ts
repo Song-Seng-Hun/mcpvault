@@ -1,5 +1,6 @@
 import type { Tool } from '@modelcontextprotocol/server';
 import type { ScopeCapability } from './scope-auth.js';
+export { operationReadAlias } from './operation-contracts.js';
 export interface EndpointDescriptor {
     endpointId: string;
     toolName: string;

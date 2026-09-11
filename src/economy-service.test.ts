@@ -75,6 +75,43 @@ test('a captured contract cannot disclose its private replacement through market
  } finally {await ledger.close();}
 });
 
+test.each(['later-task', 'final-actor'] as const)('market rejects previously gathered task/project rows hidden during %s', async boundary => {
+ for (const target of ['Community/Tasks/task.md', 'Community/Projects/demo.md']) {
+  const f = await fixture();
+  try {
+   await f.fs.writeNote({path:'Community/Tasks/second.md',content:'Second',frontmatter:{...f.task.frontmatter,task_id:'second'}});
+   const extra = await f.fs.readNote('Community/Tasks/second.md');
+   for (const [taskId, revision] of [['task',f.task.revision],['second',extra.revision]]) await f.service.contract(actor('alice'),{
+    op:'draft',requestId:`draft-${taskId}`,contractId:taskId,expectedRevision:'missing',terms:{taskId,taskRevision:revision,title:`PRIVATE_TITLE_${taskId}`,criteria:['Check'],exclusions:[],kind:'research',reward:10,deadline:'2027-01-01T00:00:00.000Z',verifier:'independent-review-v1'}} as any);
+   const original = f.fs.readNote.bind(f.fs); let hidden = false, actorChecks = 0;
+   const hide = async () => { if (hidden) return; hidden = true; const n = await original(target); await f.fs.writeNote({path:target,content:n.content,frontmatter:{...n.frontmatter,moderation_status:'hidden'},expectedRevision:n.revision}); };
+   const spy = vi.spyOn(f.fs,'readNote').mockImplementation(async (...args) => {
+    const n = await original(...args); if (boundary === 'later-task' && args[0] === 'Community/Tasks/second.md') await hide(); return n;
+   });
+   const service = new EconomyService(f.fs,f.ledger,p,{assertActor:async()=>{ if (boundary === 'final-actor' && ++actorChecks === 2) await hide(); }});
+   await expect(service.market(actor('alice'),{limit:1})).rejects.toThrow(/unavailable|changed/i);
+   expect(hidden).toBe(true); spy.mockRestore();
+  } finally {await f.ledger.close();}
+ }
+});
+
+test('market reauthenticates after dependency rereads and ignores writes to skipped hidden tasks',async()=>{
+ const f=await fixture();
+ try {
+  await f.fs.writeNote({path:'Community/Tasks/second.md',content:'Second',frontmatter:{...f.task.frontmatter,task_id:'second'}});
+  const second=await f.fs.readNote('Community/Tasks/second.md');
+  for(const [taskId,revision] of [['task',f.task.revision],['second',second.revision]])await f.service.contract(actor('alice'),{op:'draft',requestId:`draft-${taskId}`,contractId:taskId,expectedRevision:'missing',terms:{taskId,taskRevision:revision,title:`TITLE_${taskId}`,criteria:['Check'],exclusions:[],kind:'research',reward:10,deadline:'2027-01-01T00:00:00.000Z',verifier:'independent-review-v1'}} as any);
+  const original=f.fs.readNote.bind(f.fs);let taskReads=0,revoked=false;
+  const spy=vi.spyOn(f.fs,'readNote').mockImplementation(async(...args)=>{const n=await original(...args);if(args[0]==='Community/Tasks/task.md'&&++taskReads===2)revoked=true;return n;});
+  const service=new EconomyService(f.fs,f.ledger,p,{assertActor:async()=>{if(revoked)throw Error('Revoked after dependency read');}});
+  await expect(service.market(actor('alice'),{})).rejects.toThrow(/revoked/i); spy.mockRestore();
+  const hidden=await original('Community/Tasks/task.md');await f.fs.writeNote({path:'Community/Tasks/task.md',content:hidden.content,frontmatter:{...hidden.frontmatter,moderation_status:'hidden'}});
+  let changed=false;
+  vi.spyOn(f.fs,'readNote').mockImplementation(async(...args)=>{const n=await original(...args);if(args[0]==='Community/Tasks/second.md'&&!changed){changed=true;await f.fs.writeNote({path:'Community/Tasks/task.md',content:'Changed still hidden',frontmatter:{...hidden.frontmatter,moderation_status:'hidden'}});}return n;});
+  const result=await f.service.market(actor('alice'),{});expect(result.total).toBe(1);expect(result.items[0].contractId).toBe('second');
+ }finally{await f.ledger.close();}
+});
+
 test('paid bridge leases do not cross ledgers or survive the awaited bridge',async()=>{
  const first=await fixture(),second=await fixture();
  let release!:()=>void;const gate=new Promise<void>(r=>{release=r;});

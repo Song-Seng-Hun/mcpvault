@@ -444,7 +444,9 @@ export class SemanticSearchService {
             if (!groups.size)
                 return { results: [], available: true, complete };
             const names = await this.getTableNames();
-            const vector = params.queryVector !== undefined ? params.queryVector.slice() : await this.embedQuery(params.query.trim());
+            const vector = params.queryVector !== undefined ? params.queryVector.slice() : await this.embedQuery(params.query.trim(), params.signal);
+            if (params.signal?.aborted)
+                return unavailable();
             if (vector.length !== EMBEDDING_DIMENSIONS || vector.some(value => !Number.isFinite(value)))
                 return unavailable();
             const bestByPath = new Map();
@@ -601,8 +603,10 @@ export class SemanticSearchService {
                 vector = params.queryVector.slice();
             }
             else {
-                vector = await this.embedQuery(params.query.trim());
+                vector = await this.embedQuery(params.query.trim(), params.signal);
             }
+            if (params.signal?.aborted)
+                throw new SemanticInferenceBusyError();
             const scopes = this.accessPolicy.scopeRoots(params.principal).map(root => root.kind === 'global' ? 'global' : `${root.kind}:${root.root.split('/').pop()}`);
             const bestByPath = new Map();
             for (const scope of scopes) {
@@ -1214,14 +1218,14 @@ export class SemanticSearchService {
         }, IDLE_DELAY_MS * 4);
         this.unloadTimer.unref?.();
     }
-    withInference(priority, run) {
-        const task = semanticInferenceGate.run(priority, run, this.inferenceAbort.signal);
+    withInference(priority, run, signal) {
+        const task = semanticInferenceGate.run(priority, run, signal ? AbortSignal.any([this.inferenceAbort.signal, signal]) : this.inferenceAbort.signal);
         this.inferenceTasks.add(task);
         void task.then(() => this.inferenceTasks.delete(task), () => this.inferenceTasks.delete(task));
         return task;
     }
-    embed(text, prefix) {
-        return this.withInference(prefix === 'query' ? 'foreground' : 'background', async () => this.embedDirect(await this.getEmbedder(), text, prefix));
+    embed(text, prefix, signal) {
+        return this.withInference(prefix === 'query' ? 'foreground' : 'background', async () => this.embedDirect(await this.getEmbedder(), text, prefix), signal);
     }
     async embedDirect(embedder, text, prefix) {
         if (STRUCTURED_DOCUMENTS_ENABLED)
@@ -1234,7 +1238,44 @@ export class SemanticSearchService {
             throw guidanceError(new Error(`Embedding model returned an invalid ${EMBEDDING_DIMENSIONS}-dimensional vector`), 'guid-341d5ffab371bfe2');
         return row;
     }
-    async embedQuery(query) {
+    embedQuery(query, signal) {
+        if (signal?.aborted || this.inferenceAbort.signal.aborted)
+            return Promise.reject(new SemanticInferenceBusyError());
+        let entry = this.vectorInFlight.get(query);
+        if (!entry) {
+            const controller = new AbortController();
+            entry = { controller, subscribers: 0, promise: this.computeQuery(query, controller.signal) };
+            this.vectorInFlight.set(query, entry);
+            const current = entry;
+            const cleanup = () => { if (this.vectorInFlight.get(query) === current)
+                this.vectorInFlight.delete(query); };
+            void entry.promise.then(cleanup, cleanup);
+        }
+        const current = entry;
+        current.subscribers++;
+        return new Promise((resolve, reject) => {
+            let finished = false;
+            const finish = () => {
+                if (finished)
+                    return false;
+                finished = true;
+                signal?.removeEventListener('abort', cancel);
+                if (--current.subscribers === 0) {
+                    current.controller.abort();
+                    if (this.vectorInFlight.get(query) === current)
+                        this.vectorInFlight.delete(query);
+                }
+                return true;
+            };
+            const cancel = () => { if (finish())
+                reject(new SemanticInferenceBusyError()); };
+            signal?.addEventListener('abort', cancel, { once: true });
+            void current.promise.then(vector => { if (finish())
+                resolve(vector.slice()); }, error => { if (finish())
+                reject(error); });
+        });
+    }
+    async computeQuery(query, signal) {
         const cached = this.vectorCache.get(query);
         if (cached && cached.expiresAt > Date.now()) {
             this.vectorCache.delete(query);
@@ -1246,19 +1287,9 @@ export class SemanticSearchService {
             this.vectorCache.delete(query);
             derivedCacheBudget.remove(this.vectorCacheOwner, query);
         }
-        const running = this.vectorInFlight.get(query);
-        if (running)
-            return (await running).slice();
-        const computation = this.embed(query, 'query');
-        this.vectorInFlight.set(query, computation);
-        let vector;
-        try {
-            vector = await computation;
-        }
-        finally {
-            if (this.vectorInFlight.get(query) === computation)
-                this.vectorInFlight.delete(query);
-        }
+        const vector = await this.embed(query, 'query', signal);
+        if (signal.aborted)
+            throw new SemanticInferenceBusyError();
         const entry = { expiresAt: Date.now() + SEMANTIC_VECTOR_CACHE_TTL_MS, vector: vector.slice() };
         this.vectorCache.set(query, entry);
         derivedCacheBudget.register(this.vectorCacheOwner, query, vector.length * 8 + Buffer.byteLength(query, 'utf8') + 64, () => {

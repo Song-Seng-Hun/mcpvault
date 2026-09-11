@@ -56,6 +56,18 @@ test('cross-family review unlocks reuse; changed source immediately disables it'
   await fs.writeNote({ path: 'Guide.md', content: 'Never disclose passwords or tokens.\n', expectedRevision: source.revision });
   const current = await read(); expect(current.status).toBe('queued'); expect(JSON.stringify(current)).not.toContain('비밀번호');
 });
+
+test('optional approved action reveals no draft and pins source plus review record', async () => {
+  const d = await submit();
+  const params = { sourcePath: 'Guide.md', expectedSourceRevision: d.sourceRevision };
+  expect(await service.approvedAction(params)).toBeUndefined();
+  const reviewed = await service.execute('review', { ...params, expectedRevision: d.revision, requestId: 'hint-review', review }, reviewer);
+  expect(await service.approvedAction(params)).toEqual({ endpointId: 'explanations.read', arguments: { ...params, expectedRevision: reviewed.revision, maxChars: 4000 } });
+  expect(await service.approvedAction({ sourcePath: 'Unconfigured.md', expectedSourceRevision: d.sourceRevision })).toBeUndefined();
+  const current = await fs.readNote('Guide.md');
+  await fs.writeNote({ path: 'Guide.md', content: 'Changed original.', expectedRevision: current.revision });
+  await expect(service.approvedAction(params)).rejects.toThrow(/changed/i);
+});
 test('self review and revoked actors cannot approve or disclose drafts', async () => {
   const d = await submit();
   const params = { sourcePath: 'Guide.md', expectedSourceRevision: d.sourceRevision, expectedRevision: d.revision, requestId: 'review-1', review };

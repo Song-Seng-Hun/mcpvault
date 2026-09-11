@@ -196,6 +196,13 @@ export class RoleplayStore {
   }
   snapshot(): Promise<RoleplayState> { return this.serial(async () => structuredClone((await this.replay()).state)); }
   read(): Promise<Replay> { return this.serial(async () => structuredClone(await this.replay())); }
+  /** Exact retained receipt only; do not clone the whole world for an import. */
+  committedTurn(turnId: string): Promise<Replay['records'][number] | undefined> {
+    return this.serial(async () => {
+      const record = (await this.replay()).records.find(r => r.event.receipt.id === turnId);
+      return record ? structuredClone(record) : undefined;
+    });
+  }
   async transact(command: RoleplayCommand, revalidate?: (state: RoleplayState) => Promise<void>): Promise<RoleplayReceipt & { path: string; noteRevision: string }> {
     if (Object.hasOwn(command, 'rolls') || Object.hasOwn(command.data, 'rolls')) throw guidanceError(new Error('Caller cannot supply recorded dice outcomes'), 'guid-141dc1c59a936e13');
     command = structuredClone(command);

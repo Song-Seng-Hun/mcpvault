@@ -17,7 +17,7 @@ import { StorySessions } from './story-session.js';
 const common = ['op', 'projectId', 'requestId', 'expectedRevision', 'expectedProjectRevision', 'accessToken', 'maxChars', 'limit', 'cursor', 'field'];
 const fields: Record<string, string[]> = {
   project: ['title', 'brief', 'participants', 'showrunnerAccountId', 'enabled', 'maxSteps'],
-  artifact: ['artifactId', 'kind', 'title', 'content', 'branchId', 'data', 'sources', 'references'],
+  artifact: ['artifactId', 'kind', 'title', 'content', 'branchId', 'data', 'sources', 'references', 'roleplayTurn'],
   sequence: ['branchId', 'presentation', 'chronology', 'shots'],
   context: ['branchId', 'artifactId', 'characterId', 'query'],
   review: ['reviewId', 'artifactId', 'branchId', 'sourceRevision', 'content', 'findings', 'pass'],

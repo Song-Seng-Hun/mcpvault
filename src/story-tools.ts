@@ -87,6 +87,7 @@ const fields: Record<string, Record<string, Schema>> = {
     ...Object.fromEntries(['audience', 'genre', 'theme', 'style', 'targetLength'].map(key => [key, text(1000)])), forbidden: array(text(200, 1), 20) }, ['medium']),
     participants: array(account, 50), showrunnerAccountId: account, enabled: { type: 'boolean' }, maxSteps: integer(1, 128) },
   artifact: { artifactId: id, kind: enumeration(...STORY_KINDS), title: text(180, 1), content: text(20000), branchId, data,
+    roleplayTurn: object({turnId:id,revision,noteRevision:revision,shareable:{type:'boolean',const:true}}, ['turnId','revision','noteRevision','shareable']),
     sources: array(object({ artifactId: id, revision }, ['artifactId', 'revision']), 32), references: array(text(500, 1), 50) },
   sequence: { branchId, presentation: ids(), chronology: ids(), shots: ids() },
   context: { branchId, artifactId: id, characterId: id, query: text(500) },

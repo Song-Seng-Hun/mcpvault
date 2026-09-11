@@ -1,4 +1,4 @@
-import { roleplayAccount, roleplayHash, roleplayId, roleplayRevision, roleplayText } from './roleplay-model.js';
+import { roleplayAccount, roleplayHash, roleplayId, roleplayRevision, roleplayText } from './roleplay-kernel.js';
 const fail = (message) => { throw new Error(message); };
 const exact = (obj, keys) => {
     if (!obj || typeof obj !== 'object' || Array.isArray(obj) || Object.keys(obj).some(k => !keys.includes(k)))

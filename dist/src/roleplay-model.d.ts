@@ -1,3 +1,4 @@
+export { roleplayHash, roleplayRevision, roleplayId, roleplayAccount, roleplayText } from './roleplay-kernel.js';
 import { type RoleplayEvolution } from './roleplay-evolution-model.js';
 import { ROLEPLAY_REGISTERED_ROUTE, type RoleplayTrpg, type TrpgOutcome } from './roleplay-trpg.js';
 export interface RoleplayPolicy {
@@ -121,11 +122,6 @@ export interface RoleplayState {
     }>;
 }
 export declare const initialRoleplay: () => RoleplayState;
-export declare const roleplayHash: (value: unknown) => string;
-export declare const roleplayRevision: (s: RoleplayState) => string;
-export declare function roleplayId(value: unknown, label?: string): string;
-export declare function roleplayAccount(value: unknown): string;
-export declare function roleplayText(value: unknown, max?: number): string;
 export declare function validateEffects(input: unknown): Effect[];
 /** Advisory only: execution rechecks conditions, effects, control and revisions. */
 export declare function roleplayRuleConditionsMatch(s: RoleplayState, rule: Rule, id: string): boolean;

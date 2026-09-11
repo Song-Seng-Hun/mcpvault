@@ -6,7 +6,7 @@ import { ScopeAccessPolicy } from './scope-access.js';
 import { normalizeScopeId } from './scopes.js';
 import { isModerationHidden } from './moderation-policy.js';
 import { coordinate, fingerprint, integer, textField } from './work-model.js';
-import { communityActivitySnapshot, communityCandidates, matchesParticipationTopic, isParticipationTask } from './community-participation-candidates.js';
+import { communityActivitySnapshot, communityCandidates, discussionSnapshot, matchesParticipationTopic, isParticipationTask } from './community-participation-candidates.js';
 import { COMMUNITY_ACTIVITY_TEMPLATE_IDS, getCommunityActivityTemplate } from './community-participation-activities.js';
 const DEFAULTS = { enabled: false, paused: false, allowedTopics: [], allowedActions: [], dailyLimit: 6, dailyInitiationLimit: 1 };
 const READ_BYTES = 2_000_000;
@@ -339,6 +339,11 @@ export class CommunityParticipationService {
                 const topic = textField(params.topic || state.settings.allowedTopics[0], 'topic', 64, true).toLowerCase();
                 if (!state.settings.allowedTopics.includes(topic))
                     throw guidanceError(new Error('Topic outside allowed participation scope'), 'guid-1e87f17f43241691');
+                if (params.emptyDiscussion !== undefined && typeof params.emptyDiscussion !== 'boolean')
+                    throw guidanceError(Error('emptyDiscussion must be boolean'), 'guid-74570f9f0c0c7980');
+                if (params.emptyDiscussion && (action !== 'initiate' || params.target || (await discussionSnapshot(this.fileSystem, this.access, principal)).state !== 'empty')) {
+                    throw guidanceError(Error('Discussion is not confirmed empty; search existing topics or rest'), 'guid-87abaabc29b78e2d');
+                }
                 state.daily = this.day(state);
                 if (action === 'initiate' && state.daily.initiations >= state.settings.dailyInitiationLimit)
                     throw guidanceError(new Error('Daily initiation budget exhausted'), 'guid-c1c79489e62a087b');
@@ -352,7 +357,7 @@ export class CommunityParticipationService {
                     target.activityRevision = snapshot.activityRevision;
                     guards.push({ path: target.path, expectedRevision: target.revision });
                 }
-                state.activeRun = { id: `run-${fingerprint([principal.accountId, key]).slice(0, 32)}`, publicRequestId: `participation-${fingerprint([principal.accountId, key])}`, action, topic, startedAt: now, ...(target && { target }) };
+                state.activeRun = { id: `run-${fingerprint([principal.accountId, key]).slice(0, 32)}`, publicRequestId: `participation-${fingerprint([principal.accountId, key])}`, action, topic, startedAt: now, ...(target && { target }), ...(params.emptyDiscussion && { emptyDiscussion: true }) };
                 state.daily.runs++;
                 if (action === 'initiate')
                     state.daily.initiations++;
@@ -427,6 +432,8 @@ export class CommunityParticipationService {
             result.activeRun = loaded.state.activeRun;
         if (blocked)
             return bound(result);
+        const discussion = await discussionSnapshot(this.fileSystem, this.access, principal);
+        result.discussion = discussion;
         const profilePath = `Community/Agents/${principal.role}s/${normalizeScopeId(principal.agentId || principal.modelId, 'identity')}.md`;
         let interests = [];
         if (await this.fileSystem.noteExists(profilePath)) {
@@ -457,8 +464,9 @@ export class CommunityParticipationService {
         }
         const optional = {
             memoryAction: principal.role === 'agent' ? { endpointId: 'memory.brief', arguments: { scope: 'personal', maxChars: 2000 }, when: 'Only if a prior experience matters; use a specific query. Never auto-preload or copy private memory to a public contribution.' } : undefined,
-            initiation: loaded.state.settings.allowedActions.includes('initiate') && this.day(loaded.state).initiations < loaded.state.settings.dailyInitiationLimit
-                ? { after: 'Search existing public topics first; initiate only within host authorization. Read one template with community.participation(op=read,templateId).', templates: COMMUNITY_ACTIVITY_TEMPLATE_IDS, endpointId: 'workshop.create' } : undefined,
+            initiation: !result.startAfter && discussion.state === 'empty' && loaded.state.settings.allowedActions.includes('initiate') && this.day(loaded.state).initiations < loaded.state.settings.dailyInitiationLimit
+                ? { emptyDiscussion: true, after: 'Search the existing Wiki for this allowed topic first. Start one participation run with action=initiate, emptyDiscussion=true and the current revision. Reuse its publicRequestId. Write one substantive question, evidence links and desired response; use a Workshop only when structured collaboration is justified. Rest is valid.',
+                    templates: COMMUNITY_ACTIVITY_TEMPLATE_IDS, endpointId: 'community.post' } : undefined,
             protocol: result.protocol,
         };
         for (const [key, value] of Object.entries(optional)) {

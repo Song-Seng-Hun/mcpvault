@@ -80,6 +80,7 @@ export declare class IdeationService {
         seed: string;
         references?: unknown;
         expectedParentRevision: string;
+        requestId?: string;
     }): Promise<{
         success: true;
         ideaId: string;
@@ -128,11 +129,13 @@ export declare class IdeationService {
         rationale: string;
         references?: unknown;
         expectedRevision?: string;
+        expectedIdeaRevision?: string;
     }): Promise<{
         success: boolean;
         ideaId: string;
         evaluator: string;
         revision: string;
+        evaluatedIdeaRevision: string;
     }>;
     createWorkshop(params: {
         principal?: ScopePrincipal;

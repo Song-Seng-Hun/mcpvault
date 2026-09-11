@@ -37,28 +37,32 @@ export class EconomyService {
             throw guidanceError(new Error('Host-approved economic owner is required'), 'guid-1e74aaa7d6649083');
         return p;
     }
-    async visible(path, p) {
+    async visible(path, p, observed) {
         const physical = this.access.resolveExternalPath(path, p);
         // Paid pilot contracts are command-center public. Private sources are not
         // copied into contract receipts even when the caller can personally read them.
         if (!this.paths.isAllowed(physical) || !this.access.canAccessPhysicalPath(physical, p) || !this.access.canAccessPhysicalPath(physical))
             throw guidanceError(new Error('Quest source unavailable'), 'guid-d3910f6b53c95fd4');
+        const identity = this.fs.noteChangeIdentity(physical);
+        const dependency = observed?.get(identity) ?? { path: physical, revision: undefined, changed: false };
+        observed?.set(identity, dependency);
         try {
             const note = await this.fs.readNote(physical);
             if (isModerationHidden(note.frontmatter))
                 throw new Error();
+            dependency.revision ??= note.revision;
             return note;
         }
         catch {
             throw guidanceError(new Error('Quest source unavailable'), 'guid-d3910f6b53c95fd4');
         }
     }
-    async task(c, p, member = true) {
-        const note = await this.visible(taskPath(c.terms.taskId), p);
+    async task(c, p, member = true, observed) {
+        const note = await this.visible(taskPath(c.terms.taskId), p, observed);
         if (note.frontmatter.mcpvault_type !== 'agent_task' || note.frontmatter.task_id !== c.terms.taskId || !note.frontmatter.project_id)
             throw guidanceError(new Error('Quest requires an existing project-backed task'), 'guid-75fe077722c5d193');
         const projectId = normalizeScopeId(String(note.frontmatter.project_id), 'projectId');
-        const project = await this.visible(`Community/Projects/${projectId}.md`, p);
+        const project = await this.visible(`Community/Projects/${projectId}.md`, p, observed);
         if (project.frontmatter.mcpvault_type !== 'work_project' || project.frontmatter.project_id !== projectId)
             throw guidanceError(new Error('Quest project unavailable'), 'guid-60530027273785c6');
         if (member && (!Array.isArray(project.frontmatter.participants) || !project.frontmatter.participants.includes(p.accountId)))
@@ -257,30 +261,75 @@ export class EconomyService {
     }
     async market(principal, params) {
         const actor = await this.actor(principal), s = await this.ledger.snapshot(), items = [];
-        for (const c of Object.values(s.contracts)) {
-            if (params.contractId && c.id !== params.contractId)
-                continue;
-            if (c.status === 'draft' && c.requester !== actor.accountId)
-                continue;
-            try {
-                await this.task(c, actor, false);
+        const observed = new Map();
+        let active;
+        const dispose = this.fs.observeNoteChanges(path => {
+            const identity = this.fs.noteChangeIdentity(path), committed = observed.get(identity), pending = active?.get(identity);
+            if (committed)
+                committed.changed = true;
+            if (pending)
+                pending.changed = true;
+        });
+        try {
+            for (const c of Object.values(s.contracts)) {
+                if (params.contractId && c.id !== params.contractId)
+                    continue;
+                if (c.status === 'draft' && c.requester !== actor.accountId)
+                    continue;
+                active = new Map();
+                try {
+                    await this.task(c, actor, false, active);
+                }
+                catch {
+                    active = undefined;
+                    continue;
+                }
+                // Failed/hidden attempts are discarded; successful rows retain changes
+                // observed even during their first read, and share exact dependency pins.
+                for (const [identity, dependency] of active) {
+                    const prior = observed.get(identity);
+                    if (prior) {
+                        if (dependency.changed || prior.revision !== dependency.revision)
+                            prior.changed = true;
+                    }
+                    else
+                        observed.set(identity, dependency);
+                }
+                active = undefined;
+                const role = c.worker === actor.accountId ? 'worker' : c.requester === actor.accountId ? 'requester' : c.reviewer === actor.accountId ? 'reviewer' : 'reader';
+                const attention = questAttention(c, new Date().toISOString());
+                const warning = attention === 'none' ? undefined : attention;
+                items.push({ contractId: c.id, title: c.terms.title, status: c.status, reward: c.terms.reward, deadline: c.terms.deadline,
+                    task: taskPath(c.terms.taskId), revision: economyRevision(c), generation: c.generation, role,
+                    ...(warning && { warning }),
+                    ...(params.contractId && { criteria: c.terms.criteria, exclusions: c.terms.exclusions, verifier: c.terms.verifier, reviewFee: c.reviewFee, postingFee: c.postingFee,
+                        ...(c.submission && { submissionBasis: c.submission.basis }) }) });
             }
-            catch {
-                continue;
+            // Never sort by wealth/reputation; current ready work precedes closed records.
+            items.sort((a, b) => Number(a.status === 'settled') - Number(b.status === 'settled') || String(a.contractId).localeCompare(String(b.contractId)));
+            await this.actor(actor);
+            // Recheck only this read's dependencies, including off-page rows used for
+            // counts/cursors. Observers cover in-process edits during later awaits;
+            // revisions also detect external edits, without claiming filesystem isolation.
+            for (const dependency of observed.values()) {
+                if (dependency.revision === undefined)
+                    continue;
+                const current = await this.visible(dependency.path, actor);
+                if (current.revision !== dependency.revision)
+                    dependency.changed = true;
             }
-            const role = c.worker === actor.accountId ? 'worker' : c.requester === actor.accountId ? 'requester' : c.reviewer === actor.accountId ? 'reviewer' : 'reader';
-            const attention = questAttention(c, new Date().toISOString());
-            const warning = attention === 'none' ? undefined : attention;
-            items.push({ contractId: c.id, title: c.terms.title, status: c.status, reward: c.terms.reward, deadline: c.terms.deadline,
-                task: taskPath(c.terms.taskId), revision: economyRevision(c), generation: c.generation, role,
-                ...(warning && { warning }),
-                ...(params.contractId && { criteria: c.terms.criteria, exclusions: c.terms.exclusions, verifier: c.terms.verifier, reviewFee: c.reviewFee, postingFee: c.postingFee,
-                    ...(c.submission && { submissionBasis: c.submission.basis }) }) });
+            await this.actor(actor);
+            if ([...observed.values()].some(dependency => dependency.changed))
+                throw guidanceError(new Error('Quest source unavailable'), 'guid-d3910f6b53c95fd4');
+            // No await after this last ACL barrier and before observer disposal.
+            for (const dependency of observed.values())
+                if (!this.access.canAccessPhysicalPath(dependency.path, actor) || !this.access.canAccessPhysicalPath(dependency.path))
+                    throw guidanceError(new Error('Quest source unavailable'), 'guid-d3910f6b53c95fd4');
+            return page(items, { dataOnly: true, budgetIsNotExecutionAuthority: true }, fingerprint({ account: actor.accountId, items }), { ...params, limit: Math.min(params.limit ?? 3, 3) }, 'quest.market');
         }
-        // Never sort by wealth/reputation; current ready work precedes closed records.
-        items.sort((a, b) => Number(a.status === 'settled') - Number(b.status === 'settled') || String(a.contractId).localeCompare(String(b.contractId)));
-        await this.actor(actor);
-        return page(items, { dataOnly: true, budgetIsNotExecutionAuthority: true }, fingerprint({ account: actor.accountId, items }), { ...params, limit: Math.min(params.limit ?? 3, 3) }, 'quest.market');
+        finally {
+            dispose();
+        }
     }
     async contract(principal, params) {
         if (!['draft', 'fund', 'claim', 'submit', 'cancel', 'dispute'].includes(params.op))

@@ -95,6 +95,75 @@ test('Idea Lab preserves branches, bounded critiques, evaluations, and revision-
   }
 });
 
+test('branch_idea forwards a retry key through the MCP dispatcher', async () => {
+  const { server, client } = await setup();
+  try {
+    const registration = await json(client, 'register_scope_account', { accountId: 'branch-retry-owner', modelId: 'codex', password: 'branch-retry-owner-password-123' });
+    const accessToken = registration.value.accessToken;
+    const parent = await json(client, 'create_idea', { ideaId: 'retry-parent', title: 'Retry parent', seed: 'Preserve branch creation retries.', accessToken });
+    const request = { parentIdeaId: 'retry-parent', title: 'Retry child', seed: 'One durable branch.', expectedParentRevision: parent.value.revision, requestId: 'branch-mcp-retry', accessToken };
+    const first = await json(client, 'branch_idea', request);
+    const replay = await json(client, 'branch_idea', request);
+    expect(replay.value.ideaId).toBe(first.value.ideaId);
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
+test('evaluate_idea forwards expectedIdeaRevision through the MCP dispatcher', async () => {
+  const { server, client } = await setup();
+  try {
+    const registration = await json(client, 'register_scope_account', { accountId: 'evaluation-revision-owner', modelId: 'codex', password: 'evaluation-revision-owner-password-123' });
+    const accessToken = registration.value.accessToken;
+    await json(client, 'create_idea', { ideaId: 'evaluation-parent', title: 'Evaluation parent', seed: 'Reject stale source evaluations.', accessToken });
+    const result = await client.callTool({ name: 'evaluate_idea', arguments: {
+      ideaId: 'evaluation-parent', novelty: 4, usefulness: 4, feasibility: 3, risk: 2, evidenceQuality: 4,
+      rationale: 'The supplied source revision must be current.', expectedIdeaRevision: '0'.repeat(64), accessToken,
+    } });
+    expect(result.isError).toBe(true);
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
+test('branch_idea preserves initiate-only participation accounting and replays its one receipt', async () => {
+  const { server, client } = await setup();
+  try {
+    const registration = await json(client, 'register_scope_account', { accountId: 'branch-participation-owner', modelId: 'codex', password: 'branch-participation-owner-password-123' });
+    const accessToken = registration.value.accessToken;
+    const parent = await json(client, 'create_idea', { ideaId: 'participation-parent', title: 'Branch parent', seed: 'Preserve the initiation limit.', accessToken });
+    const settings = await json(client, 'manage_community_participation', {
+      op: 'update', expectedRevision: 'missing', requestId: 'enable-branch-participation',
+      settings: { enabled: true, allowedTopics: ['branch'], allowedActions: ['explore', 'initiate'] }, accessToken,
+    });
+    const explore = await json(client, 'record_community_participation', {
+      op: 'start', action: 'explore', topic: 'branch', expectedRevision: settings.value.revision, requestId: 'start-explore-branch', accessToken,
+    });
+    const branch = { parentIdeaId: 'participation-parent', title: 'Branch child', seed: 'Create one branch.', expectedParentRevision: parent.value.revision, accessToken };
+    const denied = await client.callTool({ name: 'branch_idea', arguments: { ...branch, requestId: explore.value.activeRun.publicRequestId } });
+    expect(denied.isError).toBe(true);
+    const initiator = await json(client, 'register_scope_account', { accountId: 'branch-initiation-owner', modelId: 'codex', agentId: 'branch-initiation-agent', password: 'branch-initiation-owner-password-123', accessToken });
+    const initiatorToken = initiator.value.accessToken;
+    const initiateSettings = await json(client, 'manage_community_participation', {
+      op: 'update', expectedRevision: 'missing', requestId: 'enable-branch-initiation',
+      settings: { enabled: true, allowedTopics: ['branch'], allowedActions: ['initiate'] }, accessToken: initiatorToken,
+    });
+    const initiate = await json(client, 'record_community_participation', {
+      op: 'start', action: 'initiate', topic: 'branch', expectedRevision: initiateSettings.value.revision, requestId: 'start-initiate-branch', accessToken: initiatorToken,
+    });
+    const first = await json(client, 'branch_idea', { ...branch, requestId: initiate.value.activeRun.publicRequestId, accessToken: initiatorToken });
+    const replay = await json(client, 'branch_idea', { ...branch, requestId: initiate.value.activeRun.publicRequestId, accessToken: initiatorToken });
+    expect(replay.value.ideaId).toBe(first.value.ideaId);
+    const recorded = await json(client, 'manage_community_participation', { op: 'read', accessToken: initiatorToken });
+    expect(recorded.value).toMatchObject({ daily: { initiations: 1 }, activeRun: { action: 'initiate', publicAttempt: { operation: 'idea.branch', path: first.value.path } } });
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
 test('managed facilitation rejects inaccessible sources and stale steps, replays requests, and advances only after actual participants submit', async () => {
   const { server, client } = await setup();
   try {
