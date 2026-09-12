@@ -4,7 +4,8 @@ import { createHash, randomUUID } from 'node:crypto';
 import { fingerprint as workFingerprintForOutput } from './work-model.js';
 import { workshopDecisionSeal } from './workshop-output.js';
 import { KnowledgeApplicationService } from './knowledge-applications.js';
-import { prepareKnowledgeSynthesis, inspectSynthesisBasis } from './knowledge-synthesis.js';
+import { prepareKnowledgeSynthesis, inspectSynthesisBasis, synthesisMemberRole } from './knowledge-synthesis.js';
+import { buildTopicPacket, type TopicPacketOptions } from './topic-packet.js';
 import { normalizeKnowledgeSynthesis } from './knowledge-synthesis-model.js';
 import { prepareKnowledgeInvestigation, inspectInvestigation, investigationReviewBasis, writeInvestigationReview } from './knowledge-investigation.js';
 import { SourceProvenanceSession, prepareSourceDerivations, sourceWorkIdentity } from './source-provenance.js';
@@ -14737,6 +14738,10 @@ export class LlmWikiService {
    * semantic clustering endpoint: MOC/project/domain/subject metadata is the
    * authored boundary, and the returned plan preserves every input note.
    */
+  async topicPacket(principal: ScopePrincipal | undefined, options: TopicPacketOptions) {
+    return buildTopicPacket(this.fileSystem, this.access, principal, options);
+  }
+
   async synthesisCandidates(principal?: ScopePrincipal, limit = 10, maxChars = 7000, options: SynthesisCandidatesOptions = {}) {
     const boundedLimit = Math.min(Math.max(Number(limit) || 10, 1), 30);
     const boundedChars = Math.min(Math.max(Number(maxChars) || 7000, 768), 16000);
@@ -14805,9 +14810,7 @@ export class LlmWikiService {
       // knowledge_role describes what a note does, not whether it has already
       // synthesized this cluster. Only an explicit synthesis stage (or a
       // Decision Record) may suppress covered inputs.
-      const isSynthesis = noteKind === 'decision'
-        || frontmatter.knowledge_synthesis !== undefined
-        || String(frontmatter.interpretation_status || '').toLocaleLowerCase() === 'synthesized';
+      const isSynthesis = synthesisMemberRole(frontmatter) === 'output';
       const nav = navigationOrder(frontmatter.nav_order);
       const member: Member = {
         physicalPath: note.path,

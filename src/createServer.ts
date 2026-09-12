@@ -2910,6 +2910,12 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
             .filter(key => rawArgs[key] !== undefined).map(key => [key, rawArgs[key]]));
           return jsonResult(await service.execute(EXPLANATION_ENDPOINTS[toolName]!.split('.')[1]!, params, principal), false);
         }
+
+        case "get_wiki_topic_packet": {
+          const result = await llmWiki.topicPacket(principal, trimmedArgs);
+          if (JSON.stringify(await scopeAuth.authenticate(rawArgs.accessToken)) !== JSON.stringify(principal)) throw new Error('Authentication changed; retry topic request');
+          return jsonResult(result, trimmedArgs.prettyPrint);
+        }
         case 'list_benchmarks': case 'read_benchmark': case 'submit_benchmark': case 'review_benchmark': case 'finalize_benchmark': {
           const service = benchmarkService(principal ? revalidateActor : undefined);
           if (!service) throw guidanceError(Error('Benchmark feature is not configured by the host'), 'guid-77896f1b100b2241');

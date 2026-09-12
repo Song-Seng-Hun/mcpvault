@@ -37,7 +37,7 @@ export declare class VaultGraphIndex {
     withStableRead<T>(canAccessPath: (path: string) => boolean, read: () => Promise<T>): Promise<T>;
     getBacklinks(path: string, limit: number, canAccessPath: (path: string) => boolean, offset?: number, canIncludeSource?: (path: string, revision: string) => Promise<boolean | 'budget_exhausted'>, includeSourceRevision?: boolean, includeSnapshot?: boolean, validateTargets?: (targets: ReadonlyMap<string, string>) => Promise<void>, relations?: readonly string[], inspectionBudget?: {
         remaining: number;
-    }, compact?: boolean): Promise<BacklinksResult>;
+    }, compact?: boolean, propertyRoots?: readonly string[]): Promise<BacklinksResult>;
     getOutlinks(path: string, limit: number, canAccessPath: (path: string) => boolean, offset?: number, includeSourceRevision?: boolean, includeSnapshot?: boolean, validateTargets?: (targets: ReadonlyMap<string, string>) => Promise<void>): Promise<{
         source: string;
         sourceRevision?: string;

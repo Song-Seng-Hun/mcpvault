@@ -3,6 +3,8 @@ import type { ScopeAccessPolicy } from './scope-access.js';
 import type { ScopePrincipal } from './scope-auth.js';
 import { type ReadReferenceMetadata } from './references.js';
 import type { QueryNote } from './types.js';
+/** Shared authored-candidate classification; role alone is not synthesis. */
+export declare function synthesisMemberRole(fm: Record<string, any>): 'input' | 'output' | undefined;
 /** Inspect only visible current metadata; never expose unavailable input identities. */
 export declare function inspectSynthesisBasis(value: unknown, container: string, read: (path: string) => Promise<QueryNote>, access: ScopeAccessPolicy, principal?: ScopePrincipal): Promise<{
     state: string;

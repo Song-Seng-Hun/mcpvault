@@ -228,6 +228,18 @@ export async function startRestApi(server: Server, options: RestApiOptions = {})
       }
 
       const queryArguments = Object.fromEntries(requestUrl.searchParams.entries());
+      // The topic service validates numbers strictly. URL query parameters
+      // arrive as strings; normalize only this new endpoint's typed inputs.
+      if (endpointId === 'wiki.topic_packet') {
+        for (const key of ['limit', 'maxChars']) {
+          if (typeof queryArguments[key] === 'string' && /^\d+$/.test(queryArguments[key]!)) {
+            (queryArguments as Record<string, unknown>)[key] = Number(queryArguments[key]);
+          }
+        }
+        if (queryArguments.prettyPrint === 'true' || queryArguments.prettyPrint === 'false') {
+          (queryArguments as Record<string, unknown>).prettyPrint = queryArguments.prettyPrint === 'true';
+        }
+      }
       const arguments_ = { ...queryArguments, ...pathArguments, ...body };
       const result = await runtime.dispatchTool('call_endpoint', { endpointId, arguments: arguments_ });
       sendJson(request, response, result.isError ? 400 : 200, resultValue(result), !result.isError && request.method === 'GET');

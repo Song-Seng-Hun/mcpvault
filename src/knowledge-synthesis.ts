@@ -9,6 +9,14 @@ import { extractObsidianLinkOccurrences } from './backlinks.js';
 import { normalizeKnowledgeSynthesis } from './knowledge-synthesis-model.js';
 import type { QueryNote } from './types.js';
 
+/** Shared authored-candidate classification; role alone is not synthesis. */
+export function synthesisMemberRole(fm: Record<string, any>): 'input' | 'output' | undefined {
+  const kind = String(fm.note_kind || '').trim().toLowerCase();
+  if (!['atomic', 'knowledge', 'literature', 'question', 'hypothesis', 'experiment', 'assumption', 'decision'].includes(kind)
+    || ['archived', 'superseded', 'tombstoned'].includes(String(fm.lifecycle || '').trim().toLowerCase())) return undefined;
+  return kind === 'decision' || fm.knowledge_synthesis !== undefined || String(fm.interpretation_status || '').toLowerCase() === 'synthesized' ? 'output' : 'input';
+}
+
 const UNAVAILABLE = 'Synthesis input unavailable or changed; read current context and retry';
 const INPUT_KINDS = new Set(['atomic', 'knowledge', 'literature', 'question', 'hypothesis', 'experiment', 'assumption', 'decision']);
 const historicalInput = (fm: Record<string, unknown>) => ['archived', 'superseded', 'tombstoned'].includes(String(fm.lifecycle || '').trim().toLowerCase())

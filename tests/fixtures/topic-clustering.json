@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "notice": "Synthetic evaluation premises, not operational recommendations or factual sources.",
+  "notes": [
+    {"id":"c1","moc":"Cache","claim":"Caching avoids repeated work in this fixture.","condition":"Inputs remain stable.","source":"cache-observation-1"},
+    {"id":"c2","moc":"Cache","claim":"Cached results become stale after mutation.","condition":"The invalidation event is missing.","counterargumentTo":"c1","source":"cache-observation-2"},
+    {"id":"c3","moc":"Cache","claim":"An eviction bound limits retained entries.","condition":"The fixture enforces the configured entry cap.","source":"cache-observation-3"},
+    {"id":"c4","moc":"Cache","question":"Does a skewed workload invalidate the measured benefit?","source":"cache-open-question"},
+    {"id":"r1","moc":"Retry","claim":"Retry recovers the fixture's transient failures.","condition":"The operation is idempotent.","source":"retry-observation-1"},
+    {"id":"r2","moc":"Retry","claim":"Retry duplicates an unprotected side effect.","condition":"The operation lacks an idempotency key.","counterargumentTo":"r1","source":"retry-observation-2"},
+    {"id":"r3","moc":"Retry","claim":"A finite retry cap bounds attempts in the fixture.","condition":"The cap is enforced across every caller.","source":"retry-observation-3"},
+    {"id":"r4","moc":"Retry","question":"Does coordinated retry amplify overload?","source":"retry-open-question"}
+  ],
+  "relations": [
+    {"from":"c1","to":"c3","kind":"supports","weight":1},
+    {"from":"c2","to":"c1","kind":"contradicts","weight":1},
+    {"from":"c4","to":"c1","kind":"questions","weight":1},
+    {"from":"r1","to":"r3","kind":"supports","weight":1},
+    {"from":"r2","to":"r1","kind":"contradicts","weight":1},
+    {"from":"r4","to":"r1","kind":"questions","weight":1},
+    {"from":"c1","to":"r1","kind":"related","weight":4},
+    {"from":"c1","to":"r1","kind":"similar_example_role","weight":1},
+    {"from":"c2","to":"r2","kind":"similar_example_role","weight":4},
+    {"from":"c3","to":"r3","kind":"similar_example_role","weight":4},
+    {"from":"c4","to":"r4","kind":"similar_example_role","weight":4}
+  ]
+}

@@ -2941,7 +2941,7 @@ export class FileSystemService {
     return matches;
   }
 
-  async getBacklinks(path: string, limit: number = 100, canAccessPath: (path: string) => boolean = () => true, offset = 0, options: { includeSourceRevision?: boolean; includeSnapshot?: boolean; expectedRevision?: string; readMetadata?: (path: string) => Promise<QueryNote | undefined>; metadataExhausted?: () => boolean; relations?: readonly string[]; inspectionBudget?: { remaining: number }; compact?: boolean } = {}): Promise<BacklinksResult> {
+  async getBacklinks(path: string, limit: number = 100, canAccessPath: (path: string) => boolean = () => true, offset = 0, options: { includeSourceRevision?: boolean; includeSnapshot?: boolean; expectedRevision?: string; readMetadata?: (path: string) => Promise<QueryNote | undefined>; metadataExhausted?: () => boolean; relations?: readonly string[]; propertyRoots?: readonly string[]; inspectionBudget?: { remaining: number }; compact?: boolean } = {}): Promise<BacklinksResult> {
     const target = this.normalizePath(path);
     if (!this.pathFilter.isAllowed(target) || !canAccessPath(target)) throw guidanceError(new Error(`Access denied: ${target}`), 'guid-26a1bd21fd48991f');
     const targetNote = options.readMetadata ? await options.readMetadata(target) : options.expectedRevision === undefined ? await this.readNote(target)
@@ -2963,7 +2963,7 @@ export class FileSystemService {
           graph.invalidate(sourcePath);
           throw guidanceError(new Error('Graph source changed or became unavailable; retry the query to refresh its snapshot.'), 'guid-16d3d56b92981cc2');
         }
-      }, true, options.includeSnapshot, targets => this.assertGraphTargetRevisions(graph, targets, canAccessPath), options.relations, options.inspectionBudget, options.compact);
+      }, true, options.includeSnapshot, targets => this.assertGraphTargetRevisions(graph, targets, canAccessPath), options.relations, options.inspectionBudget, options.compact, options.propertyRoots);
       await this.assertGraphReadRevision(graph, target, result.targetRevision, canAccessPath, targetNote.revision);
       const sources = [...new Map(result.backlinks.map(link => [link.path, link.sourceRevision])).entries()];
       for (let offset = 0; offset < sources.length; offset += 8) {

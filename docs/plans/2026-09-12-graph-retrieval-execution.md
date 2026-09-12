@@ -1,6 +1,6 @@
 # Graph retrieval, topic packets and local Graphify execution
 
-Status: P1 complete: code/review/build, full regression, final evaluation, NAS-backed live verification, source/dist commit and user-fork main push. Implementation commit2e6bc86b. P2/P3 follow next.
+Status: P1 delivered at implementation commit2e6bc86b. P2 code/reviews/build/full regression and NAS deployment with user-confirmed empty-state acceptance are complete; fork delivery is recorded by Git. P3 follows next. Successful operational-MOC packets remain unverified because no MOC has been authored yet.
 
 ## Authority and coordination
 
@@ -12,8 +12,9 @@ Status: P1 complete: code/review/build, full regression, final evaluation, NAS-b
 - Baseline verified locally; preserve the seven unrelated untracked research files.
 - Main owns production/adapters, stage execution and delivery. One disjoint
   evaluation worker owns graph evaluation fixtures/tests; no parallel test runs.
-- Preserve the existing host memory guard: start only above 3.8 GiB free RAM,
-  stop the owned process tree below 3.5 GiB. No user apps/live service termination.
+- Current user-approved host guard: start at2.3GiB free RAM and stop the owned
+  verifier tree below2GiB. The earlier3.8/3.5GiB entries below are historical.
+  No user apps or unrelated live services are terminated to obtain headroom.
 
 ## Approved stages and acceptance
 
@@ -78,6 +79,27 @@ user-fork push and remote verification. No stage is complete from a plan or a
 partial test run alone. Keep five stable MCP tools and Markdown authority.
 
 ## Execution record
+
+- P2 current status: service26 and MCP/REST1 targeted assertions and strict build
+  passed. Independent SPEC and QUALITY findings were reproduced and closed.
+  Same-budget offline MOC/Leiden fixture comparison and bounded current-agent
+  summaries are documented, with no model API calls or general quality claim.
+  Full455-file regression completed on frozen basis
+  `c0bbac864b0dbda4f983824dea0ac50e3b26b121f0f9bb588be35e864f4027cb`;
+  with6377 passed assertions,4 existing allowed skips,0 failures/missing files.
+  Completed per-file receipts are retained and interrupted runs excluded.
+  Worker heap256MiB is an explicit lower-memory option; coordinator192MiB
+  (384MiB for llm-wiki, topic-packet-mcp and scope-security) and single-worker
+  execution. document-structure retains its original512MiB worker after a
+  confirmed256MiB V8 OOM; its complete rerun passed22 assertions.
+  A bounded30-second admission grace period handles transient headroom loss
+  without lowering thresholds. NAS release/rollback preparation and read-only
+  preflight and activation succeeded. Canonical data was preserved and the old
+  runtime retained. The user confirmed the operational Wiki intentionally has
+  no authored MOC yet: live acceptance verifies the empty-state/read-only/schema/
+  invalid-input/budget contract without creating notes. Successful MOC packets
+  remain locally fixture-verified, not live-positive-verified. See topic-packets.md
+  for measurement scope and limits. Fork commit/push follows this acceptance.
 
 - Baseline and ownership verified after B handoff. No implementation from B is
   claimed as this task's work. Stage 1 tests are being authored first.

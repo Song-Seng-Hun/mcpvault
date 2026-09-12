@@ -4,6 +4,14 @@ import { isModerationHidden } from './moderation-policy.js';
 import { ReferenceService } from './references.js';
 import { extractObsidianLinkOccurrences } from './backlinks.js';
 import { normalizeKnowledgeSynthesis } from './knowledge-synthesis-model.js';
+/** Shared authored-candidate classification; role alone is not synthesis. */
+export function synthesisMemberRole(fm) {
+    const kind = String(fm.note_kind || '').trim().toLowerCase();
+    if (!['atomic', 'knowledge', 'literature', 'question', 'hypothesis', 'experiment', 'assumption', 'decision'].includes(kind)
+        || ['archived', 'superseded', 'tombstoned'].includes(String(fm.lifecycle || '').trim().toLowerCase()))
+        return undefined;
+    return kind === 'decision' || fm.knowledge_synthesis !== undefined || String(fm.interpretation_status || '').toLowerCase() === 'synthesized' ? 'output' : 'input';
+}
 const UNAVAILABLE = 'Synthesis input unavailable or changed; read current context and retry';
 const INPUT_KINDS = new Set(['atomic', 'knowledge', 'literature', 'question', 'hypothesis', 'experiment', 'assumption', 'decision']);
 const historicalInput = (fm) => ['archived', 'superseded', 'tombstoned'].includes(String(fm.lifecycle || '').trim().toLowerCase())

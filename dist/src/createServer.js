@@ -2770,6 +2770,12 @@ export function createServer(vaultPath, options = {}) {
                             .filter(key => rawArgs[key] !== undefined).map(key => [key, rawArgs[key]]));
                         return jsonResult(await service.execute(EXPLANATION_ENDPOINTS[toolName].split('.')[1], params, principal), false);
                     }
+                    case "get_wiki_topic_packet": {
+                        const result = await llmWiki.topicPacket(principal, trimmedArgs);
+                        if (JSON.stringify(await scopeAuth.authenticate(rawArgs.accessToken)) !== JSON.stringify(principal))
+                            throw new Error('Authentication changed; retry topic request');
+                        return jsonResult(result, trimmedArgs.prettyPrint);
+                    }
                     case 'list_benchmarks':
                     case 'read_benchmark':
                     case 'submit_benchmark':

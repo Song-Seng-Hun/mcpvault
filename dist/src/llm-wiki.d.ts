@@ -1,3 +1,4 @@
+import { type TopicPacketOptions } from './topic-packet.js';
 import { type AuthoringContext } from './authoring-assist.js';
 import { type FileSystemService, type DerivedViewWritePolicy } from './filesystem.js';
 import type { ScopeAccessPolicy } from './scope-access.js';
@@ -4033,6 +4034,20 @@ export declare class LlmWikiService {
      * semantic clustering endpoint: MOC/project/domain/subject metadata is the
      * authored boundary, and the returned plan preserves every input note.
      */
+    topicPacket(principal: ScopePrincipal | undefined, options: TopicPacketOptions): Promise<Record<string, any> | {
+        mode: string;
+        partial: boolean;
+        completeTopic: boolean;
+        nextAction: {
+            endpointId: string;
+            arguments: {
+                path: string;
+                expectedRevision: string | undefined;
+                maxChars: number;
+            };
+        };
+        notice: string;
+    }>;
     synthesisCandidates(principal?: ScopePrincipal, limit?: number, maxChars?: number, options?: SynthesisCandidatesOptions): Promise<Record<string, any>>;
     promotionCandidates(principal?: ScopePrincipal, limit?: number, maxChars?: number, prettyPrint?: boolean): Promise<{
         items: Record<string, unknown>[];

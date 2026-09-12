@@ -2900,7 +2900,7 @@ export class FileSystemService {
                     graph.invalidate(sourcePath);
                     throw guidanceError(new Error('Graph source changed or became unavailable; retry the query to refresh its snapshot.'), 'guid-16d3d56b92981cc2');
                 }
-            }, true, options.includeSnapshot, targets => this.assertGraphTargetRevisions(graph, targets, canAccessPath), options.relations, options.inspectionBudget, options.compact);
+            }, true, options.includeSnapshot, targets => this.assertGraphTargetRevisions(graph, targets, canAccessPath), options.relations, options.inspectionBudget, options.compact, options.propertyRoots);
             await this.assertGraphReadRevision(graph, target, result.targetRevision, canAccessPath, targetNote.revision);
             const sources = [...new Map(result.backlinks.map(link => [link.path, link.sourceRevision])).entries()];
             for (let offset = 0; offset < sources.length; offset += 8) {

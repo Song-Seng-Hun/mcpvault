@@ -110,7 +110,7 @@ const toolsByFeature: Record<HostFeatureId, readonly string[]> = {
     'get_wiki_recall_queue', 'get_wiki_reciprocal_link_preview', 'get_wiki_relation_set_preview',
     'get_wiki_retention_queue', 'get_wiki_review_dashboard', 'get_wiki_review_packet', 'get_wiki_review_queue',
     'get_wiki_source_comparison', 'get_wiki_source_lineage', 'get_wiki_source_trust', 'get_wiki_summary_candidates',
-    'get_wiki_synthesis_candidates', 'get_wiki_term_change_preview', 'get_wiki_trail', 'get_wiki_unused_knowledge',
+    'get_wiki_synthesis_candidates', 'get_wiki_topic_packet', 'get_wiki_term_change_preview', 'get_wiki_trail', 'get_wiki_unused_knowledge',
     'get_wiki_vocabulary_health', 'manage_wiki_moc_region', 'preflight_wiki_publish', 'preview_wiki_merge',
     'preview_wiki_split', 'propose_wiki_term_change', 'publish_decision_record', 'read_wiki_moc_region_status',
     'read_wiki_projection', 'read_wiki_saved_view', 'record_wiki_recall', 'resolve_wiki_term',

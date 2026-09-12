@@ -305,6 +305,7 @@ export declare class FileSystemService {
         readMetadata?: (path: string) => Promise<QueryNote | undefined>;
         metadataExhausted?: () => boolean;
         relations?: readonly string[];
+        propertyRoots?: readonly string[];
         inspectionBudget?: {
             remaining: number;
         };

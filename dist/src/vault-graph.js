@@ -218,7 +218,7 @@ export class VaultGraphIndex {
         }
         return result;
     }
-    async getBacklinks(path, limit, canAccessPath, offset = 0, canIncludeSource, includeSourceRevision = false, includeSnapshot = false, validateTargets, relations, inspectionBudget, compact = false) {
+    async getBacklinks(path, limit, canAccessPath, offset = 0, canIncludeSource, includeSourceRevision = false, includeSnapshot = false, validateTargets, relations, inspectionBudget, compact = false, propertyRoots) {
         if (inspectionBudget && (!Number.isSafeInteger(inspectionBudget.remaining) || inspectionBudget.remaining < 0))
             throw Error('Invalid backlink inspection budget');
         await this.ensure();
@@ -239,6 +239,8 @@ export class VaultGraphIndex {
         const snapshot = includeSnapshot ? new NavigationViewFingerprint(['backlinks', targetEntry.path, targetEntry.revision]) : undefined;
         if (relations)
             snapshot?.add('relation_filter', targetEntry.revision, [...new Set(relations)].sort());
+        if (propertyRoots)
+            snapshot?.add('property_filter', targetEntry.revision, [...new Set(propertyRoots)].sort());
         const visible = this.visibilityContext(canAccessPath);
         const allResolver = buildResolver([...this.allPaths], this.entries);
         // Internal evidence discovery needs only an authored occurrence, never its
@@ -265,6 +267,8 @@ export class VaultGraphIndex {
             // Internal bounded readers can reserve their fresh-author budget for
             // a relation class without loading unrelated incoming authors first.
             if (relations && (!link.relation || !relations.includes(link.relation)))
+                continue;
+            if (propertyRoots && (!link.propertyPath || !propertyRoots.includes(link.propertyPath.split(/[.\[]/, 1)[0])))
                 continue;
             if (inspectionBudget) {
                 if (!inspectionBudget.remaining) {
@@ -761,6 +765,21 @@ export class VaultGraphIndex {
             }
             tags.push(...extractInlineTags(parsed.content).map(tag => tag.toLowerCase()));
             const links = extractObsidianLinkOccurrences(raw);
+            // Explicit wikilinks are already emitted by the Markdown scanner, but
+            // retain their MOC property provenance for bounded membership queries.
+            for (const property of ['primary_moc', 'moc', 'mocs']) {
+                const value = parsed.frontmatter[property];
+                const values = Array.isArray(value) ? value : [value];
+                for (let index = 0; index < values.length; index++) {
+                    if (typeof values[index] !== 'string')
+                        continue;
+                    for (const occurrence of extractObsidianLinkOccurrences(values[index])) {
+                        const existing = links.find(link => link.link === occurrence.link && !link.propertyPath);
+                        if (existing)
+                            existing.propertyPath = Array.isArray(value) ? `${property}[${index}]` : property;
+                    }
+                }
+            }
             for (const relation of RELATION_FIELDS) {
                 const values = Array.isArray(parsed.frontmatter[relation]) ? parsed.frontmatter[relation] : [];
                 for (let relationIndex = 0; relationIndex < values.length; relationIndex += 1) {
@@ -770,7 +789,7 @@ export class VaultGraphIndex {
                     const target = value.trim();
                     const normalizedTarget = target.replace(/^!?\[\[/, '').replace(/\]\]$/, '').split(/[|#]/, 1)[0].trim().replace(/\\/g, '/').toLowerCase();
                     const propertyPath = `${relation}[${relationIndex}]`;
-                    const existing = links.find(link => link.link === target && !link.relation);
+                    const existing = links.find(link => link.link === target && !link.relation && !link.propertyPath);
                     if (existing) {
                         existing.relation = relation;
                         existing.context = `${relation}: ${target}`;
