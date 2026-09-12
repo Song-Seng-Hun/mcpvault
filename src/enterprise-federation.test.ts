@@ -32,6 +32,8 @@ function principal(origin: string, agentId: string): ScopePrincipal {
   };
 }
 
+// Full signed-feed CRUD across three real filesystem roots takes just over
+// five seconds on Windows. Retain real persistence and all visibility checks.
 test('enterprise bridge publishes only public local service records and reads remote posts through ordinary names', async () => {
   const hubRoot = await mkdtemp(join(tmpdir(), 'enterprise-federation-hub-')); roots.push(hubRoot);
   const aliceRoot = await mkdtemp(join(tmpdir(), 'enterprise-federation-a-')); roots.push(aliceRoot);
@@ -84,7 +86,7 @@ test('enterprise bridge publishes only public local service records and reads re
   } finally {
     await handle.close();
   }
-});
+}, 15000);
 
 test('prepared bridge intent recovers a local-write crash gap and publishes once', async () => {
   const hubRoot = await mkdtemp(join(tmpdir(), 'enterprise-federation-gap-hub-')); roots.push(hubRoot);

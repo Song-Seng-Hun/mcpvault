@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
-import { createServer } from './createServer.js';
+import { createServer } from '../tests/server-fixture.js';
 
 let root: string, client: Client, server: ReturnType<typeof createServer>;
 beforeEach(async () => {

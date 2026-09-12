@@ -4,6 +4,11 @@ import { createServer as createHttpServer } from 'node:http';
 import { createServer as createHttpsServer } from 'node:https';
 import { appendFile, copyFile, mkdir, open, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises';
 import { dirname, join, relative, resolve } from 'node:path';
+import { isOriginalPath } from './original-boundary.js';
+import { DocumentPolicyStore } from './document-policy-store.js';
+import { DocumentAuthority } from './document-authority.js';
+import { FileSystemService } from './filesystem.js';
+import { PathFilter } from './pathfilter.js';
 const PROTOCOL = 'mcpvault-global-sync/v1';
 const MAX_DOCUMENT_BYTES = 1_048_576;
 const MAX_REASON_LENGTH = 500;
@@ -905,6 +910,9 @@ export class GlobalSyncReadClient {
 }
 /** Pull-only replica. Local edits are never overwritten; remote tombstones are recoverable moves. */
 export class GlobalSyncReplica {
+    documentPolicy;
+    fileSystem;
+    pathFilter = new PathFilter();
     vaultPath;
     statePath;
     backupRoot;
@@ -916,6 +924,8 @@ export class GlobalSyncReplica {
     loaded = false;
     constructor(options) {
         this.vaultPath = resolve(options.vaultPath);
+        this.documentPolicy = new DocumentPolicyStore(this.vaultPath);
+        this.fileSystem = new FileSystemService(this.vaultPath, this.pathFilter);
         this.statePath = join(this.vaultPath, '.mcpvault', 'global-sync-replica.json');
         this.backupRoot = join(this.vaultPath, '.mcpvault', 'global-sync-backups');
         this.quarantineRoot = join(this.vaultPath, '.mcpvault', 'global-sync-quarantine');
@@ -987,8 +997,13 @@ export class GlobalSyncReplica {
                 break;
             }
             const path = this.localPath(entry.documentId);
+            const original = isOriginalPath(entry.documentId);
             const previous = this.state.documents[entry.documentId];
             const current = await this.currentContent(path);
+            if (original && (entry.operation === 'tombstone' || current.exists && current.hash !== entry.contentHash)) {
+                conflicts.push({ documentId: entry.documentId, revisionId: entry.revisionId, reason: 'Immutable original cannot be replaced or removed; capture a new source path.' });
+                break;
+            }
             if (previous?.revisionId === entry.revisionId) {
                 if (entry.operation === 'upsert' && current.hash !== previous.contentHash) {
                     conflicts.push({ documentId: entry.documentId, revisionId: entry.revisionId, reason: guidanceText('guid-95ae73e56a42b58d', 'Local document changed after its last synchronized revision.') });
@@ -1012,7 +1027,14 @@ export class GlobalSyncReplica {
                 if (current.exists && current.hash !== revision.contentHash)
                     await this.backup(path, entry.documentId, entry.sequence);
                 await mkdir(dirname(path), { recursive: true });
-                await writeAtomic(path, revision.content);
+                if (original) {
+                    // Never touch even identical existing originals. Exclusive creation
+                    // also prevents a concurrent importer from replacing a new original.
+                    if (!current.exists)
+                        await writeFile(path, revision.content, { flag: 'wx' });
+                }
+                else
+                    await writeAtomic(path, revision.content);
                 this.state.documents[entry.documentId] = { revisionId: entry.revisionId, operation: 'upsert', contentHash: revision.contentHash };
             }
             else {
@@ -1094,19 +1116,43 @@ export class GlobalSyncReplica {
     async proposeLocal(documentId, author, reason, origin, provenance, idempotencyKey) {
         await this.load();
         const normalized = normalizeId(documentId, 'documentId');
+        await this.assertPublicDocument(normalized);
         const current = await this.currentContent(this.localPath(normalized));
         if (!current.exists || current.content === undefined)
             throw guidanceError(new Error('local Global document does not exist'), 'guid-e5d25c871c517b8a');
         if (!this.client.submitProposal)
             throw guidanceError(new Error('This Global replica is read-only'), 'guid-6f0501785e6489b8');
+        await this.assertPublicDocument(normalized);
         return this.client.submitProposal({ documentId: normalized, ...(this.state.documents[normalized]?.revisionId && { parentRevision: this.state.documents[normalized].revisionId }), operation: 'upsert', content: current.content, author, reason, origin, ...(provenance && { provenance }), ...(idempotencyKey && { idempotencyKey }) });
     }
     async proposeTombstone(documentId, author, reason, origin) {
         await this.load();
         const normalized = normalizeId(documentId, 'documentId');
+        await this.assertPublicDocument(normalized);
         if (!this.client.submitProposal)
             throw guidanceError(new Error('This Global replica is read-only'), 'guid-6f0501785e6489b8');
         return this.client.submitProposal({ documentId: normalized, ...(this.state.documents[normalized]?.revisionId && { parentRevision: this.state.documents[normalized].revisionId }), operation: 'tombstone', author, reason, origin });
+    }
+    async assertPublicDocument(path) {
+        await this.documentPolicy.refresh();
+        if (!this.pathFilter.isAllowed(path) || !new DocumentAuthority(this.documentPolicy.rules()).canRead(path))
+            throw new Error('Protected documents cannot be exported to public Global');
+        // Tombstones may refer to missing files. Validate the closest existing
+        // ancestor too; a missing child does not excuse a confidential junction.
+        for (let candidate = path;; candidate = dirname(candidate).replace(/\\/g, '/')) {
+            try {
+                const canonical = this.fileSystem.canonicalReferencePath(candidate);
+                const lexical = candidate === '.' ? '' : candidate;
+                if (process.platform === 'win32' ? canonical.toLowerCase() !== lexical.toLowerCase() : canonical !== lexical)
+                    throw new Error('Public Global export refuses canonical aliases');
+                break;
+            }
+            catch (error) {
+                if (candidate !== '.' && error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT')
+                    continue;
+                throw error;
+            }
+        }
     }
 }
 function bearer(request) {

@@ -4,6 +4,8 @@ import { randomUUID, createHash } from 'node:crypto';
 import { mkdir, writeFile, readFile, lstat, open, rm, unlink, access } from 'node:fs/promises';
 import { win32 } from 'node:path';
 import type { DocumentResourceSnapshot } from './document-resource.js';
+import { createDerivedCacheOwner, derivedCacheBudget } from './cache-budget.js';
+import { documentResidentEstimate } from './document-work-memory.js';
 import type { DocumentStructure } from './document-structure.js';
 import { pdfDocumentStructure } from './document-pdf.js';
 
@@ -83,9 +85,23 @@ async function run(executable: string, args: string[], timeoutMs = 125000, ceili
   return new Promise<{ bytes: Buffer; code: number; diagnostic?: string }>((resolve, reject) => {
     const child = spawn(executable, args, { shell: false, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'],
       env: pdfHostEnvironment(executable) });
-    const chunks: Buffer[] = []; let length = 0, errorBytes = 0, failed = false, stderr = '';
+    const chunks: Buffer[] = []; let length = 0, errorBytes = 0, failed = false, settled = false, stderr = '';
     let exitTimer: ReturnType<typeof setTimeout> | undefined;
-    const uncertain = () => { clearTimeout(timer); if (exitTimer) clearTimeout(exitTimer); reject(new PdfProcessExitUnconfirmed('PDF process exit unconfirmed; host recovery required')); };
+    const disposeOutput = () => {
+      chunks.length = 0; stderr = '';
+      child.stdout.removeListener('data', collectOutput);
+      child.stderr.removeListener('data', collectError);
+      child.stdout.destroy(); child.stderr.destroy();
+    };
+    const uncertain = () => {
+      if (settled) return;
+      settled = true; failed = true;
+      clearTimeout(timer); if (exitTimer) clearTimeout(exitTimer);
+      // Keep OS recovery markers, but do not retain parent output after the
+      // caller releases its extraction admission. Ignore later child events.
+      disposeOutput();
+      reject(new PdfProcessExitUnconfirmed('PDF process exit unconfirmed; host recovery required'));
+    };
     const abort = () => {
       if (failed) return;
       failed = true;
@@ -93,18 +109,25 @@ async function run(executable: string, args: string[], timeoutMs = 125000, ceili
       exitTimer = setTimeout(uncertain, 5000);
     };
     const timer = setTimeout(abort, timeoutMs);
-    child.stdout.on('data', (chunk: Buffer) => { length += chunk.length; if (length > ceiling) abort(); else if (!failed) chunks.push(chunk); });
-    child.stderr.on('data', (chunk: Buffer) => { errorBytes += chunk.length; if (errorBytes <= 1024) stderr += chunk.toString('ascii'); if (errorBytes > 65536) abort(); });
+    const collectOutput = (chunk: Buffer) => { if (settled) return; length += chunk.length; if (length > ceiling) abort(); else if (!failed) chunks.push(chunk); };
+    const collectError = (chunk: Buffer) => { if (settled) return; errorBytes += chunk.length; if (errorBytes <= 1024) stderr += chunk.toString('ascii'); if (errorBytes > 65536) abort(); };
+    child.stdout.on('data', collectOutput);
+    child.stderr.on('data', collectError);
     child.on('error', () => {
+      if (settled) return;
       if (child.pid) { uncertain(); return; }
-      clearTimeout(timer); reject(guidanceError(new Error('PDF host process unavailable'), 'guid-06bd12959a15944e'));
+      settled = true; failed = true; clearTimeout(timer); disposeOutput();
+      reject(guidanceError(new Error('PDF host process unavailable'), 'guid-06bd12959a15944e'));
     });
     child.on('close', code => {
+      if (settled) return;
+      settled = true;
       clearTimeout(timer);
       if (exitTimer) clearTimeout(exitTimer);
       if (failed || code === null) reject(guidanceError(new Error('PDF host timeout or output budget exceeded'), 'guid-308737e370565166'));
       else resolve({ bytes: Buffer.concat(chunks), code,
         ...(/^[a-z0-9_]{1,80}\r?\n$/.test(stderr) && { diagnostic: stderr.trim() }) });
+      disposeOutput();
     });
   });
 }
@@ -117,6 +140,7 @@ let admitted = 0;
 export class LocalPdfProvider {
   readonly config: PdfHostConfig;
   private blocked = false;
+  private readonly cacheOwner = createDerivedCacheOwner('pdf-provider');
   private hot: { key: string; document: DocumentStructure } | undefined;
   constructor(config: unknown) { this.config = validatePdfHostConfig(config); }
 
@@ -132,7 +156,10 @@ export class LocalPdfProvider {
       const document = await this.convert(snapshot);
       // One hot generation only. Source/scope are revalidated by DocumentIndex
       // before and after this call. Runtime maintenance requires provider restart.
-      this.hot = { key, document }; return document;
+      derivedCacheBudget.clearOwner(this.cacheOwner);
+      this.hot = { key, document };
+      derivedCacheBudget.register(this.cacheOwner, key, documentResidentEstimate(document), () => { this.hot = undefined; });
+      return document;
     });
     queue = operation.then(() => {}, () => {});
     try { return await operation; } finally { admitted--; }

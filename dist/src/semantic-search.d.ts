@@ -48,9 +48,8 @@ export declare class SemanticSearchService {
     private readonly vectorCache;
     private readonly vectorInFlight;
     private queryGeneration;
-    private readonly indexPath;
-    private readonly manifestPath;
-    private readonly workerLockPath;
+    private indexPath;
+    private readonly snapshotStorage;
     private manifest;
     private manifestReady;
     private pendingReady;
@@ -82,7 +81,7 @@ export declare class SemanticSearchService {
     private unavailableUntil;
     private lastError;
     private readonly catalogUnsubscribe;
-    constructor(vaultPath: string, pathFilter: PathFilter, accessPolicy?: ScopeAccessPolicy, catalog?: VaultFileCatalog | undefined, vaultIo?: VaultIoCoordinator, excludePath?: (path: string) => boolean);
+    constructor(vaultPath: string, pathFilter: PathFilter, accessPolicy?: ScopeAccessPolicy, catalog?: VaultFileCatalog | undefined, vaultIo?: VaultIoCoordinator, excludePath?: (path: string) => boolean, cacheDir?: string | undefined);
     notifyChange(path: string, kind: ChangeKind): void;
     notifyChanges(changes: readonly VaultCatalogChange[]): void;
     close(): Promise<void>;
@@ -101,6 +100,7 @@ export declare class SemanticSearchService {
     private changedQueryOutcome;
     status(): SemanticIndexStatus;
     private indexedCount;
+    private pendingCount;
     private loadManifest;
     private validatedManifest;
     private saveManifest;
@@ -112,6 +112,7 @@ export declare class SemanticSearchService {
     private scanForChanges;
     private findMarkdownFiles;
     private drain;
+    private indexDirectory;
     private getDb;
     private getTable;
     /**

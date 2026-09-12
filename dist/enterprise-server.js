@@ -2,7 +2,7 @@
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { enterpriseServerHelp, startEnterpriseServer, } from './src/enterprise-server.js';
-const OPTION_NAMES = new Set(['registry', 'realm', 'host', 'port', 'cert', 'key', 'ca', 'federation-config', 'global-import-config']);
+const OPTION_NAMES = new Set(['registry', 'realm', 'host', 'port', 'cert', 'key', 'ca', 'federation-config', 'global-import-config', 'features-config', 'owner-activity-config']);
 function required(options, name) {
     const value = options.get(name);
     if (!value)
@@ -34,6 +34,8 @@ export function parseEnterpriseServerArgs(argv) {
         throw new Error('--port must be an integer from 0 through 65535');
     const federationConfigPath = options.get('federation-config');
     const globalImportConfigPath = options.get('global-import-config');
+    const featuresConfigPath = options.get('features-config');
+    const ownerActivityConfigPath = options.get('owner-activity-config');
     return {
         registryPath: required(options, 'registry'),
         realmId: required(options, 'realm'),
@@ -44,6 +46,8 @@ export function parseEnterpriseServerArgs(argv) {
         caPath: required(options, 'ca'),
         ...(federationConfigPath && { federationConfigPath }),
         ...(globalImportConfigPath && { globalImportConfigPath }),
+        ...(featuresConfigPath && { featuresConfigPath }),
+        ...(ownerActivityConfigPath && { ownerActivityConfigPath }),
     };
 }
 export async function runEnterpriseServer(argv, io = { stdout: console.log, stderr: console.error }) {

@@ -9,7 +9,7 @@ import { SearchService } from './search.js';
 import { PathFilter } from './pathfilter.js';
 import { FrontmatterHandler } from './frontmatter.js';
 import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
-import { createServer } from './createServer.js';
+import { createServer } from '../tests/server-fixture.js';
 
 const faults = vi.hoisted(() => ({
   stat: new Map<string, string>(), readFile: new Map<string, string>(), readdir: new Map<string, string>(),

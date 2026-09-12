@@ -5,15 +5,16 @@ const io = vi.hoisted(() => ({ mkdir: vi.fn(), writeFile: vi.fn(), readFile: vi.
 vi.mock('node:fs/promises', () => io);
 vi.mock('node:child_process', () => ({ spawn: io.spawn }));
 import { LocalPdfProvider, assertNoPdfHostLinks } from './document-pdf-host.js';
+import { derivedCacheBudget } from './cache-budget.js';
 
 const root = 'E:\\private\\pdf-host-v1';
 const config = { version: 1, boundaryRoot: root, python: root+'\\runtime\\python.exe', worker: root+'\\runtime\\document_pdf_worker.py',
   sandboxHost: root+'\\host.exe', aclHelper: root+'\\acl.ps1', powershell: 'C:\\Program Files\\PowerShell\\7\\pwsh.exe' };
 const snapshot = { path: 'fixture.pdf', mediaType: 'application/pdf', bytes: Buffer.from('synthetic'), revision: 'a'.repeat(64) };
-let uncertainAt = '', killFails = false;
+let uncertainAt = '', killFails = false, uncertainWithOutput = false;
 let handle: { writeFile: ReturnType<typeof vi.fn>; sync: ReturnType<typeof vi.fn>; close: ReturnType<typeof vi.fn> };
 beforeEach(() => {
-  vi.clearAllMocks(); uncertainAt = ''; killFails = false;
+  vi.clearAllMocks(); uncertainAt = ''; killFails = false; uncertainWithOutput = false;
   handle = { writeFile: vi.fn().mockResolvedValue(undefined), sync: vi.fn().mockResolvedValue(undefined), close: vi.fn().mockResolvedValue(undefined) };
   io.open.mockResolvedValue(handle);
   io.lstat.mockResolvedValue({ isSymbolicLink: () => false, isDirectory: () => true });
@@ -22,6 +23,7 @@ beforeEach(() => {
     const child = Object.assign(new EventEmitter(), { pid: 99, stdout: new PassThrough(), stderr: new PassThrough(), kill: vi.fn(() => !killFails) });
     queueMicrotask(() => {
       if (args.includes(uncertainAt)) {
+        if (uncertainWithOutput) child.stdout.emit('data', Buffer.alloc(8 * 1024 * 1024));
         if (killFails) child.stdout.emit('data', Buffer.alloc(129 * 1024));
         else child.emit('error', new Error('kill failed'));
         return;
@@ -76,5 +78,24 @@ describe.skipIf(process.platform !== 'win32')('PDF host fail-closed lifecycle', 
     expect(handle.close).toHaveBeenCalledOnce(); expect(io.rm).toHaveBeenCalledOnce(); expect(io.unlink).toHaveBeenCalledOnce();
     const count = io.spawn.mock.calls.length;
     await provider.extract(snapshot); expect(io.spawn).toHaveBeenCalledTimes(count);
+  });
+  it('its hot PDF generation is evictable under the process-wide memory budget', async () => {
+    const provider = new LocalPdfProvider(config);
+    await provider.extract(snapshot);
+    const count = io.spawn.mock.calls.length;
+    const held = derivedCacheBudget.reserveWork(derivedCacheBudget.maxWorkingBytes);
+    held.release();
+    await provider.extract(snapshot);
+    expect(io.spawn.mock.calls.length).toBeGreaterThan(count);
+  });
+  it('unconfirmed worker exit disposes parent output collectors before releasing the operation', async () => {
+    uncertainAt = '--python'; uncertainWithOutput = true;
+    await expect(new LocalPdfProvider(config).extract(snapshot)).rejects.toThrow(/exit unconfirmed/);
+    const worker = io.spawn.mock.results.at(-1)!.value;
+    expect(worker.stdout.listenerCount('data')).toBe(0);
+    expect(worker.stderr.listenerCount('data')).toBe(0);
+    expect(worker.stdout.destroyed).toBe(true);
+    expect(worker.stderr.destroyed).toBe(true);
+    expect(io.rm).not.toHaveBeenCalled(); expect(io.unlink).not.toHaveBeenCalled();
   });
 });

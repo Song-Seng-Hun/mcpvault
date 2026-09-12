@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { createHash } from 'node:crypto';
 import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
 import { FileSystemService } from './filesystem.js';
-import { createServer } from './createServer.js';
+import { createServer } from '../tests/server-fixture.js';
 import { endpointIdForTool } from './endpoint-registry.js';
 
 let vault: string;

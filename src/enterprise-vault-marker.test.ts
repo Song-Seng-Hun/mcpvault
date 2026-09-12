@@ -3,7 +3,7 @@ import { mkdtemp, mkdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ensureEnterpriseVaultMarker, readEnterpriseVaultMarker } from './enterprise-vault-marker.js';
-import { createServer } from './createServer.js';
+import { createServer } from '../tests/server-fixture.js';
 const roots: string[] = [];
 afterEach(async () => { for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true }); });
 test('enterprise marker refuses legacy createServer and a different mode after restart', async () => {

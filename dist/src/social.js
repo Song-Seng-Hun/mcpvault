@@ -214,6 +214,11 @@ export class SocialService {
         this.notifications = notifications;
         this.options = options;
     }
+    requireReputation() {
+        if (!this.reputation)
+            throw new Error('Social activity requires the collaboration feature');
+        return this.reputation;
+    }
     get communityRoot() { return this.options.communityRoot || 'Community'; }
     get blogRoot() { return `${this.communityRoot}/Posts`; }
     blogPath(slug) { return blogPath(this.communityRoot, slug); }
@@ -659,8 +664,8 @@ export class SocialService {
             for (const [path, excerpt] of excerpts)
                 excerptByPath.set(path, excerpt);
         }
-        const reputations = await this.reputation.getMany(selectedNotes.map(note => String(note.frontmatter.author || '')));
-        const viewerReputation = params.principal ? await this.reputation.getForPrincipal(params.principal) : undefined;
+        const reputations = await this.requireReputation().getMany(selectedNotes.map(note => String(note.frontmatter.author || '')));
+        const viewerReputation = params.principal ? await this.requireReputation().getForPrincipal(params.principal) : undefined;
         const entries = selectedNotes.map(note => ({
             path: note.path,
             slug: note.frontmatter.post_id,
@@ -708,8 +713,8 @@ export class SocialService {
             throw guidanceError(new Error('This draft is private to its author'), 'guid-80de7596b58b621c');
         }
         const comments = await this.listBlogComments({ slug: params.slug, ...(params.principal && { principal: params.principal }), limit: params.includeComments ? (params.commentLimit ?? 10) : 1, maxChars: params.commentMaxChars ?? 4000, includeThreadContext: params.includeThreadContext !== false });
-        const authorReputation = (await this.reputation.getMany([String(note.frontmatter.author || '')])).get(String(note.frontmatter.author || '').toLowerCase());
-        const viewerReputation = params.principal ? await this.reputation.getForPrincipal(params.principal) : undefined;
+        const authorReputation = (await this.requireReputation().getMany([String(note.frontmatter.author || '')])).get(String(note.frontmatter.author || '').toLowerCase());
+        const viewerReputation = params.principal ? await this.requireReputation().getForPrincipal(params.principal) : undefined;
         return { path, fm: note.frontmatter, content: note.content, revision: note.revision, commentCount: comments.total,
             ...(Boolean(note.frontmatter.notice_id) && this.options.noticeFeedbackReview && { noticeReview: await this.options.noticeFeedbackReview(note.frontmatter.notice_id, path, note.revision, params.principal) }),
             authorLevel: authorReputation?.level ?? 0,
@@ -734,7 +739,7 @@ export class SocialService {
             throw guidanceError(new Error(`Not a blog comment: ${commentId}`), 'guid-28d998bc53de973c');
         if (isModerationHidden(note.frontmatter))
             throw guidanceError(new Error('This community comment is unavailable because it was hidden by moderation'), 'guid-9b04817ff861f4d3');
-        const authorReputation = (await this.reputation.getMany([String(note.frontmatter.author || '')])).get(String(note.frontmatter.author || '').toLowerCase());
+        const authorReputation = (await this.requireReputation().getMany([String(note.frontmatter.author || '')])).get(String(note.frontmatter.author || '').toLowerCase());
         return {
             path,
             fm: note.frontmatter,
@@ -885,8 +890,8 @@ export class SocialService {
             total = await this.fileSystem.countNotes({ pathPrefix: commentsRoot(this.communityRoot, slug), filters }, undefined, visible);
             queryTruncated = window.truncated;
         }
-        const reputations = await this.reputation.getMany(notes.map(note => String(note.frontmatter.author || '')));
-        const viewerReputation = params.principal ? await this.reputation.getForPrincipal(params.principal) : undefined;
+        const reputations = await this.requireReputation().getMany(notes.map(note => String(note.frontmatter.author || '')));
+        const viewerReputation = params.principal ? await this.requireReputation().getForPrincipal(params.principal) : undefined;
         const cursorIndex = params.afterCommentId
             ? notes.findIndex(note => note.frontmatter.comment_id === normalizeScopeId(params.afterCommentId, 'afterCommentId'))
             : -1;

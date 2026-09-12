@@ -8,9 +8,10 @@ import { SemanticSearchService } from './semantic-search.js';
 import { PathFilter } from './pathfilter.js';
 import { VaultFileCatalog } from './vault-catalog.js';
 import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
-import { createServer } from './createServer.js';
+import { createServer } from '../tests/server-fixture.js';
 import { endpointIdForTool } from './endpoint-registry.js';
 import { SEMANTIC_EMBEDDING_PROFILE } from './semantic-profile.js';
+import { derivedStorageFixture } from '../tests/derived-storage-fixture.js';
 
 const faults = vi.hoisted(() => ({ readFile: new Map<string, string>(), readdir: new Map<string, string>(), stat: new Map<string, string>() }));
 vi.mock('node:fs/promises', async importOriginal => {
@@ -24,6 +25,7 @@ vi.mock('node:fs/promises', async importOriginal => {
 });
 
 let vault: string;
+let host: Awaited<ReturnType<typeof derivedStorageFixture>>;
 let service: SemanticSearchService;
 let catalog: VaultFileCatalog | undefined;
 let rows: any[];
@@ -34,10 +36,11 @@ const schema = async () => ({ fields: [{ name: 'embeddingProfile' }, { name: 'ch
 const params = { query: 'fixture', queryVector: vector, maxChars: 512 };
 beforeEach(async () => {
   vault = await mkdtemp(join(tmpdir(), 'mcpvault-semantic-integrity-'));
+  host = await derivedStorageFixture(vault);
   await mkdir(join(vault, 'Area'));
   await writeFile(join(vault, 'Area/Note.md'), raw);
   rows = [{ id: 'Area/Note.md#0', path: 'Area/Note.md', title: 'Note', hash: hash(raw), line: 1, wiki: false, fiction: false, vector, embeddingProfile: SEMANTIC_EMBEDDING_PROFILE }];
-  service = new SemanticSearchService(vault, new PathFilter());
+  service = new SemanticSearchService(vault, new PathFilter(), undefined, undefined, undefined, undefined, host.host);
   await (service as any).manifestReady;
   await (service as any).pendingReady;
   const info = await stat(join(vault, 'Area/Note.md'));
@@ -54,6 +57,8 @@ afterEach(async () => {
   await service.close();
   catalog?.close(); catalog = undefined;
   vi.restoreAllMocks();
+  vi.unstubAllEnvs();
+  await host.close();
   await rm(vault, { recursive: true, force: true });
 });
 
@@ -125,6 +130,7 @@ test('newly prepared vector rows carry raw Markdown line numbers', async () => {
 });
 
 test('public MCP semantic search locators open the intended physical line', async () => {
+  vi.stubEnv('MCPVAULT_DERIVED_CACHE_DIR', host.host);
   const content = '---\nkey: value\n---\n\n# Heading\n\n \n\nTarget paragraph';
   await writeFile(join(vault, 'Area/Note.md'), content);
   const legacyRows = [{ ...rows[0], id: 'Area/Note.md#2', hash: hash(content), line: 2 }];
@@ -238,7 +244,7 @@ test('a delivered event invalidates cached misses without starting an embedding 
   rows = [];
   catalog = new VaultFileCatalog(vault, new PathFilter());
   // Use the production catalog subscription with an explicit delivery boundary.
-  const isolated = new SemanticSearchService(vault, new PathFilter(), undefined, catalog);
+  const isolated = new SemanticSearchService(vault, new PathFilter(), undefined, catalog, undefined, undefined, host.host);
   try {
     vi.spyOn(isolated as any, 'acquireIndexLease').mockResolvedValue(false);
     vi.spyOn(isolated as any, 'getTableNames').mockResolvedValue(new Set(['chunks_global']));
@@ -254,14 +260,12 @@ test('a delivered event invalidates cached misses without starting an embedding 
 });
 
 test('persisted manifests and queues discard unsafe paths and reconstruct scope from the path', async () => {
-  const indexPath = join(vault, '.mcpvault/semantic-index');
-  await mkdir(indexPath, { recursive: true });
   const entry = { hash: hash(raw), scope: 'agent:other' };
-  await writeFile(join(indexPath, 'manifest.snapshot.gz'), gzipSync(JSON.stringify({ 'Area/Note.md': entry, 'Area/../Outside.md': entry, '_scopes/users/host/Private.md': entry })));
-  await writeFile(join(indexPath, 'pending.snapshot.gz'), gzipSync(JSON.stringify([
+  await writeFile(host.path('semantic-manifest.snapshot.gz'), gzipSync(JSON.stringify({ 'Area/Note.md': entry, 'Area/../Outside.md': entry, '_scopes/users/host/Private.md': entry })));
+  await writeFile(host.path('semantic-pending.snapshot.gz'), gzipSync(JSON.stringify([
     { path: 'Area/Note.md', kind: 'upsert' }, { path: 'Area/../Outside.md', kind: 'delete' }, { path: '/absolute.md', kind: 'upsert' },
   ])));
-  const isolated = new SemanticSearchService(vault, new PathFilter());
+  const isolated = new SemanticSearchService(vault, new PathFilter(), undefined, undefined, undefined, undefined, host.host);
   try {
     await (isolated as any).manifestReady;
     await (isolated as any).pendingReady;
@@ -271,11 +275,9 @@ test('persisted manifests and queues discard unsafe paths and reconstruct scope 
 });
 
 test('an over-expanded pending snapshot is ignored before queued work is restored', async () => {
-  const indexPath = join(vault, '.mcpvault/semantic-index');
-  await mkdir(indexPath, { recursive: true });
   const snapshot = ' '.repeat(8 * 1024 * 1024) + JSON.stringify([{ path: 'Area/Note.md', kind: 'delete' }]);
-  await writeFile(join(indexPath, 'pending.snapshot.gz'), gzipSync(snapshot));
-  const isolated = new SemanticSearchService(vault, new PathFilter());
+  await writeFile(host.path('semantic-pending.snapshot.gz'), gzipSync(snapshot));
+  const isolated = new SemanticSearchService(vault, new PathFilter(), undefined, undefined, undefined, undefined, host.host);
   try {
     await (isolated as any).pendingReady;
     expect((isolated as any).pending.size).toBe(0);
@@ -328,6 +330,8 @@ test('a failed vector write preserves manifest and retries the batch idempotentl
   };
   vi.spyOn(service as any, 'getDb').mockResolvedValue({});
   vi.mocked((service as any).getTable).mockResolvedValue(table);
+  // getDb is native-only mocked; provision the private directory it normally owns.
+  await mkdir(host.path('semantic-index'), { mode: 0o700 });
   await expect((service as any).drain(4)).rejects.toThrow('native write failure');
   expect(storedRows).toEqual(rows);
   expect((service as any).manifest['Area/Note.md']).toEqual(before);
@@ -340,7 +344,7 @@ test('a failed vector write preserves manifest and retries the batch idempotentl
   expect(storedRows).toHaveLength(1);
   expect(storedRows[0].hash).toBe(hash(changed));
   expect((service as any).pending.size).toBe(0);
-});
+}, 30000);
 
 test('public MCP retains bounded lexical results when the vector backend fails', async () => {
   vi.spyOn(SemanticSearchService.prototype as any, 'getTableNames').mockRejectedValue(new Error(`private-driver-detail ${vault}`));

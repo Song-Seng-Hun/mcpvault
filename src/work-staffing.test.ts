@@ -10,6 +10,217 @@ const input = (extra: Partial<WorkStaffingInput> = {}): WorkStaffingInput => ({
   workload: { owner: 0, reviewer: 0 }, personalWipLimit: 2, ...extra,
 });
 
+const localProfile = (accountId: string, extra: Partial<WorkExecutionProfile> = {}) =>
+  profile(accountId, 'local-model', { executionLocality: 'local', bookkeepingSuitable: true, ...extra });
+
+describe('bookkeeping staffing', () => {
+  it('signals deterministic bookkeeping without any LLM, cost or automatic action', () => {
+    const value = input({ taskType: 'bookkeeping', deterministicAvailable: true, candidates: [], eligibleAccountIds: [], budget: 0 });
+    const before = structuredClone(value);
+    const result = recommendStaffing(value);
+    expect(result).toMatchObject({ advisory: true, execution: { mode: 'deterministic', llmRequired: false },
+      rows: [], unfilled: [], summary: { required: 0, recommended: 0, estimatedCost: 0, unknownCost: false } });
+    expect(value).toEqual(before);
+    expect(result).toEqual(recommendStaffing(value));
+    expect(JSON.stringify(result)).not.toMatch(/spawn|command|autoAssign/);
+  });
+
+  it('preserves existing ownership on the deterministic path without charging it', () => {
+    const result = recommendStaffing(input({ taskType: 'bookkeeping', deterministicAvailable: true,
+      currentAssignments: [{ accountId: 'owner', perspective: 'bookkeeping' }], candidates: [], eligibleAccountIds: [] }));
+    expect(result.rows).toEqual([expect.objectContaining({ accountId: 'owner', source: 'existing' })]);
+    expect(result.summary).toMatchObject({ required: 0, covered: 0, recommended: 0, estimatedCost: 0 });
+  });
+
+  it.each(['security', 'permissions', 'shared_policy', 'destructive'] as const)(
+    'keeps independent review mandatory for deterministic %s', workKind => {
+      const result = recommendStaffing(input({ taskType: 'bookkeeping', deterministicAvailable: true, workKind,
+        candidates: [localProfile('owner'), profile('reviewer')] }));
+      expect(result.execution).toEqual({ mode: 'deterministic', llmRequired: true });
+      expect(result.rows).toEqual([]);
+      expect(result.unfilled).toEqual([{ perspective: 'independent_review', reason: 'independent_review_required' }]);
+      expect(result.explanations.join(' ')).toMatch(/local.*remote/i);
+      const reviewed = recommendStaffing(input({ taskType: 'bookkeeping', deterministicAvailable: true, workKind,
+        candidates: [localProfile('owner'), localProfile('reviewer')] }));
+      expect(reviewed.rows).toEqual([expect.objectContaining({ accountId: 'reviewer', verification: 'independent_review' })]);
+      expect(reviewed.unfilled).toEqual([]);
+    });
+
+  it.each([undefined, false])('requires verified local LLM when deterministic availability is %s', deterministicAvailable => {
+    const result = recommendStaffing(input({ taskType: 'bookkeeping', deterministicAvailable,
+      candidates: [profile('owner', 'remote-model', { cost: 0 }), localProfile('local')], eligibleAccountIds: ['owner', 'local'] }));
+    expect(result.execution).toEqual({ mode: 'local_llm', llmRequired: true });
+    expect(result.rows.map(r => r.perspective)).toEqual(['bookkeeping']);
+    expect(result.rows.every(r => r.accountId === 'local')).toBe(true);
+    expect(result.summary).toMatchObject({ required: 1, recommended: 1, estimatedCost: 1 });
+    expect(result.unfilled).toEqual([]);
+  });
+
+  it.each([
+    { executionLocality: undefined }, { executionLocality: 'unknown' as const }, { executionLocality: 'remote' as const },
+    { hostVerified: false }, { bookkeepingSuitable: undefined }, { bookkeepingSuitable: false }, { version: 'unknown' },
+  ])('never infers local bookkeeping availability from labels: %j', metadata => {
+    const result = recommendStaffing(input({ taskType: 'bookkeeping',
+      candidates: [localProfile('owner', { provider: 'localhost', family: 'local', ...metadata })], eligibleAccountIds: ['owner'] }));
+    expect(result.rows).toEqual([]);
+    expect(result.unfilled).toEqual([
+      { perspective: 'bookkeeping', reason: 'no_verified_local_candidate' },
+    ]);
+  });
+
+  it('reports missing local profiles explicitly without exposing ineligible candidates', () => {
+    const result = recommendStaffing(input({ taskType: 'bookkeeping', candidates: [localProfile('hidden')], eligibleAccountIds: ['missing'] }));
+    expect(result.rows).toEqual([]);
+    expect(result.unfilled.every(r => r.reason === 'no_verified_local_candidate')).toBe(true);
+    expect(JSON.stringify(result)).not.toContain('hidden');
+  });
+
+  it('selects the cheapest qualified local before owner reuse, family preference and history', () => {
+    const value = input({ taskType: 'bookkeeping', workKind: 'security',
+      candidates: [localProfile('owner', { cost: 9, family: 'preferred' }), localProfile('cheap', { cost: 1 }),
+        localProfile('reviewer', { cost: 2 }), profile('remote', 'gpt', { cost: 0 })],
+      eligibleAccountIds: ['owner', 'cheap', 'reviewer', 'remote'], preferences: { bookkeeping: ['preferred'] },
+      currentAssignments: [{ accountId: 'owner', perspective: 'bookkeeping', active: false, verified: true }],
+    });
+    const result = recommendStaffing(value);
+    expect(result.rows.map(r => r.accountId)).toEqual(['cheap', 'reviewer']);
+    expect(result.summary.estimatedCost).toBe(3);
+    expect(result).toEqual(recommendStaffing({ ...value, candidates: [...value.candidates].reverse() }));
+  });
+
+  it.each([
+    { requiredTools: ['browser'] }, { requiredCapabilities: ['bookkeeping'] }, { minimumTier: 'frontier' as const },
+    { budget: 0 }, { workload: { owner: 2 } },
+  ])('does not select a cheap local that fails qualifications: %j', constraints => {
+    const result = recommendStaffing(input({ taskType: 'bookkeeping', candidates: [localProfile('owner')], eligibleAccountIds: ['owner'], ...constraints }));
+    expect(result.rows).toEqual([]);
+    expect(result.unfilled.every(r => r.reason === 'no_qualified_candidate')).toBe(true);
+  });
+
+  it('preserves affordable independent local review and cumulative budget limits', () => {
+    const result = recommendStaffing(input({ taskType: 'bookkeeping', workKind: 'security', authorAccountIds: [],
+      requiredPerspectives: ['ledger', 'status'], budget: 3,
+      candidates: [localProfile('a-reviewer', { availableBudget: 1 }), localProfile('z-worker', { availableBudget: 2 })],
+      eligibleAccountIds: ['a-reviewer', 'z-worker'] }));
+    expect(result.rows.map(r => r.accountId)).toEqual(['z-worker', 'z-worker', 'a-reviewer']);
+    expect(result.unfilled).toEqual([]);
+    expect(result.summary.estimatedCost).toBe(3);
+  });
+
+  it('prefers known local cost and does not treat missing cost as free under a budget', () => {
+    const value = input({ taskType: 'bookkeeping', authorAccountIds: [], candidates: [localProfile('owner', { cost: undefined }), localProfile('known', { cost: 5 })],
+      eligibleAccountIds: ['owner', 'known'] });
+    expect(recommendStaffing(value).rows[0]?.accountId).toBe('known');
+    expect(recommendStaffing({ ...value, candidates: [localProfile('owner', { cost: undefined })], budget: 10 }).rows).toEqual([]);
+  });
+
+  it.each(['bookkeeping', 'independent_review'])('retains disqualified %s history without counting current coverage', perspective => {
+    const cases: Partial<WorkStaffingInput>[] = [
+      { candidates: [localProfile('old', { executionLocality: 'remote' })] },
+      { candidates: [localProfile('old', { executionLocality: 'unknown' })] },
+      { candidates: [localProfile('old', { hostVerified: false })] },
+      { candidates: [localProfile('old', { bookkeepingSuitable: false })] },
+      { candidates: [] },
+      { eligibleAccountIds: [] },
+      { requiredTools: ['browser'] },
+      { requiredCapabilities: ['ledger'] },
+      { minimumTier: 'frontier' },
+      { budget: 0 },
+      { candidates: [localProfile('old', { availableBudget: 0 })] },
+    ];
+    for (const invalid of cases) {
+      const value = input({ taskType: 'bookkeeping', workKind: 'security', requiredPerspectives: [perspective],
+        currentAssignments: [{ accountId: 'old', perspective, active: true, verified: true }],
+        candidates: [localProfile('old')], eligibleAccountIds: ['old'], ...invalid });
+      const result = recommendStaffing(value);
+      expect(result.rows.filter(r => r.source === 'existing')).toEqual([expect.objectContaining({ accountId: 'old', perspective })]);
+      expect(result.summary.covered, JSON.stringify(invalid)).toBe(0);
+      expect(result.unfilled.map(r => r.perspective), JSON.stringify(invalid)).toContain(perspective);
+    }
+  });
+
+  it('fills bookkeeping after a remote historical owner with a qualified local recommendation', () => {
+    const result = recommendStaffing(input({ taskType: 'bookkeeping',
+      candidates: [localProfile('old', { executionLocality: 'remote' }), localProfile('local')], eligibleAccountIds: ['old', 'local'],
+      currentAssignments: [{ accountId: 'old', perspective: 'bookkeeping', verified: true }] }));
+    expect(result.rows.map(r => [r.accountId, r.source])).toEqual([['old', 'existing'], ['local', 'recommendation']]);
+    expect(result.summary).toMatchObject({ required: 1, covered: 0, recommended: 1, unfilled: 0, estimatedCost: 1 });
+  });
+
+  it('still counts qualified local existing coverage without another charge at the current task WIP limit', () => {
+    const result = recommendStaffing(input({ taskType: 'bookkeeping', workKind: 'security',
+      candidates: [localProfile('owner'), localProfile('reviewer')], workload: { owner: 2, reviewer: 2 },
+      currentAssignments: [{ accountId: 'owner', perspective: 'bookkeeping' }, { accountId: 'reviewer', perspective: 'independent_review' }] }));
+    expect(result.summary).toMatchObject({ required: 2, covered: 2, recommended: 0, unfilled: 0, estimatedCost: 0 });
+  });
+
+  it('does not reserve the cheapest local for unrequested review in general bookkeeping', () => {
+    const value = input({ taskType: 'bookkeeping', authorAccountIds: ['expensive'], budget: 9,
+      candidates: [localProfile('expensive', { cost: 8 }), localProfile('cheap', { cost: 1 })], eligibleAccountIds: ['expensive', 'cheap'] });
+    const result = recommendStaffing(value);
+    expect(result.rows).toEqual([expect.objectContaining({ accountId: 'cheap', perspective: 'bookkeeping' })]);
+    expect(result.summary).toMatchObject({ required: 1, recommended: 1, estimatedCost: 1 });
+    expect(result.explanations.join(' ')).not.toMatch(/review is preserved|budget is reserved/i);
+    expect(result).toEqual(recommendStaffing({ ...value, candidates: [...value.candidates].reverse() }));
+  });
+
+  it.each([false, true])('preserves an existing independent reviewer in the general fast path (alternative=%s)', alternative => {
+    const value = input({ taskType: 'bookkeeping', authorAccountIds: [],
+      candidates: [localProfile('r', { cost: 0 }), ...(alternative ? [localProfile('worker')] : [])],
+      eligibleAccountIds: ['r', 'worker'], currentAssignments: [{ accountId: 'r', perspective: 'independent_review' }] });
+    const result = recommendStaffing(value);
+    expect(result.rows[0]).toMatchObject({ accountId: 'r', source: 'existing', verification: 'independent_review' });
+    expect(result.rows.filter(r => r.source === 'recommendation')).toEqual(alternative
+      ? [expect.objectContaining({ accountId: 'worker', perspective: 'bookkeeping' })] : []);
+    expect(result.unfilled).toEqual(alternative ? [] : [{ perspective: 'bookkeeping', reason: 'no_qualified_candidate' }]);
+    expect(result.summary).toMatchObject({ required: 1, recommended: Number(alternative), estimatedCost: Number(alternative) });
+    expect(recommendStaffing({ ...value, currentAssignments: [{ accountId: 'r', perspective: 'independent_review', active: false }] }).rows)
+      .toEqual([expect.objectContaining({ accountId: 'r', perspective: 'bookkeeping', source: 'recommendation' })]);
+  });
+
+  it.each([0, 1])('uses explicit family preference after cost and before workload/account in the fast path (preferred load=%s)', load => {
+    const value = input({ taskType: 'bookkeeping', authorAccountIds: [],
+      candidates: [localProfile('a', { family: 'other' }), localProfile('z', { family: 'preferred' })],
+      eligibleAccountIds: ['a', 'z'], workload: { a: 0, z: load }, preferences: { bookkeeping: ['preferred'] } });
+    const result = recommendStaffing(value);
+    expect(result.rows).toEqual([expect.objectContaining({ accountId: 'z', perspective: 'bookkeeping' })]);
+    expect(result.summary).toMatchObject({ required: 1, recommended: 1, estimatedCost: 1 });
+    expect(result).toEqual(recommendStaffing({ ...value, candidates: [...value.candidates].reverse() }));
+    expect(recommendStaffing({ ...value, candidates: [value.candidates[0]!, localProfile('z', { family: 'preferred', cost: 2 })] }).rows[0]?.accountId).toBe('a');
+    expect(recommendStaffing({ ...value, preferences: {} }).rows[0]?.accountId).toBe('a');
+  });
+
+  it('skips remaining-role budget reservation in the general bookkeeping fast path', () => {
+    const result = recommendStaffing(input({ taskType: 'bookkeeping', authorAccountIds: [],
+      requiredPerspectives: ['ledger', 'status'], budget: 1,
+      candidates: [localProfile('unknown', { cost: undefined }), localProfile('known', { cost: 1 })], eligibleAccountIds: ['unknown', 'known'] }));
+    expect(result.rows).toEqual([expect.objectContaining({ accountId: 'known', perspective: 'ledger' })]);
+    expect(result.unfilled).toEqual([{ perspective: 'status', reason: 'no_qualified_candidate' }]);
+  });
+
+  it.each([false, true])('honors explicit independent review in general bookkeeping (deterministic=%s)', deterministicAvailable => {
+    const value = input({ taskType: 'bookkeeping', deterministicAvailable,
+      requiredPerspectives: ['bookkeeping', 'independent_review'],
+      candidates: [localProfile('owner'), localProfile('reviewer')] });
+    const result = recommendStaffing(value);
+    expect(result.execution?.llmRequired).toBe(true);
+    expect(result.rows.find(r => r.perspective === 'independent_review')).toMatchObject({ accountId: 'reviewer', verification: 'independent_review' });
+    expect(result.summary.required).toBe(deterministicAvailable ? 1 : 2);
+    const missing = recommendStaffing({ ...value, candidates: [localProfile('owner')] });
+    expect(missing.rows.some(r => r.verification === 'self_verified')).toBe(false);
+    expect(missing.unfilled).toContainEqual({ perspective: 'independent_review', reason: 'independent_review_required' });
+  });
+
+  it.each([
+    { taskType: 'code', deterministicAvailable: true },
+    { taskType: 'bookkeeping', deterministicAvailable: 'yes' },
+    { candidates: [localProfile('owner', { executionLocality: 'localhost' as WorkExecutionProfile['executionLocality'] })] },
+    { candidates: [localProfile('owner', { bookkeepingSuitable: 'yes' as unknown as boolean })] },
+  ])('rejects malformed bookkeeping metadata: %j', invalid => {
+    expect(() => recommendStaffing(input(invalid as Partial<WorkStaffingInput>))).toThrow();
+  });
+});
+
 describe('recommendStaffing', () => {
   it.each(['project', 'account'] as const)('accepts fractional %s budget boundaries without losing an essential hat', boundary => {
     const result = recommendStaffing(input({ candidates: [profile('owner', 'gpt', { cost: 0.1, ...(boundary === 'account' && { availableBudget: 0.3 }) })],
@@ -59,7 +270,7 @@ describe('recommendStaffing', () => {
     });
     const result = recommendStaffing(input({ authorAccountIds: [], workKind: 'security', requiredPerspectives: ['implementation'], budget: 2,
       candidates: [profile('preferred', 'gpt', { cost: 2 }), profile('cheap', 'claude'), third],
-      eligibleAccountIds: ['preferred', 'cheap', 'third'], ...gate,
+      eligibleAccountIds: ['preferred', 'cheap', 'third'], preferences: { implementation: ['gpt'] }, ...gate,
     }));
     expect(result.rows[0]?.accountId).toBe('preferred');
     expect(result.rows.some(r => r.verification === 'independent_review')).toBe(false);
@@ -72,7 +283,7 @@ describe('recommendStaffing', () => {
   ])('excludes related accounts from reviewer lookahead without relying on budget disqualification: %j', exclusions => {
     const result = recommendStaffing(input({ authorAccountIds: [], workKind: 'security', requiredPerspectives: ['implementation'], budget: 2,
       candidates: [profile('preferred', 'gpt', { cost: 2 }), profile('cheap', 'claude'), profile('third', 'gemini')],
-      eligibleAccountIds: ['preferred', 'cheap', 'third'], ...exclusions,
+      eligibleAccountIds: ['preferred', 'cheap', 'third'], preferences: { implementation: ['gpt'] }, ...exclusions,
     }));
     expect(result.rows[0]?.accountId).toBe('preferred');
     expect(result.rows.some(r => r.verification === 'independent_review')).toBe(false);
@@ -99,6 +310,7 @@ describe('recommendStaffing', () => {
 
   it('does not reuse inactive unverified history ahead of role preference', () => {
     const result = recommendStaffing(input({ requiredPerspectives: ['implementation'], authorAccountIds: [],
+      preferences: { implementation: ['gpt'] },
       candidates: [profile('old', 'claude'), profile('preferred')], eligibleAccountIds: ['old', 'preferred'],
       currentAssignments: [{ accountId: 'old', perspective: 'language', active: false, verified: false }],
     }));
@@ -300,10 +512,11 @@ describe('recommendStaffing', () => {
     expect(result.explanations.join(' ')).toMatch(/user preferences.*not.*rank/i);
   });
 
-  it.each([['creative', 'gemini'], ['planning', 'claude'], ['implementation', 'gpt']] as const)('defaults %s to the user preference %s', (perspective, family) => {
+  it.each(['creative', 'planning', 'implementation'])('has no hardcoded model-family preference for %s', perspective => {
     const families = ['claude', 'gpt', 'gemini'];
-    const result = recommendStaffing(input({ requiredPerspectives: [perspective], authorAccountIds: [], candidates: families.map(f => profile(f, f)), eligibleAccountIds: families }));
-    expect(result.rows[0]?.family).toBe(family);
+    const value = input({ requiredPerspectives: [perspective], authorAccountIds: [], candidates: families.map(f => profile(f, f, { cost: f === 'claude' ? 5 : f === 'gpt' ? 2 : 1 })), eligibleAccountIds: families });
+    expect(recommendStaffing(value).rows[0]?.family).toBe('gemini');
+    expect(recommendStaffing({ ...value, preferences: { [perspective]: ['claude'] } }).rows[0]?.family).toBe('claude');
   });
 
   it('uses verified role history before cost and cost before load', () => {

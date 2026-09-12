@@ -1,0 +1,1 @@
+{"version":3,"file":"owner-activity-host.d.ts","sourceRoot":"","sources":["../../src/owner-activity-host.ts"],"names":[],"mappings":"AACA,OAAO,EAAE,mBAAmB,EAAE,MAAM,qBAAqB,CAAC;AAK1D;4EAC4E;AAC5E,wBAAsB,2BAA2B,CAAC,IAAI,EAAE,MAAM,EAAE,aAAa,EAAE,MAAM,GAAG,OAAO,CAAC;IAC9F,MAAM,EAAE,MAAM,mBAAmB,CAAC;IAAC,OAAO,EAAE,MAAM,OAAO,CAAC,IAAI,CAAC,CAAC;CACjE,CAAC,CAyBD"}

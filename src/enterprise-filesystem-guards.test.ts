@@ -100,3 +100,24 @@ test('directory listings filter children that belong to an inaccessible enterpri
   expect(listing.directories).toContain('PublicCommunity');
   expect(listing.directories).not.toContain('Community');
 });
+
+test('physical owner predicates receive canonical slash-separated Vault paths on Windows', async () => {
+  const checked: string[] = [];
+  const note = await withEnterpriseStorageContext({ access, principal, assertFresh() {},
+    canAccessPath(path) { checked.push(path); return path === 'Folder/Visible.md'; },
+    canTraversePath: () => true,
+  }, () => fileSystem.readNote('Folder/Visible.md'));
+
+  expect(note.originalContent).toContain('# Visible');
+  expect(checked).toContain('Folder/Visible.md');
+  expect(checked.every(path => !path.includes('\\'))).toBe(true);
+
+  const writeChecks: string[] = [];
+  await withEnterpriseStorageContext({ access: new ScopeAccessPolicy(), assertFresh() {},
+    canAccessPath(path) { writeChecks.push(path); return !path.includes('\\'); },
+    canTraversePath: () => true,
+    beforeWrite: async path => { writeChecks.push(path); },
+  }, () => fileSystem.writeNote({ path: 'Folder/New.md', content: '# New\n' }));
+  expect(writeChecks).toContain('Folder/New.md');
+  expect(writeChecks.every(path => !path.includes('\\'))).toBe(true);
+});

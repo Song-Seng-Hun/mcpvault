@@ -8,7 +8,7 @@ import { FrontmatterHandler } from './frontmatter.js';
 import { PathFilter } from './pathfilter.js';
 import { extractObsidianLinkOccurrences } from './backlinks.js';
 import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
-import { createServer } from './createServer.js';
+import { createServer } from '../tests/server-fixture.js';
 
 let vault: string;
 let graph: VaultGraphIndex;

@@ -30,6 +30,7 @@ export declare function pdfWorkerArguments(c: PdfHostConfig, profile: string, jo
 export declare class LocalPdfProvider {
     readonly config: PdfHostConfig;
     private blocked;
+    private readonly cacheOwner;
     private hot;
     constructor(config: unknown);
     extract(snapshot: DocumentResourceSnapshot): Promise<DocumentStructure>;

@@ -2,7 +2,8 @@ import { guidanceError } from './guidance-runtime.js';
 import { join, resolve, relative } from 'path';
 import { watch, type FSWatcher } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { mkdir, readFile, readdir, rename, stat, writeFile } from 'node:fs/promises';
+import { readFile, readdir, stat } from 'node:fs/promises';
+import { HostDerivedStorage } from './host-derived-storage.js';
 import type { PathFilter } from './pathfilter.js';
 import type { RankCandidate, SearchParams, SearchResult, MemorySearchParams, MemorySearchOutcome } from './types.js';
 import { generateObsidianUri } from './uri.js';
@@ -12,7 +13,6 @@ import type { VaultCatalogChange, VaultCatalogFileStat, VaultFileCatalog } from 
 import { createDerivedCacheOwner, derivedCacheBudget, estimateCacheBytes } from './cache-budget.js';
 import { VaultIoCoordinator } from './vault-io.js';
 import { isMissingVaultPath, VaultReadUnavailableError } from './vault-read-errors.js';
-import { readSnapshotBytes } from './snapshot-read.js';
 import { parse as parseYaml } from 'yaml';
 import { isFictionMarkdown } from './fiction-domain.js';
 
@@ -24,8 +24,8 @@ const NO_WATCHER_RECONCILE_INTERVAL_MS = 5_000;
 const INDEX_READ_BATCH_SIZE = 32;
 const MAX_INDEXED_TEXT_BYTES = 64 * 1024 * 1024;
 const NGRAM_SIZE = 3;
-const SEARCH_SNAPSHOT_FILE = '.mcpvault/search-index.snapshot.bin';
-const LEGACY_SEARCH_SNAPSHOT_FILE = '.mcpvault/search-index.snapshot.gz';
+const SEARCH_SNAPSHOT_FILE = 'search-index.snapshot.bin';
+const LEGACY_SEARCH_SNAPSHOT_FILE = 'search-index.snapshot.gz';
 const SEARCH_SNAPSHOT_VERSION = 8;
 const SNAPSHOT_SAVE_DEBOUNCE_MS = 1_000;
 const DIRECTORY_CACHE_TTL_MS = 5_000;
@@ -64,6 +64,8 @@ interface IndexedDocument {
   moderationHidden: boolean;
   fiction: boolean;
   revision: string;
+  /** Revision used to build postings, independent of subsequently hydrated text. */
+  postingRevision?: string;
   size: number;
   mtimeMs: number;
   bodyLength: number;
@@ -737,6 +739,7 @@ export class SearchService {
   private cacheGeneration = 0;
   private indexReady: Promise<void> | undefined;
   private readonly snapshotReady: Promise<void>;
+  private readonly snapshotStorage: HostDerivedStorage;
   private indexRefresh: Promise<void> | undefined;
   private snapshotTimer: ReturnType<typeof setTimeout> | undefined;
   private snapshotWrite: Promise<void> | undefined;
@@ -755,8 +758,10 @@ export class SearchService {
     private pathFilter: PathFilter,
     private readonly catalog?: VaultFileCatalog,
     private readonly vaultIo = new VaultIoCoordinator(),
+    cacheDir = process.env.MCPVAULT_DERIVED_CACHE_DIR,
   ) {
     this.vaultPath = resolve(vaultPath);
+    this.snapshotStorage = new HostDerivedStorage(this.vaultPath, cacheDir);
     this.snapshotReady = this.loadSnapshot();
     if (catalog) {
       this.catalogUnsubscribe = catalog.subscribeBatch(changes => {
@@ -888,7 +893,7 @@ export class SearchService {
 
   private async loadSnapshot(): Promise<void> {
     try {
-      const binary = await readSnapshotBytes(join(this.vaultPath, SEARCH_SNAPSHOT_FILE), { maxBytes: MAX_SNAPSHOT_BYTES });
+      const binary = await this.snapshotStorage.read(SEARCH_SNAPSHOT_FILE, { maxBytes: MAX_SNAPSHOT_BYTES });
       const parsed = decodeSnapshot(binary);
       if (parsed) this.restoreSnapshot(parsed);
       return;
@@ -896,7 +901,7 @@ export class SearchService {
       // Try the previous compressed-JSON format for a one-release migration.
     }
     try {
-      const raw = await readSnapshotBytes(join(this.vaultPath, LEGACY_SEARCH_SNAPSHOT_FILE), {
+      const raw = await this.snapshotStorage.read(LEGACY_SEARCH_SNAPSHOT_FILE, {
         maxBytes: 32 * 1024 * 1024, maxDecodedBytes: MAX_SNAPSHOT_BYTES,
       });
       const parsed = JSON.parse(raw.toString('utf8')) as Partial<SearchSnapshot>;
@@ -957,6 +962,7 @@ export class SearchService {
   }
 
   private scheduleSnapshotSave(): void {
+    if (!this.snapshotStorage.cacheDir) return;
     this.snapshotPending = true;
     if (this.snapshotTimer) return;
     this.snapshotTimer = setTimeout(() => {
@@ -967,6 +973,7 @@ export class SearchService {
   }
 
   private async flushSnapshot(): Promise<void> {
+    if (!this.snapshotStorage.cacheDir) return;
     if (this.snapshotWrite) return;
     if (!this.snapshotPending) return;
     this.snapshotPending = false;
@@ -974,7 +981,7 @@ export class SearchService {
     const generation = this.indexGeneration;
     const snapshot: SearchSnapshot = {
       version: SEARCH_SNAPSHOT_VERSION,
-      documents: [...this.documents.values()].map(document => ({
+      documents: [...this.documents.values()].filter(document => this.pathFilter.isAllowed(document.relativePath)).map(document => ({
         relativePath: document.relativePath,
         title: document.title,
         authorityTerms: document.authorityTerms,
@@ -988,7 +995,7 @@ export class SearchService {
         isWiki: document.isWiki,
         moderationHidden: document.moderationHidden,
         fiction: document.fiction,
-        revision: document.revision,
+        revision: document.postingRevision ?? document.revision,
         size: document.size,
         mtimeMs: document.mtimeMs,
         bodyLength: document.bodyLength,
@@ -1001,12 +1008,8 @@ export class SearchService {
       grams: this.gramsById.slice(1),
     };
     this.snapshotWrite = (async () => {
-      const snapshotPath = join(this.vaultPath, SEARCH_SNAPSHOT_FILE);
-      await mkdir(join(this.vaultPath, '.mcpvault'), { recursive: true });
       const encoded = encodeSnapshot(snapshot);
-      const temporaryPath = `${snapshotPath}.${process.pid}.tmp`;
-      await writeFile(temporaryPath, encoded);
-      await rename(temporaryPath, snapshotPath);
+      await this.snapshotStorage.write(SEARCH_SNAPSHOT_FILE, encoded, MAX_SNAPSHOT_BYTES);
       this.snapshotSavedGeneration = generation;
     })().catch(() => {
       // The snapshot is an optional acceleration cache. Search correctness
@@ -1036,32 +1039,34 @@ export class SearchService {
     const inScope = (path: string) => this.pathFilter.isAllowed(path) && params.canAccessPath(path)
       && (!prefix || path === prefix || path.startsWith(`${prefix}/`))
       && !excludes.some(exclude => path === exclude || path.startsWith(`${exclude}/`));
-    let complete = true;
-    const admitted = new Set<number>();
-    for (const document of this.documents.values()) {
-      if (!inScope(document.relativePath) || document.moderationHidden) continue;
-      if (params.candidateRevisions && params.candidateRevisions.get(document.relativePath) !== document.revision) {
-        // Omitted paths are outside the caller's collection, not stale hits.
-        if (params.candidateRevisions.has(document.relativePath)) complete = false;
-        continue;
-      }
-      admitted.add(document.documentId);
-    }
+    const indexedRevision = (path: string) => {
+      const doc = this.documents.get(path);
+      return doc?.postingRevision ?? doc?.revision;
+    };
+    let complete = params.candidateCoverage?.(this, this.indexGeneration, indexedRevision) ?? true;
     if (params.candidateRevisions) for (const [path, revision] of params.candidateRevisions) {
-      if (inScope(path) && this.documents.get(path)?.revision !== revision) complete = false;
+      if (inScope(path) && indexedRevision(path) !== revision) complete = false;
     }
     const terms = positiveSearchTerms(params.query).map(term => term.toLowerCase());
-    const ids = this.candidateIds(terms, params.searchContent !== false, params.searchFrontmatter === true, false, admitted);
+    const ids = this.candidateIds(terms, params.searchContent !== false, params.searchFrontmatter === true, false, this.scopedDocumentIds(prefix, excludes));
     const candidates: Array<{ result: SearchResult; score: number }> = [];
     for (const id of ids) {
       const document = this.documentsById.get(id);
-      if (!document || !admitted.has(id)) continue;
+      if (!document || !inScope(document.relativePath) || document.moderationHidden) continue;
+      const postingRevision = document.postingRevision ?? document.revision;
+      if (params.candidateRevisions && params.candidateRevisions.get(document.relativePath) !== postingRevision) {
+        if (params.candidateRevisions.has(document.relativePath)) complete = false;
+        continue;
+      }
+      if (params.candidateRevision && params.candidateRevision(document.relativePath) !== postingRevision) {
+        complete = false; continue;
+      }
       const discovery = [...document.authorityTerms, ...document.authorityIds, ...document.retrievalCues,
         ...(document.useWhen ? [document.useWhen] : [])].join('\n').toLowerCase();
       const score = terms.reduce((value, term) => value + Number(discovery.includes(term)), 0);
       candidates.push({ score, result: {
         p: document.relativePath, t: document.title,
-        ex: '', mc: 0, rv: document.revision, why: ['indexed_candidate'],
+        ex: '', mc: 0, rv: postingRevision, why: ['indexed_candidate'],
       } });
       // Retain at most the hard maximum plus an overflow witness. No partial
       // window is ever advertised as complete or usable for a lossless cursor.
@@ -1112,7 +1117,7 @@ export class SearchService {
       this.cache.delete(cacheKey);
       this.cache.set(cacheKey, cached);
       derivedCacheBudget.touch(this.cacheOwner, cacheKey);
-      return cached.results.map(result => ({ ...result }));
+      return cached.results.filter(result => this.pathFilter.isAllowed(result.p)).map(result => ({ ...result }));
     }
     if (cached) {
       this.cache.delete(cacheKey);
@@ -1120,7 +1125,7 @@ export class SearchService {
     }
 
     const running = hasAccessPredicate ? undefined : this.inFlight.get(cacheKey);
-    if (running) return (await running).map(result => ({ ...result }));
+    if (running) return (await running).filter(result => this.pathFilter.isAllowed(result.p)).map(result => ({ ...result }));
 
     const generation = this.cacheGeneration;
     const computation = (async (): Promise<SearchResult[]> => {
@@ -1249,7 +1254,7 @@ export class SearchService {
     })();
     if (!hasAccessPredicate) this.inFlight.set(cacheKey, computation);
     try {
-      return await computation;
+      return (await computation).filter(result => this.pathFilter.isAllowed(result.p));
     } finally {
       if (!hasAccessPredicate && this.inFlight.get(cacheKey) === computation) this.inFlight.delete(cacheKey);
     }
@@ -1383,8 +1388,10 @@ export class SearchService {
         size = info.size;
         mtimeMs = info.mtimeMs;
       }
+      if (!this.pathFilter.isAllowed(relativePath)) return undefined;
       if (existing && existing.size === size && existing.mtimeMs === mtimeMs) return existing;
       const content = await this.vaultIo.readUtf8(fullPath);
+      if (!this.pathFilter.isAllowed(relativePath)) return undefined;
       const frontmatterMatch = content.match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/);
       const body = frontmatterMatch ? content.slice(frontmatterMatch[0].length) : content;
       const frontmatterText = frontmatterMatch?.[1] || '';
@@ -1531,6 +1538,7 @@ export class SearchService {
   private setDocument(document: IndexedDocument): void {
     const old = this.documents.get(document.relativePath);
     if (old === document) return;
+    document.postingRevision = document.revision;
     this.corpusStatsCache.clear();
     derivedCacheBudget.clearOwner(this.corpusCacheOwner);
     if (old) {
@@ -1649,12 +1657,14 @@ export class SearchService {
   }
 
   private async loadText(document: IndexedDocument): Promise<void> {
+    if (!this.pathFilter.isAllowed(document.relativePath)) throw new VaultReadUnavailableError();
     if (document.body !== undefined && document.frontmatterText !== undefined) {
       document.lastAccessAt = Date.now();
       return;
     }
     try {
       const content = await readFile(join(this.vaultPath, document.relativePath), 'utf-8');
+      if (!this.pathFilter.isAllowed(document.relativePath)) throw new VaultReadUnavailableError();
       const frontmatterMatch = content.match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/);
       document.body = frontmatterMatch ? content.slice(frontmatterMatch[0].length) : content;
       document.bodyStartLine = frontmatterMatch ? frontmatterMatch[0].split('\n').length : 1;

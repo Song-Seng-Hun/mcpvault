@@ -1,6 +1,12 @@
 import { describe, expect, test } from "vitest";
 import { parseCliArgs } from "./cli.js";
 
+test('feature selection config is an explicit single host file, independent of provider flags', () => {
+  expect(parseCliArgs(['Vault', '--features-config=features.json'])).toEqual({ vaultPathArg: 'Vault', readOnly: false, featuresConfig: 'features.json' });
+  expect(parseCliArgs(['--features-config', 'features.json', 'Vault']).vaultPathArg).toBe('Vault');
+  for (const args of [['--features-config'], ['--features-config='], ['--features-config', '--read-only'], ['--features-config=a', '--features-config=b']]) expect(() => parseCliArgs(args)).toThrow(/features-config/);
+});
+
 test('benchmark opt-in config is explicit, single and independent of wallet enablement', () => {
   expect(parseCliArgs(['Vault', '--benchmark-config=private.json'])).toEqual({ vaultPathArg: 'Vault', readOnly: false, benchmarkConfig: 'private.json' });
   expect(parseCliArgs(['--benchmark-config', 'private.json', 'Vault']).vaultPathArg).toBe('Vault');
@@ -37,6 +43,12 @@ test('parses private economy config separately from the vault path',()=>{
 });
 
 describe("parseCliArgs", () => {
+  test('accepts one explicit owner consent file without implying an execution target', () => {
+    expect(parseCliArgs(['/vault', '--owner-activity-config', 'owner.json'])).toMatchObject({ ownerActivityConfig: 'owner.json' });
+    expect(parseCliArgs(['/vault', '--owner-activity-config=owner.json'])).toMatchObject({ ownerActivityConfig: 'owner.json' });
+    expect(() => parseCliArgs(['/vault', '--owner-activity-config'])).toThrow(/requires/i);
+    expect(() => parseCliArgs(['/vault', '--owner-activity-config', 'a', '--owner-activity-config', 'b'])).toThrow(/one|duplicate/i);
+  });
   test("starts a dedicated HTTP runtime without stdio using one option", () => {
     expect(parseCliArgs(['/My', 'Vault', '--mcp-http-only'])).toEqual({ vaultPathArg: '/My Vault', readOnly: false, mcpHttpPort: 8788, stdio: false });
     expect(parseCliArgs(['/vault', '--mcp-http-only=0'])).toMatchObject({ vaultPathArg: '/vault', mcpHttpPort: 0, stdio: false });

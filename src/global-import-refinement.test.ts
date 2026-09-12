@@ -1,5 +1,5 @@
 import { createHash, createPrivateKey, sign } from 'node:crypto';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, rm, writeFile, stat, utimes, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
@@ -88,4 +88,54 @@ test.each([0, 11, 1.5, NaN])('rejects an unsafe page budget %s before requests',
   const f = fixture(0);
   await expect(f.replica().pullPages(budget)).rejects.toThrow(/pages/i);
   expect(f.client.getManifest).not.toHaveBeenCalled();
+});
+
+test.each(['replace', 'tombstone', 'same-bytes'] as const)('a trusted signed import cannot mutate an existing original (%s)', async operation => {
+  const f = fixture(0), documentId = '_sources/raw.md', content = '# Exact original\r\n';
+  const hash = (value: string) => `sha256:${createHash('sha256').update(value).digest('hex')}`;
+  let revision: GlobalRevisionWithContent;
+  const publish = (sequence: number, body?: string) => {
+    const header = { documentId, revisionId: `source-${sequence}`, sequence, ...(sequence > 1 && { parentRevision: `source-${sequence - 1}` }),
+      operation: body === undefined ? 'tombstone' as const : 'upsert' as const,
+      ...(body !== undefined && { contentHash: hash(body) }), byteLength: body === undefined ? 0 : Buffer.byteLength(body),
+      author: 'fixture', reason: 'reviewed', origin: 'fixture', createdAt: '2026-09-10T00:00:00Z' };
+    revision = { ...f.signed(header), ...(body !== undefined && { content: body }) };
+    f.client.getRevision.mockImplementation(async () => revision);
+    f.client.getManifest.mockImplementation(async () => f.signed({ protocol: 'mcpvault-global-sync/v1', hubId: 'fixture', cursor: sequence,
+      latestSequence: sequence, entries: [{ documentId, revisionId: header.revisionId, sequence, operation: header.operation,
+        ...(header.parentRevision && { parentRevision: header.parentRevision }), ...(body !== undefined && { contentHash: hash(body) }) }], hasMore: false }));
+  };
+  publish(1, content);
+  expect((await f.replica().pull()).applied).toEqual([documentId]);
+  const path = join(root, documentId);
+  await utimes(path, new Date('2020-01-01'), new Date('2020-01-01'));
+  const before = await stat(path);
+  publish(2, operation === 'tombstone' ? undefined : operation === 'replace' ? '# Replacement' : content);
+  const result = await f.replica().pull();
+  if (operation !== 'same-bytes') expect(result.conflicts).toHaveLength(1);
+  expect(await readFile(path, 'utf8')).toBe(content);
+  expect((await stat(path)).mtimeMs).toBe(before.mtimeMs);
+});
+
+test.each(['proposeLocal', 'proposeTombstone'] as const)('Global %s cannot export confidential content or existence', async method => {
+  const f = fixture(0);
+  const submit = vi.fn(async () => ({ status: 'submitted' }));
+  Object.assign(f.client, { submitProposal: submit });
+  await mkdir(join(root, '_wiki', '_policies'), { recursive: true });
+  await writeFile(join(root, '_wiki', '_policies', 'documents.md'), `---\ntype: protected-document-policy\nversion: 1\nrules: [{path: Secret.md, confidential: true}]\n---\n`);
+  await writeFile(join(root, 'Secret.md'), 'PRIVATE_EXPORT_BODY');
+  await expect(f.replica()[method]('Secret.md', 'author', 'reason', 'origin')).rejects.toThrow(/protected|confidential|public|denied/i);
+  expect(submit).not.toHaveBeenCalled();
+});
+
+test('Global export rejects a public-looking junction into a confidential folder', async () => {
+  const f = fixture(0), submit = vi.fn(async () => ({ status: 'submitted' }));
+  Object.assign(f.client, { submitProposal: submit });
+  await mkdir(join(root, 'Restricted'));
+  await mkdir(join(root, '_wiki', '_policies'), { recursive: true });
+  await writeFile(join(root, 'Restricted', 'Secret.md'), 'PRIVATE_EXPORT_BODY');
+  await writeFile(join(root, '_wiki', '_policies', 'documents.md'), '---\ntype: protected-document-policy\nversion: 1\nrules: [{path: Restricted, recursive: true, confidential: true}]\n---\n');
+  await symlink(join(root, 'Restricted'), join(root, 'Alias'), 'junction');
+  await expect(f.replica().proposeLocal('Alias/Secret.md', 'author', 'reason', 'origin')).rejects.toThrow(/protected|confidential|public|denied|alias/i);
+  expect(submit).not.toHaveBeenCalled();
 });

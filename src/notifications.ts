@@ -1,6 +1,4 @@
 import { guidanceError } from './guidance-runtime.js';
-import { mkdir, rename, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
 import { gzip } from 'node:zlib';
 import { promisify } from 'node:util';
 import type { FileSystemService } from './filesystem.js';
@@ -13,7 +11,7 @@ import type { QueryNote } from './types.js';
 import { iterateNotes } from './paged-query.js';
 import { isClosedWorkflowStatus } from './community-status.js';
 import { isModerationHidden } from './moderation-policy.js';
-import { readSnapshotBytes } from './snapshot-read.js';
+import { HostDerivedStorage } from './host-derived-storage.js';
 import { createDerivedCacheOwner, derivedCacheBudget, estimateCacheBytes } from './cache-budget.js';
 
 const gzipAsync = promisify(gzip);
@@ -22,7 +20,7 @@ const READ_STATE_ROOT = '_notifications';
 const EVENT_CACHE_TTL_MS = 2_000;
 const EVENT_CACHE_MAX_ENTRIES = 64;
 const HYDRATE_BATCH_SIZE = 32;
-const PUBLIC_SNAPSHOT_FILE = '.mcpvault/public-discovery.snapshot.bin';
+const PUBLIC_SNAPSHOT_FILE = 'public-discovery.snapshot.bin';
 const PUBLIC_SNAPSHOT_MAGIC = Buffer.from('MCPVPUB1', 'ascii');
 const PUBLIC_SNAPSHOT_VERSION = 2;
 const PUBLIC_SNAPSHOT_MAX_ENTRIES = 200_000;
@@ -561,13 +559,15 @@ export class NotificationService {
   private publicSnapshotPending: PublicSnapshotIndex | undefined;
   private publicManifestCache: { expiresAt: number; entries: PublicSnapshotManifestEntry[] } | undefined;
   private publicSnapshotRestoreAttempted = false;
+  private readonly snapshotStorage?: HostDerivedStorage;
 
   constructor(
     private readonly fileSystem: FileSystemService,
     private readonly reputation: ReputationService,
     private readonly vaultPath?: string,
     private readonly fileCatalog?: VaultFileCatalog,
-  ) {}
+    cacheDir = process.env.MCPVAULT_DERIVED_CACHE_DIR,
+  ) { if (vaultPath) this.snapshotStorage = new HostDerivedStorage(vaultPath, cacheDir); }
 
   async close(): Promise<void> {
     if (this.publicSnapshotUpdate) await this.publicSnapshotUpdate;
@@ -607,9 +607,9 @@ export class NotificationService {
   }
 
   private async loadPublicSnapshot(): Promise<PublicSnapshotIndex | undefined> {
-    if (!this.vaultPath || !this.fileCatalog) return undefined;
+    if (!this.snapshotStorage?.cacheDir || !this.fileCatalog) return undefined;
     try {
-      const raw = await readSnapshotBytes(join(this.vaultPath, PUBLIC_SNAPSHOT_FILE), {
+      const raw = await this.snapshotStorage.read(PUBLIC_SNAPSHOT_FILE, {
         maxBytes: 32 * 1024 * 1024, maxDecodedBytes: PUBLIC_SNAPSHOT_MAX_BYTES,
       });
       const disk = decodePublicSnapshot(raw);
@@ -640,7 +640,7 @@ export class NotificationService {
   }
 
   private async savePublicSnapshot(value: PublicSnapshotIndex): Promise<void> {
-    if (!this.vaultPath || !this.fileCatalog) return;
+    if (!this.snapshotStorage?.cacheDir || !this.fileCatalog) return;
     try {
       const manifest = await this.publicManifest();
       if (!manifest || manifest.length > PUBLIC_SNAPSHOT_MAX_ENTRIES) return;
@@ -650,17 +650,14 @@ export class NotificationService {
       }
       if (notes.length > PUBLIC_SNAPSHOT_MAX_ENTRIES) return;
       const compressed = await gzipAsync(encodePublicSnapshot({ manifest, notes }));
-      const snapshotPath = join(this.vaultPath, PUBLIC_SNAPSHOT_FILE);
-      const temporaryPath = `${snapshotPath}.${process.pid}.tmp`;
-      await mkdir(join(this.vaultPath, '.mcpvault'), { recursive: true });
-      await writeFile(temporaryPath, compressed);
-      await rename(temporaryPath, snapshotPath);
+      await this.snapshotStorage.write(PUBLIC_SNAPSHOT_FILE, compressed, 32 * 1024 * 1024);
     } catch {
       // Derived acceleration state is optional; Markdown remains authoritative.
     }
   }
 
   private queuePublicSnapshotSave(value: PublicSnapshotIndex): void {
+    if (!this.snapshotStorage?.cacheDir) return;
     this.publicSnapshotPending = value;
     if (this.publicSnapshotWrite) return;
     const write = (async () => {

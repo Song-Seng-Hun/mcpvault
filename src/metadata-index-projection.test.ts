@@ -8,6 +8,7 @@ import { VaultIoCoordinator } from './vault-io.js';
 import { FrontmatterHandler } from './frontmatter.js';
 import { PathFilter } from './pathfilter.js';
 import { readUtf8MetadataSource } from './streaming-metadata.js';
+import { derivedStorageFixture } from '../tests/derived-storage-fixture.js';
 
 const digest = (raw: string) => createHash('sha256').update(raw, 'utf8').digest('hex');
 async function fixture(run: (root: string, indexes: VaultMetadataIndex[]) => Promise<void>) {
@@ -66,22 +67,25 @@ test('index never reinstates a source deleted during its projected read', async 
 
 test('projected entries round-trip through the unchanged binary snapshot and retain dirty body revisions', async () => {
   await fixture(async (root, indexes) => {
+    const snapshotHost = await derivedStorageFixture(root);
+    try {
     const path = join(root, 'Note.md'), raw = '---\ntitle: 한글\nstatus: active\n---\nOld'; await writeFile(path, raw);
     const stamp = await stat(path), parser = new FrontmatterHandler();
-    const first = new VaultMetadataIndex(root, new PathFilter(), parser); indexes.push(first);
+    const first = new VaultMetadataIndex(root, new PathFilter(), parser, undefined, undefined, snapshotHost.host); indexes.push(first);
     vi.spyOn(first as any, 'startWatcher').mockImplementation(() => undefined);
     const original = await first.list(); await (first as any).flushSnapshot(); await first.close();
-    expect((await readFile(join(root, '.mcpvault/metadata-index.snapshot.bin'))).subarray(0, 8).toString()).toBe('MCPVMETA');
+    expect((await readFile(snapshotHost.path('metadata-index.snapshot.bin'))).subarray(0, 8).toString()).toBe('MCPVMETA');
     const io = new VaultIoCoordinator(), projection = vi.spyOn(io, 'readUtf8Metadata');
-    const reopened = new VaultMetadataIndex(root, new PathFilter(), parser, undefined, io); indexes.push(reopened);
+    const reopened = new VaultMetadataIndex(root, new PathFilter(), parser, undefined, io, snapshotHost.host); indexes.push(reopened);
     vi.spyOn(reopened as any, 'startWatcher').mockImplementation(() => undefined);
     expect(await reopened.list()).toEqual(original); expect(projection).not.toHaveBeenCalled();
     const edited = raw.replace('Old', 'New'); await writeFile(path, edited); await utimes(path, stamp.atime, stamp.mtime);
     reopened.invalidate('Note.md', 'upsert');
     const current = await reopened.list(); expect(current[0]!.revision).toBe(digest(edited));
     expect(current[0]!.frontmatter).toEqual(original[0]!.frontmatter); expect(projection).toHaveBeenCalledTimes(1);
+    } finally { for (const index of indexes) await index.close(); await snapshotHost.close(); }
   });
-});
+}, 30000);
 
 test('batched index construction gives the parser only small headers', async () => {
   await fixture(async (root, indexes) => {

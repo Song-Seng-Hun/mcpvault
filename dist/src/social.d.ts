@@ -15,7 +15,7 @@ export declare class SocialService {
     private readonly reputation;
     private readonly notifications?;
     private readonly options;
-    constructor(fileSystem: FileSystemService, access: ScopeAccessPolicy, references: ReferenceService, reputation: ReputationService, notifications?: NotificationService | undefined, options?: {
+    constructor(fileSystem: FileSystemService, access: ScopeAccessPolicy, references: ReferenceService, reputation: ReputationService | undefined, notifications?: NotificationService | undefined, options?: {
         communityRoot?: string;
         publicMode?: boolean;
         noticeFeedback?: (id: unknown, revision: unknown, principal?: ScopePrincipal) => Promise<{
@@ -25,6 +25,7 @@ export declare class SocialService {
         }>;
         noticeFeedbackReview?: (id: unknown, path: string, revision: string, principal?: ScopePrincipal) => Promise<unknown>;
     });
+    private requireReputation;
     private get communityRoot();
     private get blogRoot();
     private blogPath;

@@ -3,7 +3,7 @@ import { mkdtemp, mkdir, rm, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
-import { createServer } from './createServer.js';
+import { createServer } from '../tests/server-fixture.js';
 import { EconomyLedger } from './economy-ledger.js';
 import type { EconomyPolicy } from './economy-model.js';
 import {FileSystemService} from './filesystem.js';

@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
-import { createServer, getServerRuntime } from './createServer.js';
+import { createServer, getServerRuntime } from '../tests/server-fixture.js';
 import { createHash } from 'node:crypto';
 import { getWikiPolicyTopic, WIKI_POLICY_TOPICS, WIKI_POLICY_VERSION } from './wiki-policy.js';
 import { FileSystemService } from './filesystem.js';

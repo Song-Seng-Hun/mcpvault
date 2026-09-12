@@ -6,7 +6,7 @@ import { EndpointRegistry } from './endpoint-registry.js';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { createServer, getServerRuntime } from './createServer.js';
+import { createServer, getServerRuntime } from '../tests/server-fixture.js';
 import { FileSystemService } from './filesystem.js';
 
 test('research templates remain optional scaffolds over existing kinds and are reachable in the schema', () => {

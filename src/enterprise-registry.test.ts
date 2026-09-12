@@ -138,6 +138,177 @@ describe('policy, employees, and runtimes', () => {
   });
 });
 
+describe('verified employee departments', () => {
+  test('legacy employees remain valid and internal runtimes confer no departments', async () => {
+    const value = await initializedRegistry();
+    const created = await invite(value);
+    await value.redeemInvite(reservationInput(created.secret), async () => {});
+    const employee = registry().getEmployee(binding.userId);
+    expect(employee).not.toHaveProperty('departmentIds');
+    expect(employee).not.toHaveProperty('defaultDepartmentId');
+    expect(employee).not.toHaveProperty('departmentRevision');
+    expect(registry().assertRegisteredBinding(binding).employee).toEqual(employee);
+  });
+
+  test('creates bounded verified memberships and persists an explicit member default', async () => {
+    const value = registry();
+    await value.initialize({ mode: 'company', realmId: 'acme', vaultPath });
+    const departmentIds = ['a'.repeat(64), ...Array.from({ length: 31 }, (_, index) => `dept-${index}._x`)];
+    const employee = await value.createEmployee({ userId: binding.userId, sharedMemoryEnabled: true,
+      departmentIds, defaultDepartmentId: departmentIds[0]! });
+    expect(employee).toMatchObject({ departmentIds, defaultDepartmentId: departmentIds[0], departmentRevision: 0 });
+    expect(registry().getEmployee(binding.userId)).toEqual(employee);
+    departmentIds.push('mutated-after-create');
+    expect(employee.departmentIds).toHaveLength(32);
+  });
+
+  test('does not infer a default from a single membership and permits an explicit empty list', async () => {
+    const value = await initializedRegistry();
+    for (const departmentIds of [['engineering'], []]) {
+      const userId = departmentIds.length ? 'member' : 'empty';
+      const employee = await value.createEmployee({ userId, departmentIds });
+      expect(employee).toMatchObject({ departmentIds, departmentRevision: 0 });
+      expect(employee).not.toHaveProperty('defaultDepartmentId');
+      expect(registry().getEmployee(userId)).toEqual(employee);
+    }
+  });
+
+  const invalidDepartments = [
+    { departmentIds: null }, { departmentIds: 'engineering' }, { departmentIds: [1] },
+    { departmentIds: ['Engineering'] }, { departmentIds: [' engineering'] }, { departmentIds: ['engineering '] },
+    { departmentIds: ['../engineering'] }, { departmentIds: ['a/b'] }, { departmentIds: ['a\\b'] },
+    { departmentIds: ['аdmin'] }, { departmentIds: [''] }, { departmentIds: ['a\n'] },
+    { departmentIds: ['a'.repeat(65)] }, { departmentIds: ['engineering', 'engineering'] },
+    { departmentIds: Array.from({ length: 33 }, (_, index) => `dept-${index}`) },
+    { defaultDepartmentId: 'engineering' }, { departmentIds: [], defaultDepartmentId: 'engineering' },
+    { departmentIds: ['engineering'], defaultDepartmentId: 'finance' },
+    { departmentIds: ['engineering'], defaultDepartmentId: null },
+    { departmentIds: ['engineering'], defaultDepartmentId: 'Engineering' },
+  ];
+
+  test.each(invalidDepartments)('rejects explicit invalid department inputs %# without writing', async input => {
+    const value = await initializedRegistry();
+    const before = await readFile(registryPath, 'utf8');
+    await expect(value.createEmployee({ userId: 'invalid', ...input } as Parameters<EnterpriseRegistry['createEmployee']>[0]))
+      .rejects.toThrow(/department/i);
+    expect(await readFile(registryPath, 'utf8')).toBe(before);
+    await expect(value.updateEmployeeDepartments({ userId: binding.userId, expectedDepartmentRevision: 0,
+      ...input } as Parameters<EnterpriseRegistry['updateEmployeeDepartments']>[0])).rejects.toThrow(/department/i);
+    expect(await readFile(registryPath, 'utf8')).toBe(before);
+  });
+
+  test('changes and revokes departments across reloads, preserving other employee fields', async () => {
+    const first = await initializedRegistry({ sharedMemoryEnabled: true });
+    const original = await first.disableEmployee({ userId: binding.userId });
+    const changed = await first.updateEmployeeDepartments({ userId: binding.userId,
+      departmentIds: ['engineering', 'finance'], defaultDepartmentId: 'finance', expectedDepartmentRevision: 0 });
+    expect(changed).toEqual({ ...original, departmentIds: ['engineering', 'finance'], defaultDepartmentId: 'finance', departmentRevision: 1 });
+    const second = registry();
+    expect(second.getEmployee(binding.userId)).toEqual(changed);
+    const moved = await second.updateEmployeeDepartments({ userId: binding.userId,
+      departmentIds: ['operations'], expectedDepartmentRevision: 1 });
+    expect(moved).toEqual({ ...original, departmentIds: ['operations'], departmentRevision: 2 });
+    const revoked = await registry().updateEmployeeDepartments({ userId: binding.userId, departmentIds: [], expectedDepartmentRevision: 2 });
+    expect(revoked).toEqual({ ...original, departmentIds: [], departmentRevision: 3 });
+    expect(registry().getEmployee(binding.userId)).toEqual(revoked);
+  });
+
+  test('fresh binding checks expose host memberships and ignore client self-grants', async () => {
+    const value = await initializedRegistry();
+    const created = await invite(value);
+    await value.redeemInvite(reservationInput(created.secret, {
+      departmentIds: ['spoofed'], defaultDepartmentId: 'spoofed', departmentRevision: 999,
+      binding: { ...binding, departmentIds: ['spoofed'] },
+    }), async () => {});
+    expect(value.getEmployee(binding.userId)).not.toHaveProperty('departmentIds');
+    const changed = await value.updateEmployeeDepartments({ userId: binding.userId,
+      departmentIds: ['engineering'], defaultDepartmentId: 'engineering', expectedDepartmentRevision: 0 });
+    const asserted = registry().assertBinding({ ...binding, realmId: 'acme', mode: 'company', certFingerprint: CERT_A });
+    expect(asserted.employee).toEqual(changed);
+    expect(asserted.binding).not.toHaveProperty('departmentIds');
+    await value.updateEmployeeDepartments({ userId: binding.userId, departmentIds: [], expectedDepartmentRevision: 1 });
+    expect(registry().assertRegisteredBinding(binding).employee).toMatchObject({ departmentIds: [], departmentRevision: 2 });
+  });
+
+  test('rejects stale updates before writing', async () => {
+    const value = await initializedRegistry();
+    await value.updateEmployeeDepartments({ userId: binding.userId, departmentIds: ['engineering'], expectedDepartmentRevision: 0 });
+    const before = await readFile(registryPath, 'utf8');
+    await expect(registry().updateEmployeeDepartments({ userId: binding.userId, departmentIds: [], expectedDepartmentRevision: 0 }))
+      .rejects.toThrow(/stale.*department.*revision/i);
+    expect(await readFile(registryPath, 'utf8')).toBe(before);
+  });
+
+  test('only one concurrent update wins across independent registry instances', async () => {
+    const first = await initializedRegistry();
+    const outcomes = await Promise.allSettled([first, registry()].map((value, index) => value.updateEmployeeDepartments({
+      userId: binding.userId, departmentIds: [`dept-${index}`], expectedDepartmentRevision: 0,
+    })));
+    const successes = outcomes.filter(outcome => outcome.status === 'fulfilled');
+    const failures = outcomes.filter(outcome => outcome.status === 'rejected');
+    expect(successes).toHaveLength(1);
+    expect(failures).toHaveLength(1);
+    expect(failures[0]!.reason.message).toMatch(/stale.*department.*revision/i);
+    expect(registry().getEmployee(binding.userId)).toEqual(successes[0]!.value);
+    expect(successes[0]!.value.departmentRevision).toBe(1);
+  });
+
+  test.each([undefined, null, -1, 0.5, '0', Number.NaN, Number.MAX_SAFE_INTEGER + 1])('rejects invalid expected revision %s', async revision => {
+    const value = await initializedRegistry();
+    const before = await readFile(registryPath, 'utf8');
+    await expect(value.updateEmployeeDepartments({ userId: binding.userId, departmentIds: [],
+      expectedDepartmentRevision: revision as number })).rejects.toThrow(/revision/i);
+    expect(await readFile(registryPath, 'utf8')).toBe(before);
+  });
+
+  test('rejects unknown employees without writing', async () => {
+    const value = await initializedRegistry();
+    const before = await readFile(registryPath, 'utf8');
+    await expect(value.updateEmployeeDepartments({ userId: 'missing', departmentIds: [], expectedDepartmentRevision: 0 }))
+      .rejects.toThrow(/unknown.*employee/i);
+    expect(await readFile(registryPath, 'utf8')).toBe(before);
+  });
+
+  test.each([
+    ...invalidDepartments, { departmentRevision: null }, { departmentRevision: -1 }, { departmentRevision: '0' },
+    { departmentRevision: 0.5 }, { departmentRevision: Number.MAX_SAFE_INTEGER + 1 },
+  ])('fails closed for invalid persisted department metadata %#', async input => {
+    await initializedRegistry();
+    const database = JSON.parse(await readFile(registryPath, 'utf8'));
+    Object.assign(database.employees[0], input);
+    await writeFile(registryPath, JSON.stringify(database));
+    expect(() => registry().getEmployee(binding.userId)).toThrow(/corrupt/i);
+  });
+
+  test('does not overflow the persisted revision', async () => {
+    const value = await initializedRegistry();
+    const database = JSON.parse(await readFile(registryPath, 'utf8'));
+    database.employees[0].departmentRevision = Number.MAX_SAFE_INTEGER;
+    await writeFile(registryPath, JSON.stringify(database));
+    const before = await readFile(registryPath, 'utf8');
+    await expect(value.updateEmployeeDepartments({ userId: binding.userId, departmentIds: [], expectedDepartmentRevision: Number.MAX_SAFE_INTEGER }))
+      .rejects.toThrow(/revision/i);
+    expect(await readFile(registryPath, 'utf8')).toBe(before);
+  });
+
+  test('public mode rejects company grants and department updates', async () => {
+    const value = registry();
+    await value.initialize({ mode: 'public', realmId: 'public-realm', vaultPath });
+    await value.createEmployee({ userId: binding.userId });
+    const before = await readFile(registryPath, 'utf8');
+    await expect(value.createEmployee({ userId: 'company-employee', departmentIds: ['engineering'] })).rejects.toThrow(/company|public/i);
+    await expect(value.updateEmployeeDepartments({ userId: binding.userId, departmentIds: ['engineering'], expectedDepartmentRevision: 0 }))
+      .rejects.toThrow(/company|public/i);
+    await expect(value.updateEmployeeDepartments({ userId: binding.userId, departmentIds: [], expectedDepartmentRevision: 0 }))
+      .rejects.toThrow(/company|public/i);
+    expect(await readFile(registryPath, 'utf8')).toBe(before);
+    const database = JSON.parse(before);
+    database.employees[0].departmentIds = ['engineering'];
+    await writeFile(registryPath, JSON.stringify(database));
+    expect(() => registry().getEmployee(binding.userId)).toThrow(/corrupt/i);
+  });
+});
+
 describe('invite registration', () => {
   test('writes the one-use secret only to the explicit private file and never returns it', async () => {
     const value = await initializedRegistry({ sharedMemoryEnabled: true });

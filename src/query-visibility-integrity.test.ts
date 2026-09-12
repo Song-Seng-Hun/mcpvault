@@ -3,7 +3,7 @@ import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
-import { createServer } from './createServer.js';
+import { createServer } from '../tests/server-fixture.js';
 import { VaultMetadataIndex } from './vault-index.js';
 import { VaultIoCoordinator } from './vault-io.js';
 import { FileSystemService } from './filesystem.js';

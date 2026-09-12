@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 import { serveStdio, StdioServerTransport } from "@modelcontextprotocol/server/stdio";
 import { createServer, getServerRuntime } from "./src/createServer.js";
+import { loadHostFeatureConfig } from './src/host-feature-config.js';
+import { loadOwnerActivityHostConfig } from './src/owner-activity-host.js';
 import { createServerLifecycle } from "./src/server-lifecycle.js";
 import { parseCliArgs } from "./src/cli.js";
 import { startRestApi } from "./src/rest-api.js";
@@ -70,6 +72,15 @@ Options:
   --benchmark-config FILE
                   Opt-in private host-approved challenges. Does not open a contest,
                   create an account, approve rewards or change the supply cap.
+  --features-config FILE
+                  Explicit owner-private v1 feature selection, applied at startup.
+                  Default: wiki-core only. Does not grant data/provider/owner consent.
+                  Environment alternative: MCPVAULT_FEATURE_CONFIG.
+  --owner-activity-config FILE
+                  Separate private human-owner consent; grants no document access.
+                  Legacy bridges still need an independently verified execution
+                  controller. A file or localhost label is not that proof.
+                  Environment alternative: MCPVAULT_OWNER_ACTIVITY_CONFIG.
   --mcp-http[=PORT]
                   Expose MCP 2026 Stateless Streamable HTTP (default 8788)
   --mcp-http-only[=PORT]
@@ -93,13 +104,16 @@ Examples:
 }
 // Remove runtime options before joining trailing args, preserving support for
 // unquoted vault paths with spaces. When omitted, use the current directory.
-const { vaultPathArg, readOnly, restPort, mcpHttpPort, mcpHttpHost, mcpHttpTlsCert, mcpHttpTlsKey, stdio, economyConfig, roleplayConfig, skillEvolutionConfig, explanationConfig, benchmarkConfig } = parseCliArgs(cliArgs);
+const { vaultPathArg, readOnly, restPort, mcpHttpPort, mcpHttpHost, mcpHttpTlsCert, mcpHttpTlsKey, stdio, economyConfig, roleplayConfig, skillEvolutionConfig, explanationConfig, benchmarkConfig, featuresConfig, ownerActivityConfig } = parseCliArgs(cliArgs);
 const vaultPath = resolve(vaultPathArg || process.cwd());
+const featurePath = featuresConfig ?? process.env.MCPVAULT_FEATURE_CONFIG;
+const ownerConsentPath = ownerActivityConfig ?? process.env.MCPVAULT_OWNER_ACTIVITY_CONFIG;
+const features = await loadHostFeatureConfig(featurePath ? resolve(featurePath) : undefined, vaultPath);
 if (mcpHttpPort === undefined && (mcpHttpHost || mcpHttpTlsCert || mcpHttpTlsKey)) {
     throw new Error('--mcp-http-host, --mcp-http-cert, and --mcp-http-key require --mcp-http');
 }
-const hostEconomy = economyConfig ? await loadEconomyHostConfig(resolve(economyConfig), vaultPath) : undefined;
-const hostBenchmark = benchmarkConfig ? await loadBenchmarkHostConfig(resolve(benchmarkConfig), vaultPath) : undefined;
+const hostEconomy = features.selected.includes('economy') && economyConfig ? await loadEconomyHostConfig(resolve(economyConfig), vaultPath) : undefined;
+const hostBenchmark = features.selected.includes('benchmarks') && benchmarkConfig ? await loadBenchmarkHostConfig(resolve(benchmarkConfig), vaultPath) : undefined;
 let benchmarkAuthority;
 let economy;
 if (hostEconomy?.policy.enabled) {
@@ -122,11 +136,14 @@ let benchmarkWriter;
 try {
     if (hostBenchmark?.enabled && !readOnly)
         benchmarkWriter = await acquireBenchmarkWriter(hostBenchmark);
-    const skillEvolution = skillEvolutionConfig ? await loadSkillEvolutionHostConfig(resolve(skillEvolutionConfig), vaultPath) : undefined;
-    const explanations = explanationConfig ? await loadExplanationHostConfig(resolve(explanationConfig), vaultPath) : undefined;
-    if (roleplayConfig)
+    const skillEvolution = features.selected.includes('skill-evolution') && skillEvolutionConfig ? await loadSkillEvolutionHostConfig(resolve(skillEvolutionConfig), vaultPath) : undefined;
+    const explanations = features.selected.includes('explanation-translation') && explanationConfig ? await loadExplanationHostConfig(resolve(explanationConfig), vaultPath) : undefined;
+    if (features.selected.includes('roleplay') && roleplayConfig)
         roleplay = await RoleplayStore.open(await loadRoleplayHostConfig(resolve(roleplayConfig), vaultPath));
-    mcpServer = createServer(vaultPath, { version: VERSION, readOnly, ...(economy && { economy }), ...(roleplay && { roleplay }), ...(skillEvolution && { skillEvolution }),
+    mcpServer = createServer(vaultPath, { version: VERSION, readOnly, features, ...(economy && { economy }), ...(roleplay && { roleplay }), ...(skillEvolution && { skillEvolution }),
+        // A legacy bridge cannot verify the execution behind a client. A policy
+        // file alone must not turn labels or localhost into runtime attestation.
+        ...(ownerConsentPath && { ownerActivity: { ...await loadOwnerActivityHostConfig(resolve(ownerConsentPath), vaultPath), execution: () => undefined } }),
         ...(hostBenchmark?.enabled && { benchmarks: {
                 enabled: true, definitions: hostBenchmark.definitions,
                 accountProfiles: async () => { await benchmarkWriter?.assertHeld(); return hostBenchmark.accountProfiles(); },

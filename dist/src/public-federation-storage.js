@@ -1,9 +1,19 @@
 import { guidanceError } from './guidance-runtime.js';
-import { assertEnterpriseStorageFresh } from './enterprise-storage-context.js';
+import { assertEnterpriseStorageFresh, assertOwnerActivityStorageAccess, prepareOwnerActivityStorageWrite } from './enterprise-storage-context.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { lstat, mkdir, open, realpath, rename, unlink } from 'node:fs/promises';
+import { lstatSync, realpathSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 const MAX_FEDERATION_FILE_BYTES = 64 * 1024 * 1024;
+function ownerPath(options) {
+    if (options.ownerPath === undefined)
+        return undefined;
+    const path = options.ownerPath.replace(/\\/g, '/');
+    if (!path || path.startsWith('/') || path.split('/').some(part => !part || part === '.' || part === '..')) {
+        throw guidanceError(new Error('Invalid owner activity storage path'), 'guid-c151366effa760d3');
+    }
+    return path;
+}
 function checkedLimit(options) {
     if (!Number.isSafeInteger(options.maxBytes) || options.maxBytes < 1 || options.maxBytes > MAX_FEDERATION_FILE_BYTES) {
         throw guidanceError(new Error(`maxBytes must be an integer between 1 and ${MAX_FEDERATION_FILE_BYTES}`), 'guid-54152e8590bede6e');
@@ -55,6 +65,25 @@ async function assertSafeExistingPath(root, target, requireFile) {
             throw guidanceError(new Error('Federation file target is not a regular file'), 'guid-9ab0b30e8106ea22');
     }
 }
+/** Final bounded path fence: no awaited callback may run between this check
+ * and dispatching the native mutation. This is not an OS administrator lock. */
+function assertFinalPath(root, target, expected) {
+    if (realpathSync(root.lexical) !== root.canonical)
+        throw new Error('Federation trusted root binding changed');
+    let current = root.lexical;
+    let info = lstatSync(current);
+    for (const part of components(root.lexical, target)) {
+        if (!info.isDirectory())
+            throw new Error('Federation storage parent is not a directory');
+        current = join(current, part);
+        info = lstatSync(current);
+        if (info.isSymbolicLink() || !isInside(root.canonical, realpathSync(current)))
+            throw new Error('Federation storage path changed to a symbolic link or junction');
+    }
+    if (expected && (info.ino !== expected.ino || info.dev !== expected.dev || info.isFile() !== expected.isFile()))
+        throw new Error('Federation storage file binding changed');
+    return info;
+}
 async function ensureSafeParent(root, parent) {
     let current = root.lexical;
     for (const component of components(root.lexical, parent)) {
@@ -89,6 +118,9 @@ async function ensureSafeParent(root, parent) {
 }
 export async function readFederationFile(rootInput, targetInput, options) {
     assertEnterpriseStorageFresh();
+    const authorizedPath = ownerPath(options);
+    if (authorizedPath)
+        assertOwnerActivityStorageAccess(authorizedPath);
     const maxBytes = checkedLimit(options);
     const root = await canonicalRoot(rootInput);
     const target = targetPath(root.lexical, targetInput);
@@ -109,6 +141,8 @@ export async function readFederationFile(rootInput, targetInput, options) {
         const after = await handle.stat();
         if (bytesRead > maxBytes || after.size > maxBytes)
             throw guidanceError(new Error(`${label(options)} exceeds its size limit`), 'guid-c938dfcfcc36a984');
+        if (authorizedPath)
+            assertOwnerActivityStorageAccess(authorizedPath);
         return buffer.subarray(0, bytesRead).toString('utf8');
     }
     finally {
@@ -120,12 +154,16 @@ export async function ensureFederationDirectory(rootInput, targetInput) {
     const target = targetPath(root.lexical, targetInput);
     await ensureSafeParent(root, target);
 }
-export async function removeFederationFile(rootInput, targetInput) {
+export async function removeFederationFile(rootInput, targetInput, beforeRemove) {
     assertEnterpriseStorageFresh();
     const root = await canonicalRoot(rootInput);
     const target = targetPath(root.lexical, targetInput);
     try {
         await assertSafeExistingPath(root, target, true);
+        const identity = await lstat(target);
+        await beforeRemove?.();
+        assertFinalPath(root, target, identity);
+        assertEnterpriseStorageFresh();
         await unlink(target);
     }
     catch (error) {
@@ -135,6 +173,7 @@ export async function removeFederationFile(rootInput, targetInput) {
 }
 export async function writeFederationFileAtomic(rootInput, targetInput, content, options) {
     assertEnterpriseStorageFresh();
+    const authorizedPath = ownerPath(options);
     const maxBytes = checkedLimit(options);
     if (typeof content !== 'string' || Buffer.byteLength(content, 'utf8') > maxBytes) {
         throw guidanceError(new Error(`${label(options)} exceeds its size limit`), 'guid-c938dfcfcc36a984');
@@ -143,6 +182,9 @@ export async function writeFederationFileAtomic(rootInput, targetInput, content,
     const target = targetPath(root.lexical, targetInput);
     const parent = dirname(target);
     await ensureSafeParent(root, parent);
+    const parentIdentity = await lstat(parent);
+    if (authorizedPath)
+        await prepareOwnerActivityStorageWrite(authorizedPath);
     try {
         await assertSafeExistingPath(root, target, true);
     }
@@ -152,12 +194,12 @@ export async function writeFederationFileAtomic(rootInput, targetInput, content,
     }
     const temporary = join(parent, `.${randomUUID()}.tmp`);
     let handle;
+    let temporaryIdentity;
     try {
         handle = await open(temporary, 'wx', 0o600);
+        temporaryIdentity = await handle.stat();
         await handle.writeFile(content, 'utf8');
         await handle.sync();
-        await handle.close();
-        handle = undefined;
         await ensureSafeParent(root, parent);
         try {
             await assertSafeExistingPath(root, target, true);
@@ -166,13 +208,39 @@ export async function writeFederationFileAtomic(rootInput, targetInput, content,
             if (!(error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT'))
                 throw error;
         }
+        if (authorizedPath)
+            await prepareOwnerActivityStorageWrite(authorizedPath);
+        await options.beforeCommit?.();
+        assertFinalPath(root, parent, parentIdentity);
+        assertFinalPath(root, temporary, temporaryIdentity);
+        try {
+            const destination = assertFinalPath(root, target);
+            if (!destination.isFile())
+                throw new Error('Federation destination is not a regular file');
+        }
+        catch (error) {
+            if (error.code !== 'ENOENT')
+                throw error;
+        }
+        assertEnterpriseStorageFresh();
+        if (authorizedPath)
+            assertOwnerActivityStorageAccess(authorizedPath);
         await rename(temporary, target);
         await assertSafeExistingPath(root, target, true);
     }
     finally {
-        if (handle)
-            await handle.close().catch(() => undefined);
-        await unlink(temporary).catch(() => undefined);
+        try {
+            if (temporaryIdentity) {
+                assertFinalPath(root, parent, parentIdentity);
+                assertFinalPath(root, temporary, temporaryIdentity);
+                await unlink(temporary);
+            }
+        }
+        catch { /* Never delete a redirected, replaced or already-published file. */ }
+        finally {
+            if (handle)
+                await handle.close().catch(() => undefined);
+        }
     }
 }
 /** Display prefix is advisory; full identity digest prevents delimiter/truncation collisions. */

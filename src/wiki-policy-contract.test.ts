@@ -2,7 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';
-import { createServer, getServerRuntime, type ServerRuntime } from './createServer.js';
+import { createServer, getServerRuntime, type ServerRuntime } from '../tests/server-fixture.js';
 import { getLlmWikiTools } from './llm-wiki-tools.js';
 import { getWikiPolicyTopic, WIKI_POLICY_FINGERPRINT, WIKI_POLICY_TOPICS, WIKI_POLICY_VERSION } from './wiki-policy.js';
 

@@ -49,7 +49,7 @@ export class SkillEvolutionService {
         const current = (await this.auth.listPrincipals()).find(a => a.accountId === principal.accountId);
         if (!current || current.modelId !== principal.modelId || current.agentId !== principal.agentId || current.role !== principal.role
             || !this.auth.hasCapability(current, 'write') || !this.auth.hasCapability(principal, 'write')
-            || !this.access.canAccessPhysicalPath(rootPath(skillId(p.skillId)), principal))
+            || !this.access.canAccessPhysicalPath(rootPath(skillId(p.skillId)).slice(0, -1), principal))
             throw guidanceError(Error('Authenticated skill write account is unavailable'), 'guid-a5360f00f58805f5');
         await this.options.assertActor?.(principal);
         return principal;

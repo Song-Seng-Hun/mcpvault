@@ -1,3 +1,4 @@
+import { PathFilter } from './pathfilter.js';
 import { type PublicActorRecord, type PublicCommentRecord, type PublicFederationEvent, type PublicFederationFeed, type PublicFederationIdentity, type PublicPostRecord, type PublicProfileRecord, type PublicPublishInput } from './public-federation.js';
 export interface PublicFederationTransport {
     publish(input: PublicPublishInput, idempotencyKey: string): Promise<PublicFederationEvent>;
@@ -14,6 +15,7 @@ export interface PublicFederationReplicaOptions {
     storageNamespace?: string;
     /** Existing SocialService/AgentDirectory files are the local source in enterprise mode. */
     manageLocalProjection?: boolean;
+    pathFilter?: PathFilter;
 }
 export interface PublicReplicaPublishResult {
     status: 'published' | 'pending';
@@ -30,8 +32,10 @@ export interface PublicFederationPullResult {
     applied: string[];
     pending: string[];
     hidden: string[];
-    cursor: number;
-    hasMore: boolean;
+    /** Global progress is host-internal, never exposed to request-bound callers. */
+    cursor?: number;
+    hasMore?: boolean;
+    progress?: 'scoped';
     errors: string[];
 }
 export type PublicFederationObjectStatus = 'active' | 'pending-parent' | 'origin-tombstone' | 'global-moderation' | 'local-hide';
@@ -75,12 +79,19 @@ export declare class PublicFederationReplica {
     private readonly maxOutboxRecords;
     private readonly maxOutboxBytes;
     private readonly manageLocalProjection;
+    private readonly pathFilter;
     private state;
     private loaded;
     private mutationTail;
     constructor(options: PublicFederationReplicaOptions);
+    private logicalProjection;
+    private projectionAllowed;
+    private assertProjection;
+    private objectPath;
+    private objectAllowed;
     private read;
     private writeAtomic;
+    private removeProjection;
     private load;
     private save;
     private withMutation;
@@ -90,8 +101,8 @@ export declare class PublicFederationReplica {
     private assertAcknowledgement;
     private deliver;
     private reject;
-    publish(input: PublicPublishInput, idempotencyKey: string): Promise<PublicReplicaPublishResult>;
-    flushOutbox(): Promise<PublicOutboxFlushResult>;
+    publish(input: PublicPublishInput, idempotencyKey: string, authorize?: () => Promise<void>): Promise<PublicReplicaPublishResult>;
+    flushOutbox(authorize?: (input: PublicPublishInput, idempotencyKey: string) => Promise<void>): Promise<PublicOutboxFlushResult>;
     private apply;
     private possibleImportedPaths;
     private reconcile;
@@ -108,7 +119,7 @@ export declare class PublicFederationReplica {
         totalLines: number;
     }>;
     listObjects(params?: PublicFederationListParams): Promise<PublicFederationObjectList>;
-    getCursor(): Promise<number>;
+    getCursor(): Promise<number | undefined>;
     pull(limit?: number): Promise<PublicFederationPullResult>;
     hideLocally(objectId: string, reason: string): Promise<void>;
 }

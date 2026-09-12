@@ -1,10 +1,11 @@
 import { guidanceText } from './guidance-runtime.js';
 import { guidanceError } from './guidance-runtime.js';
-import { assertEnterpriseStorageFresh } from './enterprise-storage-context.js';
+import { activeDocumentStorageContext, assertEnterpriseStorageFresh, canReadEnterpriseStoragePath, prepareOwnerActivityStorageWrite } from './enterprise-storage-context.js';
 import { createHash } from 'node:crypto';
 import { readdir } from 'node:fs/promises';
 import { federationStorageName, ensureFederationDirectory, readFederationFile, writeFederationFileAtomic, removeFederationFile } from './public-federation-storage.js';
-import { join, resolve } from 'node:path';
+import { join, resolve, relative } from 'node:path';
+import { PathFilter } from './pathfilter.js';
 import { makePublicActorId, verifyPublicFederationFeed, verifyPublicFederationEvent, validatePublicPublishInput, } from './public-federation.js';
 const DEFAULT_MAX_OUTBOX_RECORDS = 500;
 const DEFAULT_MAX_OUTBOX_BYTES = 16 * 1024 * 1024;
@@ -103,6 +104,7 @@ export class PublicFederationReplica {
     maxOutboxRecords;
     maxOutboxBytes;
     manageLocalProjection;
+    pathFilter;
     state = { version: 1, cursor: 0, lastEventHash: '', objects: {}, localHidden: [] };
     loaded = false;
     mutationTail = Promise.resolve();
@@ -125,12 +127,50 @@ export class PublicFederationReplica {
         this.maxOutboxRecords = Math.min(Math.max(Math.trunc(options.maxOutboxRecords ?? DEFAULT_MAX_OUTBOX_RECORDS), 1), 10_000);
         this.maxOutboxBytes = Math.min(Math.max(Math.trunc(options.maxOutboxBytes ?? DEFAULT_MAX_OUTBOX_BYTES), 1024), 256 * 1024 * 1024);
         this.manageLocalProjection = options.manageLocalProjection !== false;
+        this.pathFilter = options.pathFilter ?? new PathFilter();
     }
-    read(path) {
-        return readFederationFile(this.vaultPath, path, { maxBytes: 64 * 1024 * 1024 });
+    logicalProjection(path) {
+        const logical = relative(this.vaultPath, path).replace(/\\/g, '/');
+        return logical.startsWith('PublicCommunity/') ? logical : undefined;
+    }
+    projectionAllowed(path, observe = true) {
+        activeDocumentStorageContext()?.assertFresh();
+        return this.pathFilter.isAllowed(path) && canReadEnterpriseStoragePath(path, observe);
+    }
+    assertProjection(path) {
+        const logical = this.logicalProjection(path);
+        if (logical && !this.projectionAllowed(logical))
+            throw new Error('Federation projection unavailable');
+    }
+    objectPath(objectId, object) {
+        return object.base.actorId === this.actorId
+            ? `PublicCommunity/Local/${importedCategory(object)}/${federationStorageName(objectId)}.md`
+            : `PublicCommunity/Imported/${actorOrigin(object.base.actorId)}/${importedCategory(object)}/${federationStorageName(objectId)}.md`;
+    }
+    objectAllowed(objectId, object, observe = true) {
+        return this.projectionAllowed(this.objectPath(objectId, object), observe);
+    }
+    async read(path) {
+        this.assertProjection(path);
+        const ownerPath = this.logicalProjection(path);
+        const result = await readFederationFile(this.vaultPath, path, { maxBytes: 64 * 1024 * 1024, ...(ownerPath && { ownerPath }) });
+        this.assertProjection(path);
+        return result;
     }
     writeAtomic(path, content) {
-        return writeFederationFileAtomic(this.vaultPath, path, content, { maxBytes: 64 * 1024 * 1024 });
+        this.assertProjection(path);
+        const ownerPath = this.logicalProjection(path);
+        return writeFederationFileAtomic(this.vaultPath, path, content, { maxBytes: 64 * 1024 * 1024,
+            ...(ownerPath && { ownerPath, beforeCommit: async () => this.assertProjection(path) }) });
+    }
+    async removeProjection(path) {
+        const logical = this.logicalProjection(path);
+        if (!logical || !this.projectionAllowed(logical, false))
+            return;
+        await removeFederationFile(this.vaultPath, path, async () => {
+            await prepareOwnerActivityStorageWrite(logical);
+            this.assertProjection(path);
+        });
     }
     async load() {
         if (this.loaded)
@@ -217,11 +257,12 @@ export class PublicFederationReplica {
         await this.writeAtomic(join(this.rejectedRoot, `${sha256(entry.idempotencyKey)}.md`), outboxMarkdown(entry) + `\nRejection: ${JSON.stringify(reason)}\n`);
         await removeFederationFile(this.vaultPath, path);
     }
-    async publish(input, idempotencyKey) {
+    async publish(input, idempotencyKey, authorize) {
         return this.withMutation(async () => {
             if (!idempotencyKey || idempotencyKey.length > 128 || !/^[a-zA-Z0-9._:-]+$/.test(idempotencyKey))
                 throw guidanceError(new Error('idempotencyKey is required and contains only letters, numbers, dot, underscore, colon, or hyphen'), 'guid-da5dd57649554246');
             validatePublicPublishInput(input, this.identity);
+            await authorize?.();
             const rows = await this.queued();
             const path = this.outboxPath(idempotencyKey);
             const existing = rows.find(row => row.path === path);
@@ -240,6 +281,7 @@ export class PublicFederationReplica {
             if (rows.length > 0 && rows[0].path !== path)
                 return { status: 'pending', objectId: objectIdOf(input), error: 'earlier publication is pending' };
             try {
+                await authorize?.();
                 const event = await this.deliver(entry, path);
                 return { status: 'published', objectId: objectIdOf(input), event };
             }
@@ -252,12 +294,16 @@ export class PublicFederationReplica {
             }
         });
     }
-    async flushOutbox() {
+    async flushOutbox(authorize) {
         return this.withMutation(async () => {
             const rows = await this.queued();
+            // Admission failures must not become a response listing forbidden IDs.
+            for (const { entry } of rows)
+                await authorize?.(entry.input, entry.idempotencyKey);
             const published = [], pending = [], rejected = [];
             for (let index = 0; index < rows.length; index += 1) {
                 const { path, entry } = rows[index];
+                await authorize?.(entry.input, entry.idempotencyKey);
                 try {
                     await this.deliver(entry, path);
                     published.push(objectIdOf(entry.input));
@@ -324,6 +370,8 @@ export class PublicFederationReplica {
             const origin = actorOrigin(object.base.actorId);
             if (origin === this.identity.origin && object.base.actorId === this.actorId)
                 continue;
+            if (!this.objectAllowed(objectId, object, false))
+                continue;
             const projectionState = this.objectStatus(objectId);
             const categories = { 'origin-tombstone': 'Tombstones', 'global-moderation': 'Moderated', 'local-hide': 'LocallyHidden', 'pending-parent': 'Pending', active: importedCategory(object) };
             const category = categories[projectionState];
@@ -341,9 +389,16 @@ export class PublicFederationReplica {
         for (const projection of projections)
             if (projection.projectionState !== 'active') {
                 for (const path of projection.obsolete)
-                    await removeFederationFile(this.vaultPath, path);
+                    await this.removeProjection(path);
             }
         for (const projection of projections) {
+            // Status markers have a different physical path from their source. An
+            // exact-file grant can remove its revoked body without gaining marker
+            // write access; persist the verified status even when that marker is out
+            // of scope, rather than rolling the revocation back to an active object.
+            const logical = this.logicalProjection(projection.path);
+            if (logical && !this.projectionAllowed(logical, false))
+                continue;
             const content = markdownForImported(projection.objectId, projection.object, projection.projectionState);
             let current;
             try {
@@ -359,7 +414,7 @@ export class PublicFederationReplica {
                 await this.writeAtomic(projection.path, content);
             if (projection.projectionState === 'active') {
                 for (const path of projection.obsolete)
-                    await removeFederationFile(this.vaultPath, path);
+                    await this.removeProjection(path);
             }
         }
         return { pending, hidden };
@@ -386,7 +441,7 @@ export class PublicFederationReplica {
     async getObject(objectId, options = {}) {
         return this.withMutation(async () => {
             const object = this.state.objects[objectId];
-            if (!object)
+            if (!object || !this.objectAllowed(objectId, object))
                 return undefined;
             const view = this.view(objectId, object);
             return view.status === 'active' || options.includeUnavailable === true ? view : undefined;
@@ -397,15 +452,16 @@ export class PublicFederationReplica {
     async getImportedReadTarget(objectId, expectedRevision) {
         return this.withMutation(async () => {
             const object = this.state.objects[objectId];
-            if (!object || object.revision !== expectedRevision || this.objectStatus(objectId) !== 'active'
+            if (!object || !this.objectAllowed(objectId, object) || object.revision !== expectedRevision || this.objectStatus(objectId) !== 'active'
                 || object.base.actorId === this.actorId)
                 throw guidanceError(new Error('Federation object changed or unavailable; reread its window'), 'guid-72562d6c40c54a58');
             const content = markdownForImported(objectId, object, 'active');
             const path = `PublicCommunity/Imported/${actorOrigin(object.base.actorId)}/${importedCategory(object)}/${federationStorageName(objectId)}.md`;
             try {
-                const persisted = await readFederationFile(this.vaultPath, join(this.vaultPath, path), { maxBytes: 128 * 1024, label: guidanceText('guid-56d63a4c2f891a79', 'public federation projection') });
+                const persisted = await readFederationFile(this.vaultPath, join(this.vaultPath, path), { maxBytes: 128 * 1024, ownerPath: path, label: guidanceText('guid-56d63a4c2f891a79', 'public federation projection') });
                 if (persisted !== content)
                     throw guidanceError(new Error('projection changed'), 'guid-55fb28553f1f051c');
+                this.assertProjection(join(this.vaultPath, path));
             }
             catch {
                 throw guidanceError(new Error('Federation projection changed or unavailable; retry synchronization before reading'), 'guid-fe6d6e936d06034e');
@@ -420,6 +476,7 @@ export class PublicFederationReplica {
             const origin = params.origin?.trim().toLowerCase();
             const requestedStatus = params.status || (params.includeUnavailable === true ? undefined : 'active');
             const rows = Object.entries(this.state.objects)
+                .filter(([objectId, object]) => this.objectAllowed(objectId, object))
                 .map(([objectId, object]) => this.view(objectId, object))
                 .filter(view => (!params.postId || (view.record.type === 'comment' && view.record.postId === params.postId)) && (!params.type || view.record.type === params.type) && (!origin || view.origin === origin) && (!requestedStatus || view.status === requestedStatus))
                 .sort((left, right) => left.objectId.localeCompare(right.objectId));
@@ -433,9 +490,14 @@ export class PublicFederationReplica {
                 ...(truncated && objects.length > overlap && { nextCursor: objects.at(-1).objectId }) };
         });
     }
-    async getCursor() { return this.withMutation(async () => this.state.cursor); }
-    async pull(limit = 50) {
+    async getCursor() {
         return this.withMutation(async () => {
+            activeDocumentStorageContext()?.assertFresh();
+            return activeDocumentStorageContext() ? undefined : this.state.cursor;
+        });
+    }
+    async pull(limit = 50) {
+        const result = await this.withMutation(async () => {
             let feed;
             try {
                 feed = await this.client.getFeed(this.state.cursor, limit);
@@ -465,7 +527,8 @@ export class PublicFederationReplica {
                 }
                 const status = await this.reconcile();
                 await this.save();
-                return { applied: Array.from(new Set(applied)), pending: status.pending, hidden: status.hidden, cursor: this.state.cursor, hasMore: feed.hasMore, errors: [] };
+                return { applied: Array.from(new Set(applied)).filter(id => this.state.objects[id] && this.objectAllowed(id, this.state.objects[id])),
+                    pending: status.pending, hidden: status.hidden, cursor: this.state.cursor, hasMore: feed.hasMore, errors: [] };
             }
             catch (error) {
                 // Do not expose a partially applied page as a complete verified cache.
@@ -474,6 +537,14 @@ export class PublicFederationReplica {
                 throw error;
             }
         });
+        // Redact for every request context, not just when this page happens to
+        // contain hidden records (that conditional would itself leak activity).
+        const context = activeDocumentStorageContext();
+        context?.assertFresh();
+        if (context)
+            return { applied: result.applied, pending: result.pending, hidden: result.hidden,
+                progress: 'scoped', errors: result.errors.length ? ['Public federation unavailable'] : [] };
+        return result;
     }
     async hideLocally(objectId, reason) {
         await this.withMutation(async () => {

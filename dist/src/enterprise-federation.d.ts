@@ -1,6 +1,7 @@
 import type { AgentDirectoryService } from './agent-directory.js';
 import type { ScopePrincipal } from './scope-auth.js';
 import type { SocialService } from './social.js';
+import { PathFilter } from './pathfilter.js';
 export interface PublicFederationHostConfig {
     baseUrl: string;
     trustedHubPublicKey: string;
@@ -13,12 +14,14 @@ export interface EnterpriseFederationAdapterOptions {
     social: SocialService;
     directory: AgentDirectoryService;
     config: PublicFederationHostConfig;
+    pathFilter?: PathFilter;
 }
 export declare class EnterpriseFederationAdapter {
     private readonly vaultPath;
     private readonly social;
     private readonly directory;
     private readonly config;
+    private readonly pathFilter;
     private readonly statePath;
     private readonly intentsRoot;
     private readonly reader;
@@ -27,8 +30,14 @@ export declare class EnterpriseFederationAdapter {
     private loaded;
     private mutationTail;
     constructor(options: EnterpriseFederationAdapterOptions);
+    private logicalPublicPath;
+    private assertPublicPath;
+    private preparePublicWrite;
     private readBounded;
     private writeAtomic;
+    private remoteCommentPath;
+    private assertImportedSource;
+    private authorizeIntent;
     private load;
     private save;
     private exclusive;

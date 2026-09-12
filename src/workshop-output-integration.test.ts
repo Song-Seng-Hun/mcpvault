@@ -3,7 +3,7 @@ import { mkdtemp,rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Client,InMemoryTransport } from '@modelcontextprotocol/client';
-import { createServer } from './createServer.js';
+import { createServer } from '../tests/server-fixture.js';
 import { FileSystemService } from './filesystem.js';
 import { ScopeAuthService } from './scope-auth.js';
 import { ModerationService } from './moderation.js';
@@ -63,7 +63,11 @@ it.each(scenarios)('normal output services enforce $type persistence and recover
       }});
     });
     try {
-      await expect(update('execute_output',output,requestId)).rejects.toThrow(/token|actor|capability|suspended|lost response/i);
+      // Revocation may now fail closed at the storage boundary before the
+      // later actor check. Keep persistence and revoked-retry assertions below.
+      await expect(update('execute_output',output,requestId)).rejects.toThrow(scenario.failure === 'session'
+        ? /Vault read unavailable; retry after storage access is restored\./
+        : /token|actor|capability|suspended|lost response/i);
       expect(attempted).toBe(true);
       const pending=await fs.readNote(workshopPath);
       expect(pending.frontmatter.workshop_output_pending.input.outputId).toBe(output.outputId);

@@ -8,7 +8,7 @@ import { ScopeAccessPolicy } from './scope-access.js';
 import { ReferenceService } from './references.js';
 import { LlmWikiService } from './llm-wiki.js';
 import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
-import { createServer } from './createServer.js';
+import { createServer } from '../tests/server-fixture.js';
 import { VaultMetadataIndex } from './vault-index.js';
 import { FrontmatterHandler } from './frontmatter.js';
 import { PathFilter } from './pathfilter.js';

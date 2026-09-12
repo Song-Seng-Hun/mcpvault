@@ -2,7 +2,7 @@ import { afterEach, expect, test } from 'vitest';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { createServer, getServerRuntime } from './createServer.js';
+import { createServer, getServerRuntime } from '../tests/server-fixture.js';
 import { FileSystemService } from './filesystem.js';
 import { FrontmatterHandler } from './frontmatter.js';
 import { PathFilter } from './pathfilter.js';

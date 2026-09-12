@@ -1,3 +1,4 @@
+import { type HostFeatureConfig } from './host-features.js';
 import { type EnterpriseMode } from './enterprise-registry.js';
 import { type GlobalImportResult } from './global-sync.js';
 export interface EnterpriseServerConfig {
@@ -10,6 +11,10 @@ export interface EnterpriseServerConfig {
     caPath: string;
     federationConfigPath?: string;
     globalImportConfigPath?: string;
+    featuresConfigPath?: string;
+    ownerActivityConfigPath?: string;
+    /** Trusted embedding only; CLI callers select a verified file instead. */
+    features?: HostFeatureConfig;
 }
 export interface EnterpriseServerHandle {
     host: string;

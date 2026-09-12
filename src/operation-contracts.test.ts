@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest';
 import * as registryModule from './endpoint-registry.js';
-import { createServer, getServerRuntime } from './createServer.js';
+import { createServer, getServerRuntime } from '../tests/server-fixture.js';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -37,11 +37,16 @@ test('typed mixed operation contract drives aliases and discovery across authori
         const listed = registry.list(id, 1, 20000, { readOnly: true, authenticated,
           capabilities: new Set(['write', 'task', 'chat', 'profile']),
           roleplayConfigured: configured, roleplayWritesConfigured: configured,
-          skillEvolutionEnabled: configured }, false).endpoints[0]!;
+          skillEvolutionEnabled: configured,
+          ownerActivity: { policyFingerprint: 'test-policy', executionBindingGeneration: 'test-host', eligibility: {
+            'skill-evolution': { discover: true, read: true, claim: true, execute: true },
+            roleplay: { discover: true, read: true, claim: true, execute: true },
+            collaboration: { discover: true, read: true, claim: true, execute: true },
+          } },
+        }, false).endpoints[0]!;
         expect(listed.operations![write!]!.available, id).toBe(false);
         const needsAuth = read!.includes('preview') || id === 'community.participation';
-        const needsHost = id!.startsWith('roleplay.') && id !== 'roleplay.world'
-          || id === 'skill.promote' || id === 'skill.rollback';
+        const needsHost = id!.startsWith('roleplay.') || id!.startsWith('skill.');
         expect(listed.operations![read!]!.available, `${id}/${authenticated}/${configured}`)
           .toBe((!needsAuth || authenticated) && (!needsHost || configured));
       }

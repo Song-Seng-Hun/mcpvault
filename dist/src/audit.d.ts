@@ -6,6 +6,8 @@ export interface AuditEvent {
     role: 'model' | 'agent' | 'anonymous';
     outcome: 'attempt' | 'error';
     target?: string;
+    /** Structured source paths for current-policy filtering, never access grants. */
+    paths?: string[];
     error?: string;
 }
 /**
@@ -31,6 +33,7 @@ export declare class AuditService {
         principal?: ScopePrincipal;
         limit?: number;
         includeErrors?: boolean;
+        canAccessPath?: (path: string) => boolean;
     }): Promise<{
         events: AuditEvent[];
         total: number;

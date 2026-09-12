@@ -13,6 +13,14 @@ export class CollectionHealthProjection {
         this.evaluatedAt = evaluatedAt;
     }
     isCurrent(at = Date.now()) { return at >= this.evaluatedAt && at < this.nextReviewAt; }
+    /** Cache admission must count the private Map, not its empty JSON envelope.
+     * At most 120 groups are retained; include keys, nested values and overhead. */
+    estimatedRetainedBytes() {
+        let bytes = 256;
+        for (const [key, group] of this.groups)
+            bytes += 128 + key.length * 2 + JSON.stringify(group).length * 4;
+        return bytes;
+    }
     add(note) {
         const path = this.publicPath(note.path);
         const fm = note.frontmatter;

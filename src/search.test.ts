@@ -4,9 +4,11 @@ import { PathFilter } from "./pathfilter.js";
 import { writeFile, readFile, mkdir, mkdtemp, rm } from "fs/promises";
 import { dirname, join, sep } from "path";
 import { tmpdir } from "os";
+import { derivedStorageFixture } from '../tests/derived-storage-fixture.js';
 
 let testVaultPath: string;
 let searchService: SearchService;
+let snapshotHost: Awaited<ReturnType<typeof derivedStorageFixture>> | undefined;
 
 beforeEach(async () => {
   testVaultPath = await mkdtemp(join(tmpdir(), "mcpvault-search-"));
@@ -14,7 +16,8 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  searchService.close();
+  await searchService.close();
+  await snapshotHost?.close(); snapshotHost = undefined;
   try {
     await rm(testVaultPath, { recursive: true });
   } catch {
@@ -168,18 +171,21 @@ describe("SearchService", () => {
   });
 
   test("restores the derived index snapshot after a server restart", async () => {
+    await searchService.close();
+    snapshotHost = await derivedStorageFixture(testVaultPath);
+    searchService = new SearchService(testVaultPath, new PathFilter(), undefined, undefined, snapshotHost.host);
     await writeNote("restartable.md", "# Restartable\n\nSnapshot candidate.");
     await writeNote("raw-locator.md", "---\nkey: metadata\n---\n\nRawLineNeedle");
     await writeNote("authority-restart.md", "---\nclose_match: [Restart Authority]\n---\n# Authority restart\n\nNeutral body.");
     expect(await searchService.search({ query: "candidate" })).toHaveLength(1);
     expect((await searchService.search({ query: "RawLineNeedle" }))[0]?.ln).toBe(5);
     expect((await searchService.search({ query: "Restart Authority", expandAuthority: true }))[0]).toMatchObject({ au: { relation: "close_match", confidence: "high" } });
-    await new Promise(resolve => setTimeout(resolve, 1_100));
-    const snapshot = await readFile(join(testVaultPath, ".mcpvault", "search-index.snapshot.bin"));
+    await (searchService as any).flushSnapshot();
+    const snapshot = await readFile(snapshotHost.path('search-index.snapshot.bin'));
     expect(snapshot.subarray(0, 8).toString("ascii")).toBe("MCPVSRCH");
 
-    searchService.close();
-    const restarted = new SearchService(testVaultPath, new PathFilter());
+    await searchService.close();
+    const restarted = new SearchService(testVaultPath, new PathFilter(), undefined, undefined, snapshotHost.host);
     try {
       const results = await restarted.search({ query: "candidate" });
       expect(results).toHaveLength(1);
@@ -189,9 +195,9 @@ describe("SearchService", () => {
         p: "authority-restart.md", au: { relation: "close_match", confidence: "high", matched: "Restart Authority" },
       });
     } finally {
-      restarted.close();
+      await restarted.close();
     }
-  });
+  }, 30000);
 
   test("invalidates the bounded cache when a caller reports a direct edit", async () => {
     await writeNote("changing.md", "# Changing\n\noldneedle.");

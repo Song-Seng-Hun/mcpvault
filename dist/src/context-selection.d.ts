@@ -4,12 +4,12 @@ import type { ScopePrincipal } from './scope-auth.js';
 import type { RetrievalService, RetrievalHit } from './retrieval-service.js';
 import { type ContextIntent } from './context-rules.js';
 import { type ContextPassageSelection } from './context-passages.js';
+export { isSituationMemory } from './situation-metadata.js';
 export interface SituationOptions {
     context: string;
     intent: ContextIntent;
     explain: boolean;
 }
-export declare function isSituationMemory(fm: Record<string, any>): boolean;
 /** Metadata discovery reuses existing indexes. No prompt execution, body hydration,
  * cross-request cache, or private-memory aggregation. Eligibility precedes top-k. */
 export declare function selectSituationCandidates(fs: FileSystemService, access: ScopeAccessPolicy, retrieval: RetrievalService, query: string, options: SituationOptions, principal?: ScopePrincipal, semantic?: boolean): Promise<{

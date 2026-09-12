@@ -6,7 +6,7 @@ const emptyTasks = { tasks: [], total: 0, statusCounts: { in_progress: 0, accept
 
 // Boundary doubles isolate scheduling; the selected nextAction and coverage are
 // outputs of the real Pulse service. Real Work/task admission has separate tests.
-function fixture(values: Record<string, unknown> = {}, failures: string[] = []) {
+function fixture(values: Record<string, unknown> = {}, failures: string[] = [], ownerConsent = true) {
   const calls: string[] = [];
   const read = (name: string, fallback: unknown) => async () => {
     calls.push(name);
@@ -26,9 +26,22 @@ function fixture(values: Record<string, unknown> = {}, failures: string[] = []) 
     { pulse: read('work', { coverage: 'loaded' }) } as any,
     undefined,
     { nextAction: read('skills', undefined) } as any,
+    undefined,
+    // Scheduling tests explicitly admit optional reads; no production grant.
+    async () => ownerConsent ? ({ run: async <T>(reader: () => Promise<T>) => reader(),
+      revalidate: async () => {}, assertFresh: () => {} }) : undefined,
   );
   return { calls, service };
 }
+
+test('without owner consent, scheduling never reads optional activity backends', async () => {
+  const f = fixture({}, [], false);
+  const value = await f.service.get({ principal, skillId: 'safe-edit' });
+  expect(value.nextAction.tool).toBe('wiki.home');
+  for (const source of ['notifications', 'posts', 'rooms', 'reputation', 'workshops', 'ideas', 'skills']) {
+    expect(f.calls).not.toContain(source);
+  }
+});
 
 test('checkpoint reads only continuity, even if every lower-priority backend fails', async () => {
   const f = fixture({ continuity: { exists: true } }, ['work', 'tasks', 'notifications', 'posts', 'rooms', 'reputation', 'reviewQueue', 'inbox', 'maintenance', 'workshops', 'ideas', 'skills']);

@@ -40,7 +40,9 @@ export declare class EconomyLedger {
     private closed;
     private closing;
     private assertStorageBinding;
+    private readonly runHostCleanup;
     private constructor();
+    private journalOwnerPath;
     static initialize(options: EconomyLedgerOptions): Promise<EconomyLedger>;
     static open(options: EconomyLedgerOptions): Promise<EconomyLedger>;
     private static acquire;
@@ -51,6 +53,7 @@ export declare class EconomyLedger {
     close(): Promise<void>;
     private checkpoint;
     private saveCheckpoint;
+    private cancelPrepared;
     private replay;
     private makeEvent;
     snapshot(): Promise<EconomyState>;

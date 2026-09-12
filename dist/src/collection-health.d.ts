@@ -62,6 +62,9 @@ export declare class CollectionHealthProjection {
     private nextReviewAt;
     constructor(publicPath: (path: string) => string, evaluatedAt?: number);
     isCurrent(at?: number): boolean;
+    /** Cache admission must count the private Map, not its empty JSON envelope.
+     * At most 120 groups are retained; include keys, nested values and overhead. */
+    estimatedRetainedBytes(): number;
     add(note: QueryNote & {
         revision: string;
     }): void;

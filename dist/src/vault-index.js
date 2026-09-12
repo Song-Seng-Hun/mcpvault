@@ -1,12 +1,15 @@
 import { guidanceError } from './guidance-runtime.js';
 import { watch } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
-import { mkdir, readdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
+import { readdir, stat } from 'node:fs/promises';
+import { HostDerivedStorage } from './host-derived-storage.js';
 import { VaultIoCoordinator } from './vault-io.js';
 import { isMissingVaultPath, VaultReadUnavailableError } from './vault-read-errors.js';
 import { createDerivedCacheOwner, derivedCacheBudget, estimateCacheBytes } from './cache-budget.js';
 import { buildNoteReferenceIndex, resolveNoteReference as resolveIndexedNoteReference } from './note-reference.js';
 import { encodeMetadataSnapshot, decodeMetadataSnapshot, METADATA_SNAPSHOT_MAX_BYTES } from './metadata-snapshot.js';
+import { contextRuleState, normalizeContextText } from './context-rules.js';
+import { isSituationMetadata } from './situation-metadata.js';
 const FULL_REFRESH_INTERVAL_MS = 60_000;
 const READ_BATCH_SIZE = 32;
 const QUERY_CACHE_TTL_MS = 2_000;
@@ -15,7 +18,7 @@ const QUERY_CACHE_MAX_ROWS = 100_000;
 const SORTED_QUERY_CACHE_MAX_ENTRIES = 64;
 const SORTED_QUERY_CACHE_MAX_ROWS = 100_000;
 const TOP_K_MAX = 1_024;
-const METADATA_SNAPSHOT_FILE = '.mcpvault/metadata-index.snapshot.bin';
+const METADATA_SNAPSHOT_FILE = 'metadata-index.snapshot.bin';
 const METADATA_SNAPSHOT_SAVE_DEBOUNCE_MS = 1_000;
 function normalizePath(value) {
     return value.trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
@@ -122,6 +125,11 @@ export class VaultMetadataIndex {
     cacheOwner = createDerivedCacheOwner('metadata.queries');
     entries = new Map();
     filterIndex = new Map();
+    situationEligible = new Set();
+    situationOrdinary = new Set();
+    situationGeneration = 0;
+    situationCoverageId = 0;
+    situationCoverage = new WeakMap();
     pathIndex = new Map();
     authoritySchemeIndex = new Map();
     authorityPairIndex = new Map();
@@ -132,6 +140,7 @@ export class VaultMetadataIndex {
     sortedQueryCacheRows = 0;
     dirty = new Set();
     snapshotReady;
+    snapshotStorage;
     ready;
     refreshPromise;
     snapshotWrite;
@@ -146,12 +155,13 @@ export class VaultMetadataIndex {
     forceFullRead = false;
     lastFullRefreshAt = 0;
     firstList = true;
-    constructor(vaultPath, pathFilter, frontmatter, catalog, vaultIo = new VaultIoCoordinator()) {
+    constructor(vaultPath, pathFilter, frontmatter, catalog, vaultIo = new VaultIoCoordinator(), cacheDir = process.env.MCPVAULT_DERIVED_CACHE_DIR) {
         this.pathFilter = pathFilter;
         this.frontmatter = frontmatter;
         this.catalog = catalog;
         this.vaultIo = vaultIo;
         this.vaultPath = resolve(vaultPath);
+        this.snapshotStorage = new HostDerivedStorage(this.vaultPath, cacheDir);
         this.snapshotReady = this.loadSnapshot();
         this.ready = this.initialize().catch(() => {
             // Initialization runs eagerly. A failed load must not permanently poison
@@ -190,6 +200,7 @@ export class VaultMetadataIndex {
             this.dirty.add(normalized);
         }
     }
+    /** Host authority changes invalidate every advisory metadata generation. */
     invalidateAll() {
         this.changeGeneration++;
         this.forceFullRead = true;
@@ -197,6 +208,7 @@ export class VaultMetadataIndex {
         this.clearQueryCaches();
     }
     clearQueryCaches() {
+        this.situationCoverage = new WeakMap();
         this.queryCache.clear();
         this.sortedQueryCache.clear();
         this.queryCacheRows = 0;
@@ -234,19 +246,101 @@ export class VaultMetadataIndex {
             canReference: (_source, target) => canAccessPath(target),
         });
     }
+    /** Request-local selection over existing literal postings. Ordinary rows are
+     * set lookups, not a full metadata/revision walk. No authority is cached. */
+    async prepareSituation(input, intent, explain, canAccessPath) {
+        await this.ensureFresh();
+        const generation = this.situationGeneration, changes = this.changeGeneration;
+        const diagnostics = [];
+        const states = new Map();
+        const assertFresh = () => {
+            if (this.closed || generation !== this.situationGeneration || changes !== this.changeGeneration)
+                throw guidanceError(new Error('Situation metadata changed; retry the request.'), 'guid-cb0beec6f8a0e1c5');
+        };
+        const visible = (path) => this.pathFilter.isAllowed(path) && canAccessPath(path);
+        const canSelect = (path) => {
+            assertFresh();
+            if (!this.situationEligible.has(path) || !visible(path))
+                return false;
+            if (this.situationOrdinary.has(path))
+                return true;
+            let state = states.get(path);
+            if (!state) {
+                const entry = this.entries.get(path);
+                if (!entry)
+                    return false;
+                state = contextRuleState(entry.frontmatter.context_rules, input, intent);
+                states.set(path, state);
+                if (explain && diagnostics.length < 8 && (state === 'invalid' || state === 'conditions_unmatched'))
+                    diagnostics.push({ physicalPath: path, revision: entry.revision, reason: state === 'invalid' ? 'invalid_context_rules' : state });
+            }
+            return state === 'unspecified' || state === 'conditions_matched';
+        };
+        const possible = new Set(), haystack = normalizeContextText(input);
+        for (const key of ['context_rules.any', 'context_rules.all']) {
+            for (const [encoded, paths] of this.filterIndex.get(key) || []) {
+                const phrase = JSON.parse(encoded);
+                if (typeof phrase === 'string' && haystack.includes(normalizeContextText(phrase)))
+                    for (const path of paths)
+                        possible.add(path);
+            }
+        }
+        const activated = [];
+        for (const path of possible) {
+            if (!canSelect(path))
+                continue;
+            // Generic property postings can also contain literal dotted YAML keys.
+            // Only the actual nested, validated positive rules may activate a note.
+            const rules = this.entries.get(path).frontmatter.context_rules;
+            if (states.get(path) !== 'conditions_matched' || !(rules?.any?.length || rules?.all?.length))
+                continue;
+            activated.push({ path, revision: this.entries.get(path).revision });
+            activated.sort((a, b) => a.path.localeCompare(b.path) || (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+            if (activated.length > 12)
+                activated.pop();
+        }
+        const coverage = (index, indexGeneration, revision) => {
+            assertFresh();
+            let verified = this.situationCoverage.get(index);
+            if (!verified || verified.generation !== generation || verified.indexGeneration !== indexGeneration) {
+                // Reconcile revision-only metadata once per pair of index generations.
+                // Warm requests do not enumerate ordinary metadata or hydrate bodies.
+                // The memo stores discrepancies, never caller admission decisions.
+                const mismatches = [];
+                for (const path of this.situationEligible)
+                    if (revision(path) !== this.entries.get(path)?.revision)
+                        mismatches.push(path);
+                const key = verified?.key ?? `situation-coverage:${++this.situationCoverageId}`;
+                verified = { generation, indexGeneration, mismatches, key };
+                this.situationCoverage.set(index, verified);
+                const current = verified;
+                derivedCacheBudget.register(this.cacheOwner, key, 512 + mismatches.reduce((bytes, path) => bytes + 64 + path.length * 2, 0), () => {
+                    if (this.situationCoverage.get(index) === current)
+                        this.situationCoverage.delete(index);
+                });
+            }
+            else
+                derivedCacheBudget.touch(this.cacheOwner, verified.key);
+            // Missing hidden or condition-ineligible notes cannot change completeness.
+            return !verified.mismatches.some(canSelect);
+        };
+        return { activated, diagnostics, canSelect, assertFresh, coverage,
+            revision: (path) => canSelect(path) ? this.entries.get(path)?.revision : undefined,
+        };
+    }
     async list(filters, pathPrefix = '') {
         await this.ensureFresh();
         const hasFilters = Boolean(filters && Object.keys(filters).length > 0);
         const normalizedPrefix = normalizePath(pathPrefix);
         if (!hasFilters && !normalizedPrefix)
-            return [...this.entries.values()];
+            return [...this.entries.values()].filter(entry => this.pathFilter.isAllowed(entry.path));
         const cacheKey = JSON.stringify([normalizedPrefix, filters || {}]);
         const cached = this.queryCache.get(cacheKey);
         if (cached && cached.expiresAt > Date.now()) {
             this.queryCache.delete(cacheKey);
             this.queryCache.set(cacheKey, cached);
             derivedCacheBudget.touch(this.cacheOwner, `query:${cacheKey}`);
-            return cached.paths.map(path => this.entries.get(path)).filter((entry) => entry !== undefined);
+            return cached.paths.filter(path => this.pathFilter.isAllowed(path)).map(path => this.entries.get(path)).filter((entry) => entry !== undefined);
         }
         if (cached) {
             this.queryCache.delete(cacheKey);
@@ -255,7 +349,7 @@ export class VaultMetadataIndex {
         }
         const candidates = this.candidatePaths(filters || {}, normalizedPrefix);
         if (!candidates)
-            return [...this.entries.values()];
+            return [...this.entries.values()].filter(entry => this.pathFilter.isAllowed(entry.path));
         const paths = [...candidates];
         if (paths.length <= QUERY_CACHE_MAX_ROWS) {
             const entry = { expiresAt: Date.now() + QUERY_CACHE_TTL_MS, paths };
@@ -277,7 +371,7 @@ export class VaultMetadataIndex {
                 derivedCacheBudget.remove(this.cacheOwner, `query:${oldest.value}`);
             }
         }
-        return paths.map(path => this.entries.get(path)).filter((entry) => entry !== undefined);
+        return paths.filter(path => this.pathFilter.isAllowed(path)).map(path => this.entries.get(path)).filter((entry) => entry !== undefined);
     }
     /** Count metadata candidates without sorting or reading note bodies. */
     async count(filters = {}, pathPrefix = '', canAccessPath = () => true, predicate = () => true) {
@@ -285,7 +379,7 @@ export class VaultMetadataIndex {
         const candidates = this.candidatePaths(filters, normalizePath(pathPrefix));
         let count = 0;
         for (const entry of this.iterateCandidateEntries(candidates)) {
-            if (canAccessPath(entry.path) && predicate(entry))
+            if (this.pathFilter.isAllowed(entry.path) && canAccessPath(entry.path) && predicate(entry))
                 count += 1;
         }
         return count;
@@ -324,7 +418,7 @@ export class VaultMetadataIndex {
             this.sortedQueryCache.delete(cacheKey);
             this.sortedQueryCache.set(cacheKey, cached);
             derivedCacheBudget.touch(this.cacheOwner, `sorted:${cacheKey}`);
-            return cached;
+            return cached.filter(entry => this.pathFilter.isAllowed(entry.path));
         }
         const entries = [...await this.list(filters, pathPrefix)].sort((a, b) => compareEntries(a, b, sortBy, sortOrder));
         if (entries.length <= SORTED_QUERY_CACHE_MAX_ROWS) {
@@ -535,6 +629,7 @@ export class VaultMetadataIndex {
     }
     async close() {
         this.closed = true;
+        this.clearQueryCaches();
         this.catalogUnsubscribe?.();
         this.watcher?.close();
         this.watcher = undefined;
@@ -548,6 +643,8 @@ export class VaultMetadataIndex {
         this.authorityPairIndex.clear();
         derivedCacheBudget.clearOwner(this.cacheOwner);
     }
+    /** Drain pending source changes without materializing a metadata result. */
+    async prepareRead() { await this.ensureFresh(); }
     async ensureFresh() {
         await this.ready;
         this.startWatcher();
@@ -759,9 +856,13 @@ export class VaultMetadataIndex {
             // Full reconciliation is intentionally stat-only for unchanged notes.
             // This keeps repeated pulse/community reads from reopening and reparsing
             // the whole vault while preserving the existing metadata object.
+            if (!this.pathFilter.isAllowed(normalized))
+                return undefined;
             if (existing && existing.size === size && existing.mtimeMs === mtimeMs)
                 return existing;
             const source = await this.vaultIo.readUtf8Metadata(fullPath);
+            if (!this.pathFilter.isAllowed(normalized))
+                return undefined;
             return {
                 path: normalized,
                 frontmatter: this.frontmatter.parse(source.header).frontmatter,
@@ -782,11 +883,7 @@ export class VaultMetadataIndex {
     }
     async loadSnapshot() {
         try {
-            const snapshotPath = join(this.vaultPath, METADATA_SNAPSHOT_FILE);
-            const info = await stat(snapshotPath);
-            if (!info.isFile() || info.size > METADATA_SNAPSHOT_MAX_BYTES)
-                return;
-            const parsed = decodeMetadataSnapshot(await readFile(snapshotPath));
+            const parsed = decodeMetadataSnapshot(await this.snapshotStorage.read(METADATA_SNAPSHOT_FILE, { maxBytes: METADATA_SNAPSHOT_MAX_BYTES }));
             if (!parsed)
                 return;
             for (const entry of parsed) {
@@ -801,7 +898,7 @@ export class VaultMetadataIndex {
         }
     }
     scheduleSnapshotSave() {
-        if (this.closed)
+        if (this.closed || !this.snapshotStorage.cacheDir)
             return;
         this.snapshotPending = true;
         if (this.snapshotTimer)
@@ -813,22 +910,18 @@ export class VaultMetadataIndex {
         this.snapshotTimer.unref?.();
     }
     async flushSnapshot() {
-        if (this.closed || this.snapshotWrite || !this.snapshotPending)
+        if (this.closed || this.snapshotWrite || !this.snapshotPending || !this.snapshotStorage.cacheDir)
             return;
         this.snapshotPending = false;
         let encoded;
         try {
-            encoded = encodeMetadataSnapshot([...this.entries.values()]);
+            encoded = encodeMetadataSnapshot([...this.entries.values()].filter(entry => this.pathFilter.isAllowed(entry.path)));
         }
         catch {
             return;
         }
         this.snapshotWrite = (async () => {
-            const snapshotPath = join(this.vaultPath, METADATA_SNAPSHOT_FILE);
-            await mkdir(join(this.vaultPath, '.mcpvault'), { recursive: true });
-            const temporaryPath = `${snapshotPath}.${process.pid}.tmp`;
-            await writeFile(temporaryPath, encoded);
-            await rename(temporaryPath, snapshotPath);
+            await this.snapshotStorage.write(METADATA_SNAPSHOT_FILE, encoded, METADATA_SNAPSHOT_MAX_BYTES);
         })().catch(() => {
             // The snapshot is optional acceleration state; Markdown remains authoritative.
         });
@@ -843,6 +936,9 @@ export class VaultMetadataIndex {
     }
     rebuildFilterIndex() {
         this.filterIndex.clear();
+        this.situationEligible.clear();
+        this.situationOrdinary.clear();
+        this.situationGeneration++;
         for (const entry of this.entries.values())
             this.addFilterEntry(entry);
     }
@@ -914,6 +1010,12 @@ export class VaultMetadataIndex {
         }
     }
     addFilterEntry(entry) {
+        this.situationGeneration++;
+        if (isSituationMetadata(entry.frontmatter, entry.path)) {
+            this.situationEligible.add(entry.path);
+            if (entry.frontmatter.context_rules === undefined)
+                this.situationOrdinary.add(entry.path);
+        }
         for (const [key, values] of flattenFilterValues(entry.frontmatter)) {
             for (const value of values) {
                 const encoded = encodeFilterValue(value);
@@ -932,6 +1034,9 @@ export class VaultMetadataIndex {
         }
     }
     removeFilterEntry(entry) {
+        this.situationGeneration++;
+        this.situationEligible.delete(entry.path);
+        this.situationOrdinary.delete(entry.path);
         for (const [key, values] of flattenFilterValues(entry.frontmatter)) {
             const valueIndex = this.filterIndex.get(key);
             if (!valueIndex)

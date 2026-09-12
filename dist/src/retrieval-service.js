@@ -74,6 +74,8 @@ export class RetrievalService {
         const safe = {
             query: params.query, limit, canAccessPath: admitted, pathPrefix: prefix === '.' ? '' : prefix,
             ...(params.candidateRevisions && { candidateRevisions: params.candidateRevisions }),
+            ...(params.candidateRevision && { candidateRevision: params.candidateRevision }),
+            ...(params.candidateCoverage && { candidateCoverage: params.candidateCoverage }),
         };
         for (const key of ['searchContent', 'searchFrontmatter', 'caseSensitive', 'excludePaths']) {
             if (params[key] !== undefined)

@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { gunzipSync } from 'node:zlib';
 import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
-import { createServer } from './createServer.js';
+import { createServer } from '../tests/server-fixture.js';
 import { AgentPulseService } from './agent-pulse.js';
 import { AgentTaskService } from './agent-tasks.js';
 import { FileSystemService } from './filesystem.js';
@@ -15,14 +15,18 @@ import { ScopeAccessPolicy } from './scope-access.js';
 import { ScopeAuthService } from './scope-auth.js';
 import { getAgentPulseTools } from './agent-pulse-tools.js';
 import { SkillEvolutionService } from './skill-evolution.js';
+import { derivedStorageFixture } from '../tests/derived-storage-fixture.js';
 
 let vault: string;
+let snapshotHost: Awaited<ReturnType<typeof derivedStorageFixture>> | undefined;
 
 beforeEach(async () => {
   vault = await mkdtemp(join(tmpdir(), 'mcpvault-pulse-'));
 });
 
 afterEach(async () => {
+  vi.unstubAllEnvs();
+  await snapshotHost?.close(); snapshotHost = undefined;
   await rm(vault, { recursive: true, force: true });
 });
 
@@ -40,6 +44,7 @@ async function json(client: Client, name: string, arguments_: Record<string, unk
 }
 
 function unitPulseService(options: {
+  ownerConsent?: boolean;
   workState?: Record<string, unknown>;
   activePosts?: Array<Record<string, unknown>>;
   notifications?: Array<Record<string, unknown>>;
@@ -69,8 +74,28 @@ function unitPulseService(options: {
       reviewPacket: options.reviewPacket,
       synthesisCandidates: options.synthesisCandidates || (async () => ({ items: [], total: 0, truncated: false })),
     } as any,
+    undefined, undefined, undefined, undefined, undefined,
+    // Routing tests explicitly admit optional activity; production defaults
+    // remain fail-closed and are separately exercised without this fixture.
+    async () => options.ownerConsent === false ? undefined : ({
+      run: async <T>(reader: () => Promise<T>) => reader(),
+      revalidate: async () => {}, assertFresh: () => {},
+    }),
   );
 }
+
+test('unit routing without owner consent skips optional notification reads', async () => {
+  let notificationReads = 0;
+  const pulse = unitPulseService({ ownerConsent: false,
+    notifications: [{ sourceType: 'blog_post', sourceId: 'unapproved-post' }],
+    onNotificationList: () => { notificationReads++; },
+    reviewPacket: async () => ({}),
+  });
+  const result = await pulse.get({ principal: { accountId: 'reader', modelId: 'codex', role: 'model' } as any });
+  expect(notificationReads).toBe(0);
+  expect(result.coverage.notifications).toEqual({ state: 'skipped' });
+  expect(JSON.stringify(result)).not.toContain('unapproved-post');
+});
 
 test('anonymous pulse routes to complete conditional onboarding without demanding registration', async () => {
   const { server, client } = await setup();
@@ -1306,6 +1331,8 @@ test('watch notifications still resolve through indexed public activity', async 
 });
 
 test('persists and restores the public discovery snapshot after restart', async () => {
+  snapshotHost = await derivedStorageFixture(vault);
+  vi.stubEnv('MCPVAULT_DERIVED_CACHE_DIR', snapshotHost.host);
   const first = await setup();
   try {
     const registration = await json(first.client, 'register_scope_account', { accountId: 'snapshot-agent', modelId: 'codex', password: 'snapshot-agent-password-123' });
@@ -1314,12 +1341,8 @@ test('persists and restores the public discovery snapshot after restart', async 
       expectedRevision: 'missing', accessToken: registration.value.accessToken,
     });
     await json(first.client, 'get_agent_pulse', { accessToken: registration.value.accessToken });
-    let snapshot: Buffer | undefined;
-    for (let attempt = 0; attempt < 25 && !snapshot; attempt += 1) {
-      try { snapshot = await readFile(join(vault, '.mcpvault', 'public-discovery.snapshot.bin')); } catch { /* save is debounced/background */ }
-      if (!snapshot) await new Promise(resolve => setTimeout(resolve, 20));
-    }
-    expect(snapshot).toBeDefined();
+    await first.server.close(); // Flush optional persistence before checking the restart artifact.
+    const snapshot = await readFile(snapshotHost.path('public-discovery.snapshot.bin'));
     expect(gunzipSync(snapshot!).subarray(0, 8).toString('ascii')).toBe('MCPVPUB1');
     expect(gunzipSync(snapshot!).readUInt32LE(8)).toBe(2);
   } finally {
@@ -1336,4 +1359,4 @@ test('persists and restores the public discovery snapshot after restart', async 
     await second.client.close();
     await second.server.close();
   }
-});
+}, 30000);

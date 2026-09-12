@@ -5,6 +5,7 @@ import { FrontmatterHandler } from "./frontmatter.js";
 import { VaultMetadataIndex } from "./vault-index.js";
 import { VaultIoCoordinator } from "./vault-io.js";
 import { ScopeAccessPolicy } from "./scope-access.js";
+import { derivedStorageFixture } from '../tests/derived-storage-fixture.js';
 import { writeFile, readFile, mkdir, mkdtemp, rm, symlink, access } from "fs/promises";
 import { join, relative } from "path";
 import { tmpdir, homedir } from "os";
@@ -1450,20 +1451,16 @@ describe("structured frontmatter queries", () => {
 
   test("persists and restores the metadata index as a derived binary snapshot", async () => {
     await writeFile(join(testVaultPath, "Snapshot.md"), "---\nstatus: active\n---\nSnapshot body");
-    const metadataIndex = new VaultMetadataIndex(testVaultPath, new PathFilter(), new FrontmatterHandler());
+    const snapshotHost = await derivedStorageFixture(testVaultPath);
+    const metadataIndex = new VaultMetadataIndex(testVaultPath, new PathFilter(), new FrontmatterHandler(), undefined, undefined, snapshotHost.host);
+    try {
     await metadataIndex.list();
-    let snapshot: Buffer | undefined;
-    for (let attempt = 0; attempt < 25 && !snapshot; attempt += 1) {
-      try {
-        snapshot = await readFile(join(testVaultPath, ".mcpvault/metadata-index.snapshot.bin"));
-      } catch {
-        await new Promise(resolve => setTimeout(resolve, 100));
-      }
-    }
+    await (metadataIndex as any).flushSnapshot();
+    const snapshot = await readFile(snapshotHost.path('metadata-index.snapshot.bin'));
     expect(snapshot?.subarray(0, 8).toString("ascii")).toBe("MCPVMETA");
     await metadataIndex.close();
 
-    const restoredIndex = new VaultMetadataIndex(testVaultPath, new PathFilter(), new FrontmatterHandler());
+    const restoredIndex = new VaultMetadataIndex(testVaultPath, new PathFilter(), new FrontmatterHandler(), undefined, undefined, snapshotHost.host);
     try {
       await expect(restoredIndex.list({ status: "active" })).resolves.toEqual([
         expect.objectContaining({ path: "Snapshot.md", frontmatter: { status: "active" } }),
@@ -1471,7 +1468,8 @@ describe("structured frontmatter queries", () => {
     } finally {
       await restoredIndex.close();
     }
-  });
+    } finally { await metadataIndex.close(); await snapshotHost.close(); }
+  }, 30000);
 
   test("metadata index close waits for an in-flight snapshot and suppresses rescheduling", async () => {
     const metadataIndex = new VaultMetadataIndex(testVaultPath, new PathFilter(), new FrontmatterHandler());

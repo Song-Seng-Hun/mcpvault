@@ -27,22 +27,26 @@ vi.mock('@huggingface/transformers', () => ({
 
 let root: string;
 let services: SemanticSearchService[];
-async function service(): Promise<any> {
+let snapshotHosts: Array<Awaited<ReturnType<typeof import('../tests/derived-storage-fixture.js').derivedStorageFixture>>>;
+async function service(privateStorage = false): Promise<any> {
   const { SemanticSearchService } = await import('./semantic-search.js');
   const path = join(root, String(services.length)); await mkdir(path);
-  const instance = new SemanticSearchService(path, new PathFilter()); services.push(instance);
+  const host = privateStorage ? await (await import('../tests/derived-storage-fixture.js')).derivedStorageFixture(path) : undefined;
+  if (host) snapshotHosts.push(host);
+  const instance = new SemanticSearchService(path, new PathFilter(), undefined, undefined, undefined, undefined, host?.host); services.push(instance);
   await Promise.all([(instance as any).manifestReady, (instance as any).pendingReady]);
   return instance;
 }
 beforeEach(async () => {
   vi.resetModules(); vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
   Object.assign(model, { loads: 0, disposed: 0, active: 0, peak: 0, calls: [], load: undefined, run: undefined });
-  services = []; root = await mkdtemp(join(tmpdir(), 'mcpvault-inference-'));
+  services = []; snapshotHosts = []; root = await mkdtemp(join(tmpdir(), 'mcpvault-inference-'));
 });
 afterEach(async () => {
   for (const instance of services) await instance.close();
   await vi.advanceTimersByTimeAsync(60001);
   vi.useRealTimers(); vi.restoreAllMocks();
+  for (const host of snapshotHosts) await host.close();
   const target = await realpath(root), local = relative(await realpath(tmpdir()), target);
   if (!local || local.startsWith('..') || isAbsolute(local) || !basename(target).startsWith('mcpvault-inference-')) throw new Error('Unsafe test cleanup');
   await rm(target, { recursive: true, force: true });
@@ -83,7 +87,7 @@ test('single-input batch fallback runs within the same admission without deadloc
 });
 
 test('busy foreground inference is temporary and does not disable later semantic searches', async () => {
-  const a = await service(), { SemanticInferenceBusyError } = await import('./semantic-inference-gate.js');
+  const a = await service(true), { SemanticInferenceBusyError } = await import('./semantic-inference-gate.js');
   vi.spyOn(a, 'acquireIndexLease').mockResolvedValue(false);
   vi.spyOn(a, 'getTableNames').mockResolvedValue(new Set(['chunks_global']));
   const embed = vi.spyOn(a, 'embedQuery').mockRejectedValue(new SemanticInferenceBusyError());

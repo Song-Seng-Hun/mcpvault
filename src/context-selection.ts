@@ -4,30 +4,30 @@ import type { ScopeAccessPolicy } from './scope-access.js';
 import type { ScopePrincipal } from './scope-auth.js';
 import type { QueryNotesCursor } from './types.js';
 import type { RetrievalService, RetrievalHit } from './retrieval-service.js';
-import { isModerationHidden } from './moderation-policy.js';
 import { contextRuleState, type ContextIntent } from './context-rules.js';
 import { buildMarkdownLiteralMask } from './backlinks.js';
 import { selectContextPassages, type ContextPassageSelection } from './context-passages.js';
-import { isFictionDomain } from './fiction-domain.js';
+import { isSituationMetadata } from './situation-metadata.js';
+export { isSituationMemory } from './situation-metadata.js';
 
 export interface SituationOptions { context: string; intent: ContextIntent; explain: boolean }
-export function isSituationMemory(fm: Record<string, any>): boolean {
-  return Boolean(fm.memory_entries) || ['core', 'episodic'].includes(fm.memory_role)
-    || ['diary', 'log', 'reflection'].includes(fm.note_kind)
-    || ['diary', 'log', 'reflection', 'journal_entry'].includes(fm.mcpvault_type);
-}
 /** Metadata discovery reuses existing indexes. No prompt execution, body hydration,
  * cross-request cache, or private-memory aggregation. Eligibility precedes top-k. */
 export async function selectSituationCandidates(fs: FileSystemService, access: ScopeAccessPolicy, retrieval: RetrievalService,
   query: string, options: SituationOptions, principal?: ScopePrincipal, semantic = false) {
   const allowed = new Set<string>(); const revisions = new Map<string, string>();
   const activated: RetrievalHit[] = [];
-  const diagnostics: Array<{ physicalPath: string; revision: string; reason: string }> = [];
+  let diagnostics: Array<{ physicalPath: string; revision: string; reason: string }> = [];
   const canAccess = (p: string) => access.canAccessPhysicalPath(p, principal) && retrieval.skillDiscoveryAllowed(p);
+  const indexed = await fs.prepareSituation(`${query}\n${options.context}`, options.intent, options.explain, canAccess);
+  if (indexed) {
+    diagnostics = indexed.diagnostics;
+    activated.push(...indexed.activated.map(n => ({ p: n.path, physicalPath: n.path, t: '', ex: '', mc: 0, rv: n.revision, why: ['retrieval_cue_match'] })));
+  }
   let after: QueryNotesCursor | undefined; let examined = 0;
-  do {
+  if (!indexed) do {
     const batch = await fs.queryNotes({ limit: 500, includeContent: false, includeTotal: false, sortBy: 'path', ...(after && { after }) }, canAccess,
-      n => !isModerationHidden(n.frontmatter) && !isFictionDomain(n.frontmatter, n.path) && !n.frontmatter.mcpvault_type && !isSituationMemory(n.frontmatter));
+      n => isSituationMetadata(n.frontmatter, n.path));
     for (const n of batch.notes) {
       if (++examined > 10000) throw guidanceError(new Error('Situation metadata window exhausted'), 'guid-cb08ef637cea601e');
       const state = contextRuleState(n.frontmatter.context_rules, `${query}\n${options.context}`, options.intent);
@@ -44,7 +44,13 @@ export async function selectSituationCandidates(fs: FileSystemService, access: S
     if (batch.truncated && !after) throw guidanceError(new Error('Situation metadata changed'), 'guid-cb0beec6f8a0e1c5');
   } while (after);
   // Reserve eight candidate slots for explicit safety/evidence relations.
-  const outcome = await retrieval.memoryCandidates({ query, limit: 12, ...(principal && { principal }), semantic, canAccessPath: p => allowed.has(p) && canAccess(p), candidateRevisions: revisions });
+  const outcome = await retrieval.memoryCandidates({ query, limit: 12, ...(principal && { principal }), semantic,
+    ...(indexed ? { canAccessPath: indexed.canSelect, candidateRevision: indexed.revision, candidateCoverage: indexed.coverage }
+      : { canAccessPath: (p: string) => allowed.has(p) && canAccess(p), candidateRevisions: revisions }) });
+  indexed?.assertFresh();
+  // Explicit activations and diagnostics also need current caller admission.
+  for (let i = activated.length - 1; i >= 0; i--) if (!canAccess(activated[i]!.p)) activated.splice(i, 1);
+  diagnostics = diagnostics.filter(item => canAccess(item.physicalPath));
   // Put up to two explicit activations inside the existing retrieval budget and
   // early enough for downstream bounded hydration. Keep richer retrieved hits
   // when available; all unused reserved slots return to ordinary ranking.

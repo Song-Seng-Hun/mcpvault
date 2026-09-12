@@ -11,6 +11,10 @@ export interface EnterpriseEmployee {
     sharedMemoryEnabled: boolean;
     createdAt: string;
     disabledAt?: string;
+    /** Verified host-admin memberships; absence grants no department access. */
+    departmentIds?: string[];
+    defaultDepartmentId?: string;
+    departmentRevision?: number;
 }
 export interface EnterpriseRuntime {
     runtimeId: string;
@@ -71,6 +75,15 @@ export declare class EnterpriseRegistry {
     createEmployee(params: {
         userId: string;
         sharedMemoryEnabled?: boolean;
+        departmentIds?: string[];
+        defaultDepartmentId?: string;
+    }): Promise<EnterpriseEmployee>;
+    /** Host administrator API only. Replaces memberships; an omitted default clears it. */
+    updateEmployeeDepartments(params: {
+        userId: string;
+        departmentIds: string[];
+        defaultDepartmentId?: string;
+        expectedDepartmentRevision: number;
     }): Promise<EnterpriseEmployee>;
     disableEmployee(params: {
         userId: string;

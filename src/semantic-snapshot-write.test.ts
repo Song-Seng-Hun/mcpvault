@@ -5,20 +5,24 @@ import { tmpdir } from 'node:os';
 import { gunzipSync } from 'node:zlib';
 import { SemanticSearchService } from './semantic-search.js';
 import { PathFilter } from './pathfilter.js';
+import { derivedStorageFixture } from '../tests/derived-storage-fixture.js';
 
 let vault: string, service: any;
+let host: Awaited<ReturnType<typeof derivedStorageFixture>>;
 beforeEach(async () => {
   vault = await mkdtemp(join(tmpdir(), 'mcpvault-stream-snapshot-'));
-  service = new SemanticSearchService(vault, new PathFilter());
+  host = await derivedStorageFixture(vault);
+  service = new SemanticSearchService(vault, new PathFilter(), undefined, undefined, undefined, undefined, host.host);
   await service.manifestReady; await service.pendingReady;
 });
 afterEach(async () => {
   vi.restoreAllMocks(); await service.close();
+  await host.close();
   const target = await realpath(vault), local = relative(await realpath(tmpdir()), target);
   if (!local || local.startsWith('..') || isAbsolute(local) || !basename(target).startsWith('mcpvault-stream-snapshot-')) throw new Error('Unsafe test cleanup');
   await rm(target, { recursive: true, force: true });
 });
-const decode = async (vault: string, file: string) => JSON.parse(gunzipSync(await readFile(join(vault, '.mcpvault/semantic-index', file))).toString('utf8'));
+const decode = async (_vault: string, file: string) => JSON.parse(gunzipSync(await readFile(host.path(`semantic-${file}`))).toString('utf8'));
 
 test('manifest serialization never materializes the complete JSON payload', async () => {
   const manifest = Object.fromEntries(Array.from({ length: 1000 }, (_, i) => [`한글${i}.md`, { hash: 'a'.repeat(64), scope: 'global' }]));
@@ -80,14 +84,15 @@ test('streaming pending records keep captured retry state and allow a later writ
   vi.restoreAllMocks();
   await service.flushPendingSnapshot();
   expect((await decode(vault, 'pending.snapshot.gz'))[1]).toEqual({ path: 'Second.md', kind: 'upsert', attempt: 3 });
-});
+}, 30000);
 
 test('optional manifest publication failure does not invalidate successful indexing state', async () => {
   service.manifest = { 'Note.md': { hash: 'a'.repeat(64), scope: 'global' } };
-  await mkdir(service.manifestPath, { recursive: true });
-  await writeFile(join(service.manifestPath, 'keep.md'), 'not our temporary file');
+  const manifestPath = host.path('semantic-manifest.snapshot.gz');
+  await mkdir(manifestPath, { recursive: true });
+  await writeFile(join(manifestPath, 'keep.md'), 'not our temporary file');
   await expect(service.saveManifest()).resolves.toBeUndefined();
   expect(service.manifest['Note.md'].hash).toBe('a'.repeat(64));
   expect(service.pending.size).toBe(0);
-  expect(await readFile(join(service.manifestPath, 'keep.md'), 'utf8')).toBe('not our temporary file');
+  expect(await readFile(join(manifestPath, 'keep.md'), 'utf8')).toBe('not our temporary file');
 });

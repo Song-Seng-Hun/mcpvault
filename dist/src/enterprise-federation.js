@@ -1,8 +1,12 @@
 import { guidanceError, guidanceText } from './guidance-runtime.js';
 import { createHash } from 'node:crypto';
+import { isDeepStrictEqual } from 'node:util';
 import { readdir } from 'node:fs/promises';
 import { federationStorageName, ensureFederationDirectory, readFederationFile, writeFederationFileAtomic, removeFederationFile } from './public-federation-storage.js';
-import { join, resolve } from 'node:path';
+import { join, resolve, relative } from 'node:path';
+import { PathFilter } from './pathfilter.js';
+import { activeDocumentStorageContext, assertEnterpriseStorageAccess, prepareDocumentWrite } from './enterprise-storage-context.js';
+import { normalizeScopeId } from './scopes.js';
 import { makePublicActorId, makePublicObjectId, validatePublicPublishInput, } from './public-federation.js';
 import { PublicFederationClient } from './public-federation-http.js';
 import { PublicFederationReplica } from './public-federation-replica.js';
@@ -127,6 +131,7 @@ export class EnterpriseFederationAdapter {
     social;
     directory;
     config;
+    pathFilter;
     statePath;
     intentsRoot;
     reader;
@@ -139,6 +144,7 @@ export class EnterpriseFederationAdapter {
         this.social = options.social;
         this.directory = options.directory;
         this.config = options.config;
+        this.pathFilter = options.pathFilter ?? new PathFilter();
         this.statePath = join(this.vaultPath, '.mcpvault', 'public-federation', 'enterprise-state.json');
         this.intentsRoot = join(this.vaultPath, '.mcpvault', 'public-federation', 'enterprise-intents');
         const readerClient = new PublicFederationClient({ baseUrl: this.config.baseUrl });
@@ -149,13 +155,90 @@ export class EnterpriseFederationAdapter {
             trustedHubPublicKey: this.config.trustedHubPublicKey,
             storageNamespace: 'host',
             manageLocalProjection: false,
+            pathFilter: this.pathFilter,
         });
     }
-    readBounded(path, maxBytes, label) {
-        return readFederationFile(this.vaultPath, path, { maxBytes, label });
+    logicalPublicPath(path) {
+        const logical = relative(this.vaultPath, path).replace(/\\/g, '/');
+        return logical.startsWith('PublicCommunity/') ? logical : undefined;
     }
-    writeAtomic(path, content) {
-        return writeFederationFileAtomic(this.vaultPath, path, content, { maxBytes: 2 * 1024 * 1024 });
+    assertPublicPath(logical, write = false) {
+        activeDocumentStorageContext()?.assertFresh();
+        if (!this.pathFilter.isAllowed(logical))
+            throw new Error('Federation destination unavailable');
+        assertEnterpriseStorageAccess(logical, write);
+    }
+    async preparePublicWrite(path) {
+        const logical = this.logicalPublicPath(path);
+        if (!logical)
+            throw new Error('Federation destination unavailable');
+        this.assertPublicPath(logical, true);
+        await prepareDocumentWrite(logical);
+        this.assertPublicPath(logical, true);
+    }
+    async readBounded(path, maxBytes, label) {
+        const logical = this.logicalPublicPath(path);
+        if (logical)
+            this.assertPublicPath(logical);
+        const result = await readFederationFile(this.vaultPath, path, { maxBytes, label, ...(logical && { ownerPath: logical }) });
+        if (logical)
+            this.assertPublicPath(logical);
+        return result;
+    }
+    async writeAtomic(path, content) {
+        const logical = this.logicalPublicPath(path);
+        if (logical)
+            await this.preparePublicWrite(path);
+        return writeFederationFileAtomic(this.vaultPath, path, content, { maxBytes: 2 * 1024 * 1024,
+            ...(logical && { ownerPath: logical, beforeCommit: () => this.preparePublicWrite(path) }) });
+    }
+    remoteCommentPath(objectId) {
+        if (!/^comment:[a-z0-9][a-z0-9._-]*:[a-z0-9][a-z0-9._-]*:[a-z0-9][a-z0-9._-]*$/.test(objectId))
+            throw new Error('Federation destination unavailable');
+        return join(this.vaultPath, 'PublicCommunity', 'Local', 'FederatedComments', `${federationStorageName(objectId)}.md`);
+    }
+    assertImportedSource(objectId) {
+        const match = /^(post|comment):([a-z0-9][a-z0-9._-]*):[a-z0-9][a-z0-9._-]*:[a-z0-9][a-z0-9._-]*$/.exec(objectId);
+        if (!match)
+            throw new Error('Federation source unavailable');
+        this.assertPublicPath(`PublicCommunity/Imported/${match[2]}/${match[1] === 'post' ? 'Posts' : 'Comments'}/${federationStorageName(objectId)}.md`);
+    }
+    async authorizeIntent(intent) {
+        activeDocumentStorageContext()?.assertFresh();
+        if (intent.local.remote !== true) {
+            let logical;
+            const args = isRecord(intent.local.serviceArgs) ? intent.local.serviceArgs : {};
+            if (intent.operation === 'profile') {
+                logical = `PublicCommunity/Local/Agents/agents/${normalizeScopeId(intent.identity.agentId, 'agentId')}.md`;
+            }
+            else {
+                const slug = normalizeScopeId(String(args.slug ?? intent.local.slug ?? ''), 'slug');
+                const postPath = `PublicCommunity/Local/Posts/${slug}.md`;
+                if (intent.operation === 'post' || intent.operation === 'delete-post')
+                    logical = postPath;
+                else {
+                    this.assertPublicPath(postPath);
+                    const commentId = normalizeScopeId(String(args.commentId ?? ''), 'commentId');
+                    logical = `PublicCommunity/Local/Comments/${slug}/${commentId}.md`;
+                    if (intent.input.type === 'comment' && intent.input.replyTo) {
+                        const parent = normalizeScopeId(String(args.replyTo ?? ''), 'replyTo');
+                        this.assertPublicPath(`PublicCommunity/Local/Comments/${slug}/${parent}.md`);
+                    }
+                }
+            }
+            await this.preparePublicWrite(join(this.vaultPath, logical));
+            return;
+        }
+        this.assertImportedSource(String(intent.local.postId ?? intent.local.slug));
+        if (intent.input.type === 'comment' && intent.input.replyTo)
+            this.assertImportedSource(intent.input.replyTo);
+        if (intent.operation !== 'comment')
+            this.assertImportedSource(this.targetObjectId(intent.input));
+        const path = this.remoteCommentPath(this.targetObjectId(intent.input));
+        // A persisted sidecar is not authority to redirect replay to another file.
+        if (intent.local.path !== path)
+            throw new Error('Federation destination unavailable');
+        await this.preparePublicWrite(path);
     }
     async load() {
         if (this.loaded)
@@ -215,13 +298,14 @@ export class EnterpriseFederationAdapter {
                 trustedHubPublicKey: this.config.trustedHubPublicKey,
                 storageNamespace: `actor-${federationStorageName(key)}`,
                 manageLocalProjection: false,
+                pathFilter: this.pathFilter,
             });
             this.publishers.set(key, replica);
         }
         return replica;
     }
-    async ensureActor(identity, actorId) {
-        await this.publisher(identity).publish({ type: 'actor', actorId, expectedRevision: 0 }, `actor-v1-${sha256(actorId).slice(0, 24)}`);
+    async ensureActor(identity, actorId, intent) {
+        await this.publisher(identity).publish({ type: 'actor', actorId, expectedRevision: 0 }, `actor-v1-${sha256(actorId).slice(0, 24)}`, () => this.authorizeIntent(intent));
     }
     intentPath(intent) {
         return join(this.intentsRoot, federationStorageName(intent.actorId), `${sha256(intent.id)}.md`);
@@ -229,6 +313,7 @@ export class EnterpriseFederationAdapter {
     async prepareIntent(intent) {
         const value = { version: 1, stage: 'prepared', createdAt: new Date().toISOString(), ...intent };
         validatePublicPublishInput(value.input, value.identity);
+        await this.authorizeIntent(value);
         const path = this.intentPath(value);
         try {
             const existing = parseIntent(await this.readBounded(path, 128 * 1024, 'enterprise federation intent'));
@@ -244,14 +329,18 @@ export class EnterpriseFederationAdapter {
         return { value, path };
     }
     async commitAndPublish(intent, path) {
+        await this.authorizeIntent(intent);
         const committed = { ...intent, stage: 'committed' };
         await this.writeAtomic(path, intentMarkdown(committed));
-        const result = await this.publisher(intent.identity).publish(intent.input, intent.idempotencyKey);
+        const result = await this.publisher(intent.identity).publish(intent.input, intent.idempotencyKey, () => this.authorizeIntent(intent));
         const objectId = this.targetObjectId(intent.input);
         this.state.revisions[objectId] = federationRevision(intent.input);
         (this.state.deliveries ||= {})[objectId] = result.status;
         await this.save();
-        await removeFederationFile(this.vaultPath, path);
+        // Retain the source/destination provenance until delivery. A raw outbox
+        // entry alone is not permission for a later, differently scoped request.
+        if (result.status === 'published')
+            await removeFederationFile(this.vaultPath, path);
         return result;
     }
     targetObjectId(input) {
@@ -266,7 +355,6 @@ export class EnterpriseFederationAdapter {
     async publishProfile(args, principalInput) {
         const { principal, identity, actorId } = this.authenticated(principalInput, 'profile');
         const localArgs = allowArgs(args, ['displayName', 'bio', 'interests', 'availability', 'expectedRevision']);
-        await this.ensureActor(identity, actorId);
         const objectId = `profile:${identity.origin}:${identity.agentId}`;
         const expectedRevision = this.expectedRevision(objectId);
         const input = expectedRevision === 0
@@ -274,6 +362,7 @@ export class EnterpriseFederationAdapter {
             : { type: 'update', objectId: this.mutationId('update', identity, localArgs), actorId, targetObjectId: objectId, expectedRevision, displayName: text(localArgs.displayName ?? principal.agentId, 'displayName'), ...(localArgs.bio !== undefined && String(localArgs.bio).trim() && { bio: String(localArgs.bio).trim() }) };
         const id = `profile:${actorId}:${sha256(JSON.stringify(localArgs))}`;
         const prepared = await this.prepareIntent({ id, operation: 'profile', actorId, identity, input, idempotencyKey: sha256(id), local: { displayName: localArgs.displayName, bio: localArgs.bio, serviceArgs: localArgs } });
+        await this.ensureActor(identity, actorId, prepared.value);
         let local;
         try {
             local = await this.directory.update({ ...localArgs, principal });
@@ -289,7 +378,6 @@ export class EnterpriseFederationAdapter {
         const localArgs = allowArgs(args, ['slug', 'title', 'content', 'status', 'tags', 'category', 'seriesId', 'seriesTitle', 'seriesOrder', 'relatedPosts', 'duplicateOf', 'feedbackType', 'sourcePaths', 'reproduction', 'proposedChange', 'blockedTask', 'attempted', 'helpWanted', 'environment', 'expectedRevision', 'requestId']);
         if (localArgs.status !== undefined && String(localArgs.status).toLowerCase() !== 'published')
             throw guidanceError(new Error('draft and archived posts are local only and cannot enter public federation'), 'guid-ca6e7668da318029');
-        await this.ensureActor(identity, actorId);
         const slug = text(localArgs.slug, 'slug').toLowerCase();
         const objectId = makePublicObjectId('post', identity.origin, identity.agentId, slug);
         const expectedRevision = this.expectedRevision(objectId);
@@ -301,6 +389,7 @@ export class EnterpriseFederationAdapter {
         const id = `post:${objectId}:${sha256(JSON.stringify(localArgs))}`;
         const serviceArgs = { ...localArgs, status: 'published', ...(requestId && { requestId }), principal };
         const prepared = await this.prepareIntent({ id, operation: 'post', actorId, identity, input, idempotencyKey: sha256(id), local: { slug, title: localArgs.title, content: localArgs.content, ...(requestId && { requestId }), serviceArgs: { ...localArgs, status: 'published', ...(requestId && { requestId }) } } });
+        await this.ensureActor(identity, actorId, prepared.value);
         const local = await this.social.publishBlogPost(serviceArgs);
         const federation = await this.commitAndPublish(prepared.value, prepared.path);
         return { ...local, federation: { status: federation.status, objectId, revision: federationRevision(input) } };
@@ -308,7 +397,6 @@ export class EnterpriseFederationAdapter {
     async deletePost(args, principalInput) {
         const { principal, identity, actorId } = this.authenticated(principalInput, 'publish');
         const localArgs = allowArgs(args, ['slug', 'expectedRevision']);
-        await this.ensureActor(identity, actorId);
         const slug = text(localArgs.slug, 'slug').toLowerCase();
         const objectId = makePublicObjectId('post', identity.origin, identity.agentId, slug);
         const expectedRevision = this.expectedRevision(objectId);
@@ -318,6 +406,7 @@ export class EnterpriseFederationAdapter {
         validatePublicPublishInput(input, identity);
         const id = `delete-post:${objectId}:${expectedRevision}`;
         const prepared = await this.prepareIntent({ id, operation: 'delete-post', actorId, identity, input, idempotencyKey: sha256(id), local: { serviceArgs: localArgs, slug } });
+        await this.ensureActor(identity, actorId, prepared.value);
         const local = await this.social.deleteBlogPost({ ...localArgs, principal });
         const federation = await this.commitAndPublish(prepared.value, prepared.path);
         return { ...local, federation: { status: federation.status, objectId, revision: federationRevision(input) } };
@@ -329,7 +418,6 @@ export class EnterpriseFederationAdapter {
     async publishComment(args, principalInput) {
         const { principal, identity, actorId } = this.authenticated(principalInput, 'comment');
         const localArgs = allowArgs(args, ['slug', 'content', 'replyTo', 'commentId', 'references', 'stance', 'requestId']);
-        await this.ensureActor(identity, actorId);
         const slug = text(localArgs.slug, 'slug').toLowerCase();
         const remote = slug.startsWith('post:');
         const postId = remote ? slug : await this.resolveLocalPostId(slug);
@@ -351,10 +439,13 @@ export class EnterpriseFederationAdapter {
         }
         const input = { type: 'comment', objectId, actorId, expectedRevision: 0, postId, ...(replyTo && { replyTo }), body };
         validatePublicPublishInput(input, identity);
-        const path = remote ? join(this.vaultPath, 'PublicCommunity', 'Local', 'FederatedComments', `${federationStorageName(objectId)}.md`) : undefined;
+        const path = remote ? this.remoteCommentPath(objectId) : undefined;
+        if (path)
+            await this.preparePublicWrite(path);
         const serviceArgs = { ...localArgs, commentId, requestId };
         const id = `comment:${objectId}:${sha256(JSON.stringify({ postId, replyTo, body }))}`;
         const prepared = await this.prepareIntent({ id, operation: 'comment', actorId, identity, input, idempotencyKey: sha256(id), local: { remote, ...(path && { path }), postId, objectId, body, serviceArgs } });
+        await this.ensureActor(identity, actorId, prepared.value);
         let local;
         if (remote) {
             await this.writeAtomic(path, `---\nmcpvault_type: federated_comment\ncomment_id: ${objectId}\npost_id: ${postId}\nauthor: ${actorId}\n---\n${body}\n`);
@@ -369,11 +460,13 @@ export class EnterpriseFederationAdapter {
     async changeComment(args, principalInput, deletion) {
         const { principal, identity, actorId } = this.authenticated(principalInput, 'comment');
         const localArgs = allowArgs(args, deletion ? ['slug', 'commentId', 'expectedRevision'] : ['slug', 'commentId', 'content', 'references', 'stance', 'expectedRevision']);
-        await this.ensureActor(identity, actorId);
         const slug = text(localArgs.slug, 'slug').toLowerCase();
         const rawCommentId = text(localArgs.commentId, 'commentId').toLowerCase();
         const remote = rawCommentId.startsWith('comment:');
         const targetObjectId = remote ? rawCommentId : makePublicObjectId('comment', identity.origin, identity.agentId, rawCommentId);
+        const path = remote ? this.remoteCommentPath(targetObjectId) : undefined;
+        if (path)
+            await this.preparePublicWrite(path);
         const expectedRevision = this.expectedRevision(targetObjectId);
         if (!expectedRevision)
             throw guidanceError(new Error('comment has no known public federation revision'), 'guid-fa2d71041d844605');
@@ -391,10 +484,10 @@ export class EnterpriseFederationAdapter {
         if (!deletion)
             assertEnterpriseMentions(text(localArgs.content, 'content'));
         validatePublicPublishInput(input, identity);
-        const path = remote ? join(this.vaultPath, 'PublicCommunity', 'Local', 'FederatedComments', `${federationStorageName(targetObjectId)}.md`) : undefined;
         const operation = deletion ? 'delete-comment' : 'edit-comment';
         const id = `${operation}:${targetObjectId}:${sha256(JSON.stringify(localArgs))}`;
         const prepared = await this.prepareIntent({ id, operation, actorId, identity, input, idempotencyKey: sha256(id), local: { remote, ...(path && { path }), targetObjectId, slug, serviceArgs: localArgs, ...(deletion ? {} : { body: text(localArgs.content, 'content') }) } });
+        await this.ensureActor(identity, actorId, prepared.value);
         let local;
         if (remote) {
             await this.reader.pull(100);
@@ -417,8 +510,10 @@ export class EnterpriseFederationAdapter {
     async readSync() {
         try {
             const result = await this.reader.pull(100);
+            if (result.progress === 'scoped')
+                return { state: 'scoped', reasons: ['scope_limited'] };
             const errors = result.errors.length > 0;
-            return { state: errors ? 'unavailable' : result.hasMore ? 'partial' : 'caught_up', cursor: result.cursor,
+            return { state: errors ? 'unavailable' : result.hasMore ? 'partial' : 'caught_up', ...(result.cursor !== undefined && { cursor: result.cursor }),
                 reasons: errors ? [result.errors.some(error => /^public federation feed (signature|cursor|does not continue|is out of order)/.test(error)) ? 'invalid_feed' : 'hub_unavailable']
                     : result.hasMore ? ['more_events'] : [] };
         }
@@ -430,7 +525,9 @@ export class EnterpriseFederationAdapter {
             catch {
                 throw guidanceError(new Error('Verified federation cache unavailable'), 'guid-f5ad58550b9dba89');
             }
-            return { state: 'unavailable', cursor, reasons: ['cache_unavailable'] };
+            if (activeDocumentStorageContext())
+                return { state: 'scoped', reasons: ['scope_limited'] };
+            return { state: 'unavailable', ...(cursor !== undefined && { cursor }), reasons: ['cache_unavailable'] };
         }
     }
     async readLocalPost(args, principal, sync, federationId) {
@@ -583,6 +680,7 @@ export class EnterpriseFederationAdapter {
                 return post.fm.author === intent.actorId && post.fm.content_status === 'deleted';
             }
             if (intent.local.remote === true) {
+                await this.authorizeIntent(intent);
                 const content = await this.readBounded(String(intent.local.path), 128 * 1024, 'local federated comment');
                 if (!content.includes(`author: ${intent.actorId}`))
                     return false;
@@ -606,6 +704,7 @@ export class EnterpriseFederationAdapter {
         }
     }
     async performIntentLocal(intent, principal) {
+        await this.authorizeIntent(intent);
         const serviceArgs = isRecord(intent.local.serviceArgs) ? intent.local.serviceArgs : {};
         if (intent.operation === 'profile') {
             await this.directory.update({ ...serviceArgs, principal });
@@ -633,7 +732,6 @@ export class EnterpriseFederationAdapter {
     }
     async retry(principalInput) {
         const { principal, identity, actorId } = this.authenticated(principalInput, 'publish');
-        await this.ensureActor(identity, actorId);
         const root = join(this.intentsRoot, federationStorageName(actorId));
         await ensureFederationDirectory(this.vaultPath, root);
         const names = await readdir(root).catch(error => {
@@ -645,12 +743,23 @@ export class EnterpriseFederationAdapter {
             throw guidanceError(new Error('enterprise federation intent queue exceeds its bounded recovery limit'), 'guid-390e2f9a2bdd2596');
         const recovered = [];
         const unresolved = [];
+        const authorized = new Map();
+        const intents = [];
         for (const name of names.filter(name => name.endsWith('.md')).sort()) {
             const path = join(root, name);
             const intent = parseIntent(await this.readBounded(path, 128 * 1024, 'enterprise federation intent'));
             if (intent.actorId !== actorId || intent.identity.origin !== identity.origin || intent.identity.agentId !== identity.agentId)
                 throw guidanceError(new Error('federation intent identity mismatch'), 'guid-01c8d4c598af46b4');
             validatePublicPublishInput(intent.input, intent.identity);
+            await this.authorizeIntent(intent);
+            authorized.set(intent.idempotencyKey, intent);
+            intents.push({ path, intent });
+        }
+        // Filename order is not delivery order. Admit the entire bounded recovery
+        // set first, so a pending successor cannot hide an authorized predecessor.
+        if (intents.length)
+            await this.ensureActor(identity, actorId, intents[0].intent);
+        for (const { path, intent } of intents) {
             if (intent.stage === 'prepared' && !await this.localMatches(intent, principal)) {
                 try {
                     await this.performIntentLocal(intent, principal);
@@ -668,7 +777,21 @@ export class EnterpriseFederationAdapter {
                 break;
             }
         }
-        const outbox = await this.publisher(identity).flushOutbox();
+        const outbox = await this.publisher(identity).flushOutbox(activeDocumentStorageContext() ? async (input, idempotencyKey) => {
+            const intent = authorized.get(idempotencyKey);
+            if (intent && isDeepStrictEqual(input, intent.input)) {
+                await this.authorizeIntent(intent);
+                return;
+            }
+            // Actor creation is a prerequisite of an otherwise authorized intent.
+            if (input.type === 'actor' && input.actorId === actorId && authorized.size
+                && idempotencyKey === `actor-v1-${sha256(actorId).slice(0, 24)}`) {
+                for (const pending of authorized.values())
+                    await this.authorizeIntent(pending);
+                return;
+            }
+            throw new Error('Federation replay authority unavailable');
+        } : undefined);
         for (const objectId of outbox.published)
             (this.state.deliveries ||= {})[objectId] = 'published';
         for (const objectId of outbox.pending)

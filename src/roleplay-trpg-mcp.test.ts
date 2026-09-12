@@ -3,7 +3,7 @@ import { mkdtemp, mkdir, realpath, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, isAbsolute, join, relative } from 'node:path';
 import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
-import { createServer } from './createServer.js';
+import { createServer } from '../tests/server-fixture.js';
 import { RoleplayStore } from './roleplay-store.js';
 import { roleplayRevision } from './roleplay-model.js';
 import { FileSystemService } from './filesystem.js';

@@ -4,7 +4,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { createServer } from './createServer.js';
+import { createServer } from '../tests/server-fixture.js';
 import { ScopeAccessPolicy } from './scope-access.js';
 import { FileSystemService } from './filesystem.js';
 

@@ -1,48 +1,57 @@
 import { guidanceError } from './guidance-runtime.js';
-import { isModerationHidden } from './moderation-policy.js';
 import { contextRuleState } from './context-rules.js';
 import { buildMarkdownLiteralMask } from './backlinks.js';
 import { selectContextPassages } from './context-passages.js';
-import { isFictionDomain } from './fiction-domain.js';
-export function isSituationMemory(fm) {
-    return Boolean(fm.memory_entries) || ['core', 'episodic'].includes(fm.memory_role)
-        || ['diary', 'log', 'reflection'].includes(fm.note_kind)
-        || ['diary', 'log', 'reflection', 'journal_entry'].includes(fm.mcpvault_type);
-}
+import { isSituationMetadata } from './situation-metadata.js';
+export { isSituationMemory } from './situation-metadata.js';
 /** Metadata discovery reuses existing indexes. No prompt execution, body hydration,
  * cross-request cache, or private-memory aggregation. Eligibility precedes top-k. */
 export async function selectSituationCandidates(fs, access, retrieval, query, options, principal, semantic = false) {
     const allowed = new Set();
     const revisions = new Map();
     const activated = [];
-    const diagnostics = [];
+    let diagnostics = [];
     const canAccess = (p) => access.canAccessPhysicalPath(p, principal) && retrieval.skillDiscoveryAllowed(p);
+    const indexed = await fs.prepareSituation(`${query}\n${options.context}`, options.intent, options.explain, canAccess);
+    if (indexed) {
+        diagnostics = indexed.diagnostics;
+        activated.push(...indexed.activated.map(n => ({ p: n.path, physicalPath: n.path, t: '', ex: '', mc: 0, rv: n.revision, why: ['retrieval_cue_match'] })));
+    }
     let after;
     let examined = 0;
-    do {
-        const batch = await fs.queryNotes({ limit: 500, includeContent: false, includeTotal: false, sortBy: 'path', ...(after && { after }) }, canAccess, n => !isModerationHidden(n.frontmatter) && !isFictionDomain(n.frontmatter, n.path) && !n.frontmatter.mcpvault_type && !isSituationMemory(n.frontmatter));
-        for (const n of batch.notes) {
-            if (++examined > 10000)
-                throw guidanceError(new Error('Situation metadata window exhausted'), 'guid-cb08ef637cea601e');
-            const state = contextRuleState(n.frontmatter.context_rules, `${query}\n${options.context}`, options.intent);
-            if (state === 'invalid' || state === 'conditions_unmatched') {
-                if (options.explain && diagnostics.length < 8)
-                    diagnostics.push({ physicalPath: n.path, revision: n.revision, reason: state === 'invalid' ? 'invalid_context_rules' : 'conditions_unmatched' });
-                continue;
+    if (!indexed)
+        do {
+            const batch = await fs.queryNotes({ limit: 500, includeContent: false, includeTotal: false, sortBy: 'path', ...(after && { after }) }, canAccess, n => isSituationMetadata(n.frontmatter, n.path));
+            for (const n of batch.notes) {
+                if (++examined > 10000)
+                    throw guidanceError(new Error('Situation metadata window exhausted'), 'guid-cb08ef637cea601e');
+                const state = contextRuleState(n.frontmatter.context_rules, `${query}\n${options.context}`, options.intent);
+                if (state === 'invalid' || state === 'conditions_unmatched') {
+                    if (options.explain && diagnostics.length < 8)
+                        diagnostics.push({ physicalPath: n.path, revision: n.revision, reason: state === 'invalid' ? 'invalid_context_rules' : 'conditions_unmatched' });
+                    continue;
+                }
+                allowed.add(n.path);
+                if (n.revision)
+                    revisions.set(n.path, n.revision);
+                const rules = n.frontmatter.context_rules;
+                if (state === 'conditions_matched' && (rules.any?.length || rules.all?.length) && activated.length < 12)
+                    activated.push({ p: n.path, physicalPath: n.path, t: '', ex: '', mc: 0, ...(n.revision && { rv: n.revision }), why: ['retrieval_cue_match'] });
             }
-            allowed.add(n.path);
-            if (n.revision)
-                revisions.set(n.path, n.revision);
-            const rules = n.frontmatter.context_rules;
-            if (state === 'conditions_matched' && (rules.any?.length || rules.all?.length) && activated.length < 12)
-                activated.push({ p: n.path, physicalPath: n.path, t: '', ex: '', mc: 0, ...(n.revision && { rv: n.revision }), why: ['retrieval_cue_match'] });
-        }
-        after = batch.truncated ? batch.nextCursor : undefined;
-        if (batch.truncated && !after)
-            throw guidanceError(new Error('Situation metadata changed'), 'guid-cb0beec6f8a0e1c5');
-    } while (after);
+            after = batch.truncated ? batch.nextCursor : undefined;
+            if (batch.truncated && !after)
+                throw guidanceError(new Error('Situation metadata changed'), 'guid-cb0beec6f8a0e1c5');
+        } while (after);
     // Reserve eight candidate slots for explicit safety/evidence relations.
-    const outcome = await retrieval.memoryCandidates({ query, limit: 12, ...(principal && { principal }), semantic, canAccessPath: p => allowed.has(p) && canAccess(p), candidateRevisions: revisions });
+    const outcome = await retrieval.memoryCandidates({ query, limit: 12, ...(principal && { principal }), semantic,
+        ...(indexed ? { canAccessPath: indexed.canSelect, candidateRevision: indexed.revision, candidateCoverage: indexed.coverage }
+            : { canAccessPath: (p) => allowed.has(p) && canAccess(p), candidateRevisions: revisions }) });
+    indexed?.assertFresh();
+    // Explicit activations and diagnostics also need current caller admission.
+    for (let i = activated.length - 1; i >= 0; i--)
+        if (!canAccess(activated[i].p))
+            activated.splice(i, 1);
+    diagnostics = diagnostics.filter(item => canAccess(item.physicalPath));
     // Put up to two explicit activations inside the existing retrieval budget and
     // early enough for downstream bounded hydration. Keep richer retrieved hits
     // when available; all unused reserved slots return to ordinary ranking.

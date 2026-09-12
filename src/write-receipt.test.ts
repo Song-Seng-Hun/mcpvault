@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from 'vitest';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { join } from 'node:path';
@@ -98,12 +98,14 @@ test('receipt writes retain restricted-path and stale-revision rejection without
 });
 
 test.each(['publish', 'guarded publish', 'triage', 'review', 'claim review'] as const)('%s keeps its response tied to its own mutation', async action => {
-  const { fs, observe } = await fixture();
+  const { fs, vault, observe } = await fixture();
   const path = 'Knowledge/example.md';
   const sourcePath = '_sources/test.md';
-  await fs.writeNote({ path: sourcePath, content: 'Evidence.\n', frontmatter: {
+  // An existing imported original is test setup, not a generic mutable note.
+  await mkdir(join(vault, '_sources'));
+  await writeFile(join(vault, sourcePath), new FrontmatterHandler().stringify({
     llm_wiki_type: 'source', immutable: true, content_sha256: hash('Evidence.\n'),
-  } });
+  }, 'Evidence.\n'));
   await fs.writeNote({ path, content: '# Knowledge\nOriginal.', frontmatter: {
     llm_wiki_type: 'knowledge', note_kind: 'atomic', lifecycle: 'review',
     claims: [{ id: 'claim', text: 'A testable claim.', status: 'unverified', evidence_paths: [sourcePath] }],

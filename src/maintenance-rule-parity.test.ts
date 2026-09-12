@@ -10,7 +10,7 @@ import { LlmWikiService } from './llm-wiki.js';
 import { organizationLintIssues } from './organization.js';
 import { endpointIdForTool } from './endpoint-registry.js';
 import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
-import { createServer } from './createServer.js';
+import { createServer } from '../tests/server-fixture.js';
 
 async function fixture(run: (wiki: LlmWikiService, seed: (path: string, fm: Record<string, unknown>, body?: string) => Promise<string>, root: string) => Promise<void>) {
   const base = await realpath(tmpdir()), prefix = 'mcpvault-maint-parity-', root = await mkdtemp(join(base, prefix));

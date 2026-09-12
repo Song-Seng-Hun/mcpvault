@@ -15,6 +15,8 @@ const MAX_TEXT_LENGTH = 128;
 const LOCK_ATTEMPTS = 500;
 const LOCK_WAIT_MS = 10;
 const CERTIFICATE_PATTERN = /^[a-f0-9]{64}$/;
+const DEPARTMENT_ID_PATTERN = /^[a-z0-9][a-z0-9._-]{0,63}$/;
+const MAX_EMPLOYEE_DEPARTMENTS = 32;
 
 export type EnterpriseMode = 'public' | 'company';
 export type RuntimeKind = 'external' | 'internal';
@@ -31,6 +33,10 @@ export interface EnterpriseEmployee {
   sharedMemoryEnabled: boolean;
   createdAt: string;
   disabledAt?: string;
+  /** Verified host-admin memberships; absence grants no department access. */
+  departmentIds?: string[];
+  defaultDepartmentId?: string;
+  departmentRevision?: number;
 }
 
 export interface EnterpriseRuntime {
@@ -162,6 +168,31 @@ function normalizeOptionalText(value: unknown, field: string): string | undefine
   return value.trim();
 }
 
+function validateEmployeeDepartments(value: { departmentIds?: unknown; defaultDepartmentId?: unknown }): Pick<EnterpriseEmployee, 'departmentIds' | 'defaultDepartmentId'> {
+  const validId = (id: unknown): id is string => typeof id === 'string'
+    && id === id.trim() && DEPARTMENT_ID_PATTERN.test(id);
+  const { departmentIds, defaultDepartmentId } = value;
+  const departments: Pick<EnterpriseEmployee, 'departmentIds' | 'defaultDepartmentId'> = {};
+  if (departmentIds !== undefined) {
+    if (!Array.isArray(departmentIds) || departmentIds.length > MAX_EMPLOYEE_DEPARTMENTS
+      || !Array.from(departmentIds).every(validId) || new Set(departmentIds).size !== departmentIds.length) {
+      throw new Error('departmentIds must contain at most 32 unique opaque lowercase IDs of 1-64 characters');
+    }
+    departments.departmentIds = [...departmentIds];
+  }
+  if (defaultDepartmentId !== undefined) {
+    if (!validId(defaultDepartmentId) || !departments.departmentIds?.includes(defaultDepartmentId)) {
+      throw new Error('defaultDepartmentId must be a valid ID in departmentIds');
+    }
+    departments.defaultDepartmentId = defaultDepartmentId;
+  }
+  return departments;
+}
+
+function assertDepartmentRevision(value: unknown, field: string): asserts value is number {
+  if (!Number.isSafeInteger(value) || Number(value) < 0) throw new Error(`${field} must be a non-negative safe integer`);
+}
+
 function normalizeBinding(value: EnterpriseBinding): EnterpriseBinding {
   if (!isRecord(value)) throw guidanceError(new Error('binding is required'), 'guid-1913f728c9f36b89');
   const displayLabel = normalizeOptionalText(value.displayLabel, 'displayLabel');
@@ -240,10 +271,15 @@ function validateDatabase(value: unknown, expectedVaultPath: string): Enterprise
   try {
     const employees = employeesRaw.map((item: unknown) => {
       if (!isRecord(item) || typeof item.active !== 'boolean' || typeof item.sharedMemoryEnabled !== 'boolean') throw new Error();
+      const departments = validateEmployeeDepartments(item);
+      if (profile.mode === 'public' && departments.departmentIds?.length) throw new Error();
+      if (item.departmentRevision !== undefined) assertDepartmentRevision(item.departmentRevision, 'departmentRevision');
       return {
         userId: normalizeScopeId(String(item.userId || ''), 'userId'), active: item.active, sharedMemoryEnabled: item.sharedMemoryEnabled,
         createdAt: parseTimestamp(item.createdAt, 'createdAt'),
         ...(item.disabledAt !== undefined && { disabledAt: parseTimestamp(item.disabledAt, 'disabledAt') }),
+        ...departments,
+        ...(item.departmentRevision !== undefined && { departmentRevision: item.departmentRevision }),
       } satisfies EnterpriseEmployee;
     });
     const runtimes = runtimesRaw.map((item: unknown) => {
@@ -454,16 +490,41 @@ export class EnterpriseRegistry {
     return this.readDatabase().employees.find(item => item.userId === userId);
   }
 
-  async createEmployee(params: { userId: string; sharedMemoryEnabled?: boolean }): Promise<EnterpriseEmployee> {
+  async createEmployee(params: { userId: string; sharedMemoryEnabled?: boolean; departmentIds?: string[]; defaultDepartmentId?: string }): Promise<EnterpriseEmployee> {
     const userId = normalizeScopeId(params.userId, 'userId');
     if (params.sharedMemoryEnabled !== undefined && typeof params.sharedMemoryEnabled !== 'boolean') throw guidanceError(new Error('sharedMemoryEnabled must be boolean'), 'guid-5fd94ae7c0bcddf6');
+    const departments = validateEmployeeDepartments(params);
     return await this.exclusive(async () => {
       const database = this.readDatabase();
+      if (database.profile.mode !== 'company' && departments.departmentIds?.length) throw new Error('Public mode cannot grant company departments');
       entryCapacity(database, 'employees');
       if (database.employees.some(item => item.userId === userId)) throw guidanceError(new Error(`Enterprise employee already exists: ${userId}`), 'guid-d28f2d52be263dff');
-      const employee: EnterpriseEmployee = { userId, active: true, sharedMemoryEnabled: params.sharedMemoryEnabled === true, createdAt: this.timestamp() };
+      const employee: EnterpriseEmployee = { userId, active: true, sharedMemoryEnabled: params.sharedMemoryEnabled === true, createdAt: this.timestamp(),
+        ...departments, ...(departments.departmentIds !== undefined && { departmentRevision: 0 }) };
       await this.writeDatabase({ ...database, employees: [...database.employees, employee] });
       return employee;
+    });
+  }
+
+  /** Host administrator API only. Replaces memberships; an omitted default clears it. */
+  async updateEmployeeDepartments(params: { userId: string; departmentIds: string[]; defaultDepartmentId?: string; expectedDepartmentRevision: number }): Promise<EnterpriseEmployee> {
+    const userId = normalizeScopeId(params.userId, 'userId');
+    const departments = validateEmployeeDepartments(params);
+    if (departments.departmentIds === undefined) throw new Error('departmentIds is required');
+    const expectedRevision = params.expectedDepartmentRevision;
+    assertDepartmentRevision(expectedRevision, 'expectedDepartmentRevision');
+    return await this.exclusive(async () => {
+      const database = this.readDatabase();
+      if (database.profile.mode !== 'company') throw new Error('Department updates require company mode');
+      const employee = database.employees.find(item => item.userId === userId);
+      if (!employee) throw guidanceError(new Error(`Unknown enterprise employee: ${userId}`), 'guid-fa77b46d6e0bca27');
+      const currentRevision = employee.departmentRevision ?? 0;
+      if (currentRevision !== expectedRevision) throw new Error(`Stale department revision: expected ${expectedRevision}, current ${currentRevision}`);
+      if (currentRevision === Number.MAX_SAFE_INTEGER) throw new Error('departmentRevision capacity reached');
+      const updated: EnterpriseEmployee = { ...employee, ...departments, departmentRevision: currentRevision + 1 };
+      if (departments.defaultDepartmentId === undefined) delete updated.defaultDepartmentId;
+      await this.writeDatabase({ ...database, employees: database.employees.map(item => item.userId === userId ? updated : item) });
+      return updated;
     });
   }
 

@@ -3,7 +3,7 @@ import { mkdtemp, writeFile, rm, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
-import { createServer, getServerRuntime } from './createServer.js';
+import { createServer, getServerRuntime } from '../tests/server-fixture.js';
 import { startRestApi } from './rest-api.js';
 const cleanup: Array<() => Promise<unknown>> = [];
 afterEach(async () => { for (const f of cleanup.splice(0).reverse()) await f(); });

@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
 import { EndpointRegistry } from './endpoint-registry.js';
-import { createServer, getServerRuntime } from './createServer.js';
+import { createServer, getServerRuntime } from '../tests/server-fixture.js';
 import { getRoleplayTools, ROLEPLAY_MUTATING_TOOLS } from './roleplay-tools.js';
 import { withGuidance } from './guidance-runtime.js';
 
@@ -27,21 +27,28 @@ async function fixture() {
   return { call, client, registry: getServerRuntime(server)!.endpointRegistry };
 }
 
-test.each([512, 2000, 12000])('compact catalog traverses every endpoint exactly once at budget %i', async maxChars => {
+test.each([512, 2000, 12000])('compact active catalog traverses every available endpoint exactly once at budget %i', async maxChars => {
   const { call, registry } = await fixture();
-  const seen = new Set<string>(); let cursor: string | undefined;
+  const seen = new Set<string>(); let cursor: string | undefined, expectedTotal: number | undefined;
   for (let page = 0; page <= registry.size(); page++) {
     const result = await call('list_active_capabilities', { limit: 100, maxChars, ...(cursor && {cursor}) });
+    expectedTotal ??= result.total;
+    expect(result.total).toBe(expectedTotal);
     expect(result.endpoints.length).toBeGreaterThan(0);
     for (const endpoint of result.endpoints) {
-      expect(endpoint.input).toBeUndefined(); expect(endpoint.state).toBeDefined();
+      expect(endpoint.input).toBeUndefined(); expect(endpoint.state).toBe('ready');
+      expect(endpoint.available).toBe(true);
       expect(seen.has(endpoint.endpointId)).toBe(false); seen.add(endpoint.endpointId);
     }
     cursor = result.nextCursor;
     if (!cursor) { expect(result.truncated).toBe(false); break; }
     expect(result.truncated).toBe(true);
   }
-  expect(seen.size).toBe(registry.size());
+  expect(seen.size).toBe(expectedTotal);
+  // Registered but unauthenticated/host-unconfigured operations are not active.
+  expect(seen.size).toBeLessThan(registry.size());
+  expect(seen.has('wiki.search')).toBe(true);
+  expect(seen.has('roleplay.action')).toBe(false);
 });
 
 test('catalog cursors reject changed catalog, authority, and host configuration', () => {
@@ -105,14 +112,15 @@ test('representative Korean and English intent queries rank the primary operatio
   expect(exact.endpoints[0].schemaOmitted).not.toBe(true);
 });
 
-test('unconfigured optional execution is disabled but the roleplay world status probe remains readable', async () => {
+test('unconfigured optional execution stays disabled and the status probe reports no configured world', async () => {
   const { call } = await fixture();
   for (const id of ['roleplay.action', 'roleplay.character', 'quest.contract', 'economy.wallet']) {
     const endpoint = (await call('search_capabilities', { query: id, maxChars: 20000 })).endpoints[0];
     expect(endpoint.state, id).toBe('disabled'); expect(endpoint.reason).toMatch(/host.*config/i);
   }
   const world = (await call('search_capabilities', { query: 'roleplay.world', maxChars: 20000 })).endpoints[0];
-  expect(world.operations.read.available).toBe(true); expect(world.operations.initialize.state).toBe('disabled');
+  expect(world.operations.read).toMatchObject({ available: false, state: 'disabled' });
+  expect(world.operations.initialize.state).toBe('disabled');
   const probe = await call('call_endpoint', { endpointId: 'roleplay.world', arguments: { op: 'read' } });
   expect(probe.enabled).toBe(false);
 });
@@ -120,9 +128,12 @@ test('unconfigured optional execution is disabled but the roleplay world status 
 test('configured roleplay distinguishes missing host administrators, caller authority and read-only writes', () => {
   const registry = new EndpointRegistry();
   registry.setTools(getRoleplayTools(), { submit_roleplay_action: 'chat', manage_roleplay_character: 'chat' }, new Set(ROLEPLAY_MUTATING_TOOLS));
-  const context = { ...publicContext, authenticated: true, capabilities: new Set<any>(['chat']), roleplayConfigured: true, roleplayWritesConfigured: true };
+  const context = { ...publicContext, authenticated: true, capabilities: new Set<any>(['chat']), roleplayConfigured: true, roleplayWritesConfigured: true,
+    ownerActivity: { policyFingerprint: 'fixture-consent', executionBindingGeneration: 'fixture-runtime',
+      eligibility: { roleplay: { discover: true, read: true, claim: true, execute: true } } } };
   const read = (id: string, extra: Record<string, unknown>) => registry.list(id, 1, 20000, { ...context, ...extra }, false).endpoints[0] as any;
   expect(read('roleplay.action', {}).state).toBe('ready');
+  expect(read('roleplay.action', { ownerActivity: undefined }).state).toBe('locked');
   expect(read('roleplay.action', { roleplayWritesConfigured: false })).toMatchObject({ state: 'disabled', reason: expect.stringMatching(/administrator.*config/i) });
   expect(read('roleplay.action', { capabilities: new Set() }).state).toBe('locked');
   expect(read('roleplay.action', { readOnly: true }).state).toBe('disabled');

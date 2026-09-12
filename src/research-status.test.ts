@@ -3,7 +3,7 @@ import { mkdtemp, realpath, rm, appendFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, isAbsolute, join, relative } from 'node:path';
 import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
-import { createServer } from './createServer.js';
+import { createServer } from '../tests/server-fixture.js';
 import { FileSystemService } from './filesystem.js';
 
 let base: string, vault: string, client: Client, server: ReturnType<typeof createServer>;

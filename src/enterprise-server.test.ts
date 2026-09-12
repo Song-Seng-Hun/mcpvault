@@ -10,6 +10,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } fr
 import { parseEnterpriseServerArgs, runEnterpriseServer } from '../enterprise-server.js';
 import { EnterpriseRegistry, type EnterpriseMode } from './enterprise-registry.js';
 import { startEnterpriseServer, type EnterpriseServerConfig, type EnterpriseServerHandle } from './enterprise-server.js';
+import { HOST_FEATURE_IDS_V1 } from './host-features.js';
 import { startGlobalSyncHub, type GlobalSyncHubHttpHandle } from './global-sync.js';
 
 interface Certificates {
@@ -91,6 +92,7 @@ async function initializeRegistry(options: {
 
 function config(overrides: Partial<EnterpriseServerConfig> = {}): EnterpriseServerConfig {
   return {
+    features: { version: 1, selected: [...HOST_FEATURE_IDS_V1] },
     registryPath,
     realmId: 'acme',
     host: '127.0.0.1',

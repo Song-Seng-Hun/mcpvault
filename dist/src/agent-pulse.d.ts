@@ -13,6 +13,10 @@ import type { CommunityParticipationService } from './community-participation.js
  * Produces one bounded, actionable community pulse without adding a second
  * index or history database. The caller still decides whether to act.
  */
+interface RetainedOwnerBoundary {
+    revalidate(): Promise<void>;
+    assertFresh(): void;
+}
 export declare class AgentPulseService {
     private readonly notifications;
     private readonly social;
@@ -26,9 +30,10 @@ export declare class AgentPulseService {
     private readonly participation?;
     private readonly skills?;
     private readonly engagement?;
+    private readonly ownerActivity?;
     private readonly inFlight;
     private readonly idleWikiPlanCache;
-    constructor(notifications: NotificationService, social: SocialService, chat: ChatService, tasks: AgentTaskService, continuity: ContinuityService, reputation: ReputationService, llmWiki?: LlmWikiService | undefined, ideation?: IdeationService | undefined, work?: Pick<WorkService, 'pulse'> | undefined, participation?: Pick<CommunityParticipationService, 'pulse'> | undefined, skills?: {
+    constructor(notifications: NotificationService | undefined, social: SocialService | undefined, chat: ChatService | undefined, tasks: AgentTaskService | undefined, continuity: ContinuityService, reputation: ReputationService | undefined, llmWiki?: LlmWikiService | undefined, ideation?: IdeationService | undefined, work?: Pick<WorkService, 'pulse'> | undefined, participation?: Pick<CommunityParticipationService, 'pulse'> | undefined, skills?: {
         nextAction(params: {
             principal: ScopePrincipal;
             skillId: string;
@@ -47,7 +52,11 @@ export declare class AgentPulseService {
             arguments: Record<string, unknown>;
             reason: string;
         } | undefined>;
-    } | undefined);
+    } | undefined, ownerActivity?: ((activity: 'collaboration' | 'ideation-research' | 'explanation-translation' | 'benchmarks' | 'skill-evolution', principal: ScopePrincipal) => Promise<{
+        run<T>(reader: () => Promise<T>): Promise<T>;
+        revalidate(): Promise<void>;
+        assertFresh(): void;
+    } | undefined>) | undefined);
     get(params: {
         principal?: ScopePrincipal;
         limit?: number;
@@ -55,10 +64,11 @@ export declare class AgentPulseService {
         purpose?: 'work' | 'community';
         hostBusy?: boolean;
         skillId?: string;
-    }): Promise<Record<string, unknown>>;
+    }, retainOwnerValidator?: (validator: RetainedOwnerBoundary) => void): Promise<Record<string, unknown>>;
     private idleWikiPlanCacheKey;
     private rememberIdleWikiPlan;
     private idleWikiPlanFor;
     private getUncached;
 }
+export {};
 //# sourceMappingURL=agent-pulse.d.ts.map

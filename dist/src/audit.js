@@ -66,6 +66,7 @@ export class AuditService {
     async record(params) {
         const identity = actorFor(params.principal, params.explicitActor);
         const target = params.args ? targetFor(params.args) : undefined;
+        const paths = ['path', 'oldPath', 'newPath'].flatMap(key => typeof params.args?.[key] === 'string' && String(params.args[key]).length <= 500 ? [String(params.args[key])] : []);
         const event = {
             at: new Date().toISOString(),
             tool: String(params.tool).slice(0, 120),
@@ -73,6 +74,7 @@ export class AuditService {
             role: identity.role,
             outcome: params.outcome,
             ...(target ? { target } : {}),
+            ...(paths.length && { paths }),
             ...(params.error !== undefined ? { error: String(params.error instanceof Error ? params.error.message : params.error).slice(0, 500) } : {}),
         };
         try {
@@ -99,9 +101,22 @@ export class AuditService {
                 const event = JSON.parse(line);
                 if (event.actor !== target)
                     continue;
+                if (params.canAccessPath && event.target) {
+                    // Old/non-path records cannot prove that a slug, room, or error text
+                    // does not identify a now-protected document. Do not guess a path.
+                    if (!Array.isArray(event.paths) || !event.paths.length || !event.paths.every(path => typeof path === 'string' && params.canAccessPath(path)))
+                        continue;
+                }
                 if (!params.includeErrors && event.outcome === 'error')
                     continue;
-                events.push(event);
+                if (params.canAccessPath) {
+                    // Free-form errors and mixed target identifiers have no exact policy
+                    // locator. Return only structured targets validated for this reader.
+                    const { error: _error, target: _target, ...checked } = event;
+                    events.push({ ...checked, ...(event.paths?.length && { target: event.paths.join(' ') }) });
+                }
+                else
+                    events.push(event);
                 if (events.length >= limit)
                     break;
             }

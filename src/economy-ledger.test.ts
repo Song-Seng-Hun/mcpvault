@@ -6,6 +6,8 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { EconomyLedger, admitEconomyEventBytes } from './economy-ledger.js';
 import type { EconomyPolicy } from './economy-model.js';
+import { ScopeAccessPolicy } from './scope-access.js';
+import { withEnterpriseStorageContext } from './enterprise-storage-context.js';
 
 const dirs: string[] = [];
 afterEach(async () => { for (const p of dirs.splice(0)) await rm(p, { recursive: true, force: true }); });
@@ -76,6 +78,64 @@ test('unverified storage and checkpoint inside vault fail closed', async () => {
   await expect(EconomyLedger.open({...o,hostPath:o.vaultPath})).rejects.toThrow(/outside/);
 });
 
+test('owner activity guards the actual authoritative journal path immediately before its write', async () => {
+  const o = await fixture(); const ledger = await EconomyLedger.initialize(o);
+  const checked: string[] = []; const writes: string[] = [];
+  try {
+    await expect(withEnterpriseStorageContext({ access: new ScopeAccessPolicy(), assertFresh() {},
+      canAccessPath(path) { checked.push(path); return !path.endsWith('/journal/0000000001.md'); },
+      beforeWrite: async path => { writes.push(path); },
+    }, () => ledger.transact({ op:'issue', actor:'operator', requestId:'owner-journal', amount:5000, reason:'approval' })))
+      .rejects.toThrow(/owner activity|authority|consent/i);
+    expect(checked).toContain('.mcpvault-economy/journal/0000000001.md');
+    expect(writes).toContain('.mcpvault-economy/journal/0000000001.md');
+    await expect(readFile(join(o.vaultPath, '.mcpvault-economy', 'journal', '0000000001.md'), 'utf8')).rejects.toThrow();
+  } finally { await ledger.close(); }
+  const checkpointName = (await readdir(o.hostPath)).find(name => name.endsWith('.checkpoint.json'))!;
+  expect(JSON.parse(await readFile(join(o.hostPath, checkpointName), 'utf8'))).toMatchObject({ sequence: 0, hash: '0'.repeat(64) });
+  expect((await readdir(o.hostPath)).some(name => name.endsWith('.prepared.md'))).toBe(false);
+  const reopened = await EconomyLedger.open(o);
+  try {
+    expect(await reopened.snapshot()).toMatchObject({ sequence: 0, issued: 0 });
+    expect((await readdir(join(o.vaultPath, '.mcpvault-economy', 'journal'))).filter(name => name.endsWith('.md'))).toEqual([]);
+  } finally { await reopened.close(); }
+});
+
+test('owner activity write refresh runs for the journal without treating host checkpoints as Vault data', async () => {
+  const o = await fixture(); const ledger = await EconomyLedger.initialize(o);
+  const checked: string[] = []; const writes: string[] = [];
+  try {
+    await withEnterpriseStorageContext({ access: new ScopeAccessPolicy(), assertFresh() {},
+      canAccessPath(path) { checked.push(path); return path === '.mcpvault-economy/journal/0000000001.md'; },
+      beforeWrite: async path => { writes.push(path); },
+    }, () => ledger.transact({ op:'issue', actor:'operator', requestId:'owner-journal-allowed', amount:5000, reason:'approval' }));
+    expect(writes).toContain('.mcpvault-economy/journal/0000000001.md');
+    expect(checked.every(path => path === '.mcpvault-economy/journal/0000000001.md')).toBe(true);
+  } finally { await ledger.close(); }
+});
+
+test('revocation after pending intent persistence rolls back replayable host state before rejection', async () => {
+  const o = await fixture(); const ledger = await EconomyLedger.initialize(o);
+  let allowed = true; let refreshes = 0;
+  const ambientAccess = new ScopeAccessPolicy({ documentRules: () => [{ path: 'Protected.md', confidential: true }] });
+  await expect(withEnterpriseStorageContext({ access: ambientAccess,
+    assertFresh() { if (!allowed) throw new Error('owner activity authority changed'); },
+    canAccessPath: path => allowed && path === '.mcpvault-economy/journal/0000000001.md',
+    beforeWrite: async () => { refreshes += 1; if (refreshes === 3) allowed = false; },
+  }, () => ledger.transact({ op:'issue', actor:'operator', requestId:'revoked-after-pending', amount:5000, reason:'approval' })))
+    .rejects.toThrow(/owner activity|authority/i);
+  await ledger.close();
+  expect(refreshes).toBe(3);
+  const checkpointName = (await readdir(o.hostPath)).find(name => name.endsWith('.checkpoint.json'))!;
+  expect(JSON.parse(await readFile(join(o.hostPath, checkpointName), 'utf8'))).toMatchObject({ sequence: 0, hash: '0'.repeat(64) });
+  expect((await readdir(o.hostPath)).some(name => name.endsWith('.prepared.md'))).toBe(false);
+  const reopened = await EconomyLedger.open(o);
+  try {
+    expect(await reopened.snapshot()).toMatchObject({ sequence: 0, issued: 0 });
+    expect((await readdir(join(o.vaultPath, '.mcpvault-economy', 'journal'))).filter(name => name.endsWith('.md'))).toEqual([]);
+  } finally { await reopened.close(); }
+});
+
 test('close stops new admission, drains accepted writes, and releases once',async()=>{
  const o=await fixture();const ledger=await EconomyLedger.initialize(o);
  let release!:()=>void;const gate=new Promise<void>(r=>{release=r;});
@@ -99,6 +159,55 @@ test('a prepared but not published transaction is recovered from exact host inte
  await unlink(eventPath);
  const reopened=await EconomyLedger.open(o);
  try{expect(await reopened.transact(command)).toEqual(receipt);expect((await reopened.snapshot()).issued).toBe(5000);}finally{await reopened.close();}
+});
+
+test('host replay aborts a guarded unpublished intent instead of executing without its owner', async () => {
+  const o = await fixture(), ledger = await EconomyLedger.initialize(o);
+  await ledger.transact({ op: 'issue', actor: 'operator', requestId: 'guarded-crash', amount: 5000, reason: 'approval' });
+  await ledger.close();
+  const cpName = (await readdir(o.hostPath)).find(name => name.endsWith('.checkpoint.json'))!;
+  const cpPath = join(o.hostPath, cpName), cp = JSON.parse(await readFile(cpPath, 'utf8'));
+  const eventPath = join(o.vaultPath, '.mcpvault-economy/journal/0000000001.md');
+  await writeFile(join(o.hostPath, cpName.replace('.checkpoint.json', '.prepared.md')), await readFile(eventPath));
+  await writeFile(cpPath, JSON.stringify({ version: 1, vault: cp.vault, sequence: 0, hash: '0'.repeat(64),
+    pending: { sequence: 1, hash: cp.hash, ownerGuarded: true } }));
+  await unlink(eventPath);
+  const reopened = await EconomyLedger.open(o);
+  try {
+    expect(await reopened.snapshot()).toMatchObject({ sequence: 0, issued: 0 });
+    expect((await readdir(join(o.vaultPath, '.mcpvault-economy/journal'))).filter(name => name.endsWith('.md'))).toEqual([]);
+    expect((await readdir(o.hostPath)).some(name => name.endsWith('.prepared.md'))).toBe(false);
+  } finally { await reopened.close(); }
+});
+
+test('ledger acquisition cannot capture an agent request as host cleanup authority', async () => {
+  const o = await fixture();
+  let unexpected: EconomyLedger | undefined;
+  try {
+    await expect(withEnterpriseStorageContext({ access: new ScopeAccessPolicy(), assertFresh() {} }, async () => {
+      unexpected = await EconomyLedger.initialize(o);
+    })).rejects.toThrow(/host|request/i);
+  } finally { await unexpected?.close(); }
+});
+
+test('a final owner refresh cannot publish after the writer fence is replaced', async () => {
+  const o = await fixture(), ledger = await EconomyLedger.initialize(o);
+  const lockPath = join(o.vaultPath, '.mcpvault-economy/writer.lock');
+  const originalLock = await readFile(lockPath, 'utf8');
+  let refreshes = 0;
+  try {
+    await expect(withEnterpriseStorageContext({ access: new ScopeAccessPolicy(), assertFresh() {}, canAccessPath: () => true,
+      beforeWrite: async () => {
+        if (++refreshes === 3) await writeFile(lockPath, JSON.stringify({ ...JSON.parse(originalLock), nonce: 'replaced-writer' }));
+      },
+    }, () => ledger.transact({ op: 'issue', actor: 'operator', requestId: 'replaced-fence', amount: 5000, reason: 'approval' }))).rejects.toThrow(/fencing/i);
+    await expect(readFile(join(o.vaultPath, '.mcpvault-economy/journal/0000000001.md')).then(() => 'unexpected journal publication')).rejects.toThrow();
+    const cpName = (await readdir(o.hostPath)).find(name => name.endsWith('.checkpoint.json'))!;
+    expect(JSON.parse(await readFile(join(o.hostPath, cpName), 'utf8')).pending.ownerGuarded).toBe(true);
+  } finally { await writeFile(lockPath, originalLock); await ledger.close(); }
+  const reopened = await EconomyLedger.open(o);
+  try { expect(await reopened.snapshot()).toMatchObject({ sequence: 0, issued: 0 }); }
+  finally { await reopened.close(); }
 });
 
 test('refuses a pending replay with a journal prefix gap before it can overwrite the pending path',async()=>{

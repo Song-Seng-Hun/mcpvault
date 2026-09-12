@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { FileSystemService } from './filesystem.js';
 import { ScopeAccessPolicy } from './scope-access.js';
 import type { ScopePrincipal } from './scope-auth.js';
-import { withEnterpriseStorageContext } from './enterprise-storage-context.js';
+import { assertEnterpriseStorageAccess, canReadEnterpriseStoragePath, prepareDocumentWrite, withEnterpriseStorageContext } from './enterprise-storage-context.js';
 import { authorIdentity, resolveActorMention } from './enterprise-identity.js';
 
 let root: string;
@@ -44,4 +44,30 @@ test('physical public projections reject generic and derived writes', async () =
   const publicAccess = new ScopeAccessPolicy({ commandCenterId: 'acme', enterprise: { mode: 'public', realmId: 'acme' } });
   const actor = { ...principal, enterprise: { ...principal.enterprise!, mode: 'public' as const } };
   await expect(withEnterpriseStorageContext({ access: publicAccess, principal: actor, assertFresh() {} }, () => fs.writeNote({ path: 'PublicCommunity/Imported/forged.md', content: 'fake actor' }))).rejects.toThrow(/managed/i);
+});
+
+test('nested storage contexts intersect owner predicates and preserve both freshness and write hooks', async () => {
+  const events: string[] = [];
+  const ownerAccess = new ScopeAccessPolicy();
+  await withEnterpriseStorageContext({ access: ownerAccess, assertFresh() { events.push('outer-fresh'); },
+    canAccessPath: path => path === 'Shared/allowed.md' || path === 'Shared/outer-only.md',
+    canTraversePath: path => path === 'Shared',
+    beforeWrite: async path => { events.push(`outer-write:${path}`); },
+  }, () => withEnterpriseStorageContext({ access: ownerAccess, assertFresh() { events.push('inner-fresh'); },
+    canAccessPath: path => path === 'Shared/allowed.md' || path === 'Shared/inner-only.md',
+    canTraversePath: path => path === 'Shared',
+    beforeWrite: async path => { events.push(`inner-write:${path}`); },
+  }, async () => {
+    expect(canReadEnterpriseStoragePath('Shared/allowed.md')).toBe(true);
+    expect(canReadEnterpriseStoragePath('Shared/outer-only.md')).toBe(false);
+    expect(canReadEnterpriseStoragePath('Shared/inner-only.md')).toBe(false);
+    expect(() => assertEnterpriseStorageAccess('Shared/outer-only.md')).toThrow(/owner activity/i);
+    expect(() => assertEnterpriseStorageAccess('Shared/inner-only.md')).toThrow(/owner activity/i);
+    await prepareDocumentWrite('Shared/allowed.md');
+  }));
+
+  expect(events).toContain('outer-fresh');
+  expect(events).toContain('inner-fresh');
+  expect(events).toContain('outer-write:Shared/allowed.md');
+  expect(events).toContain('inner-write:Shared/allowed.md');
 });

@@ -19,7 +19,7 @@ const reviewPolicy = { type: 'object', additionalProperties: false, required: ['
   version: { type: 'integer', const: 2 }, requireHostExecution: { type: 'boolean' }, optionalCriteria: strings,
 } };
 const staffingPolicy = { type: 'object', additionalProperties: false, required: ['taskType'], properties: {
-  taskType: { type: 'string', enum: ['code', 'research', 'writing', 'planning'] }, factualVerification: { type: 'boolean' },
+  taskType: { type: 'string', enum: ['code', 'research', 'writing', 'planning', 'bookkeeping'] }, factualVerification: { type: 'boolean' },
   requiredTools: strings, requiredCapabilities: strings, minimumTier: { type: 'string', enum: ['unknown', 'economical', 'standard', 'frontier'] },
   budget: { type: 'number', minimum: 0, maximum: 1e9 }, preferences: { type: 'object', maxProperties: 40, additionalProperties: strings },
 } };

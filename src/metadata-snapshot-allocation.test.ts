@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { VaultMetadataIndex } from './vault-index.js';
 import { FrontmatterHandler } from './frontmatter.js';
 import { PathFilter } from './pathfilter.js';
+import { derivedStorageFixture } from '../tests/derived-storage-fixture.js';
 import { encodeMetadataSnapshot, decodeMetadataSnapshot, METADATA_SNAPSHOT_MAX_BYTES,
   METADATA_SNAPSHOT_MAX_ENTRIES, type MetadataSnapshotEntry } from './metadata-snapshot.js';
 
@@ -112,14 +113,16 @@ test('decoder rejects truncated, trailing, malformed and nonfinite snapshots', (
   }
 });
 
-async function fixture(run: (root: string, index: VaultMetadataIndex) => Promise<void>) {
+async function fixture(run: (root: string, index: VaultMetadataIndex, snapshotHost: Awaited<ReturnType<typeof derivedStorageFixture>>) => Promise<void>) {
   const base = await realpath(tmpdir()), prefix = 'mcpvault-metadata-encoding-', root = await mkdtemp(join(base, prefix));
   await writeFile(join(root, 'Note.md'), '---\ntitle: 한글\n---\nBody');
-  const index = new VaultMetadataIndex(root, new PathFilter(), new FrontmatterHandler());
+  const snapshotHost = await derivedStorageFixture(root);
+  const index = new VaultMetadataIndex(root, new PathFilter(), new FrontmatterHandler(), undefined, undefined, snapshotHost.host);
   vi.spyOn(index as any, 'startWatcher').mockImplementation(() => undefined);
-  try { await index.list(); await run(root, index); }
+  try { await index.list(); await run(root, index, snapshotHost); }
   finally {
     await index.close(); vi.restoreAllMocks();
+    await snapshotHost.close();
     const target = await realpath(root), rel = relative(base, target);
     if (!rel || rel.startsWith('..') || isAbsolute(rel) || !basename(target).startsWith(prefix)) throw new Error('Unsafe cleanup');
     await rm(target, { recursive: true, force: true });
@@ -127,20 +130,24 @@ async function fixture(run: (root: string, index: VaultMetadataIndex) => Promise
 }
 
 test('metadata save avoids per-field buffers and concatenation copies', async () => {
-  await fixture(async (root, index) => {
+  await fixture(async (_root, index, snapshotHost) => {
+    const rows = await index.list();
     const concat = vi.spyOn(Buffer, 'concat'), from = vi.spyOn(Buffer, 'from');
-    await (index as any).flushSnapshot();
+    // Measure serialization itself; Windows ACL subprocess stdout may allocate
+    // unrelated buffers during the subsequently verified private disk write.
+    encodeMetadataSnapshot(rows);
     const concatCount = concat.mock.calls.length;
     const fieldCopies = from.mock.calls.filter(([value]) => typeof value === 'string' && value.includes('한글')).length;
     vi.restoreAllMocks();
-    expect((await readFile(join(root, '.mcpvault/metadata-index.snapshot.bin'))).subarray(0, 8).toString()).toBe('MCPVMETA');
+    await (index as any).flushSnapshot();
+    expect((await readFile(snapshotHost.path('metadata-index.snapshot.bin'))).subarray(0, 8).toString()).toBe('MCPVMETA');
     expect(concatCount).toBe(0); expect(fieldCopies).toBe(0);
   });
-});
+}, 30000);
 
 test('failed encoding preserves previous snapshot and Markdown; a later edit saves normally', async () => {
-  await fixture(async (root, index) => {
-    const snapshot = join(root, '.mcpvault/metadata-index.snapshot.bin'), note = join(root, 'Note.md');
+  await fixture(async (root, index, snapshotHost) => {
+    const snapshot = snapshotHost.path('metadata-index.snapshot.bin'), note = join(root, 'Note.md');
     await (index as any).flushSnapshot();
     const before = await readFile(snapshot), source = await readFile(note, 'utf8');
     // Inject a nonserializable derived value, never into authoritative Markdown.
@@ -156,4 +163,4 @@ test('failed encoding preserves previous snapshot and Markdown; a later edit sav
     await (index as any).flushSnapshot();
     expect(decodeMetadataSnapshot(await readFile(snapshot))).toEqual(current);
   });
-});
+}, 30000);

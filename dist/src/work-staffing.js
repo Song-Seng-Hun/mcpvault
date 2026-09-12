@@ -10,12 +10,8 @@ const DEFAULTS = {
     research: ['source', 'counterpoint'],
     writing: ['language', 'continuity'],
     planning: ['constraints', 'feasibility', 'risk'],
+    bookkeeping: ['bookkeeping'],
 };
-const USER_PREFERENCES = new Map([
-    ...['creative', 'dialogue', 'story', 'translation', 'plain-language', 'youtube', 'language', 'continuity'].map(role => [role, ['gemini']]),
-    ...['direction', 'ideas', 'planning', 'decomposition', 'constraints', 'feasibility', 'risk'].map(role => [role, ['claude']]),
-    ...['implementation', 'change-impact', 'test', 'evidence', 'theory', 'tools', 'source', 'counterpoint', 'factual-verification', REVIEW].map(role => [role, ['gpt']]),
-]);
 /**
  * Pure, bounded advisory allocation; never establishes access or approves work.
  * Caller must supply every author/requester/assignee account and only visible
@@ -27,6 +23,12 @@ const USER_PREFERENCES = new Map([
  */
 export function recommendStaffing(input) {
     validate(input);
+    const bookkeeping = input.taskType === 'bookkeeping';
+    const deterministic = bookkeeping && input.deterministicAvailable === true;
+    // Read review intent before deterministic handling suppresses non-review hats.
+    const explicitReview = input.requiredPerspectives?.includes(REVIEW) === true;
+    const independentRequired = input.workKind !== 'general' || (bookkeeping && explicitReview);
+    const needsReview = !bookkeeping || independentRequired;
     const eligible = new Set(input.eligibleAccountIds);
     // All supplied profiles are visible context. Only the separately filtered
     // pool may receive recommendations; author identity is not an access grant.
@@ -37,41 +39,33 @@ export function recommendStaffing(input) {
     const owners = new Set([...input.authorAccountIds, ...(input.assigneeAccountIds ?? []),
         ...active.filter(a => a.perspective !== REVIEW).map(a => a.accountId)]);
     const excludedReviewers = new Set([...owners, ...(input.requesterAccountIds ?? [])]);
+    // Existing independent reviewers remain reserved even when no new review is
+    // requested; recommending them as authors would invalidate the retained row.
     const reservedReviewers = new Set(active.filter(a => a.perspective === REVIEW && !excludedReviewers.has(a.accountId)).map(a => a.accountId));
     const workload = (id) => Object.hasOwn(input.workload, id) ? input.workload[id] : 0;
-    const required = [...new Set(input.requiredPerspectives ?? [
+    const required = deterministic ? [] : [...new Set(input.requiredPerspectives ?? [
             ...DEFAULTS[input.taskType], ...(input.taskType === 'writing' && input.factualVerification ? ['factual-verification'] : []),
         ])].filter(p => p !== REVIEW);
     const result = {
         advisory: true, rows: [], unfilled: [],
+        ...(bookkeeping ? { execution: { mode: deterministic ? 'deterministic' : 'local_llm', llmRequired: !deterministic || needsReview } } : {}),
         explanations: ['Family orders are configurable user preferences, not empirical rankings or permissions.',
             'Recommendations do not constitute approval or evidence of completed verification.'],
-        summary: { required: required.length + 1, covered: 0, recommended: 0, unfilled: 0, estimatedCost: 0, unknownCost: false },
+        summary: { required: required.length + Number(needsReview), covered: 0, recommended: 0, unfilled: 0, estimatedCost: 0, unknownCost: false },
     };
     const covered = new Set();
     const spent = new Map();
     const proposed = new Set();
     const explanations = new Set(result.explanations);
+    if (bookkeeping)
+        explanations.add('Bookkeeping uses deterministic code when the host confirms coverage; otherwise only qualified host-verified local LLMs are recommended, with no remote fallback.');
     const family = (p) => p?.hostVerified && p.family && p.family.toLowerCase() !== 'unknown' ? p.family.toLowerCase() : null;
     const known = (p) => Boolean(p?.hostVerified && family(p) && p.version && p.version.toLowerCase() !== 'unknown');
-    for (const assignment of active) {
-        const p = profiles.get(assignment.accountId);
-        const independent = assignment.perspective === REVIEW && !excludedReviewers.has(assignment.accountId);
-        result.rows.push({
-            accountId: assignment.accountId, perspective: assignment.perspective,
-            family: family(p), tier: p?.hostVerified ? p.tier : 'unknown', source: 'existing',
-            verification: independent ? 'independent_review' : assignment.verified ? 'verified' : 'declared',
-            reasons: ['Existing ownership is preserved; this does not revalidate current eligibility or execution availability.'],
-        });
-        if (assignment.perspective !== REVIEW || independent)
-            covered.add(assignment.perspective);
-        if (!known(p))
-            explanations.add('Some existing ownership has unknown execution metadata; verify the host before new work.');
-        if (assignment.perspective === REVIEW && !independent)
-            explanations.add('An existing review assignment is not independent of all author/requester/assignee accounts.');
-    }
+    const localBookkeeper = (p) => known(p) && p.executionLocality === 'local' && p.bookkeepingSuitable === true;
     const qualifies = (p) => {
         if (!known(p))
+            return false;
+        if (bookkeeping && (!eligible.has(p.accountId) || !localBookkeeper(p)))
             return false;
         if (!(input.requiredTools ?? []).every(tool => p.tools.includes(tool)))
             return false;
@@ -88,10 +82,44 @@ export function recommendStaffing(input) {
             return false;
         return p.availableBudget === undefined || withinBudget((spent.get(p.accountId) ?? 0) + cost, p.availableBudget);
     };
+    for (const assignment of active) {
+        const p = profiles.get(assignment.accountId);
+        const independent = assignment.perspective === REVIEW && !excludedReviewers.has(assignment.accountId);
+        const currentCoverage = !bookkeeping || Boolean(p && qualifies(p));
+        result.rows.push({
+            accountId: assignment.accountId, perspective: assignment.perspective,
+            family: family(p), tier: p?.hostVerified ? p.tier : 'unknown', source: 'existing',
+            verification: independent ? 'independent_review' : assignment.verified ? 'verified' : 'declared',
+            reasons: [!currentCoverage
+                    ? 'Existing bookkeeping ownership is history only; current local eligibility or qualifications are not satisfied.'
+                    : 'Existing ownership is preserved; this does not revalidate current eligibility or execution availability.'],
+        });
+        if (currentCoverage && (assignment.perspective !== REVIEW || independent))
+            covered.add(assignment.perspective);
+        if (!known(p))
+            explanations.add('Some existing ownership has unknown execution metadata; verify the host before new work.');
+        if (assignment.perspective === REVIEW && !independent)
+            explanations.add('An existing review assignment is not independent of all author/requester/assignee accounts.');
+    }
+    const costOrder = (a, b) => (a.cost ?? Number.MAX_SAFE_INTEGER) - (b.cost ?? Number.MAX_SAFE_INTEGER);
+    const loadOrder = (a, b) => workload(a.accountId) - workload(b.accountId)
+        || (a.accountId < b.accountId ? -1 : a.accountId > b.accountId ? 1 : 0);
     const pick = (perspective, independent, self = false, remainingEssentials = 0) => {
         let pool = selectable.filter(p => qualifies(p)
             && (!independent || !excludedReviewers.has(p.accountId)) && (!self || owners.has(p.accountId))
             && (perspective === REVIEW || !reservedReviewers.has(p.accountId)));
+        const order = (Object.hasOwn(input.preferences ?? {}, perspective) ? input.preferences?.[perspective] : undefined)
+            ?? [];
+        const preference = (p) => {
+            const index = order.findIndex(f => f.toLowerCase() === family(p));
+            return index < 0 ? order.length : index;
+        };
+        // Ordinary bookkeeping needs only the cheapest qualified local for each
+        // requested hat, with explicit preferences breaking cost ties. Skip all
+        // prospective capacity/reviewer reservations and history/diversity ranking.
+        if (bookkeeping && !needsReview)
+            return pool.sort((a, b) => costOrder(a, b)
+                || preference(a) - preference(b) || loadOrder(a, b))[0];
         if (perspective !== REVIEW && pool.length > 1) {
             // All essential perspectives share the same qualification requirements,
             // and sequential hats use one WIP slot. After each possible next choice,
@@ -143,7 +171,7 @@ export function recommendStaffing(input) {
         }
         // A qualified current owner can take sequential hats before asking the host
         // for additional staff. This also leaves available independent reviewers.
-        if (!independent && !self) {
+        if (!bookkeeping && !independent && !self) {
             const reuse = pool.filter(p => owners.has(p.accountId));
             if (reuse.length)
                 pool = reuse;
@@ -153,22 +181,18 @@ export function recommendStaffing(input) {
             const p = profiles.get(id);
             return p?.hostVerified && p.tier !== 'unknown' ? [p.tier] : [];
         }));
-        const order = (Object.hasOwn(input.preferences ?? {}, perspective) ? input.preferences?.[perspective] : undefined)
-            ?? USER_PREFERENCES.get(perspective.toLowerCase()) ?? [];
-        const preference = (p) => {
-            const index = order.findIndex(f => f.toLowerCase() === family(p));
-            return index < 0 ? order.length : index;
-        };
         const history = (p) => input.currentAssignments.some(a => a.accountId === p.accountId && a.perspective === perspective && a.verified === true) ? 0 : 1;
         const diversity = (p) => usedFamilies.has(family(p)) ? 1 : 0;
         // A different known tier contributes secondary diversity, with no ordering
         // by size. Unknown tier earns no diversity credit; minimum tier gates above.
         const tierDiversity = (p) => usedTiers.size && p.tier !== 'unknown' && !usedTiers.has(p.tier) ? 0 : 1;
-        pool.sort((a, b) => diversity(a) - diversity(b) || tierDiversity(a) - tierDiversity(b)
+        // Coverage and independence are already reserved above; bookkeeping cost
+        // takes precedence over ownership, diversity, history and family preference.
+        pool.sort((a, b) => (bookkeeping ? costOrder(a, b) : 0)
+            || diversity(a) - diversity(b) || tierDiversity(a) - tierDiversity(b)
             || preference(a) - preference(b) || history(a) - history(b)
-            || (a.cost ?? Number.MAX_SAFE_INTEGER) - (b.cost ?? Number.MAX_SAFE_INTEGER)
-            || workload(a.accountId) - workload(b.accountId)
-            || (a.accountId < b.accountId ? -1 : a.accountId > b.accountId ? 1 : 0));
+            || costOrder(a, b)
+            || loadOrder(a, b));
         const selected = pool[0];
         if (selected && usedFamilies.size && diversity(selected))
             explanations.add('Family diversity is limited by qualified availability or preserved sequential ownership.');
@@ -193,8 +217,10 @@ export function recommendStaffing(input) {
     };
     const wait = (perspective) => {
         const missingHost = [...eligible].some(id => !known(profiles.get(id)));
-        result.unfilled.push({ perspective, reason: perspective === REVIEW && input.workKind !== 'general'
-                ? 'independent_review_required' : missingHost ? 'waiting_host_verification' : 'no_qualified_candidate' });
+        result.unfilled.push({ perspective, reason: perspective === REVIEW && independentRequired
+                ? 'independent_review_required' : bookkeeping
+                ? selectable.some(localBookkeeper) ? 'no_qualified_candidate' : 'no_verified_local_candidate'
+                : missingHost ? 'waiting_host_verification' : 'no_qualified_candidate' });
     };
     let remainingEssentials = required.filter(p => !covered.has(p)).length;
     for (const perspective of required) {
@@ -209,11 +235,11 @@ export function recommendStaffing(input) {
         else
             wait(perspective);
     }
-    if (covered.has(REVIEW))
+    if (needsReview && covered.has(REVIEW))
         result.summary.covered++;
-    else {
+    else if (needsReview) {
         const reviewer = pick(REVIEW, true);
-        const self = !reviewer && input.workKind === 'general' ? pick(REVIEW, false, true) : undefined;
+        const self = !reviewer && !independentRequired ? pick(REVIEW, false, true) : undefined;
         if (reviewer || self)
             add(REVIEW, (reviewer ?? self), Boolean(self));
         else
@@ -258,8 +284,9 @@ function validate(input) {
         throw guidanceError(new Error('Invalid execution tier'), 'guid-c83c89c3c52cde8e'); };
     object(input, ['candidates', 'eligibleAccountIds', 'taskType', 'factualVerification', 'requiredPerspectives', 'workKind',
         'authorAccountIds', 'requesterAccountIds', 'assigneeAccountIds', 'currentAssignments', 'workload', 'personalWipLimit',
-        'requiredTools', 'requiredCapabilities', 'minimumTier', 'budget', 'preferences']);
-    if (!['code', 'research', 'writing', 'planning'].includes(input.taskType))
+        'requiredTools', 'requiredCapabilities', 'minimumTier', 'budget', 'preferences', 'deterministicAvailable']);
+    if (!['code', 'research', 'writing', 'planning', 'bookkeeping'].includes(input.taskType)
+        || (input.deterministicAvailable === true && input.taskType !== 'bookkeeping'))
         throw guidanceError(new Error('Invalid staffing task type'), 'guid-a79782fbd9523683');
     if (!['general', 'security', 'permissions', 'shared_policy', 'destructive'].includes(input.workKind))
         throw guidanceError(new Error('Invalid work kind'), 'guid-cc0e1af0c83477e5');
@@ -276,13 +303,15 @@ function validate(input) {
             strings(input[key], 20);
     if (input.factualVerification !== undefined)
         boolean(input.factualVerification);
+    if (input.deterministicAvailable !== undefined)
+        boolean(input.deterministicAvailable);
     if (input.minimumTier !== undefined)
         tier(input.minimumTier);
     if (input.budget !== undefined)
         number(input.budget);
     const ids = new Set();
     for (const candidate of list(input.candidates, 100)) {
-        const p = object(candidate, ['accountId', 'provider', 'family', 'version', 'reasoning', 'tier', 'tools', 'capabilities', 'hostVerified', 'availableBudget', 'cost']);
+        const p = object(candidate, ['accountId', 'provider', 'family', 'version', 'reasoning', 'tier', 'tools', 'capabilities', 'hostVerified', 'availableBudget', 'cost', 'executionLocality', 'bookkeepingSuitable']);
         text(p.accountId, true);
         if (ids.has(p.accountId))
             throw guidanceError(new Error('Duplicate execution account profile'), 'guid-29b2a5107462d753');
@@ -292,6 +321,10 @@ function validate(input) {
                 text(p[key]);
         tier(p.tier);
         boolean(p.hostVerified);
+        if (p.executionLocality !== undefined && !['local', 'remote', 'unknown'].includes(p.executionLocality))
+            throw guidanceError(new Error('Unknown staffing field'), 'guid-2ab84d9fc5a09972');
+        if (p.bookkeepingSuitable !== undefined)
+            boolean(p.bookkeepingSuitable);
         strings(p.tools, 50);
         strings(p.capabilities, 50);
         for (const key of ['availableBudget', 'cost'])

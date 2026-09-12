@@ -29,7 +29,11 @@ test('cyclic YAML sorted reads reject only cache copies, then cache repaired cur
     expect(repaired[0]!.revision).not.toBe(previousRevision);
     expect((index as any).sortedQueryCache.size).toBe(1);
     expect((index as any).sortedQueryCacheRows).toBe(1);
-    expect(await index.listSorted()).toBe(repaired);
+    const cached = (index as any).sortedQueryCache.values().next().value;
+    const repeated = await index.listSorted();
+    expect(repeated).toEqual(repaired);
+    expect(repeated[0]).toBe(repaired[0]);
+    expect((index as any).sortedQueryCache.values().next().value).toBe(cached);
   } finally {
     await index?.close();
     const target = resolve(root);

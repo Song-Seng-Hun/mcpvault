@@ -7,8 +7,10 @@ import { SemanticSearchService } from './semantic-search.js';
 import { PathFilter } from './pathfilter.js';
 import { chunkSemanticNote } from './semantic-chunks.js';
 import { SEMANTIC_EMBEDDING_PROFILE } from './semantic-profile.js';
+import { derivedStorageFixture } from '../tests/derived-storage-fixture.js';
 
 let vault: string, service: SemanticSearchService, embedded: string[];
+let snapshotHost: Awaited<ReturnType<typeof derivedStorageFixture>> | undefined;
 const path = 'Knowledge/Note.md';
 const hash = (raw: string) => createHash('sha256').update(raw).digest('hex');
 const vector = (text: string) => Array.from({ length: 384 }, (_, i) => Math.fround(parseInt(hash(text).slice(i % 32 * 2, i % 32 * 2 + 2), 16) / 255));
@@ -21,6 +23,8 @@ function inference() {
 }
 beforeEach(async () => {
   vault = await mkdtemp(join(tmpdir(), 'mcpvault-semantic-reuse-'));
+  snapshotHost = await derivedStorageFixture(vault);
+  vi.stubEnv('MCPVAULT_DERIVED_CACHE_DIR', snapshotHost.host);
   service = new SemanticSearchService(vault, new PathFilter());
   await (service as any).manifestReady; await (service as any).pendingReady;
   // These are native-database integration tests. Bootstrap the isolated DB as
@@ -31,6 +35,8 @@ beforeEach(async () => {
 });
 afterEach(async () => {
   await service.close(); vi.useRealTimers(); vi.restoreAllMocks();
+  vi.unstubAllEnvs();
+  await snapshotHost?.close(); snapshotHost = undefined;
   const target = await realpath(vault), local = relative(await realpath(tmpdir()), target);
   if (!local || local.startsWith('..') || isAbsolute(local) || !basename(target).startsWith('mcpvault-semantic-reuse-')) throw new Error('Unsafe test cleanup');
   await rm(target, { recursive: true, force: true });
@@ -251,7 +257,8 @@ test('a slow semantic query holds resources until completion, then releases afte
 
 test('failed manifest publication does not requeue a successful native vector write', async () => {
   await index('# Old');
-  await mkdir((service as any).manifestPath);
+  const namespace = dirname(await (service as any).snapshotStorage.directory('semantic-index'));
+  await mkdir(join(namespace, 'semantic-manifest.snapshot.gz'));
   const raw = '# New'; await seed(raw);
   service.notifyChange(path, 'upsert');
   await expect((service as any).drain(1)).resolves.toBeUndefined();

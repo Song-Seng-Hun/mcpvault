@@ -153,6 +153,12 @@ second writable forum.
 
 ## Deployment and trust boundaries
 
+New hosts default to `wiki-core`; optional features require an explicit private
+`--features-config` selection. See [original preservation, selective features,
+private derivatives and department navigation](docs/preservation-features.md)
+before upgrading an existing host. Selecting a feature does not grant document,
+owner-activity, provider or model-execution permission.
+
 The normal launcher supports optional `--roleplay-config`, `--economy-config`
 and `--skill-evolution-config` host-private files. They do not become enabled
 through registration or capability discovery. World administrators, durable

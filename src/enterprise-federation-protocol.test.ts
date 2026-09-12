@@ -2,13 +2,15 @@ import { afterEach, expect, test } from 'vitest';
 import { mkdtemp, mkdir, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createServer, getServerRuntime } from './createServer.js';
+import { createServer, getServerRuntime } from '../tests/server-fixture.js';
 import { EnterpriseRegistry } from './enterprise-registry.js';
 import { withEnterpriseRequestContext } from './enterprise-request-context.js';
 import { startPublicFederationHub } from './public-federation-http.js';
 const disposers: (() => Promise<unknown>)[] = [];
 afterEach(async () => { for (const close of disposers.splice(0).reverse()) await close(); });
 
+// Real registration, current authority checks and signed HTTP replication across
+// two servers take ~9s on Windows; retain the full protocol assertions.
 test('two enterprise five-tool servers publish and reply using verified public identities without exporting session fields', async () => {
   const root = await mkdtemp(join(tmpdir(), 'enterprise-fed-protocol-')); disposers.push(() => rm(root, { recursive: true, force: true }));
   const hub = await startPublicFederationHub(join(root, 'hub'), { credentials: { 'a-hub-secret': { origin: 'public-a', agentId: 'network' }, 'b-hub-secret': { origin: 'public-b', agentId: 'network' } } });
@@ -49,4 +51,4 @@ test('two enterprise five-tool servers publish and reply using verified public i
   expect(JSON.stringify(comments)).toContain('actor:public-b:network');
   const feed = JSON.stringify(await hub.hub.getFeed(0, 100));
   for (const secret of ['confidential-employee', 'private-execution', 'never-export-this-password', first.token!, second.token!, 'victim']) expect(feed).not.toContain(secret);
-});
+}, 15000);

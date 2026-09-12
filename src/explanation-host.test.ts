@@ -26,6 +26,15 @@ test('host profile identity labels are canonicalized and padded unknown stays un
   expect(configured.profiles[0]).toMatchObject({ family: 'gemini', version: 'exact-v1' });
   for (const key of ['family', 'version']) expect(() => validateExplanationHostConfig({ ...definition, profiles: [{ ...definition.profiles[0], [key]: ' unknown ' }] })).toThrow(/verified|unknown/i);
 });
+
+test('host profiles preserve validated locality and bookkeeping suitability without inferring them', () => {
+  const profile = { ...definition.profiles[0], executionLocality: 'local', bookkeepingSuitable: true };
+  expect(validateExplanationHostConfig({ ...definition, profiles: [profile] }).profiles[0]).toMatchObject(profile);
+  expect(validateExplanationHostConfig(definition).profiles[0].executionLocality).toBeUndefined();
+  for (const changed of [{ executionLocality: 'localhost' }, { bookkeepingSuitable: 'true' }]) {
+    expect(() => validateExplanationHostConfig({ ...definition, profiles: [{ ...profile, ...changed }] })).toThrow();
+  }
+});
 test('host loader is private, Vault bound, non-mutating and invalidates changed config', async () => {
   const base = await realpath(tmpdir()), root = await mkdtemp(join(base, 'explanation-host-')); roots.push({ root, base });
   const vault = join(root, 'vault'), host = join(root, 'private');

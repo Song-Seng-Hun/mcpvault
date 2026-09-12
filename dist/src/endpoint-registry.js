@@ -2,12 +2,39 @@ import { guidanceError, guidanceText } from './guidance-runtime.js';
 import { boundSearchResults } from './search-limits.js';
 import { projectGuidance } from './guidance-runtime.js';
 import { STORY_OPERATIONS } from './story-tools.js';
-import { operationAvailability } from './operation-contracts.js';
-export { operationReadAlias } from './operation-contracts.js';
+import { operationAvailability, operationReadAlias } from './operation-contracts.js';
+export { operationReadAlias };
 import { DOCUMENT_TOOL_ENDPOINTS } from './document-tools.js';
 import { EXPLANATION_ENDPOINTS } from './explanation-tools.js';
 import { BENCHMARK_TOOL_ENDPOINTS } from './benchmark-tools.js';
 import { createHash } from 'node:crypto';
+import { hostFeatureForTool } from './host-features.js';
+const OPTIONAL_ACTIVITIES = new Set(['collaboration', 'ideation-research', 'explanation-translation',
+    'benchmarks', 'economy', 'roleplay', 'skill-evolution']);
+export function ownerActivityForEndpointTool(toolName) {
+    const feature = hostFeatureForTool(toolName);
+    return feature && OPTIONAL_ACTIVITIES.has(feature) ? feature : undefined;
+}
+const OWNER_OPERATION_ACTIONS = {
+    manage_skill_candidate: { list: 'discover', read: 'read' },
+    manage_roleplay_evolution: { list: 'discover', read: 'read' },
+    manage_story_artifact: { list: 'discover', read: 'read' },
+    manage_story_review: { list: 'discover', read: 'read' },
+    manage_story_session: { list: 'discover', read: 'read' },
+    manage_quest_contract: { claim: 'claim' },
+};
+export function ownerActionForEndpointTool(toolName, mutating, op) {
+    const explicitOperation = typeof op === 'string' ? OWNER_OPERATION_ACTIONS[toolName]?.[op] : undefined;
+    if (explicitOperation)
+        return explicitOperation;
+    const alias = operationReadAlias(toolName, op);
+    const effective = alias ?? toolName;
+    if (/^(?:list|search|get_.+candidates|resolve_skill)/.test(effective))
+        return 'discover';
+    if (/^(?:claim|release)_/.test(effective))
+        return 'claim';
+    return alias ? 'read' : mutating ? 'execute' : 'read';
+}
 const CONTROL_TOOLS = new Set(['orient_wiki', 'get_agent_pulse', 'list_active_capabilities', 'search_capabilities', 'call_endpoint']);
 const ENDPOINT_QUERY_STOP_WORDS = new Set([
     'a', 'an', 'and', 'are', 'as', 'at', 'be', 'by', 'can', 'could', 'do', 'for', 'from', 'get', 'give', 'i', 'in', 'into', 'is', 'it', 'me', 'of', 'on', 'or', 'please', 'show', 'that', 'the', 'to', 'use', 'want', 'with', 'would',
@@ -589,7 +616,13 @@ function compactEndpointSchema(endpoint) {
 }
 export class EndpointRegistry {
     descriptors = new Map();
+    registrationGeneration = 0;
+    catalogFingerprint;
     setTools(tools, requiredCapabilities, mutatingTools) {
+        // Code-owned descriptor/schema changes enter through registration. Never
+        // retain a fingerprint across registrations, even for an identical catalog.
+        this.registrationGeneration += 1;
+        this.catalogFingerprint = undefined;
         this.descriptors.clear();
         for (const tool of tools) {
             if (CONTROL_TOOLS.has(tool.name))
@@ -691,17 +724,31 @@ export class EndpointRegistry {
                 || context.benchmarksConfigured === false && item.endpointId.startsWith('benchmark.');
             const roleplaySetupMissing = context.roleplayWritesConfigured === false && item.endpointId.startsWith('roleplay.') && item.mutating;
             const disabled = context.readOnly && item.mutating || skillDisabled || hostMissing || roleplaySetupMissing;
-            const available = !disabled && (item.requires.length === 0 || context.authenticated && missing.length === 0 || item.endpointId === 'auth.register' || item.endpointId === 'auth.login');
-            const state = disabled ? 'disabled' : available ? 'ready' : 'locked';
-            const reason = hostMissing ? 'host configuration is missing' : roleplaySetupMissing ? 'host administrator configuration is missing' : skillDisabled ? 'skill evolution is disabled by the host' : disabled ? 'server is read-only' : !context.authenticated && item.requires.length > 0 && item.endpointId !== 'auth.register' && item.endpointId !== 'auth.login' ? 'authentication required' : missing.length > 0 ? `capability required: ${missing.join(', ')}` : undefined;
-            const operations = operationAvailability(item, context, { available, state, requires: item.requires, ...(reason && { reason }) });
-            if (operations)
-                return { ...item, ...operations };
-            return { ...item, available, state, ...(reason && { reason }) };
+            const parentAvailable = !disabled && (item.requires.length === 0 || context.authenticated && missing.length === 0 || item.endpointId === 'auth.register' || item.endpointId === 'auth.login');
+            const parentState = disabled ? 'disabled' : parentAvailable ? 'ready' : 'locked';
+            const parentReason = hostMissing ? 'host configuration is missing' : roleplaySetupMissing ? 'host administrator configuration is missing' : skillDisabled ? 'skill evolution is disabled by the host' : disabled ? 'server is read-only' : !context.authenticated && item.requires.length > 0 && item.endpointId !== 'auth.register' && item.endpointId !== 'auth.login' ? 'authentication required' : missing.length > 0 ? `capability required: ${missing.join(', ')}` : undefined;
+            const activity = ownerActivityForEndpointTool(item.toolName);
+            const consent = (action) => !activity || context.ownerActivity?.eligibility[activity]?.[action] === true;
+            const ownerProject = (value, action) => value.state === 'disabled' || consent(action) ? value : { ...value, available: false, state: 'locked', reason: 'owner consent required' };
+            const base = ownerProject({ available: parentAvailable, state: parentState, requires: item.requires, ...(parentReason && { reason: parentReason }) }, ownerActionForEndpointTool(item.toolName, item.mutating));
+            const operations = operationAvailability(item, context, { available: parentAvailable, state: parentState, requires: item.requires, ...(parentReason && { reason: parentReason }) });
+            if (operations) {
+                const projected = Object.fromEntries(Object.entries(operations.operations)
+                    .map(([op, value]) => [op, ownerProject(value, ownerActionForEndpointTool(item.toolName, item.mutating, op))]));
+                const values = Object.values(projected);
+                // A mixed endpoint is discoverable when an actual operation can run;
+                // the mutating parent's disabled state cannot hide an authorized read.
+                const summary = values.find(value => value.available) ?? values.find(value => value.state === 'locked') ?? base;
+                return { ...item, ...summary, operations: projected };
+            }
+            return { ...item, ...base };
         })
             .filter(item => !activeOnly || item.available);
         if (page.compact) {
-            const fingerprint = createHash('sha256').update(JSON.stringify({ descriptors, context: { ...context, capabilities: [...context.capabilities].sort() }, activeOnly, text })).digest('hex').slice(0, 32);
+            // Full schemas are static within a registration generation. Cache only
+            // their digest; authority and availability above are evaluated every time.
+            this.catalogFingerprint ??= createHash('sha256').update(JSON.stringify(descriptors)).digest('hex');
+            const fingerprint = createHash('sha256').update(JSON.stringify({ catalog: this.catalogFingerprint, generation: this.registrationGeneration, context: { ...context, capabilities: [...context.capabilities].sort() }, activeOnly, text })).digest('hex').slice(0, 32);
             let offset = 0;
             if (page.cursor !== undefined) {
                 try {

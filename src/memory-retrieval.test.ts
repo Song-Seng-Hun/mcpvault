@@ -10,11 +10,13 @@ import { ScopeAccessPolicy } from './scope-access.js';
 import { FileSystemService } from './filesystem.js';
 import { PathFilter } from './pathfilter.js';
 import { SEMANTIC_EMBEDDING_PROFILE } from './semantic-profile.js';
+import { derivedStorageFixture } from '../tests/derived-storage-fixture.js';
 
 let vault: string;
 let search: SearchService;
 let semantic: SemanticSearchService;
 let retrieval: RetrievalService;
+let host: Awaited<ReturnType<typeof derivedStorageFixture>>;
 const revision = 'a'.repeat(64);
 const vector = Array.from({ length: 384 }, (_, i) => Number(i === 0));
 
@@ -24,12 +26,14 @@ beforeEach(async () => {
   const access = new ScopeAccessPolicy();
   const fs = new FileSystemService(vault);
   search = new SearchService(vault, filter);
-  semantic = new SemanticSearchService(vault, filter, access);
+  host = await derivedStorageFixture(vault);
+  semantic = new SemanticSearchService(vault, filter, access, undefined, undefined, undefined, host.host);
   retrieval = new RetrievalService(search, new CollaborationService(fs, search), semantic, access, fs);
 });
 afterEach(async () => {
   await search.close();
   await semantic.close();
+  await host.close();
   vi.restoreAllMocks();
   await rm(vault, { recursive: true, force: true });
 });
@@ -98,6 +102,7 @@ test('the internal metadata response has a hard 10000-hit ceiling', async () => 
     const document = { ...seed, relativePath: `Synthetic/${i}.md`, documentId: 100 + i };
     (search as any).documents.set(document.relativePath, document);
     (search as any).documentsById.set(document.documentId, document);
+    (search as any).pathDocuments.get('').add(document.documentId);
   }
   const result = await retrieval.memoryCandidates({ query: '', limit: 50_000, semantic: false, canAccessPath: p => p.startsWith('Synthetic/') });
   expect(result.results).toHaveLength(10_000);
@@ -228,6 +233,26 @@ test('vector candidate cache never reuses another admission predicate', async ()
 test('stale vector revisions are incomplete and never hydrated', async () => {
   await vectorBackend([row('A.md')]);
   const result = await semantic.memoryCandidates({ query: 'semanticneedle', queryVector: vector, canAccessPath: () => true, candidateRevisions: new Map([['A.md', 'b'.repeat(64)]]) });
+  expect(result.results).toEqual([]);
+  expect(result.complete).toBe(false);
+});
+
+test('lazy metadata revisions filter semantic-only candidates before top-k', async () => {
+  await vectorBackend([row('Stale.md', 0), row('SemanticOnly.md', 0.1)]);
+  const result = await retrieval.memoryCandidates({ query: 'semanticneedle', queryVector: vector, semantic: true, limit: 1,
+    canAccessPath: () => true, candidateRevision: path => path === 'SemanticOnly.md' ? revision : 'b'.repeat(64) });
+  expect(result.results.map(hit => hit.p)).toEqual(['SemanticOnly.md']);
+  expect(result.complete).toBe(false);
+});
+
+test('lazy metadata revisions are rechecked after semantic awaits', async () => {
+  await vectorBackend([row('A.md')]);
+  let current = revision;
+  vi.spyOn(semantic as any, 'getTableNames').mockImplementation(async () => {
+    current = 'b'.repeat(64); return new Set(['chunks_global']);
+  });
+  const result = await semantic.memoryCandidates({ query: 'semanticneedle', queryVector: vector,
+    canAccessPath: () => true, candidateRevision: () => current });
   expect(result.results).toEqual([]);
   expect(result.complete).toBe(false);
 });

@@ -227,6 +227,9 @@ export interface GlobalImportResult extends GlobalPullResult {
 }
 /** Pull-only replica. Local edits are never overwritten; remote tombstones are recoverable moves. */
 export declare class GlobalSyncReplica {
+    private readonly documentPolicy;
+    private readonly fileSystem;
+    private readonly pathFilter;
     private readonly vaultPath;
     private readonly statePath;
     private readonly backupRoot;
@@ -247,6 +250,7 @@ export declare class GlobalSyncReplica {
     pullPages(maxPages?: number, pageSize?: number): Promise<GlobalImportResult>;
     proposeLocal(documentId: string, author: string, reason: string, origin: string, provenance?: GlobalProvenance, idempotencyKey?: string): Promise<GlobalProposal>;
     proposeTombstone(documentId: string, author: string, reason: string, origin: string): Promise<GlobalProposal>;
+    private assertPublicDocument;
 }
 export interface GlobalSyncHubHttpOptions {
     host?: string;

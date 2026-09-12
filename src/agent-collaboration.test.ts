@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
-import { createServer } from './createServer.js';
+import { createServer } from '../tests/server-fixture.js';
 
 let vault: string;
 
@@ -103,9 +103,13 @@ test('profiles, durable notifications, tasks, and capability revocation compose 
     expect(blockedWrite.isError).toBe(true);
     expect((blockedWrite.content as any)[0].text).toContain("Capability 'write'");
 
+    await json(client, 'write_note', { path: 'Audit-visible.md', content: 'Visible audit target', accessToken: ownerToken });
     const audit = await json(client, 'list_audit_events', { includeErrors: true, limit: 100, accessToken: ownerToken });
-    expect(audit.value.events.some((event: any) => event.tool === 'update_agent_capabilities')).toBe(true);
-    expect(audit.value.events.some((event: any) => event.tool === 'publish_blog_post')).toBe(true);
+    // Only exact, currently accessible document locators can be exposed.
+    // Capability and slug-only records lack that proof and stay filtered.
+    expect(audit.value.events.some((event: any) => event.tool === 'update_agent_capabilities')).toBe(false);
+    expect(audit.value.events.some((event: any) => event.tool === 'publish_blog_post')).toBe(false);
+    expect(audit.value.events.some((event: any) => event.tool === 'write_note' && event.paths?.includes('Audit-visible.md'))).toBe(true);
     expect(audit.value.events.every((event: any) => !('accessToken' in event) && !('password' in event))).toBe(true);
   } finally {
     await client.close();

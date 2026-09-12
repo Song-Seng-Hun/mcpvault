@@ -3,7 +3,7 @@ import { AgentPulseService } from './agent-pulse.js';
 import type { ScopePrincipal } from './scope-auth.js';
 
 const principal: ScopePrincipal = { accountId: 'test', modelId: 'test', role: 'model' };
-function pulse(options: { checkpoint?: boolean; busy?: boolean } = {}) {
+function pulse(options: { checkpoint?: boolean; busy?: boolean; ownerConsent?: boolean } = {}) {
   const calls: string[] = [];
   const service = new AgentPulseService(
     { list: async () => ({ notifications: [], unreadCount: 0 }) } as any,
@@ -15,6 +15,10 @@ function pulse(options: { checkpoint?: boolean; busy?: boolean } = {}) {
     { reviewQueue: async () => ({ items: [], total: 0 }), inbox: async () => ({ items: [], total: 0 }), reviewPacket: async () => ({}) } as any,
     undefined, undefined, undefined,
     { nextAction: async ({ skillId }: { skillId: string }) => { calls.push(skillId); return { endpointId: 'skill.candidate', arguments: { skillId, candidateId: '123', op: 'read' } }; } } as any,
+    undefined,
+    async () => options.ownerConsent === false ? undefined : ({
+      run: async <T>(reader: () => Promise<T>) => reader(), revalidate: async () => {}, assertFresh: () => {},
+    }),
   );
   return { service, calls };
 }
@@ -29,5 +33,12 @@ test('pulse offers one relevant skill candidate only after current work prioriti
 test('no supplied skill or a busy host never scans skills or starts optional evolution', async () => {
   const f = pulse(); await f.service.get({ principal });
   await f.service.get({ principal, skillId: 'safe-edit', hostBusy: true });
+  expect(f.calls).toEqual([]);
+});
+
+test('without owner consent a supplied skill never triggers candidate discovery', async () => {
+  const f = pulse({ ownerConsent: false });
+  const value = await f.service.get({ principal, skillId: 'safe-edit' });
+  expect(value.nextAction.tool).toBe('wiki.home');
   expect(f.calls).toEqual([]);
 });

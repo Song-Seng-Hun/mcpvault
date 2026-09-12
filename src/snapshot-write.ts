@@ -1,7 +1,7 @@
 import { guidanceError } from './guidance-runtime.js';
 import { randomUUID } from 'node:crypto';
-import { open, rename, unlink } from 'node:fs/promises';
-import { Readable, Transform } from 'node:stream';
+import { open, rename, unlink, type FileHandle } from 'node:fs/promises';
+import { Readable, Transform, Writable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { createGzip } from 'node:zlib';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -23,6 +23,19 @@ function byteLimit(maxBytes: number): Transform {
   });
 }
 
+/** Write to a caller-owned, already private exclusive handle. The owner is
+ * responsible for closing, publication and identity-checked cleanup. */
+export async function writeGzipSnapshotHandle(handle: FileHandle, chunks: Iterable<string | Uint8Array>, limits: SnapshotWriteLimits): Promise<void> {
+  if (![limits.maxBytes, limits.maxDecodedBytes].every(value => Number.isSafeInteger(value) && value > 0 && value <= 0x7fffffff)) throw guidanceError(new TypeError('Invalid snapshot byte limit'), 'guid-0d65cfcdd8523b6d');
+  await pipeline(
+    Readable.from(snapshotByteChunks(chunks, limits.maxDecodedBytes), { objectMode: false, highWaterMark: 64 * 1024 }),
+    createGzip(), byteLimit(limits.maxBytes),
+    new Writable({ highWaterMark: 64 * 1024, write(chunk, _encoding, callback) {
+      handle.writeFile(chunk).then(() => callback(), callback);
+    } }),
+  );
+}
+
 /** Internal disposable cache paths only. Does not authorize source-document IO. */
 export async function writeGzipSnapshot(path: string, chunks: Iterable<string | Uint8Array>, limits: SnapshotWriteLimits): Promise<void> {
   if (![limits.maxBytes, limits.maxDecodedBytes].every(value => Number.isSafeInteger(value) && value > 0 && value <= 0x7fffffff)) throw guidanceError(new TypeError('Invalid snapshot byte limit'), 'guid-0d65cfcdd8523b6d');
@@ -34,8 +47,7 @@ export async function writeGzipSnapshot(path: string, chunks: Iterable<string | 
     try {
       await pipeline(
         Readable.from(snapshotByteChunks(chunks, limits.maxDecodedBytes), { objectMode: false, highWaterMark: 64 * 1024 }),
-        createGzip(), byteLimit(limits.maxBytes),
-        handle.createWriteStream(),
+        createGzip(), byteLimit(limits.maxBytes), handle.createWriteStream(),
       );
     } finally { await handle.close(); }
     // Windows can briefly reject concurrent replacement even after streams

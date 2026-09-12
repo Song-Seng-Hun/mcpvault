@@ -4,12 +4,14 @@ import type { ScopeCapability } from './scope-auth.js';
 import { boundSearchResults } from './search-limits.js';
 import { projectGuidance } from './guidance-runtime.js';
 import { STORY_OPERATIONS } from './story-tools.js';
-import { operationAvailability } from './operation-contracts.js';
-export { operationReadAlias } from './operation-contracts.js';
+import { operationAvailability, operationReadAlias } from './operation-contracts.js';
+export { operationReadAlias };
 import { DOCUMENT_TOOL_ENDPOINTS } from './document-tools.js';
 import { EXPLANATION_ENDPOINTS } from './explanation-tools.js';
 import { BENCHMARK_TOOL_ENDPOINTS } from './benchmark-tools.js';
 import { createHash } from 'node:crypto';
+import { hostFeatureForTool } from './host-features.js';
+import type { Activity, OwnerActivityAction } from './owner-activity.js';
 
 export interface EndpointDescriptor {
   endpointId: string;
@@ -40,6 +42,36 @@ export interface EndpointAvailabilityContext {
   economyConfigured?: boolean;
   explanationsConfigured?: boolean;
   benchmarksConfigured?: boolean;
+  ownerActivity?: {
+    policyFingerprint: string;
+    executionBindingGeneration: string;
+    grantAvailabilityGeneration?: string;
+    eligibility: Partial<Record<Activity, Partial<Record<OwnerActivityAction, boolean>>>>;
+  };
+}
+
+const OPTIONAL_ACTIVITIES = new Set<Activity>(['collaboration', 'ideation-research', 'explanation-translation',
+  'benchmarks', 'economy', 'roleplay', 'skill-evolution']);
+export function ownerActivityForEndpointTool(toolName: string): Activity | undefined {
+  const feature = hostFeatureForTool(toolName);
+  return feature && OPTIONAL_ACTIVITIES.has(feature as Activity) ? feature as Activity : undefined;
+}
+const OWNER_OPERATION_ACTIONS: Readonly<Record<string, Readonly<Record<string, OwnerActivityAction>>>> = {
+  manage_skill_candidate: { list: 'discover', read: 'read' },
+  manage_roleplay_evolution: { list: 'discover', read: 'read' },
+  manage_story_artifact: { list: 'discover', read: 'read' },
+  manage_story_review: { list: 'discover', read: 'read' },
+  manage_story_session: { list: 'discover', read: 'read' },
+  manage_quest_contract: { claim: 'claim' },
+};
+export function ownerActionForEndpointTool(toolName: string, mutating: boolean, op?: unknown): OwnerActivityAction {
+  const explicitOperation = typeof op === 'string' ? OWNER_OPERATION_ACTIONS[toolName]?.[op] : undefined;
+  if (explicitOperation) return explicitOperation;
+  const alias = operationReadAlias(toolName, op);
+  const effective = alias ?? toolName;
+  if (/^(?:list|search|get_.+candidates|resolve_skill)/.test(effective)) return 'discover';
+  if (/^(?:claim|release)_/.test(effective)) return 'claim';
+  return alias ? 'read' : mutating ? 'execute' : 'read';
 }
 
 const CONTROL_TOOLS = new Set(['orient_wiki', 'get_agent_pulse', 'list_active_capabilities', 'search_capabilities', 'call_endpoint']);
@@ -630,8 +662,14 @@ function compactEndpointSchema(endpoint: EndpointDescriptor & { available: boole
 
 export class EndpointRegistry {
   private descriptors = new Map<string, EndpointDescriptor>();
+  private registrationGeneration = 0;
+  private catalogFingerprint: string | undefined;
 
   setTools(tools: Tool[], requiredCapabilities: Partial<Record<string, ScopeCapability>>, mutatingTools: Set<string>): void {
+    // Code-owned descriptor/schema changes enter through registration. Never
+    // retain a fingerprint across registrations, even for an identical catalog.
+    this.registrationGeneration += 1;
+    this.catalogFingerprint = undefined;
     this.descriptors.clear();
     for (const tool of tools) {
       if (CONTROL_TOOLS.has(tool.name)) continue;
@@ -730,16 +768,33 @@ export class EndpointRegistry {
           || context.benchmarksConfigured === false && item.endpointId.startsWith('benchmark.');
         const roleplaySetupMissing = context.roleplayWritesConfigured === false && item.endpointId.startsWith('roleplay.') && item.mutating;
         const disabled = context.readOnly && item.mutating || skillDisabled || hostMissing || roleplaySetupMissing;
-        const available = !disabled && (item.requires.length === 0 || context.authenticated && missing.length === 0 || item.endpointId === 'auth.register' || item.endpointId === 'auth.login');
-        const state = disabled ? 'disabled' as const : available ? 'ready' as const : 'locked' as const;
-        const reason = hostMissing ? 'host configuration is missing' : roleplaySetupMissing ? 'host administrator configuration is missing' : skillDisabled ? 'skill evolution is disabled by the host' : disabled ? 'server is read-only' : !context.authenticated && item.requires.length > 0 && item.endpointId !== 'auth.register' && item.endpointId !== 'auth.login' ? 'authentication required' : missing.length > 0 ? `capability required: ${missing.join(', ')}` : undefined;
-        const operations = operationAvailability(item, context, { available, state, requires: item.requires, ...(reason && { reason }) });
-        if (operations) return { ...item, ...operations };
-        return { ...item, available, state, ...(reason && { reason }) };
+        const parentAvailable = !disabled && (item.requires.length === 0 || context.authenticated && missing.length === 0 || item.endpointId === 'auth.register' || item.endpointId === 'auth.login');
+        const parentState = disabled ? 'disabled' as const : parentAvailable ? 'ready' as const : 'locked' as const;
+        const parentReason = hostMissing ? 'host configuration is missing' : roleplaySetupMissing ? 'host administrator configuration is missing' : skillDisabled ? 'skill evolution is disabled by the host' : disabled ? 'server is read-only' : !context.authenticated && item.requires.length > 0 && item.endpointId !== 'auth.register' && item.endpointId !== 'auth.login' ? 'authentication required' : missing.length > 0 ? `capability required: ${missing.join(', ')}` : undefined;
+        const activity = ownerActivityForEndpointTool(item.toolName);
+        const consent = (action: OwnerActivityAction) => !activity || context.ownerActivity?.eligibility[activity]?.[action] === true;
+        const ownerProject = <T extends { available: boolean; state: 'ready' | 'locked' | 'disabled'; reason?: string }>(value: T, action: OwnerActivityAction): T =>
+          value.state === 'disabled' || consent(action) ? value : { ...value, available: false, state: 'locked', reason: 'owner consent required' };
+        const base = ownerProject({ available: parentAvailable, state: parentState, requires: item.requires, ...(parentReason && { reason: parentReason }) },
+          ownerActionForEndpointTool(item.toolName, item.mutating));
+        const operations = operationAvailability(item, context, { available: parentAvailable, state: parentState, requires: item.requires, ...(parentReason && { reason: parentReason }) });
+        if (operations) {
+          const projected = Object.fromEntries(Object.entries(operations.operations)
+            .map(([op, value]) => [op, ownerProject(value, ownerActionForEndpointTool(item.toolName, item.mutating, op))]));
+          const values = Object.values(projected);
+          // A mixed endpoint is discoverable when an actual operation can run;
+          // the mutating parent's disabled state cannot hide an authorized read.
+          const summary = values.find(value => value.available) ?? values.find(value => value.state === 'locked') ?? base;
+          return { ...item, ...summary, operations: projected };
+        }
+        return { ...item, ...base };
       })
       .filter(item => !activeOnly || item.available);
     if (page.compact) {
-      const fingerprint = createHash('sha256').update(JSON.stringify({ descriptors, context: { ...context, capabilities: [...context.capabilities].sort() }, activeOnly, text })).digest('hex').slice(0, 32);
+      // Full schemas are static within a registration generation. Cache only
+      // their digest; authority and availability above are evaluated every time.
+      this.catalogFingerprint ??= createHash('sha256').update(JSON.stringify(descriptors)).digest('hex');
+      const fingerprint = createHash('sha256').update(JSON.stringify({ catalog: this.catalogFingerprint, generation: this.registrationGeneration, context: { ...context, capabilities: [...context.capabilities].sort() }, activeOnly, text })).digest('hex').slice(0, 32);
       let offset = 0;
       if (page.cursor !== undefined) {
         try {

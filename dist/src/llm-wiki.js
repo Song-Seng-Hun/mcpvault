@@ -1,4 +1,5 @@
 import { guidanceError, guidanceText } from './guidance-runtime.js';
+import { prepareDocumentWrite } from './enterprise-storage-context.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { fingerprint as workFingerprintForOutput } from './work-model.js';
 import { workshopDecisionSeal } from './workshop-output.js';
@@ -15,6 +16,7 @@ import { normalizeScopeId } from './scopes.js';
 import { endpointIdForTool } from './endpoint-registry.js';
 import { organizationDateTimestamp, workDateState } from './organization.js';
 import { iterateNotes, iterateNoteBodies } from './paged-query.js';
+import { createDerivedCacheOwner, derivedCacheBudget, estimateCacheBytes } from './cache-budget.js';
 import { resolveEvidenceLocator } from './evidence-locator.js';
 import { readSourceMetadataPage } from './source-metadata-page.js';
 import { getOrganizationPropertyContract, getOrganizationRelationContract, hasExplicitKnowledgeDisposition, inapplicableOrganizationProperties, isActionableKnowledge, isOpenActionableKnowledge, knowledgeOrganization, normalizeClarifyDisposition, normalizeDecisionStatus, normalizeIsoDate, normalizeKnowledgeDisposition, normalizeLifecycle, normalizeNoteKind, normalizeRecallQuality, normalizeReviewAt, normalizeReviewChecks, normalizeReviewIntervalDays, normalizeReviewOutcome, normalizeTaskStatus, normalizeVolatilityClass, organizationLintIssues, organizationNoteTemplate, organizationPropertyAppliesTo, temporalValidity, ANSWER_PACKET_INTENTS, BASES_VIEW_IDS, CAPTURE_SOURCES, CATALOG_ORDERS, CLAIM_ROLES, CLAIM_STATUSES, COMPLETION_DISPOSITION_REQUIRED_MESSAGE, CONFIDENCE_LEVELS, DECISION_STATUSES, FOCUS_HORIZONS, ISSUE_KINDS, KNOWLEDGE_ROLES, KNOWLEDGE_STATUSES, NOTE_KINDS, NOTE_TEMPLATE_IDS, RECALL_REPAIR_STATUSES, RELATION_FIELDS, RECIPROCAL_RELATIONS, SERVICE_CLASSES, SOURCE_TRUST_LEVELS, TEMPORAL_VALIDITY_STATES, VOLATILITY_CLASSES, LIFECYCLES, TASK_STATUSES, ISSUE_RESOLUTION_STATUSES, ISSUE_RETROSPECTIVE_STATUSES, WIKI_PROJECTION_VIEWS } from './organization.js';
@@ -1134,6 +1136,7 @@ export class LlmWikiService {
         };
     }
     generation = 0;
+    projectionCacheOwner = createDerivedCacheOwner('wiki.projections');
     catalogSummaryCache = new Map();
     catalogSummaryInFlight = new Map();
     lintCache = new Map();
@@ -1147,12 +1150,91 @@ export class LlmWikiService {
         this.references = references;
         this.semanticSearch = semanticSearch;
     }
-    invalidate() {
+    dropProjection(kind, cache, key) {
+        cache.delete(key);
+        derivedCacheBudget.remove(this.projectionCacheOwner, `${kind}:${key}`);
+    }
+    retainProjection(kind, cache, key, entry, dependencyBytes) {
+        // Cap session/option variants as well as their bytes. Source sets are not
+        // visible output, but are still owned retained memory and must be charged.
+        this.dropProjection(kind, cache, key);
+        cache.set(key, entry);
+        const bytes = 512 + key.length * 2 + estimateCacheBytes(entry.value) * 4
+            + estimateCacheBytes(entry.principal ?? null) * 4 + dependencyBytes;
+        derivedCacheBudget.register(this.projectionCacheOwner, `${kind}:${key}`, bytes, () => {
+            if (cache.get(key) === entry)
+                cache.delete(key);
+        });
+        while (cache.size > 32)
+            this.dropProjection(kind, cache, cache.keys().next().value);
+    }
+    hasDependency(basis, path) {
+        if (basis.has(path))
+            return true;
+        if (process.platform !== 'win32')
+            return false;
+        const identity = normalizePath(path).toLowerCase();
+        for (const key of basis.keys())
+            if (normalizePath(key).toLowerCase() === identity)
+                return true;
+        return false;
+    }
+    invalidate(changes) {
         this.generation += 1;
-        this.catalogSummaryCache.clear();
         this.catalogSummaryInFlight.clear();
-        this.lintCache.clear();
         this.lintInFlight.clear();
+        if (!changes || !changes.length || changes.length > 128 || changes.some(({ path }) => !path || path.length > 500 || path !== normalizePath(path)
+            || /^(?:[a-z]:|\/)|(?:^|\/)\.{1,2}(?:\/|$)/i.test(path))) {
+            this.catalogSummaryCache.clear();
+            this.lintCache.clear();
+            derivedCacheBudget.clearOwner(this.projectionCacheOwner);
+            return;
+        }
+        for (const [key, entry] of this.catalogSummaryCache) {
+            for (const { path } of changes)
+                if (this.cachePathRelevant(path, entry.principal, entry.basis))
+                    entry.dirty.add(path);
+            if (entry.dirty.size > 128)
+                this.dropProjection('catalog', this.catalogSummaryCache, key);
+            else
+                entry.generation = this.generation;
+        }
+        for (const [key, entry] of this.lintCache) {
+            const basis = this.lintSnapshots.get(entry.value);
+            if (!basis || changes.some(({ path }) => this.cachePathRelevant(path, entry.principal, basis)))
+                this.dropProjection('lint', this.lintCache, key);
+            else
+                entry.generation = this.generation;
+        }
+    }
+    cachePathRelevant(path, principal, basis) {
+        if (this.hasDependency(basis, path))
+            return true;
+        // Invalidation may run inside another writer's ambient authority. Only
+        // structurally disjoint private ownership can prove irrelevance here.
+        const owner = /^_scopes\/(agents|models|users)\/([^/]+)(?:\/|$)/i.exec(path);
+        if (!owner)
+            return true;
+        const id = owner[1].toLowerCase() === 'agents' ? principal?.agentId
+            : owner[1].toLowerCase() === 'models' ? principal?.modelId : principal?.userId;
+        return id?.toLowerCase() === owner[2].toLowerCase();
+    }
+    async summaryCacheCurrent(entry, principal) {
+        const generation = this.generation;
+        const admitted = (path) => this.access.canAccessPhysicalPath(path, principal);
+        if (entry.generation !== generation || [...entry.basis].some(path => !admitted(path))
+            || [...entry.dirty].some(path => this.hasDependency(entry.basis, path)))
+            return false;
+        if (entry.dirty.size) {
+            const changed = await this.fileSystem.readNoteMetadata([...entry.dirty], admitted, { strict: true });
+            if (changed.some(note => !isModerationHidden(note.frontmatter)
+                && (typeof note.frontmatter.llm_wiki_type === 'string' || note.path.toLowerCase() === PUBLIC_SCHEMA_PATH.toLowerCase())))
+                return false;
+        }
+        if (generation !== this.generation || [...entry.basis].some(path => !admitted(path)))
+            return false;
+        entry.dirty.clear();
+        return true;
     }
     /**
      * Monotonic version for disposable Wiki read projections. Consumers may
@@ -1162,7 +1244,7 @@ export class LlmWikiService {
         return this.generation;
     }
     principalKey(principal) {
-        return JSON.stringify(principal ? [principal.accountId, principal.userId || '', principal.modelId, principal.agentId || '', principal.commandCenterId || '', principal.role] : ['anonymous']);
+        return JSON.stringify([principal ?? null, this.access.documentPolicyFingerprint()]);
     }
     async validatedKnowledgeDisposition(params, existing, containerPath, principal, required) {
         const supplied = [params.retrospective, params.knowledgeNotes, params.negativeKnowledgeNotes, params.noReusableKnowledge, params.knowledgeDispositionReason]
@@ -2071,13 +2153,21 @@ export class LlmWikiService {
             throw guidanceError(new Error('archiveSequence requires archiveSeries'), 'guid-0d9abed04612b020');
         const sourceId = params.sourceId
             ? normalizeScopeId(params.sourceId, 'sourceId')
-            : `source-${contentHash.slice(0, 16)}`;
+            : `source-${hash(String(params.content ?? '')).slice(0, 16)}`;
         const path = joinRoot(params.scopeRoot, `_sources/${sourceId}.md`);
         const provenance = params.sourceDerivations === undefined ? undefined
             : await prepareSourceDerivations(this.fileSystem, this.access, params.sourceDerivations, path, params.principal);
         if (await this.fileSystem.noteExists(path)) {
             const existing = await this.fileSystem.readNote(path);
             if (existing.frontmatter.content_sha256 === contentHash && existing.content === content) {
+                if (existing.frontmatter.original_sha256 && existing.frontmatter.original_sha256 !== hash(String(params.content ?? ''))) {
+                    throw new Error('Existing immutable original has different bytes; capture a new sourceId');
+                }
+                if (existing.frontmatter.original_path) {
+                    if (existing.frontmatter.original_path !== joinRoot(params.scopeRoot, `_sources/${sourceId}/original.txt`))
+                        throw new Error('Immutable original metadata mismatch');
+                    await this.fileSystem.preserveOriginal(existing.frontmatter.original_path, Buffer.from(String(params.content ?? ''), 'utf8'));
+                }
                 if (provenance && JSON.stringify(existing.frontmatter.source_derivations || []) !== JSON.stringify(provenance.records)) {
                     throw guidanceError(new Error('Existing immutable source has different provenance; ingest a new sourceId instead of silently changing derivations'), 'guid-839b4c6ea69c1ec7');
                 }
@@ -2086,6 +2176,7 @@ export class LlmWikiService {
             throw guidanceError(new Error(`Source id already exists with different content: ${sourceId}. Ingest a new immutable snapshot with a new sourceId.`), 'guid-b89495d373a32339');
         }
         const timestamp = params.capturedAt?.trim() || now();
+        const original = await this.fileSystem.preserveOriginal(joinRoot(params.scopeRoot, `_sources/${sourceId}/original.txt`), Buffer.from(String(params.content ?? ''), 'utf8'));
         const write = {
             path,
             content,
@@ -2096,6 +2187,9 @@ export class LlmWikiService {
                 title,
                 immutable: true,
                 content_sha256: contentHash,
+                original_path: original.path,
+                original_sha256: original.sha256,
+                original_byte_length: original.byteLength,
                 captured_by: params.capturedBy,
                 captured_at: timestamp,
                 ...(params.sourceUrl?.trim() && { source_url: params.sourceUrl.trim() }),
@@ -2231,9 +2325,8 @@ export class LlmWikiService {
             throw guidanceError(new Error('At least one immutable source evidence path is required'), 'guid-0d8e9ba13f3f7e1f');
         for (const evidenceItem of evidence) {
             const evidencePath = evidenceItem.path;
-            if (!this.access.canReferenceFrom(params.path, evidencePath)) {
-                throw guidanceError(new Error(`A more-private source cannot ground a more-public knowledge note: ${this.access.toPublicPath(evidencePath)}`), 'guid-2c172f5c483210b7');
-            }
+            if (!this.access.canAccessPhysicalPath(evidencePath, params.principal))
+                throw new Error('Evidence source is not accessible');
             const evidence = await this.fileSystem.readNote(evidencePath);
             if (evidence.frontmatter.llm_wiki_type !== 'source' || evidence.frontmatter.immutable !== true) {
                 throw guidanceError(new Error(`Evidence is not an immutable LLM Wiki source: ${this.access.toPublicPath(evidencePath)}`), 'guid-6df470e7610f2255');
@@ -2248,6 +2341,11 @@ export class LlmWikiService {
             if (locatorError)
                 throw guidanceError(new Error(`Evidence locator is invalid for ${this.access.toPublicPath(evidencePath)}: ${locatorError}`), 'guid-c4cf9013a99eeca3');
         }
+        await prepareDocumentWrite(params.path);
+        for (const evidencePath of evidencePaths)
+            if (!this.access.canReferenceFrom(params.path, evidencePath)) {
+                throw guidanceError(new Error(`A more-private source cannot ground a more-public knowledge note: ${this.access.toPublicPath(evidencePath)}`), 'guid-2c172f5c483210b7');
+            }
         const timestamp = now();
         const references = await this.references.validateAndNormalize(params.references ?? existing?.frontmatter.references, params.path, params.principal, content);
         const reviewBasisLinks = await this.collectReviewBasisLinks(content, references, params.principal, params.path);
@@ -2457,24 +2555,63 @@ export class LlmWikiService {
         };
     }
     async catalog(principal, options = {}) {
+        principal = principal ? structuredClone(principal) : undefined;
+        const authorityKey = this.principalKey(principal);
+        const preparation = this.fileSystem.prepareMetadataRead();
+        if (preparation)
+            await preparation;
+        if (authorityKey !== this.principalKey(principal))
+            throw new Error('Wiki catalog or authorization changed; retry with current context');
+        const requestGeneration = this.generation;
+        const assertCurrent = (basis, generation = requestGeneration) => {
+            if (generation !== this.generation || authorityKey !== this.principalKey(principal)
+                || [...basis].some(path => !this.access.canAccessPhysicalPath(path, principal))) {
+                throw new Error('Wiki catalog or authorization changed; retry with current context');
+            }
+        };
         // A relative "now" validity filter is time-dependent even when the vault
         // generation is unchanged, so do not retain it in the summary cache.
-        if (!options.summaryOnly || ((options.validity !== undefined || options.includeFacets === true) && !options.validAt))
-            return this.computeCatalog(principal, options);
+        if (!options.summaryOnly || ((options.validity !== undefined || options.includeFacets === true) && !options.validAt)) {
+            const basis = new Set();
+            const value = await this.computeCatalog(principal, options, basis);
+            assertCurrent(basis);
+            return value;
+        }
         const key = `${this.principalKey(principal)}|${options.noteKind || ''}|${options.lifecycle || ''}|${options.epistemicStatus || ''}|${options.taskStatus || ''}|${options.reviewPolicy || ''}|${options.sourceType || ''}|${options.polarity || ''}|${options.knowledgeRole || ''}|${options.moc || ''}|${options.project || ''}|${options.domain || ''}|${options.subjectTerm || ''}|${options.method || ''}|${options.audience || ''}|${options.tag || ''}|${options.validity || ''}|${options.validAt || ''}|${options.limit || ''}|${options.maxChars || ''}|${options.includeFacets ? 'facets' : ''}|${options.facetLimit || ''}|${normalizeCatalogOrder(options.orderBy)}`;
         const cached = this.catalogSummaryCache.get(key);
-        if (cached?.generation === this.generation)
+        if (cached && await this.summaryCacheCurrent(cached, principal)) {
+            assertCurrent(cached.basis);
+            if (this.catalogSummaryCache.get(key) === cached) {
+                this.catalogSummaryCache.delete(key);
+                this.catalogSummaryCache.set(key, cached);
+                derivedCacheBudget.touch(this.projectionCacheOwner, `catalog:${key}`);
+            }
             return cached.value;
+        }
+        if (cached)
+            this.dropProjection('catalog', this.catalogSummaryCache, key);
         const running = this.catalogSummaryInFlight.get(key);
-        if (running)
-            return running;
+        if (running) {
+            const result = await running;
+            assertCurrent(result.basis);
+            return result.value;
+        }
         const generation = this.generation;
-        const computation = this.computeCatalog(principal, { ...options, summaryOnly: true });
+        const basis = new Set();
+        // A cache-validation miss can legitimately observe a newer generation;
+        // recompute against that generation, then fence every delivery (including waiters).
+        const computation = this.computeCatalog(principal, { ...options, summaryOnly: true }, basis).then(value => {
+            assertCurrent(basis, generation);
+            return { value, basis };
+        });
         this.catalogSummaryInFlight.set(key, computation);
         try {
-            const value = await computation;
-            if (this.generation === generation)
-                this.catalogSummaryCache.set(key, { generation, value });
+            const { value } = await computation;
+            assertCurrent(basis, generation);
+            // Reserve the complete bounded dirty-path allowance once; invalidation
+            // need not reserialize every retained result just to update its charge.
+            const dependencyBytes = [...basis].reduce((bytes, path) => bytes + 80 + path.length * 2, 128 * (80 + 500 * 2));
+            this.retainProjection('catalog', this.catalogSummaryCache, key, { generation, value, basis, dirty: new Set(), ...(principal && { principal }) }, dependencyBytes);
             return value;
         }
         finally {
@@ -2482,7 +2619,7 @@ export class LlmWikiService {
                 this.catalogSummaryInFlight.delete(key);
         }
     }
-    async computeCatalog(principal, options = {}) {
+    async computeCatalog(principal, options = {}, basis) {
         const canAccess = (path) => this.access.canAccessPhysicalPath(path, principal);
         const entries = [];
         const counts = {};
@@ -2580,6 +2717,7 @@ export class LlmWikiService {
             if (options.validity && temporal.state !== options.validity)
                 continue;
             total += 1;
+            basis?.add(note.path);
             counts[catalogType] = (counts[catalogType] || 0) + 1;
             if (isPublicSchema)
                 schemaPresent = true;
@@ -13326,7 +13464,7 @@ export class LlmWikiService {
                 if (!source || (candidate.revision && candidate.revision !== source.revision)) {
                     // Evict only this principal/limit's stale lint view. The next call
                     // recomputes it instead of repeatedly dropping the same old signals.
-                    this.lintCache.delete(`${this.principalKey(principal)}|${Math.max(200, healthLimit * 4)}`);
+                    this.dropProjection('lint', this.lintCache, `${this.principalKey(principal)}|${Math.max(200, healthLimit * 4)}`);
                     continue;
                 }
                 if (isModerationHidden(source.frontmatter))
@@ -16305,7 +16443,7 @@ export class LlmWikiService {
         if (cached?.generation === this.generation && await this.lintSnapshotMatches(cached.value, principal))
             return cached.value;
         if (cached)
-            this.lintCache.delete(key);
+            this.dropProjection('lint', this.lintCache, key);
         const running = this.lintInFlight.get(key);
         if (running)
             return running;
@@ -16318,8 +16456,11 @@ export class LlmWikiService {
         this.lintInFlight.set(key, computation);
         try {
             const value = await computation;
-            if (this.generation === generation)
-                this.lintCache.set(key, { generation, value });
+            if (this.generation === generation) {
+                const dependencyBytes = [...(this.lintSnapshots.get(value)?.keys() ?? [])].reduce((bytes, path) => bytes + 256 + path.length * 2, 0)
+                    + (this.lintCollections.get(value)?.estimatedRetainedBytes() ?? 0);
+                this.retainProjection('lint', this.lintCache, key, { generation, value, ...(principal && { principal: structuredClone(principal) }) }, dependencyBytes);
+            }
             return value;
         }
         finally {

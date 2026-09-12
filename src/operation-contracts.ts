@@ -61,6 +61,9 @@ export function operationAvailability(item: EndpointDescriptor, context: Endpoin
   const publicRead: Availability = { available: true, state: 'ready', requires: [] };
   const disabled = (requires: string[], reason: string): Availability => ({ available: false, state: 'disabled', requires, reason });
   const read = (policy: ReadPolicy): Availability => {
+    const hostDisabled = context.skillEvolutionEnabled === false && item.endpointId.startsWith('skill.')
+      || context.roleplayConfigured === false && item.endpointId.startsWith('roleplay.');
+    if (hostDisabled && baseWrite.state === 'disabled') return baseWrite;
     switch (policy) {
       case 'public': case 'roleplay-world': return publicRead;
       case 'authenticated': return { available: context.authenticated, state: context.authenticated ? 'ready' : 'locked', requires: ['authentication'],

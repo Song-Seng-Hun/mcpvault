@@ -10,6 +10,8 @@ export class PathFilter {
         '.obsidian',
         '.git',
         '.mcpvault-roleplay',
+        // Protected original metadata is host-managed, never ordinary note data.
+        '_policies',
         'node_modules',
         '.ds_store',
         'thumbs.db',

@@ -45,6 +45,10 @@ export function operationAvailability(item, context, baseWrite) {
     const publicRead = { available: true, state: 'ready', requires: [] };
     const disabled = (requires, reason) => ({ available: false, state: 'disabled', requires, reason });
     const read = (policy) => {
+        const hostDisabled = context.skillEvolutionEnabled === false && item.endpointId.startsWith('skill.')
+            || context.roleplayConfigured === false && item.endpointId.startsWith('roleplay.');
+        if (hostDisabled && baseWrite.state === 'disabled')
+            return baseWrite;
         switch (policy) {
             case 'public':
             case 'roleplay-world': return publicRead;

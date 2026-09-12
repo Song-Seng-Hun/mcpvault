@@ -1,6 +1,5 @@
 import { guidanceError } from './guidance-runtime.js';
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
+import { checkWindowsPrivateAcl } from './windows-private-acl.js';
 import { dirname, isAbsolute, relative, sep, join } from 'node:path';
 import { lstat, realpath } from 'node:fs/promises';
 import { hostSourceRoots } from './host-source-roots.js';
@@ -9,7 +8,6 @@ import { profileFingerprint } from './skill-evaluation.js';
 import { createTrustedSkillEvaluationProfiles } from './skill-evaluation-profiles.js';
 const inside = (root, path) => { const r = relative(root, path); return !r || (r !== '..' && !r.startsWith(`..${sep}`) && !isAbsolute(r)); };
 const local = (path) => isAbsolute(path) && !/^(?:\\\\|\/\/)/.test(path);
-const runFile = promisify(execFile);
 /** Fail closed before reading secrets; no paths, ACL details or key contents are logged. */
 export async function assertHostPrivateStorage(paths) {
     for (const path of paths) {
@@ -20,28 +18,11 @@ export async function assertHostPrivateStorage(paths) {
             throw guidanceError(new Error('Host private storage permissions must be owner-only'), 'guid-7c8ada537ca42c7b');
     }
     if (process.platform === 'win32') {
-        // Static program; canonical Windows paths travel in an environment value, never executable text.
-        const program = `$ErrorActionPreference='Stop'; try {
-      $identity=[Security.Principal.WindowsIdentity]::GetCurrent().User.Value
-      $allowed=@($identity,'S-1-5-18','S-1-5-32-544')
-      foreach($path in $env:MCPVAULT_PRIVATE_CHECK_PATHS.Split([char]10)) {
-        if([IO.Directory]::Exists($path)) {$acl=[IO.Directory]::GetAccessControl($path)}
-        else {$acl=[IO.File]::GetAccessControl($path)}
-        $owner=$acl.GetOwner([Security.Principal.SecurityIdentifier]).Value
-        if($allowed -notcontains $owner){exit 2}
-        foreach($rule in $acl.GetAccessRules($true,$true,[Security.Principal.SecurityIdentifier])) {
-          if($rule.AccessControlType -eq 'Allow' -and $allowed -notcontains $rule.IdentityReference.Value){exit 3}
-        }
-      }
-      exit 0
-    } catch {exit 4}`;
         try {
-            await runFile(join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'), ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', program], { windowsHide: true, timeout: 10000, maxBuffer: 1024, env: { ...process.env,
-                    PSModulePath: join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'Modules'),
-                    MCPVAULT_PRIVATE_CHECK_PATHS: paths.join('\n') } });
+            await checkWindowsPrivateAcl(paths);
         }
-        catch (error) {
-            throw guidanceError(new Error(`Host private storage permissions could not be verified (check code ${error.code ?? 'unavailable'})`), 'guid-3c27527344dbc762');
+        catch {
+            throw guidanceError(new Error('Host private storage permissions could not be verified'), 'guid-3c27527344dbc762');
         }
     }
 }

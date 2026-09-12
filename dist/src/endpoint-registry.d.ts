@@ -1,6 +1,8 @@
 import type { Tool } from '@modelcontextprotocol/server';
 import type { ScopeCapability } from './scope-auth.js';
-export { operationReadAlias } from './operation-contracts.js';
+import { operationReadAlias } from './operation-contracts.js';
+export { operationReadAlias };
+import type { Activity, OwnerActivityAction } from './owner-activity.js';
 export interface EndpointDescriptor {
     endpointId: string;
     toolName: string;
@@ -33,10 +35,20 @@ export interface EndpointAvailabilityContext {
     economyConfigured?: boolean;
     explanationsConfigured?: boolean;
     benchmarksConfigured?: boolean;
+    ownerActivity?: {
+        policyFingerprint: string;
+        executionBindingGeneration: string;
+        grantAvailabilityGeneration?: string;
+        eligibility: Partial<Record<Activity, Partial<Record<OwnerActivityAction, boolean>>>>;
+    };
 }
+export declare function ownerActivityForEndpointTool(toolName: string): Activity | undefined;
+export declare function ownerActionForEndpointTool(toolName: string, mutating: boolean, op?: unknown): OwnerActivityAction;
 export declare function endpointIdForTool(toolName: string): string;
 export declare class EndpointRegistry {
     private descriptors;
+    private registrationGeneration;
+    private catalogFingerprint;
     setTools(tools: Tool[], requiredCapabilities: Partial<Record<string, ScopeCapability>>, mutatingTools: Set<string>): void;
     resolve(id: unknown): EndpointDescriptor | undefined;
     resolveRoute(method: string, pathname: string): MatchedEndpoint | undefined;

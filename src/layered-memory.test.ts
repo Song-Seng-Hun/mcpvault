@@ -3,7 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
-import { createServer } from './createServer.js';
+import { createServer } from '../tests/server-fixture.js';
 import { FileSystemService } from './filesystem.js';
 import { LayeredMemoryService } from './layered-memory.js';
 import { RetrievalService } from './retrieval-service.js';

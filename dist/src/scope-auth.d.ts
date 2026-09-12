@@ -17,6 +17,9 @@ export interface ScopePrincipal {
         realmId: string;
         runtimeId: string;
         sharedMemoryEnabled: boolean;
+        /** Current administrator-verified membership, refreshed during authentication. */
+        departmentIds?: string[];
+        defaultDepartmentId?: string;
     };
     sessionId?: string;
     sessionGeneration?: number;
@@ -73,6 +76,9 @@ export declare class ScopeAuthService {
         invitationToken?: string;
         sessionId?: string;
         expectedGeneration?: number;
+        /** User selection is checked against host authority; it grants nothing. */
+        accountType?: 'personal' | 'enterprise';
+        departmentId?: string;
     }): Promise<{
         success: true;
         accessToken: string;

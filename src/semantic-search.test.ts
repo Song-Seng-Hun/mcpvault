@@ -4,6 +4,7 @@ import { join, sep } from 'node:path';
 import { afterEach, describe, expect, test } from 'vitest';
 import { PathFilter } from './pathfilter.js';
 import { SemanticSearchService } from './semantic-search.js';
+import { derivedStorageFixture } from '../tests/derived-storage-fixture.js';
 
 const vaults: string[] = [];
 
@@ -25,9 +26,11 @@ describe('semantic index process lease', () => {
   test('close releases the owned lock and permits a standby instance to take over', async () => {
     const vault = await mkdtemp(join(tmpdir(), 'mcpvault-semantic-close-'));
     vaults.push(vault);
-    const first = new SemanticSearchService(vault, new PathFilter());
-    const second = new SemanticSearchService(vault, new PathFilter());
-    const lockPath = join(vault, '.mcpvault', 'semantic-index', 'worker.lock');
+    const host = await derivedStorageFixture(vault);
+    const first = new SemanticSearchService(vault, new PathFilter(), undefined, undefined, undefined, undefined, host.host);
+    const second = new SemanticSearchService(vault, new PathFilter(), undefined, undefined, undefined, undefined, host.host);
+    const lockPath = join(host.path('semantic-index'), 'worker.lock');
+    try {
 
     expect(await (first as any).acquireIndexLease()).toBe(true);
     expect(await (second as any).acquireIndexLease()).toBe(false);
@@ -39,5 +42,6 @@ describe('semantic index process lease', () => {
 
     await second.close();
     await expect(access(lockPath)).rejects.toMatchObject({ code: 'ENOENT' });
-  });
+    } finally { await first.close(); await second.close(); await host.close(); }
+  }, 30000);
 });

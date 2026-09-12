@@ -7,23 +7,51 @@ import { guidanceError } from './guidance-runtime.js';
  * cannot change the visible data or search semantics.
  */
 export const DEFAULT_DERIVED_CACHE_BUDGET_BYTES = 32 * 1024 * 1024;
+export const DEFAULT_WORKING_SET_BUDGET_BYTES = 128 * 1024 * 1024;
 let ownerSequence = 0;
+export class DocumentWorkBudgetError extends Error {
+    constructor() { super('Document work memory budget exceeded; narrow the document or retry after active work completes'); this.name = 'DocumentWorkBudgetError'; }
+}
 export class DerivedCacheBudget {
     maxBytes;
+    maxWorkingBytes;
     entries = new Map();
     entriesByOwner = new Map();
     lruHeap = [];
     // Intermediate sums can exceed MAX_SAFE_INTEGER before LRU eviction even
     // when every individual charge and the final public total are safe integers.
     totalBytes = 0n;
+    activeBytes = 0n;
     maxAccountedBytes;
+    maxWorkingAccountedBytes;
     clock = 0;
-    constructor(maxBytes = DEFAULT_DERIVED_CACHE_BUDGET_BYTES) {
+    constructor(maxBytes = DEFAULT_DERIVED_CACHE_BUDGET_BYTES, maxWorkingBytes = maxBytes) {
         this.maxBytes = maxBytes;
+        this.maxWorkingBytes = maxWorkingBytes;
         if (!Number.isFinite(maxBytes) || maxBytes <= 0 || maxBytes > Number.MAX_SAFE_INTEGER) {
             throw guidanceError(new Error('maxBytes must be a positive finite number no greater than Number.MAX_SAFE_INTEGER'), 'guid-73767f404babc2c2');
         }
         this.maxAccountedBytes = BigInt(Math.floor(maxBytes));
+        if (!Number.isFinite(maxWorkingBytes) || maxWorkingBytes <= 0 || maxWorkingBytes > Number.MAX_SAFE_INTEGER)
+            throw new Error('Invalid working memory budget');
+        this.maxWorkingAccountedBytes = BigInt(Math.floor(maxWorkingBytes));
+    }
+    /** Pinned work cannot be evicted or overbooked. Reserve before allocating. */
+    reserveWork(bytes) {
+        if (!Number.isSafeInteger(bytes) || bytes < 0 || this.activeBytes + BigInt(bytes) > this.maxWorkingAccountedBytes) {
+            throw new DocumentWorkBudgetError();
+        }
+        const charge = BigInt(bytes);
+        this.activeBytes += charge;
+        this.enforce();
+        let released = false;
+        return { release: () => { if (!released) {
+                released = true;
+                this.activeBytes -= charge;
+            } } };
+    }
+    workSnapshot() {
+        return { maxBytes: this.maxWorkingBytes, activeBytes: Number(this.activeBytes), totalBytes: Number(this.activeBytes + this.totalBytes) };
     }
     register(owner, key, bytes, onEvict, options = {}) {
         const id = this.id(owner, key);
@@ -100,12 +128,13 @@ export class DerivedCacheBudget {
         this.lruHeap.pop();
     }
     enforce() {
-        while (this.totalBytes > this.maxAccountedBytes && this.entries.size > 0) {
+        while ((this.totalBytes > this.maxAccountedBytes || this.totalBytes + this.activeBytes > this.maxWorkingAccountedBytes) && this.entries.size > 0) {
             const oldestId = this.lruHeap[0]?.id;
             if (!oldestId)
                 break;
             const entry = this.entries.get(oldestId);
-            if (this.entries.size === 1 && entry?.allowOversized)
+            if (this.entries.size === 1 && entry?.allowOversized
+                && (this.activeBytes === 0n || this.totalBytes + this.activeBytes <= this.maxWorkingAccountedBytes))
                 break;
             this.removeById(oldestId);
             try {
@@ -155,7 +184,7 @@ export class DerivedCacheBudget {
             rightEntry.heapIndex = right;
     }
 }
-export const derivedCacheBudget = new DerivedCacheBudget();
+export const derivedCacheBudget = new DerivedCacheBudget(DEFAULT_DERIVED_CACHE_BUDGET_BYTES, DEFAULT_WORKING_SET_BUDGET_BYTES);
 export function createDerivedCacheOwner(prefix) {
     ownerSequence += 1;
     return `${prefix}#${ownerSequence}`;

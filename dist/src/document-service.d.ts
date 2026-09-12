@@ -78,7 +78,9 @@ export declare class DocumentService {
     private sign;
     private verify;
     outline(params: DocumentOutlineParams): Promise<import("./work-model.js").WorkPage>;
+    private outlineWithinWork;
     read(params: DocumentReadParams): Promise<ReadResult>;
+    private readWithinWork;
     manifest(params: ResourceManifestParams): Promise<import("./work-model.js").WorkPage | {
         path: string;
         revision: string;
@@ -96,6 +98,7 @@ export declare class DocumentService {
             };
         };
     }>;
+    private manifestWithinWork;
     export(params: DocumentExportParams): Promise<{
         path: string;
         revision: string;
@@ -116,5 +119,6 @@ export declare class DocumentService {
             };
         };
     }>;
+    private exportWithinWork;
 }
 //# sourceMappingURL=document-service.d.ts.map

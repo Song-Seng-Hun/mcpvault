@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
-import { createServer } from './createServer.js';
+import { createServer } from '../tests/server-fixture.js';
 import { IdeationService } from './ideation.js';
 import { createFacilitation, managedFacilitationMarkdown } from './workshop-facilitation.js';
 import { FileSystemService } from './filesystem.js';

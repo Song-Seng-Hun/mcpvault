@@ -1,6 +1,6 @@
 import { guidanceError } from './guidance-runtime.js';
 import { createHash, randomUUID } from 'node:crypto';
-import { mkdir, readFile, readdir, rename, stat, writeFile } from 'node:fs/promises';
+import { readdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { FileSystemService } from './filesystem.js';
 import type { ScopeAccessPolicy } from './scope-access.js';
@@ -14,6 +14,7 @@ import type { NotificationService } from './notifications.js';
 import type { VaultFileCatalog } from './vault-catalog.js';
 import { iterateNotes, queryAllNotes, queryWindow } from './paged-query.js';
 import { createDerivedCacheOwner, derivedCacheBudget, estimateCacheBytes } from './cache-budget.js';
+import { HostDerivedStorage } from './host-derived-storage.js';
 
 const POSTS = 'Community/Posts';
 const COMMENTS = 'Community/Comments';
@@ -22,7 +23,7 @@ const GUESTBOOKS = 'Community/Guestbooks';
 const MAX_SCAN = 500;
 const REACTION_CACHE_TTL_MS = 2_000;
 const REACTION_SNAPSHOT_VERSION = 1;
-const REACTION_SNAPSHOT_FILE = '.mcpvault/community-reactions.snapshot.bin';
+const REACTION_SNAPSHOT_FILE = 'community-reactions.snapshot.bin';
 const MAX_REACTION_SNAPSHOT_ENTRIES = 100_000;
 const CATEGORIES = ['question', 'discussion', 'proposal', 'announcement', 'bug', 'research', 'showcase', 'agora'] as const;
 
@@ -144,16 +145,23 @@ export class CommunityFeaturesService {
   private reactionIndexReady = false;
   private reactionIndexUpdate: Promise<void> = Promise.resolve();
   private reactionSnapshotWrite: Promise<void> | undefined;
+  private readonly snapshotStorage: HostDerivedStorage;
 
   constructor(
     private readonly fileSystem: FileSystemService,
     private readonly access: ScopeAccessPolicy,
     private readonly auth: ScopeAuthService,
-    private readonly reputation: ReputationService,
+    private readonly reputation: ReputationService | undefined,
     private readonly vaultPath: string,
     private readonly notifications?: NotificationService,
     private readonly fileCatalog?: VaultFileCatalog,
-  ) {}
+    cacheDir = process.env.MCPVAULT_DERIVED_CACHE_DIR,
+  ) { this.snapshotStorage = new HostDerivedStorage(vaultPath, cacheDir); }
+
+  private requireReputation(): ReputationService {
+    if (!this.reputation) throw new Error('Social activity requires the collaboration feature');
+    return this.reputation;
+  }
 
   async close(): Promise<void> {
     if (this.reactionSnapshotWrite) await this.reactionSnapshotWrite;
@@ -215,7 +223,7 @@ export class CommunityFeaturesService {
       ...(group.chaptersTruncated && { chaptersTruncated: true }),
     }));
     const limited = series.slice(0, positive(params.limit, 50, 100));
-    const reputations = await this.reputation.getMany(limited.flatMap(group => group.chapters.map((chapter: Record<string, any>) => String(chapter.author || ''))));
+    const reputations = await this.requireReputation().getMany(limited.flatMap(group => group.chapters.map((chapter: Record<string, any>) => String(chapter.author || ''))));
     for (const group of limited) for (const chapter of group.chapters) {
       const authorReputation = reputations.get(String(chapter.author || '').toLowerCase());
       chapter.authorLevel = authorReputation?.level ?? 0;
@@ -270,7 +278,7 @@ export class CommunityFeaturesService {
       for (const note of visibleComments) yield { type: 'comment', note, id: note.frontmatter.comment_id, path: note.path, postId: note.frontmatter.post_id, createdAt: note.frontmatter.created_at, updatedAt: note.frontmatter.updated_at };
     }
     const selected = boundedTopK(activityCandidates(), limit, (a, b) => String(b.updatedAt || b.createdAt).localeCompare(String(a.updatedAt || a.createdAt)) || a.path.localeCompare(b.path));
-    const authorReputations = await this.reputation.getMany(selected.map(item => String(item.note.frontmatter.author || '')));
+    const authorReputations = await this.requireReputation().getMany(selected.map(item => String(item.note.frontmatter.author || '')));
     const items = selected.map(item => ({ type: item.type, id: item.id, path: item.path, ...(item.title !== undefined && { title: item.title }), ...(item.postId !== undefined && { postId: item.postId }), authorLevel: authorReputations.get(String(item.note.frontmatter.author || '').toLowerCase())?.level ?? 0, authorLevelLabel: authorReputations.get(String(item.note.frontmatter.author || '').toLowerCase())?.label ?? '뉴비', createdAt: item.createdAt, updatedAt: item.updatedAt }));
     const total = postCount + commentCount;
     return { author, items, postCount, commentCount, total, truncated: total > items.length || Boolean(postWindow?.truncated) || Boolean(commentWindow?.truncated), maxChars };
@@ -420,8 +428,9 @@ export class CommunityFeaturesService {
   }
 
   private async loadReactionSnapshot(): Promise<{ counts: Map<string, { likeCount: number; dislikeCount: number }>; incomplete: boolean } | undefined> {
+    if (!this.snapshotStorage.cacheDir) return undefined;
     try {
-      const snapshot = decodeReactionSnapshot(await readFile(join(this.vaultPath, REACTION_SNAPSHOT_FILE)));
+      const snapshot = decodeReactionSnapshot(await this.snapshotStorage.read(REACTION_SNAPSHOT_FILE, { maxBytes: 32 * 1024 * 1024 }));
       const currentEntries = await this.reactionFiles();
       if (!currentEntries || currentEntries.length !== snapshot.entries.length) return undefined;
       for (let index = 0; index < currentEntries.length; index += 1) {
@@ -438,24 +447,22 @@ export class CommunityFeaturesService {
   }
 
   private async saveReactionSnapshot(counts: Map<string, { likeCount: number; dislikeCount: number }>): Promise<void> {
+    if (!this.snapshotStorage.cacheDir) return;
     const entries = await this.reactionFiles();
     if (!entries) return;
     const snapshot: ReactionSnapshot = {
       entries,
       counts: [...counts.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([postId, value]) => [postId, value.likeCount, value.dislikeCount]),
     };
-    const path = join(this.vaultPath, REACTION_SNAPSHOT_FILE);
-    const temporaryPath = `${path}.${process.pid}.tmp`;
     try {
-      await mkdir(join(this.vaultPath, '.mcpvault'), { recursive: true });
-      await writeFile(temporaryPath, encodeReactionSnapshot(snapshot));
-      await rename(temporaryPath, path);
+      await this.snapshotStorage.write(REACTION_SNAPSHOT_FILE, encodeReactionSnapshot(snapshot), 32 * 1024 * 1024);
     } catch {
       // Derived acceleration state is optional; Markdown and Git remain authoritative.
     }
   }
 
   private queueReactionSnapshotSave(counts: Map<string, { likeCount: number; dislikeCount: number }>): void {
+    if (!this.snapshotStorage.cacheDir) return;
     const previous = this.reactionSnapshotWrite || Promise.resolve();
     const write = previous.then(() => this.saveReactionSnapshot(counts)).catch(() => undefined);
     this.reactionSnapshotWrite = write;
@@ -587,7 +594,7 @@ export class CommunityFeaturesService {
       }
     }
     const selected = boundedTopK(visiblePosts(), limit, (a, b) => b.likeCount - a.likeCount || String(b.note.frontmatter.updated_at || '').localeCompare(String(a.note.frontmatter.updated_at || '')) || a.note.path.localeCompare(b.note.path));
-    const reputations = await this.reputation.getMany(selected.map(item => String(item.note.frontmatter.author || '')));
+    const reputations = await this.requireReputation().getMany(selected.map(item => String(item.note.frontmatter.author || '')));
     const posts = selected.map(item => {
       const note = item.note;
       const authorReputation = reputations.get(String(note.frontmatter.author || '').toLowerCase());

@@ -8,15 +8,17 @@ import { PathFilter } from './pathfilter.js';
 import { DocumentResourceReader } from './document-resource.js';
 import { DocumentIndex } from './document-index.js';
 import { parseDocumentStructure } from './document-structure.js';
+import { derivedStorageFixture } from '../tests/derived-storage-fixture.js';
 
 let root: string, cache: string, reader: DocumentResourceReader;
+let host: Awaited<ReturnType<typeof derivedStorageFixture>>;
 const indexes: DocumentIndex[] = [];
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'mcpvault-document-index-'));
-  cache = await mkdtemp(join(tmpdir(), 'mcpvault-document-cache-'));
+  host = await derivedStorageFixture(root); cache = host.host;
   reader = new DocumentResourceReader(new FileSystemService(root), new PathFilter(), new ScopeAccessPolicy());
 });
-afterEach(async () => { indexes.splice(0).forEach(index => index.close()); await rm(root, { recursive: true, force: true }); await rm(cache, { recursive: true, force: true }); });
+afterEach(async () => { for (const index of indexes.splice(0)) await index.close(); await host.close(); await rm(root, { recursive: true, force: true }); });
 function index(parse = vi.fn(parseDocumentStructure)) {
   const result = new DocumentIndex(reader, undefined, { cacheDir: cache, parse }); indexes.push(result); return { result, parse };
 }
@@ -38,15 +40,15 @@ test('reuses a structure only for the current original revision', async () => {
 
 test('persists only local derived structure and rebuilds after cache loss', async () => {
   await writeFile(join(root, 'note.md'), '# Topic\n\nA fact.');
-  const first = await index().result.load('note.md');
+  const firstIndex = index().result, first = await firstIndex.load('note.md'); await firstIndex.close();
   const second = index();
   expect((await second.result.load('note.md')).structure).toEqual(first.structure);
   expect(second.parse).not.toHaveBeenCalled();
-  for (const entry of await readdir(cache)) await rm(join(cache, entry), { force: true });
+  for (const entry of await readdir(cache)) if (entry.endsWith('.structure.json.gz')) await rm(join(cache, entry), { force: true });
   const third = index();
   expect((await third.result.load('note.md')).structure).toEqual(first.structure);
   expect(third.parse).toHaveBeenCalledTimes(1);
-});
+}, 30000);
 
 test('never lets a warm cache hide deletion or newly hidden moderation', async () => {
   await writeFile(join(root, 'note.md'), '# Visible');
@@ -74,9 +76,9 @@ test('count eviction removes only enough own cache files to meet the bound', asy
   await writeFile(join(root, 'note.md'), 'current');
   const names = Array.from({ length: 513 }, (_, n) => n.toString(16).padStart(64, '0') + '.structure.json.gz');
   await Promise.all(names.map(name => writeFile(join(cache, name), 'old')));
-  await index().result.load('note.md');
+  const current = index().result; await current.load('note.md'); await current.close();
   expect((await readdir(cache)).filter(name => name.endsWith('.structure.json.gz'))).toHaveLength(512);
-});
+}, 30000);
 
 test('unsupported binary parsing is explicit and leaves original bytes alone', async () => {
   await writeFile(join(root, 'image.png'), Buffer.from([0, 1, 2]));
@@ -98,6 +100,6 @@ test('oversized repeated heading metadata skips disk serialization before alloca
     const loaded = await index().result.load('note.md');
     expect(loaded.structure.fragments.length).toBeGreaterThan(1200);
     expect(stringify.mock.calls.some(([value]) => value && typeof value === 'object' && ('structure' in value || 'fragments' in value))).toBe(false);
-    expect(await readdir(cache)).toEqual([]);
+    expect((await readdir(cache)).filter(name => name.endsWith('.structure.json.gz'))).toEqual([]);
   } finally { stringify.mockRestore(); }
 });

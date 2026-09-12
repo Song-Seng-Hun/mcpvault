@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { createHash } from 'node:crypto';
 import { stringify } from 'yaml';
 import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
-import { createServer } from './createServer.js';
+import { createServer } from '../tests/server-fixture.js';
 import { FileSystemService } from './filesystem.js';
 import { ScopeAccessPolicy } from './scope-access.js';
 import { ReferenceService } from './references.js';

@@ -1,0 +1,1666 @@
+{
+  "benchmark": "SYNTHETIC local retrieval comparison",
+  "version": 1,
+  "size": 1000,
+  "smoke": false,
+  "node": "v22.23.2",
+  "corpus": {
+    "sha256": "e345b2cc7a223e74c8ca95abf35a253a4051f1e075e3e2d3960a4bd35057da96",
+    "documents": 1000,
+    "publicDocuments": 900,
+    "privateDocuments": 100,
+    "bytes": 4327153,
+    "creationMs": 1645.2933999999998
+  },
+  "bounds": {
+    "topK": 4,
+    "searchChars": 4096,
+    "readChars": 2048,
+    "timeoutPerArmMs": 180000,
+    "outputBytesPerArm": 262144,
+    "ramStartBytes": 3489660928,
+    "ramStopBytes": 3355443200
+  },
+  "model": null,
+  "modelInputTokens": null,
+  "modelOutputTokens": null,
+  "actualNasReadBytes": null,
+  "modelAnswerQuality": null,
+  "measurementStatus": "not-measured",
+  "results": [
+    {
+      "arm": "vanilla",
+      "pid": 21948,
+      "model": null,
+      "modelInputTokens": null,
+      "modelOutputTokens": null,
+      "actualNasReadBytes": null,
+      "modelAnswerQuality": null,
+      "measurementStatus": "not-measured",
+      "startup": {
+        "elapsedMs": 170.75499999999997,
+        "io": {
+          "readFileCalls": 0,
+          "handleReadCalls": 0,
+          "openCalls": 0,
+          "metadataCalls": 0,
+          "directoryCalls": 0,
+          "sourceReadBytes": 0,
+          "otherReadBytes": 0
+        }
+      },
+      "initializationProbe": {
+        "elapsedMs": 1406.9403,
+        "io": {
+          "readFileCalls": 900,
+          "handleReadCalls": 0,
+          "openCalls": 0,
+          "metadataCalls": 0,
+          "directoryCalls": 2,
+          "sourceReadBytes": 3894435,
+          "otherReadBytes": 0
+        },
+        "retrievalCalls": 1
+      },
+      "cold": [
+        {
+          "id": "lookup00001",
+          "question": "What value does lookup00001 specify? Cite the current source.",
+          "query": "lookup00001",
+          "elapsedMs": 369.56629999999996,
+          "io": {
+            "readFileCalls": 901,
+            "handleReadCalls": 0,
+            "openCalls": 0,
+            "metadataCalls": 0,
+            "directoryCalls": 2,
+            "sourceReadBytes": 3898762,
+            "otherReadBytes": 0
+          },
+          "calls": {
+            "retrieval": 2,
+            "model": 0
+          },
+          "quality": {
+            "pass": true,
+            "expectedSources": 1,
+            "correctSources": 1,
+            "invalidEvidence": 0,
+            "aclLeak": false,
+            "answerMarkerRecall": 1,
+            "evidencePrecision": 1
+          },
+          "proxy": {
+            "unit": "UTF-16 characters; NOT tokens",
+            "requestChars": 225,
+            "responseChars": 422
+          },
+          "model": null,
+          "modelInputTokens": null,
+          "modelOutputTokens": null,
+          "actualNasReadBytes": null,
+          "modelAnswerQuality": null,
+          "measurementStatus": "not-measured"
+        },
+        {
+          "id": "lookup00501",
+          "question": "What value does lookup00501 specify? Cite the current source.",
+          "query": "lookup00501",
+          "elapsedMs": 372.7447000000002,
+          "io": {
+            "readFileCalls": 901,
+            "handleReadCalls": 0,
+            "openCalls": 0,
+            "metadataCalls": 0,
+            "directoryCalls": 2,
+            "sourceReadBytes": 3898762,
+            "otherReadBytes": 0
+          },
+          "calls": {
+            "retrieval": 2,
+            "model": 0
+          },
+          "quality": {
+            "pass": true,
+            "expectedSources": 1,
+            "correctSources": 1,
+            "invalidEvidence": 0,
+            "aclLeak": false,
+            "answerMarkerRecall": 1,
+            "evidencePrecision": 1
+          },
+          "proxy": {
+            "unit": "UTF-16 characters; NOT tokens",
+            "requestChars": 225,
+            "responseChars": 421
+          },
+          "model": null,
+          "modelInputTokens": null,
+          "modelOutputTokens": null,
+          "actualNasReadBytes": null,
+          "modelAnswerQuality": null,
+          "measurementStatus": "not-measured"
+        },
+        {
+          "id": "lookup00999",
+          "question": "What value does lookup00999 specify? Cite the current source.",
+          "query": "lookup00999",
+          "elapsedMs": 411.549,
+          "io": {
+            "readFileCalls": 901,
+            "handleReadCalls": 0,
+            "openCalls": 0,
+            "metadataCalls": 0,
+            "directoryCalls": 2,
+            "sourceReadBytes": 3898762,
+            "otherReadBytes": 0
+          },
+          "calls": {
+            "retrieval": 2,
+            "model": 0
+          },
+          "quality": {
+            "pass": true,
+            "expectedSources": 1,
+            "correctSources": 1,
+            "invalidEvidence": 0,
+            "aclLeak": false,
+            "answerMarkerRecall": 1,
+            "evidencePrecision": 1
+          },
+          "proxy": {
+            "unit": "UTF-16 characters; NOT tokens",
+            "requestChars": 225,
+            "responseChars": 422
+          },
+          "model": null,
+          "modelInputTokens": null,
+          "modelOutputTokens": null,
+          "actualNasReadBytes": null,
+          "modelAnswerQuality": null,
+          "measurementStatus": "not-measured"
+        },
+        {
+          "id": "two-sources",
+          "question": "What values do lookup00001 and lookup00999 specify? Cite both.",
+          "query": "lookup00001 lookup00999",
+          "elapsedMs": 385.1772000000001,
+          "io": {
+            "readFileCalls": 902,
+            "handleReadCalls": 0,
+            "openCalls": 0,
+            "metadataCalls": 0,
+            "directoryCalls": 2,
+            "sourceReadBytes": 3903089,
+            "otherReadBytes": 0
+          },
+          "calls": {
+            "retrieval": 3,
+            "model": 0
+          },
+          "quality": {
+            "pass": true,
+            "expectedSources": 2,
+            "correctSources": 2,
+            "invalidEvidence": 0,
+            "aclLeak": false,
+            "answerMarkerRecall": 1,
+            "evidencePrecision": 1
+          },
+          "proxy": {
+            "unit": "UTF-16 characters; NOT tokens",
+            "requestChars": 413,
+            "responseChars": 843
+          },
+          "model": null,
+          "modelInputTokens": null,
+          "modelOutputTokens": null,
+          "actualNasReadBytes": null,
+          "modelAnswerQuality": null,
+          "measurementStatus": "not-measured"
+        },
+        {
+          "id": "denied-only",
+          "question": "What value does lookup00000 specify in accessible sources?",
+          "query": "lookup00000",
+          "elapsedMs": 366.6837999999998,
+          "io": {
+            "readFileCalls": 900,
+            "handleReadCalls": 0,
+            "openCalls": 0,
+            "metadataCalls": 0,
+            "directoryCalls": 2,
+            "sourceReadBytes": 3894435,
+            "otherReadBytes": 0
+          },
+          "calls": {
+            "retrieval": 1,
+            "model": 0
+          },
+          "quality": {
+            "pass": true,
+            "expectedSources": 0,
+            "correctSources": 0,
+            "invalidEvidence": 0,
+            "aclLeak": false,
+            "answerMarkerRecall": null,
+            "evidencePrecision": null
+          },
+          "proxy": {
+            "unit": "UTF-16 characters; NOT tokens",
+            "requestChars": 49,
+            "responseChars": 2
+          },
+          "model": null,
+          "modelInputTokens": null,
+          "modelOutputTokens": null,
+          "actualNasReadBytes": null,
+          "modelAnswerQuality": null,
+          "measurementStatus": "not-measured"
+        },
+        {
+          "id": "absent",
+          "question": "What value does lookupabsent specify?",
+          "query": "lookupabsent",
+          "elapsedMs": 359.39350000000013,
+          "io": {
+            "readFileCalls": 900,
+            "handleReadCalls": 0,
+            "openCalls": 0,
+            "metadataCalls": 0,
+            "directoryCalls": 2,
+            "sourceReadBytes": 3894435,
+            "otherReadBytes": 0
+          },
+          "calls": {
+            "retrieval": 1,
+            "model": 0
+          },
+          "quality": {
+            "pass": true,
+            "expectedSources": 0,
+            "correctSources": 0,
+            "invalidEvidence": 0,
+            "aclLeak": false,
+            "answerMarkerRecall": null,
+            "evidencePrecision": null
+          },
+          "proxy": {
+            "unit": "UTF-16 characters; NOT tokens",
+            "requestChars": 50,
+            "responseChars": 2
+          },
+          "model": null,
+          "modelInputTokens": null,
+          "modelOutputTokens": null,
+          "actualNasReadBytes": null,
+          "modelAnswerQuality": null,
+          "measurementStatus": "not-measured"
+        }
+      ],
+      "warm": [
+        {
+          "id": "lookup00001",
+          "question": "What value does lookup00001 specify? Cite the current source.",
+          "query": "lookup00001",
+          "elapsedMs": 433.1174000000001,
+          "io": {
+            "readFileCalls": 901,
+            "handleReadCalls": 0,
+            "openCalls": 0,
+            "metadataCalls": 0,
+            "directoryCalls": 2,
+            "sourceReadBytes": 3898762,
+            "otherReadBytes": 0
+          },
+          "calls": {
+            "retrieval": 2,
+            "model": 0
+          },
+          "quality": {
+            "pass": true,
+            "expectedSources": 1,
+            "correctSources": 1,
+            "invalidEvidence": 0,
+            "aclLeak": false,
+            "answerMarkerRecall": 1,
+            "evidencePrecision": 1
+          },
+          "proxy": {
+            "unit": "UTF-16 characters; NOT tokens",
+            "requestChars": 225,
+            "responseChars": 422
+          },
+          "model": null,
+          "modelInputTokens": null,
+          "modelOutputTokens": null,
+          "actualNasReadBytes": null,
+          "modelAnswerQuality": null,
+          "measurementStatus": "not-measured"
+        },
+        {
+          "id": "lookup00501",
+          "question": "What value does lookup00501 specify? Cite the current source.",
+          "query": "lookup00501",
+          "elapsedMs": 426.35019999999986,
+          "io": {
+            "readFileCalls": 901,
+            "handleReadCalls": 0,
+            "openCalls": 0,
+            "metadataCalls": 0,
+            "directoryCalls": 2,
+            "sourceReadBytes": 3898762,
+            "otherReadBytes": 0
+          },
+          "calls": {
+            "retrieval": 2,
+            "model": 0
+          },
+          "quality": {
+            "pass": true,
+            "expectedSources": 1,
+            "correctSources": 1,
+            "invalidEvidence": 0,
+            "aclLeak": false,
+            "answerMarkerRecall": 1,
+            "evidencePrecision": 1
+          },
+          "proxy": {
+            "unit": "UTF-16 characters; NOT tokens",
+            "requestChars": 225,
+            "responseChars": 421
+          },
+          "model": null,
+          "modelInputTokens": null,
+          "modelOutputTokens": null,
+          "actualNasReadBytes": null,
+          "modelAnswerQuality": null,
+          "measurementStatus": "not-measured"
+        },
+        {
+          "id": "lookup00999",
+          "question": "What value does lookup00999 specify? Cite the current source.",
+          "query": "lookup00999",
+          "elapsedMs": 398.5626000000002,
+          "io": {
+            "readFileCalls": 901,
+            "handleReadCalls": 0,
+            "openCalls": 0,
+            "metadataCalls": 0,
+            "directoryCalls": 2,
+            "sourceReadBytes": 3898762,
+            "otherReadBytes": 0
+          },
+          "calls": {
+            "retrieval": 2,
+            "model": 0
+          },
+          "quality": {
+            "pass": true,
+            "expectedSources": 1,
+            "correctSources": 1,
+            "invalidEvidence": 0,
+            "aclLeak": false,
+            "answerMarkerRecall": 1,
+            "evidencePrecision": 1
+          },
+          "proxy": {
+            "unit": "UTF-16 characters; NOT tokens",
+            "requestChars": 225,
+            "responseChars": 422
+          },
+          "model": null,
+          "modelInputTokens": null,
+          "modelOutputTokens": null,
+          "actualNasReadBytes": null,
+          "modelAnswerQuality": null,
+          "measurementStatus": "not-measured"
+        },
+        {
+          "id": "two-sources",
+          "question": "What values do lookup00001 and lookup00999 specify? Cite both.",
+          "query": "lookup00001 lookup00999",
+          "elapsedMs": 360.3852999999999,
+          "io": {
+            "readFileCalls": 902,
+            "handleReadCalls": 0,
+            "openCalls": 0,
+            "metadataCalls": 0,
+            "directoryCalls": 2,
+            "sourceReadBytes": 3903089,
+            "otherReadBytes": 0
+          },
+          "calls": {
+            "retrieval": 3,
+            "model": 0
+          },
+          "quality": {
+            "pass": true,
+            "expectedSources": 2,
+            "correctSources": 2,
+            "invalidEvidence": 0,
+            "aclLeak": false,
+            "answerMarkerRecall": 1,
+            "evidencePrecision": 1
+          },
+          "proxy": {
+            "unit": "UTF-16 characters; NOT tokens",
+            "requestChars": 413,
+            "responseChars": 843
+          },
+          "model": null,
+          "modelInputTokens": null,
+          "modelOutputTokens": null,
+          "actualNasReadBytes": null,
+          "modelAnswerQuality": null,
+          "measurementStatus": "not-measured"
+        },
+        {
+          "id": "denied-only",
+          "question": "What value does lookup00000 specify in accessible sources?",
+          "query": "lookup00000",
+          "elapsedMs": 347.41509999999926,
+          "io": {
+            "readFileCalls": 900,
+            "handleReadCalls": 0,
+            "openCalls": 0,
+            "metadataCalls": 0,
+            "directoryCalls": 2,
+            "sourceReadBytes": 3894435,
+            "otherReadBytes": 0
+          },
+          "calls": {
+            "retrieval": 1,
+            "model": 0
+          },
+          "quality": {
+            "pass": true,
+            "expectedSources": 0,
+            "correctSources": 0,
+            "invalidEvidence": 0,
+            "aclLeak": false,
+            "answerMarkerRecall": null,
+            "evidencePrecision": null
+          },
+          "proxy": {
+            "unit": "UTF-16 characters; NOT tokens",
+            "requestChars": 49,
+            "responseChars": 2
+          },
+          "model": null,
+          "modelInputTokens": null,
+          "modelOutputTokens": null,
+          "actualNasReadBytes": null,
+          "modelAnswerQuality": null,
+          "measurementStatus": "not-measured"
+        },
+        {
+          "id": "absent",
+          "question": "What value does lookupabsent specify?",
+          "query": "lookupabsent",
+          "elapsedMs": 498.22689999999966,
+          "io": {
+            "readFileCalls": 900,
+            "handleReadCalls": 0,
+            "openCalls": 0,
+            "metadataCalls": 0,
+            "directoryCalls": 2,
+            "sourceReadBytes": 3894435,
+            "otherReadBytes": 0
+          },
+          "calls": {
+            "retrieval": 1,
+            "model": 0
+          },
+          "quality": {
+            "pass": true,
+            "expectedSources": 0,
+            "correctSources": 0,
+            "invalidEvidence": 0,
+            "aclLeak": false,
+            "answerMarkerRecall": null,
+            "evidencePrecision": null
+          },
+          "proxy": {
+            "unit": "UTF-16 characters; NOT tokens",
+            "requestChars": 50,
+            "responseChars": 2
+          },
+          "model": null,
+          "modelInputTokens": null,
+          "modelOutputTokens": null,
+          "actualNasReadBytes": null,
+          "modelAnswerQuality": null,
+          "measurementStatus": "not-measured"
+        }
+      ],
+      "incrementalWrite": {
+        "elapsedMs": 1.4953999999997905,
+        "io": {
+          "readFileCalls": 0,
+          "handleReadCalls": 0,
+          "openCalls": 0,
+          "metadataCalls": 0,
+          "directoryCalls": 0,
+          "sourceReadBytes": 0,
+          "otherReadBytes": 0
+        },
+        "logicalWriteBytes": 4327
+      },
+      "staleReadProbe": {
+        "elapsedMs": 0.6791999999995824,
+        "io": {
+          "readFileCalls": 1,
+          "handleReadCalls": 0,
+          "openCalls": 0,
+          "metadataCalls": 0,
+          "directoryCalls": 0,
+          "sourceReadBytes": 4327,
+          "otherReadBytes": 0
+        },
+        "rejected": true,
+        "retrievalCalls": 1
+      },
+      "incrementalMaintenanceProbe": {
+        "elapsedMs": 356.34230000000025,
+        "io": {
+          "readFileCalls": 900,
+          "handleReadCalls": 0,
+          "openCalls": 0,
+          "metadataCalls": 0,
+          "directoryCalls": 2,
+          "sourceReadBytes": 3894435,
+          "otherReadBytes": 0
+        },
+        "retrievalCalls": 1
+      },
+      "incremental": [
+        {
+          "id": "lookup00001",
+          "question": "What value does lookup00001 specify? Cite the current source.",
+          "query": "lookup00001",
+          "elapsedMs": 366.97929999999997,
+          "io": {
+            "readFileCalls": 901,
+            "handleReadCalls": 0,
+            "openCalls": 0,
+            "metadataCalls": 0,
+            "directoryCalls": 2,
+            "sourceReadBytes": 3898762,
+            "otherReadBytes": 0
+          },
+          "calls": {
+            "retrieval": 2,
+            "model": 0
+          },
+          "quality": {
+            "pass": true,
+            "expectedSources": 1,
+            "correctSources": 1,
+            "invalidEvidence": 0,
+            "aclLeak": false,
+            "answerMarkerRecall": 1,
+            "evidencePrecision": 1
+          },
+          "proxy": {
+            "unit": "UTF-16 characters; NOT tokens",
+            "requestChars": 225,
+            "responseChars": 422
+          },
+          "model": null,
+          "modelInputTokens": null,
+          "modelOutputTokens": null,
+          "actualNasReadBytes": null,
+          "modelAnswerQuality": null,
+          "measurementStatus": "not-measured"
+        },
+        {
+          "id": "lookup00501",
+          "question": "What value does lookup00501 specify? Cite the current source.",
+          "query": "lookup00501",
+          "elapsedMs": 398.8649999999998,
+          "io": {
+            "readFileCalls": 901,
+            "handleReadCalls": 0,
+            "openCalls": 0,
+            "metadataCalls": 0,
+            "directoryCalls": 2,
+            "sourceReadBytes": 3898762,
+            "otherReadBytes": 0
+          },
+          "calls": {
+            "retrieval": 2,
+            "model": 0
+          },
+          "quality": {
+            "pass": true,
+            "expectedSources": 1,
+            "correctSources": 1,
+            "invalidEvidence": 0,
+            "aclLeak": false,
+            "answerMarkerRecall": 1,
+            "evidencePrecision": 1
+          },
+          "proxy": {
+            "unit": "UTF-16 characters; NOT tokens",
+            "requestChars": 225,
+            "responseChars": 421
+          },
+          "model": null,
+          "modelInputTokens": null,
+          "modelOutputTokens": null,
+          "actualNasReadBytes": null,
+          "modelAnswerQuality": null,
+          "measurementStatus": "not-measured"
+        },
+        {
+          "id": "lookup00999",
+          "question": "What value does lookup00999 specify? Cite the current source.",
+          "query": "lookup00999",
+          "elapsedMs": 388.97270000000026,
+          "io": {
+            "readFileCalls": 901,
+            "handleReadCalls": 0,
+            "openCalls": 0,
+            "metadataCalls": 0,
+            "directoryCalls": 2,
+            "sourceReadBytes": 3898762,
+            "otherReadBytes": 0
+          },
+          "calls": {
+            "retrieval": 2,
+            "model": 0
+          },
+          "quality": {
+            "pass": true,
+            "expectedSources": 1,
+            "correctSources": 1,
+            "invalidEvidence": 0,
+            "aclLeak": false,
+            "answerMarkerRecall": 1,
+            "evidencePrecision": 1
+          },
+          "proxy": {
+            "unit": "UTF-16 characters; NOT tokens",
+            "requestChars": 225,
+            "responseChars": 422
+          },
+          "model": null,
+          "modelInputTokens": null,
+          "modelOutputTokens": null,
+          "actualNasReadBytes": null,
+          "modelAnswerQuality": null,
+          "measurementStatus": "not-measured"
+        },
+        {
+          "id": "two-sources",
+          "question": "What values do lookup00001 and lookup00999 specify? Cite both.",
+          "query": "lookup00001 lookup00999",
+          "elapsedMs": 378.65339999999924,
+          "io": {
+            "readFileCalls": 902,
+            "handleReadCalls": 0,
+            "openCalls": 0,
+            "metadataCalls": 0,
+            "directoryCalls": 2,
+            "sourceReadBytes": 3903089,
+            "otherReadBytes": 0
+          },
+          "calls": {
+            "retrieval": 3,
+            "model": 0
+          },
+          "quality": {
+            "pass": true,
+            "expectedSources": 2,
+            "correctSources": 2,
+            "invalidEvidence": 0,
+            "aclLeak": false,
+            "answerMarkerRecall": 1,
+            "evidencePrecision": 1
+          },
+          "proxy": {
+            "unit": "UTF-16 characters; NOT tokens",
+            "requestChars": 413,
+            "responseChars": 843
+          },
+          "model": null,
+          "modelInputTokens": null,
+          "modelOutputTokens": null,
+          "actualNasReadBytes": null,
+          "modelAnswerQuality": null,
+          "measurementStatus": "not-measured"
+        },
+        {
+          "id": "denied-only",
+          "question": "What value does lookup00000 specify in accessible sources?",
+          "query": "lookup00000",
+          "elapsedMs": 345.91079999999965,
+          "io": {
+            "readFileCalls": 900,
+            "handleReadCalls": 0,
+            "openCalls": 0,
+            "metadataCalls": 0,
+            "directoryCalls": 2,
+            "sourceReadBytes": 3894435,
+            "otherReadBytes": 0
+          },
+          "calls": {
+            "retrieval": 1,
+            "model": 0
+          },
+          "quality": {
+            "pass": true,
+            "expectedSources": 0,
+            "correctSources": 0,
+            "invalidEvidence": 0,
+            "aclLeak": false,
+            "answerMarkerRecall": null,
+            "evidencePrecision": null
+          },
+          "proxy": {
+            "unit": "UTF-16 characters; NOT tokens",
+            "requestChars": 49,
+            "responseChars": 2
+          },
+          "model": null,
+          "modelInputTokens": null,
+          "modelOutputTokens": null,
+          "actualNasReadBytes": null,
+          "modelAnswerQuality": null,
+          "measurementStatus": "not-measured"
+        },
+        {
+          "id": "absent",
+          "question": "What value does lookupabsent specify?",
+          "query": "lookupabsent",
+          "elapsedMs": 377.66169999999875,
+          "io": {
+            "readFileCalls": 900,
+            "handleReadCalls": 0,
+            "openCalls": 0,
+            "metadataCalls": 0,
+            "directoryCalls": 2,
+            "sourceReadBytes": 3894435,
+            "otherReadBytes": 0
+          },
+          "calls": {
+            "retrieval": 1,
+            "model": 0
+          },
+          "quality": {
+            "pass": true,
+            "expectedSources": 0,
+            "correctSources": 0,
+            "invalidEvidence": 0,
+            "aclLeak": false,
+            "answerMarkerRecall": null,
+            "evidencePrecision": null
+          },
+          "proxy": {
+            "unit": "UTF-16 characters; NOT tokens",
+            "requestChars": 50,
+            "responseChars": 2
+          },
+          "model": null,
+          "modelInputTokens": null,
+          "modelOutputTokens": null,
+          "actualNasReadBytes": null,
+          "modelAnswerQuality": null,
+          "measurementStatus": "not-measured"
+        }
+      ],
+      "teardown": {
+        "elapsedMs": 0.0805000000000291,
+        "io": {
+          "readFileCalls": 0,
+          "handleReadCalls": 0,
+          "openCalls": 0,
+          "metadataCalls": 0,
+          "directoryCalls": 0,
+          "sourceReadBytes": 0,
+          "otherReadBytes": 0
+        }
+      },
+      "processMaxRssBytes": 91721728,
+      "memorySamples": {
+        "rssBytes": 91430912,
+        "heapUsedBytes": 17264944,
+        "externalBytes": 4386682,
+        "arrayBuffersBytes": 1852601,
+        "samples": 113
+      },
+      "pass": true,
+      "processWallMs": 9198.2458,
+      "supervisorFreeMemory": {
+        "minimumBytes": 3991932928,
+        "samples": 85,
+        "intervalMs": 100
+      },
+      "stderr": null
+    },
+    {
+      "arm": "preservation",
+      "pid": 23576,
+      "model": null,
+      "modelInputTokens": null,
+      "modelOutputTokens": null,
+      "actualNasReadBytes": null,
+      "modelAnswerQuality": null,
+      "measurementStatus": "not-measured",
+      "startup": {
+        "elapsedMs": 1207.2863,
+        "io": {
+          "readFileCalls": 0,
+          "handleReadCalls": 0,
+          "openCalls": 0,
+          "metadataCalls": 0,
+          "directoryCalls": 0,
+          "sourceReadBytes": 0,
+          "otherReadBytes": 0
+        }
+      },
+      "initializationProbe": {
+        "elapsedMs": 711.2051000000001,
+        "io": {
+          "readFileCalls": 1000,
+          "handleReadCalls": 0,
+          "openCalls": 0,
+          "metadataCalls": 1000,
+          "directoryCalls": 5,
+          "sourceReadBytes": 4327153,
+          "otherReadBytes": 0
+        },
+        "retrievalCalls": 1
+      },
+      "cold": [
+        {
+          "id": "lookup00001",
+          "question": "What value does lookup00001 specify? Cite the current source.",
+          "query": "lookup00001",
+          "elapsedMs": 96.82700000000023,
+          "io": {
+            "readFileCalls": 0,
+            "handleReadCalls": 4,
+            "openCalls": 2,
+            "metadataCalls": 6,
+            "directoryCalls": 0,
+            "sourceReadBytes": 8654,
+            "otherReadBytes": 0
+          },
+          "calls": {
+            "retrieval": 2,
+            "model": 0
+          },
+          "quality": {
+            "pass": true,
+            "expectedSources": 1,
+            "correctSources": 1,
+            "invalidEvidence": 0,
+            "aclLeak": false,
+            "answerMarkerRecall": 1,
+            "evidencePrecision": 1
+          },
+          "proxy": {
+            "unit": "UTF-16 characters; NOT tokens",
+            "requestChars": 225,
+            "responseChars": 1058
+          },
+          "model": null,
+          "modelInputTokens": null,
+          "modelOutputTokens": null,
+          "actualNasReadBytes": null,
+          "modelAnswerQuality": null,
+          "measurementStatus": "not-measured"
+        },
+        {
+          "id": "lookup00501",
+          "question": "What value does lookup00501 specify? Cite the current source.",
+          "query": "lookup00501",
+          "elapsedMs": 66.84439999999995,
+          "io": {
+            "readFileCalls": 0,
+            "handleReadCalls": 4,
+            "openCalls": 2,
+            "metadataCalls": 6,
+            "directoryCalls": 0,
+            "sourceReadBytes": 8654,
+            "otherReadBytes": 0
+          },
+          "calls": {
+            "retrieval": 2,
+            "model": 0
+          },
+          "quality": {
+            "pass": true,
+            "expectedSources": 1,
+            "correctSources": 1,
+            "invalidEvidence": 0,
+            "aclLeak": false,
+            "answerMarkerRecall": 1,
+            "evidencePrecision": 1
+          },
+          "proxy": {
+            "unit": "UTF-16 characters; NOT tokens",
+            "requestChars": 225,
+            "responseChars": 1057
+          },
+          "model": null,
+          "modelInputTokens": null,
+          "modelOutputTokens": null,
+          "actualNasReadBytes": null,
+          "modelAnswerQuality": null,
+          "measurementStatus": "not-measured"
+        },
+        {
+          "id": "lookup00999",
+          "question": "What value does lookup00999 specify? Cite the current source.",
+          "query": "lookup00999",
+          "elapsedMs": 71.22959999999966,
+          "io": {
+            "readFileCalls": 0,
+            "handleReadCalls": 4,
+            "openCalls": 2,
+            "metadataCalls": 6,
+            "directoryCalls": 0,
+            "sourceReadBytes": 8654,
+            "otherReadBytes": 0
+          },
+          "calls": {
+            "retrieval": 2,
+            "model": 0
+          },
+          "quality": {
+            "pass": true,
+            "expectedSources": 1,
+            "correctSources": 1,
+            "invalidEvidence": 0,
+            "aclLeak": false,
+            "answerMarkerRecall": 1,
+            "evidencePrecision": 1
+          },
+          "proxy": {
+            "unit": "UTF-16 characters; NOT tokens",
+            "requestChars": 225,
+            "responseChars": 1058
+          },
+          "model": null,
+          "modelInputTokens": null,
+          "modelOutputTokens": null,
+          "actualNasReadBytes": null,
+          "modelAnswerQuality": null,
+          "measurementStatus": "not-measured"
+        },
+        {
+          "id": "two-sources",
+          "question": "What values do lookup00001 and lookup00999 specify? Cite both.",
+          "query": "lookup00001 lookup00999",
+          "elapsedMs": 104.84670000000006,
+          "io": {
+            "readFileCalls": 0,
+            "handleReadCalls": 8,
+            "openCalls": 4,
+            "metadataCalls": 12,
+            "directoryCalls": 0,
+            "sourceReadBytes": 17308,
+            "otherReadBytes": 0
+          },
+          "calls": {
+            "retrieval": 3,
+            "model": 0
+          },
+          "quality": {
+            "pass": true,
+            "expectedSources": 2,
+            "correctSources": 2,
+            "invalidEvidence": 0,
+            "aclLeak": false,
+            "answerMarkerRecall": 1,
+            "evidencePrecision": 1
+          },
+          "proxy": {
+            "unit": "UTF-16 characters; NOT tokens",
+            "requestChars": 413,
+            "responseChars": 2115
+          },
+          "model": null,
+          "modelInputTokens": null,
+          "modelOutputTokens": null,
+          "actualNasReadBytes": null,
+          "modelAnswerQuality": null,
+          "measurementStatus": "not-measured"
+        },
+        {
+          "id": "denied-only",
+          "question": "What value does lookup00000 specify in accessible sources?",
+          "query": "lookup00000",
+          "elapsedMs": 18.83699999999999,
+          "io": {
+            "readFileCalls": 0,
+            "handleReadCalls": 0,
+            "openCalls": 0,
+            "metadataCalls": 0,
+            "directoryCalls": 0,
+            "sourceReadBytes": 0,
+            "otherReadBytes": 0
+          },
+          "calls": {
+            "retrieval": 1,
+            "model": 0
+          },
+          "quality": {
+            "pass": true,
+            "expectedSources": 0,
+            "correctSources": 0,
+            "invalidEvidence": 0,
+            "aclLeak": false,
+            "answerMarkerRecall": null,
+            "evidencePrecision": null
+          },
+          "proxy": {
+            "unit": "UTF-16 characters; NOT tokens",
+            "requestChars": 49,
+            "responseChars": 2
+          },
+          "model": null,
+          "modelInputTokens": null,
+          "modelOutputTokens": null,
+          "actualNasReadBytes": null,
+          "modelAnswerQuality": null,
+          "measurementStatus": "not-measured"
+        },
+        {
+          "id": "absent",
+          "question": "What value does lookupabsent specify?",
+          "query": "lookupabsent",
+          "elapsedMs": 16.655099999999948,
+          "io": {
+            "readFileCalls": 0,
+            "handleReadCalls": 0,
+            "openCalls": 0,
+            "metadataCalls": 0,
+            "directoryCalls": 0,
+            "sourceReadBytes": 0,
+            "otherReadBytes": 0
+          },
+          "calls": {
+            "retrieval": 1,
+            "model": 0
+          },
+          "quality": {
+            "pass": true,
+            "expectedSources": 0,
+            "correctSources": 0,
+            "invalidEvidence": 0,
+            "aclLeak": false,
+            "answerMarkerRecall": null,
+            "evidencePrecision": null
+          },
+          "proxy": {
+            "unit": "UTF-16 characters; NOT tokens",
+            "requestChars": 50,
+            "responseChars": 2
+          },
+          "model": null,
+          "modelInputTokens": null,
+          "modelOutputTokens": null,
+          "actualNasReadBytes": null,
+          "modelAnswerQuality": null,
+          "measurementStatus": "not-measured"
+        }
+      ],
+      "warm": [
+        {
+          "id": "lookup00001",
+          "question": "What value does lookup00001 specify? Cite the current source.",
+          "query": "lookup00001",
+          "elapsedMs": 63.86479999999983,
+          "io": {
+            "readFileCalls": 0,
+            "handleReadCalls": 4,
+            "openCalls": 2,
+            "metadataCalls": 6,
+            "directoryCalls": 0,
+            "sourceReadBytes": 8654,
+            "otherReadBytes": 0
+          },
+          "calls": {
+            "retrieval": 2,
+            "model": 0
+          },
+          "quality": {
+            "pass": true,
+            "expectedSources": 1,
+            "correctSources": 1,
+            "invalidEvidence": 0,
+            "aclLeak": false,
+            "answerMarkerRecall": 1,
+            "evidencePrecision": 1
+          },
+          "proxy": {
+            "unit": "UTF-16 characters; NOT tokens",
+            "requestChars": 225,
+            "responseChars": 1058
+          },
+          "model": null,
+          "modelInputTokens": null,
+          "modelOutputTokens": null,
+          "actualNasReadBytes": null,
+          "modelAnswerQuality": null,
+          "measurementStatus": "not-measured"
+        },
+        {
+          "id": "lookup00501",
+          "question": "What value does lookup00501 specify? Cite the current source.",
+          "query": "lookup00501",
+          "elapsedMs": 57.41539999999986,
+          "io": {
+            "readFileCalls": 0,
+            "handleReadCalls": 4,
+            "openCalls": 2,
+            "metadataCalls": 6,
+            "directoryCalls": 0,
+            "sourceReadBytes": 8654,
+            "otherReadBytes": 0
+          },
+          "calls": {
+            "retrieval": 2,
+            "model": 0
+          },
+          "quality": {
+            "pass": true,
+            "expectedSources": 1,
+            "correctSources": 1,
+            "invalidEvidence": 0,
+            "aclLeak": false,
+            "answerMarkerRecall": 1,
+            "evidencePrecision": 1
+          },
+          "proxy": {
+            "unit": "UTF-16 characters; NOT tokens",
+            "requestChars": 225,
+            "responseChars": 1057
+          },
+          "model": null,
+          "modelInputTokens": null,
+          "modelOutputTokens": null,
+          "actualNasReadBytes": null,
+          "modelAnswerQuality": null,
+          "measurementStatus": "not-measured"
+        },
+        {
+          "id": "lookup00999",
+          "question": "What value does lookup00999 specify? Cite the current source.",
+          "query": "lookup00999",
+          "elapsedMs": 55.23730000000023,
+          "io": {
+            "readFileCalls": 0,
+            "handleReadCalls": 4,
+            "openCalls": 2,
+            "metadataCalls": 6,
+            "directoryCalls": 0,
+            "sourceReadBytes": 8654,
+            "otherReadBytes": 0
+          },
+          "calls": {
+            "retrieval": 2,
+            "model": 0
+          },
+          "quality": {
+            "pass": true,
+            "expectedSources": 1,
+            "correctSources": 1,
+            "invalidEvidence": 0,
+            "aclLeak": false,
+            "answerMarkerRecall": 1,
+            "evidencePrecision": 1
+          },
+          "proxy": {
+            "unit": "UTF-16 characters; NOT tokens",
+            "requestChars": 225,
+            "responseChars": 1058
+          },
+          "model": null,
+          "modelInputTokens": null,
+          "modelOutputTokens": null,
+          "actualNasReadBytes": null,
+          "modelAnswerQuality": null,
+          "measurementStatus": "not-measured"
+        },
+        {
+          "id": "two-sources",
+          "question": "What values do lookup00001 and lookup00999 specify? Cite both.",
+          "query": "lookup00001 lookup00999",
+          "elapsedMs": 103.03800000000001,
+          "io": {
+            "readFileCalls": 0,
+            "handleReadCalls": 8,
+            "openCalls": 4,
+            "metadataCalls": 12,
+            "directoryCalls": 0,
+            "sourceReadBytes": 17308,
+            "otherReadBytes": 0
+          },
+          "calls": {
+            "retrieval": 3,
+            "model": 0
+          },
+          "quality": {
+            "pass": true,
+            "expectedSources": 2,
+            "correctSources": 2,
+            "invalidEvidence": 0,
+            "aclLeak": false,
+            "answerMarkerRecall": 1,
+            "evidencePrecision": 1
+          },
+          "proxy": {
+            "unit": "UTF-16 characters; NOT tokens",
+            "requestChars": 413,
+            "responseChars": 2115
+          },
+          "model": null,
+          "modelInputTokens": null,
+          "modelOutputTokens": null,
+          "actualNasReadBytes": null,
+          "modelAnswerQuality": null,
+          "measurementStatus": "not-measured"
+        },
+        {
+          "id": "denied-only",
+          "question": "What value does lookup00000 specify in accessible sources?",
+          "query": "lookup00000",
+          "elapsedMs": 17.696300000000065,
+          "io": {
+            "readFileCalls": 0,
+            "handleReadCalls": 0,
+            "openCalls": 0,
+            "metadataCalls": 0,
+            "directoryCalls": 0,
+            "sourceReadBytes": 0,
+            "otherReadBytes": 0
+          },
+          "calls": {
+            "retrieval": 1,
+            "model": 0
+          },
+          "quality": {
+            "pass": true,
+            "expectedSources": 0,
+            "correctSources": 0,
+            "invalidEvidence": 0,
+            "aclLeak": false,
+            "answerMarkerRecall": null,
+            "evidencePrecision": null
+          },
+          "proxy": {
+            "unit": "UTF-16 characters; NOT tokens",
+            "requestChars": 49,
+            "responseChars": 2
+          },
+          "model": null,
+          "modelInputTokens": null,
+          "modelOutputTokens": null,
+          "actualNasReadBytes": null,
+          "modelAnswerQuality": null,
+          "measurementStatus": "not-measured"
+        },
+        {
+          "id": "absent",
+          "question": "What value does lookupabsent specify?",
+          "query": "lookupabsent",
+          "elapsedMs": 14.628700000000208,
+          "io": {
+            "readFileCalls": 0,
+            "handleReadCalls": 0,
+            "openCalls": 0,
+            "metadataCalls": 0,
+            "directoryCalls": 0,
+            "sourceReadBytes": 0,
+            "otherReadBytes": 0
+          },
+          "calls": {
+            "retrieval": 1,
+            "model": 0
+          },
+          "quality": {
+            "pass": true,
+            "expectedSources": 0,
+            "correctSources": 0,
+            "invalidEvidence": 0,
+            "aclLeak": false,
+            "answerMarkerRecall": null,
+            "evidencePrecision": null
+          },
+          "proxy": {
+            "unit": "UTF-16 characters; NOT tokens",
+            "requestChars": 50,
+            "responseChars": 2
+          },
+          "model": null,
+          "modelInputTokens": null,
+          "modelOutputTokens": null,
+          "actualNasReadBytes": null,
+          "modelAnswerQuality": null,
+          "measurementStatus": "not-measured"
+        }
+      ],
+      "incrementalWrite": {
+        "elapsedMs": 10.466699999999946,
+        "io": {
+          "readFileCalls": 0,
+          "handleReadCalls": 0,
+          "openCalls": 0,
+          "metadataCalls": 0,
+          "directoryCalls": 0,
+          "sourceReadBytes": 0,
+          "otherReadBytes": 0
+        },
+        "logicalWriteBytes": 4327
+      },
+      "staleReadProbe": {
+        "elapsedMs": 10.269399999999678,
+        "io": {
+          "readFileCalls": 0,
+          "handleReadCalls": 2,
+          "openCalls": 1,
+          "metadataCalls": 3,
+          "directoryCalls": 0,
+          "sourceReadBytes": 4327,
+          "otherReadBytes": 0
+        },
+        "rejected": true,
+        "retrievalCalls": 1
+      },
+      "incrementalMaintenanceProbe": {
+        "elapsedMs": 16.407900000000154,
+        "io": {
+          "readFileCalls": 1,
+          "handleReadCalls": 0,
+          "openCalls": 0,
+          "metadataCalls": 1,
+          "directoryCalls": 0,
+          "sourceReadBytes": 4327,
+          "otherReadBytes": 0
+        },
+        "retrievalCalls": 1
+      },
+      "incremental": [
+        {
+          "id": "lookup00001",
+          "question": "What value does lookup00001 specify? Cite the current source.",
+          "query": "lookup00001",
+          "elapsedMs": 56.29619999999977,
+          "io": {
+            "readFileCalls": 0,
+            "handleReadCalls": 4,
+            "openCalls": 2,
+            "metadataCalls": 6,
+            "directoryCalls": 0,
+            "sourceReadBytes": 8654,
+            "otherReadBytes": 0
+          },
+          "calls": {
+            "retrieval": 2,
+            "model": 0
+          },
+          "quality": {
+            "pass": true,
+            "expectedSources": 1,
+            "correctSources": 1,
+            "invalidEvidence": 0,
+            "aclLeak": false,
+            "answerMarkerRecall": 1,
+            "evidencePrecision": 1
+          },
+          "proxy": {
+            "unit": "UTF-16 characters; NOT tokens",
+            "requestChars": 225,
+            "responseChars": 1058
+          },
+          "model": null,
+          "modelInputTokens": null,
+          "modelOutputTokens": null,
+          "actualNasReadBytes": null,
+          "modelAnswerQuality": null,
+          "measurementStatus": "not-measured"
+        },
+        {
+          "id": "lookup00501",
+          "question": "What value does lookup00501 specify? Cite the current source.",
+          "query": "lookup00501",
+          "elapsedMs": 62.02129999999988,
+          "io": {
+            "readFileCalls": 0,
+            "handleReadCalls": 4,
+            "openCalls": 2,
+            "metadataCalls": 6,
+            "directoryCalls": 0,
+            "sourceReadBytes": 8654,
+            "otherReadBytes": 0
+          },
+          "calls": {
+            "retrieval": 2,
+            "model": 0
+          },
+          "quality": {
+            "pass": true,
+            "expectedSources": 1,
+            "correctSources": 1,
+            "invalidEvidence": 0,
+            "aclLeak": false,
+            "answerMarkerRecall": 1,
+            "evidencePrecision": 1
+          },
+          "proxy": {
+            "unit": "UTF-16 characters; NOT tokens",
+            "requestChars": 225,
+            "responseChars": 1057
+          },
+          "model": null,
+          "modelInputTokens": null,
+          "modelOutputTokens": null,
+          "actualNasReadBytes": null,
+          "modelAnswerQuality": null,
+          "measurementStatus": "not-measured"
+        },
+        {
+          "id": "lookup00999",
+          "question": "What value does lookup00999 specify? Cite the current source.",
+          "query": "lookup00999",
+          "elapsedMs": 53.929499999999734,
+          "io": {
+            "readFileCalls": 0,
+            "handleReadCalls": 4,
+            "openCalls": 2,
+            "metadataCalls": 6,
+            "directoryCalls": 0,
+            "sourceReadBytes": 8654,
+            "otherReadBytes": 0
+          },
+          "calls": {
+            "retrieval": 2,
+            "model": 0
+          },
+          "quality": {
+            "pass": true,
+            "expectedSources": 1,
+            "correctSources": 1,
+            "invalidEvidence": 0,
+            "aclLeak": false,
+            "answerMarkerRecall": 1,
+            "evidencePrecision": 1
+          },
+          "proxy": {
+            "unit": "UTF-16 characters; NOT tokens",
+            "requestChars": 225,
+            "responseChars": 1058
+          },
+          "model": null,
+          "modelInputTokens": null,
+          "modelOutputTokens": null,
+          "actualNasReadBytes": null,
+          "modelAnswerQuality": null,
+          "measurementStatus": "not-measured"
+        },
+        {
+          "id": "two-sources",
+          "question": "What values do lookup00001 and lookup00999 specify? Cite both.",
+          "query": "lookup00001 lookup00999",
+          "elapsedMs": 103.4032000000002,
+          "io": {
+            "readFileCalls": 0,
+            "handleReadCalls": 8,
+            "openCalls": 4,
+            "metadataCalls": 12,
+            "directoryCalls": 0,
+            "sourceReadBytes": 17308,
+            "otherReadBytes": 0
+          },
+          "calls": {
+            "retrieval": 3,
+            "model": 0
+          },
+          "quality": {
+            "pass": true,
+            "expectedSources": 2,
+            "correctSources": 2,
+            "invalidEvidence": 0,
+            "aclLeak": false,
+            "answerMarkerRecall": 1,
+            "evidencePrecision": 1
+          },
+          "proxy": {
+            "unit": "UTF-16 characters; NOT tokens",
+            "requestChars": 413,
+            "responseChars": 2115
+          },
+          "model": null,
+          "modelInputTokens": null,
+          "modelOutputTokens": null,
+          "actualNasReadBytes": null,
+          "modelAnswerQuality": null,
+          "measurementStatus": "not-measured"
+        },
+        {
+          "id": "denied-only",
+          "question": "What value does lookup00000 specify in accessible sources?",
+          "query": "lookup00000",
+          "elapsedMs": 21.420900000000074,
+          "io": {
+            "readFileCalls": 0,
+            "handleReadCalls": 0,
+            "openCalls": 0,
+            "metadataCalls": 0,
+            "directoryCalls": 0,
+            "sourceReadBytes": 0,
+            "otherReadBytes": 0
+          },
+          "calls": {
+            "retrieval": 1,
+            "model": 0
+          },
+          "quality": {
+            "pass": true,
+            "expectedSources": 0,
+            "correctSources": 0,
+            "invalidEvidence": 0,
+            "aclLeak": false,
+            "answerMarkerRecall": null,
+            "evidencePrecision": null
+          },
+          "proxy": {
+            "unit": "UTF-16 characters; NOT tokens",
+            "requestChars": 49,
+            "responseChars": 2
+          },
+          "model": null,
+          "modelInputTokens": null,
+          "modelOutputTokens": null,
+          "actualNasReadBytes": null,
+          "modelAnswerQuality": null,
+          "measurementStatus": "not-measured"
+        },
+        {
+          "id": "absent",
+          "question": "What value does lookupabsent specify?",
+          "query": "lookupabsent",
+          "elapsedMs": 15.740600000000086,
+          "io": {
+            "readFileCalls": 0,
+            "handleReadCalls": 0,
+            "openCalls": 0,
+            "metadataCalls": 0,
+            "directoryCalls": 0,
+            "sourceReadBytes": 0,
+            "otherReadBytes": 0
+          },
+          "calls": {
+            "retrieval": 1,
+            "model": 0
+          },
+          "quality": {
+            "pass": true,
+            "expectedSources": 0,
+            "correctSources": 0,
+            "invalidEvidence": 0,
+            "aclLeak": false,
+            "answerMarkerRecall": null,
+            "evidencePrecision": null
+          },
+          "proxy": {
+            "unit": "UTF-16 characters; NOT tokens",
+            "requestChars": 50,
+            "responseChars": 2
+          },
+          "model": null,
+          "modelInputTokens": null,
+          "modelOutputTokens": null,
+          "actualNasReadBytes": null,
+          "modelAnswerQuality": null,
+          "measurementStatus": "not-measured"
+        }
+      ],
+      "teardown": {
+        "elapsedMs": 0.7383999999997286,
+        "io": {
+          "readFileCalls": 0,
+          "handleReadCalls": 0,
+          "openCalls": 0,
+          "metadataCalls": 0,
+          "directoryCalls": 0,
+          "sourceReadBytes": 0,
+          "otherReadBytes": 0
+        }
+      },
+      "processMaxRssBytes": 153645056,
+      "memorySamples": {
+        "rssBytes": 152043520,
+        "heapUsedBytes": 58886768,
+        "externalBytes": 5326785,
+        "arrayBuffersBytes": 1500612,
+        "samples": 41
+      },
+      "pass": true,
+      "processWallMs": 3238.577000000001,
+      "supervisorFreeMemory": {
+        "minimumBytes": 3984736256,
+        "samples": 29,
+        "intervalMs": 100
+      },
+      "stderr": null
+    }
+  ],
+  "pass": true,
+  "methodology": [
+    "Same deterministic corpus, questions, public-reader ACL, current revisions and null model; independent sequential Node processes, vanilla first.",
+    "Cold means first question pass AFTER separately measured lazy index bootstrap; warm repeats in-process. OS disk cache is not flushed.",
+    "Startup includes source imports/construction; processWallMs also includes Node/tsx bootstrap and IPC. Initialization probe includes one no-result search.",
+    "One identical source rewrite per arm; invalidation/write and maintenance probe separate from post-change queries. No durable index cache is configured.",
+    "Logical reads: instrumented fs.promises.readFile/open/FileHandle.read/readFile under corpus. Successful read bytes may include repeated verification/EOF calls; metadata attempts also counted.",
+    "Does not count OS physical IO, SMB/NAS bytes, module loads, sync/callback/stream IO, kernel directory traffic or physical cache writes. Model tokens and model answer quality are not measured.",
+    "Vanilla scans accessible files one body at a time with OR lexical matching and bounded top-K, then revision-checks and returns selected lines; no all-document prompt.",
+    "Marker recall/exact-revision slice precision are retrieval correctness gates, not semantic answer quality. Synthetic unique identifiers are a limited workload.",
+    "Process maxRSS includes runtime; 100ms samples and free-memory guard can miss peaks and are NOT an OS hard memory bound. No cost advantage claim."
+  ]
+}

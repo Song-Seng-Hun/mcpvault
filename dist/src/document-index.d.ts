@@ -1,5 +1,5 @@
 import type { ScopePrincipal } from './scope-auth.js';
-import type { DocumentResourceReader, DocumentResourceSnapshot } from './document-resource.js';
+import type { DocumentResourceReader, DocumentResourceSnapshot, DocumentRevision } from './document-resource.js';
 import { type DocumentStructure } from './document-structure.js';
 import type { VaultFileCatalog } from './vault-catalog.js';
 export interface LoadedDocument {
@@ -25,18 +25,37 @@ export declare class DocumentIndex {
     readonly catalog?: VaultFileCatalog | undefined;
     readonly options: DocumentIndexOptions;
     private readonly hot;
+    private readonly preparing;
     private readonly cacheOwner;
     private readonly namespace;
     private readonly unsubscribe;
     private closed;
     private diskQueue;
+    private readonly pendingDiskKeys;
+    private pendingDiskBytes;
+    private readonly diskLedger;
+    private diskLedgerReady;
+    private diskWrites;
+    private writerLease;
     constructor(reader: DocumentResourceReader, catalog?: VaultFileCatalog | undefined, options?: DocumentIndexOptions);
     private assertCacheDirectory;
     private key;
+    private assertPrivateCache;
     load(path: string, principal?: ScopePrincipal, expectedRevision?: string): Promise<LoadedDocument>;
+    /** Revalidate metadata-only pages without retaining or decoding source bodies. */
+    revalidatePin(pin: DocumentRevision, principal?: ScopePrincipal): Promise<void>;
+    private loadWithinWork;
     private restore;
+    /** Copy only authority inputs into the queue, never the snapshot's original bytes. */
+    private publicationGuard;
+    /** One lifetime writer per private root makes its capacity ledger exclusive.
+     * An abandoned lease fails closed to memory-only writes; never steal a host's lock. */
+    private acquireWriterLease;
+    private releaseWriterLease;
     private persist;
+    private loadDiskLedger;
+    private reserveDiskEntry;
     invalidate(path?: string): void;
-    close(): void;
+    close(): Promise<void>;
 }
 //# sourceMappingURL=document-index.d.ts.map

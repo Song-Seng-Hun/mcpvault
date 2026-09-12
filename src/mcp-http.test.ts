@@ -3,7 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
-import { createServer } from './createServer.js';
+import { createServer } from '../tests/server-fixture.js';
 import { startMcpHttpApi, type McpHttpHandle } from './mcp-http.js';
 
 const resources: Array<{ vault: string; api: McpHttpHandle; server: any; clients: Client[] }> = [];

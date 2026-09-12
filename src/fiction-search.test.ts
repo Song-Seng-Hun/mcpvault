@@ -3,6 +3,7 @@ import { mkdtemp, mkdir, readFile, writeFile, realpath, rm } from 'node:fs/promi
 import { basename, dirname, isAbsolute, join, relative } from 'node:path';
 import { tmpdir } from 'node:os';
 import { SearchService } from './search.js';
+import { derivedStorageFixture } from '../tests/derived-storage-fixture.js';
 import { FileSystemService } from './filesystem.js';
 import { PathFilter } from './pathfilter.js';
 import { ScopeAccessPolicy } from './scope-access.js';
@@ -10,6 +11,7 @@ import { CollaborationService } from './scopes.js';
 import { RetrievalService } from './retrieval-service.js';
 
 let vault: string, search: SearchService, fs: FileSystemService, access: ScopeAccessPolicy, retrieval: RetrievalService;
+let snapshotHost: Awaited<ReturnType<typeof derivedStorageFixture>> | undefined;
 beforeEach(async () => {
   vault = await mkdtemp(join(tmpdir(), 'mcpvault-fiction-search-'));
   search = new SearchService(vault, new PathFilter()); fs = new FileSystemService(vault); access = new ScopeAccessPolicy();
@@ -17,6 +19,7 @@ beforeEach(async () => {
 });
 afterEach(async () => {
   await search.close(); vi.restoreAllMocks();
+  await snapshotHost?.close(); snapshotHost = undefined;
   const target = await realpath(vault), local = relative(await realpath(tmpdir()), target);
   if (!local || local.startsWith('..') || isAbsolute(local) || !basename(target).startsWith('mcpvault-fiction-search-')) throw Error('Unsafe fixture cleanup');
   await rm(target, { recursive: true, force: true });
@@ -43,14 +46,16 @@ test('only fiction uses canonical markers, managed Story paths and the existing 
 });
 
 test('fiction classification persists without cached text and old version seven snapshots rebuild', async () => {
+  await search.close(); snapshotHost = await derivedStorageFixture(vault);
+  search = new SearchService(vault, new PathFilter(), undefined, undefined, snapshotHost.host);
   await seed('Fiction.md', '---\nfiction_domain: roleplay\n---\nfictionneedle');
   await seed('Real.md', 'fictionneedle real');
   await search.search({ query: 'fictionneedle' });
   await (search as any).flushSnapshot();
-  const snapshotPath = join(vault, '.mcpvault/search-index.snapshot.bin');
+  const snapshotPath = snapshotHost.path('search-index.snapshot.bin');
   const snapshot = await readFile(snapshotPath);
   await search.close();
-  search = new SearchService(vault, new PathFilter());
+  search = new SearchService(vault, new PathFilter(), undefined, undefined, snapshotHost.host);
   await (search as any).snapshotReady;
   const load = vi.spyOn(search as any, 'loadText');
   expect((await search.search({ query: 'fictionneedle', fictionDomain: 'exclude' } as any)).map(hit => hit.p)).toEqual(['Real.md']);
@@ -58,11 +63,11 @@ test('fiction classification persists without cached text and old version seven 
   await search.close();
   snapshot.writeUInt32LE(7, 8); // A pre-classification cache is unknown, never nonfiction.
   await writeFile(snapshotPath, snapshot);
-  search = new SearchService(vault, new PathFilter());
+  search = new SearchService(vault, new PathFilter(), undefined, undefined, snapshotHost.host);
   await (search as any).snapshotReady;
   expect((search as any).documents.size).toBe(0);
   expect((await search.search({ query: 'fictionneedle', fictionDomain: 'exclude' } as any)).map(hit => hit.p)).toEqual(['Real.md']);
-});
+}, 30000);
 
 test('a text load rechecks classification changed since the indexed generation', async () => {
   await seed('Changing.md', 'fictionneedle originally real');

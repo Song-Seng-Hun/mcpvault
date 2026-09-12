@@ -20,9 +20,11 @@ export function validateExplanationHostConfig(input: unknown): ExplanationHostDe
   const profiles: WorkExecutionProfile[] = v.profiles.map((raw: unknown) => {
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw guidanceError(Error('Invalid host execution profile'), 'guid-577a3438bd997d6a');
     const p = structuredClone(raw) as WorkExecutionProfile;
-    if (Object.keys(p).some(k => !['accountId', 'provider', 'family', 'version', 'reasoning', 'tier', 'tools', 'capabilities', 'hostVerified', 'availableBudget', 'cost'].includes(k))
+    if (Object.keys(p).some(k => !['accountId', 'provider', 'family', 'version', 'reasoning', 'tier', 'tools', 'capabilities', 'hostVerified', 'availableBudget', 'cost', 'executionLocality', 'bookkeepingSuitable'].includes(k))
       || p.hostVerified !== true || !['economical', 'standard', 'frontier', 'unknown'].includes(p.tier)
       || normalizeScopeId(p.accountId, 'accountId') !== p.accountId) throw guidanceError(Error('Invalid host execution profile'), 'guid-577a3438bd997d6a');
+    if (p.executionLocality !== undefined && !['local', 'remote', 'unknown'].includes(p.executionLocality)
+      || p.bookkeepingSuitable !== undefined && typeof p.bookkeepingSuitable !== 'boolean') throw new Error('Invalid host execution profile');
     for (const key of ['family', 'version'] as const) {
       const label = textField(p[key], key, 80, true);
       if (!label || label.toLowerCase() === 'unknown') throw guidanceError(Error('Verified family and exact version required'), 'guid-08d2263d8fe2a125');

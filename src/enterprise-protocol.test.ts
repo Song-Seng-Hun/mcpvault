@@ -2,7 +2,7 @@ import { afterEach, expect, test } from 'vitest';
 import { mkdtemp, mkdir, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createServer, getServerRuntime } from './createServer.js';
+import { createServer, getServerRuntime } from '../tests/server-fixture.js';
 import { EnterpriseRegistry } from './enterprise-registry.js';
 import { withEnterpriseRequestContext } from './enterprise-request-context.js';
 import { FileSystemService } from './filesystem.js';

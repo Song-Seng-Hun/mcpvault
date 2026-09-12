@@ -77,6 +77,8 @@ export class RetrievalService {
     const safe: MemorySearchParams = {
       query: params.query, limit, canAccessPath: admitted, pathPrefix: prefix === '.' ? '' : prefix,
       ...(params.candidateRevisions && { candidateRevisions: params.candidateRevisions }),
+      ...(params.candidateRevision && { candidateRevision: params.candidateRevision }),
+      ...(params.candidateCoverage && { candidateCoverage: params.candidateCoverage }),
     };
     for (const key of ['searchContent', 'searchFrontmatter', 'caseSensitive', 'excludePaths'] as const) {
       if (params[key] !== undefined) Object.assign(safe, { [key]: params[key] });

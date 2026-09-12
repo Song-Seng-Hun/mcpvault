@@ -37,6 +37,13 @@ type Guard = { path: string; expectedRevision: string };
 type Intent = { kind: 'claim'; params: WorkClaimParams; paidContractId?:string } | { kind: 'handoff'; params: WorkHandoffParams } | { kind: 'review'; params: WorkReviewParams };
 export interface WorkServiceOptions {
   executionProfiles?: () => Promise<WorkExecutionProfile[]>;
+  /** Trusted host advice for this exact project/task generation, never a
+   * request field or an execution grant. Missing coverage means local LLM. */
+  deterministicCoverage?: (input: {
+    principal: ScopePrincipal;
+    project: { path: string; revision?: string };
+    tasks: Array<{ path: string; revision?: string }>;
+  }) => Promise<boolean>;
   verifyReviewExecution?: HostExecutionVerifier;
   readReviewGitSource?: ContextReader;
   assertActor?: (principal: ScopePrincipal) => Promise<void>;
@@ -916,13 +923,21 @@ export class WorkService {
       const taskId = normalizeScopeId(params.taskId, 'taskId'); selected = projectTasks.filter(n => n.fm.task_id === taskId);
       if (selected.length !== 1) throw guidanceError(new Error('Staffing target unavailable'), 'guid-0a1a381d8076f396');
     }
+    const policy = this.staffingPolicy(project.frontmatter.staffing_policy || { taskType: 'code' });
+    const workKind = selected.find(n => n.fm.work_kind !== 'general')?.fm.work_kind || 'general';
+    const deterministicAvailable = policy.taskType === 'bookkeeping' && await this.options.deterministicCoverage?.({
+      principal: structuredClone(actor), project: { path: projectPath(id), revision: project.revision },
+      tasks: selected.map(n => ({ path: n.path, ...(n.revision !== undefined && { revision: n.revision }) })),
+    }) === true;
+    const needsProfiles = !deterministicAvailable || workKind !== 'general'
+      || project.frontmatter.required_perspectives?.includes('independent_review');
     const registered = await this.auth.listPrincipals();
     const eligible: ScopePrincipal[] = [];
     for (const account of registered.filter(p => project.frontmatter.participants.includes(p.accountId))) {
       try { eligible.push(await this.actor(account)); } catch { /* Hidden, banned, or unauthorized candidates are excluded before output. */ }
     }
     const ids = new Set(eligible.map(p => p.accountId));
-    const profiles = (await this.options.executionProfiles?.() || []).filter(p => ids.has(p.accountId));
+    const profiles = (needsProfiles ? await this.options.executionProfiles?.() || [] : []).filter(p => ids.has(p.accountId));
     const workload: Record<string, number> = Object.fromEntries([...ids].map(account => [account, inventory.filter(n => started(n.fm) && n.fm.assignee_account_id === account).length]));
     const currentAssignments: WorkStaffingInput['currentAssignments'] = [];
     for (const task of selected) {
@@ -934,18 +949,32 @@ export class WorkService {
     }
     const occupied = new Set(selected.filter(n => started(n.fm)).map(n => n.fm.assignee_account_id));
     const noProjectSlot = projectTasks.filter(n => started(n.fm)).length >= project.frontmatter.wip_limit;
-    const result = recommendStaffing({ ...this.staffingPolicy(project.frontmatter.staffing_policy || { taskType: 'code' }), candidates: profiles,
+    const result = recommendStaffing({ ...policy, ...(policy.taskType === 'bookkeeping' && { deterministicAvailable }), candidates: profiles,
       eligibleAccountIds: [...ids].filter(account => !noProjectSlot || occupied.has(account)),
       ...(project.frontmatter.required_perspectives?.length && { requiredPerspectives: project.frontmatter.required_perspectives }),
-      workKind: selected.find(n => n.fm.work_kind !== 'general')?.fm.work_kind || 'general',
+      workKind,
       authorAccountIds: [...new Set(selected.map(n => n.fm.author_account_id).filter(Boolean))],
       requesterAccountIds: [...new Set(selected.map(n => n.fm.requester_account_id).filter(Boolean))],
       assigneeAccountIds: [...new Set(selected.map(n => n.fm.assignee_account_id).filter(Boolean))],
       currentAssignments, workload, personalWipLimit: project.frontmatter.personal_wip_limit });
     const items: Properties[] = [...result.rows.map(row => ({ kind: 'staffing', ...row })), ...result.unfilled.map(row => ({ kind: 'unfilled', ...row })),
       ...result.explanations.map(text => ({ kind: 'explanation', text })), ...(noProjectSlot ? [{ kind: 'explanation', text: guidanceText('guid-8286904df029a470', 'Project WIP is full; finish or explicitly hand off existing work first.') }] : [])];
-    return page(items, { projectId: id, projectRevision: project.revision, advisory: true, summary: result.summary },
-      fingerprint({ account: actor.accountId, project: project.revision, task: params.taskId, inventory, items }), params, `staffing:${id}`);
+    if (deterministicAvailable) {
+      // Host coverage is generation-specific advice, not a reusable approval.
+      for (const target of [...selected, { path: projectPath(id), revision: project.revision }]) {
+        if (!target.revision || (await this.visible(target.path)).revision !== target.revision) {
+          throw new Error('Staffing generation changed during host assessment; retry');
+        }
+      }
+      const generation = (tasks: Array<{ path: string; revision?: string }>) =>
+        fingerprint(tasks.map(n => ({ path: n.path, revision: n.revision })).sort((a, b) => a.path.localeCompare(b.path)));
+      if (generation((await this.inventory(id)).filter(n => n.fm.mcpvault_type === 'agent_task')) !== generation(projectTasks)) {
+        throw new Error('Staffing task membership or generation changed during host assessment; retry');
+      }
+    }
+    return page(items, { projectId: id, projectRevision: project.revision, advisory: true, summary: result.summary,
+      ...(result.execution && { execution: result.execution }) },
+      fingerprint({ account: actor.accountId, project: project.revision, task: params.taskId, inventory, items, execution: result.execution }), params, `staffing:${id}`);
   }
 
   async reviewContext(params: WorkPacketParams & { locatorId?: string }) {

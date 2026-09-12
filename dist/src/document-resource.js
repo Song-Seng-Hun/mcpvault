@@ -6,6 +6,7 @@ import { FrontmatterHandler } from './frontmatter.js';
 import { isModerationHidden } from './moderation-policy.js';
 import { assertEnterpriseStorageAccess } from './enterprise-storage-context.js';
 import { resourceBundleLocation, parseResourceBundleManifest } from './resource-bundle.js';
+import { withDocumentWork, reserveDocumentWork, documentWorkMemo, documentFrontmatterEstimate } from './document-work-memory.js';
 const TEXT_MEDIA = {
     '.md': 'text/markdown', '.markdown': 'text/markdown', '.txt': 'text/plain',
     '.sh': 'text/x-shellscript', '.bash': 'text/x-shellscript', '.zsh': 'text/x-shellscript',
@@ -37,6 +38,11 @@ export class DocumentResourceReader {
     filter;
     access;
     admitted;
+    // read() binds a validated member to its manifest. Neither identity may come
+    // from the caller's mutable snapshot during revalidation. Retain no bytes/text.
+    bundleRevisions = new WeakMap();
+    sourceRevisions = new WeakMap();
+    pins = new WeakMap();
     constructor(fs, filter, access, admitted = () => true) {
         this.fs = fs;
         this.filter = filter;
@@ -68,7 +74,38 @@ export class DocumentResourceReader {
             throw guidanceError(new Error('Document unavailable'), 'guid-9ef06b8861d9b3c6');
         assertEnterpriseStorageAccess(actual);
     }
+    /** Reauthorize a deferred derivative without retaining/decoding source bytes. */
+    assertAdmitted(input, principal) {
+        const path = this.resolve(input, principal);
+        this.canonical(path, principal);
+        return path;
+    }
     async read(input, principal, options = {}) {
+        return withDocumentWork(async () => {
+            const path = this.assertAdmitted(input, principal);
+            const memo = documentWorkMemo(this);
+            const key = JSON.stringify([path, principal ?? null, options.expectedRevision, options.maxBytes, options.decodeText]);
+            let pending = memo.get(key);
+            const reused = pending !== undefined;
+            if (!pending) {
+                pending = this.readWithinWork(input, principal, options);
+                memo.set(key, pending);
+            }
+            const original = await pending;
+            if (reused)
+                await this.assertCurrent(original, principal);
+            this.assertAdmitted(input, principal);
+            // Never lend the memo's mutable Buffer or wrapper to a caller.
+            reserveDocumentWork(original.bytes.length + 512);
+            const copy = { ...original, bytes: Buffer.from(original.bytes) };
+            this.sourceRevisions.set(copy, this.sourceRevisions.get(original));
+            const bundle = this.bundleRevisions.get(original);
+            if (bundle)
+                this.bundleRevisions.set(copy, bundle);
+            return copy;
+        });
+    }
+    async readWithinWork(input, principal, options = {}) {
         const path = this.resolve(input, principal);
         const media = documentMedia(path), ceiling = media.mediaType === 'application/pdf' ? 50 * 1024 * 1024 : 8 * 1024 * 1024;
         const maxBytes = options.maxBytes ?? ceiling;
@@ -83,18 +120,23 @@ export class DocumentResourceReader {
             const before = await handle.stat();
             if (!before.isFile() || before.size > maxBytes)
                 throw guidanceError(new Error('Document byte budget exceeded or not a regular file'), 'guid-c06d934164e04bc6');
-            const chunks = [];
+            // Contiguous bytes + caller copy + UTF-16 decode/moderation temporaries.
+            // Allocate once: a short read must not retain a fresh 64 KiB backing store.
+            reserveDocumentWork(before.size * (media.text ? 6 : 2) + 128 * 1024);
+            const bytes = Buffer.allocUnsafe(before.size), probe = Buffer.allocUnsafe(1);
             let length = 0;
             for (;;) {
-                const buffer = Buffer.allocUnsafe(Math.min(64 * 1024, maxBytes - length + 1));
-                const { bytesRead } = await handle.read(buffer, 0, buffer.length, null);
+                const filled = length === bytes.length;
+                const { bytesRead } = filled ? await handle.read(probe, 0, 1, null)
+                    : await handle.read(bytes, length, Math.min(64 * 1024, bytes.length - length), null);
                 if (!bytesRead)
                     break;
                 length += bytesRead;
-                if (length > maxBytes)
-                    throw guidanceError(new Error('Document byte budget exceeded'), 'guid-5ffca210c6cbab4b');
-                chunks.push(buffer.subarray(0, bytesRead));
+                if (length > maxBytes || length > before.size)
+                    throw guidanceError(new Error('Document byte budget exceeded or changed during snapshot read'), 'guid-5ffca210c6cbab4b');
             }
+            if (length !== before.size)
+                throw guidanceError(new Error('Document changed during snapshot read'), 'guid-4009a30550b5eaa1');
             const after = await handle.stat(), current = await stat(fullPath);
             for (const candidate of [after, current]) {
                 if (before.size !== candidate.size || before.mtimeMs !== candidate.mtimeMs || before.ctimeMs !== candidate.ctimeMs
@@ -102,10 +144,11 @@ export class DocumentResourceReader {
                     throw guidanceError(new Error('Document changed during snapshot read'), 'guid-4009a30550b5eaa1');
             }
             this.canonical(path, principal);
-            const bytes = Buffer.concat(chunks, length), revision = createHash('sha256').update(bytes).digest('hex');
+            const revision = createHash('sha256').update(bytes).digest('hex');
             if (options.expectedRevision !== undefined && options.expectedRevision !== revision)
                 throw guidanceError(new Error('Stale document revision; reread the current outline'), 'guid-c5a49801a6dd4e7b');
             const bundle = resourceBundleLocation(path);
+            let manifestRevision;
             if (bundle && bundle.relative !== 'manifest.md') {
                 if (!bundle.relative.startsWith('files/'))
                     throw guidanceError(new Error('Resource bundle member unavailable'), 'guid-f561038c0f652993');
@@ -114,6 +157,7 @@ export class DocumentResourceReader {
                 const entry = manifest.entries.find(e => e.path === bundle.relative.slice(6));
                 if (!entry || entry.status !== 'available' || entry.sha256 !== revision || entry.byteLength !== bytes.length)
                     throw guidanceError(new Error('Resource bundle original hash mismatch or unavailable member'), 'guid-ae671ae1cd8a7579');
+                manifestRevision = { path: metadata.path, revision: metadata.revision, byteLength: metadata.bytes.length };
             }
             const result = { path, revision, bytes, mediaType: media.mediaType };
             // Raw export must still enforce Markdown/text moderation.
@@ -125,11 +169,21 @@ export class DocumentResourceReader {
                     throw guidanceError(new Error('Document is not valid UTF-8; retrieve its original bytes instead'), 'guid-77a46a4da95b1c28');
                 }
                 if (/\.(?:md|markdown|txt)$/i.test(path)) {
+                    // Outside FrontmatterHandler's tolerant syntax catch: budget failure
+                    // must never become a missing moderation flag / public fallback.
+                    reserveDocumentWork(documentFrontmatterEstimate(result.text));
                     const parsed = new FrontmatterHandler().parse(result.text);
                     if (isModerationHidden(parsed.frontmatter))
                         throw guidanceError(new Error('Document unavailable'), 'guid-9ef06b8861d9b3c6');
                 }
             }
+            const sourceRevision = Object.freeze({ path, revision, byteLength: bytes.length });
+            this.sourceRevisions.set(result, sourceRevision);
+            if (manifestRevision)
+                this.bundleRevisions.set(result, Object.freeze({
+                    member: sourceRevision,
+                    manifest: Object.freeze(manifestRevision),
+                }));
             return result;
         }
         finally {
@@ -137,6 +191,93 @@ export class DocumentResourceReader {
         }
     }
     async assertCurrent(snapshot, principal) {
-        await this.read(this.access.toPublicPath(snapshot.path), principal, { expectedRevision: snapshot.revision, decodeText: snapshot.text !== undefined });
+        return withDocumentWork(() => this.assertCurrentWithinWork(snapshot, principal));
+    }
+    pin(snapshot) {
+        const pin = this.sourceRevisions.get(snapshot);
+        if (!pin || pin.path !== snapshot.path || pin.revision !== snapshot.revision || pin.byteLength !== snapshot.bytes.length)
+            throw new Error('Document revision pin unavailable; reread the source');
+        this.pins.set(pin, this.bundleRevisions.get(snapshot)?.manifest);
+        return pin;
+    }
+    async assertPin(pin, principal) {
+        if (!this.pins.has(pin))
+            throw new Error('Document revision pin unavailable; reread the source');
+        return withDocumentWork(() => this.assertRevisionCurrent(pin, this.pins.get(pin), principal));
+    }
+    async assertCurrentWithinWork(snapshot, principal) {
+        const pinned = this.bundleRevisions.get(snapshot), manifest = pinned?.manifest;
+        if (pinned && (snapshot.path !== pinned.member.path || snapshot.revision !== pinned.member.revision
+            || snapshot.bytes.length !== pinned.member.byteLength)) {
+            throw guidanceError(new Error('Resource bundle original hash mismatch or unavailable member'), 'guid-ae671ae1cd8a7579');
+        }
+        await this.assertRevisionCurrent(pinned?.member ?? { path: snapshot.path, revision: snapshot.revision, byteLength: snapshot.bytes.length }, manifest, principal);
+    }
+    async assertRevisionCurrent(source, manifest, principal) {
+        const path = this.resolve(this.access.toPublicPath(source.path), principal);
+        const bundle = resourceBundleLocation(path);
+        if (bundle && bundle.relative !== 'manifest.md'
+            && (!bundle.relative.startsWith('files/') || manifest?.path !== `${bundle.root}/manifest.md`)) {
+            throw guidanceError(new Error('Resource bundle member unavailable; reread the original snapshot'), 'guid-f561038c0f652993');
+        }
+        const authorize = () => {
+            this.canonical(path, principal);
+            if (manifest)
+                this.canonical(manifest.path, principal);
+        };
+        // Exact original hashes also detect changed moderation and NAS rewrites
+        // whose size/mtime did not change. No second decode or parse is needed.
+        await this.assertHashCurrent(source, authorize, manifest ? () => this.assertHashCurrent(manifest, authorize) : undefined);
+        authorize();
+    }
+    async assertHashCurrent(source, authorize, checkManifest) {
+        if (!/^[a-f0-9]{64}$/.test(source.revision))
+            throw guidanceError(new Error('Invalid document revision'), 'guid-5fa1120c58291289');
+        authorize();
+        const fullPath = join(this.fs.getVaultPath(), source.path);
+        const handle = await open(fullPath, 'r');
+        try {
+            authorize();
+            const before = await handle.stat();
+            authorize();
+            if (!before.isFile() || before.size !== source.byteLength)
+                throw guidanceError(new Error('Stale document revision; reread the current outline'), 'guid-c5a49801a6dd4e7b');
+            reserveDocumentWork(64 * 1024);
+            const hash = createHash('sha256'), buffer = Buffer.allocUnsafe(64 * 1024);
+            let length = 0;
+            for (;;) {
+                // Read at most one extra byte to detect growth without following an
+                // unbounded append. The same fixed buffer is reused for every chunk.
+                const { bytesRead } = await handle.read(buffer, 0, Math.min(buffer.length, source.byteLength - length + 1), null);
+                authorize();
+                if (!bytesRead)
+                    break;
+                length += bytesRead;
+                if (length > source.byteLength)
+                    throw guidanceError(new Error('Stale document revision; reread the current outline'), 'guid-c5a49801a6dd4e7b');
+                hash.update(buffer.subarray(0, bytesRead));
+            }
+            if (length !== source.byteLength || hash.digest('hex') !== source.revision)
+                throw guidanceError(new Error('Stale document revision; reread the current outline'), 'guid-c5a49801a6dd4e7b');
+            if (checkManifest) {
+                await checkManifest();
+                authorize();
+            }
+            // Keep the source handle open across manifest validation so generation
+            // changes there are checked too, including replacement of the pathname.
+            const after = await handle.stat();
+            authorize();
+            const current = await stat(fullPath);
+            authorize();
+            for (const candidate of [after, current]) {
+                if (!candidate.isFile() || before.size !== candidate.size || before.mtimeMs !== candidate.mtimeMs || before.ctimeMs !== candidate.ctimeMs
+                    || before.ino !== candidate.ino || before.dev !== candidate.dev)
+                    throw guidanceError(new Error('Document changed during snapshot read'), 'guid-4009a30550b5eaa1');
+            }
+        }
+        finally {
+            await handle.close();
+        }
+        authorize();
     }
 }

@@ -3,7 +3,7 @@ import { mkdtemp, writeFile, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { FileSystemService } from './filesystem.js';
-import { createServer } from './createServer.js';
+import { createServer } from '../tests/server-fixture.js';
 import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
 import { randomUUID } from 'node:crypto';
 

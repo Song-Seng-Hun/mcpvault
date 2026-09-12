@@ -92,6 +92,14 @@ export declare class FileSystemService {
     noteExists(path: string): Promise<boolean>;
     private assertExpectedRevision;
     writeNote(params: NoteWriteParams): Promise<void>;
+    /** Trusted capture primitive, not a generic write endpoint. Original bytes
+     * are exclusive-create only, never rewritten or removed even after a later
+     * projection failure. A same-byte retry may finish an interrupted capture. */
+    preserveOriginal(pathInput: string, bytes: Buffer): Promise<{
+        path: string;
+        sha256: string;
+        byteLength: number;
+    }>;
     /** Revision of this serialized write, not a subsequent read/current-state guarantee. */
     writeNoteWithReceipt(params: NoteWriteParams, policy?: {
         maxBytes?: number;
@@ -287,13 +295,32 @@ export declare class FileSystemService {
     iterateFreshNoteMetadata(canAccessPath: (path: string) => boolean, options?: {
         afterPath?: string;
         sortByPath?: boolean;
+        sortOrder?: 'asc' | 'desc';
+        deferDiscoveryObservation?: boolean;
         maxBytes?: number;
         strictMissing?: boolean;
     }): AsyncGenerator<QueryNote>;
     /** Internal whole-inventory consumer. Unlike independent cursor pages, all
      * rows belong to one captured metadata cohort. This is not an OS transaction. */
     readQueryInventory(canAccessPath: (path: string) => boolean, canReadNote: (note: QueryNote) => boolean, includeContentFor?: (note: QueryNote) => boolean, consumeContent?: (note: QueryNote) => void | Promise<void>): Promise<QueryNote[]>;
+    /** Complete the metadata read barrier before consumers capture their generation. */
+    prepareMetadataRead(): Promise<void> | undefined;
     queryNotes(params?: QueryNotesParams, canAccessPath?: (path: string) => boolean, canReadNote?: (note: QueryNote) => boolean): Promise<QueryNotesResult>;
+    prepareSituation(input: string, intent: import('./context-rules.js').ContextIntent, explain: boolean, canAccessPath: (path: string) => boolean): Promise<{
+        activated: {
+            path: string;
+            revision: string;
+        }[];
+        diagnostics: {
+            physicalPath: string;
+            revision: string;
+            reason: string;
+        }[];
+        canSelect: (path: string) => boolean;
+        assertFresh: () => void;
+        coverage: (index: object, indexGeneration: number, revision: (path: string) => string | undefined) => boolean;
+        revision: (path: string) => string | undefined;
+    } | undefined>;
     queryAuthorityShelf(params: {
         scheme: string;
         aroundAuthorityId?: string;

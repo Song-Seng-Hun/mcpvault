@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createHash } from 'node:crypto';
 import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
-import { createServer } from './createServer.js';
+import { createServer } from '../tests/server-fixture.js';
 import { startRestApi, type RestApiHandle } from './rest-api.js';
 
 const resources: Array<{ vault: string; api: RestApiHandle; server: any }> = [];
@@ -62,7 +62,9 @@ test('REST adapter uses the same dynamic endpoint registry and dispatcher', asyn
     nextCursor = page.nextCursor;
   }
   expect(discovered.size).toBe(catalog.total);
-  expect(discovered.has('notes.write')).toBe(true);
+  // This route is the active catalog: anonymous callers cannot write notes.
+  expect(discovered.has('notes.write')).toBe(false);
+  expect(discovered.has('notes.read')).toBe(true);
   // The full catalog is itself bounded, so newly added endpoints may be past
   // the response budget. Probe the generic executor to verify both are
   // registered without asking it to perform a real read.

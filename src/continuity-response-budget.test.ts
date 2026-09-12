@@ -9,7 +9,7 @@ import { ReferenceService } from './references.js';
 import { LlmWikiService } from './llm-wiki.js';
 import { randomUUID } from 'node:crypto';
 import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
-import { createServer } from './createServer.js';
+import { createServer } from '../tests/server-fixture.js';
 
 const vaults: string[] = [];
 afterEach(async () => { for (const vault of vaults.splice(0)) await rm(vault, { recursive: true, force: true }); });

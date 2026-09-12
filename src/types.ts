@@ -164,6 +164,10 @@ export interface MemorySearchParams extends SearchParams {
   canAccessPath: (path: string) => boolean;
   /** Captured current metadata revisions, keyed by canonical physical path. */
   candidateRevisions?: ReadonlyMap<string, string>;
+  /** INTERNAL lazy lookup against one captured metadata generation. */
+  candidateRevision?: (path: string) => string | undefined;
+  /** INTERNAL index-coverage barrier; never a client-supplied permission. */
+  candidateCoverage?: (index: object, generation: number, revision: (path: string) => string | undefined) => boolean;
 }
 
 export interface MemorySearchOutcome {
@@ -556,6 +560,10 @@ export interface QueryNotesParams {
   offset?: number;
   /** Internal keyset cursor. Use the last returned sort value and path. */
   after?: QueryNotesCursor;
+  /** Host-only query/authority binding, never a client access grant. */
+  cursorContext?: string;
+  /** Protected documents are deliberately absent from shared metadata indexes. */
+  freshMetadata?: boolean;
   includeContent?: boolean;
   /** Skip the exact total count when only page data is needed. */
   includeTotal?: boolean;
@@ -563,6 +571,7 @@ export interface QueryNotesParams {
 
 export interface QueryNotesCursor {
   path: string;
+  context?: string;
   value?: string | number | boolean | null;
   missing?: boolean;
 }

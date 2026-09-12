@@ -11,6 +11,7 @@ import { assertRoleplayMutationBoundary } from './roleplay-boundary.js';
 import { assertSkillEvolutionMutationBoundary } from './skill-evolution-boundary.js';
 import { assertStoryMutationBoundary } from './story-boundary.js';
 import { assertResourceBundleMutationBoundary } from './resource-bundle.js';
+import { assertOriginalMutation, isOriginalPath } from './original-boundary.js';
 import { generateObsidianUri } from './uri.js';
 import { extractObsidianLinkOccurrences } from './backlinks.js';
 import { buildDailyNotePath, resolveDailyDate } from './daily.js';
@@ -20,7 +21,7 @@ import { buildNoteReferenceIndex, markdownNotePath, noteReferenceDocument, resol
 import { validateJsonCanvasDocument } from './json-canvas.js';
 import { acceptsPlainReference, isReferenceSnapshotPath, propertyPathText } from './property-references.js';
 import { assertLegacyDiscussionMutationAllowed, ScopeAccessPolicy } from './scope-access.js';
-import { assertEnterpriseStorageAccess, assertEnterpriseStorageFresh, canReadEnterpriseStoragePath } from './enterprise-storage-context.js';
+import { assertEnterpriseStorageAccess, assertEnterpriseStorageFresh, canReadEnterpriseStoragePath, canTraverseEnterpriseStoragePath, prepareDocumentWrite } from './enterprise-storage-context.js';
 import { expandScopePath, parseScopePath, scopeRoot } from './scopes.js';
 import { extractMarkdownTasks, iterateMarkdownTasks } from './markdown-tasks.js';
 import { extractInlineTags } from './markdown-tags.js';
@@ -748,7 +749,13 @@ export class FileSystemService {
             if (!this.pathFilter.isAllowedForListing(canonicalRelative)) {
                 throw guidanceError(new Error(`Access denied: ${relativePath}. Its canonical target is restricted.`), 'guid-22315a8b4963c206');
             }
-            assertEnterpriseStorageAccess(canonicalRelative);
+            if (lstatSync(realPath).isDirectory()) {
+                if (!canTraverseEnterpriseStoragePath(canonicalRelative || '.'))
+                    throw new Error('Access denied: directory traversal unavailable');
+            }
+            else {
+                assertEnterpriseStorageAccess(canonicalRelative);
+            }
         }
         catch (err) {
             if (err instanceof Error && 'code' in err) {
@@ -765,7 +772,8 @@ export class FileSystemService {
                         if (!this.pathFilter.isAllowedForListing(canonicalParent)) {
                             throw guidanceError(new Error(`Access denied: ${relativePath}. Its canonical parent is restricted.`), 'guid-33e0fae467973725');
                         }
-                        assertEnterpriseStorageAccess(canonicalParent);
+                        if (!canTraverseEnterpriseStoragePath(canonicalParent || '.'))
+                            throw new Error('Access denied: directory traversal unavailable');
                     }
                     catch (parentErr) {
                         // Parent doesn't exist either (will be created by mkdir). Lexical check above is sufficient.
@@ -796,9 +804,10 @@ export class FileSystemService {
      * symlinked target or parent. This closes the practical symlink escape case
      * where a validated path is used as a mutation target.
      */
-    resolveWritablePath(relativePath) {
+    resolveWritablePath(relativePath, exclusiveOriginalCreation = false) {
         const fullPath = this.resolvePath(relativePath);
-        const relativePathToVault = relative(this.vaultPath, fullPath);
+        const relativePathToVault = relative(this.vaultPath, fullPath).replace(/\\/g, '/');
+        assertOriginalMutation(relativePathToVault, exclusiveOriginalCreation);
         assertRoleplayMutationBoundary(relativePathToVault);
         assertSkillEvolutionMutationBoundary(relativePathToVault);
         assertStoryMutationBoundary(relativePathToVault);
@@ -830,24 +839,37 @@ export class FileSystemService {
     }
     /** Recheck live host notice authority at dispatch, after awaited preparation. */
     async writeProtectedFile(path, content, options = 'utf8') {
-        assertStoryMutationBoundary(relative(this.vaultPath, path));
-        assertSkillEvolutionMutationBoundary(relative(this.vaultPath, path));
-        this.assertNoticeMutation(relative(this.vaultPath, path));
+        const physicalPath = relative(this.vaultPath, path).replace(/\\/g, '/');
+        assertOriginalMutation(physicalPath, typeof options === 'object' && options !== null && 'flag' in options && options.flag === 'wx');
+        await prepareDocumentWrite(physicalPath);
+        assertEnterpriseStorageAccess(physicalPath, true);
+        assertStoryMutationBoundary(physicalPath);
+        assertSkillEvolutionMutationBoundary(physicalPath);
+        this.assertNoticeMutation(physicalPath);
         return writeFile(path, content, options);
     }
     async removeProtectedFile(path) {
-        assertStoryMutationBoundary(relative(this.vaultPath, path));
-        assertSkillEvolutionMutationBoundary(relative(this.vaultPath, path));
-        this.assertNoticeMutation(relative(this.vaultPath, path));
+        const physicalPath = relative(this.vaultPath, path).replace(/\\/g, '/');
+        assertOriginalMutation(physicalPath);
+        assertStoryMutationBoundary(physicalPath);
+        assertSkillEvolutionMutationBoundary(physicalPath);
+        this.assertNoticeMutation(physicalPath);
         return unlink(path);
     }
     async renameProtectedFile(from, to) {
-        assertStoryMutationBoundary(relative(this.vaultPath, from));
-        assertStoryMutationBoundary(relative(this.vaultPath, to));
-        assertSkillEvolutionMutationBoundary(relative(this.vaultPath, from));
-        assertSkillEvolutionMutationBoundary(relative(this.vaultPath, to));
-        this.assertNoticeMutation(relative(this.vaultPath, from));
-        this.assertNoticeMutation(relative(this.vaultPath, to));
+        const sourcePath = relative(this.vaultPath, from).replace(/\\/g, '/');
+        const targetPath = relative(this.vaultPath, to).replace(/\\/g, '/');
+        assertOriginalMutation(sourcePath);
+        assertOriginalMutation(targetPath);
+        await prepareDocumentWrite(targetPath);
+        assertEnterpriseStorageAccess(sourcePath, true);
+        assertEnterpriseStorageAccess(targetPath, true);
+        assertStoryMutationBoundary(sourcePath);
+        assertStoryMutationBoundary(targetPath);
+        assertSkillEvolutionMutationBoundary(sourcePath);
+        assertSkillEvolutionMutationBoundary(targetPath);
+        this.assertNoticeMutation(sourcePath);
+        this.assertNoticeMutation(targetPath);
         return rename(from, to);
     }
     async readNote(path, maxBytes) {
@@ -932,7 +954,8 @@ export class FileSystemService {
     async withNoteRead(path, read) {
         path = this.normalizePath(path);
         const fullPath = this.resolvePath(path);
-        assertEnterpriseStorageAccess(relative(this.vaultPath, fullPath));
+        const physicalPath = relative(this.vaultPath, fullPath).replace(/\\/g, '/');
+        assertEnterpriseStorageAccess(physicalPath);
         if (!this.pathFilter.isAllowed(path)) {
             throw guidanceError(new Error(`Access denied: ${path}. This path is restricted (system files like .obsidian, .git, and dotfiles are not accessible).`), 'guid-a904f1a7ce9c950e');
         }
@@ -943,8 +966,10 @@ export class FileSystemService {
             throw guidanceError(new Error(`Cannot read directory as file: ${path}. Use list_directory tool instead.`), 'guid-6dac95374869d668');
         }
         try {
-            assertEnterpriseStorageAccess(relative(this.vaultPath, fullPath));
-            return await read(fullPath);
+            assertEnterpriseStorageAccess(physicalPath);
+            const result = await read(fullPath);
+            assertEnterpriseStorageAccess(physicalPath);
+            return result;
         }
         catch (error) {
             if (error instanceof Error && 'code' in error) {
@@ -997,6 +1022,35 @@ export class FileSystemService {
     }
     async writeNote(params) {
         await this.writeNoteWithReceipt(params);
+    }
+    /** Trusted capture primitive, not a generic write endpoint. Original bytes
+     * are exclusive-create only, never rewritten or removed even after a later
+     * projection failure. A same-byte retry may finish an interrupted capture. */
+    async preserveOriginal(pathInput, bytes) {
+        const path = this.normalizePath(pathInput);
+        if (!isOriginalPath(path) || !this.pathFilter.isAllowedForListing(path) || !Buffer.isBuffer(bytes)
+            || bytes.length > 50 * 1024 * 1024)
+            throw new Error('Original capture requires a source path and at most 50 MiB of bytes');
+        bytes = Buffer.from(bytes);
+        const digest = createHash('sha256').update(bytes).digest('hex');
+        return this.withMutationLock(path, async () => {
+            const fullPath = this.resolveWritablePath(path, true);
+            await mkdir(dirname(fullPath), { recursive: true });
+            try {
+                await this.writeProtectedFile(fullPath, bytes, { flag: 'wx' });
+                this.notifyNoteChanged(path, 'upsert');
+            }
+            catch (error) {
+                if (!error || typeof error !== 'object' || !('code' in error) || error.code !== 'EEXIST')
+                    throw error;
+                // Verify identity, never "repair" existing originals by replacing them.
+                if ((await stat(fullPath)).size !== bytes.length
+                    || createHash('sha256').update(await readFile(fullPath)).digest('hex') !== digest) {
+                    throw new Error('Existing immutable original has different bytes; capture a new source');
+                }
+            }
+            return { path, sha256: digest, byteLength: bytes.length };
+        });
     }
     /** Revision of this serialized write, not a subsequent read/current-state guarantee. */
     async writeNoteWithReceipt(params, policy = {}) {
@@ -1130,7 +1184,7 @@ export class FileSystemService {
     async writeNoteUnlocked(params, revisionMaxBytes, assertAccess) {
         const { content, frontmatter, mode = 'overwrite', expectedRevision } = params;
         const path = this.normalizePath(params.path);
-        const fullPath = this.resolveWritablePath(path);
+        const fullPath = this.resolveWritablePath(path, expectedRevision === 'missing' && mode === 'overwrite');
         if (!this.pathFilter.isAllowed(path)) {
             throw guidanceError(new Error(`Access denied: ${path}. This path is restricted (system files like .obsidian, .git, and dotfiles are not accessible).`), 'guid-a904f1a7ce9c950e');
         }
@@ -1645,7 +1699,8 @@ export class FileSystemService {
         // Normalize path: treat '.' as root directory, strip vault prefix
         const normalizedPath = path === '.' ? '' : this.normalizePath(path);
         const fullPath = this.resolvePath(normalizedPath);
-        assertEnterpriseStorageAccess(normalizedPath);
+        if (!canTraverseEnterpriseStoragePath(normalizedPath || '.'))
+            throw new Error('Access denied: directory traversal unavailable');
         try {
             assertEnterpriseStorageFresh();
             const entries = await readdir(fullPath, { withFileTypes: true });
@@ -1656,8 +1711,6 @@ export class FileSystemService {
                 if (!this.pathFilter.isAllowedForListing(entryPath)) {
                     continue;
                 }
-                if (!canReadEnterpriseStoragePath(entryPath))
-                    continue;
                 if (entry.isSymbolicLink()) {
                     // Follow symlinks that resolve inside the vault
                     try {
@@ -1668,14 +1721,17 @@ export class FileSystemService {
                             continue; // Symlink target outside vault, skip silently
                         }
                         const canonicalEntryPath = realRelative.replace(/\\/g, '/');
-                        if (!this.pathFilter.isAllowedForListing(canonicalEntryPath)
-                            || !canReadEnterpriseStoragePath(canonicalEntryPath))
+                        if (!this.pathFilter.isAllowedForListing(canonicalEntryPath))
                             continue;
                         const targetStat = await stat(entryFullPath);
                         if (targetStat.isDirectory()) {
+                            if (!canTraverseEnterpriseStoragePath(canonicalEntryPath))
+                                continue;
                             directories.push(entry.name);
                         }
                         else if (targetStat.isFile()) {
+                            if (!canReadEnterpriseStoragePath(canonicalEntryPath))
+                                continue;
                             files.push(entry.name);
                         }
                     }
@@ -1684,9 +1740,13 @@ export class FileSystemService {
                     }
                 }
                 else if (entry.isDirectory()) {
+                    if (!canTraverseEnterpriseStoragePath(entryPath))
+                        continue;
                     directories.push(entry.name);
                 }
                 else if (entry.isFile()) {
+                    if (!canReadEnterpriseStoragePath(entryPath))
+                        continue;
                     files.push(entry.name);
                 }
             }
@@ -1748,14 +1808,14 @@ export class FileSystemService {
     }
     /** Internal scans may cross only the structural ancestors of a readable
      * enterprise scope. The ancestor itself is never returned to the caller. */
-    canTraverseEnterpriseReadPath(path) {
-        if (canReadEnterpriseStoragePath(path))
+    canTraverseEnterpriseReadPath(path, recordSource = true) {
+        if (canTraverseEnterpriseStoragePath(path, recordSource))
             return true;
         const normalized = path.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '').toLowerCase();
         if (normalized === '_scopes' || normalized === '_scopes/users' || normalized === '_scopes/agents')
             return true;
         const employeeRoot = /^_scopes\/users\/[^/]+$/.exec(normalized);
-        return Boolean(employeeRoot && canReadEnterpriseStoragePath(`${path.replace(/\/$/, '')}/SharedMemory`));
+        return Boolean(employeeRoot && canReadEnterpriseStoragePath(`${path.replace(/\/$/, '')}/SharedMemory`, recordSource));
     }
     /**
      * Build one visibility-safe move plan. Resolution uses every physical note
@@ -2900,11 +2960,11 @@ export class FileSystemService {
             message: params.action === 'create' ? 'Daily note created.' : 'Content appended to daily note.',
         };
     }
-    async collectVaultFiles() {
+    async collectVaultFiles(recordSource = true) {
         const files = [];
         const scanDirectory = async (dirPath, relativePath = '') => {
             assertEnterpriseStorageFresh();
-            if (relativePath && !this.canTraverseEnterpriseReadPath(relativePath))
+            if (relativePath && !this.canTraverseEnterpriseReadPath(relativePath, recordSource))
                 return;
             const entries = await readdir(dirPath, { withFileTypes: true });
             for (const entry of entries) {
@@ -2916,7 +2976,7 @@ export class FileSystemService {
                     }
                 }
                 else if (entry.isFile() && this.pathFilter.isAllowedForListing(entryRelativePath)
-                    && canReadEnterpriseStoragePath(entryRelativePath)) {
+                    && canReadEnterpriseStoragePath(entryRelativePath, recordSource)) {
                     files.push(entryRelativePath);
                 }
             }
@@ -3214,11 +3274,13 @@ export class FileSystemService {
     async queryNotesBounded(params, maxChars, canAccessPath, canReadNote, prettyPrint = false) {
         if (!Number.isInteger(maxChars) || maxChars < 512 || maxChars > 20000)
             throw guidanceError(new Error('maxChars must be an integer between 512 and 20000'), 'guid-cc408e854eb4b949');
+        if (params.after && params.after.context !== params.cursorContext)
+            throw new Error('Query navigation or authorization changed; restart without after');
         const page = await this.queryNotes({ ...params, includeContent: false }, canAccessPath, canReadNote);
         let remainingBytes = 1024 * 1024;
         return packQueryPage(page, {
             maxChars, prettyPrint, includeContent: params.includeContent === true,
-            cursorFor: note => cursorForQueryNote(note, params.sortBy || 'path'),
+            cursorFor: note => ({ ...cursorForQueryNote(note, params.sortBy || 'path'), ...(params.cursorContext && { context: params.cursorContext }) }),
             hydrate: async (note) => {
                 if (remainingBytes <= 1)
                     return undefined;
@@ -3244,9 +3306,9 @@ export class FileSystemService {
      * Discovery retains path names, not all note metadata or bodies. No index
      * refresh or unrestricted query fallback occurs in this iterator. */
     async *iterateFreshNoteMetadata(canAccessPath, options = {}) {
-        const paths = await this.collectVaultFiles();
+        const paths = await this.collectVaultFiles(!options.deferDiscoveryObservation);
         if (options.sortByPath)
-            paths.sort((a, b) => a.localeCompare(b));
+            paths.sort((a, b) => (options.sortOrder === 'desc' ? -1 : 1) * a.localeCompare(b));
         for (const path of paths) {
             if (!/\.(?:md|markdown|txt)$/i.test(path) || !this.pathFilter.isAllowed(path) || !canAccessPath(path))
                 continue;
@@ -3339,9 +3401,11 @@ export class FileSystemService {
         }
         return notes.map(note => hydrated.get(note.path) || note);
     }
+    /** Complete the metadata read barrier before consumers capture their generation. */
+    prepareMetadataRead() { return this.metadataIndex?.prepareRead(); }
     async queryNotes(params = {}, canAccessPath = () => true, canReadNote = () => true) {
         assertEnterpriseStorageFresh();
-        const effectiveCanAccessPath = (path) => canAccessPath(path) && canReadEnterpriseStoragePath(path);
+        const effectiveCanAccessPath = (path) => canAccessPath(path) && canReadEnterpriseStoragePath(path, !params.freshMetadata);
         const requestedLimit = params.limit ?? 100;
         if (!Number.isInteger(requestedLimit) || requestedLimit < 1) {
             throw guidanceError(new Error('limit must be a positive integer'), 'guid-14abe8b02cfc3624');
@@ -3369,7 +3433,7 @@ export class FileSystemService {
         const notes = [];
         const filters = params.filters || {};
         const hydrate = (selected) => Promise.all(selected.map(note => this.hydrateQueryNote(note, effectiveCanAccessPath, canReadNote, path => this.vaultIo.readUtf8(path))));
-        if (this.metadataIndex && params.includeTotal === false) {
+        if (this.metadataIndex && !params.freshMetadata && params.includeTotal === false) {
             const page = await this.metadataIndex.listSortedPage({
                 filters,
                 pathPrefix,
@@ -3401,8 +3465,25 @@ export class FileSystemService {
                 ...(nextCursor ? { nextCursor } : {}),
             };
         }
-        const indexedEntries = this.metadataIndex ? await this.metadataIndex.listSorted(filters, pathPrefix, sortBy, sortOrder) : undefined;
-        if (indexedEntries) {
+        const indexedEntries = this.metadataIndex && !params.freshMetadata ? await this.metadataIndex.listSorted(filters, pathPrefix, sortBy, sortOrder) : undefined;
+        if (params.freshMetadata) {
+            const pathOrdered = sortBy === 'path';
+            const admitted = (path) => (!pathPrefix || path === pathPrefix || path.startsWith(`${pathPrefix}/`))
+                && (params.includeTotal !== false || !pathOrdered || !params.after || compareQueryNoteToCursor({ path, frontmatter: {} }, params.after, 'path', sortOrder) > 0)
+                && effectiveCanAccessPath(path);
+            for await (const note of this.iterateFreshNoteMetadata(admitted, { maxBytes: 64 * 1024, strictMissing: true,
+                deferDiscoveryObservation: true, sortByPath: pathOrdered, sortOrder })) {
+                const matches = Object.entries(filters).every(([key, expected]) => {
+                    const actual = getFrontmatterValue(note.frontmatter, key);
+                    return actual.found && frontmatterValuesEqual(actual.value, expected);
+                });
+                if (matches && canReadNote(note))
+                    notes.push(note);
+                if (pathOrdered && params.includeTotal === false && notes.length >= requestedOffset + limit + 1)
+                    break;
+            }
+        }
+        else if (indexedEntries) {
             for (const entry of indexedEntries) {
                 if (!this.pathFilter.isAllowed(entry.path) || !effectiveCanAccessPath(entry.path))
                     continue;
@@ -3453,7 +3534,7 @@ export class FileSystemService {
             : selectSortedNotes(afterNotes, sortBy, sortOrder, requestedOffset, limit);
         const truncated = requestedOffset + limit < afterNotes.length;
         const nextCursor = selected.length > 0 && truncated ? cursorForQueryNote(selected[selected.length - 1], sortBy) : undefined;
-        if (params.includeContent && indexedEntries) {
+        if (params.includeContent && (indexedEntries || params.freshMetadata)) {
             const withContent = await hydrate(selected);
             return {
                 notes: withContent,
@@ -3469,6 +3550,10 @@ export class FileSystemService {
             truncated,
             ...(nextCursor ? { nextCursor } : {}),
         };
+    }
+    async prepareSituation(input, intent, explain, canAccessPath) {
+        assertEnterpriseStorageFresh();
+        return this.metadataIndex?.prepareSituation(input, intent, explain, path => path === this.normalizePath(path) && this.pathFilter.isAllowed(path) && canAccessPath(path) && canReadEnterpriseStoragePath(path));
     }
     async queryAuthorityShelf(params, canAccessPath = () => true) {
         if (!this.metadataIndex)

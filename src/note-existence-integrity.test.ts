@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { FileSystemService } from './filesystem.js';
-import { createServer } from './createServer.js';
+import { createServer } from '../tests/server-fixture.js';
 import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
 
 const faults = vi.hoisted(() => ({ stat: new Map<string, string>(), createBeforeWrite: new Map<string, string>() }));

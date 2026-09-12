@@ -8,6 +8,7 @@ import { fingerprint, page } from './work-model.js';
 import { resourceBundleLocation, parseResourceBundleManifest } from './resource-bundle.js';
 import { pdfRangeProvenance } from './document-pdf.js';
 import { boundedHeadingLabel, documentPage } from './document-page.js';
+import { withDocumentWork } from './document-work-memory.js';
 
 export interface DocumentParams { path: string; expectedRevision?: string; principal?: ScopePrincipal; maxChars?: number }
 export interface DocumentOutlineParams extends DocumentParams { parentId?: string; limit?: number; cursor?: string }
@@ -74,6 +75,9 @@ export class DocumentService {
     return [a, b];
   }
   async outline(params: DocumentOutlineParams) {
+    return withDocumentWork(() => this.outlineWithinWork(params));
+  }
+  private async outlineWithinWork(params: DocumentOutlineParams) {
     const maxChars = budget(params.maxChars);
     if ((params.parentId || params.cursor) && !params.expectedRevision) throw guidanceError(new Error('expectedRevision is required for a fragment or cursor'), 'guid-66554315e040b071');
     const { structure: doc } = await this.index.load(params.path, params.principal, params.expectedRevision);
@@ -86,6 +90,9 @@ export class DocumentService {
   }
 
   async read(params: DocumentReadParams): Promise<ReadResult> {
+    return withDocumentWork(() => this.readWithinWork(params));
+  }
+  private async readWithinWork(params: DocumentReadParams): Promise<ReadResult> {
     const maxChars = budget(params.maxChars);
     if (params.ranges !== undefined && (!Array.isArray(params.ranges) || !params.ranges.length || params.ranges.length > 8)) throw guidanceError(new Error('ranges must contain 1..8 selections'), 'guid-b609b40e5e87ac09');
     if (params.ranges && RANGE_KEYS.some(k => params[k] !== undefined)) throw guidanceError(new Error('Use ranges or a single selection, not both'), 'guid-e6833ec64f3ace02');
@@ -173,6 +180,9 @@ export class DocumentService {
   }
 
   async manifest(params: ResourceManifestParams) {
+    return withDocumentWork(() => this.manifestWithinWork(params));
+  }
+  private async manifestWithinWork(params: ResourceManifestParams) {
     const maxChars = budget(params.maxChars);
     const snapshot = await this.index.reader.read(params.path, params.principal, { ...(params.expectedRevision !== undefined && { expectedRevision: params.expectedRevision }), decodeText: false });
     const bundle = resourceBundleLocation(snapshot.path);
@@ -195,6 +205,9 @@ export class DocumentService {
     return result;
   }
   async export(params: DocumentExportParams) {
+    return withDocumentWork(() => this.exportWithinWork(params));
+  }
+  private async exportWithinWork(params: DocumentExportParams) {
     const maxChars = budget(params.maxChars);
     const snapshot = await this.index.reader.read(params.path, params.principal, { ...(params.expectedRevision !== undefined && { expectedRevision: params.expectedRevision }), decodeText: false });
     const start = params.startByte ?? 0, length = params.byteLength ?? 2048;

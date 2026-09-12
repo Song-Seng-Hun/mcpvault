@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { ScopeAuthService } from './scope-auth.js';
 import { EnterpriseRegistry } from './enterprise-registry.js';
 import { withEnterpriseRequestContext } from './enterprise-request-context.js';
+import { getScopeAuthTools } from './scope-auth-tools.js';
 
 const roots: string[] = [];
 afterEach(async () => { for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true }); });
@@ -82,4 +83,48 @@ test('runtime revocation immediately invalidates a warm token and removes direct
   await registry.disableRuntime({ runtimeId: 'local' });
   expect(() => request(() => auth.authenticate(session.accessToken))).toThrow(/disabled|runtime/);
   expect(await auth.listPrincipals()).toEqual([]);
+});
+
+test('verified departments refresh on a warm session; signup claims never grant membership', async () => {
+  const { registry, auth, input } = await setup();
+  await registry.updateEmployeeDepartments({ userId: 'employee', departmentIds: ['engineering', 'research'], defaultDepartmentId: 'engineering', expectedDepartmentRevision: 0 });
+  const session = await request(() => auth.register({ ...input, departmentIds: ['finance'], defaultDepartmentId: 'finance', local: true } as any));
+  expect(session.principal.enterprise?.departmentIds).toEqual(['engineering', 'research']);
+  expect(session.principal.enterprise?.defaultDepartmentId).toBe('engineering');
+  await registry.updateEmployeeDepartments({ userId: 'employee', departmentIds: ['sales'], defaultDepartmentId: 'sales', expectedDepartmentRevision: 1 });
+  const current = request(() => auth.authenticate(session.accessToken));
+  expect(current?.enterprise?.departmentIds).toEqual(['sales']);
+  expect(current?.enterprise?.defaultDepartmentId).toBe('sales');
+  expect((await auth.listPrincipals())[0]?.enterprise?.departmentIds).toEqual(['sales']);
+  await registry.updateEmployeeDepartments({ userId: 'employee', departmentIds: [], expectedDepartmentRevision: 2 });
+  expect(request(() => auth.authenticate(session.accessToken))?.enterprise?.departmentIds).toEqual([]);
+  expect(request(() => auth.authenticate(session.accessToken))?.enterprise?.defaultDepartmentId).toBeUndefined();
+});
+
+test('signup schema accepts account purpose and a department claim without treating either as authority', () => {
+  const schema = getScopeAuthTools().find(t => t.name === 'register_scope_account')!.inputSchema as any;
+  expect(schema.properties.accountType.enum).toEqual(['personal', 'enterprise']);
+  expect(schema.properties.departmentId.type).toBe('string');
+});
+
+test('enterprise signup rejects an unverified department and permits a verified claim', async () => {
+  const { registry, auth, input } = await setup();
+  await registry.updateEmployeeDepartments({ userId: 'employee', departmentIds: ['engineering'], defaultDepartmentId: 'engineering', expectedDepartmentRevision: 0 });
+  await expect(request(() => auth.register({ ...input, accountType: 'enterprise', departmentId: 'finance' }))).rejects.toThrow(/department|verified/i);
+  expect(await auth.listPrincipals()).toHaveLength(0);
+  const result = await request(() => auth.register({ ...input, accountType: 'enterprise', departmentId: 'engineering' }));
+  expect(result.principal.enterprise?.defaultDepartmentId).toBe('engineering');
+});
+
+test('signup purpose must match the host authority and personal claims do not self-provision enterprise membership', async () => {
+  const { auth, input, root } = await setup();
+  await expect(request(() => auth.register({ ...input, accountType: 'personal' }))).rejects.toThrow(/account type|enterprise/i);
+  const personal = new ScopeAuthService(join(root, 'personal-vault'));
+  const base = { accountId: 'person', userId: 'human', modelId: 'codex', agentId: 'worker', password: 'test-password-at-least-12' };
+  await expect(personal.register({ ...base, accountType: 'enterprise', departmentId: 'finance' })).rejects.toThrow(/enterprise|host/i);
+  await expect(personal.register({ ...base, accountType: 'personal', departmentId: 'finance' })).rejects.toThrow(/department|enterprise/i);
+  await expect(personal.register({ ...base, accountType: 'invalid' } as any)).rejects.toThrow(/account type/i);
+  const result = await personal.register({ ...base, accountType: 'personal' });
+  expect(result.principal.enterprise).toBeUndefined();
+  expect(result.principal.userId).toBe('human');
 });

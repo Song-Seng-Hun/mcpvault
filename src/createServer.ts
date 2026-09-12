@@ -1,4 +1,6 @@
 import { guidanceError } from './guidance-runtime.js';
+import { createHash } from 'node:crypto';
+import { DEFAULT_HOST_FEATURE_CONFIG, parseHostFeatureConfig, hostFeatureForTool, type HostFeatureConfig, type HostFeatureId } from './host-features.js';
 import { Server, type Tool } from "@modelcontextprotocol/server";
 import { workshopDecisionContext, workshopTaskDescription } from './workshop-output.js';
 import { FileSystemService, MAX_NOTE_CONTENT_BYTES } from "./filesystem.js";
@@ -29,6 +31,10 @@ import { ScopeAuthService, type ScopeCapability, type ScopePrincipal } from "./s
 import { ScopeAccessPolicy } from "./scope-access.js";
 import { EnterpriseRegistry } from './enterprise-registry.js';
 import { withEnterpriseStorageContext } from './enterprise-storage-context.js';
+import { OwnerActivityRuntime, type OwnerActivityRuntimeOptions, type OwnerActivityOperation } from './owner-activity-runtime.js';
+import type { Activity, OwnerActivityAction } from './owner-activity.js';
+import { DocumentPolicyStore } from './document-policy-store.js';
+import { documentPolicyPath, type DocumentAuthorityOptions } from './document-authority.js';
 import { getScopeAuthTools, SCOPE_AUTH_MUTATING_TOOLS, SCOPE_AUTH_TOOL_NAMES } from "./scope-auth-tools.js";
 import { LlmWikiService } from "./llm-wiki.js";
 import { getLlmWikiTools, LLM_WIKI_MUTATING_TOOLS } from "./llm-wiki-tools.js";
@@ -104,7 +110,8 @@ import { REPUTATION_MUTATING_TOOLS, getReputationTools } from "./reputation-tool
 import { SemanticSearchService } from "./semantic-search.js";
 import { cleanupStaleDerivedTemps } from './derived-temp-cleanup.js';
 import { normalizeSearchMaxChars } from "./search-limits.js";
-import { EndpointRegistry, endpointIdForTool } from "./endpoint-registry.js";
+import { EndpointRegistry, endpointIdForTool, ownerActivityForEndpointTool, ownerActionForEndpointTool,
+  type EndpointAvailabilityContext } from "./endpoint-registry.js";
 import { resolve } from "path";
 import { VaultMetadataIndex } from "./vault-index.js";
 import { VaultFileCatalog, type VaultCatalogChange } from "./vault-catalog.js";
@@ -238,7 +245,9 @@ function requestFairnessKey(args: Record<string, unknown>): string {
   return `token:${(hash >>> 0).toString(16)}`;
 }
 
-export interface CreateServerOptions {
+export interface CreateServerOptions extends DocumentAuthorityOptions {
+  /** Explicit immutable host selection; never populated by a client request. */
+  features?: HostFeatureConfig;
   /** Explicit host-selected sources; no automatic Vault-wide translation. */
   explanations?: { sources: import('./explanation-service.js').ExplanationSourceConfig[] };
   benchmarks?: Omit<BenchmarkOptions, 'assertActor' | 'accountAvailable' | 'ledger' | 'access' | 'pathFilter'> & {
@@ -246,7 +255,9 @@ export interface CreateServerOptions {
     bindAuthority?: (service: BenchmarkService) => void;
   };
   /** Trusted host integrations only; never populated from API arguments or Vault notes. */
-  workCollaboration?: Pick<import('./work-service.js').WorkServiceOptions, 'executionProfiles' | 'readReviewGitSource' | 'verifyReviewExecution'>;
+  workCollaboration?: Pick<import('./work-service.js').WorkServiceOptions, 'executionProfiles' | 'readReviewGitSource' | 'verifyReviewExecution' | 'deterministicCoverage'>;
+  /** Trusted human-owner consent and independently verified execution identity. */
+  ownerActivity?: OwnerActivityRuntimeOptions;
   /** Explicit trusted host registration. Never loaded from a request or Vault note. */
   skillEvolution?: SkillEvolutionHost;
   /** Host-private notice registration/delegation file, reloaded before operations. */
@@ -461,7 +472,68 @@ export function getServerRuntime(server: Server): ServerRuntime | undefined {
   return SERVER_RUNTIMES.get(server);
 }
 
+function ownerRequestPaths(toolName: string, args: Record<string, any>): readonly string[] | undefined {
+  const result = new Set<string>();
+  const add = (value: unknown) => {
+    if (typeof value === 'string' && value.length > 0) result.add(value.replace(/\\/g, '/'));
+    else if (Array.isArray(value)) for (const item of value) add(item);
+  };
+  for (const [key, value] of Object.entries(args)) {
+    // Feedback source locations describe repository code, not Vault reads.
+    // The social service validates these annotations; its actual IO remains
+    // guarded by the active owner lease and document policy.
+    if (key === 'sourcePaths' && toolName === 'publish_blog_post') continue;
+    if (/(?:^|_)(?:path|paths|sourcePaths|evidencePaths|references|targetPath)$/i.test(key)) add(value);
+  }
+  // Federated object IDs are opaque identities, not local filenames. The
+  // federation storage adapter checks its resolved physical path under lease.
+  if (typeof args.slug === 'string' && !args.slug.startsWith('post:') && /blog_post|blog_posts/.test(toolName)) add(`Community/Posts/${args.slug}.md`);
+  if (result.size > 32) throw new Error('Owner activity path budget exceeded');
+  if (result.size) return Object.freeze([...result]);
+  return ownerActionForEndpointTool(toolName, MUTATING_TOOLS.has(toolName)) === 'discover' ? undefined : Object.freeze([]);
+}
+
 export function createServer(vaultPath: string, options: CreateServerOptions = {}): Server {
+  const features = parseHostFeatureConfig(options.features ?? DEFAULT_HOST_FEATURE_CONFIG);
+  const selectedFeatures = new Set(features.selected);
+  const ownerActivityRuntime = new OwnerActivityRuntime(options.ownerActivity);
+  const catalogActivities: readonly Activity[] = ['collaboration', 'ideation-research', 'explanation-translation',
+    'benchmarks', 'economy', 'roleplay', 'skill-evolution'];
+  const catalogActions: readonly OwnerActivityAction[] = ['discover', 'read', 'claim', 'execute'];
+  const ownerCatalogSnapshot = (principal?: ScopePrincipal): NonNullable<EndpointAvailabilityContext['ownerActivity']> => {
+    if (!options.ownerActivity) return { policyFingerprint: 'absent', executionBindingGeneration: 'absent', eligibility: {} };
+    const policy = options.ownerActivity.policy();
+    const execution = options.ownerActivity.execution(principal);
+    const now = Date.now();
+    const eligibility: NonNullable<EndpointAvailabilityContext['ownerActivity']>['eligibility'] = {};
+    const availability: string[] = [];
+    for (const activity of catalogActivities) eligibility[activity] = Object.fromEntries(catalogActions.map(action => [action,
+      Boolean(execution && policy.decision({ ...execution, activity, action, paths: [], now }).allowed)]));
+    if (execution) for (const activity of catalogActivities) for (const action of catalogActions) {
+      availability.push(activity, action, policy.availabilityGeneration({ ...execution, activity, action, now }));
+    }
+    const executionBindingGeneration = execution ? createHash('sha256').update(JSON.stringify([execution.accountId, execution.executionTarget])).digest('hex').slice(0, 32) : 'absent';
+    const grantAvailabilityGeneration = createHash('sha256').update(JSON.stringify(availability)).digest('hex').slice(0, 32);
+    return { policyFingerprint: policy.fingerprint, executionBindingGeneration, grantAvailabilityGeneration, eligibility };
+  };
+  const ownerCatalogState = async (principal?: ScopePrincipal): Promise<NonNullable<EndpointAvailabilityContext['ownerActivity']>> => {
+    await options.ownerActivity?.refresh?.();
+    return ownerCatalogSnapshot(principal);
+  };
+  const hasFeature = (feature: HostFeatureId) => selectedFeatures.has(feature);
+  // Shared task records support selected story/quest workflows without exposing
+  // the optional work board. Journal/saved-item methods likewise share storage
+  // helpers with social methods, but need no social indexes or subscriptions.
+  const needsTaskRecords = ['work-management', 'roleplay', 'economy', 'explanation-translation'].some(id => selectedFeatures.has(id as HostFeatureId));
+  const needsPersonalStorage = hasFeature('personal-memory') || hasFeature('collaboration');
+  const featureToolAllowed = (tool: string) => {
+    const feature = hostFeatureForTool(tool);
+    return feature !== undefined && hasFeature(feature);
+  };
+  const requiredService = <T>(service: T | undefined): T => {
+    if (!service) throw new Error('This operation requires an additional selected host feature');
+    return service;
+  };
   const {
     name = "mcpvault",
     version = "0.0.0",
@@ -489,17 +561,51 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
     ...(effectiveCenterId && { commandCenterId: effectiveCenterId }),
     ...(enterpriseRegistry && { enterpriseRegistry, authPath: `${options.enterpriseRegistryPath}.accounts.json` }),
   });
-  const scopeAccess = new ScopeAccessPolicy({ ...(effectiveCenterId && { commandCenterId: effectiveCenterId }), ...(enterpriseProfile && { enterprise: enterpriseProfile }) });
+  const documentPolicy = new DocumentPolicyStore(resolvedVaultPath);
+  let documentPolicyReady = false;
+  let indexedDocumentPolicy = '';
+  // Restrictive observations survive token renewal for the same runtime/account.
+  // Never evict an active lineage to make room: forgetting it could declassify a
+  // later write. Host admission must end local jobs when this server shuts down.
+  const documentSessionSources = new Map<string, Set<string>>();
+  const documentRules = () => {
+    const stored = documentPolicy.rules(), configured = options.documentRules?.();
+    // Additional trusted host constraints never replace persisted restrictions.
+    return configured?.length ? Object.freeze([...stored, ...configured]) : stored;
+  };
+  const scopeAccess = new ScopeAccessPolicy({ ...(effectiveCenterId && { commandCenterId: effectiveCenterId }), ...(enterpriseProfile && { enterprise: enterpriseProfile }),
+    documentRules, ...(options.localInferenceAllowed && { localInferenceAllowed: options.localInferenceAllowed }) });
   const guidance = new GuidanceCatalog(resolvedVaultPath, () => noticeRegistry.load().guidance, options.guidanceDefinitions ?? GUIDANCE_DEFINITIONS,
     path => pathFilter.isAllowed(path) && scopeAccess.canAccessPhysicalPath(path));
   const noticeRegistry = new NoticeRegistry(resolvedVaultPath, options.noticeConfigPath || process.env.MCPVAULT_NOTICE_CONFIG, guidance);
   const excludedGuidance = (path: string) => guidance.isManagedPath(path) && guidance.enabled();
   const fileCatalog = new VaultFileCatalog(resolvedVaultPath, pathFilter, excludedGuidance);
+  // Shared indexes may not hydrate protected sources into their legacy shared
+  // snapshots or embedding providers, even for an authorized local requester.
+  // Such documents use the separately private, authorized document index.
+  const publicIndexFilter = new class extends PathFilter {
+    override isAllowed(path: string): boolean {
+      return documentPolicyReady && pathFilter.isAllowed(path) && scopeAccess.canReadProtectedDocument(path);
+    }
+    override isAllowedForListing(path: string): boolean {
+      return documentPolicyReady && pathFilter.isAllowedForListing(path) && scopeAccess.canReadProtectedDocument(path);
+    }
+  }();
   const vaultIo = new VaultIoCoordinator();
-  const semanticSearch = new SemanticSearchService(resolvedVaultPath, pathFilter, scopeAccess, fileCatalog, vaultIo, excludedGuidance);
-  const searchService = new SearchService(resolvedVaultPath, pathFilter, fileCatalog, vaultIo);
-  const metadataIndex = new VaultMetadataIndex(resolvedVaultPath, pathFilter, frontmatterHandler, fileCatalog, vaultIo);
-  const graphIndex = new VaultGraphIndex(resolvedVaultPath, pathFilter, frontmatterHandler, fileCatalog, vaultIo);
+  const semanticSearch = new SemanticSearchService(resolvedVaultPath, publicIndexFilter, scopeAccess, fileCatalog, vaultIo, excludedGuidance);
+  const searchService = new SearchService(resolvedVaultPath, publicIndexFilter, fileCatalog, vaultIo);
+  const metadataIndex = new VaultMetadataIndex(resolvedVaultPath, publicIndexFilter, frontmatterHandler, fileCatalog, vaultIo);
+  const graphIndex = new VaultGraphIndex(resolvedVaultPath, publicIndexFilter, frontmatterHandler, fileCatalog, vaultIo);
+  const refreshDocumentPolicy = async () => {
+    try { await documentPolicy.refresh(); }
+    catch (error) { documentPolicyReady = false; throw error; }
+    const fingerprint = scopeAccess.documentPolicyFingerprint();
+    if (!documentPolicyReady || fingerprint !== indexedDocumentPolicy) {
+      documentPolicyReady = true; indexedDocumentPolicy = fingerprint;
+      metadataIndex.invalidateAll(); searchService.invalidate(); graphIndex.invalidate();
+      semanticSearch.notifyChanges([]);
+    }
+  };
   const pendingReadModelChanges = new Map<string, VaultCatalogChange>();
   let readModelFlushQueued = false;
   const flushReadModelChanges = () => {
@@ -514,7 +620,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
     reputationCache?.invalidateMany(changes);
     notificationsCache?.invalidateMany(changes);
     communityFeaturesCache?.invalidateMany(changes);
-    llmWikiCache?.invalidate();
+    llmWikiCache?.invalidate(changes);
     graphIndex.invalidateMany(changes);
   };
   const queueReadModelChange = (path: string, kind: VaultCatalogChange['kind']) => {
@@ -544,12 +650,12 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
   const retrieval = new RetrievalService(searchService, collaboration, semanticSearch, scopeAccess, fileSystem);
   const documentCacheDir = process.env.MCPVAULT_DOCUMENT_CACHE_DIR;
   const pdfHostConfig = process.env.MCPVAULT_PDF_HOST_CONFIG;
-  const documentIndex = new DocumentIndex(new DocumentResourceReader(fileSystem, pathFilter, scopeAccess, path => retrieval.skillDiscoveryAllowed(path)), fileCatalog,
-    { ...(documentCacheDir && { cacheDir: documentCacheDir }), ...(pdfHostConfig && { pdf: configuredPdfProvider(pdfHostConfig) }) });
-  const documents = new DocumentService(documentIndex);
-  const documentSearch = new DocumentSearch(documentIndex, retrieval);
-  const layeredMemory = new LayeredMemoryService(fileSystem, retrieval, scopeAccess);
-  const researchBridge = new ResearchBridgeService(fileSystem, scopeAccess, retrieval);
+  const documentIndex = hasFeature('document-search') ? new DocumentIndex(new DocumentResourceReader(fileSystem, pathFilter, scopeAccess, path => retrieval.skillDiscoveryAllowed(path)), fileCatalog,
+    { ...(documentCacheDir && { cacheDir: documentCacheDir }), ...(pdfHostConfig && { pdf: configuredPdfProvider(pdfHostConfig) }) }) : undefined;
+  const documents = documentIndex ? new DocumentService(documentIndex) : undefined;
+  const documentSearch = documentIndex ? new DocumentSearch(documentIndex, retrieval) : undefined;
+  const layeredMemory = hasFeature('personal-memory') ? new LayeredMemoryService(fileSystem, retrieval, scopeAccess) : undefined;
+  const researchBridge = hasFeature('ideation-research') ? new ResearchBridgeService(fileSystem, scopeAccess, retrieval) : undefined;
   const questionPacket = new QuestionPacketService(fileSystem, scopeAccess, retrieval);
   const sourceComparison = new SourceComparisonService(fileSystem, scopeAccess, retrieval);
   const sourceChange = new SourceChangeService(fileSystem, scopeAccess);
@@ -564,30 +670,30 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
     const owner = (await scopeAuth.listPrincipals()).find(account => account.accountId === accountId);
     return owner && scopeAuth.hasCapability(owner, 'write') && !await moderation.isBanned(owner.accountId, owner.userId) ? owner : undefined;
   }, readOnly);
-  void mocRegions.start().then(() => mocRegions.flush()).catch(() => { /* Registration corruption disables automation, never the server. Explicit status reports the error. */ });
-  const reputation = new ReputationService(fileSystem, scopeAuth, moderation);
+  void refreshDocumentPolicy().then(() => mocRegions.start()).then(() => mocRegions.flush()).catch(() => { /* Invalid protected policy or registration disables automation; explicit reads report the error. */ });
+  const reputation = hasFeature('collaboration') ? new ReputationService(fileSystem, scopeAuth, moderation) : undefined;
   reputationCache = reputation;
-  const notifications = new NotificationService(fileSystem, reputation, resolvedVaultPath, fileCatalog);
+  const notifications = reputation ? new NotificationService(fileSystem, reputation, resolvedVaultPath, fileCatalog) : undefined;
   notificationsCache = notifications;
-  const social = new SocialService(fileSystem, scopeAccess, references, reputation, notifications, {
+  const social = needsPersonalStorage ? new SocialService(fileSystem, scopeAccess, references, reputation, notifications, {
     ...(enterpriseProfile?.mode === 'public' && { communityRoot: 'PublicCommunity/Local', publicMode: true }),
     noticeFeedback: (id, revision, principal) => notices.feedback(id, revision, principal),
     noticeFeedbackReview: (id, path, revision, principal) => notices.feedbackReview(id, path, revision, principal),
-  });
-  const chat = new ChatService(fileSystem, references, reputation, options.roleplay ? async () => (await options.roleplay!.read()).records : undefined);
-  const whispers = new WhisperService(fileSystem, references);
-  const communityStatus = new CommunityStatusService(fileSystem, enterpriseProfile?.mode === 'public' ? { communityRoot: 'PublicCommunity/Local' } : {});
+  }) : undefined;
+  const chat = hasFeature('collaboration') ? new ChatService(fileSystem, references, reputation!, options.roleplay ? async () => (await options.roleplay!.read()).records : undefined) : undefined;
+  const whispers = hasFeature('collaboration') ? new WhisperService(fileSystem, references) : undefined;
+  const communityStatus = hasFeature('collaboration') ? new CommunityStatusService(fileSystem, enterpriseProfile?.mode === 'public' ? { communityRoot: 'PublicCommunity/Local' } : {}) : undefined;
   const agentDirectory = new AgentDirectoryService(fileSystem, scopeAuth,
     ...(enterpriseProfile?.mode === 'public' ? [{ communityRoot: 'PublicCommunity/Local', publicMode: true }] : []));
-  const federation = options.publicFederation ? new EnterpriseFederationAdapter({ vaultPath: resolvedVaultPath, social, directory: agentDirectory, config: options.publicFederation }) : undefined;
+  const federation = options.publicFederation && hasFeature('collaboration') ? new EnterpriseFederationAdapter({ vaultPath: resolvedVaultPath, social: social!, directory: agentDirectory, config: options.publicFederation, pathFilter }) : undefined;
   const audit = new AuditService(resolvedVaultPath);
-  const agentTasks = new AgentTaskService(fileSystem, references, scopeAuth, scopeAccess);
-  const ideation = new IdeationService(fileSystem, references);
-  const independentResearch = new IndependentResearchService(fileSystem, references, scopeAccess, async accountId => {
+  const agentTasks = needsTaskRecords ? new AgentTaskService(fileSystem, references, scopeAuth, scopeAccess) : undefined;
+  const ideation = hasFeature('ideation-research') ? new IdeationService(fileSystem, references) : undefined;
+  const independentResearch = hasFeature('ideation-research') ? new IndependentResearchService(fileSystem, references, scopeAccess, async accountId => {
     const actor = (await scopeAuth.listPrincipals()).find(p => p.accountId === accountId);
     return Boolean(actor && scopeAuth.hasCapability(actor, 'publish') && !await moderation.isBanned(actor.accountId, actor.userId));
-  });
-  const communityFeatures = new CommunityFeaturesService(fileSystem, scopeAccess, scopeAuth, reputation, resolvedVaultPath, notifications, fileCatalog);
+  }) : undefined;
+  const communityFeatures = needsPersonalStorage ? new CommunityFeaturesService(fileSystem, scopeAccess, scopeAuth, reputation, resolvedVaultPath, notifications, hasFeature('collaboration') ? fileCatalog : undefined) : undefined;
   communityFeaturesCache = communityFeatures;
   // The lexical, metadata, graph, and semantic indexes subscribe to the
   // catalog themselves. The remaining derived views are intentionally kept
@@ -605,20 +711,21 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
       notificationsCache?.invalidateMany();
       communityFeaturesCache?.invalidateMany();
     }
-    llmWikiCache?.invalidate();
+    llmWikiCache?.invalidate(changes);
   });
   const obsidianSearch = new ObsidianSearchService(resolvedVaultPath, pathFilter, scopeAccess, vaultIo);
-  const context = new ContextService(social, chat);
+  const context = hasFeature('collaboration') ? new ContextService(social!, chat!) : undefined;
   const continuity = new ContinuityService(fileSystem, {
     access: scopeAccess,
     buildLearningPath: (principal, path, maxDepth, limit, maxChars) => llmWiki.learningPath(principal, path, maxDepth, limit, maxChars, true),
   });
-  const workGroups = new WorkGroupService(fileSystem, references, scopeAuth, {
+  const workGroups = hasFeature('work-management') ? new WorkGroupService(fileSystem, references, scopeAuth, {
     assertActor: async principal => {
       if (await moderation.isBanned(principal.accountId, principal.userId)) throw guidanceError(new Error('This account is suspended by moderation'), 'guid-3ce72ccf715bd653');
     },
-  });
-  const work = new WorkService(fileSystem, references, scopeAuth, agentTasks, {
+  }) : undefined;
+  const work = needsTaskRecords ? new WorkService(fileSystem, references, scopeAuth, agentTasks!, {
+    ...(options.workCollaboration?.deterministicCoverage && { deterministicCoverage: options.workCollaboration.deterministicCoverage }),
     ...options.workCollaboration,
     assertTaskMutation: async taskId => {
       await assertEconomyConfigured(resolvedVaultPath,Boolean(options.economy));
@@ -638,8 +745,8 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
     assertActor: async principal => {
       if (await moderation.isBanned(principal.accountId, principal.userId)) throw guidanceError(new Error('This account is suspended by moderation'), 'guid-3ce72ccf715bd653');
     },
-  });
-  const participation = new CommunityParticipationService(fileSystem, { access: scopeAccess, notifications,
+  }) : undefined;
+  const participation = hasFeature('collaboration') ? new CommunityParticipationService(fileSystem, { access: scopeAccess, ...(notifications && { notifications }),
     ...(options.economy && {ownerUsage:async(principal:ScopePrincipal)=>{
       const owners=options.economy!.policy.owners,owner=owners[principal.accountId];
       if(!owner)return undefined; // Free community participation remains available.
@@ -648,23 +755,23 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
     },...new EconomyService(fileSystem,options.economy.ledger,options.economy.policy,{assertActor:async actor=>{
         if(!(await scopeAuth.listPrincipals()).some(p=>p.accountId===actor.accountId)||await moderation.isBanned(actor.accountId,actor.userId))throw guidanceError(new Error('Current authorized account required'), 'guid-163a12295a1d8545');
       }}).participationOptions()}),
-  });
-  const skillEvolution = new SkillEvolutionService(fileSystem, scopeAccess, scopeAuth, options.skillEvolution, {
+  }) : undefined;
+  const skillEvolution = hasFeature('skill-evolution') ? new SkillEvolutionService(fileSystem, scopeAccess, scopeAuth, options.skillEvolution, {
     readOnly,
     assertActor: async principal => {
       if (await moderation.isBanned(principal.accountId, principal.userId)) throw guidanceError(Error('This skill account is suspended by moderation'), 'guid-f2a52b5e03e2009a');
     },
-  });
-  retrieval.attachSkillEvolution(skillEvolution);
-  ideation.attachOutputAdapter({
+  }) : undefined;
+  if (skillEvolution) retrieval.attachSkillEvolution(skillEvolution);
+  ideation?.attachOutputAdapter({
     assertReadable:async(principal,path,container)=>{
       try {
         const paths=await references.validateAndNormalize([path],container,principal);
         if(paths.length!==1||paths[0]!==path||!scopeAccess.canAccessPhysicalPath(path,principal))throw Error();
       }catch{throw guidanceError(Error('Output or basis unavailable'), 'guid-619a9c57010ef0a6');}
     },
-    verifyTaskOrigin:(note,input,receipt)=>work.verifyWorkshopTaskOrigin(note,input,receipt),
-    authorizeProject:(principal,projectId,owner,delegate,grantor)=>work.authorizeWorkshopProject(principal,projectId,owner,delegate,grantor),
+    verifyTaskOrigin:(note,input,receipt)=>requiredService(work).verifyWorkshopTaskOrigin(note,input,receipt),
+    authorizeProject:(principal,projectId,owner,delegate,grantor)=>requiredService(work).authorizeWorkshopProject(principal,projectId,owner,delegate,grantor),
     assertAccess:async(principal,input)=>{
       const current=(await scopeAuth.listPrincipals()).find(p=>p.accountId===principal.accountId);
       const capability=input.type==='decision'?'publish':'task';
@@ -672,7 +779,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
     },
     create:async(input,guards,receipt,principal,projectId,assertAccess)=>{
       await assertAccess();
-      if(input.type==='task') return work.createWorkshopTask({principal,projectId,taskId:input.path.split('/').at(-1)!.replace(/\.md$/,''),title:input.title,
+      if(input.type==='task') return requiredService(work).createWorkshopTask({principal,projectId,taskId:input.path.split('/').at(-1)!.replace(/\.md$/,''),title:input.title,
         description:workshopTaskDescription(input,receipt.workshopPath),completionCriteria:input.completionCriteria,
         workKind:input.kind as 'general',references:[receipt.workshopPath,...input.evidencePaths],expectedRevision:'missing',requestId:`output-${receipt.payloadFingerprint}`},guards,receipt,assertAccess);
       const context=workshopDecisionContext(input);
@@ -681,7 +788,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         {revisionGuards:guards,workshopOutput:receipt,assertOutputAccess:assertAccess});
     },
   });
-  const explanationService = (validate?: () => Promise<ScopePrincipal>) => options.explanations ? new ExplanationService(fileSystem, scopeAccess, {
+  const explanationService = (validate?: () => Promise<ScopePrincipal>) => hasFeature('explanation-translation') && options.explanations ? new ExplanationService(fileSystem, scopeAccess, {
     sources: options.explanations.sources,
     executionProfiles: options.workCollaboration?.executionProfiles ?? (async () => []),
     assertActor: async actor => {
@@ -694,10 +801,10 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
       const current = (await scopeAuth.listPrincipals()).find(p => p.accountId === accountId);
       return Boolean(current && scopeAuth.hasCapability(current, 'task') && !await moderation.isBanned(current.accountId, current.userId));
     },
-    canTakeWork: async actor => !(await agentTasks.listAssignedOpen({ assignee: actor.agentId || actor.modelId, limit: 1, maxChars: 1200 })).tasks.length,
+    canTakeWork: async actor => !(await requiredService(agentTasks).listAssignedOpen({ assignee: actor.agentId || actor.modelId, limit: 1, maxChars: 1200 })).tasks.length,
   }) : undefined;
   const explanations = explanationService();
-  const benchmarkService = (validate?: () => Promise<ScopePrincipal>) => options.benchmarks?.enabled ? new BenchmarkService(fileSystem, {
+  const benchmarkService = (validate?: () => Promise<ScopePrincipal>) => hasFeature('benchmarks') && options.benchmarks?.enabled ? new BenchmarkService(fileSystem, {
     ...options.benchmarks, access: scopeAccess, pathFilter,
     ...(options.economy && { ledger: options.economy.ledger }),
     accountAvailable: async accountId => {
@@ -714,9 +821,24 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
   }) : undefined;
   const benchmarks = benchmarkService();
   if (benchmarks) options.benchmarks?.bindAuthority?.(benchmarks);
-  const agentPulse = new AgentPulseService(notifications, social, chat, agentTasks, continuity, reputation, llmWiki, ideation, work, participation, skillEvolution,
+  const agentPulse = new AgentPulseService(notifications, hasFeature('collaboration') ? social : undefined, chat,
+    hasFeature('work-management') ? agentTasks : undefined, continuity, reputation, llmWiki, ideation,
+    hasFeature('work-management') ? work : undefined, participation, skillEvolution,
     { ...(explanations && { explanation: (principal: ScopePrincipal) => explanations.nextAction(principal) }),
-      ...(benchmarks && { benchmark: (principal: ScopePrincipal) => benchmarks.pulse(principal) }) });
+      ...(benchmarks && { benchmark: (principal: ScopePrincipal) => benchmarks.pulse(principal) }) },
+    async (activity, principal) => {
+      const operation = await ownerActivityRuntime.begin(activity, 'discover', undefined, principal);
+      if (!operation.canAccessPath('.')) return undefined;
+      const assertDocumentFresh = scopeAccess.captureDocumentBoundary(principal);
+      return {
+        run: <T>(reader: () => Promise<T>) => withEnterpriseStorageContext({ access: scopeAccess, principal,
+          assertFresh: () => { assertDocumentFresh(); operation.assertFresh(); },
+          canAccessPath: operation.canAccessPath, canTraversePath: operation.canTraversePath,
+          beforeWrite: operation.beforeWrite }, reader),
+        revalidate: operation.revalidate,
+        assertFresh: operation.assertFresh,
+      };
+    });
   const endpointRegistry = new EndpointRegistry();
   const requestGate = new RequestConcurrencyGate();
 
@@ -1131,6 +1253,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
           inputSchema: {
             type: "object",
             properties: {
+              department: { type: "string", enum: ["default"], description: "Restrict navigation to the current administrator-verified default department using protected document policy. This never grants access; omit for ordinary company-wide navigation." },
               filters: { type: "object", description: guidanceText('guid-6c6012de673b180a', "Frontmatter filters, including dot notation for nested properties, e.g. {\"status\": \"active\", \"project\": \"alpha\"}") },
               pathPrefix: { type: "string", description: guidanceText('guid-c27dd20a75e3f799', "Restrict results to a vault subtree, e.g. Projects/2026") },
               sortBy: { type: "string", description: guidanceText('guid-bb398a2d64650d6a', "path (default) or a frontmatter property, including nested dot notation") },
@@ -1387,7 +1510,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         ...getExplanationTools(), ...getBenchmarkTools(),
       ].map(tool => tool.name) : []),
     ] : []);
-    return buildInternalTools().filter(tool => !unavailable.has(tool.name)).map(tool => {
+    return buildInternalTools().filter(tool => !unavailable.has(tool.name) && featureToolAllowed(tool.name)).map(tool => {
       if (SCOPE_AUTH_TOOL_NAMES.has(tool.name)) return tool;
       const schema = tool.inputSchema;
       // Normalize once without mutating shared tool-module schema constants.
@@ -1429,7 +1552,12 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
 
     let rawArgs: Record<string, unknown> = {};
     let principal: ScopePrincipal | undefined;
+    let ownerOperation: OwnerActivityOperation | undefined;
+    let finalOwnerRefresh: (() => Promise<void>) | undefined;
+    let finalOwnerValidator: (() => void) | undefined;
+    let ownerRegistrationName = requestedToolName;
     try {
+      await refreshDocumentPolicy();
       rawArgs = args && typeof args === 'object' ? { ...(args as Record<string, unknown>) } : {};
 
       if (requestedToolName === 'call_endpoint') {
@@ -1451,6 +1579,12 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         throw guidanceError(new Error(`Direct MCP tool '${requestedToolName}' is not exposed. Use search_capabilities and call_endpoint.`), 'guid-e5b95513008be9fa');
       }
 
+      // Check the canonical registration BEFORE read aliases; aliases never grant selection.
+      const registrationName = toolName === 'read_work_group' ? 'manage_work_group'
+        : toolName === 'read_work_project' ? 'manage_work_project'
+        : toolName === 'read_community_participation' ? 'manage_community_participation' : toolName;
+      ownerRegistrationName = registrationName;
+      if (!featureToolAllowed(registrationName)) throw new Error('Endpoint feature is disabled or unavailable in this host selection');
       toolName = operationReadAlias(toolName, rawArgs.op) || toolName;
       if (readOnly && MUTATING_TOOLS.has(toolName)) {
         throw guidanceError(new Error(`Endpoint '${toolName}' is disabled because MCPVault is running in read-only mode.`), 'guid-189f788b35f642fb');
@@ -1492,7 +1626,36 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
       }
 
       principal = scopeAuth.authenticate(rawArgs.accessToken);
-      await audit.record({ tool: toolName, args: rawArgs, ...(principal && { principal }), outcome: 'attempt' });
+      let assertDocumentFresh = scopeAccess.captureDocumentBoundary(principal);
+      const principalSnapshot = JSON.stringify(principal);
+      const assertStorageFresh = () => {
+        if (JSON.stringify(scopeAuth.authenticate(rawArgs.accessToken)) !== principalSnapshot) throw new Error('Authenticated authority changed; retry with current authorization');
+        assertDocumentFresh();
+      };
+      const documentSessionKey = principal ? `${principal.enterprise?.runtimeId ?? ''}\0${principal.accountId}` : undefined;
+      const observeDocument = (root: string) => {
+        if (!documentSessionKey) throw new Error('Protected document requires an authenticated execution');
+        let sources = documentSessionSources.get(documentSessionKey);
+        if (!sources) {
+          if (documentSessionSources.size >= 256) throw new Error('Protected execution capacity reached; host review required');
+          documentSessionSources.set(documentSessionKey, sources = new Set());
+        }
+        if (!sources.has(root) && sources.size >= 32) throw new Error('Protected source budget exceeded; use a smaller isolated job');
+        sources.add(root);
+      };
+      const inheritDocument = async (path: string) => {
+        const target = documentPolicyPath(path);
+        const sources = [...(documentSessionKey ? documentSessionSources.get(documentSessionKey) ?? [] : [])].filter(source => source !== target);
+        if (!sources.length) return;
+        assertStorageFresh();
+        if (sources.some(source => !scopeAccess.canReadProtectedDocument(source, principal))) throw new Error('Protected source authority was revoked before inheritance');
+        // Ephemeral programmatic rules are useful for host read admission but
+        // cannot be the sole durable classification of a persisted derivative.
+        if (options.documentRules?.().length) throw new Error('Persist source classifications before creating protected derivatives');
+        await documentPolicy.inherit(target, sources, documentPolicy.revision());
+        assertDocumentFresh = scopeAccess.captureDocumentBoundary(principal);
+        assertStorageFresh();
+      };
       // Public reads remain anonymous, but every mutation must have an
       // attributable principal.  Capability checks below are intentionally
       // not the authentication gate: a missing principal would otherwise
@@ -1508,6 +1671,10 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         throw guidanceError(new Error(`Capability '${requiredCapability}' is not granted to this account`), 'guid-534ac974cdf24373');
       }
       const trimmedArgs = trimPaths(rawArgs, scopeAccess, principal);
+      const ownerActivity = ownerActivityForEndpointTool(ownerRegistrationName);
+      if (ownerActivity) ownerOperation = await ownerActivityRuntime.begin(ownerActivity,
+        ownerActionForEndpointTool(ownerRegistrationName, MUTATING_TOOLS.has(toolName), rawArgs.op), ownerRequestPaths(toolName, trimmedArgs), principal);
+      await audit.record({ tool: toolName, args: rawArgs, ...(principal && { principal }), outcome: 'attempt' });
       if (principal?.enterprise?.mode === 'public' && toolName === 'publish_blog_post' && trimmedArgs.status === 'draft') {
         throw guidanceError(new Error('Keep drafts in this agent\'s private memory; publish to the public community only when ready'), 'guid-8584387a03eae818');
       }
@@ -1531,7 +1698,10 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
       assertImmutableSourceBoundary(toolName, trimmedArgs, scopeAccess);
       assertManagedCommunityBoundary(toolName, trimmedArgs);
       const publicCommunityWriter = new Set(['publish_blog_post', 'delete_blog_post', 'comment_on_blog_post', 'edit_blog_comment', 'delete_blog_comment', 'update_agent_profile', 'update_community_status', 'moderate_content', 'toggle_reaction', 'accept_blog_comment', 'unaccept_blog_comment', 'public_federation_retry']).has(toolName);
-      const toolResponse = await withEnterpriseStorageContext({ access: scopeAccess, ...(principal && { principal }), publicCommunityWriter, assertFresh: () => { scopeAuth.authenticate(rawArgs.accessToken); } }, async () => {
+      const toolResponse = await withEnterpriseStorageContext({ access: scopeAccess, ...(principal && { principal }), publicCommunityWriter,
+        assertFresh: () => { assertStorageFresh(); ownerOperation?.assertFresh(); }, observe: observeDocument, inherit: inheritDocument,
+        ...(ownerOperation && { canAccessPath: ownerOperation.canAccessPath, canTraversePath: ownerOperation.canTraversePath,
+          beforeWrite: ownerOperation.beforeWrite }) }, async () => {
       const communityReceipt = (value: Record<string, unknown>) => jsonResult({ ...value,
         ...(principal?.enterprise?.mode === 'public' && !federation && { federation: { status: 'disabled' } }),
       }, trimmedArgs.prettyPrint);
@@ -1542,7 +1712,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
       if (Object.hasOwn(DOCUMENT_TOOL_ENDPOINTS, toolName)) {
         // This service owns scope URI resolution. trimPaths has already expanded
         // legacy adapter paths and must not feed private physical paths back in.
-        return jsonResult(await dispatchDocumentTool(toolName, rawArgs, principal, documents, documentSearch), false);
+        return jsonResult(await dispatchDocumentTool(toolName, rawArgs, principal, requiredService(documents), requiredService(documentSearch)), false);
       }
       const storyEndpoint = storyEndpointForTool(toolName);
       if (storyEndpoint) {
@@ -1555,7 +1725,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
             if (typeof storyArgs[key] === 'string' && /^\d{1,5}$/.test(storyArgs[key])) storyArgs[key] = Number(storyArgs[key]);
           }
         }
-        const service = new StoryService(fileSystem, scopeAccess, references, scopeAuth, work, agentTasks, {
+        const service = new StoryService(fileSystem, scopeAccess, references, scopeAuth, requiredService(work), requiredService(agentTasks), {
           readOnly, gitHistory, assertActor: async () => { await revalidateActor(); },
           readRoleplayTurn: (source, actor) => new RoleplayService(fileSystem, scopeAccess, references, options.roleplay,
             { assertActor: async () => { await revalidateActor(); } }).storyTurn(source, actor),
@@ -1567,6 +1737,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         case "get_scope_context": {
           if (principal?.enterprise) return jsonResult({
             identity: scopeAuth.whoami(rawArgs.accessToken),
+            defaultNavigation: scopeAccess.defaultNavigation(principal),
             defaultScope: principal.enterprise.mode === 'company' ? 'community' : 'global',
             scopes: scopeAccess.scopeRoots(principal).map(item => ({ scope: item.kind, root: scopeAccess.toPublicPath(item.root) })),
           }, trimmedArgs.prettyPrint);
@@ -1580,6 +1751,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
           if (principal?.enterprise) return jsonResult({
             identity: { actorId: principal.actorId, authorLabel: principal.authorLabel, sessionId: principal.sessionId, sessionGeneration: principal.sessionGeneration },
             instanceMode: principal.enterprise.mode,
+            defaultNavigation: scopeAccess.defaultNavigation(principal),
             defaultScope: principal.enterprise.mode === 'company' ? 'community' : 'global',
             allowedScopes: scopeAccess.scopeRoots(principal).map(item => ({ scope: item.kind, uri: scopeAccess.toPublicPath(item.root) })),
             primaryAction: { tool: 'get_agent_pulse', arguments: { maxChars: 4000 }, reason: guidanceText('guid-a1e278b3dad7ed62', 'Continue as this persistent agent within the current approved instance.') },
@@ -1588,33 +1760,47 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         }
 
         case "list_active_capabilities": {
+          const ownerState = await ownerCatalogState(principal);
           const result = endpointRegistry.list(
             undefined,
             trimmedArgs.limit,
             trimmedArgs.maxChars,
-            { readOnly, skillEvolutionEnabled: skillEvolution.enabled, authenticated: Boolean(principal), capabilities: new Set(principal?.capabilities || []), principalKey: JSON.stringify(principal), roleplayConfigured: Boolean(options.roleplay), roleplayWritesConfigured: Boolean(options.roleplay?.options.policy.administrators.length), economyConfigured: Boolean(options.economy?.policy.enabled), explanationsConfigured: Boolean(options.explanations), benchmarksConfigured: Boolean(options.benchmarks?.enabled) },
-            false,
+            { readOnly, skillEvolutionEnabled: Boolean(skillEvolution?.enabled), authenticated: Boolean(principal), capabilities: new Set(principal?.capabilities || []), principalKey: JSON.stringify(principal), roleplayConfigured: Boolean(options.roleplay), roleplayWritesConfigured: Boolean(options.roleplay?.options.policy.administrators.length), economyConfigured: Boolean(options.economy?.policy.enabled), explanationsConfigured: Boolean(explanations), benchmarksConfigured: Boolean(benchmarks), ownerActivity: ownerState },
+            true,
             { compact: true, cursor: trimmedArgs.cursor },
           );
+          if (JSON.stringify(await ownerCatalogState(principal)) !== JSON.stringify(ownerState)
+            || JSON.stringify(ownerCatalogSnapshot(principal)) !== JSON.stringify(ownerState)) throw new Error('Capability owner authority changed; restart the catalog request');
+          finalOwnerValidator = () => {
+            if (JSON.stringify(ownerCatalogSnapshot(principal)) !== JSON.stringify(ownerState)) throw new Error('Capability owner authority changed; restart the catalog request');
+          };
+          finalOwnerRefresh = async () => { await options.ownerActivity?.refresh?.(); };
           return jsonResult(result, false);
         }
 
         case 'memory_recall':
         case 'memory_brief':
         case 'memory_consolidate': {
-          const result = await layeredMemory.read(toolName.slice('memory_'.length) as 'recall' | 'brief' | 'consolidate', { ...trimmedArgs, principal });
+          const result = await requiredService(layeredMemory).read(toolName.slice('memory_'.length) as 'recall' | 'brief' | 'consolidate', { ...trimmedArgs, principal });
           if (principal && JSON.stringify(scopeAuth.authenticate(rawArgs.accessToken)) !== JSON.stringify(principal)) throw guidanceError(new Error('Memory authentication changed; login again before reading'), 'guid-27c139de639ac99d');
           return jsonResult(result, false);
         }
 
         case "search_capabilities": {
+          const ownerState = await ownerCatalogState(principal);
           const result = endpointRegistry.list(
             trimmedArgs.query,
             trimmedArgs.limit,
             trimmedArgs.maxChars,
-            { readOnly, skillEvolutionEnabled: skillEvolution.enabled, authenticated: Boolean(principal), capabilities: new Set(principal?.capabilities || []), roleplayConfigured: Boolean(options.roleplay), roleplayWritesConfigured: Boolean(options.roleplay?.options.policy.administrators.length), economyConfigured: Boolean(options.economy?.policy.enabled), explanationsConfigured: Boolean(options.explanations), benchmarksConfigured: Boolean(options.benchmarks?.enabled) },
+            { readOnly, skillEvolutionEnabled: Boolean(skillEvolution?.enabled), authenticated: Boolean(principal), capabilities: new Set(principal?.capabilities || []), roleplayConfigured: Boolean(options.roleplay), roleplayWritesConfigured: Boolean(options.roleplay?.options.policy.administrators.length), economyConfigured: Boolean(options.economy?.policy.enabled), explanationsConfigured: Boolean(explanations), benchmarksConfigured: Boolean(benchmarks), ownerActivity: ownerState },
             false,
           );
+          if (JSON.stringify(await ownerCatalogState(principal)) !== JSON.stringify(ownerState)
+            || JSON.stringify(ownerCatalogSnapshot(principal)) !== JSON.stringify(ownerState)) throw new Error('Capability owner authority changed; retry with current consent');
+          finalOwnerValidator = () => {
+            if (JSON.stringify(ownerCatalogSnapshot(principal)) !== JSON.stringify(ownerState)) throw new Error('Capability owner authority changed; retry with current consent');
+          };
+          finalOwnerRefresh = async () => { await options.ownerActivity?.refresh?.(); };
           return jsonResult(result, trimmedArgs.prettyPrint);
         }
 
@@ -1626,11 +1812,10 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
             assertNoticeActorFresh();
             if (notice) return jsonResult(notice, false);
           }
-          if (principal?.enterprise) {
-            const posts = await social.listBlogPosts({ principal, limit: 3, maxChars: 1800, includeExcerpt: false });
+          if (principal?.enterprise && hasFeature('collaboration') && hasFeature('personal-memory')) {
             return jsonResult({ identity: { actorId: principal.actorId, authorLabel: principal.authorLabel, sessionId: principal.sessionId, generation: principal.sessionGeneration },
+              defaultNavigation: scopeAccess.defaultNavigation(principal),
               defaultScope: principal.enterprise.mode === 'company' ? 'community' : 'global',
-              posts,
               primaryAction: { tool: 'call_endpoint', arguments: { endpointId: 'memory.brief', arguments: { scope: 'personal', maxChars: 1800 } }, reason: guidanceText('guid-3ae748a5a17853b5', 'Resume this persistent agent using its own memory before selecting shared work.') },
             }, trimmedArgs.prettyPrint);
           }
@@ -1641,30 +1826,30 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
             ...(trimmedArgs.purpose !== undefined && { purpose: trimmedArgs.purpose }),
             ...(trimmedArgs.hostBusy !== undefined && { hostBusy: trimmedArgs.hostBusy }),
             ...(trimmedArgs.skillId !== undefined && { skillId: trimmedArgs.skillId }),
-          });
+          }, validator => { finalOwnerRefresh = validator.revalidate; finalOwnerValidator = validator.assertFresh; });
           if (principal && scopeAuth.authenticate(rawArgs.accessToken)?.accountId !== principal.accountId) throw guidanceError(new Error('Session expired during pulse; login again'), 'guid-5051af441248af37');
           return jsonResult(packet, trimmedArgs.purpose === 'community' ? false : trimmedArgs.prettyPrint);
         }
 
         case 'get_wiki_bridge_candidates': {
-          const packet = await researchBridge.candidates({ ...trimmedArgs, principal } as any);
+          const packet = await requiredService(researchBridge).candidates({ ...trimmedArgs, principal } as any);
           if (principal && JSON.stringify(scopeAuth.authenticate(rawArgs.accessToken)) !== JSON.stringify(principal)) throw guidanceError(new Error('Research authentication changed; login again before reading'), 'guid-134b283bd26baf39');
           return jsonResult(packet, false);
         }
         case 'read_community_participation':
         case 'manage_community_participation': {
-          const packet = await participation.settings({ ...trimmedArgs, principal, ...(toolName === 'read_community_participation' && { op: 'read' }), authorize: () => { if (!principal || JSON.stringify(scopeAuth.authenticate(rawArgs.accessToken)) !== JSON.stringify(principal)) throw guidanceError(new Error('Participation authentication changed'), 'guid-d130c9cb9e9dbb37'); } });
+          const packet = await requiredService(participation).settings({ ...trimmedArgs, principal, ...(toolName === 'read_community_participation' && { op: 'read' }), authorize: () => { if (!principal || JSON.stringify(scopeAuth.authenticate(rawArgs.accessToken)) !== JSON.stringify(principal)) throw guidanceError(new Error('Participation authentication changed'), 'guid-d130c9cb9e9dbb37'); } });
           if (!principal || scopeAuth.authenticate(rawArgs.accessToken)?.accountId !== principal.accountId) throw guidanceError(new Error('Session expired during participation read'), 'guid-1fd7c5c41175ae9b');
           return jsonResult(packet, false);
         }
         case 'record_community_participation': {
-          const packet = await participation.record({ ...trimmedArgs, principal, authorize: () => { if (!principal || JSON.stringify(scopeAuth.authenticate(rawArgs.accessToken)) !== JSON.stringify(principal)) throw guidanceError(new Error('Participation authentication changed'), 'guid-d130c9cb9e9dbb37'); } } as any);
+          const packet = await requiredService(participation).record({ ...trimmedArgs, principal, authorize: () => { if (!principal || JSON.stringify(scopeAuth.authenticate(rawArgs.accessToken)) !== JSON.stringify(principal)) throw guidanceError(new Error('Participation authentication changed'), 'guid-d130c9cb9e9dbb37'); } } as any);
           if (!principal || JSON.stringify(scopeAuth.authenticate(rawArgs.accessToken)) !== JSON.stringify(principal)) throw guidanceError(new Error('Participation authentication changed'), 'guid-d130c9cb9e9dbb37');
           return jsonResult(packet, false);
         }
 
         case "read_context": {
-          return jsonResult(await context.read({
+          return jsonResult(await requiredService(context).read({
             ...(principal && { principal }),
             targetType: trimmedArgs.targetType as any,
             ...(typeof trimmedArgs.slug === 'string' && { slug: trimmedArgs.slug }),
@@ -2420,20 +2605,20 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         }
 
         case "write_journal_entry": {
-          return jsonResult(await social.writeJournalEntry({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
+          return jsonResult(await requiredService(social).writeJournalEntry({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
         }
 
         case "list_journal_entries":
         case "read_journal_entry": {
           const result = toolName === 'list_journal_entries'
-            ? await social.listJournalEntries({ ...trimmedArgs, principal })
-            : await social.readJournalEntry({ ...trimmedArgs, principal });
+            ? await requiredService(social).listJournalEntries({ ...trimmedArgs, principal })
+            : await requiredService(social).readJournalEntry({ ...trimmedArgs, principal });
           if (principal && JSON.stringify(scopeAuth.authenticate(rawArgs.accessToken)) !== JSON.stringify(principal)) throw guidanceError(new Error('Journal authentication changed; login again before reading'), 'guid-49ab02be711a3444');
           return jsonResult(result, trimmedArgs.prettyPrint);
         }
 
         case "publish_blog_post": {
-          return communityReceipt(await social.publishBlogPost({ ...trimmedArgs, principal }));
+          return communityReceipt(await requiredService(social).publishBlogPost({ ...trimmedArgs, principal }));
         }
 
         case 'list_guidance_catalog': {
@@ -2449,93 +2634,93 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         }
 
         case "delete_blog_post": {
-          return communityReceipt(await social.deleteBlogPost({ ...trimmedArgs, principal }));
+          return communityReceipt(await requiredService(social).deleteBlogPost({ ...trimmedArgs, principal }));
         }
 
         case "list_blog_posts": {
-          return jsonResult(await social.listBlogPosts({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
+          return jsonResult(await requiredService(social).listBlogPosts({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
         }
 
         case "read_blog_post": {
-          return jsonResult(await social.getBlogPost({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
+          return jsonResult(await requiredService(social).getBlogPost({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
         }
 
         case "comment_on_blog_post": {
-          return communityReceipt(await social.commentOnBlogPost({ ...trimmedArgs, principal }));
+          return communityReceipt(await requiredService(social).commentOnBlogPost({ ...trimmedArgs, principal }));
         }
 
         case "edit_blog_comment": {
-          return communityReceipt(await social.editBlogComment({ ...trimmedArgs, principal }));
+          return communityReceipt(await requiredService(social).editBlogComment({ ...trimmedArgs, principal }));
         }
 
         case "delete_blog_comment": {
-          return communityReceipt(await social.deleteBlogComment({ ...trimmedArgs, principal }));
+          return communityReceipt(await requiredService(social).deleteBlogComment({ ...trimmedArgs, principal }));
         }
 
         case "list_blog_comments": {
-          return jsonResult(await social.listBlogComments({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
+          return jsonResult(await requiredService(social).listBlogComments({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
         }
 
         case "list_mentions": {
-          return jsonResult(await social.listMentions({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
+          return jsonResult(await requiredService(social).listMentions({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
         }
 
         case "list_blog_series": {
-          return jsonResult(await communityFeatures.listSeries(trimmedArgs), trimmedArgs.prettyPrint);
+          return jsonResult(await requiredService(communityFeatures).listSeries(trimmedArgs), trimmedArgs.prettyPrint);
         }
 
         case "list_author_activity": {
-          return jsonResult(await communityFeatures.authorActivity({ author: trimmedArgs.author, limit: trimmedArgs.limit, maxChars: trimmedArgs.maxChars }), trimmedArgs.prettyPrint);
+          return jsonResult(await requiredService(communityFeatures).authorActivity({ author: trimmedArgs.author, limit: trimmedArgs.limit, maxChars: trimmedArgs.maxChars }), trimmedArgs.prettyPrint);
         }
 
         case "toggle_reaction": {
-          return jsonResult(await communityFeatures.toggleReaction({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
+          return jsonResult(await requiredService(communityFeatures).toggleReaction({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
         }
 
         case "list_reactions": {
-          return jsonResult(await communityFeatures.listReactions(trimmedArgs), trimmedArgs.prettyPrint);
+          return jsonResult(await requiredService(communityFeatures).listReactions(trimmedArgs), trimmedArgs.prettyPrint);
         }
 
         case "list_popular_posts": {
-          return jsonResult(await communityFeatures.listPopularPosts(trimmedArgs), trimmedArgs.prettyPrint);
+          return jsonResult(await requiredService(communityFeatures).listPopularPosts(trimmedArgs), trimmedArgs.prettyPrint);
         }
 
         case "accept_blog_comment":
         case "unaccept_blog_comment": {
-          return jsonResult(await communityFeatures.acceptComment({ ...trimmedArgs, principal, accepted: toolName === 'accept_blog_comment' }), trimmedArgs.prettyPrint);
+          return jsonResult(await requiredService(communityFeatures).acceptComment({ ...trimmedArgs, principal, accepted: toolName === 'accept_blog_comment' }), trimmedArgs.prettyPrint);
         }
 
         case "write_guestbook_entry": {
-          return jsonResult(await communityFeatures.guestbook({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
+          return jsonResult(await requiredService(communityFeatures).guestbook({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
         }
 
         case "list_guestbook": {
-          return jsonResult(await communityFeatures.guestbook(trimmedArgs), trimmedArgs.prettyPrint);
+          return jsonResult(await requiredService(communityFeatures).guestbook(trimmedArgs), trimmedArgs.prettyPrint);
         }
 
         case "delete_guestbook_entry": {
-          return jsonResult(await communityFeatures.guestbook({ ...trimmedArgs, principal, deleteEntry: true }), trimmedArgs.prettyPrint);
+          return jsonResult(await requiredService(communityFeatures).guestbook({ ...trimmedArgs, principal, deleteEntry: true }), trimmedArgs.prettyPrint);
         }
 
         case "watch_target":
         case "unwatch_target": {
-          return jsonResult(await communityFeatures.watch({ ...trimmedArgs, principal, active: toolName === 'watch_target' }), trimmedArgs.prettyPrint);
+          return jsonResult(await requiredService(communityFeatures).watch({ ...trimmedArgs, principal, active: toolName === 'watch_target' }), trimmedArgs.prettyPrint);
         }
 
         case "list_watched_targets": {
-          return jsonResult(await communityFeatures.listWatches(principal, trimmedArgs.maxChars as number | undefined), trimmedArgs.prettyPrint);
+          return jsonResult(await requiredService(communityFeatures).listWatches(principal, trimmedArgs.maxChars as number | undefined), trimmedArgs.prettyPrint);
         }
 
         case "save_item": {
-          return jsonResult(await communityFeatures.save({ ...trimmedArgs, principal, active: true }), trimmedArgs.prettyPrint);
+          return jsonResult(await requiredService(communityFeatures).save({ ...trimmedArgs, principal, active: true }), trimmedArgs.prettyPrint);
         }
 
         case "unsave_item": {
-          return jsonResult(await communityFeatures.save({ ...trimmedArgs, principal, active: false }), trimmedArgs.prettyPrint);
+          return jsonResult(await requiredService(communityFeatures).save({ ...trimmedArgs, principal, active: false }), trimmedArgs.prettyPrint);
         }
 
         case "list_saved_items": {
-          return jsonResult(await communityFeatures.listSaves(principal, trimmedArgs.maxChars as number | undefined), trimmedArgs.prettyPrint);
+          return jsonResult(await requiredService(communityFeatures).listSaves(principal, trimmedArgs.maxChars as number | undefined), trimmedArgs.prettyPrint);
         }
 
         case "read_references": {
@@ -2543,11 +2728,11 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         }
 
         case "create_chat_room": {
-          return jsonResult(await chat.createRoom({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
+          return jsonResult(await requiredService(chat).createRoom({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
         }
 
         case "list_chat_rooms": {
-          return jsonResult(await chat.listRooms(trimmedArgs), trimmedArgs.prettyPrint);
+          return jsonResult(await requiredService(chat).listRooms(trimmedArgs), trimmedArgs.prettyPrint);
         }
 
         case "send_chat_message": {
@@ -2557,35 +2742,35 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
             const receipt = await service.execute('action', { ...trimmedArgs, op: 'ooc', expectedRevision: trimmedArgs.expectedRevision ?? roleplayRevision(state) }, principal);
             return jsonResult({ ...receipt, messageId: `roleplay-${receipt.id}`, roomId: trimmedArgs.roomId, note: guidanceText('guid-9e806e522f13c7ef', 'Out-of-character chat only. Use roleplay.action with character/generation for in-character actions.') }, false);
           }
-          return jsonResult(await chat.sendMessage({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
+          return jsonResult(await requiredService(chat).sendMessage({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
         }
 
         case "edit_chat_message": {
-          return jsonResult(await chat.editMessage({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
+          return jsonResult(await requiredService(chat).editMessage({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
         }
 
         case "delete_chat_message": {
-          return jsonResult(await chat.deleteMessage({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
+          return jsonResult(await requiredService(chat).deleteMessage({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
         }
 
         case "archive_chat_room": {
-          return jsonResult(await chat.archiveRoom({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
+          return jsonResult(await requiredService(chat).archiveRoom({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
         }
 
         case "read_chat_room": {
-          return jsonResult(await chat.readRoomWithMessages({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
+          return jsonResult(await requiredService(chat).readRoomWithMessages({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
         }
 
         case "send_whisper": {
-          return jsonResult(await whispers.send({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
+          return jsonResult(await requiredService(whispers).send({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
         }
 
         case "list_whispers": {
-          return jsonResult(await whispers.list({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
+          return jsonResult(await requiredService(whispers).list({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
         }
 
         case "update_community_status": {
-          return jsonResult(await communityStatus.update({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
+          return jsonResult(await requiredService(communityStatus).update({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
         }
 
         case "report_content": {
@@ -2602,9 +2787,9 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
 
         case "get_reputation": {
           const result = trimmedArgs.identity !== undefined
-            ? await reputation.getPublic(String(trimmedArgs.identity))
+            ? await requiredService(reputation).getPublic(String(trimmedArgs.identity))
             : principal
-              ? await reputation.getForPrincipal(principal)
+              ? await requiredService(reputation).getForPrincipal(principal)
               : (() => { throw guidanceError(new Error('identity is required for anonymous reputation lookup'), 'guid-e950a246d244c855'); })();
           return jsonResult(result, trimmedArgs.prettyPrint);
         }
@@ -2635,7 +2820,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         }
 
         case "list_notifications": {
-          return jsonResult(await notifications.list({
+          return jsonResult(await requiredService(notifications).list({
             ...(principal && { principal }),
             includeRead: trimmedArgs.includeRead,
             limit: trimmedArgs.limit,
@@ -2645,7 +2830,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         }
 
         case "mark_notifications_read": {
-          return jsonResult(await notifications.markRead({
+          return jsonResult(await requiredService(notifications).markRead({
             ...(principal && { principal }),
             through: trimmedArgs.through,
             expectedRevision: trimmedArgs.expectedRevision,
@@ -2653,7 +2838,10 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         }
 
         case "list_audit_events": {
-          return jsonResult(await audit.list({ ...(principal && { principal }), limit: trimmedArgs.limit, includeErrors: trimmedArgs.includeErrors }), trimmedArgs.prettyPrint);
+          return jsonResult(await audit.list({ ...(principal && { principal }), limit: trimmedArgs.limit, includeErrors: trimmedArgs.includeErrors,
+            ...(scopeAccess.hasDocumentPolicy() && { canAccessPath: (path: string) => {
+              try { return canAccessPath(scopeAccess.resolveExternalPath(path, principal)); } catch { return false; }
+            } }) }), trimmedArgs.prettyPrint);
         }
 
         case 'manage_roleplay_world': case 'read_roleplay_world':
@@ -2706,30 +2894,30 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
           return jsonResult(await continuity.previewLearningConfiguration({ ...rawArgs, ...(principal && {principal}), rootPath: rawArgs.rootPath as string,
             configuration: rawArgs.configuration, mappings: rawArgs.mappings }), false);
         case 'manage_work_project':
-        case 'read_work_project': return jsonResult(await work.project({ ...trimmedArgs, principal }), false);
-        case 'resolve_skill': return jsonResult(await skillEvolution.resolve({ ...trimmedArgs, principal }), false);
-        case 'record_skill_experience': return jsonResult(await skillEvolution.experience({ ...trimmedArgs, principal }), false);
+        case 'read_work_project': return jsonResult(await requiredService(work).project({ ...trimmedArgs, principal }), false);
+        case 'resolve_skill': return jsonResult(await requiredService(skillEvolution).resolve({ ...trimmedArgs, principal }), false);
+        case 'record_skill_experience': return jsonResult(await requiredService(skillEvolution).experience({ ...trimmedArgs, principal }), false);
         case 'manage_skill_candidate':
-        case 'read_skill_candidate': return jsonResult(await skillEvolution.candidate({ ...trimmedArgs, principal }), false);
+        case 'read_skill_candidate': return jsonResult(await requiredService(skillEvolution).candidate({ ...trimmedArgs, principal }), false);
         case 'evaluate_skill':
-        case 'read_skill_evaluation': return jsonResult(await skillEvolution.evaluate({ ...trimmedArgs, principal }), false);
+        case 'read_skill_evaluation': return jsonResult(await requiredService(skillEvolution).evaluate({ ...trimmedArgs, principal }), false);
         case 'promote_skill':
-        case 'preview_skill_promotion': return jsonResult(await skillEvolution.promote({ ...trimmedArgs, principal }), false);
+        case 'preview_skill_promotion': return jsonResult(await requiredService(skillEvolution).promote({ ...trimmedArgs, principal }), false);
         case 'rollback_skill':
-        case 'preview_skill_rollback': return jsonResult(await skillEvolution.rollback({ ...trimmedArgs, principal }), false);
+        case 'preview_skill_rollback': return jsonResult(await requiredService(skillEvolution).rollback({ ...trimmedArgs, principal }), false);
         case 'manage_work_group':
-        case 'read_work_group': return jsonResult(await workGroups.group({ ...trimmedArgs, principal }), false);
-        case 'read_work_coverage': return jsonResult(await work.coverage({ ...trimmedArgs, principal }), false);
-        case 'read_work_board': return jsonResult(await work.board({ ...trimmedArgs, principal }), false);
-        case 'read_work_packet': return jsonResult(await work.packet({ ...trimmedArgs, principal }), false);
-        case 'read_work_review_context': return jsonResult(await work.reviewContext({ ...trimmedArgs, principal }), false);
-        case 'read_work_staffing': return jsonResult(await work.staffing({ ...trimmedArgs, principal }), false);
-        case 'claim_work_task': return jsonResult(await work.claim({ ...trimmedArgs, principal }), false);
-        case 'handoff_work_task': return jsonResult(await work.handoff({ ...trimmedArgs, principal }), false);
-        case 'review_work_task': return jsonResult(await work.review({ ...trimmedArgs, principal }), false);
+        case 'read_work_group': return jsonResult(await requiredService(workGroups).group({ ...trimmedArgs, principal }), false);
+        case 'read_work_coverage': return jsonResult(await requiredService(work).coverage({ ...trimmedArgs, principal }), false);
+        case 'read_work_board': return jsonResult(await requiredService(work).board({ ...trimmedArgs, principal }), false);
+        case 'read_work_packet': return jsonResult(await requiredService(work).packet({ ...trimmedArgs, principal }), false);
+        case 'read_work_review_context': return jsonResult(await requiredService(work).reviewContext({ ...trimmedArgs, principal }), false);
+        case 'read_work_staffing': return jsonResult(await requiredService(work).staffing({ ...trimmedArgs, principal }), false);
+        case 'claim_work_task': return jsonResult(await requiredService(work).claim({ ...trimmedArgs, principal }), false);
+        case 'handoff_work_task': return jsonResult(await requiredService(work).handoff({ ...trimmedArgs, principal }), false);
+        case 'review_work_task': return jsonResult(await requiredService(work).review({ ...trimmedArgs, principal }), false);
 
         case "create_agent_task": {
-          return jsonResult(await agentTasks.create({
+          return jsonResult(await requiredService(agentTasks).create({
             ...Object.fromEntries(Object.keys(WORK_TASK_PROPERTIES).filter(key => trimmedArgs[key] !== undefined).map(key => [key, trimmedArgs[key]])),
             ...(principal && { principal }),
             taskId: trimmedArgs.taskId,
@@ -2742,7 +2930,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         }
 
         case "read_agent_task": {
-          return jsonResult(await agentTasks.read({
+          return jsonResult(await requiredService(agentTasks).read({
             taskId: trimmedArgs.taskId,
             includeContent: trimmedArgs.includeContent,
             referenceLimit: trimmedArgs.referenceLimit,
@@ -2751,11 +2939,11 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         }
 
         case "list_agent_tasks": {
-          return jsonResult(await agentTasks.list({ status: trimmedArgs.status, assignee: trimmedArgs.assignee, requester: trimmedArgs.requester, limit: trimmedArgs.limit, maxChars: trimmedArgs.maxChars }), trimmedArgs.prettyPrint);
+          return jsonResult(await requiredService(agentTasks).list({ status: trimmedArgs.status, assignee: trimmedArgs.assignee, requester: trimmedArgs.requester, limit: trimmedArgs.limit, maxChars: trimmedArgs.maxChars }), trimmedArgs.prettyPrint);
         }
 
         case "update_agent_task": {
-          return jsonResult(await agentTasks.update({
+          return jsonResult(await requiredService(agentTasks).update({
             ...Object.fromEntries(Object.keys(WORK_TASK_PROPERTIES).filter(key => trimmedArgs[key] !== undefined).map(key => [key, trimmedArgs[key]])),
             ...(principal && { principal }),
             taskId: trimmedArgs.taskId,
@@ -2775,46 +2963,46 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         }
 
         case "create_idea": {
-          return jsonResult(await ideation.createIdea({ ...(principal && { principal }), ideaId: trimmedArgs.ideaId, title: trimmedArgs.title, seed: trimmedArgs.seed, problem: trimmedArgs.problem, constraints: trimmedArgs.constraints, successCriteria: trimmedArgs.successCriteria, references: trimmedArgs.references, workshopId: trimmedArgs.workshopId, expectedRevision: trimmedArgs.expectedRevision, requestId: trimmedArgs.requestId }), trimmedArgs.prettyPrint);
+          return jsonResult(await requiredService(ideation).createIdea({ ...(principal && { principal }), ideaId: trimmedArgs.ideaId, title: trimmedArgs.title, seed: trimmedArgs.seed, problem: trimmedArgs.problem, constraints: trimmedArgs.constraints, successCriteria: trimmedArgs.successCriteria, references: trimmedArgs.references, workshopId: trimmedArgs.workshopId, expectedRevision: trimmedArgs.expectedRevision, requestId: trimmedArgs.requestId }), trimmedArgs.prettyPrint);
         }
 
         case "list_ideas": {
-          return jsonResult(await ideation.listIdeas({ status: trimmedArgs.status, workshopId: trimmedArgs.workshopId, limit: trimmedArgs.limit, maxChars: trimmedArgs.maxChars }), trimmedArgs.prettyPrint);
+          return jsonResult(await requiredService(ideation).listIdeas({ status: trimmedArgs.status, workshopId: trimmedArgs.workshopId, limit: trimmedArgs.limit, maxChars: trimmedArgs.maxChars }), trimmedArgs.prettyPrint);
         }
 
         case "read_idea": {
-          return jsonResult(await ideation.readIdea({ ideaId: trimmedArgs.ideaId, limit: trimmedArgs.limit, maxChars: trimmedArgs.maxChars, includeContent: trimmedArgs.includeContent }), trimmedArgs.prettyPrint);
+          return jsonResult(await requiredService(ideation).readIdea({ ideaId: trimmedArgs.ideaId, limit: trimmedArgs.limit, maxChars: trimmedArgs.maxChars, includeContent: trimmedArgs.includeContent }), trimmedArgs.prettyPrint);
         }
 
         case "branch_idea": {
-          return jsonResult(await ideation.branchIdea({ ...(principal && { principal }), parentIdeaId: trimmedArgs.parentIdeaId, ideaId: trimmedArgs.ideaId, title: trimmedArgs.title, seed: trimmedArgs.seed, references: trimmedArgs.references, expectedParentRevision: trimmedArgs.expectedParentRevision, requestId: trimmedArgs.requestId }), trimmedArgs.prettyPrint);
+          return jsonResult(await requiredService(ideation).branchIdea({ ...(principal && { principal }), parentIdeaId: trimmedArgs.parentIdeaId, ideaId: trimmedArgs.ideaId, title: trimmedArgs.title, seed: trimmedArgs.seed, references: trimmedArgs.references, expectedParentRevision: trimmedArgs.expectedParentRevision, requestId: trimmedArgs.requestId }), trimmedArgs.prettyPrint);
         }
 
         case "update_idea_status": {
-          return jsonResult(await ideation.updateIdeaStatus({ ...(principal && { principal }), ideaId: trimmedArgs.ideaId, status: trimmedArgs.status, reason: trimmedArgs.reason, expectedRevision: trimmedArgs.expectedRevision }), trimmedArgs.prettyPrint);
+          return jsonResult(await requiredService(ideation).updateIdeaStatus({ ...(principal && { principal }), ideaId: trimmedArgs.ideaId, status: trimmedArgs.status, reason: trimmedArgs.reason, expectedRevision: trimmedArgs.expectedRevision }), trimmedArgs.prettyPrint);
         }
 
         case "contribute_idea": {
-          return jsonResult(await ideation.contributeIdea({ ...(principal && { principal }), ideaId: trimmedArgs.ideaId, kind: trimmedArgs.kind, content: trimmedArgs.content, references: trimmedArgs.references, replyTo: trimmedArgs.replyTo, requestId: trimmedArgs.requestId }), trimmedArgs.prettyPrint);
+          return jsonResult(await requiredService(ideation).contributeIdea({ ...(principal && { principal }), ideaId: trimmedArgs.ideaId, kind: trimmedArgs.kind, content: trimmedArgs.content, references: trimmedArgs.references, replyTo: trimmedArgs.replyTo, requestId: trimmedArgs.requestId }), trimmedArgs.prettyPrint);
         }
 
         case "evaluate_idea": {
-          return jsonResult(await ideation.evaluateIdea({ ...(principal && { principal }), ideaId: trimmedArgs.ideaId, novelty: trimmedArgs.novelty, usefulness: trimmedArgs.usefulness, feasibility: trimmedArgs.feasibility, risk: trimmedArgs.risk, evidenceQuality: trimmedArgs.evidenceQuality, rationale: trimmedArgs.rationale, references: trimmedArgs.references, expectedRevision: trimmedArgs.expectedRevision, expectedIdeaRevision: trimmedArgs.expectedIdeaRevision }), trimmedArgs.prettyPrint);
+          return jsonResult(await requiredService(ideation).evaluateIdea({ ...(principal && { principal }), ideaId: trimmedArgs.ideaId, novelty: trimmedArgs.novelty, usefulness: trimmedArgs.usefulness, feasibility: trimmedArgs.feasibility, risk: trimmedArgs.risk, evidenceQuality: trimmedArgs.evidenceQuality, rationale: trimmedArgs.rationale, references: trimmedArgs.references, expectedRevision: trimmedArgs.expectedRevision, expectedIdeaRevision: trimmedArgs.expectedIdeaRevision }), trimmedArgs.prettyPrint);
         }
 
         case "create_workshop": {
-          return jsonResult(await ideation.createWorkshop({ ...(principal && { principal }), workshopId: trimmedArgs.workshopId, title: trimmedArgs.title, prompt: trimmedArgs.prompt, agenda: trimmedArgs.agenda, ideaIds: trimmedArgs.ideaIds, timeboxMinutes: trimmedArgs.timeboxMinutes, maxContributionsPerAgent: trimmedArgs.maxContributionsPerAgent, references: trimmedArgs.references, requestId: trimmedArgs.requestId, facilitation: trimmedArgs.facilitation, revalidateActor, ...(trimmedArgs.researchWork && { researchWork: trimmedArgs.researchWork }) }), trimmedArgs.prettyPrint);
+          return jsonResult(await requiredService(ideation).createWorkshop({ ...(principal && { principal }), workshopId: trimmedArgs.workshopId, title: trimmedArgs.title, prompt: trimmedArgs.prompt, agenda: trimmedArgs.agenda, ideaIds: trimmedArgs.ideaIds, timeboxMinutes: trimmedArgs.timeboxMinutes, maxContributionsPerAgent: trimmedArgs.maxContributionsPerAgent, references: trimmedArgs.references, requestId: trimmedArgs.requestId, facilitation: trimmedArgs.facilitation, revalidateActor, ...(trimmedArgs.researchWork && { researchWork: trimmedArgs.researchWork }) }), trimmedArgs.prettyPrint);
         }
         case 'list_workshop_methods':
-          return jsonResult(ideation.getWorkshopMethods({ methodId: trimmedArgs.methodId, stepId:trimmedArgs.stepId, cursor: trimmedArgs.cursor, maxChars: trimmedArgs.maxChars }), false);
+          return jsonResult(requiredService(ideation).getWorkshopMethods({ methodId: trimmedArgs.methodId, stepId:trimmedArgs.stepId, cursor: trimmedArgs.cursor, maxChars: trimmedArgs.maxChars }), false);
         case 'read_workshop_research':
-          return jsonResult(await independentResearch.read({ ...trimmedArgs, principal, revalidateActor }), false);
+          return jsonResult(await requiredService(independentResearch).read({ ...trimmedArgs, principal, revalidateActor }), false);
         case 'update_workshop_research':
-          return jsonResult(await independentResearch.update({ ...trimmedArgs, principal, revalidateActor }), false);
+          return jsonResult(await requiredService(independentResearch).update({ ...trimmedArgs, principal, revalidateActor }), false);
         case 'read_workshop_facilitation':
-          return jsonResult(await ideation.readWorkshopFacilitation({ ...(principal && { principal }), workshopId: trimmedArgs.workshopId, cursor: trimmedArgs.cursor, limit: trimmedArgs.limit, maxChars: trimmedArgs.maxChars }), false);
+          return jsonResult(await requiredService(ideation).readWorkshopFacilitation({ ...(principal && { principal }), workshopId: trimmedArgs.workshopId, cursor: trimmedArgs.cursor, limit: trimmedArgs.limit, maxChars: trimmedArgs.maxChars }), false);
         case 'update_workshop_facilitation':
-          return jsonResult(await ideation.updateWorkshopFacilitation({ ...(principal && { principal }), workshopId: trimmedArgs.workshopId, expectedRevision: trimmedArgs.expectedRevision, requestId: trimmedArgs.requestId, operation: trimmedArgs.operation, payload: trimmedArgs.payload, stepId: trimmedArgs.stepId, structured: trimmedArgs.structured, content: trimmedArgs.content, kind: trimmedArgs.kind, references: trimmedArgs.references, revalidateActor }), trimmedArgs.prettyPrint);
+          return jsonResult(await requiredService(ideation).updateWorkshopFacilitation({ ...(principal && { principal }), workshopId: trimmedArgs.workshopId, expectedRevision: trimmedArgs.expectedRevision, requestId: trimmedArgs.requestId, operation: trimmedArgs.operation, payload: trimmedArgs.payload, stepId: trimmedArgs.stepId, structured: trimmedArgs.structured, content: trimmedArgs.content, kind: trimmedArgs.kind, references: trimmedArgs.references, revalidateActor }), trimmedArgs.prettyPrint);
         case 'read_economy_wallet': case 'read_quest_market': case 'manage_quest_contract': case 'review_quest_contract': {
           if (!options.economy) throw guidanceError(new Error('Economy is disabled; host-provisioned verified storage, owners and policy are required'), 'guid-f53a20931dd8ae52');
           const economy = new EconomyService(fileSystem, options.economy.ledger, options.economy.policy, {
@@ -2844,7 +3032,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
                 return {revision:task.revision,generation:Number(task.frontmatter.claim_generation),requestId:bridgeId};
               }
               if(task.revision!==contract.terms.taskRevision)throw guidanceError(new Error('Work source changed before paid claim'), 'guid-043f855be2b5c35c');
-              const result = await work.claimPaid({ op: 'start', taskId: contract.terms.taskId, principal: actor, expectedRevision: task.revision, expectedGeneration: Number(task.frontmatter.claim_generation || 0), requestId: bridgeId, reason: guidanceText('guid-a26177bbcfa63cf0', `Exclusive paid claim ${contract.id}`) },contract.id);
+              const result = await requiredService(work).claimPaid({ op: 'start', taskId: contract.terms.taskId, principal: actor, expectedRevision: task.revision, expectedGeneration: Number(task.frontmatter.claim_generation || 0), requestId: bridgeId, reason: guidanceText('guid-a26177bbcfa63cf0', `Exclusive paid claim ${contract.id}`) },contract.id);
               return {revision:String(result.revision),generation:Number(result.generation),requestId:bridgeId};
             },
           });
@@ -2857,23 +3045,23 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         }
 
         case "list_workshops": {
-          return jsonResult(await ideation.listWorkshops({ phase: trimmedArgs.phase, status: trimmedArgs.status, limit: trimmedArgs.limit, maxChars: trimmedArgs.maxChars }), trimmedArgs.prettyPrint);
+          return jsonResult(await requiredService(ideation).listWorkshops({ phase: trimmedArgs.phase, status: trimmedArgs.status, limit: trimmedArgs.limit, maxChars: trimmedArgs.maxChars }), trimmedArgs.prettyPrint);
         }
 
         case "read_workshop": {
-          return jsonResult(await ideation.readWorkshop({ workshopId: trimmedArgs.workshopId, limit: trimmedArgs.limit, maxChars: trimmedArgs.maxChars, includeContent: trimmedArgs.includeContent }), trimmedArgs.prettyPrint);
+          return jsonResult(await requiredService(ideation).readWorkshop({ workshopId: trimmedArgs.workshopId, limit: trimmedArgs.limit, maxChars: trimmedArgs.maxChars, includeContent: trimmedArgs.includeContent }), trimmedArgs.prettyPrint);
         }
 
         case "contribute_workshop": {
-          return jsonResult(await ideation.contributeWorkshop({ ...(principal && { principal }), workshopId: trimmedArgs.workshopId, kind: trimmedArgs.kind, content: trimmedArgs.content, ideaId: trimmedArgs.ideaId, expectedPhase: trimmedArgs.expectedPhase, references: trimmedArgs.references, requestId: trimmedArgs.requestId, expectedRevision: trimmedArgs.expectedRevision, stepId: trimmedArgs.stepId, structured: trimmedArgs.structured, revalidateActor }), trimmedArgs.prettyPrint);
+          return jsonResult(await requiredService(ideation).contributeWorkshop({ ...(principal && { principal }), workshopId: trimmedArgs.workshopId, kind: trimmedArgs.kind, content: trimmedArgs.content, ideaId: trimmedArgs.ideaId, expectedPhase: trimmedArgs.expectedPhase, references: trimmedArgs.references, requestId: trimmedArgs.requestId, expectedRevision: trimmedArgs.expectedRevision, stepId: trimmedArgs.stepId, structured: trimmedArgs.structured, revalidateActor }), trimmedArgs.prettyPrint);
         }
 
         case "update_workshop_phase": {
-          return jsonResult(await ideation.updateWorkshopPhase({ ...(principal && { principal }), workshopId: trimmedArgs.workshopId, phase: trimmedArgs.phase, reason: trimmedArgs.reason, expectedRevision: trimmedArgs.expectedRevision }), trimmedArgs.prettyPrint);
+          return jsonResult(await requiredService(ideation).updateWorkshopPhase({ ...(principal && { principal }), workshopId: trimmedArgs.workshopId, phase: trimmedArgs.phase, reason: trimmedArgs.reason, expectedRevision: trimmedArgs.expectedRevision }), trimmedArgs.prettyPrint);
         }
 
         case "synthesize_workshop": {
-          return jsonResult(await ideation.synthesizeWorkshop({ ...(principal && { principal }), workshopId: trimmedArgs.workshopId, synthesis: trimmedArgs.synthesis, references: trimmedArgs.references, expectedRevision: trimmedArgs.expectedRevision }), trimmedArgs.prettyPrint);
+          return jsonResult(await requiredService(ideation).synthesizeWorkshop({ ...(principal && { principal }), workshopId: trimmedArgs.workshopId, synthesis: trimmedArgs.synthesis, references: trimmedArgs.references, expectedRevision: trimmedArgs.expectedRevision }), trimmedArgs.prettyPrint);
         }
 
         case "read_note": {
@@ -3275,6 +3463,14 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         }
 
         case "query_notes": {
+          if (trimmedArgs.department !== undefined && trimmedArgs.department !== 'default') throw new Error('department must be default or omitted');
+          const department = trimmedArgs.department === 'default' ? scopeAccess.defaultDepartment(principal) : undefined;
+          if (trimmedArgs.department === 'default' && !department) throw new Error('No administrator-verified default department is available');
+          const cursorContext = department ? createHash('sha256').update(JSON.stringify({
+            principal, department, policy: scopeAccess.documentPolicyFingerprint(), filters: trimmedArgs.filters ?? {},
+            pathPrefix: trimmedArgs.pathPrefix ?? '', sortBy: trimmedArgs.sortBy ?? 'path', sortOrder: trimmedArgs.sortOrder ?? 'asc',
+          })).digest('hex') : undefined;
+          const canQueryPath = department ? (path: string) => scopeAccess.isInDefaultDepartment(path, principal, false) : canAccessPath;
           const requestedLimit = trimmedArgs.limit === undefined ? 100 : Number(trimmedArgs.limit);
           if (!Number.isInteger(requestedLimit) || requestedLimit < 1) {
             throw guidanceError(new Error('limit must be a positive integer'), 'guid-14abe8b02cfc3624');
@@ -3286,9 +3482,11 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
             sortOrder: trimmedArgs.sortOrder,
             limit: Math.min(requestedLimit, 500),
             after: trimmedArgs.after,
+            ...(cursorContext && { cursorContext }),
+            freshMetadata: Boolean(department),
             includeContent: trimmedArgs.includeContent,
             includeTotal: trimmedArgs.includeTotal,
-          }, normalizedResponseBudget(trimmedArgs.maxChars), canAccessPath, note => !isModerationHidden(note.frontmatter), trimmedArgs.prettyPrint === true);
+          }, normalizedResponseBudget(trimmedArgs.maxChars), canQueryPath, note => !isModerationHidden(note.frontmatter), trimmedArgs.prettyPrint === true);
           return {
             content: [{ type: "text", text: result.text }],
             ...(result.isError && { isError: true }),
@@ -3463,6 +3661,12 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
           throw guidanceError(new Error(`Unknown tool: ${toolName}`), 'guid-d20e8d6594572863');
       }
       });
+      await refreshDocumentPolicy();
+      assertStorageFresh();
+      await ownerOperation?.revalidate();
+      ownerOperation?.assertFresh();
+      await finalOwnerRefresh?.();
+      finalOwnerValidator?.();
       const responseContract = endpointRegistry.resolve(toolName === 'read_work_group' ? 'work.group' : toolName === 'read_work_project' ? 'work.project' : toolName === 'read_community_participation' ? 'community.participation' : endpointIdForTool(toolName))?.input;
       const responseBudget = trimmedArgs.maxChars ?? (toolName === 'search_capabilities' ? 20000 : toolName === 'get_wiki_answer_packet' && trimmedArgs.query === undefined ? 7000 : undefined);
       return enforceResponseBudget(toolResponse, normalizedResponseBudget(responseBudget, responseContract), toolName === 'get_agent_pulse' ? trimmedArgs : undefined);
@@ -3514,14 +3718,16 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
   const closeServer = server.close.bind(server);
   server.close = async () => {
     readModelCatalogUnsubscribe();
-    documentIndex.close();
+    llmWiki.invalidate();
+    documentSearch?.close();
+    await documentIndex?.close();
     await mocRegions.close();
     await metadataIndex.close();
     await searchService.close();
     await semanticSearch.close();
     graphIndex.close();
-    await notifications.close();
-    await communityFeatures.close();
+    await notifications?.close();
+    await communityFeatures?.close();
     fileCatalog.close();
     return closeServer();
   };

@@ -9,6 +9,10 @@ export interface WorkExecutionProfile {
     tools: string[];
     capabilities: string[];
     hostVerified: boolean;
+    /** Host-attested runtime locality; labels/provider names cannot establish it. */
+    executionLocality?: 'local' | 'remote' | 'unknown';
+    /** Host-attested suitability, trusted only together with hostVerified. */
+    bookkeepingSuitable?: boolean;
     availableBudget?: number;
     /** Estimated cost per recommended perspective, in the caller's budget unit. */
     cost?: number;
@@ -23,7 +27,10 @@ export interface WorkStaffingInput {
     candidates: WorkExecutionProfile[];
     /** Caller has already filtered authority, visibility and project membership. */
     eligibleAccountIds: string[];
-    taskType: 'code' | 'research' | 'writing' | 'planning';
+    taskType: 'code' | 'research' | 'writing' | 'planning' | 'bookkeeping';
+    /** Host confirms deterministic code handles all requested non-review work.
+     * Bookkeeping only; this is a routing hint, never permission to run code. */
+    deterministicAvailable?: boolean;
     factualVerification?: boolean;
     requiredPerspectives?: string[];
     workKind: 'general' | 'security' | 'permissions' | 'shared_policy' | 'destructive';
@@ -51,10 +58,15 @@ export interface WorkStaffingRow {
 }
 export interface WorkStaffingResult {
     advisory: true;
+    /** Bookkeeping routing advice only. High-risk work still needs review. */
+    execution?: {
+        mode: 'deterministic' | 'local_llm';
+        llmRequired: boolean;
+    };
     rows: WorkStaffingRow[];
     unfilled: {
         perspective: string;
-        reason: 'waiting_host_verification' | 'no_qualified_candidate' | 'independent_review_required';
+        reason: 'waiting_host_verification' | 'no_qualified_candidate' | 'independent_review_required' | 'no_verified_local_candidate';
     }[];
     explanations: string[];
     summary: {

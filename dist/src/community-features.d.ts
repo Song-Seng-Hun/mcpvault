@@ -22,7 +22,9 @@ export declare class CommunityFeaturesService {
     private reactionIndexReady;
     private reactionIndexUpdate;
     private reactionSnapshotWrite;
-    constructor(fileSystem: FileSystemService, access: ScopeAccessPolicy, auth: ScopeAuthService, reputation: ReputationService, vaultPath: string, notifications?: NotificationService | undefined, fileCatalog?: VaultFileCatalog | undefined);
+    private readonly snapshotStorage;
+    constructor(fileSystem: FileSystemService, access: ScopeAccessPolicy, auth: ScopeAuthService, reputation: ReputationService | undefined, vaultPath: string, notifications?: NotificationService | undefined, fileCatalog?: VaultFileCatalog | undefined, cacheDir?: string | undefined);
+    private requireReputation;
     close(): Promise<void>;
     private assertKnownIdentity;
     listSeries(params: {

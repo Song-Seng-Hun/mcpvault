@@ -6,6 +6,9 @@ import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ensureFederationDirectory } from './public-federation-storage.js';
 import { createServer } from './createServer.js';
+import { loadHostFeatureConfig } from './host-feature-config.js';
+import { loadOwnerActivityHostConfig } from './owner-activity-host.js';
+import { parseHostFeatureConfig, type HostFeatureConfig } from './host-features.js';
 import type { PublicFederationHostConfig } from './enterprise-federation.js';
 import { EnterpriseRegistry, type EnterpriseMode } from './enterprise-registry.js';
 import { GlobalSyncReadClient, GlobalSyncReplica, type GlobalImportResult } from './global-sync.js';
@@ -28,6 +31,10 @@ export interface EnterpriseServerConfig {
   caPath: string;
   federationConfigPath?: string;
   globalImportConfigPath?: string;
+  featuresConfigPath?: string;
+  ownerActivityConfigPath?: string;
+  /** Trusted embedding only; CLI callers select a verified file instead. */
+  features?: HostFeatureConfig;
 }
 
 export interface EnterpriseServerHandle {
@@ -313,13 +320,18 @@ export async function startEnterpriseServer(config: EnterpriseServerConfig): Pro
   if (profile.realmId !== realmId) throw guidanceError(new Error(`Enterprise registry realm '${profile.realmId}' does not match configured realm '${realmId}'`), 'guid-df09bbabd6aee122');
 
   const canonicalVaultPath = await realpath(profile.vaultPath);
+  if (config.features && config.featuresConfigPath) throw new Error('Select one explicit host feature configuration');
+  const features = config.features ? parseHostFeatureConfig(config.features)
+    : await loadHostFeatureConfig(config.featuresConfigPath ?? process.env.MCPVAULT_FEATURE_CONFIG, canonicalVaultPath);
+  const ownerConsentPath = config.ownerActivityConfigPath ?? process.env.MCPVAULT_OWNER_ACTIVITY_CONFIG;
+  const ownerConsent = ownerConsentPath ? await loadOwnerActivityHostConfig(ownerConsentPath, canonicalVaultPath) : undefined;
   const [canonicalRegistryPath, canonicalCertPath, canonicalKeyPath, canonicalCaPath] = await Promise.all([
     canonicalFileOutsideVault(registryPath, canonicalVaultPath, 'registryPath'),
     canonicalFileOutsideVault(certPath, canonicalVaultPath, 'certPath'),
     canonicalFileOutsideVault(keyPath, canonicalVaultPath, 'TLS private key'),
     canonicalFileOutsideVault(caPath, canonicalVaultPath, 'TLS CA'),
   ]);
-  const publicFederation = federationConfigPath === undefined
+  const publicFederation = federationConfigPath === undefined || !features.selected.includes('collaboration')
     ? undefined
     : profile.mode !== 'public'
       ? (() => { throw guidanceError(new Error('Public federation configuration is forbidden for a company enterprise instance'), 'guid-2ee24fa850bba9fc'); })()
@@ -348,6 +360,12 @@ export async function startEnterpriseServer(config: EnterpriseServerConfig): Pro
         }).pullPages()
       : undefined;
     runtime = createServer(profile.vaultPath, {
+      features,
+      // createServer supplies only an authenticated, current mTLS-registry
+      // principal here. This consent target does NOT attest local inference.
+      ...(ownerConsent && { ownerActivity: { ...ownerConsent, execution: (principal: import('./scope-auth.js').ScopePrincipal | undefined) =>
+        principal?.enterprise?.realmId === profile.realmId && principal.enterprise.mode === profile.mode
+          ? { accountId: principal.accountId, executionTarget: principal.enterprise.runtimeId } : undefined } }),
       enterpriseRegistryPath: canonicalRegistryPath,
       commandCenterId: profile.realmId,
       ...(publicFederation && { publicFederation }),
@@ -386,7 +404,7 @@ export async function startEnterpriseServer(config: EnterpriseServerConfig): Pro
 
 export function enterpriseServerHelp(): string {
   return [
-    'Usage: mcpvault-enterprise --registry <absolute-path> --realm <realm-id> --host <loopback-or-private-ip> --port <port> --cert <absolute-path> --key <absolute-path> --ca <absolute-path> [--federation-config <absolute-path>] [--global-import-config <absolute-path>]',
+    'Usage: mcpvault-enterprise --registry <absolute-path> --realm <realm-id> --host <loopback-or-private-ip> --port <port> --cert <absolute-path> --key <absolute-path> --ca <absolute-path> [--federation-config <absolute-path>] [--global-import-config <absolute-path>] [--features-config <absolute-path>] [--owner-activity-config <absolute-path>]',
     '',
     'Starts one mTLS-only MCP Streamable HTTP listener. It does not start stdio or REST transports.',
   ].join('\n');

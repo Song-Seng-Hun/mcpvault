@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { SearchService } from './search.js';
 import { PathFilter } from './pathfilter.js';
 import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
-import { createServer } from './createServer.js';
+import { createServer } from '../tests/server-fixture.js';
 import { FileSystemService } from './filesystem.js';
 import { CollaborationService } from './scopes.js';
 import {
@@ -164,5 +164,7 @@ describe('question retrieval evaluation sidecar', () => {
       await client.close();
       await server.close();
     }
-  });
+  // 120 real MCP queries plus legacy comparisons run serially on Windows;
+  // measured ~4.95s is too close to the ordinary five-second unit-test limit.
+  }, 15000);
 });

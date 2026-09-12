@@ -62,7 +62,8 @@ export declare class NotificationService {
     private publicSnapshotPending;
     private publicManifestCache;
     private publicSnapshotRestoreAttempted;
-    constructor(fileSystem: FileSystemService, reputation: ReputationService, vaultPath?: string | undefined, fileCatalog?: VaultFileCatalog | undefined);
+    private readonly snapshotStorage?;
+    constructor(fileSystem: FileSystemService, reputation: ReputationService, vaultPath?: string | undefined, fileCatalog?: VaultFileCatalog | undefined, cacheDir?: string | undefined);
     close(): Promise<void>;
     discoverySnapshot(): Promise<PublicSnapshotIndex>;
     /** Return only indexed public items that mention one of the exact identities. */

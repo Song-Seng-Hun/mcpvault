@@ -11,6 +11,7 @@ import { NotificationService } from './notifications.js';
 import type { ReputationService } from './reputation.js';
 import { SemanticSearchService } from './semantic-search.js';
 import { SearchService } from './search.js';
+import { derivedStorageFixture } from '../tests/derived-storage-fixture.js';
 
 // Exercise the real bounded reader at smaller test ceilings; do not allocate
 // hundreds of MiB just to prove each caller's fallback path.
@@ -26,13 +27,17 @@ vi.mock('./snapshot-read.js', async importOriginal => {
 });
 
 let vault: string;
+let host: Awaited<ReturnType<typeof derivedStorageFixture>>;
 beforeEach(async () => {
   vault = await mkdtemp(join(tmpdir(), 'mcpvault-snapshot-consumers-'));
-  await mkdir(join(vault, '.mcpvault/semantic-index'), { recursive: true });
+  host = await derivedStorageFixture(vault);
+  vi.stubEnv('MCPVAULT_DERIVED_CACHE_DIR', host.host);
 });
 afterEach(async () => {
   ceiling.decoded = 0; ceiling.rejections = 0;
   vi.restoreAllMocks();
+  vi.unstubAllEnvs();
+  await host.close();
   await rm(vault, { recursive: true, force: true });
 });
 
@@ -50,7 +55,7 @@ test('public discovery restores valid cache and rebuilds current Markdown when d
   try {
     expect((await first.discoverySnapshot()).posts[0]?.path).toBe('Community/Posts/actual.md');
     await first.close();
-    expect((await readFile(join(vault, '.mcpvault/public-discovery.snapshot.bin'))).length).toBeGreaterThan(0);
+    expect((await readFile(host.path('public-discovery.snapshot.bin'))).length).toBeGreaterThan(0);
     expect((await (restored as any).loadPublicSnapshot()).posts[0]?.path).toBe('Community/Posts/actual.md');
     ceiling.decoded = 8;
     const before = ceiling.rejections;
@@ -58,15 +63,15 @@ test('public discovery restores valid cache and rebuilds current Markdown when d
     expect(ceiling.rejections).toBeGreaterThan(before);
     expect(await readFile(join(vault, 'Community/Posts/actual.md'), 'utf8')).toBe(post);
   } finally { await first.close(); await restored.close(); await rejected.close(); catalog.close(); }
-});
+}, 30000); // Real Windows ACL checks cover write, restore, rejection and rebuild.
 
 test('semantic oversized gzip falls back to bounded valid legacy manifest without losing source files', async () => {
   const raw = '# Current';
   await writeFile(join(vault, 'Note.md'), raw);
   const hash = createHash('sha256').update(raw).digest('hex');
   const manifest = JSON.stringify({ 'Note.md': { hash, scope: 'global' } });
-  await writeFile(join(vault, '.mcpvault/semantic-index/manifest.snapshot.gz'), gzipSync(manifest));
-  await writeFile(join(vault, '.mcpvault/semantic-index/manifest.json'), manifest);
+  await writeFile(host.path('semantic-manifest.snapshot.gz'), gzipSync(manifest));
+  await writeFile(host.path('semantic-manifest.json'), manifest);
   ceiling.decoded = 8;
   const service = new SemanticSearchService(vault, new PathFilter());
   try {
@@ -79,13 +84,13 @@ test('semantic oversized gzip falls back to bounded valid legacy manifest withou
 
 test('lexical search rebuilds Markdown after legacy gzip exceeds its ceiling', async () => {
   await writeFile(join(vault, 'Note.md'), '# Present\n\nSnapshotColdNeedle');
-  await writeFile(join(vault, '.mcpvault/search-index.snapshot.gz'), gzipSync(JSON.stringify({ version: 6, documents: [], grams: [] })));
+  await writeFile(host.path('search-index.snapshot.gz'), gzipSync(JSON.stringify({ version: 6, documents: [], grams: [] })));
   ceiling.decoded = 8;
   const service = new SearchService(vault, new PathFilter());
   try {
     expect((await service.search({ query: 'SnapshotColdNeedle', maxChars: 512 }))[0]?.p).toBe('Note.md');
-    expect(ceiling.rejections).toBeGreaterThanOrEqual(2); // absent binary and rejected legacy gzip
-  } finally { service.close(); }
+    expect(ceiling.rejections).toBeGreaterThanOrEqual(1); // Existing legacy gzip reached the bounded reader and was rejected.
+  } finally { await service.close(); }
 });
 
 test.each(['Community/Posts/actual.md', '_scopes/agents/other/Private.md', 'Community/Posts/../Comments/forged.md'])('legacy discovery validates note membership for %s', async path => {
@@ -101,7 +106,7 @@ test.each(['Community/Posts/actual.md', '_scopes/agents/other/Private.md', 'Comm
   const metadata = Buffer.alloc(16); metadata.writeDoubleLE(info.size); metadata.writeDoubleLE(info.mtimeMs, 8);
   const disk = Buffer.concat([Buffer.from('MCPVPUB1'), header, string(actualPath), metadata,
     Buffer.from([0]), string(path), string(JSON.stringify({ mcpvault_type: 'blog_post', status: 'published' }))]);
-  await writeFile(join(vault, '.mcpvault/public-discovery.snapshot.bin'), gzipSync(disk));
+  await writeFile(host.path('public-discovery.snapshot.bin'), gzipSync(disk));
   const catalog = new VaultFileCatalog(vault, new PathFilter());
   const service = new NotificationService(new FileSystemService(vault), {} as ReputationService, vault, catalog);
   try {

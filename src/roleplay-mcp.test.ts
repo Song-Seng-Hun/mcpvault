@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import { startMcpHttpApi } from './mcp-http.js';
-import { createServer } from './createServer.js';
+import { createServer } from '../tests/server-fixture.js';
 import { RoleplayStore } from './roleplay-store.js';
 import { roleplayRevision } from './roleplay-model.js';
 const cleanup: Array<() => Promise<unknown>> = [];
@@ -32,7 +32,8 @@ async function setupHarness() {
 }
 let harness: Awaited<ReturnType<typeof setupHarness>>;
 // Isolated transport/account setup is not the behavior under test. Keep real
-// HTTP/authentication and the existing five-second body limit; setup errors fail.
+// HTTP/authentication. This scenario performs many real Windows-ACL guarded
+// transactions; its explicit body timeout below is not a per-request SLA.
 beforeEach(async () => { harness = await setupHarness(); });
 test('nine dynamic endpoints keep five MCP tools; two authenticated players share one state and immutable chat projection', async () => {
   const { vaultPath, world, client, second, call, tokens } = harness;
@@ -117,4 +118,4 @@ test('nine dynamic endpoints keep five MCP tools; two authenticated players shar
   const forged = await call('chat.room_read', { roomId: 'hall', maxChars: 6000 });
   expect(forged.error).toBe(true);
   expect(JSON.stringify(forged.value)).not.toContain('FORGED SUCCESS');
-});
+}, 30000);

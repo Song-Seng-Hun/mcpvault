@@ -2,9 +2,11 @@ import { guidanceError } from './guidance-runtime.js';
 import type { ScopePrincipal } from './scope-auth.js';
 import { expandScopePath, parseScopePath } from './scopes.js';
 import { posix } from 'node:path';
+import { assertOriginalMutation } from './original-boundary.js';
+import { documentAuthorityReader, type DocumentAuthorityOptions, type DocumentAuthority } from './document-authority.js';
+import { activeDocumentStorageContext } from './enterprise-storage-context.js';
 
 const PRIVATE_ROOT = '_scopes';
-const SOURCE_SEGMENT = '_sources';
 const WHISPER_ROOT = '_whispers';
 const COMMUNITY_ROOT = 'Community';
 const LEGACY_DISCUSSION_ROOT = '_collaboration/discussions';
@@ -48,18 +50,69 @@ function modelCheckpoint(path: string): { modelId: string; accountId?: string; l
 }
 
 export class ScopeAccessPolicy {
+  private readonly documentAuthority: () => DocumentAuthority | undefined;
+  private readonly localInferenceAllowed: DocumentAuthorityOptions['localInferenceAllowed'];
   private readonly commandCenterId: string;
   private readonly enterprise: { mode: 'public' | 'company'; realmId: string } | undefined;
 
-  constructor(options: { commandCenterId?: string; enterprise?: { mode: 'public' | 'company'; realmId: string } } = {}) {
+  constructor(options: { commandCenterId?: string; enterprise?: { mode: 'public' | 'company'; realmId: string } } & DocumentAuthorityOptions = {}) {
     const configured = options.commandCenterId || process.env.MCPVAULT_COMMAND_CENTER_ID || 'local';
     if (!/^[a-z0-9][a-z0-9._-]{0,63}$/i.test(configured)) throw guidanceError(new Error('commandCenterId must be a lowercase scope id'), 'guid-4ca281d9c34ac799');
     this.commandCenterId = configured.trim().toLowerCase();
     this.enterprise = options.enterprise;
+    this.documentAuthority = documentAuthorityReader(options);
+    this.localInferenceAllowed = options.localInferenceAllowed;
   }
 
   getCommandCenterId(): string { return this.commandCenterId; }
   getEnterpriseProfile() { return this.enterprise; }
+  hasDocumentPolicy(): boolean { return this.documentAuthority() !== undefined; }
+  documentPolicyFingerprint(): string { return this.documentAuthority()?.fingerprint ?? 'none'; }
+  /** Navigation only; the principal must originate from current host authentication. */
+  defaultDepartment(principal?: ScopePrincipal): string | undefined {
+    const verified = principal?.enterprise;
+    return this.enterprise?.mode === 'company' && this.enterprisePrincipalAllowed(principal)
+      && verified?.defaultDepartmentId && verified.departmentIds?.includes(verified.defaultDepartmentId)
+      ? verified.defaultDepartmentId : undefined;
+  }
+  defaultNavigation(principal?: ScopePrincipal) {
+    const departmentId = this.defaultDepartment(principal);
+    return departmentId ? { departmentId, basis: 'administrator_verified', action: {
+      endpointId: 'mcp.query_notes', arguments: { department: 'default', limit: 12, includeContent: false, includeTotal: false, maxChars: 4000 },
+    } } : undefined;
+  }
+  isInDefaultDepartment(path: string, principal?: ScopePrincipal, recordSource = true): boolean {
+    const department = this.defaultDepartment(principal);
+    if (!department || !this.canAccessPhysicalPath(path, principal, recordSource)) return false;
+    return this.documentAuthority()?.effectiveConstraints(path).some(rule =>
+      rule.realmId === principal!.enterprise!.realmId && rule.departmentIds?.includes(department)) === true;
+  }
+  isConfidentialDocument(path: string): boolean {
+    const context = activeDocumentStorageContext();
+    return (context?.access.documentAuthority()?.effectiveConstraints(path) ?? []).some(rule => rule.confidential)
+      || (this.documentAuthority()?.effectiveConstraints(path) ?? []).some(rule => rule.confidential);
+  }
+  /** Pin authorization, not document bodies. Revocation at any await discards
+   * the outgoing result, including aggregate existence information. */
+  captureDocumentBoundary(principal?: ScopePrincipal): () => void {
+    const fingerprint = this.documentAuthority()?.fingerprint;
+    const local = Boolean(principal && this.localInferenceAllowed?.(principal) === true);
+    return () => {
+      if (this.documentAuthority()?.fingerprint !== fingerprint
+        || Boolean(principal && this.localInferenceAllowed?.(principal) === true) !== local) {
+        throw new Error('Protected document authorization changed; retry with current authorization');
+      }
+    };
+  }
+  /** Used at physical IO independently of a service's legacy scope behavior. */
+  canReadProtectedDocument(path: string, principal?: ScopePrincipal, recordSource = true): boolean {
+    const authority = this.documentAuthority();
+    if (authority?.canRead(path, principal, this.localInferenceAllowed) === false) return false;
+    if (recordSource && path && path !== '.') for (const rule of authority?.effectiveConstraints(path) ?? []) {
+      if (rule.confidential || rule.realmId || rule.accountIds || rule.departmentIds) activeDocumentStorageContext()?.observe?.(rule.path);
+    }
+    return true;
+  }
   getCommunityRoot(): string { return this.enterprise?.mode === 'public' ? 'PublicCommunity' : COMMUNITY_ROOT; }
 
   private enterprisePrincipalAllowed(principal?: ScopePrincipal): boolean {
@@ -87,7 +140,11 @@ export class ScopeAccessPolicy {
     return normalized === COMMUNITY_ROOT.toLowerCase() || normalized.startsWith(`${COMMUNITY_ROOT.toLowerCase()}/`);
   }
 
-  canAccessPhysicalPath(path: string, principal?: ScopePrincipal): boolean {
+  canAccessPhysicalPath(path: string, principal?: ScopePrincipal, recordSource = true): boolean {
+    const documentContext = activeDocumentStorageContext();
+    if (documentContext?.canAccessPath?.(path) === false && documentContext.canTraversePath?.(path) !== true) return false;
+    if (documentContext && !documentContext.access.canReadProtectedDocument(path, documentContext.principal, recordSource)) return false;
+    if (!this.canReadProtectedDocument(path, principal, recordSource)) return false;
     if (!this.enterprisePrincipalAllowed(principal)) return false;
     // Reject aliases before classification; callers normally pass canonical paths.
     if (this.enterprise && /(?:^|\/)(?:\.{1,2}|[^/]*[. ])(?:\/|$)/.test(path.replace(/\\/g, '/'))) return false;
@@ -177,16 +234,14 @@ export class ScopeAccessPolicy {
   }
 
   assertMutationAllowed(path: string, operation: string): void {
-    const normalized = normalizePhysicalPath(path).toLowerCase();
-    const isGlobalSource = normalized === SOURCE_SEGMENT || normalized.startsWith(`${SOURCE_SEGMENT}/`);
-    const isPrivateSource = /^_scopes\/(?:models|agents)\/[^/]+\/_sources(?:\/|$)/.test(normalized);
-    if (isGlobalSource || isPrivateSource) {
-      throw guidanceError(new Error(`${operation} cannot mutate immutable LLM Wiki sources; use ingest_source to add a new source snapshot`), 'guid-bb37db8ee3892af1');
-    }
+    assertOriginalMutation(path);
     this.assertLegacyDiscussionMutationAllowed(path, operation);
   }
 
   canReferenceFrom(containerPath: string, referencedPath: string): boolean {
+    const documentContext = activeDocumentStorageContext();
+    if (documentContext && documentContext.access.documentAuthority()?.canFlow(containerPath, referencedPath) === false) return false;
+    if (this.documentAuthority()?.canFlow(containerPath, referencedPath) === false) return false;
     if (this.enterprise) {
       const containerPrivate = privateOwner(containerPath);
       const referencePrivate = privateOwner(referencedPath);

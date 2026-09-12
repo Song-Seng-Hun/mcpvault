@@ -28,6 +28,12 @@ const MAX_ACCOUNTS_PER_USER = 512;
 export const SCOPE_CAPABILITIES = ['write', 'publish', 'comment', 'chat', 'status', 'whisper', 'task', 'profile', 'journal', 'moderate'];
 const DEFAULT_MODEL_CAPABILITIES = ['write', 'publish', 'comment', 'chat', 'status', 'whisper', 'task', 'profile'];
 const DEFAULT_AGENT_CAPABILITIES = [...DEFAULT_MODEL_CAPABILITIES, 'journal'];
+function verifiedDepartments(employee) {
+    return {
+        ...(employee.departmentIds !== undefined && { departmentIds: [...employee.departmentIds] }),
+        ...(employee.defaultDepartmentId !== undefined && { defaultDepartmentId: employee.defaultDepartmentId }),
+    };
+}
 function isRecord(value) {
     return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
@@ -333,8 +339,12 @@ export class ScopeAuthService {
             throw guidanceError(new Error('Access token expired; call login_scope again'), 'guid-c7bcb3b8d59984a9');
         }
         if (this.enterpriseRegistry) {
-            this.assertEnterprisePrincipal(session.principal);
+            const verified = this.assertEnterprisePrincipal(session.principal);
             this.enterpriseRegistry.assertSessionLease({ agentId: session.principal.agentId, sessionId: session.principal.sessionId, generation: session.principal.sessionGeneration });
+            return { ...session.principal, capabilities: this.effectiveCapabilities(session.principal), enterprise: {
+                    mode: verified.policy.mode, realmId: verified.policy.realmId, runtimeId: verified.runtime.runtimeId,
+                    sharedMemoryEnabled: verified.employee.sharedMemoryEnabled, ...verifiedDepartments(verified.employee),
+                } };
         }
         return { ...session.principal, capabilities: this.effectiveCapabilities(session.principal) };
     }
@@ -370,7 +380,8 @@ export class ScopeAuthService {
             expectedGeneration: params.expectedGeneration ?? registry.getSessionGeneration(principal.agentId), expiresAt: new Date(expiresAt).toISOString() });
         const identity = authorIdentity(principal, verified.binding.role || verified.binding.displayLabel, (await this.readDatabase()).accounts);
         const next = { ...principal, capabilities: this.effectiveCapabilities(principal), ...identity, sessionId, sessionGeneration: lease.generation,
-            enterprise: { mode: verified.policy.mode, realmId: verified.policy.realmId, runtimeId: verified.runtime.runtimeId, sharedMemoryEnabled: verified.employee.sharedMemoryEnabled } };
+            enterprise: { mode: verified.policy.mode, realmId: verified.policy.realmId, runtimeId: verified.runtime.runtimeId, sharedMemoryEnabled: verified.employee.sharedMemoryEnabled,
+                ...verifiedDepartments(verified.employee) } };
         const accessToken = randomBytes(32).toString('base64url');
         this.sessions.set(tokenDigest(accessToken), { principal: next, expiresAt });
         return { success: true, accessToken, expiresAt: new Date(expiresAt).toISOString(), principal: next };
@@ -389,6 +400,13 @@ export class ScopeAuthService {
         if (params.accountId !== binding.accountId || params.agentId !== binding.agentId || params.modelId !== binding.modelId
             || (params.userId !== undefined && params.userId !== binding.userId))
             throw guidanceError(new Error('Registration identity must match the administrator invitation binding'), 'guid-259e7e4be2592911');
+        if (params.departmentId !== undefined) {
+            const department = normalizeScopeId(params.departmentId, 'departmentId');
+            const employee = registry.getEmployee(binding.userId);
+            if (department !== params.departmentId || !employee?.departmentIds?.includes(department)) {
+                throw new Error('Department claim requires administrator-verified membership');
+            }
+        }
         const principal = await this.exclusive(async () => {
             const database = await this.readDatabase();
             const existing = database.accounts.find(account => account.accountId === binding.accountId);
@@ -418,6 +436,13 @@ export class ScopeAuthService {
         return { ...await this.enterpriseSession(principal, params), next: 'Keep this agent identity for the next session; use explicit generation handoff for a different active session.' };
     }
     async register(params) {
+        if (params.accountType !== undefined && !['personal', 'enterprise'].includes(params.accountType))
+            throw new Error('Invalid account type');
+        if (params.accountType !== undefined && params.accountType !== (this.enterpriseRegistry ? 'enterprise' : 'personal')) {
+            throw new Error('Account type must match the personal or enterprise host authority');
+        }
+        if (!this.enterpriseRegistry && params.departmentId !== undefined)
+            throw new Error('Department claims require an enterprise host');
         if (this.enterpriseRegistry)
             return this.registerEnterprise(params);
         const accountId = normalizeScopeId(params.accountId, 'accountId');
@@ -621,7 +646,8 @@ export class ScopeAuthService {
                     return [];
                 }
                 return [{ ...principal, ...authorIdentity(principal, binding.role || binding.displayLabel, value),
-                        enterprise: { mode: policy.mode, realmId: policy.realmId, runtimeId: binding.runtimeId, sharedMemoryEnabled: employee.sharedMemoryEnabled } }];
+                        enterprise: { mode: policy.mode, realmId: policy.realmId, runtimeId: binding.runtimeId, sharedMemoryEnabled: employee.sharedMemoryEnabled,
+                            ...verifiedDepartments(employee) } }];
             });
         }
         this.principalCache = { expiresAt: Date.now() + AUTH_DATABASE_CACHE_TTL_MS, value };

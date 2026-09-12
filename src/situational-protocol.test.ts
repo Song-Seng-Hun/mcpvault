@@ -2,7 +2,7 @@ import { afterEach, expect, test } from 'vitest';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createServer, getServerRuntime } from './createServer.js';
+import { createServer, getServerRuntime } from '../tests/server-fixture.js';
 import { FileSystemService } from './filesystem.js';
 import { evaluationPrompts } from '../scripts/wiki-learning-eval-support.mjs';
 

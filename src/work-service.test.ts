@@ -8,8 +8,15 @@ import { ScopeAuthService, type ScopePrincipal } from './scope-auth.js';
 import { ReferenceService } from './references.js';
 import { AgentTaskService } from './agent-tasks.js';
 import { AgentPulseService } from './agent-pulse.js';
+import { getWorkTools } from './work-tools.js';
 
 const vaults: string[] = [];
+test('work project schema supports bookkeeping but not caller-supplied deterministic authority', () => {
+  const project = getWorkTools().find(tool => tool.name === 'manage_work_project')!;
+  const policy = (project.inputSchema as any).properties.staffingPolicy;
+  expect(policy.properties.taskType.enum).toContain('bookkeeping');
+  expect(policy.properties.deterministicAvailable).toBeUndefined();
+});
 afterEach(async () => { for (const vault of vaults.splice(0)) await rm(vault, { recursive: true, force: true }); });
 async function fixture() {
   const vault = await mkdtemp(join(tmpdir(), 'mcpvault-work-'));
@@ -59,6 +66,83 @@ async function workFixture(options: import('./work-service.js').WorkServiceOptio
   };
   return { ...f, work, create, read, update, claim };
 }
+
+test('bookkeeping staffing exposes host deterministic routing without loading model profiles', async () => {
+  let profileReads = 0;
+  const f = await workFixture({ deterministicCoverage: async input => {
+    expect(input.project.path).toBe('Community/Projects/alpha.md');
+    expect(input.project.revision).toBeTypeOf('string');
+    expect(input.tasks).toHaveLength(1);
+    return true;
+  }, executionProfiles: async () => { profileReads++; return []; } });
+  const project = await f.fs.readNote('Community/Projects/alpha.md');
+  await f.work.project({ op: 'update', principal: f.owner, projectId: 'alpha', expectedRevision: project.revision,
+    requestId: 'bookkeeping-policy', staffingPolicy: { taskType: 'bookkeeping' } });
+  await f.create('ledger');
+  const result = await f.work.staffing({ principal: f.owner, projectId: 'alpha' });
+  expect(result.execution).toEqual({ mode: 'deterministic', llmRequired: false });
+  expect(result.summary).toMatchObject({ required: 0, unfilled: 0, estimatedCost: 0 });
+  expect(profileReads).toBe(0);
+});
+
+test('bookkeeping with no verified local candidate waits and ignores request-supplied coverage', async () => {
+  const f = await workFixture();
+  const project = await f.fs.readNote('Community/Projects/alpha.md');
+  await f.work.project({ op: 'update', principal: f.owner, projectId: 'alpha', expectedRevision: project.revision,
+    requestId: 'bookkeeping-policy', staffingPolicy: { taskType: 'bookkeeping' } });
+  await f.create('ledger');
+  const result = await f.work.staffing({ principal: f.owner, projectId: 'alpha', deterministicAvailable: true } as any);
+  expect(result.execution).toEqual({ mode: 'local_llm', llmRequired: true });
+  expect(result.items).toContainEqual(expect.objectContaining({ kind: 'unfilled', reason: 'no_verified_local_candidate' }));
+});
+
+test('deterministic bookkeeping still preserves independent security review', async () => {
+  let profileReads = 0;
+  const f = await workFixture({ deterministicCoverage: async () => true,
+    executionProfiles: async () => { profileReads++; return []; } });
+  const project = await f.fs.readNote('Community/Projects/alpha.md');
+  await f.work.project({ op: 'update', principal: f.owner, projectId: 'alpha', expectedRevision: project.revision,
+    requestId: 'bookkeeping-policy', staffingPolicy: { taskType: 'bookkeeping' } });
+  await f.create('ledger', { workKind: 'security' });
+  const result = await f.work.staffing({ principal: f.owner, projectId: 'alpha' });
+  expect(result.execution).toEqual({ mode: 'deterministic', llmRequired: true });
+  expect(result.items).toContainEqual(expect.objectContaining({ kind: 'unfilled', perspective: 'independent_review' }));
+  expect(profileReads).toBe(1);
+});
+
+test('deterministic coverage is discarded when its task generation changes during host assessment', async () => {
+  let change: () => Promise<unknown> = async () => {};
+  const f = await workFixture({ deterministicCoverage: async () => { await change(); return true; } });
+  const project = await f.fs.readNote('Community/Projects/alpha.md');
+  await f.work.project({ op: 'update', principal: f.owner, projectId: 'alpha', expectedRevision: project.revision,
+    requestId: 'bookkeeping-policy', staffingPolicy: { taskType: 'bookkeeping' } });
+  await f.create('ledger');
+  change = () => f.update('ledger', { workKind: 'security' });
+  await expect(f.work.staffing({ principal: f.owner, projectId: 'alpha' })).rejects.toThrow(/changed|generation|retry/i);
+});
+
+test('project-wide deterministic coverage is discarded when a new security task appears', async () => {
+  let change: () => Promise<unknown> = async () => {};
+  const f = await workFixture({ deterministicCoverage: async () => { await change(); return true; } });
+  const project = await f.fs.readNote('Community/Projects/alpha.md');
+  await f.work.project({ op: 'update', principal: f.owner, projectId: 'alpha', expectedRevision: project.revision,
+    requestId: 'bookkeeping-policy', staffingPolicy: { taskType: 'bookkeeping' } });
+  await f.create('ledger');
+  change = () => f.create('new-security', { workKind: 'security' });
+  await expect(f.work.staffing({ principal: f.owner, projectId: 'alpha' })).rejects.toThrow(/changed|generation|retry/i);
+});
+
+test('unchanged actionable knowledge does not invalidate managed project task coverage', async () => {
+  const f = await workFixture({ deterministicCoverage: async () => true });
+  const project = await f.fs.readNote('Community/Projects/alpha.md');
+  await f.work.project({ op: 'update', principal: f.owner, projectId: 'alpha', expectedRevision: project.revision,
+    requestId: 'bookkeeping-policy', staffingPolicy: { taskType: 'bookkeeping' } });
+  await f.create('ledger');
+  await f.fs.writeNote({ path: 'Knowledge/actionable.md', content: 'Read next', frontmatter: {
+    type: 'knowledge', task_status: 'todo', next_action: 'Verify fact', project_id: 'alpha',
+  } });
+  expect((await f.work.staffing({ principal: f.owner, projectId: 'alpha' })).execution).toEqual({ mode: 'deterministic', llmRequired: false });
+});
 
 test('flexible team declarations stay on projects and do not grant participation', async () => {
   const { work, fs, owner, outsider, create } = await workFixture();

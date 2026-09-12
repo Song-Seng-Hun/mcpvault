@@ -18,8 +18,24 @@ export function parseCliArgs(args) {
     let skillEvolutionConfig;
     let explanationConfig;
     let benchmarkConfig;
+    let featuresConfig;
+    let ownerActivityConfig;
     for (let index = 0; index < args.length; index += 1) {
         const arg = args[index];
+        if (arg === '--owner-activity-config' || arg.startsWith('--owner-activity-config=')) {
+            const value = arg === '--owner-activity-config' ? args[++index] : arg.slice('--owner-activity-config='.length);
+            if (!value || !value.trim() || value.startsWith('--') || ownerActivityConfig !== undefined)
+                throw new Error('--owner-activity-config requires one host configuration file');
+            ownerActivityConfig = value;
+            continue;
+        }
+        if (arg === '--features-config' || arg.startsWith('--features-config=')) {
+            const value = arg === '--features-config' ? args[++index] : arg.slice('--features-config='.length);
+            if (!value || !value.trim() || value.startsWith('--') || featuresConfig !== undefined)
+                throw new Error('--features-config requires one host configuration file');
+            featuresConfig = value;
+            continue;
+        }
         if (arg === '--benchmark-config' || arg.startsWith('--benchmark-config=')) {
             const value = arg === '--benchmark-config' ? args[++index] : arg.slice('--benchmark-config='.length);
             if (!value || !value.trim() || value.startsWith('--') || benchmarkConfig !== undefined)
@@ -178,5 +194,7 @@ export function parseCliArgs(args) {
         ...(skillEvolutionConfig !== undefined && { skillEvolutionConfig }),
         ...(explanationConfig !== undefined && { explanationConfig }),
         ...(benchmarkConfig !== undefined && { benchmarkConfig }),
+        ...(featuresConfig !== undefined && { featuresConfig }),
+        ...(ownerActivityConfig !== undefined && { ownerActivityConfig }),
     };
 }

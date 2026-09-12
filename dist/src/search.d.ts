@@ -44,6 +44,7 @@ export declare class SearchService {
     private cacheGeneration;
     private indexReady;
     private readonly snapshotReady;
+    private readonly snapshotStorage;
     private indexRefresh;
     private snapshotTimer;
     private snapshotWrite;
@@ -56,7 +57,7 @@ export declare class SearchService {
     private needsFullReconcile;
     /** Process-local, per-account telemetry; never persisted or included in logs. */
     private readonly usageByScope;
-    constructor(vaultPath: string, pathFilter: PathFilter, catalog?: VaultFileCatalog | undefined, vaultIo?: VaultIoCoordinator);
+    constructor(vaultPath: string, pathFilter: PathFilter, catalog?: VaultFileCatalog | undefined, vaultIo?: VaultIoCoordinator, cacheDir?: string | undefined);
     /**
      * Search is derived from Markdown, so a short cache is safe and useful for
      * repeated agent lookups. Writers call this immediately after a mutation;

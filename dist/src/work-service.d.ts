@@ -14,6 +14,19 @@ type Guard = {
 };
 export interface WorkServiceOptions {
     executionProfiles?: () => Promise<WorkExecutionProfile[]>;
+    /** Trusted host advice for this exact project/task generation, never a
+     * request field or an execution grant. Missing coverage means local LLM. */
+    deterministicCoverage?: (input: {
+        principal: ScopePrincipal;
+        project: {
+            path: string;
+            revision?: string;
+        };
+        tasks: Array<{
+            path: string;
+            revision?: string;
+        }>;
+    }) => Promise<boolean>;
     verifyReviewExecution?: HostExecutionVerifier;
     readReviewGitSource?: ContextReader;
     assertActor?: (principal: ScopePrincipal) => Promise<void>;

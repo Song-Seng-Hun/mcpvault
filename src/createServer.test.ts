@@ -1,5 +1,5 @@
 import { test, expect, beforeEach, afterEach } from "vitest";
-import { createServer, getServerRuntime } from "./createServer.js";
+import { createServer, getServerRuntime } from "../tests/server-fixture.js";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "fs/promises";
 import { join } from "path";
 import { tmpdir } from "os";

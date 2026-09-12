@@ -13,7 +13,7 @@ export interface EnterpriseServerIo {
   stderr(value: string): void;
 }
 
-const OPTION_NAMES = new Set(['registry', 'realm', 'host', 'port', 'cert', 'key', 'ca', 'federation-config', 'global-import-config']);
+const OPTION_NAMES = new Set(['registry', 'realm', 'host', 'port', 'cert', 'key', 'ca', 'federation-config', 'global-import-config', 'features-config', 'owner-activity-config']);
 
 function required(options: Map<string, string>, name: string): string {
   const value = options.get(name);
@@ -40,6 +40,8 @@ export function parseEnterpriseServerArgs(argv: string[]): EnterpriseServerConfi
   if (!Number.isSafeInteger(port) || port < 0 || port > 65_535) throw new Error('--port must be an integer from 0 through 65535');
   const federationConfigPath = options.get('federation-config');
   const globalImportConfigPath = options.get('global-import-config');
+  const featuresConfigPath = options.get('features-config');
+  const ownerActivityConfigPath = options.get('owner-activity-config');
   return {
     registryPath: required(options, 'registry'),
     realmId: required(options, 'realm'),
@@ -50,6 +52,8 @@ export function parseEnterpriseServerArgs(argv: string[]): EnterpriseServerConfi
     caPath: required(options, 'ca'),
     ...(federationConfigPath && { federationConfigPath }),
     ...(globalImportConfigPath && { globalImportConfigPath }),
+    ...(featuresConfigPath && { featuresConfigPath }),
+    ...(ownerActivityConfigPath && { ownerActivityConfigPath }),
   };
 }
 

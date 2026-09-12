@@ -3,6 +3,7 @@ import type { PathFilter } from './pathfilter.js';
 import type { VaultCatalogChange, VaultFileCatalog } from './vault-catalog.js';
 import { VaultIoCoordinator } from './vault-io.js';
 import type { AuthorityShelfResult } from './types.js';
+import { type ContextIntent } from './context-rules.js';
 export interface VaultIndexEntry {
     path: string;
     frontmatter: Record<string, any>;
@@ -24,6 +25,11 @@ export declare class VaultMetadataIndex {
     private readonly cacheOwner;
     private readonly entries;
     private readonly filterIndex;
+    private readonly situationEligible;
+    private readonly situationOrdinary;
+    private situationGeneration;
+    private situationCoverageId;
+    private situationCoverage;
     private readonly pathIndex;
     private readonly authoritySchemeIndex;
     private readonly authorityPairIndex;
@@ -34,6 +40,7 @@ export declare class VaultMetadataIndex {
     private sortedQueryCacheRows;
     private readonly dirty;
     private readonly snapshotReady;
+    private readonly snapshotStorage;
     private ready;
     private refreshPromise;
     private snapshotWrite;
@@ -48,15 +55,33 @@ export declare class VaultMetadataIndex {
     private forceFullRead;
     private lastFullRefreshAt;
     private firstList;
-    constructor(vaultPath: string, pathFilter: PathFilter, frontmatter: FrontmatterHandler, catalog?: VaultFileCatalog | undefined, vaultIo?: VaultIoCoordinator);
+    constructor(vaultPath: string, pathFilter: PathFilter, frontmatter: FrontmatterHandler, catalog?: VaultFileCatalog | undefined, vaultIo?: VaultIoCoordinator, cacheDir?: string | undefined);
     invalidate(path: string, kind: 'upsert' | 'delete'): void;
     invalidateMany(changes: readonly VaultCatalogChange[]): void;
-    private invalidateAll;
+    /** Host authority changes invalidate every advisory metadata generation. */
+    invalidateAll(): void;
     private clearQueryCaches;
     /** Resolve a visible Obsidian note identity from the disposable metadata
      * read model. The identity map is rebuilt only after metadata invalidation;
      * Markdown and current frontmatter entries remain authoritative. */
     resolveNoteReference(document: string, canAccessPath?: (path: string) => boolean, sourcePath?: string, syntax?: 'markdown'): Promise<string[]>;
+    /** Request-local selection over existing literal postings. Ordinary rows are
+     * set lookups, not a full metadata/revision walk. No authority is cached. */
+    prepareSituation(input: string, intent: ContextIntent, explain: boolean, canAccessPath: (path: string) => boolean): Promise<{
+        activated: {
+            path: string;
+            revision: string;
+        }[];
+        diagnostics: {
+            physicalPath: string;
+            revision: string;
+            reason: string;
+        }[];
+        canSelect: (path: string) => boolean;
+        assertFresh: () => void;
+        coverage: (index: object, indexGeneration: number, revision: (path: string) => string | undefined) => boolean;
+        revision: (path: string) => string | undefined;
+    }>;
     list(filters?: Record<string, unknown>, pathPrefix?: string): Promise<VaultIndexEntry[]>;
     /** Count metadata candidates without sorting or reading note bodies. */
     count(filters?: Record<string, unknown>, pathPrefix?: string, canAccessPath?: (path: string) => boolean, predicate?: (entry: VaultIndexEntry) => boolean): Promise<number>;
@@ -109,6 +134,8 @@ export declare class VaultMetadataIndex {
         limit?: number;
     }, canAccessPath?: (path: string) => boolean): Promise<AuthorityShelfResult>;
     close(): Promise<void>;
+    /** Drain pending source changes without materializing a metadata result. */
+    prepareRead(): Promise<void>;
     private ensureFresh;
     private candidatePaths;
     private iterateCandidateEntries;

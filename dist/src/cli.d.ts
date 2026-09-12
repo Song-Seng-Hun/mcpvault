@@ -11,6 +11,8 @@ export interface ParsedCliArgs {
     skillEvolutionConfig?: string;
     explanationConfig?: string;
     benchmarkConfig?: string;
+    featuresConfig?: string;
+    ownerActivityConfig?: string;
     /** Dedicated HTTP process; omitted preserves legacy stdio behavior. */
     stdio?: false;
 }
