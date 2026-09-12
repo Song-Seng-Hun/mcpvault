@@ -1,7 +1,8 @@
 import type { FileSystemService } from './filesystem.js';
 import type { QueryNote } from './types.js';
+import { QUESTION_GRAPH_PROFILE } from './graph-contract.js';
 
-export type GraphRelation = 'evidence' | 'supports' | 'contradicts' | 'depends_on' | 'derived_from';
+export type GraphRelation = typeof QUESTION_GRAPH_PROFILE.relations[number];
 export type GraphLocator = { path: string; revision?: string; heading?: string; blockId?: string; startLine?: number; endLine?: number; quoteHash?: string; propertyPath?: string; malformed?: true };
 export type GraphEdge = {
   from: string; fromRevision: string; to: string; toRevision: string;
@@ -59,14 +60,14 @@ function declarations(note: QueryNote): { references: Reference[]; truncated: bo
     if (result.length >= 81) { truncated = true; return; }
     result.push({ target: pin.path, relation, ...(relation === 'evidence' && { locator: pin }) });
   };
-  for (const field of ['contradicts', 'depends_on'] as const) for (const value of take(fm[field])) add(value, field);
+  for (const field of QUESTION_GRAPH_PROFILE.priorityRelations) for (const value of take(fm[field])) add(value, field);
   for (const field of ['evidence', 'evidence_paths']) for (const value of take(fm[field])) add(value, 'evidence');
   for (const claim of take(fm.claims)) if (claim && typeof claim === 'object') {
     for (const value of take((claim as any).evidence)) add(value, 'evidence');
     for (const value of take((claim as any).evidence_paths)) add(value, 'evidence');
     for (const value of take((claim as any).contradicts)) add(value, 'contradicts');
   }
-  for (const field of ['supports', 'derived_from'] as const) for (const value of take(fm[field])) add(value, field);
+  for (const field of QUESTION_GRAPH_PROFILE.contextRelations) for (const value of take(fm[field])) add(value, field);
   return { references: result.sort((a, b) => priority(a) - priority(b)), truncated };
 }
 
@@ -91,7 +92,7 @@ export async function discoverQuestionGraph(ctx: Context): Promise<GraphCandidat
       if (declared.truncated) ctx.gap('evidence_declaration_window_exhausted', path, note.revision);
       for (const ref of declared.references) pending.push({ path, ref });
       if (!ctx.metadataExhausted() && inspectionBudget.remaining > 0) {
-        const backlinks = await ctx.fs.getBacklinks(path, 20, ctx.allowed, 0, { includeSourceRevision: true, includeSnapshot: true, expectedRevision: note.revision, relations: ['contradicts', 'claim_contradicts'],
+        const backlinks = await ctx.fs.getBacklinks(path, 20, ctx.allowed, 0, { includeSourceRevision: true, includeSnapshot: true, expectedRevision: note.revision, relations: [...QUESTION_GRAPH_PROFILE.reverseRelations],
           readMetadata: ctx.metadata, metadataExhausted: ctx.metadataExhausted, inspectionBudget, compact: true });
         for (const link of backlinks.backlinks) if (link.relation === 'contradicts' || link.relation === 'claim_contradicts') {
           if (!link.sourceRevision) { ctx.gap('reverse_relation_revision_unavailable', path, note.revision); continue; }

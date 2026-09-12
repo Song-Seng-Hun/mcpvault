@@ -28,6 +28,18 @@ function packet() {
   return new QuestionPacketService(fs, access, new RetrievalService(search, new CollaborationService(fs, search), semantic, access, fs));
 }
 const args = { query: 'entrymarker', retrievalMode: 'evidence', graphDepth: 2, includeSemantic: false, maxChars: 12000 } as const;
+
+test('shared vocabulary does not widen the opt-in question retrieval profile', async () => {
+  const allowed = ['contradicts', 'depends_on', 'supports', 'derived_from'];
+  const excluded = ['supersedes', 'implements', 'blocked_by', 'answers_questions', 'tests', 'related', 'same_as', 'close_match', 'version_of', 'refines'];
+  const relations = Object.fromEntries([...allowed, ...excluded].map(field => [field, [`${field}.md`]]));
+  await seed('Root.md', { llm_wiki_type: 'knowledge', ...relations }, 'entrymarker');
+  for (const field of [...allowed, ...excluded]) await seed(`${field}.md`, { llm_wiki_type: 'knowledge' });
+  const result = await packet().read(args);
+  expect(result.sources.map((source: any) => source.path).sort()).toEqual(['Root.md', ...allowed.map(field => `${field}.md`)].sort());
+  expect(JSON.stringify(result.sources)).not.toContain('same_as.md');
+});
+
 async function chain() {
   await seed('Root.md', { llm_wiki_type: 'knowledge', supports: ['Claim.md'] }, 'entrymarker is a policy.');
   await seed('Claim.md', { llm_wiki_type: 'knowledge', evidence_paths: ['Original.md'] }, 'A supporting claim.');

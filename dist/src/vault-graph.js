@@ -7,7 +7,7 @@ import { readdir, stat } from 'node:fs/promises';
 import { extractObsidianLinkOccurrences } from './backlinks.js';
 import { VaultIoCoordinator } from './vault-io.js';
 import { isMissingVaultPath, VaultReadUnavailableError } from './vault-read-errors.js';
-import { RELATION_FIELDS } from './organization.js';
+import { RELATION_FIELDS, CLAIM_GRAPH_RELATIONS } from './graph-contract.js';
 import { markdownNotePath, noteReferenceDocument, noteReferenceTermKeys } from './note-reference.js';
 import { collectPlainFrontmatterReferences, isNavigationalFrontmatterReference } from './property-references.js';
 import { isModerationHidden } from './moderation-policy.js';
@@ -821,11 +821,6 @@ export class VaultGraphIndex {
                 });
             }
             const claims = Array.isArray(parsed.frontmatter.claims) ? parsed.frontmatter.claims : [];
-            const claimRelations = [
-                { field: 'supports_claims', relation: 'claim_supports' },
-                { field: 'contradicts_claims', relation: 'claim_contradicts' },
-                { field: 'depends_on_claims', relation: 'claim_depends_on' },
-            ];
             for (let claimIndex = 0; claimIndex < claims.length; claimIndex += 1) {
                 const claim = claims[claimIndex];
                 if (!claim || typeof claim !== 'object')
@@ -833,7 +828,7 @@ export class VaultGraphIndex {
                 const sourceClaimId = String(claim.id || `claim-${claimIndex + 1}`).trim().toLowerCase();
                 if (!sourceClaimId)
                     continue;
-                for (const definition of claimRelations) {
+                for (const definition of CLAIM_GRAPH_RELATIONS) {
                     const values = Array.isArray(claim[definition.field]) ? claim[definition.field] : [];
                     for (const value of values.slice(0, 20)) {
                         if (typeof value !== 'string' || !value.trim())

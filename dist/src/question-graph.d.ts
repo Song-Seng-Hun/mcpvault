@@ -1,6 +1,7 @@
 import type { FileSystemService } from './filesystem.js';
 import type { QueryNote } from './types.js';
-export type GraphRelation = 'evidence' | 'supports' | 'contradicts' | 'depends_on' | 'derived_from';
+import { QUESTION_GRAPH_PROFILE } from './graph-contract.js';
+export type GraphRelation = typeof QUESTION_GRAPH_PROFILE.relations[number];
 export type GraphLocator = {
     path: string;
     revision?: string;

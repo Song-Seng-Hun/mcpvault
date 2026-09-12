@@ -1,3 +1,4 @@
+export { RELATION_FIELDS, RECIPROCAL_RELATIONS, RELATION_SEMANTICS } from './graph-contract.js';
 /**
  * Lightweight knowledge-organization vocabulary.
  *
@@ -75,82 +76,6 @@ export type CatalogOrder = typeof CATALOG_ORDERS[number];
 export type AnswerPacketIntent = typeof ANSWER_PACKET_INTENTS[number];
 export type WikiProjectionView = typeof WIKI_PROJECTION_VIEWS[number];
 export type TemporalValidityState = typeof TEMPORAL_VALIDITY_STATES[number];
-/** Typed relationships are navigation metadata, never an access grant. */
-export declare const RELATION_FIELDS: readonly ['supports', 'contradicts', 'supersedes', 'derived_from', 'depends_on', 'implements', 'blocked_by', 'answers_questions', 'tests', 'related', 'same_as', 'close_match', 'version_of', 'refines'];
-/** These relations have a meaning that is incomplete when the reverse edge is absent. */
-export declare const RECIPROCAL_RELATIONS: readonly ['related', 'same_as', 'close_match'];
-/** A compact ontology so agents can choose a relation by meaning, not by name. */
-export declare const RELATION_SEMANTICS: readonly [{
-    readonly field: 'supports';
-    readonly direction: 'directional';
-    readonly target: 'A claim, decision, or note supported by this note.';
-    readonly reciprocal: false;
-}, {
-    readonly field: 'contradicts';
-    readonly direction: 'directional';
-    readonly target: 'A claim or conclusion challenged by this note.';
-    readonly reciprocal: false;
-}, {
-    readonly field: 'supersedes';
-    readonly direction: 'directional';
-    readonly target: 'An older or replaced note.';
-    readonly reciprocal: false;
-}, {
-    readonly field: 'derived_from';
-    readonly direction: 'directional';
-    readonly target: 'The source or note from which this note was derived.';
-    readonly reciprocal: false;
-}, {
-    readonly field: 'depends_on';
-    readonly direction: 'directional';
-    readonly target: 'A prerequisite note, decision, or project.';
-    readonly reciprocal: false;
-}, {
-    readonly field: 'implements';
-    readonly direction: 'directional';
-    readonly target: 'The design, decision, or requirement implemented here.';
-    readonly reciprocal: false;
-}, {
-    readonly field: 'blocked_by';
-    readonly direction: 'directional';
-    readonly target: 'The note or dependency currently blocking this note.';
-    readonly reciprocal: false;
-}, {
-    readonly field: 'answers_questions';
-    readonly direction: 'directional';
-    readonly target: 'A question note answered by this note.';
-    readonly reciprocal: false;
-}, {
-    readonly field: 'tests';
-    readonly direction: 'directional';
-    readonly target: 'A question, hypothesis, or assumption tested by this experiment.';
-    readonly reciprocal: false;
-}, {
-    readonly field: 'related';
-    readonly direction: 'mutual';
-    readonly target: 'A materially related note without a stronger claim.';
-    readonly reciprocal: true;
-}, {
-    readonly field: 'same_as';
-    readonly direction: 'mutual';
-    readonly target: 'The same concept represented by another note or alias.';
-    readonly reciprocal: true;
-}, {
-    readonly field: 'close_match';
-    readonly direction: 'mutual';
-    readonly target: 'A near-equivalent concept useful for discovery but not safe to merge or treat as exact identity.';
-    readonly reciprocal: true;
-}, {
-    readonly field: 'version_of';
-    readonly direction: 'directional';
-    readonly target: 'The conceptual note this version belongs to.';
-    readonly reciprocal: false;
-}, {
-    readonly field: 'refines';
-    readonly direction: 'directional';
-    readonly target: 'A note made more precise or useful by this note.';
-    readonly reciprocal: false;
-}];
 export declare function getOrganizationRelationContract(): ({
     field: 'supports';
     direction: 'directional';

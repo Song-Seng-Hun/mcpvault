@@ -8,6 +8,8 @@ import { normalizeSourceDerivations } from './source-provenance-model.js';
 import { normalizeKnowledgeSynthesis } from './knowledge-synthesis-model.js';
 import { normalizeKnowledgeInvestigation } from './knowledge-investigation-model.js';
 import { MEMORY_ROLES } from './memory-contract.js';
+import { RELATION_FIELDS, RELATION_SEMANTICS } from './graph-contract.js';
+export { RELATION_FIELDS, RECIPROCAL_RELATIONS, RELATION_SEMANTICS } from './graph-contract.js';
 import { RESEARCH_TEMPLATE_IDS, getResearchTemplate, RESEARCH_LITERATURE_SECTIONS, RESEARCH_EXPERIMENT_SECTIONS } from './research-templates.js';
 
 /**
@@ -91,28 +93,6 @@ export type TemporalValidityState = typeof TEMPORAL_VALIDITY_STATES[number];
 
 /** Titles are an agent-facing API: generic names are hard to rediscover. */
 const GENERIC_NOTE_TITLE = /^(?:untitled|new note|new document|note|knowledge|draft|todo|copy)(?:\s*[-_ ]?\d+)?$/i;
-/** Typed relationships are navigation metadata, never an access grant. */
-export const RELATION_FIELDS = ['supports', 'contradicts', 'supersedes', 'derived_from', 'depends_on', 'implements', 'blocked_by', 'answers_questions', 'tests', 'related', 'same_as', 'close_match', 'version_of', 'refines'] as const;
-/** These relations have a meaning that is incomplete when the reverse edge is absent. */
-export const RECIPROCAL_RELATIONS = ['related', 'same_as', 'close_match'] as const;
-/** A compact ontology so agents can choose a relation by meaning, not by name. */
-export const RELATION_SEMANTICS = [
-  { field: 'supports', direction: 'directional', target: 'A claim, decision, or note supported by this note.', reciprocal: false },
-  { field: 'contradicts', direction: 'directional', target: 'A claim or conclusion challenged by this note.', reciprocal: false },
-  { field: 'supersedes', direction: 'directional', target: 'An older or replaced note.', reciprocal: false },
-  { field: 'derived_from', direction: 'directional', target: 'The source or note from which this note was derived.', reciprocal: false },
-  { field: 'depends_on', direction: 'directional', target: 'A prerequisite note, decision, or project.', reciprocal: false },
-  { field: 'implements', direction: 'directional', target: 'The design, decision, or requirement implemented here.', reciprocal: false },
-  { field: 'blocked_by', direction: 'directional', target: 'The note or dependency currently blocking this note.', reciprocal: false },
-  { field: 'answers_questions', direction: 'directional', target: 'A question note answered by this note.', reciprocal: false },
-  { field: 'tests', direction: 'directional', target: 'A question, hypothesis, or assumption tested by this experiment.', reciprocal: false },
-  { field: 'related', direction: 'mutual', target: 'A materially related note without a stronger claim.', reciprocal: true },
-  { field: 'same_as', direction: 'mutual', target: 'The same concept represented by another note or alias.', reciprocal: true },
-  { field: 'close_match', direction: 'mutual', target: 'A near-equivalent concept useful for discovery but not safe to merge or treat as exact identity.', reciprocal: true },
-  { field: 'version_of', direction: 'directional', target: 'The conceptual note this version belongs to.', reciprocal: false },
-  { field: 'refines', direction: 'directional', target: 'A note made more precise or useful by this note.', reciprocal: false },
-] as const;
-
 export function getOrganizationRelationContract() {
   return RELATION_SEMANTICS.map(entry => ({ ...entry }));
 }

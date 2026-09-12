@@ -1,3 +1,4 @@
+import { QUESTION_GRAPH_PROFILE } from './graph-contract.js';
 const array = (value) => Array.isArray(value) ? value : typeof value === 'string' ? [value] : [];
 const priority = (r) => r.relation === 'contradicts' || r.relation === 'depends_on' ? 0 : r.relation === 'evidence' ? 1 : 2;
 export const isPacketCounterpoint = (fm) => fm.knowledge_polarity === 'negative' || fm.polarity === 'negative' || fm.note_kind === 'negative_knowledge' || fm.knowledge_role === 'negative_knowledge';
@@ -43,7 +44,7 @@ function declarations(note) {
         }
         result.push({ target: pin.path, relation, ...(relation === 'evidence' && { locator: pin }) });
     };
-    for (const field of ['contradicts', 'depends_on'])
+    for (const field of QUESTION_GRAPH_PROFILE.priorityRelations)
         for (const value of take(fm[field]))
             add(value, field);
     for (const field of ['evidence', 'evidence_paths'])
@@ -58,7 +59,7 @@ function declarations(note) {
             for (const value of take(claim.contradicts))
                 add(value, 'contradicts');
         }
-    for (const field of ['supports', 'derived_from'])
+    for (const field of QUESTION_GRAPH_PROFILE.contextRelations)
         for (const value of take(fm[field]))
             add(value, field);
     return { references: result.sort((a, b) => priority(a) - priority(b)), truncated };
@@ -89,7 +90,7 @@ export async function discoverQuestionGraph(ctx) {
             for (const ref of declared.references)
                 pending.push({ path, ref });
             if (!ctx.metadataExhausted() && inspectionBudget.remaining > 0) {
-                const backlinks = await ctx.fs.getBacklinks(path, 20, ctx.allowed, 0, { includeSourceRevision: true, includeSnapshot: true, expectedRevision: note.revision, relations: ['contradicts', 'claim_contradicts'],
+                const backlinks = await ctx.fs.getBacklinks(path, 20, ctx.allowed, 0, { includeSourceRevision: true, includeSnapshot: true, expectedRevision: note.revision, relations: [...QUESTION_GRAPH_PROFILE.reverseRelations],
                     readMetadata: ctx.metadata, metadataExhausted: ctx.metadataExhausted, inspectionBudget, compact: true });
                 for (const link of backlinks.backlinks)
                     if (link.relation === 'contradicts' || link.relation === 'claim_contradicts') {

@@ -1,4 +1,5 @@
 import { guidanceError, guidanceText } from './guidance-runtime.js';
+import { CLAIM_RELATION_FIELDS, typedRelationTargetKindReason } from './graph-contract.js';
 import { prepareDocumentWrite } from './enterprise-storage-context.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { fingerprint as workFingerprintForOutput } from './work-model.js';
@@ -188,12 +189,6 @@ type SpatialCanvasGraph = {
 
 const claimStatuses = new Set<string>(CLAIM_STATUSES);
 const claimRoles = new Set<string>(CLAIM_ROLES);
-const CLAIM_RELATION_FIELDS = [
-  { input: 'supportsClaims', property: 'supports_claims', relation: 'supports' },
-  { input: 'contradictsClaims', property: 'contradicts_claims', relation: 'contradicts' },
-  { input: 'dependsOnClaims', property: 'depends_on_claims', relation: 'depends_on' },
-] as const;
-
 const CLAIM_ARGUMENT_LINT_CODES = new Set([
   'invalid_claim_role', 'invalid_claim_relation', 'missing_claim_block_anchor', 'duplicate_claim_block_anchor',
   'duplicate_claim_id', 'claim_graph_scan_truncated', 'unresolved_claim_note', 'ambiguous_claim_note',
@@ -1008,12 +1003,6 @@ function assertPreservationControlsNotWeakened(
       throw guidanceError(new Error('A future preserve_until can be shortened or removed only by an authorized human at the server host, not through MCP.'), 'guid-5f682b791f87555f');
     }
   }
-}
-
-function typedRelationTargetKindReason(relation: string, targetKind: string): string | undefined {
-  if (relation === 'answers_questions' && targetKind !== 'question') return 'answers_questions targets must have note_kind: question.';
-  if (relation === 'tests' && !['question', 'hypothesis', 'assumption'].includes(targetKind)) return 'tests targets must have note_kind: question, hypothesis, or assumption.';
-  return undefined;
 }
 
 const DEFAULT_SCHEMA = `# LLM Wiki schema
