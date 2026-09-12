@@ -4,7 +4,7 @@ import { basename } from 'node:path';
 import { isModerationHidden } from './moderation-policy.js';
 import { temporalValidity } from './organization.js';
 import { selectContextPassages } from './context-passages.js';
-import { bodyStartLine, passageAction, RETRIEVAL_NOTE_BYTES } from './retrieval-service.js';
+import { bodyStartLine, passageAction, RETRIEVAL_NOTE_BYTES, constrainedQuery } from './retrieval-service.js';
 import { endpointIdForTool } from './endpoint-registry.js';
 import { resolveEvidenceLocator } from './evidence-locator.js';
 import { traceSourceOrigins } from './source-provenance-model.js';
@@ -42,6 +42,9 @@ export class QuestionPacketService {
         return this.read({ ...params, includeSemantic: params.includeSemantic === true }, { context: params.context || '', intent: params.intent || 'decide', explain: params.explain === true });
     }
     async read(params, situation) {
+        if (params.retrievalMode !== undefined && !['legacy', 'evidence'].includes(params.retrievalMode))
+            throw new Error('Invalid retrievalMode');
+        const evidenceMode = !situation && params.retrievalMode === 'evidence';
         if (typeof params.query !== 'string' || !params.query.trim() || params.query.length > 1000)
             throw guidanceError(new Error('query must contain 1–1000 characters'), 'guid-81281f7bddea83f8');
         const maxChars = params.maxChars ?? 4000;
@@ -57,6 +60,13 @@ export class QuestionPacketService {
         const sources = new Map();
         const gaps = new Set();
         const diagnostics = [];
+        const continuationPaths = new Set();
+        let deferredAction;
+        const deferContext = (path, revision, reason, action) => {
+            gaps.add(reason);
+            continuationPaths.add(path);
+            deferredAction ??= action || { endpointId: 'notes.read', arguments: { path: publicPath(path), expectedRevision: revision, maxChars: 3000 } };
+        };
         let examined = 0;
         const getMetadata = async (path, allowFiction = false) => {
             if (!canAccess(path) || !this.retrieval.skillDiscoveryAllowed(path))
@@ -76,8 +86,12 @@ export class QuestionPacketService {
             return metadata.get(path);
         };
         const load = async (path, expectedRevision) => {
-            if (sources.has(path))
-                return sources.get(path);
+            if (sources.has(path)) {
+                const cached = sources.get(path);
+                if (expectedRevision && cached.revision !== expectedRevision)
+                    throw new Error('Context changed; retry the question');
+                return cached;
+            }
             if (sources.size >= 8) {
                 gaps.add('source_window_exhausted');
                 return;
@@ -91,7 +105,7 @@ export class QuestionPacketService {
             sources.set(path, value);
             return value;
         };
-        const retry = { endpointId: situation ? 'wiki.context_pack' : 'wiki.answer_packet', arguments: { query, ...(params.path && { path: params.path.startsWith('scope://') ? params.path : publicPath(params.path) }), ...(situation && { ...situation }), includeSemantic: params.includeSemantic !== false, maxChars } };
+        const retry = { endpointId: situation ? 'wiki.context_pack' : 'wiki.answer_packet', arguments: { query, ...(params.path && { path: params.path.startsWith('scope://') ? params.path : publicPath(params.path) }), ...(situation && { ...situation }), ...(evidenceMode && { retrievalMode: 'evidence' }), includeSemantic: params.includeSemantic !== false, maxChars } };
         const envelope = { mode: situation ? 'situation' : 'question', status: 'no_match', query, ...(situation && { intent: situation.intent }),
             retrieval: { usedQuery: query, expanded: false, semantic: { state: 'disabled' } },
             sources: [], gaps: [], truncated: false,
@@ -123,18 +137,26 @@ export class QuestionPacketService {
                         sharedOrigins: group.sharedOrigins.map(origin => ({ ...origin, path: publicPath(origin.path) })) })), window: 'already_loaded_sources_only' };
                 if (provenance.unresolved)
                     gaps.add('source_ancestry_unresolved');
+                if (evidenceMode && provenance.unresolved)
+                    deferContext(seeds[0], sources.get(seeds[0]).revision, 'source_ancestry_unresolved');
             }
             // Streaming revalidation of every observed source; no cross-file atomicity claim.
             for (const [path, note] of sources)
                 if (!canAccess(path) || await this.fs.readNoteRevision(path, RETRIEVAL_NOTE_BYTES) !== note.revision)
                     throw guidanceError(new Error('Context changed; retry the question'), 'guid-9e2c5234ada24056');
             for (const [path, note] of metadata)
-                if (note && !sources.has(path) && envelope.candidates?.some((c) => c.path === publicPath(path))) {
+                if (note && !sources.has(path) && (continuationPaths.has(path) || envelope.candidates?.some((c) => c.path === publicPath(path)))) {
                     if (!canAccess(path) || await this.fs.readNoteRevision(path, RETRIEVAL_NOTE_BYTES) !== note.revision)
                         throw guidanceError(new Error('Context changed; retry the question'), 'guid-9e2c5234ada24056');
                 }
             envelope.gaps = [...gaps];
             const length = () => JSON.stringify(envelope, null, params.prettyPrint ? 2 : undefined).length;
+            // Optional display text loses its space before complete evidence units.
+            if (evidenceMode && length() > maxChars)
+                for (const row of envelope.sources) {
+                    delete row.title;
+                    delete row.matchReason;
+                }
             while (length() > maxChars && envelope.diagnostics?.length) {
                 envelope.diagnostics.pop();
                 envelope.truncated = true;
@@ -143,23 +165,43 @@ export class QuestionPacketService {
                 envelope.provenance.groups.pop();
                 envelope.provenance.truncated = true;
                 envelope.truncated = true;
+                if (evidenceMode) {
+                    if (!envelope.gaps.includes('source_ancestry_omitted_do_not_count_independent_sources'))
+                        envelope.gaps.push('source_ancestry_omitted_do_not_count_independent_sources');
+                    envelope.status = 'partial';
+                    const seed = seeds[0];
+                    if (seed)
+                        deferContext(seed, sources.get(seed).revision, 'source_ancestry_omitted_do_not_count_independent_sources');
+                }
+            }
+            if (evidenceMode && deferredAction) {
+                envelope.status = 'partial';
+                envelope.truncated = true;
+                envelope.nextAction = deferredAction;
             }
             let omitted = 0;
             let omittedSafetyAction;
             while (length() > maxChars && envelope.sources.length) {
-                const removed = envelope.sources.pop();
+                const priority = (row) => row.role === 'counterpoint' || row.counterpointKind || row.selectionReasons?.includes('explicit_prerequisite') ? 5 : row.role === 'source' ? 4 : row.role === 'knowledge' ? 3 : row.role === 'related_context' ? 2 : 1;
+                let removeAt = envelope.sources.length - 1;
+                if (evidenceMode)
+                    for (let i = removeAt - 1; i >= 0; i--) {
+                        if (priority(envelope.sources[i]) < priority(envelope.sources[removeAt]))
+                            removeAt = i;
+                    }
+                const [removed] = envelope.sources.splice(removeAt, 1);
                 omitted++;
                 if (situation?.explain && !envelope.diagnostics?.some((d) => d.reason === 'response_budget')) {
                     envelope.diagnostics ||= [];
                     envelope.diagnostics.push({ reason: 'response_budget', instruction: guidanceText('guid-c592b45b881b3a35', 'Some complete source units did not fit; follow the revision-guarded nextAction.') });
                 }
-                if (situation && (removed.role === 'counterpoint' || removed.selectionReasons?.includes('explicit_prerequisite'))) {
-                    const reason = removed.role === 'counterpoint' ? 'counterpoint_omitted_read_before_deciding' : 'prerequisite_omitted_read_before_deciding';
+                if ((situation || evidenceMode) && (removed.role === 'counterpoint' || removed.counterpointKind || removed.selectionReasons?.includes('explicit_prerequisite'))) {
+                    const reason = removed.role === 'counterpoint' || removed.counterpointKind ? 'counterpoint_omitted_read_before_deciding' : 'prerequisite_omitted_read_before_deciding';
                     if (!envelope.gaps.includes(reason))
                         envelope.gaps.push(reason);
                     omittedSafetyAction = removed.readAction;
                 }
-                envelope.nextAction = omittedSafetyAction || removed.readAction;
+                envelope.nextAction = omittedSafetyAction || (evidenceMode && deferredAction) || removed.readAction;
                 envelope.omittedSources = omitted;
                 envelope.truncated = true;
             }
@@ -200,7 +242,7 @@ export class QuestionPacketService {
                 hits = await this.retrieval.projectSkillDiscovery(outcome.results, principal, canAccess);
             }
             else {
-                const outcome = await this.retrieval.retrieve({ query, ...(principal && { principal }), limit: 20, maxChars: 12000, includeRevisions: true, semantic: params.includeSemantic !== false && query.length > 1, fictionDomain: 'exclude' }, true);
+                const outcome = await this.retrieval.retrieve({ query, ...(principal && { principal }), ...(evidenceMode && { retrievalMode: 'evidence' }), limit: 20, maxChars: 12000, includeRevisions: true, semantic: params.includeSemantic !== false && query.length > 1, fictionDomain: 'exclude' }, true);
                 envelope.retrieval = { usedQuery: outcome.usedQuery, expanded: outcome.expanded, semantic: outcome.semantic };
                 hits = outcome.results.slice(0, 20);
             }
@@ -226,14 +268,18 @@ export class QuestionPacketService {
             const rows = envelope.sources;
             const linked = [];
             const socialLeads = new Map();
-            const addRow = (path, note, role, matchQuery, locator) => {
+            const addRow = (path, note, role, matchQuery, locator, prerequisite = false) => {
                 // A procedure is neither a verified fact nor executable authority, even when cited.
                 if (skillReference(note.frontmatter) && role !== 'counterpoint')
                     role = 'procedural_reference';
                 const existing = rows.find(r => r.path === publicPath(path));
+                const counterpointKind = role === 'counterpoint' ? counterpoint(note.frontmatter) ? 'negative_knowledge' : 'explicit_contradiction' : evidenceMode ? existing?.counterpointKind : undefined;
+                prerequisite ||= evidenceMode && existing?.selectionReasons?.includes('explicit_prerequisite');
                 if (existing?.role === 'source' && role !== 'source') {
                     if (role === 'counterpoint')
                         existing.counterpointKind = 'explicit_contradiction';
+                    if (evidenceMode && prerequisite)
+                        existing.selectionReasons = ['explicit_prerequisite'];
                     return existing;
                 }
                 if (existing && !locator) {
@@ -241,6 +287,8 @@ export class QuestionPacketService {
                         existing.role = role;
                     if (role === 'counterpoint')
                         existing.counterpointKind = counterpoint(note.frontmatter) ? 'negative_knowledge' : 'explicit_contradiction';
+                    if (evidenceMode && prerequisite)
+                        existing.selectionReasons = ['explicit_prerequisite'];
                     return existing;
                 }
                 const fm = note.frontmatter;
@@ -250,9 +298,13 @@ export class QuestionPacketService {
                 if (locatorState === 'stale')
                     gaps.add('stale_evidence_locator');
                 let selected = selectContextPassages({ content: note.content, query: matchQuery, maxChars: 1200, maxPassages: 2, startLine: bodyStartLine(note), ...(preferredLine && locatorState !== 'stale' && { preferredLine }) });
+                const semanticHit = evidenceMode && !locator ? candidates.find(c => c.path === path && c.hit.vs && c.hit.rv === note.revision)?.hit : undefined;
+                if (!selected.passages.length && semanticHit && Number.isSafeInteger(semanticHit.ln) && semanticHit.ln >= bodyStartLine(note)) {
+                    selected = selectContextPassages({ content: note.content, query: '', maxChars: 1200, maxPassages: 1, startLine: bodyStartLine(note), preferredLine: semanticHit.ln });
+                }
                 const identityMatch = sameIdentity.some(c => c.path === path);
                 const metadataMatch = candidates.some(c => c.path === path && c.hit.why?.some(reason => ['frontmatter_match', 'retrieval_cue_match'].includes(reason)));
-                if (!selected.passages.length && (identityMatch || metadataMatch || situation))
+                if (!selected.passages.length && (identityMatch || metadataMatch || situation || (evidenceMode && (counterpointKind || prerequisite))))
                     selected = selectContextPassages({ content: note.content, query: '', maxChars: 1200, maxPassages: 1, startLine: bodyStartLine(note), preferredLine: bodyStartLine(note) });
                 const first = selected.passages[0];
                 const readAction = first ? passageAction(publicPath(path), note.revision, first.startLine, first.endLine)
@@ -261,12 +313,22 @@ export class QuestionPacketService {
                     selected = situationPassages(note.content, bodyStartLine(note), selected);
                 const applicability = situation ? contextRuleState(fm.context_rules, `${query}\n${situation.context}`, situation.intent) : undefined;
                 const row = { path: publicPath(path), title: text(fm.title) || text(basename(path, '.md')), revision: note.revision, role,
+                    ...(evidenceMode && prerequisite && { selectionReasons: ['explicit_prerequisite'] }),
                     ...(situation && { applicability, selectionReasons: [role === 'counterpoint' ? 'explicit_counterpoint' : role === 'source' ? 'explicit_source' : role === 'related_context' ? 'explicit_prerequisite' : 'direct_question_match', ...(applicability === 'conditions_matched' ? ['context_rules_match'] : [])], ...(typeof fm.use_when === 'string' && fm.use_when.length <= 1000 && { declaredUseWhen: fm.use_when }) }),
-                    ...(role === 'counterpoint' && { counterpointKind: counterpoint(fm) ? 'negative_knowledge' : 'explicit_contradiction' }),
+                    ...(counterpointKind && { counterpointKind }),
                     passages: selected.passages, truncated: selected.truncated, ...((identityMatch || metadataMatch) && { matchReason: identityMatch ? 'exact_visible_identity' : 'metadata_match_context' }),
                     freshness: { source: 'current', lifecycle: text(fm.lifecycle || 'unspecified'), sourceIntegrity: fm.llm_wiki_type === 'source' && fm.content_sha256 ? fm.immutable === true && fm.content_sha256 === hash(note.content) ? 'intact' : 'failed' : 'unspecified', summary: fm.summary ? fm.summary_of_content_sha256 === hash(note.content) ? 'current' : 'stale' : 'unspecified', validity: temporalValidity(fm), review: text(fm.lifecycle === 'review' ? 'review' : fm.review_outcome || 'unspecified') },
                     ...(fm.llm_wiki_type === 'source' && { evidence: { workId: typeof fm.source_work_id === 'string' ? fm.source_work_id : typeof fm.source_family === 'string' ? fm.source_family : typeof fm.source_id === 'string' ? fm.source_id : publicPath(path), integrity: !fm.content_sha256 ? 'unspecified' : fm.immutable === true && fm.content_sha256 === hash(note.content) ? 'intact' : 'failed', locator: locatorState } }),
                     readAction };
+                if (existing && evidenceMode && locator) {
+                    const combined = [...existing.passages, ...row.passages].filter((p, i, all) => !all.slice(0, i).some(old => old.startLine === p.startLine && old.endLine === p.endLine && old.text === p.text));
+                    if (combined.length > 2)
+                        deferContext(path, note.revision, 'additional_evidence_locator_omitted', row.readAction);
+                    row.passages = combined.slice(0, 2);
+                    row.truncated ||= existing.truncated || combined.length > 2;
+                    if (existing.evidence?.locator === 'stale' && row.evidence)
+                        row.evidence.locator = 'stale';
+                }
                 if (existing)
                     rows[rows.indexOf(existing)] = row;
                 else
@@ -281,8 +343,12 @@ export class QuestionPacketService {
                     throw guidanceError(new Error('Context rule changed'), 'guid-41cc4a4dd68a9806');
                 addRow(root.path, note, counterpoint(note.frontmatter) ? 'counterpoint' : note.frontmatter.llm_wiki_type === 'source' ? 'source' : 'knowledge', envelope.retrieval.usedQuery);
                 const fm = note.frontmatter;
-                const claims = (Array.isArray(fm.claims) ? fm.claims : []).filter(c => c && typeof c === 'object').slice(0, 12);
-                const locators = [...(Array.isArray(fm.evidence) ? fm.evidence : []), ...claims.flatMap(c => Array.isArray(c.evidence) ? c.evidence : Array.isArray(c.evidence_paths) ? c.evidence_paths : [])].slice(0, 12);
+                const allClaims = (Array.isArray(fm.claims) ? fm.claims : []).filter(c => c && typeof c === 'object');
+                const claims = allClaims.slice(0, 12);
+                const allLocators = [...(Array.isArray(fm.evidence) ? fm.evidence : []), ...claims.flatMap(c => Array.isArray(c.evidence) ? c.evidence : Array.isArray(c.evidence_paths) ? c.evidence_paths : [])];
+                if (evidenceMode && (allClaims.length > 12 || allLocators.length > 12 || (Array.isArray(fm.evidence_paths) && fm.evidence_paths.length > 12)))
+                    deferContext(root.path, note.revision, 'evidence_declaration_window_exhausted');
+                const locators = allLocators.slice(0, 12);
                 for (const e of locators) {
                     const locator = typeof e === 'string' ? { path: e } : e;
                     if (locator && typeof locator.path === 'string')
@@ -294,29 +360,51 @@ export class QuestionPacketService {
                 for (const [field, role] of [['contradicts', 'counterpoint'], ['supports', 'related_context'], ['related', 'related_context'], ['depends_on', 'related_context']]) {
                     if (situation && (field === 'supports' || field === 'related'))
                         continue;
-                    for (const path of (Array.isArray(fm[field]) ? fm[field] : []).slice(0, 8))
+                    const references = Array.isArray(fm[field]) ? fm[field] : [];
+                    if (evidenceMode && references.length > 8)
+                        deferContext(root.path, note.revision, 'relation_window_exhausted');
+                    for (const path of references.slice(0, 8))
                         if (typeof path === 'string')
-                            linked.push({ target: path, from: root.path, role });
+                            linked.push({ target: path, from: root.path, role, ...(evidenceMode && field === 'depends_on' && { prerequisite: true }) });
                 }
-                if (situation) {
-                    const backlinks = await this.fs.getBacklinks(root.path, 20, canAccess, 0, { includeSourceRevision: true, expectedRevision: note.revision });
+                if (situation || (evidenceMode && !constrainedQuery(query))) {
+                    const backlinks = await this.fs.getBacklinks(root.path, 20, canAccess, 0, { includeSourceRevision: true, ...(evidenceMode && { includeSnapshot: true }), expectedRevision: note.revision });
                     for (const b of backlinks.backlinks)
-                        if (b.relation === 'contradicts' || b.relation === 'claim_contradicts')
-                            linked.push({ target: b.path, from: root.path, role: 'counterpoint' });
+                        if (b.relation === 'contradicts' || b.relation === 'claim_contradicts') {
+                            if (evidenceMode && !b.sourceRevision) {
+                                deferContext(root.path, note.revision, 'reverse_relation_revision_unavailable');
+                                continue;
+                            }
+                            linked.push({ target: b.path, from: root.path, role: 'counterpoint', ...(evidenceMode && b.sourceRevision && { revision: b.sourceRevision }) });
+                        }
                     if (backlinks.truncated)
                         gaps.add('reverse_relation_window_exhausted');
+                    if (evidenceMode && backlinks.truncated)
+                        deferContext(root.path, note.revision, 'reverse_relation_window_exhausted', {
+                            endpointId: endpointIdForTool('get_backlinks'), arguments: { path: publicPath(root.path), offset: 20, limit: 20, maxChars: 4000, expectedSnapshot: backlinks.snapshotFingerprint },
+                        });
                 }
             }
             const resolveReference = this.fs.createNoteReferenceResolver(canAccess, getMetadata);
-            const uniqueLinks = situation ? linked.filter((link, i) => !linked.slice(0, i).some(old => old.target === link.target && old.role === link.role)) : linked;
+            if (evidenceMode && constrainedQuery(query) && linked.length) {
+                const root = sources.get(linked[0].from);
+                deferContext(linked[0].from, root.revision, 'related_context_suppressed_by_query_constraints');
+            }
+            const uniqueLinks = evidenceMode && constrainedQuery(query) ? [] : situation || evidenceMode ? linked.filter((link, i) => !linked.slice(0, i).some(old => old.target === link.target && old.role === link.role && (!evidenceMode || JSON.stringify([old.locator, old.revision, old.prerequisite]) === JSON.stringify([link.locator, link.revision, link.prerequisite])))) : linked;
             const duplicateTargets = new Set(situation?.explain ? linked.filter((link, i) => linked.slice(0, i).some(old => old.target === link.target && old.role === link.role)).map(link => link.target) : []);
             // Safety context precedes bulk evidence; explicit priorities are not author fields.
-            if (situation)
-                uniqueLinks.sort((a, b) => ({ counterpoint: 0, related_context: 1, source: 2, knowledge: 3, lead: 4, procedural_reference: 3 }[a.role]) - ({ counterpoint: 0, related_context: 1, source: 2, knowledge: 3, lead: 4, procedural_reference: 3 }[b.role]));
+            if (situation || evidenceMode) {
+                const priorities = { counterpoint: 0, related_context: evidenceMode ? 2 : 1, source: evidenceMode ? 1 : 2, knowledge: 3, lead: 4, procedural_reference: 3 };
+                uniqueLinks.sort((a, b) => (a.prerequisite ? 0 : priorities[a.role]) - (b.prerequisite ? 0 : priorities[b.role]));
+            }
             if (situation && uniqueLinks.length > Math.max(0, 20 - candidates.length))
                 gaps.add('linked_candidate_window_exhausted');
+            if (evidenceMode && uniqueLinks.length > 20) {
+                const origin = uniqueLinks[20].from;
+                deferContext(origin, sources.get(origin).revision, 'linked_candidate_window_exhausted');
+            }
             for (const link of uniqueLinks.slice(0, situation ? Math.max(0, 20 - candidates.length) : 20)) {
-                if (sources.size >= (situation ? 8 : 6)) {
+                if (!evidenceMode && sources.size >= (situation ? 8 : 6)) {
                     gaps.add('linked_context_window_exhausted');
                     break;
                 }
@@ -334,18 +422,26 @@ export class QuestionPacketService {
                 }
                 const path = visible[0];
                 const meta = await getMetadata(path);
+                if (evidenceMode && meta && sources.size >= 8 && !sources.has(path)) {
+                    if (!meta.revision)
+                        throw new Error('Context revision unavailable');
+                    // This exact, current target remains metadata-only until the next read.
+                    deferredAction = undefined;
+                    deferContext(path, meta.revision, link.role === 'counterpoint' ? 'counterpoint_omitted_read_before_deciding' : link.prerequisite ? 'prerequisite_omitted_read_before_deciding' : 'linked_context_window_exhausted');
+                    break;
+                }
                 if (meta && social(path, meta.frontmatter)) {
                     socialLeads.set(path, meta.revision);
                     continue;
                 }
-                const note = await load(path);
+                const note = await load(path, link.revision);
                 if (!note)
                     continue;
                 if (duplicateTargets.has(link.target) && diagnostics.length < 8)
                     diagnostics.push({ physicalPath: path, revision: note.revision, reason: 'duplicate_reference' });
                 const role = social(path, note.frontmatter) ? 'lead' : link.role === 'source' && note.frontmatter.llm_wiki_type !== 'source' ? 'related_context' : link.role;
                 const locator = anchor ? { ...link.locator, path, ...(anchor.startsWith('^') ? { blockId: anchor.slice(1) } : { heading: anchor }) } : link.locator;
-                addRow(path, note, role, query, locator);
+                addRow(path, note, role, query, locator, link.prerequisite);
             }
             const hasEvidence = rows.some(r => r.role === 'source' && r.evidence?.integrity === 'intact' && r.evidence?.locator !== 'stale');
             const hasPassage = rows.some(r => r.role === 'knowledge' && r.passages.length);
@@ -368,9 +464,14 @@ export class QuestionPacketService {
                     envelope.truncated = true;
                 }
             }
-            if (situation && [...gaps].some(g => /window_exhausted|retrieval_incomplete/.test(g))) {
+            if ((situation || evidenceMode) && [...gaps].some(g => /window_exhausted|retrieval_incomplete/.test(g))) {
                 envelope.status = 'partial';
                 envelope.truncated = true;
+            }
+            if (evidenceMode && deferredAction) {
+                envelope.status = 'partial';
+                envelope.truncated = true;
+                envelope.nextAction = deferredAction;
             }
             return await finish();
         }

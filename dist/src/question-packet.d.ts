@@ -1,7 +1,7 @@
 import type { FileSystemService } from './filesystem.js';
 import type { ScopeAccessPolicy } from './scope-access.js';
 import type { ScopePrincipal } from './scope-auth.js';
-import { type RetrievalService } from './retrieval-service.js';
+import { type RetrievalMode, type RetrievalService } from './retrieval-service.js';
 import { type ContextIntent } from './context-rules.js';
 import { type SituationOptions } from './context-selection.js';
 export interface QuestionParams {
@@ -9,6 +9,7 @@ export interface QuestionParams {
     path?: string;
     expectedRevision?: string;
     includeSemantic?: boolean;
+    retrievalMode?: RetrievalMode;
     maxChars?: number;
     prettyPrint?: boolean;
     principal?: ScopePrincipal;

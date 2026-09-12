@@ -317,6 +317,7 @@ export function getLlmWikiTools(): Tool[] {
       inputSchema: { type: 'object', properties: {
         path: { type: 'string', description: guidanceText('guid-db9c563cb001d361', 'Existing visible Markdown note path') },
         query: { type: 'string', minLength: 1, maxLength: 1000, description: guidanceText('guid-296de4706a487f6e', 'Question or search terms. Exact phrases, filters and exclusions are never automatically relaxed.') },
+        retrievalMode: { type: 'string', enum: ['legacy', 'evidence'], description: 'Optional question-only retrieval strategy. Default legacy; evidence uses bounded rank fusion and safety-first source budgets. This is not an inference permission.' },
         expectedRevision: { type: 'string', description: guidanceText('guid-f97253131b8debd7', 'Optional current revision guard when query is anchored to a selected path.') },
         maxChars: { type: 'integer', minimum: 1024, maximum: 16000, default: 4000, description: guidanceText('guid-90e22fd11c7ed21a', 'Question mode defaults 4000/max 12000; path-only defaults 7000/max 16000 when omitted. Includes the complete response and formatting.') },
         includeSemantic: { type: 'boolean', description: guidanceText('guid-210150e5056d5c16', 'Add optional bounded semantic candidates to neighbor discovery (default: true)') },

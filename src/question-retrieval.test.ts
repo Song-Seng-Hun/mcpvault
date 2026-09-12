@@ -25,6 +25,18 @@ async function call(endpointId: string, args: Record<string, unknown>) {
   const text = (result.content as any[]).map(x => x.text || '').join('');
   return { error: result.isError, text, value: result.isError ? undefined : JSON.parse(text) };
 }
+
+test('answer packet exposes opt-in evidence strategy and rejects path-only use', async () => {
+  await note('Knowledge/Mode.md', '---\nllm_wiki_type: knowledge\n---\nmodeprobe exact source context.');
+  const current = await call('wiki.answer_packet', { query: 'modeprobe', retrievalMode: 'evidence', includeSemantic: false });
+  expect(current.error, current.text).toBeFalsy();
+  expect(current.value.sources[0].path).toBe('Knowledge/Mode.md');
+  const unsupported = await call('wiki.answer_packet', { path: 'Knowledge/Mode.md', retrievalMode: 'evidence', includeSemantic: false });
+  expect(unsupported.error).toBe(true);
+  expect(unsupported.text).toMatch(/query/);
+  const search = await call('wiki.search', { query: 'modeprobe', retrievalMode: 'evidence' });
+  expect(search.error).toBe(true);
+});
 test('query packet reads late conditions and keeps source identity within the whole budget', async () => {
   await note('Knowledge/Retry.md', '---\nllm_wiki_type: knowledge\nnote_kind: atomic\n---\n# Guide\n\nUnrelated introduction.\n\n## Retry conditions\n\n재시도는 멱등 요청에만 허용한다. 결제 요청은 재시도하지 않는다.\n');
   const r = await call('wiki.answer_packet', { query: '재시도', includeSemantic: false, maxChars: 4000 });

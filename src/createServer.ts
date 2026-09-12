@@ -2085,6 +2085,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
 
         case "get_wiki_answer_packet": {
           if (trimmedArgs.query !== undefined) return jsonResult(await questionPacket.read({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
+          if (trimmedArgs.retrievalMode !== undefined) throw new Error('retrievalMode requires query');
           return jsonResult(await llmWiki.answerPacket(principal, trimmedArgs.path, trimmedArgs.maxChars, trimmedArgs.includeSemantic !== false, trimmedArgs.intent), trimmedArgs.prettyPrint);
         }
 

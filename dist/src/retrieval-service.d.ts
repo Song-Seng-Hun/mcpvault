@@ -7,10 +7,12 @@ import type { ScopeAccessPolicy } from './scope-access.js';
 import type { FileSystemService } from './filesystem.js';
 import { type FictionDomainSelection } from './fiction-domain.js';
 export declare const RETRIEVAL_NOTE_BYTES: number;
+export type RetrievalMode = 'legacy' | 'evidence';
 export type RetrievalParams = SearchParams & {
     principal?: ScopePrincipal;
     excerptMode?: 'compact' | 'context';
     fictionDomain?: FictionDomainSelection;
+    retrievalMode?: RetrievalMode;
 };
 export type RetrievalHit = SearchResult & {
     physicalPath?: string;

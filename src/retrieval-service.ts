@@ -16,7 +16,8 @@ import { positiveSearchTerms, memoryCandidateLimit } from './search.js';
 import { isFictionDomain, type FictionDomainSelection } from './fiction-domain.js';
 
 export const RETRIEVAL_NOTE_BYTES = 8 * 1024 * 1024;
-export type RetrievalParams = SearchParams & { principal?: ScopePrincipal; excerptMode?: 'compact' | 'context'; fictionDomain?: FictionDomainSelection };
+export type RetrievalMode = 'legacy' | 'evidence';
+export type RetrievalParams = SearchParams & { principal?: ScopePrincipal; excerptMode?: 'compact' | 'context'; fictionDomain?: FictionDomainSelection; retrievalMode?: RetrievalMode };
 export type RetrievalHit = SearchResult & { physicalPath?: string; scope?: string; context?: unknown; nextAction?: unknown };
 export type RetrievalOutcome = { results: RetrievalHit[]; usedQuery: string; expanded: boolean; semantic: { state: 'disabled' | 'filtered' | 'available' | 'unavailable' } };
 export type MemoryCandidateParams = MemorySearchParams & { principal?: ScopePrincipal };
@@ -133,12 +134,15 @@ export class RetrievalService {
   }
 
   async retrieve(params: RetrievalParams, allowExpansion = false): Promise<RetrievalOutcome> {
+    if (params.retrievalMode !== undefined && !['legacy', 'evidence'].includes(params.retrievalMode)) throw new Error('Invalid retrievalMode');
+    const evidence = params.retrievalMode === 'evidence' && !constrainedQuery(params.query);
     const admitted = (path: string) => this.access.canAccessPhysicalPath(path, params.principal) && (!params.canAccessPath || params.canAccessPath(path)) && (this.skillEvolution?.discoveryAllowed(path) ?? true);
     // Runtime payloads are not typed: only the authenticated principal supplies identity.
     const safe: SearchParams = { query: params.query };
     for (const key of ['limit', 'maxChars', 'searchContent', 'searchFrontmatter', 'caseSensitive', 'includeRevisions', 'expandAuthority', 'excludePaths', 'fictionDomain'] as const) {
       if (params[key] !== undefined) Object.assign(safe, { [key]: params[key] });
     }
+    if (evidence) { safe.limit = 20; safe.maxChars = 12000; }
     // Required internally to validate excerpts after discovery/projection. Do
     // not turn an old index excerpt into a current one by attaching a new hash.
     if (params.fictionDomain) safe.includeRevisions = true;
@@ -173,16 +177,31 @@ export class RetrievalService {
         finally { if (timer) clearTimeout(timer); }
         semantic = { state: outcome?.available ? 'available' : 'unavailable' };
         const byPath = new Map(results.map(hit => [this.physical(hit, params.principal), hit]));
-        for (const hit of outcome?.results || []) {
+        const ranks = new Map<string, number>();
+        if (evidence) {
+          const seen = new Set<string>();
+          for (const hit of results.slice(0, 20)) {
+            const path = this.physical(hit, params.principal);
+            if (!admitted(path) || seen.has(path)) continue;
+            seen.add(path); ranks.set(path, 1 / (60 + seen.size));
+          }
+        }
+        const semanticSeen = new Set<string>();
+        for (const hit of (outcome?.results || []).slice(0, evidence ? 20 : undefined)) {
           if (!admitted(hit.p)) continue;
           const physical = this.physical(hit, params.principal); const prior = byPath.get(physical);
+          if (semanticSeen.has(physical)) continue;
+          semanticSeen.add(physical);
+          if (evidence) ranks.set(physical, (ranks.get(physical) || 0) + 1 / (60 + semanticSeen.size));
           byPath.set(physical, prior ? { ...prior, vs: true, why: [...new Set([...(prior.why || []), 'semantic_match'])] } : hit);
         }
-        results = [...byPath.values()].sort((a, b) => Number(Boolean(b.wk)) - Number(Boolean(a.wk))).slice(0, normalizeSearchLimit(params.limit));
+        results = [...byPath.values()].sort((a, b) => evidence
+          ? (ranks.get(this.physical(b, params.principal)) || 0) - (ranks.get(this.physical(a, params.principal)) || 0)
+          : Number(Boolean(b.wk)) - Number(Boolean(a.wk))).slice(0, normalizeSearchLimit(params.limit));
         results = boundSearchResults(results, normalizeSearchMaxChars(params.maxChars));
       }
     }
-    if (allowExpansion) {
+    if (allowExpansion && !evidence) {
       const terms = positiveSearchTerms(params.query).map(t => t.toLocaleLowerCase());
       const score = (hit: RetrievalHit) => {
         const preview = `${hit.t}\n${hit.ex}`.toLocaleLowerCase();
@@ -192,6 +211,7 @@ export class RetrievalService {
       // ordinary search ordering and its compact compatibility contract stay intact.
       results = [...results].sort((a, b) => Number(Boolean(b.wk)) - Number(Boolean(a.wk)) || score(b) - score(a));
     }
+    if (evidence) results = results.slice(0, normalizeSearchLimit(params.limit));
     const within = (path: string, prefix: string) => {
       const normalize = (v: string) => v.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '').toLowerCase();
       const p = normalize(path), root = normalize(prefix);
@@ -226,6 +246,7 @@ export class RetrievalService {
   }
 
   async searchNotes(params: RetrievalParams): Promise<RetrievalHit[]> {
+    if (params.retrievalMode !== undefined) throw new Error('retrievalMode is available only for question packets');
     if (params.excerptMode !== undefined && !['compact', 'context'].includes(params.excerptMode)) throw guidanceError(new Error('Invalid excerptMode'), 'guid-aeb6cd862871ecc0');
     const outcome = await this.retrieve({ ...params, ...(params.fictionDomain && params.excerptMode === 'context' && { includeRevisions: true }) });
     let results = outcome.results;
