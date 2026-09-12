@@ -1,0 +1,3 @@
+# Official stable verified at P3 implementation start, 2026-09-12.
+# Package installation only. Never run graphify install or hook install.
+graphifyy==0.9.58 --hash=sha256:e239803288e91c723d6e30540860bd6d5a1dc3f0914b9fc1104b0233e98aaeb8

@@ -69,3 +69,9 @@ share-wide raw counter deltas were0 during the3.34-second observation; caching
 and other clients make this unsuitable as proof of zero logical I/O or savings.
 Original/backup/restore equality and unchanged world/economy bytes/checkpoints
 are deployment gates. This is a user-fork deployment, not a package release.
+
+## Developer navigation
+
+Implementation: [topic packet service](../src/topic-packet.ts).
+Tests: [service contracts](../src/topic-packet.test.ts) and
+[MCP/REST adapter contracts](../src/topic-packet-mcp.test.ts).

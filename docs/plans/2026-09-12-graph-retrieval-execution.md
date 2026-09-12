@@ -1,6 +1,35 @@
 # Graph retrieval, topic packets and local Graphify execution
 
-Status: P1 delivered at implementation commit2e6bc86b. P2 code/reviews/build/full regression and NAS deployment with user-confirmed empty-state acceptance are complete; fork delivery is recorded by Git. P3 follows next. Successful operational-MOC packets remain unverified because no MOC has been authored yet.
+Status: P1 delivered at implementation commit2e6bc86b. P2 delivered at bd4898b9 with NAS deployment and user-confirmed empty-state acceptance. P3 implementation, reviews, strict build, full regression and unchanged-NAS-runtime acceptance are complete; fork delivery is recorded by Git. Successful operational-MOC packets remain unverified because no MOC has been authored yet, intentionally. No operational verification documents were created.
+
+## P3 final acceptance (2026-09-12)
+
+- Installed official `graphifyy==0.9.58` in the dedicated local venv; the exact
+  wheel and31 baseline packages are hash-pinned. No global settings, Git hooks,
+  provider APIs, graph database, resident worker or sixth MCP tool were added.
+- Host-only explicit TypeScript/JavaScript/Markdown AST and document-link
+  navigation preserves raw relations, provenance and bounded stale-safe packets.
+  Commands, scope and limitations: [local Graphify](../local-graphify.md).
+- Local fixture tests:15 passed,1 explicit file-symlink privilege skip. Two
+  independent static reviews closed all six reported findings after RED/GREEN
+  reproductions and narrow re-review. Reviews did not independently run tests.
+- Strict build passed with no generated dist change. Frozen full-suite basis
+  `4415720161cea2b15c7cbf401983845f3f2ba2b1a69a4d5945360e1ffca868d6`:
+  455 files,6,377 passed,4 existing skips,0 failed, no absent coverage. The first
+  277 completed-file receipts were retained; only178 remaining files ran in the
+  replacement single-worker batch. No source changed across that transition.
+- An11-file corpus produced157 nodes/484 edges; warm build1.6618s, query/impact
+  about37ms, copied-corpus invalidation/rebuild1.6214s. AST process-family sampled
+  working set46.4MiB; wrapper peak26.6MiB. Share-wide SMB raw deltas were0 over
+  5.56s, not a claim of zero logical I/O or network savings. No inference calls.
+- Read-only live verification confirmed fixed five tools, schema/input rejection
+  and the intentional empty-MOC state. Local fixtures alone cover positive MOCs.
+  All885 dist files match the existing P2 NAS-backed runtime (PID32440); no new
+  deployment switch/restart is needed for this host-only stage. Original sources,
+  world/economy bytes and checkpoints match the preservation baseline. P1/P2
+  deployment rollback artifacts remain intact. No operational Vault writes.
+- Existing `main` and user fork only; unrelated research documents remain out of
+  the commit. No PR, upstream contribution, release or package publication.
 
 ## Authority and coordination
 

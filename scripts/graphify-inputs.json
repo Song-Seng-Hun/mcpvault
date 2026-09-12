@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "scope": "Explicit graph retrieval/topic subsystem code, design and tests; never the operational Vault",
+  "files": [
+    "src/topic-packet.ts",
+    "src/topic-packet.test.ts",
+    "src/topic-packet-mcp.test.ts",
+    "src/knowledge-synthesis.ts",
+    "src/knowledge-synthesis-model.ts",
+    "src/vault-graph.ts",
+    "src/backlinks.ts",
+    "src/types.ts",
+    "docs/topic-packets.md",
+    "docs/topic-clustering-evaluation.md",
+    "docs/plans/2026-09-12-graph-retrieval-execution.md"
+  ]
+}
