@@ -16,18 +16,18 @@ import { sourceWorkIdentity } from './source-provenance.js';
 import { CONTEXT_INTENTS, contextRuleState, type ContextIntent } from './context-rules.js';
 import { isSituationMemory, selectSituationCandidates, situationPassages, type SituationOptions } from './context-selection.js';
 import { isFictionDomain } from './fiction-domain.js';
+import { discoverQuestionGraph, graphBodyPriority, isPacketCounterpoint as counterpoint, type GraphEdge } from './question-graph.js';
 
-export interface QuestionParams { query: string; path?: string; expectedRevision?: string; includeSemantic?: boolean; retrievalMode?: RetrievalMode; maxChars?: number; prettyPrint?: boolean; principal?: ScopePrincipal }
+export interface QuestionParams { query: string; path?: string; expectedRevision?: string; includeSemantic?: boolean; retrievalMode?: RetrievalMode; graphDepth?: 1 | 2; maxChars?: number; prettyPrint?: boolean; principal?: ScopePrincipal }
 export interface SituationParams extends QuestionParams { context?: string; intent?: ContextIntent; explain?: boolean }
 type Role = 'knowledge' | 'source' | 'counterpoint' | 'related_context' | 'lead' | 'procedural_reference';
-type Locator = { path: string; revision?: string; heading?: string; blockId?: string; startLine?: number; endLine?: number; quoteHash?: string };
+type Locator = { path: string; revision?: string; heading?: string; blockId?: string; startLine?: number; endLine?: number; quoteHash?: string; malformed?: true };
 const hash = (s: string) => createHash('sha256').update(s).digest('hex');
 const text = (v: unknown, max = 180) => typeof v === 'string' ? v.slice(0, max) : '';
 const identity = (v: string) => v.trim().toLocaleLowerCase();
 const knowledge = (fm: Record<string, any>) => fm.llm_wiki_type === 'knowledge' || Boolean(fm.note_kind && fm.llm_wiki_type !== 'source' && !fm.mcpvault_type);
 const skillReference = (fm: Record<string, any>) => fm.note_kind === 'skill' && fm.llm_wiki_type === 'knowledge' && !fm.mcpvault_type;
 const social = (path: string, fm: Record<string, any>) => (/(?:^|\/)Community\//i.test(path) && !skillReference(fm)) || Boolean(fm.mcpvault_type) || fm.llm_wiki_type === 'issue' || fm.note_kind === 'task';
-const counterpoint = (fm: Record<string, any>) => fm.knowledge_polarity === 'negative' || fm.polarity === 'negative' || fm.note_kind === 'negative_knowledge' || fm.knowledge_role === 'negative_knowledge';
 class PacketBudgetError extends Error {}
 
 /** A per-request bounded source reader, not a generated answer or a second
@@ -45,6 +45,9 @@ export class QuestionPacketService {
   async read(params: QuestionParams, situation?: SituationOptions): Promise<Record<string, any>> {
     if (params.retrievalMode !== undefined && !['legacy', 'evidence'].includes(params.retrievalMode)) throw new Error('Invalid retrievalMode');
     const evidenceMode = !situation && params.retrievalMode === 'evidence';
+    if (params.graphDepth !== undefined && params.graphDepth !== 1 && params.graphDepth !== 2) throw Error('graphDepth must be 1 or 2');
+    if (params.graphDepth === 2 && !evidenceMode) throw Error('graphDepth 2 requires query and evidence retrieval');
+    const graphMode = params.graphDepth === 2;
     if (typeof params.query !== 'string' || !params.query.trim() || params.query.length > 1000) throw guidanceError(new Error('query must contain 1–1000 characters'), 'guid-81281f7bddea83f8');
     const maxChars = params.maxChars ?? 4000;
     if (!Number.isSafeInteger(maxChars) || maxChars < 1024 || maxChars > 12000) throw guidanceError(new Error('Question maxChars must be 1024–12000'), 'guid-0f7a0d609926cad7');
@@ -91,7 +94,7 @@ export class QuestionPacketService {
       if (!canAccess(path) || isModerationHidden(value.frontmatter) || (path !== explicitPath && isFictionDomain(value.frontmatter, path)) || value.revision !== meta.revision || (expectedRevision && value.revision !== expectedRevision)) throw guidanceError(new Error('Context changed; retry the question'), 'guid-9e2c5234ada24056');
       sources.set(path, value); return value;
     };
-    const retry = { endpointId: situation ? 'wiki.context_pack' : 'wiki.answer_packet', arguments: { query, ...(params.path && { path: params.path.startsWith('scope://') ? params.path : publicPath(params.path) }), ...(situation && { ...situation }), ...(evidenceMode && { retrievalMode: 'evidence' }), includeSemantic: params.includeSemantic !== false, maxChars } };
+    const retry = { endpointId: situation ? 'wiki.context_pack' : 'wiki.answer_packet', arguments: { query, ...(params.path && { path: params.path.startsWith('scope://') ? params.path : publicPath(params.path) }), ...(situation && { ...situation }), ...(evidenceMode && { retrievalMode: 'evidence' }), ...(graphMode && { graphDepth: 2 }), includeSemantic: params.includeSemantic !== false, maxChars } };
     const envelope: Record<string, any> = { mode: situation ? 'situation' : 'question', status: 'no_match', query, ...(situation && { intent: situation.intent }),
       retrieval: { usedQuery: query, expanded: false, semantic: { state: 'disabled' } },
       sources: [], gaps: [], truncated: false,
@@ -124,7 +127,7 @@ export class QuestionPacketService {
       }
       // Streaming revalidation of every observed source; no cross-file atomicity claim.
       for (const [path, note] of sources) if (!canAccess(path) || await this.fs.readNoteRevision(path, RETRIEVAL_NOTE_BYTES) !== note.revision) throw guidanceError(new Error('Context changed; retry the question'), 'guid-9e2c5234ada24056');
-      for (const [path, note] of metadata) if (note && !sources.has(path) && (continuationPaths.has(path) || envelope.candidates?.some((c: any) => c.path === publicPath(path)))) {
+      for (const [path, note] of metadata) if (note && !sources.has(path) && (graphMode || continuationPaths.has(path) || envelope.candidates?.some((c: any) => c.path === publicPath(path)))) {
         if (!canAccess(path) || await this.fs.readNoteRevision(path, RETRIEVAL_NOTE_BYTES) !== note.revision) throw guidanceError(new Error('Context changed; retry the question'), 'guid-9e2c5234ada24056');
       }
       envelope.gaps = [...gaps];
@@ -170,6 +173,7 @@ export class QuestionPacketService {
       while (length() > maxChars && envelope.candidates?.length > 1) { envelope.candidates.pop(); envelope.truncated = true; }
       if (length() > maxChars) throw new PacketBudgetError('Response envelope exceeds maxChars; retry with a larger budget');
       if ([...sources.keys()].some(path => !canAccess(path))) throw guidanceError(new Error('Context changed; retry the question'), 'guid-9e2c5234ada24056');
+      if (graphMode && [...metadata].some(([path, note]) => note && !canAccess(path))) throw Error('Graph context changed');
       return envelope;
     };
     try {
@@ -210,6 +214,7 @@ export class QuestionPacketService {
       const ordered = [...candidates].sort((a, b) => Number(activatedPaths.has(b.path)) - Number(activatedPaths.has(a.path))
         || Number(knowledge(b.note.frontmatter)) - Number(knowledge(a.note.frontmatter)) || Number(sameIdentity.includes(b)) - Number(sameIdentity.includes(a)));
       const roots = ordered.filter(c => !social(c.path, c.note.frontmatter)).slice(0, 5);
+      if (graphMode) envelope.retrieval.graph = { depth: 2, state: constrainedQuery(query) ? 'suppressed_query_constraints' : 'expanded' };
       const rows: any[] = envelope.sources;
       const linked: Array<{ target: string; from: string; role: Role; locator?: Locator; prerequisite?: boolean; revision?: string }> = [];
       const socialLeads = new Map<string, string | undefined>();
@@ -232,6 +237,7 @@ export class QuestionPacketService {
         }
         const fm = note.frontmatter;
         const resolved = resolveEvidenceLocator(note.content, locator ?? {}, note.revision);
+        if (graphMode && locator?.malformed) resolved.valid = false;
         const locatorState: 'current' | 'stale' | 'unverified' = !resolved.valid ? 'stale' : resolved.specified ? 'current' : 'unverified';
         const preferredLine = resolved.valid && resolved.preferredLine ? bodyStartLine(note) + resolved.preferredLine - 1 : undefined;
         if (locatorState === 'stale') gaps.add('stale_evidence_locator');
@@ -242,13 +248,14 @@ export class QuestionPacketService {
         }
         const identityMatch = sameIdentity.some(c => c.path === path);
         const metadataMatch = candidates.some(c => c.path === path && c.hit.why?.some(reason => ['frontmatter_match', 'retrieval_cue_match'].includes(reason)));
-        if (!selected.passages.length && (identityMatch || metadataMatch || situation || (evidenceMode && (counterpointKind || prerequisite)))) selected = selectContextPassages({ content: note.content, query: '', maxChars: 1200, maxPassages: 1, startLine: bodyStartLine(note), preferredLine: bodyStartLine(note) });
+        if (!selected.passages.length && (identityMatch || metadataMatch || situation || graphMode || (evidenceMode && (counterpointKind || prerequisite)))) selected = selectContextPassages({ content: note.content, query: '', maxChars: 1200, maxPassages: 1, startLine: bodyStartLine(note), preferredLine: bodyStartLine(note) });
         const first = selected.passages[0];
         const readAction = first ? passageAction(publicPath(path), note.revision, first.startLine, first.endLine)
           : { endpointId: endpointIdForTool('get_note_outline'), arguments: { path: publicPath(path), expectedRevision: note.revision } };
         if (situation) selected = situationPassages(note.content, bodyStartLine(note), selected);
         const applicability = situation ? contextRuleState(fm.context_rules, `${query}\n${situation.context}`, situation.intent) : undefined;
         const row = { path: publicPath(path), title: text(fm.title) || text(basename(path, '.md')), revision: note.revision, role,
+          ...(graphMode && { graphPaths: [] as GraphEdge[][] }),
           ...(evidenceMode && prerequisite && { selectionReasons: ['explicit_prerequisite'] }),
           ...(situation && { applicability, selectionReasons: [role === 'counterpoint' ? 'explicit_counterpoint' : role === 'source' ? 'explicit_source' : role === 'related_context' ? 'explicit_prerequisite' : 'direct_question_match', ...(applicability === 'conditions_matched' ? ['context_rules_match'] : [])], ...(typeof fm.use_when === 'string' && fm.use_when.length <= 1000 && { declaredUseWhen: fm.use_when }) }),
           ...(counterpointKind && { counterpointKind }),
@@ -267,7 +274,37 @@ export class QuestionPacketService {
         else rows.push(row);
         return row;
       };
-      for (const root of roots) {
+      if (graphMode && !constrainedQuery(query)) {
+        for (const root of roots) if (root.hit.rv && root.note.revision !== root.hit.rv) throw Error('Graph root changed');
+        const graph = await discoverQuestionGraph({ fs: this.fs, roots, metadata: getMetadata, allowed: canAccess,
+          referenceAllowed: (from, to) => this.access.canReferenceFrom(from, to),
+          eligible: (path, note) => !social(path, note.frontmatter), metadataExhausted: () => examined > 40,
+          gap: (reason, path, revision) => { if (path && revision) deferContext(path, revision, reason); else gaps.add(reason); } });
+        const allocation = [...graph].sort((a, b) => graphBodyPriority(a) - graphBodyPriority(b));
+        const chosen = allocation.slice(0, 8);
+        for (const candidate of chosen) await load(candidate.path, candidate.note.revision);
+        for (const candidate of graph.filter(candidate => chosen.includes(candidate))) {
+          const note = sources.get(candidate.path); if (!note) continue;
+          const isCounterpoint = candidate.reasons.has('explicit_counterpoint') || counterpoint(note.frontmatter);
+          const role: Role = note.frontmatter.llm_wiki_type === 'source' ? 'source' : isCounterpoint ? 'counterpoint' : candidate.root ? 'knowledge' : 'related_context';
+          let row = addRow(candidate.path, note, role, query, candidate.locators[0], candidate.reasons.has('explicit_prerequisite'));
+          for (const pin of candidate.locators.slice(1)) row = addRow(candidate.path, note, role, query, pin, candidate.reasons.has('explicit_prerequisite'));
+          row.selectionReasons = [...candidate.reasons];
+          if (isCounterpoint) row.counterpointKind ||= 'explicit_contradiction';
+          row.graphPaths = candidate.paths.map(path => path.map(edge => ({ ...edge, from: publicPath(edge.from), to: publicPath(edge.to),
+            ...(edge.authorLocator && { authorLocator: { ...edge.authorLocator, path: publicPath(edge.authorLocator.path) } }),
+            ...(edge.locator && { locator: { ...edge.locator, path: publicPath(edge.locator.path) } }) })));
+        }
+        const omitted = allocation[8];
+        if (omitted?.note.revision) {
+          // A verified omitted body is actionable progress, unlike rereading
+          // the discovery root. Give it precedence over discovery gaps.
+          deferredAction = undefined;
+          deferContext(omitted.path, omitted.note.revision,
+          omitted.reasons.has('explicit_counterpoint') || omitted.reasons.has('negative_knowledge') ? 'counterpoint_omitted_read_before_deciding'
+            : omitted.reasons.has('explicit_prerequisite') ? 'prerequisite_omitted_read_before_deciding' : 'linked_context_window_exhausted');
+        }
+      } else for (const root of roots) {
         const note = await load(root.path, root.hit.rv); if (!note) continue;
         if (situation && !params.path && ['invalid', 'conditions_unmatched'].includes(contextRuleState(note.frontmatter.context_rules, `${query}\n${situation.context}`, situation.intent))) throw guidanceError(new Error('Context rule changed'), 'guid-41cc4a4dd68a9806');
         addRow(root.path, note, counterpoint(note.frontmatter) ? 'counterpoint' : note.frontmatter.llm_wiki_type === 'source' ? 'source' : 'knowledge', envelope.retrieval.usedQuery);

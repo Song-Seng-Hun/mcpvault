@@ -2941,17 +2941,21 @@ export class FileSystemService {
     return matches;
   }
 
-  async getBacklinks(path: string, limit: number = 100, canAccessPath: (path: string) => boolean = () => true, offset = 0, options: { includeSourceRevision?: boolean; includeSnapshot?: boolean; expectedRevision?: string } = {}): Promise<BacklinksResult> {
+  async getBacklinks(path: string, limit: number = 100, canAccessPath: (path: string) => boolean = () => true, offset = 0, options: { includeSourceRevision?: boolean; includeSnapshot?: boolean; expectedRevision?: string; readMetadata?: (path: string) => Promise<QueryNote | undefined>; metadataExhausted?: () => boolean; relations?: readonly string[]; inspectionBudget?: { remaining: number }; compact?: boolean } = {}): Promise<BacklinksResult> {
     const target = this.normalizePath(path);
     if (!this.pathFilter.isAllowed(target) || !canAccessPath(target)) throw guidanceError(new Error(`Access denied: ${target}`), 'guid-26a1bd21fd48991f');
-    const targetNote = options.expectedRevision === undefined ? await this.readNote(target)
+    const targetNote = options.readMetadata ? await options.readMetadata(target) : options.expectedRevision === undefined ? await this.readNote(target)
       : (await this.readNoteMetadata([target], canAccessPath, { fresh: true, strict: true }))[0];
     if (!targetNote || (options.expectedRevision !== undefined && targetNote.revision !== options.expectedRevision)) throw guidanceError(new Error('Backlink target revision changed'), 'guid-12470c1f8fe1a635');
     if (isModerationHidden(targetNote.frontmatter)) throw guidanceError(new Error(`Access denied: ${target}`), 'guid-26a1bd21fd48991f');
     return this.withGraphRead(graph => graph.withStableRead(canAccessPath, async () => {
       const result = await graph.getBacklinks(target, limit, canAccessPath, offset, async (sourcePath, revision) => {
+        // A request-owned metadata reader shares its budget/cache with graph
+        // discovery. Its budget exception is not a stale graph author.
+        const observed = options.readMetadata ? await options.readMetadata(sourcePath) : undefined;
+        if (options.readMetadata && !observed && options.metadataExhausted?.()) return 'budget_exhausted';
         try {
-          const current = await this.readNoteMetadata([sourcePath], canAccessPath, { fresh: true, strict: true });
+          const current = options.readMetadata ? observed ? [observed] : [] : await this.readNoteMetadata([sourcePath], canAccessPath, { fresh: true, strict: true });
           if (!current.length || isModerationHidden(current[0]!.frontmatter)) return false;
           if (current[0]!.revision !== revision) throw guidanceError(new Error('stale author'), 'guid-0bef5f45bbea9266');
           return true;
@@ -2959,7 +2963,7 @@ export class FileSystemService {
           graph.invalidate(sourcePath);
           throw guidanceError(new Error('Graph source changed or became unavailable; retry the query to refresh its snapshot.'), 'guid-16d3d56b92981cc2');
         }
-      }, true, options.includeSnapshot, targets => this.assertGraphTargetRevisions(graph, targets, canAccessPath));
+      }, true, options.includeSnapshot, targets => this.assertGraphTargetRevisions(graph, targets, canAccessPath), options.relations, options.inspectionBudget, options.compact);
       await this.assertGraphReadRevision(graph, target, result.targetRevision, canAccessPath, targetNote.revision);
       const sources = [...new Map(result.backlinks.map(link => [link.path, link.sourceRevision])).entries()];
       for (let offset = 0; offset < sources.length; offset += 8) {

@@ -30,6 +30,46 @@ async function fixture(hidden = false, headingOnly = false) {
   return { vault, graph, fs, io };
 }
 
+test('nested graph reads do not reconcile an unchanged view across the timer boundary', async () => {
+  const { graph } = await fixture();
+  let now = Date.now();
+  vi.spyOn(Date, 'now').mockImplementation(() => now);
+  (graph as any).lastFullRefreshAt = now - 4999;
+  const visible = () => true;
+  await expect(graph.withStableRead(visible, async () => {
+    now += 2;
+    return graph.getBacklinks('Root.md', 10, visible);
+  })).resolves.toMatchObject({ total: 1 });
+});
+
+test('nested graph reads still reject actual invalidation inside the captured view', async () => {
+  const { graph } = await fixture();
+  const visible = () => true;
+  await expect(graph.withStableRead(visible, async () => {
+    graph.invalidate('Author.md');
+    return graph.getBacklinks('Root.md', 10, visible);
+  })).rejects.toThrow(/changed/i);
+});
+
+test('an independent concurrent reader does not inherit another read generation', async () => {
+  const { graph } = await fixture();
+  const visible = () => true;
+  let release!: () => void, entered!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  const started = new Promise<void>(resolve => { entered = resolve; });
+  const held = graph.withStableRead(visible, async () => {
+    entered(); await gate;
+    return graph.getBacklinks('Root.md', 10, visible);
+  });
+  const rejected = expect(held).rejects.toThrow(/changed/i);
+  await started;
+  try {
+    graph.invalidate('Author.md');
+    await expect(graph.getBacklinks('Root.md', 10, visible)).resolves.toMatchObject({ total: 1 });
+  } finally { release(); }
+  await rejected;
+});
+
 test.each([false, true])('backlinks reject newly hidden nearby targets before returning context (headingOnly=%s)', async headingOnly => {
   const { vault, fs } = await fixture(false, headingOnly);
   await writeFile(join(vault, 'Neighbor.md'), '---\nmoderation_status: hidden\n---\n# Neighbor');

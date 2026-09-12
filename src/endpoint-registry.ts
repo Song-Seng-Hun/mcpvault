@@ -494,7 +494,7 @@ const ENDPOINT_ALIASES: Record<string, string[]> = {
   get_wiki_trail: ['wiki', 'trail', 'path', 'connection', 'multi-hop', 'graph', 'links', 'between notes'],
   get_wiki_placement_candidates: ['wiki', 'placement', 'para', 'folder', 'filing', 'organization', 'misplaced', 'lifecycle'],
   get_wiki_knowledge_gaps: ['wiki', 'question', 'hypothesis', 'experiment', 'reproducible', 'assumption', 'epistemic', 'active recall', 'research gap', 'disputed', 'negative knowledge'],
-  get_wiki_answer_packet: ['wiki', 'answer', 'question', 'query', 'context', 'packet', 'counterpoint', 'supporting', 'progressive', 'intent', 'reasoning trail', 'claim', 'evidence', 'decision', '질문', '근거', '답변'],
+  get_wiki_answer_packet: ['wiki', 'answer', 'question', 'query', 'context', 'packet', 'counterpoint', 'supporting', 'progressive', 'intent', 'reasoning trail', 'claim', 'evidence', 'decision', 'graph', 'two hop', 'graphDepth', '질문', '근거', '답변', '그래프'],
   get_wiki_source_comparison: ['wiki', 'source', 'comparison', 'compare', 'distill', 'new knowledge', 'existing knowledge', 'conflict', 'duplicate', '자료', '비교', '기존 지식', '중복'],
   get_wiki_applications: ['wiki', 'application', 'experience', 'experiment', 'retrospective', 'knowledge use', '적용', '경험', '환류'],
   get_wiki_claim_matrix: ['wiki', 'claim', 'matrix', 'evidence', 'coverage', 'source work', 'review', 'argument map', 'provenance'],

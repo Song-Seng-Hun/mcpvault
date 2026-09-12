@@ -419,6 +419,8 @@ export interface BacklinkMatch {
     propertyPath?: string;
 }
 export interface BacklinksResult {
+    /** Internal bounded inspection stopped; total is only an observed lower bound. */
+    inspectionTruncated?: boolean;
     snapshotFingerprint?: string;
     target: string;
     /** Opt-in revision of the target used by the link resolver. */

@@ -1,5 +1,6 @@
 import { guidanceError } from './guidance-runtime.js';
 import { watch, type FSWatcher } from 'node:fs';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { createHash } from 'node:crypto';
 import { join, posix, relative, resolve } from 'node:path';
 import { readdir, stat } from 'node:fs/promises';
@@ -171,6 +172,7 @@ export class VaultGraphIndex {
   private lastFullRefreshAt = 0;
   private lastContentAuditAt = 0;
   private changeGeneration = 0;
+  private readonly stableReadGeneration = new AsyncLocalStorage<number>();
   private readonly visibilityCache = new WeakMap<(path: string) => boolean, VisibilityContext>();
   private readonly catalogUnsubscribe: (() => void) | undefined;
 
@@ -238,14 +240,15 @@ export class VaultGraphIndex {
     await this.ensure();
     const generation = this.changeGeneration;
     const visible = this.visibilityContext(canAccessPath);
-    const result = await read();
+    const result = await this.stableReadGeneration.run(generation, read);
     if (this.changeGeneration !== generation || this.visibilityContext(canAccessPath) !== visible) {
       throw guidanceError(new Error('Graph changed or visibility changed during validation; retry the query. No stable graph view was returned.'), 'guid-20d7ae30ca95bf74');
     }
     return result;
   }
 
-  async getBacklinks(path: string, limit: number, canAccessPath: (path: string) => boolean, offset = 0, canIncludeSource?: (path: string, revision: string) => Promise<boolean>, includeSourceRevision = false, includeSnapshot = false, validateTargets?: (targets: ReadonlyMap<string, string>) => Promise<void>): Promise<BacklinksResult> {
+  async getBacklinks(path: string, limit: number, canAccessPath: (path: string) => boolean, offset = 0, canIncludeSource?: (path: string, revision: string) => Promise<boolean | 'budget_exhausted'>, includeSourceRevision = false, includeSnapshot = false, validateTargets?: (targets: ReadonlyMap<string, string>) => Promise<void>, relations?: readonly string[], inspectionBudget?: { remaining: number }, compact = false): Promise<BacklinksResult> {
+    if (inspectionBudget && (!Number.isSafeInteger(inspectionBudget.remaining) || inspectionBudget.remaining < 0)) throw Error('Invalid backlink inspection budget');
     await this.ensure();
     const startGeneration = this.changeGeneration;
     const target = normalizePath(path);
@@ -260,10 +263,17 @@ export class VaultGraphIndex {
     if (!targetEntry) throw guidanceError(new Error(`File not found: ${target}`), 'guid-1d1a89434322658c');
     if (!canAccessPath(targetEntry.path) || targetEntry.moderationHidden) throw guidanceError(new Error(`Access denied: ${target}`), 'guid-26a1bd21fd48991f');
     const snapshot = includeSnapshot ? new NavigationViewFingerprint(['backlinks', targetEntry.path, targetEntry.revision]) : undefined;
+    if (relations) snapshot?.add('relation_filter', targetEntry.revision, [...new Set(relations)].sort());
     const visible = this.visibilityContext(canAccessPath);
     const allResolver = buildResolver([...this.allPaths], this.entries);
-    const project = this.linkProjector(visible.resolver, allResolver);
-    const validationResolver = validateTargets ? this.targetValidationResolver(visible, canAccessPath) : visible.resolver;
+    // Internal evidence discovery needs only an authored occurrence, never its
+    // neighbouring text. Avoid the full-author redaction/dependency scan in
+    // this projection; ordinary navigation keeps its existing privacy checks.
+    const project = compact ? (_entry: GraphEntry, link: BacklinkMatch): BacklinkMatch => {
+      const { heading: _heading, ...identity } = link;
+      return { ...identity, context: '' };
+    } : this.linkProjector(visible.resolver, allResolver);
+    const validationResolver = validateTargets && !compact ? this.targetValidationResolver(visible, canAccessPath) : visible.resolver;
     const contexts = new Map<GraphEntry, { lines: Set<number>; headings: Set<string> }>();
     const sourceEntries = new Map<string, GraphEntry>();
     let total = 0;
@@ -274,17 +284,27 @@ export class VaultGraphIndex {
     const incoming = this.incomingBacklinks(visible);
     const edges = incoming ? incoming.get(normalizedTarget) || [] : this.matchingBacklinks(visible, normalizedTarget);
     const checkedSources = new Map<string, boolean>();
+    let inspectionTruncated = false;
     for (const { entry, link } of edges) {
         if (normalizedPath(entry.path) === normalizedTarget) continue;
+        // Internal bounded readers can reserve their fresh-author budget for
+        // a relation class without loading unrelated incoming authors first.
+        if (relations && (!link.relation || !relations.includes(link.relation))) continue;
+        if (inspectionBudget) {
+          if (!inspectionBudget.remaining) { inspectionTruncated = true; break; }
+          inspectionBudget.remaining--;
+        }
         // Check each matching author once, before counts and pagination. The
         // filesystem supplies a fresh, path-guarded moderation check so a
         // stale graph entry cannot disclose a newly hidden author's links.
         if (!checkedSources.has(entry.path)) {
-          checkedSources.set(entry.path, canAccessPath(entry.path) && (!canIncludeSource || await canIncludeSource(entry.path, entry.revision)));
+          const allowed = canAccessPath(entry.path) && (!canIncludeSource || await canIncludeSource(entry.path, entry.revision));
+          if (allowed === 'budget_exhausted') { inspectionTruncated = true; break; }
+          checkedSources.set(entry.path, allowed);
         }
         if (!checkedSources.get(entry.path)) continue;
         sourceEntries.set(entry.path, entry);
-        if (validateTargets) {
+        if (validateTargets && !compact) {
           let context = contexts.get(entry);
           if (!context) { context = { lines: new Set(), headings: new Set() }; contexts.set(entry, context); }
           context.lines.add(link.line);
@@ -308,7 +328,7 @@ export class VaultGraphIndex {
         snapshot?.add(entry.path, entry.revision, project(entry, backlink));
         backlinks.add({ link: backlink, order: total });
     }
-    if (validateTargets) {
+    if (validateTargets && !compact) {
       const targets = new Map<string, string>();
       for (const [entry, context] of contexts) {
         const collect = (link: { target: string; link: string }) => {
@@ -331,7 +351,9 @@ export class VaultGraphIndex {
       throw guidanceError(new Error('Graph changed or visibility changed during navigation; retry the query. No stable navigation view was returned.'), 'guid-bf4980aa26485245');
     }
     const page = backlinks.values().slice(offset, offset + limit).map(({ link }) => project(sourceEntries.get(link.path)!, link));
-    return { target, ...(includeSourceRevision && { targetRevision: targetEntry.revision }), ...(snapshot && { snapshotFingerprint: snapshot.finish() }), backlinks: page, total, truncated: total > offset + page.length };
+    if (inspectionTruncated) snapshot?.add('inspection_truncated', targetEntry.revision, total);
+    return { target, ...(includeSourceRevision && { targetRevision: targetEntry.revision }), ...(snapshot && { snapshotFingerprint: snapshot.finish() }), backlinks: page, total,
+      ...(inspectionTruncated && { inspectionTruncated: true }), truncated: inspectionTruncated || total > offset + page.length };
   }
 
   async getOutlinks(path: string, limit: number, canAccessPath: (path: string) => boolean, offset = 0, includeSourceRevision = false, includeSnapshot = false, validateTargets?: (targets: ReadonlyMap<string, string>) => Promise<void>): Promise<{ source: string; sourceRevision?: string; snapshotFingerprint?: string; outlinks: OutlinkMatch[]; total: number; truncated: boolean }> {
@@ -467,6 +489,17 @@ export class VaultGraphIndex {
 
   private async ensure(): Promise<void> {
     await this.catalog?.flushPendingEvents();
+    const captured = this.stableReadGeneration.getStore();
+    if (captured !== undefined) {
+      // A nested query shares this asynchronous read's prepared view. Do not
+      // trigger scheduled reconciliation after its generation was captured.
+      // Independent callers have their own context; real invalidations still
+      // fail closed, as do visibility/revision changes at the read boundaries.
+      if (captured !== this.changeGeneration || this.needsFullRefresh || this.dirty.size) {
+        throw Error('Graph changed during stable read; retry the query.');
+      }
+      return;
+    }
     this.startWatcher();
     for (let attempt = 0; attempt < 3; attempt++) {
       if (this.refreshPromise) await this.refreshPromise;

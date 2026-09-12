@@ -1,5 +1,6 @@
 import { guidanceError } from './guidance-runtime.js';
 import { watch } from 'node:fs';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { createHash } from 'node:crypto';
 import { join, posix, relative, resolve } from 'node:path';
 import { readdir, stat } from 'node:fs/promises';
@@ -142,6 +143,7 @@ export class VaultGraphIndex {
     lastFullRefreshAt = 0;
     lastContentAuditAt = 0;
     changeGeneration = 0;
+    stableReadGeneration = new AsyncLocalStorage();
     visibilityCache = new WeakMap();
     catalogUnsubscribe;
     constructor(vaultPath, pathFilter, frontmatter, catalog, vaultIo = new VaultIoCoordinator()) {
@@ -210,13 +212,15 @@ export class VaultGraphIndex {
         await this.ensure();
         const generation = this.changeGeneration;
         const visible = this.visibilityContext(canAccessPath);
-        const result = await read();
+        const result = await this.stableReadGeneration.run(generation, read);
         if (this.changeGeneration !== generation || this.visibilityContext(canAccessPath) !== visible) {
             throw guidanceError(new Error('Graph changed or visibility changed during validation; retry the query. No stable graph view was returned.'), 'guid-20d7ae30ca95bf74');
         }
         return result;
     }
-    async getBacklinks(path, limit, canAccessPath, offset = 0, canIncludeSource, includeSourceRevision = false, includeSnapshot = false, validateTargets) {
+    async getBacklinks(path, limit, canAccessPath, offset = 0, canIncludeSource, includeSourceRevision = false, includeSnapshot = false, validateTargets, relations, inspectionBudget, compact = false) {
+        if (inspectionBudget && (!Number.isSafeInteger(inspectionBudget.remaining) || inspectionBudget.remaining < 0))
+            throw Error('Invalid backlink inspection budget');
         await this.ensure();
         const startGeneration = this.changeGeneration;
         const target = normalizePath(path);
@@ -233,10 +237,18 @@ export class VaultGraphIndex {
         if (!canAccessPath(targetEntry.path) || targetEntry.moderationHidden)
             throw guidanceError(new Error(`Access denied: ${target}`), 'guid-26a1bd21fd48991f');
         const snapshot = includeSnapshot ? new NavigationViewFingerprint(['backlinks', targetEntry.path, targetEntry.revision]) : undefined;
+        if (relations)
+            snapshot?.add('relation_filter', targetEntry.revision, [...new Set(relations)].sort());
         const visible = this.visibilityContext(canAccessPath);
         const allResolver = buildResolver([...this.allPaths], this.entries);
-        const project = this.linkProjector(visible.resolver, allResolver);
-        const validationResolver = validateTargets ? this.targetValidationResolver(visible, canAccessPath) : visible.resolver;
+        // Internal evidence discovery needs only an authored occurrence, never its
+        // neighbouring text. Avoid the full-author redaction/dependency scan in
+        // this projection; ordinary navigation keeps its existing privacy checks.
+        const project = compact ? (_entry, link) => {
+            const { heading: _heading, ...identity } = link;
+            return { ...identity, context: '' };
+        } : this.linkProjector(visible.resolver, allResolver);
+        const validationResolver = validateTargets && !compact ? this.targetValidationResolver(visible, canAccessPath) : visible.resolver;
         const contexts = new Map();
         const sourceEntries = new Map();
         let total = 0;
@@ -246,19 +258,36 @@ export class VaultGraphIndex {
         const incoming = this.incomingBacklinks(visible);
         const edges = incoming ? incoming.get(normalizedTarget) || [] : this.matchingBacklinks(visible, normalizedTarget);
         const checkedSources = new Map();
+        let inspectionTruncated = false;
         for (const { entry, link } of edges) {
             if (normalizedPath(entry.path) === normalizedTarget)
                 continue;
+            // Internal bounded readers can reserve their fresh-author budget for
+            // a relation class without loading unrelated incoming authors first.
+            if (relations && (!link.relation || !relations.includes(link.relation)))
+                continue;
+            if (inspectionBudget) {
+                if (!inspectionBudget.remaining) {
+                    inspectionTruncated = true;
+                    break;
+                }
+                inspectionBudget.remaining--;
+            }
             // Check each matching author once, before counts and pagination. The
             // filesystem supplies a fresh, path-guarded moderation check so a
             // stale graph entry cannot disclose a newly hidden author's links.
             if (!checkedSources.has(entry.path)) {
-                checkedSources.set(entry.path, canAccessPath(entry.path) && (!canIncludeSource || await canIncludeSource(entry.path, entry.revision)));
+                const allowed = canAccessPath(entry.path) && (!canIncludeSource || await canIncludeSource(entry.path, entry.revision));
+                if (allowed === 'budget_exhausted') {
+                    inspectionTruncated = true;
+                    break;
+                }
+                checkedSources.set(entry.path, allowed);
             }
             if (!checkedSources.get(entry.path))
                 continue;
             sourceEntries.set(entry.path, entry);
-            if (validateTargets) {
+            if (validateTargets && !compact) {
                 let context = contexts.get(entry);
                 if (!context) {
                     context = { lines: new Set(), headings: new Set() };
@@ -286,7 +315,7 @@ export class VaultGraphIndex {
             snapshot?.add(entry.path, entry.revision, project(entry, backlink));
             backlinks.add({ link: backlink, order: total });
         }
-        if (validateTargets) {
+        if (validateTargets && !compact) {
             const targets = new Map();
             for (const [entry, context] of contexts) {
                 const collect = (link) => {
@@ -315,7 +344,10 @@ export class VaultGraphIndex {
             throw guidanceError(new Error('Graph changed or visibility changed during navigation; retry the query. No stable navigation view was returned.'), 'guid-bf4980aa26485245');
         }
         const page = backlinks.values().slice(offset, offset + limit).map(({ link }) => project(sourceEntries.get(link.path), link));
-        return { target, ...(includeSourceRevision && { targetRevision: targetEntry.revision }), ...(snapshot && { snapshotFingerprint: snapshot.finish() }), backlinks: page, total, truncated: total > offset + page.length };
+        if (inspectionTruncated)
+            snapshot?.add('inspection_truncated', targetEntry.revision, total);
+        return { target, ...(includeSourceRevision && { targetRevision: targetEntry.revision }), ...(snapshot && { snapshotFingerprint: snapshot.finish() }), backlinks: page, total,
+            ...(inspectionTruncated && { inspectionTruncated: true }), truncated: inspectionTruncated || total > offset + page.length };
     }
     async getOutlinks(path, limit, canAccessPath, offset = 0, includeSourceRevision = false, includeSnapshot = false, validateTargets) {
         await this.ensure();
@@ -467,6 +499,17 @@ export class VaultGraphIndex {
     }
     async ensure() {
         await this.catalog?.flushPendingEvents();
+        const captured = this.stableReadGeneration.getStore();
+        if (captured !== undefined) {
+            // A nested query shares this asynchronous read's prepared view. Do not
+            // trigger scheduled reconciliation after its generation was captured.
+            // Independent callers have their own context; real invalidations still
+            // fail closed, as do visibility/revision changes at the read boundaries.
+            if (captured !== this.changeGeneration || this.needsFullRefresh || this.dirty.size) {
+                throw Error('Graph changed during stable read; retry the query.');
+            }
+            return;
+        }
         this.startWatcher();
         for (let attempt = 0; attempt < 3; attempt++) {
             if (this.refreshPromise)

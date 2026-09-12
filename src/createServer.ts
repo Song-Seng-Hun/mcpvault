@@ -2109,7 +2109,12 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         }
 
         case "get_wiki_answer_packet": {
-          if (trimmedArgs.query !== undefined) return jsonResult(await questionPacket.read({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
+          if (trimmedArgs.query !== undefined) {
+            const result = await questionPacket.read({ ...trimmedArgs, principal });
+            if (trimmedArgs.graphDepth === 2 && JSON.stringify(await scopeAuth.authenticate(rawArgs.accessToken)) !== JSON.stringify(principal)) throw new Error('Authentication changed; retry graph request');
+            return jsonResult(result, trimmedArgs.prettyPrint);
+          }
+          if (trimmedArgs.graphDepth !== undefined && trimmedArgs.graphDepth !== 1) throw new Error('graphDepth 2 requires query and evidence retrieval');
           if (trimmedArgs.retrievalMode !== undefined) throw new Error('retrievalMode requires query');
           return jsonResult(await llmWiki.answerPacket(principal, trimmedArgs.path, trimmedArgs.maxChars, trimmedArgs.includeSemantic !== false, trimmedArgs.intent), trimmedArgs.prettyPrint);
         }

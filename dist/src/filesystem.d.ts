@@ -302,6 +302,13 @@ export declare class FileSystemService {
         includeSourceRevision?: boolean;
         includeSnapshot?: boolean;
         expectedRevision?: string;
+        readMetadata?: (path: string) => Promise<QueryNote | undefined>;
+        metadataExhausted?: () => boolean;
+        relations?: readonly string[];
+        inspectionBudget?: {
+            remaining: number;
+        };
+        compact?: boolean;
     }): Promise<BacklinksResult>;
     private assertGraphReadRevision;
     private withGraphRead;

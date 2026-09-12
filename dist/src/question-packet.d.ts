@@ -10,6 +10,7 @@ export interface QuestionParams {
     expectedRevision?: string;
     includeSemantic?: boolean;
     retrievalMode?: RetrievalMode;
+    graphDepth?: 1 | 2;
     maxChars?: number;
     prettyPrint?: boolean;
     principal?: ScopePrincipal;

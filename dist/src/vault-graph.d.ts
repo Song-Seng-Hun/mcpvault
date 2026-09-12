@@ -26,6 +26,7 @@ export declare class VaultGraphIndex {
     private lastFullRefreshAt;
     private lastContentAuditAt;
     private changeGeneration;
+    private readonly stableReadGeneration;
     private readonly visibilityCache;
     private readonly catalogUnsubscribe;
     constructor(vaultPath: string, pathFilter: PathFilter, frontmatter: FrontmatterHandler, catalog?: VaultFileCatalog | undefined, vaultIo?: VaultIoCoordinator);
@@ -34,7 +35,9 @@ export declare class VaultGraphIndex {
     close(): void;
     /** Keep caller-side asynchronous source validation inside the same view. */
     withStableRead<T>(canAccessPath: (path: string) => boolean, read: () => Promise<T>): Promise<T>;
-    getBacklinks(path: string, limit: number, canAccessPath: (path: string) => boolean, offset?: number, canIncludeSource?: (path: string, revision: string) => Promise<boolean>, includeSourceRevision?: boolean, includeSnapshot?: boolean, validateTargets?: (targets: ReadonlyMap<string, string>) => Promise<void>): Promise<BacklinksResult>;
+    getBacklinks(path: string, limit: number, canAccessPath: (path: string) => boolean, offset?: number, canIncludeSource?: (path: string, revision: string) => Promise<boolean | 'budget_exhausted'>, includeSourceRevision?: boolean, includeSnapshot?: boolean, validateTargets?: (targets: ReadonlyMap<string, string>) => Promise<void>, relations?: readonly string[], inspectionBudget?: {
+        remaining: number;
+    }, compact?: boolean): Promise<BacklinksResult>;
     getOutlinks(path: string, limit: number, canAccessPath: (path: string) => boolean, offset?: number, includeSourceRevision?: boolean, includeSnapshot?: boolean, validateTargets?: (targets: ReadonlyMap<string, string>) => Promise<void>): Promise<{
         source: string;
         sourceRevision?: string;

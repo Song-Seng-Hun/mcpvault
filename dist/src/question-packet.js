@@ -12,13 +12,13 @@ import { sourceWorkIdentity } from './source-provenance.js';
 import { CONTEXT_INTENTS, contextRuleState } from './context-rules.js';
 import { isSituationMemory, selectSituationCandidates, situationPassages } from './context-selection.js';
 import { isFictionDomain } from './fiction-domain.js';
+import { discoverQuestionGraph, graphBodyPriority, isPacketCounterpoint as counterpoint } from './question-graph.js';
 const hash = (s) => createHash('sha256').update(s).digest('hex');
 const text = (v, max = 180) => typeof v === 'string' ? v.slice(0, max) : '';
 const identity = (v) => v.trim().toLocaleLowerCase();
 const knowledge = (fm) => fm.llm_wiki_type === 'knowledge' || Boolean(fm.note_kind && fm.llm_wiki_type !== 'source' && !fm.mcpvault_type);
 const skillReference = (fm) => fm.note_kind === 'skill' && fm.llm_wiki_type === 'knowledge' && !fm.mcpvault_type;
 const social = (path, fm) => (/(?:^|\/)Community\//i.test(path) && !skillReference(fm)) || Boolean(fm.mcpvault_type) || fm.llm_wiki_type === 'issue' || fm.note_kind === 'task';
-const counterpoint = (fm) => fm.knowledge_polarity === 'negative' || fm.polarity === 'negative' || fm.note_kind === 'negative_knowledge' || fm.knowledge_role === 'negative_knowledge';
 class PacketBudgetError extends Error {
 }
 /** A per-request bounded source reader, not a generated answer or a second
@@ -45,6 +45,11 @@ export class QuestionPacketService {
         if (params.retrievalMode !== undefined && !['legacy', 'evidence'].includes(params.retrievalMode))
             throw new Error('Invalid retrievalMode');
         const evidenceMode = !situation && params.retrievalMode === 'evidence';
+        if (params.graphDepth !== undefined && params.graphDepth !== 1 && params.graphDepth !== 2)
+            throw Error('graphDepth must be 1 or 2');
+        if (params.graphDepth === 2 && !evidenceMode)
+            throw Error('graphDepth 2 requires query and evidence retrieval');
+        const graphMode = params.graphDepth === 2;
         if (typeof params.query !== 'string' || !params.query.trim() || params.query.length > 1000)
             throw guidanceError(new Error('query must contain 1–1000 characters'), 'guid-81281f7bddea83f8');
         const maxChars = params.maxChars ?? 4000;
@@ -105,7 +110,7 @@ export class QuestionPacketService {
             sources.set(path, value);
             return value;
         };
-        const retry = { endpointId: situation ? 'wiki.context_pack' : 'wiki.answer_packet', arguments: { query, ...(params.path && { path: params.path.startsWith('scope://') ? params.path : publicPath(params.path) }), ...(situation && { ...situation }), ...(evidenceMode && { retrievalMode: 'evidence' }), includeSemantic: params.includeSemantic !== false, maxChars } };
+        const retry = { endpointId: situation ? 'wiki.context_pack' : 'wiki.answer_packet', arguments: { query, ...(params.path && { path: params.path.startsWith('scope://') ? params.path : publicPath(params.path) }), ...(situation && { ...situation }), ...(evidenceMode && { retrievalMode: 'evidence' }), ...(graphMode && { graphDepth: 2 }), includeSemantic: params.includeSemantic !== false, maxChars } };
         const envelope = { mode: situation ? 'situation' : 'question', status: 'no_match', query, ...(situation && { intent: situation.intent }),
             retrieval: { usedQuery: query, expanded: false, semantic: { state: 'disabled' } },
             sources: [], gaps: [], truncated: false,
@@ -145,7 +150,7 @@ export class QuestionPacketService {
                 if (!canAccess(path) || await this.fs.readNoteRevision(path, RETRIEVAL_NOTE_BYTES) !== note.revision)
                     throw guidanceError(new Error('Context changed; retry the question'), 'guid-9e2c5234ada24056');
             for (const [path, note] of metadata)
-                if (note && !sources.has(path) && (continuationPaths.has(path) || envelope.candidates?.some((c) => c.path === publicPath(path)))) {
+                if (note && !sources.has(path) && (graphMode || continuationPaths.has(path) || envelope.candidates?.some((c) => c.path === publicPath(path)))) {
                     if (!canAccess(path) || await this.fs.readNoteRevision(path, RETRIEVAL_NOTE_BYTES) !== note.revision)
                         throw guidanceError(new Error('Context changed; retry the question'), 'guid-9e2c5234ada24056');
                 }
@@ -217,6 +222,8 @@ export class QuestionPacketService {
                 throw new PacketBudgetError('Response envelope exceeds maxChars; retry with a larger budget');
             if ([...sources.keys()].some(path => !canAccess(path)))
                 throw guidanceError(new Error('Context changed; retry the question'), 'guid-9e2c5234ada24056');
+            if (graphMode && [...metadata].some(([path, note]) => note && !canAccess(path)))
+                throw Error('Graph context changed');
             return envelope;
         };
         try {
@@ -265,6 +272,8 @@ export class QuestionPacketService {
             const ordered = [...candidates].sort((a, b) => Number(activatedPaths.has(b.path)) - Number(activatedPaths.has(a.path))
                 || Number(knowledge(b.note.frontmatter)) - Number(knowledge(a.note.frontmatter)) || Number(sameIdentity.includes(b)) - Number(sameIdentity.includes(a)));
             const roots = ordered.filter(c => !social(c.path, c.note.frontmatter)).slice(0, 5);
+            if (graphMode)
+                envelope.retrieval.graph = { depth: 2, state: constrainedQuery(query) ? 'suppressed_query_constraints' : 'expanded' };
             const rows = envelope.sources;
             const linked = [];
             const socialLeads = new Map();
@@ -293,6 +302,8 @@ export class QuestionPacketService {
                 }
                 const fm = note.frontmatter;
                 const resolved = resolveEvidenceLocator(note.content, locator ?? {}, note.revision);
+                if (graphMode && locator?.malformed)
+                    resolved.valid = false;
                 const locatorState = !resolved.valid ? 'stale' : resolved.specified ? 'current' : 'unverified';
                 const preferredLine = resolved.valid && resolved.preferredLine ? bodyStartLine(note) + resolved.preferredLine - 1 : undefined;
                 if (locatorState === 'stale')
@@ -304,7 +315,7 @@ export class QuestionPacketService {
                 }
                 const identityMatch = sameIdentity.some(c => c.path === path);
                 const metadataMatch = candidates.some(c => c.path === path && c.hit.why?.some(reason => ['frontmatter_match', 'retrieval_cue_match'].includes(reason)));
-                if (!selected.passages.length && (identityMatch || metadataMatch || situation || (evidenceMode && (counterpointKind || prerequisite))))
+                if (!selected.passages.length && (identityMatch || metadataMatch || situation || graphMode || (evidenceMode && (counterpointKind || prerequisite))))
                     selected = selectContextPassages({ content: note.content, query: '', maxChars: 1200, maxPassages: 1, startLine: bodyStartLine(note), preferredLine: bodyStartLine(note) });
                 const first = selected.passages[0];
                 const readAction = first ? passageAction(publicPath(path), note.revision, first.startLine, first.endLine)
@@ -313,6 +324,7 @@ export class QuestionPacketService {
                     selected = situationPassages(note.content, bodyStartLine(note), selected);
                 const applicability = situation ? contextRuleState(fm.context_rules, `${query}\n${situation.context}`, situation.intent) : undefined;
                 const row = { path: publicPath(path), title: text(fm.title) || text(basename(path, '.md')), revision: note.revision, role,
+                    ...(graphMode && { graphPaths: [] }),
                     ...(evidenceMode && prerequisite && { selectionReasons: ['explicit_prerequisite'] }),
                     ...(situation && { applicability, selectionReasons: [role === 'counterpoint' ? 'explicit_counterpoint' : role === 'source' ? 'explicit_source' : role === 'related_context' ? 'explicit_prerequisite' : 'direct_question_match', ...(applicability === 'conditions_matched' ? ['context_rules_match'] : [])], ...(typeof fm.use_when === 'string' && fm.use_when.length <= 1000 && { declaredUseWhen: fm.use_when }) }),
                     ...(counterpointKind && { counterpointKind }),
@@ -335,56 +347,97 @@ export class QuestionPacketService {
                     rows.push(row);
                 return row;
             };
-            for (const root of roots) {
-                const note = await load(root.path, root.hit.rv);
-                if (!note)
-                    continue;
-                if (situation && !params.path && ['invalid', 'conditions_unmatched'].includes(contextRuleState(note.frontmatter.context_rules, `${query}\n${situation.context}`, situation.intent)))
-                    throw guidanceError(new Error('Context rule changed'), 'guid-41cc4a4dd68a9806');
-                addRow(root.path, note, counterpoint(note.frontmatter) ? 'counterpoint' : note.frontmatter.llm_wiki_type === 'source' ? 'source' : 'knowledge', envelope.retrieval.usedQuery);
-                const fm = note.frontmatter;
-                const allClaims = (Array.isArray(fm.claims) ? fm.claims : []).filter(c => c && typeof c === 'object');
-                const claims = allClaims.slice(0, 12);
-                const allLocators = [...(Array.isArray(fm.evidence) ? fm.evidence : []), ...claims.flatMap(c => Array.isArray(c.evidence) ? c.evidence : Array.isArray(c.evidence_paths) ? c.evidence_paths : [])];
-                if (evidenceMode && (allClaims.length > 12 || allLocators.length > 12 || (Array.isArray(fm.evidence_paths) && fm.evidence_paths.length > 12)))
-                    deferContext(root.path, note.revision, 'evidence_declaration_window_exhausted');
-                const locators = allLocators.slice(0, 12);
-                for (const e of locators) {
-                    const locator = typeof e === 'string' ? { path: e } : e;
-                    if (locator && typeof locator.path === 'string')
-                        linked.push({ target: locator.path, from: root.path, role: 'source', locator });
-                }
-                for (const path of (Array.isArray(fm.evidence_paths) ? fm.evidence_paths : []).slice(0, 12))
-                    if (typeof path === 'string')
-                        linked.push({ target: path, from: root.path, role: 'source' });
-                for (const [field, role] of [['contradicts', 'counterpoint'], ['supports', 'related_context'], ['related', 'related_context'], ['depends_on', 'related_context']]) {
-                    if (situation && (field === 'supports' || field === 'related'))
+            if (graphMode && !constrainedQuery(query)) {
+                for (const root of roots)
+                    if (root.hit.rv && root.note.revision !== root.hit.rv)
+                        throw Error('Graph root changed');
+                const graph = await discoverQuestionGraph({ fs: this.fs, roots, metadata: getMetadata, allowed: canAccess,
+                    referenceAllowed: (from, to) => this.access.canReferenceFrom(from, to),
+                    eligible: (path, note) => !social(path, note.frontmatter), metadataExhausted: () => examined > 40,
+                    gap: (reason, path, revision) => { if (path && revision)
+                        deferContext(path, revision, reason);
+                    else
+                        gaps.add(reason); } });
+                const allocation = [...graph].sort((a, b) => graphBodyPriority(a) - graphBodyPriority(b));
+                const chosen = allocation.slice(0, 8);
+                for (const candidate of chosen)
+                    await load(candidate.path, candidate.note.revision);
+                for (const candidate of graph.filter(candidate => chosen.includes(candidate))) {
+                    const note = sources.get(candidate.path);
+                    if (!note)
                         continue;
-                    const references = Array.isArray(fm[field]) ? fm[field] : [];
-                    if (evidenceMode && references.length > 8)
-                        deferContext(root.path, note.revision, 'relation_window_exhausted');
-                    for (const path of references.slice(0, 8))
-                        if (typeof path === 'string')
-                            linked.push({ target: path, from: root.path, role, ...(evidenceMode && field === 'depends_on' && { prerequisite: true }) });
+                    const isCounterpoint = candidate.reasons.has('explicit_counterpoint') || counterpoint(note.frontmatter);
+                    const role = note.frontmatter.llm_wiki_type === 'source' ? 'source' : isCounterpoint ? 'counterpoint' : candidate.root ? 'knowledge' : 'related_context';
+                    let row = addRow(candidate.path, note, role, query, candidate.locators[0], candidate.reasons.has('explicit_prerequisite'));
+                    for (const pin of candidate.locators.slice(1))
+                        row = addRow(candidate.path, note, role, query, pin, candidate.reasons.has('explicit_prerequisite'));
+                    row.selectionReasons = [...candidate.reasons];
+                    if (isCounterpoint)
+                        row.counterpointKind ||= 'explicit_contradiction';
+                    row.graphPaths = candidate.paths.map(path => path.map(edge => ({ ...edge, from: publicPath(edge.from), to: publicPath(edge.to),
+                        ...(edge.authorLocator && { authorLocator: { ...edge.authorLocator, path: publicPath(edge.authorLocator.path) } }),
+                        ...(edge.locator && { locator: { ...edge.locator, path: publicPath(edge.locator.path) } }) })));
                 }
-                if (situation || (evidenceMode && !constrainedQuery(query))) {
-                    const backlinks = await this.fs.getBacklinks(root.path, 20, canAccess, 0, { includeSourceRevision: true, ...(evidenceMode && { includeSnapshot: true }), expectedRevision: note.revision });
-                    for (const b of backlinks.backlinks)
-                        if (b.relation === 'contradicts' || b.relation === 'claim_contradicts') {
-                            if (evidenceMode && !b.sourceRevision) {
-                                deferContext(root.path, note.revision, 'reverse_relation_revision_unavailable');
-                                continue;
-                            }
-                            linked.push({ target: b.path, from: root.path, role: 'counterpoint', ...(evidenceMode && b.sourceRevision && { revision: b.sourceRevision }) });
-                        }
-                    if (backlinks.truncated)
-                        gaps.add('reverse_relation_window_exhausted');
-                    if (evidenceMode && backlinks.truncated)
-                        deferContext(root.path, note.revision, 'reverse_relation_window_exhausted', {
-                            endpointId: endpointIdForTool('get_backlinks'), arguments: { path: publicPath(root.path), offset: 20, limit: 20, maxChars: 4000, expectedSnapshot: backlinks.snapshotFingerprint },
-                        });
+                const omitted = allocation[8];
+                if (omitted?.note.revision) {
+                    // A verified omitted body is actionable progress, unlike rereading
+                    // the discovery root. Give it precedence over discovery gaps.
+                    deferredAction = undefined;
+                    deferContext(omitted.path, omitted.note.revision, omitted.reasons.has('explicit_counterpoint') || omitted.reasons.has('negative_knowledge') ? 'counterpoint_omitted_read_before_deciding'
+                        : omitted.reasons.has('explicit_prerequisite') ? 'prerequisite_omitted_read_before_deciding' : 'linked_context_window_exhausted');
                 }
             }
+            else
+                for (const root of roots) {
+                    const note = await load(root.path, root.hit.rv);
+                    if (!note)
+                        continue;
+                    if (situation && !params.path && ['invalid', 'conditions_unmatched'].includes(contextRuleState(note.frontmatter.context_rules, `${query}\n${situation.context}`, situation.intent)))
+                        throw guidanceError(new Error('Context rule changed'), 'guid-41cc4a4dd68a9806');
+                    addRow(root.path, note, counterpoint(note.frontmatter) ? 'counterpoint' : note.frontmatter.llm_wiki_type === 'source' ? 'source' : 'knowledge', envelope.retrieval.usedQuery);
+                    const fm = note.frontmatter;
+                    const allClaims = (Array.isArray(fm.claims) ? fm.claims : []).filter(c => c && typeof c === 'object');
+                    const claims = allClaims.slice(0, 12);
+                    const allLocators = [...(Array.isArray(fm.evidence) ? fm.evidence : []), ...claims.flatMap(c => Array.isArray(c.evidence) ? c.evidence : Array.isArray(c.evidence_paths) ? c.evidence_paths : [])];
+                    if (evidenceMode && (allClaims.length > 12 || allLocators.length > 12 || (Array.isArray(fm.evidence_paths) && fm.evidence_paths.length > 12)))
+                        deferContext(root.path, note.revision, 'evidence_declaration_window_exhausted');
+                    const locators = allLocators.slice(0, 12);
+                    for (const e of locators) {
+                        const locator = typeof e === 'string' ? { path: e } : e;
+                        if (locator && typeof locator.path === 'string')
+                            linked.push({ target: locator.path, from: root.path, role: 'source', locator });
+                    }
+                    for (const path of (Array.isArray(fm.evidence_paths) ? fm.evidence_paths : []).slice(0, 12))
+                        if (typeof path === 'string')
+                            linked.push({ target: path, from: root.path, role: 'source' });
+                    for (const [field, role] of [['contradicts', 'counterpoint'], ['supports', 'related_context'], ['related', 'related_context'], ['depends_on', 'related_context']]) {
+                        if (situation && (field === 'supports' || field === 'related'))
+                            continue;
+                        const references = Array.isArray(fm[field]) ? fm[field] : [];
+                        if (evidenceMode && references.length > 8)
+                            deferContext(root.path, note.revision, 'relation_window_exhausted');
+                        for (const path of references.slice(0, 8))
+                            if (typeof path === 'string')
+                                linked.push({ target: path, from: root.path, role, ...(evidenceMode && field === 'depends_on' && { prerequisite: true }) });
+                    }
+                    if (situation || (evidenceMode && !constrainedQuery(query))) {
+                        const backlinks = await this.fs.getBacklinks(root.path, 20, canAccess, 0, { includeSourceRevision: true, ...(evidenceMode && { includeSnapshot: true }), expectedRevision: note.revision });
+                        for (const b of backlinks.backlinks)
+                            if (b.relation === 'contradicts' || b.relation === 'claim_contradicts') {
+                                if (evidenceMode && !b.sourceRevision) {
+                                    deferContext(root.path, note.revision, 'reverse_relation_revision_unavailable');
+                                    continue;
+                                }
+                                linked.push({ target: b.path, from: root.path, role: 'counterpoint', ...(evidenceMode && b.sourceRevision && { revision: b.sourceRevision }) });
+                            }
+                        if (backlinks.truncated)
+                            gaps.add('reverse_relation_window_exhausted');
+                        if (evidenceMode && backlinks.truncated)
+                            deferContext(root.path, note.revision, 'reverse_relation_window_exhausted', {
+                                endpointId: endpointIdForTool('get_backlinks'), arguments: { path: publicPath(root.path), offset: 20, limit: 20, maxChars: 4000, expectedSnapshot: backlinks.snapshotFingerprint },
+                            });
+                    }
+                }
             const resolveReference = this.fs.createNoteReferenceResolver(canAccess, getMetadata);
             if (evidenceMode && constrainedQuery(query) && linked.length) {
                 const root = sources.get(linked[0].from);
