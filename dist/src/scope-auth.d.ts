@@ -128,7 +128,9 @@ export declare class ScopeAuthService {
             };
         };
     }>;
-    listPrincipals(): Promise<ScopePrincipal[]>;
+    listPrincipals(options?: {
+        fresh?: boolean;
+    }): Promise<ScopePrincipal[]>;
     updateAgentCapabilities(params: {
         accessToken: string;
         agentId: string;

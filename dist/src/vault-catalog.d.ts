@@ -24,6 +24,7 @@ export declare class VaultFileCatalog {
     private readonly vaultPath;
     private readonly listeners;
     private readonly batchListeners;
+    private readonly reconcileListeners;
     private paths;
     private allPaths;
     private refreshPromise;
@@ -48,6 +49,9 @@ export declare class VaultFileCatalog {
     subscribe(listener: VaultCatalogListener): () => void;
     /** Subscribe to coalesced watcher changes so read models invalidate once per batch. */
     subscribeBatch(listener: VaultCatalogBatchListener): () => void;
+    /** Observe an existing completed reconciliation without invalidating indexes
+     * that are currently consuming that inventory. No extra watcher or timer. */
+    subscribeReconcile(listener: () => void): () => void;
     /** Mark a mutation already handled by the write path without broadcasting it twice. */
     invalidate(path?: string): void;
     /** Invalidate several direct mutations with one generation/cache update. */

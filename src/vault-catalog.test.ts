@@ -22,6 +22,18 @@ async function writeNote(path: string, content: string): Promise<void> {
 }
 
 describe('VaultFileCatalog', () => {
+  test('completed reconciliation notifies host maintenance once without changing ordinary batch semantics', async () => {
+    vaultPath = await mkdtemp(join(tmpdir(), 'mcpvault-catalog-'));
+    await writeNote('A.md', 'Current source'); catalog = new VaultFileCatalog(vaultPath, new PathFilter());
+    await catalog.listNotePaths(); let reconciled = 0; let batches = 0;
+    const stop = catalog.subscribeReconcile(() => { reconciled++; });
+    const stopBatch = catalog.subscribeBatch(() => { batches++; });
+    (catalog as any).lastReconciledAt = Date.now() - 60001;
+    await catalog.listNotePaths(); await catalog.listNotePaths();
+    expect(reconciled).toBe(1); expect(batches).toBe(0);
+    stop(); stopBatch(); (catalog as any).lastReconciledAt = Date.now() - 60001;
+    await catalog.listNotePaths(); expect(reconciled).toBe(1);
+  });
   test('shares one bounded note inventory and refreshes it after a mutation', async () => {
     vaultPath = await mkdtemp(join(tmpdir(), 'mcpvault-catalog-'));
     await writeNote('Wiki/one.md', 'one');

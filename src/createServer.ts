@@ -31,6 +31,10 @@ import { ScopeAuthService, type ScopeCapability, type ScopePrincipal } from "./s
 import { ScopeAccessPolicy } from "./scope-access.js";
 import { EnterpriseRegistry } from './enterprise-registry.js';
 import { withEnterpriseStorageContext } from './enterprise-storage-context.js';
+import type { MaintenanceHost } from './maintenance-host.js';
+import { MaintenanceService } from './maintenance-service.js';
+import { MaintenanceDerivedService } from './maintenance-derived.js';
+import { maintenanceExecution } from './maintenance-execution.js';
 import { OwnerActivityRuntime, type OwnerActivityRuntimeOptions, type OwnerActivityOperation } from './owner-activity-runtime.js';
 import type { Activity, OwnerActivityAction } from './owner-activity.js';
 import { DocumentPolicyStore } from './document-policy-store.js';
@@ -258,6 +262,8 @@ export interface CreateServerOptions extends DocumentAuthorityOptions {
   workCollaboration?: Pick<import('./work-service.js').WorkServiceOptions, 'executionProfiles' | 'readReviewGitSource' | 'verifyReviewExecution' | 'deterministicCoverage'>;
   /** Trusted human-owner consent and independently verified execution identity. */
   ownerActivity?: OwnerActivityRuntimeOptions;
+  /** Explicit host-private allowlist; never enabled by client arguments or features. */
+  maintenance?: MaintenanceHost;
   /** Explicit trusted host registration. Never loaded from a request or Vault note. */
   skillEvolution?: SkillEvolutionHost;
   /** Host-private notice registration/delegation file, reloaded before operations. */
@@ -665,6 +671,24 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
   const llmWiki = new LlmWikiService(fileSystem, scopeAccess, references, semanticSearch);
   llmWikiCache = llmWiki;
   const moderation = new ModerationService(resolvedVaultPath, fileSystem, scopeAuth);
+  const maintenance = new MaintenanceService({ fs: fileSystem, access: scopeAccess,
+    ...(!readOnly && options.maintenance && { host: options.maintenance }),
+    ...maintenanceExecution(scopeAuth, scopeAccess, moderation, refreshDocumentPolicy),
+    derived: new MaintenanceDerivedService(fileSystem, scopeAccess, llmWiki, async (path, principal) => {
+      // Reuse disposable public indexes. The execution boundary rejects any
+      // protected source; no private bodies or new embedding/model calls here.
+      const visible = (candidate: string) => publicIndexFilter.isAllowed(candidate) && scopeAccess.canAccessPhysicalPath(candidate, principal);
+      if (!visible(path)) throw new Error('Maintenance cache source unavailable');
+      metadataIndex.invalidate(path, 'upsert'); searchService.invalidate(path); graphIndex.invalidate(path);
+      await metadataIndex.getMany([path], visible);
+      await searchService.search({ query: 'path:"' + path + '"', limit: 1, canAccessPath: visible });
+      await graphIndex.getOutlinks(path, 1, visible);
+    }),
+  });
+  if (!readOnly && options.maintenance) void maintenance.notify().catch(() => undefined);
+  const maintenanceReconcileUnsubscribe = fileCatalog.subscribeReconcile(() => {
+    void maintenance.notify().catch(() => undefined);
+  });
   const wikiViews = new WikiViewService(fileSystem, scopeAccess);
   const mocRegions = new MocRegionService(resolvedVaultPath, fileSystem, scopeAccess, async accountId => {
     const owner = (await scopeAuth.listPrincipals()).find(account => account.accountId === accountId);
@@ -701,6 +725,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
   // process) cannot leave notifications, reputation, community discovery,
   // or Wiki catalog/lint caches stale until a restart.
   const readModelCatalogUnsubscribe = fileCatalog.subscribeBatch(changes => {
+    void maintenance.notify(changes).catch(() => undefined);
     void mocRegions.notify(changes).catch(() => undefined);
     if (changes) {
       reputationCache?.invalidateMany(changes);
@@ -2161,7 +2186,8 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         }
 
         case "get_wiki_exception_board": {
-          return jsonResult(await llmWiki.exceptionBoard(principal, trimmedArgs.limit, trimmedArgs.maxChars), trimmedArgs.prettyPrint);
+          const grouped = trimmedArgs.grouped !== false;
+          return jsonResult(await llmWiki.exceptionBoard(principal, trimmedArgs.limit, trimmedArgs.maxChars, grouped), grouped ? false : trimmedArgs.prettyPrint);
         }
 
         case "get_wiki_quality_check": {
@@ -3217,12 +3243,13 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         }
 
         case "move_note": {
-          const result = await fileSystem.moveNote({
+          const result = await maintenance.move({
             oldPath: trimmedArgs.oldPath,
             newPath: trimmedArgs.newPath,
             overwrite: trimmedArgs.overwrite,
+            ...(trimmedArgs.expectedRevision !== undefined && { expectedRevision: String(trimmedArgs.expectedRevision) }),
             ...(trimmedArgs.updateLinks === true ? { updateLinks: true, expectedRevision: String(trimmedArgs.expectedRevision || '') } : {})
-          }, canAccessPath);
+          }, principal);
           return {
             content: [{ type: "text", text: JSON.stringify({ ...result, oldPath: scopeAccess.toPublicPath(result.oldPath), newPath: scopeAccess.toPublicPath(result.newPath) }, null, 2) }],
             isError: !result.success
@@ -3718,19 +3745,17 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
 
   const closeServer = server.close.bind(server);
   server.close = async () => {
-    readModelCatalogUnsubscribe();
-    llmWiki.invalidate();
-    documentSearch?.close();
-    await documentIndex?.close();
-    await mocRegions.close();
-    await metadataIndex.close();
-    await searchService.close();
-    await semanticSearch.close();
-    graphIndex.close();
-    await notifications?.close();
-    await communityFeatures?.close();
-    fileCatalog.close();
-    return closeServer();
+    const failures: unknown[] = [];
+    // Preserve order, but never let a refused foreign-lock cleanup strand the
+    // remaining workers/watchers or the underlying protocol server.
+    for (const close of [readModelCatalogUnsubscribe, maintenanceReconcileUnsubscribe,
+      () => maintenance.close(), () => llmWiki.invalidate(), () => documentSearch?.close(),
+      () => documentIndex?.close(), () => mocRegions.close(), () => metadataIndex.close(),
+      () => searchService.close(), () => semanticSearch.close(), () => graphIndex.close(),
+      () => notifications?.close(), () => communityFeatures?.close(), () => fileCatalog.close(), closeServer]) {
+      try { await close(); } catch (error) { failures.push(error); }
+    }
+    if (failures.length) throw new AggregateError(failures, 'Runtime cleanup reported failures; protected recovery data was preserved');
   };
 
   return server;

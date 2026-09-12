@@ -127,7 +127,9 @@ export declare class ModerationService {
         familyId?: string;
         active: boolean;
     }>;
-    isBanned(accountId: string, userId?: string): Promise<boolean>;
+    isBanned(accountId: string, userId?: string, options?: {
+        fresh?: boolean;
+    }): Promise<boolean>;
     listBannedAccountIds(): Promise<Set<string>>;
 }
 export {};

@@ -34,6 +34,7 @@ export class VaultFileCatalog {
     vaultPath;
     listeners = new Set();
     batchListeners = new Set();
+    reconcileListeners = new Set();
     paths;
     allPaths;
     refreshPromise;
@@ -76,6 +77,14 @@ export class VaultFileCatalog {
         this.batchListeners.add(listener);
         this.startWatcher();
         return () => this.batchListeners.delete(listener);
+    }
+    /** Observe an existing completed reconciliation without invalidating indexes
+     * that are currently consuming that inventory. No extra watcher or timer. */
+    subscribeReconcile(listener) {
+        if (this.closed)
+            return () => undefined;
+        this.reconcileListeners.add(listener);
+        return () => this.reconcileListeners.delete(listener);
     }
     /** Mark a mutation already handled by the write path without broadcasting it twice. */
     invalidate(path) {
@@ -233,6 +242,7 @@ export class VaultFileCatalog {
         this.watcher = undefined;
         this.listeners.clear();
         this.batchListeners.clear();
+        this.reconcileListeners.clear();
         this.paths = undefined;
         this.allPaths = undefined;
         // Keep ownership until the active refresh's finally releases it. Native IO
@@ -444,6 +454,12 @@ export class VaultFileCatalog {
             if (reconcile) {
                 this.lastReconciledAt = Date.now();
                 this.forceReconcile = false;
+                for (const listener of this.reconcileListeners) {
+                    try {
+                        listener();
+                    }
+                    catch { /* A host observer cannot break the catalog. */ }
+                }
             }
         }
     }

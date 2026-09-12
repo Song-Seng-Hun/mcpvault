@@ -34,6 +34,48 @@ local I/O is not measured NAS traffic.
 
 ## Maintenance delivery
 
-The second implementation package is tracked separately in the execution record.
-No autonomous maintenance, content migration, new provider or NAS protection is
-enabled by deploying the retrieval package.
+`wiki.exception_board` defaults to compact `groups`, ordered by access/integrity,
+evidence/conflicts, navigation, then cleanup. `grouped: false` retains the legacy
+flat `items` view. Groups contain current revisions, rule-bound issue IDs,
+affected visible evidence and an executable read action. Counts are not a Vault
+health certificate. Follow `retry` when a complete group cannot fit the budget.
+
+To defer a reviewed group, use existing revision-safe `notes.change_set` to store
+its `reviewBasis` as `maintenance_review_basis` alongside `review_snoozed_until`.
+Changed or incomplete evidence invalidates that deferral. A successful review or
+edit is not proof of repair: only a subsequent successful diagnostic removes the
+finding. No automatic truth/confidence score or lifecycle change is introduced.
+
+Automatic work is off unless the host starts with `--maintenance-config` pointing
+to an existing ACL-private local file outside both Vault and source repository.
+The configuration names `version: 1`, `enabled`, the exact canonical `vaultPath`,
+an existing `accountId`, exact Vault-relative `paths`, and `operations` selected
+from `cache_refresh`, `managed_canvas_regenerate`, `moved_link_repair`. Wildcards,
+model names and feature selections never grant execution authority. Read-only
+startup ignores automatic maintenance. Deployment does not create an allowlist.
+
+The single worker uses current account/write capability, moderation, document
+policy and a private writer lease. It rechecks approval and revisions at physical
+write dispatch. Protected/classified derivatives stay manual in this release;
+they are not copied into shared caches or silently declassified. Cache refresh
+uses existing lexical/metadata/graph indexes; it makes no model calls. Only
+already-managed, source-stale Canvas files may be regenerated.
+
+Move repair requires an exact successful host-captured non-overwriting move,
+explicit source revision, unchanged destination/reference and un-reused old path.
+It replays existing link planning through a one-note change-set preview and
+fingerprint confirmation, preserving aliases, anchors and fenced examples.
+External/ambiguous events (including an indistinguishable watcher echo), restart
+observation gaps, incomplete captures and changed data remain for review. Current
+path absence alone cannot prove historical non-reuse.
+
+Private receipts retain exact before/planned bytes before a write, then verify
+the resulting revision. Duplicate events do not repeat verified work; three
+failures stop a job. Initial bounds are 64 jobs and 4 MiB of private state, with
+no automatic history deletion or lock stealing. Full/corrupt storage requires
+host review; it does not authorize dropping recovery data. The existing catalog
+and reconciliation path supply events; no additional watcher or notifications
+are introduced. NAS direct-write protection and Telnet remain outside this work.
+
+Separate package validation, deployment and fork commits are recorded in
+`docs/plans/2026-09-12-wiki-v2-execution.md`.

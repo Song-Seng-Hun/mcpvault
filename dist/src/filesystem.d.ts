@@ -12,6 +12,63 @@ import { type PackedQueryPage } from './query-page.js';
 export declare const MAX_NOTE_CONTENT_BYTES: number;
 /** Health scans never load arbitrarily large derived views into memory. */
 export declare const MAX_DERIVED_VIEW_READ_BYTES: number;
+/** Trusted service assertions, never a client-supplied permission grant. */
+export interface ChangeSetGuardPolicy {
+    guards: Array<{
+        path: string;
+        expectedRevision: string;
+    }>;
+    assertAccess?: () => void | Promise<void>;
+    /** Synchronous host observation fence at the final physical dispatch. */
+    assertCurrent?: () => void;
+}
+export interface DerivedViewWritePolicy {
+    assertAccess?: () => void | Promise<void>;
+    assertCurrent?: () => void;
+    beforeWrite?: (intent: {
+        before: string;
+        after: string;
+        previousRevision: string;
+        revision: string;
+    }) => Promise<void>;
+}
+type MoveDirection = 'inbound' | 'outgoing' | 'self';
+interface MoveLinkChange {
+    sourcePath: string;
+    line: number;
+    link: string;
+    replacement: string;
+    context: string;
+    direction: MoveDirection;
+    heading?: string;
+    targetHeading?: string;
+    targetBlockId?: string;
+}
+interface MovePropertyChange {
+    sourcePath: string;
+    propertyPath: string;
+    value: string;
+    replacement: string;
+    direction: MoveDirection;
+}
+/** Private host intent only; completion still requires a successful move and
+ * exact post-move verification. It is not an API or a permission certificate. */
+export interface MoveRecoveryCapture {
+    version: 1;
+    oldPath: string;
+    newPath: string;
+    sourceRevision: string;
+    destinationRevision: 'missing';
+    references: Array<{
+        path: string;
+        previousRevision: string;
+        revision: string;
+        before: string;
+        after: string;
+        links: MoveLinkChange[];
+        properties: MovePropertyChange[];
+    }>;
+}
 /**
  * Map a filesystem write failure to a clear, accurate Error.
  *
@@ -147,7 +204,7 @@ export declare class FileSystemService {
         path: string;
         content: string;
         expectedRevision: string;
-    }): Promise<{
+    }, policy?: DerivedViewWritePolicy): Promise<{
         path: string;
         previousRevision: string;
         revision: string;
@@ -171,7 +228,7 @@ export declare class FileSystemService {
      * transaction. Filesystem writes are not globally atomic, so a failed write
      * is restored from the in-memory originals and reported explicitly.
      */
-    patchMultipleNotes(params: PatchMultipleNotesParams, projectPath?: (path: string) => string): Promise<PatchMultipleNotesResult>;
+    patchMultipleNotes(params: PatchMultipleNotesParams, projectPath?: (path: string) => string, policy?: ChangeSetGuardPolicy): Promise<PatchMultipleNotesResult>;
     listDirectory(path?: string): Promise<DirectoryListing>;
     exists(path: string): Promise<boolean>;
     isDirectory(path: string): Promise<boolean>;
@@ -321,6 +378,11 @@ export declare class FileSystemService {
         coverage: (index: object, indexGeneration: number, revision: (path: string) => string | undefined) => boolean;
         revision: (path: string) => string | undefined;
     } | undefined>;
+    /** Reuse the canonical move planner while holding the same source/destination
+     * locks as the move. Incomplete/private/oversized scans grant no repair intent.
+     * The callback must persist privately before returning; normal move semantics
+     * remain available when capture cannot be admitted. */
+    moveNoteWithRecovery(params: MoveNoteParams, canAccessPath: (path: string) => boolean, recordIntent: (capture: MoveRecoveryCapture) => Promise<void>): Promise<MoveResult>;
     queryAuthorityShelf(params: {
         scheme: string;
         aroundAuthorityId?: string;
@@ -336,4 +398,5 @@ export declare class FileSystemService {
     /** Count metadata rows without reading note bodies; used by bounded windows. */
     countNotes(params?: QueryNotesParams, canAccessPath?: (path: string) => boolean, predicate?: (note: QueryNote) => boolean): Promise<number>;
 }
+export {};
 //# sourceMappingURL=filesystem.d.ts.map

@@ -20,8 +20,16 @@ export function parseCliArgs(args) {
     let benchmarkConfig;
     let featuresConfig;
     let ownerActivityConfig;
+    let maintenanceConfig;
     for (let index = 0; index < args.length; index += 1) {
         const arg = args[index];
+        if (arg === '--maintenance-config' || arg.startsWith('--maintenance-config=')) {
+            const value = arg === '--maintenance-config' ? args[++index] : arg.slice('--maintenance-config='.length);
+            if (!value || !value.trim() || value.startsWith('--') || maintenanceConfig !== undefined)
+                throw new Error('--maintenance-config requires one private host configuration file');
+            maintenanceConfig = value;
+            continue;
+        }
         if (arg === '--owner-activity-config' || arg.startsWith('--owner-activity-config=')) {
             const value = arg === '--owner-activity-config' ? args[++index] : arg.slice('--owner-activity-config='.length);
             if (!value || !value.trim() || value.startsWith('--') || ownerActivityConfig !== undefined)
@@ -196,5 +204,6 @@ export function parseCliArgs(args) {
         ...(benchmarkConfig !== undefined && { benchmarkConfig }),
         ...(featuresConfig !== undefined && { featuresConfig }),
         ...(ownerActivityConfig !== undefined && { ownerActivityConfig }),
+        ...(maintenanceConfig !== undefined && { maintenanceConfig }),
     };
 }

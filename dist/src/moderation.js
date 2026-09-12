@@ -131,11 +131,11 @@ export class ModerationService {
             database.bans = database.bans.slice(-10000);
         }
     }
-    async readDatabase() {
+    async readDatabase(fresh = false) {
         const cached = this.databaseCache;
-        if (cached && cached.expiresAt > Date.now())
+        if (!fresh && cached && cached.expiresAt > Date.now())
             return cached.value;
-        if (this.databaseInFlight)
+        if (!fresh && this.databaseInFlight)
             return this.databaseInFlight;
         const computation = (async () => {
             let database;
@@ -178,10 +178,14 @@ export class ModerationService {
                     throw error;
             }
             database.eventCursor = cursor;
-            this.databaseEventCursor = cursor;
-            this.databaseEventCount = pending;
+            if (!fresh) {
+                this.databaseEventCursor = cursor;
+                this.databaseEventCount = pending;
+            }
             return database;
         })();
+        if (fresh)
+            return computation;
         this.databaseInFlight = computation;
         try {
             const database = await computation;
@@ -402,8 +406,8 @@ export class ModerationService {
             return { success: true, action, targetType, ...(accountId && { accountId }), ...(userId && { familyId: userId }), active: action === 'ban' };
         });
     }
-    async isBanned(accountId, userId) {
-        const database = await this.readDatabase();
+    async isBanned(accountId, userId, options = {}) {
+        const database = await this.readDatabase(options.fresh);
         return database.bans.some(item => item.active && (item.accountId === accountId || Boolean(userId && item.userId === userId)));
     }
     async listBannedAccountIds() {

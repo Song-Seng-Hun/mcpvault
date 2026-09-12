@@ -245,7 +245,7 @@ test('Obsidian Canvas projections preserve spatial order, scope boundaries, and 
     expect(staleHealth.value.counts).toMatchObject({ stale: 1 });
     expect(staleHealth.value.items).toEqual(expect.arrayContaining([expect.objectContaining({ state: 'stale', nextAction: expect.objectContaining({ endpointId: 'wiki.canvas_view' }) })]));
     expect(staleHealth.value.items[0].changed).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'Knowledge/Spatial map.md', expectedRevision: preview.value.root.revision })]));
-    const repairBoard = await callJson(client, 'get_wiki_exception_board', { limit: 30, maxChars: 16000, accessToken });
+    const repairBoard = await callJson(client, 'get_wiki_exception_board', { grouped: false, limit: 30, maxChars: 16000, accessToken });
     expect(repairBoard.value.items).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'Views/Spatial map Spatial.canvas', code: 'canvas_stale', category: 'freshness' })]));
     const stale = await client.callTool({ name: 'export_wiki_canvas', arguments: {
       path: 'Knowledge/Spatial map.md', mode: 'moc', maxChars: 16000,
@@ -741,7 +741,7 @@ test('claim argument maps preserve Obsidian block links, revisions, scope, and b
     const organization = await callJson(client, 'get_wiki_organization_health', { limit: 100, maxChars: 16000, accessToken });
     expect(organization.value.byCode).toMatchObject({ claim_relation_cycle: expect.any(Number), missing_claim_target: 1, claim_scope_violation: 1 });
     expect(organization.value.recommendations).toEqual(expect.arrayContaining([expect.stringContaining('wiki.argument_map')]));
-    const board = await callJson(client, 'get_wiki_exception_board', { limit: 60, maxChars: 16000, accessToken });
+    const board = await callJson(client, 'get_wiki_exception_board', { grouped: false, limit: 60, maxChars: 16000, accessToken });
     expect(board.value.items).toEqual(expect.arrayContaining([
       expect.objectContaining({
         path: 'Knowledge/Missing target.md',
@@ -1322,7 +1322,7 @@ test('dependency-aware MOC learning paths preserve authorship and diagnose prere
     const organization = await callJson(client, 'get_wiki_organization_health', { limit: 20, maxChars: 12000, accessToken });
     expect(organization.value.mocSequenceHealth.needsAttention).toBe(1);
     expect(organization.value.recommendations).toEqual(expect.arrayContaining([expect.stringContaining('wiki.learning_path')]));
-    const exceptionBoard = await callJson(client, 'get_wiki_exception_board', { limit: 30, maxChars: 12000, accessToken });
+    const exceptionBoard = await callJson(client, 'get_wiki_exception_board', { grouped: false, limit: 30, maxChars: 12000, accessToken });
     expect(exceptionBoard.value.items).toEqual(expect.arrayContaining([
       expect.objectContaining({ path: 'Knowledge/MOCs/Curriculum.md', code: 'moc_dependency_cycle', suggestedAction: 'call_wiki_learning_path_then_edit_with_current_revision' }),
     ]));
@@ -1744,7 +1744,7 @@ test('context shelves, exception board, role quality, and archive resurfacing co
     const archives = await callJson(client, 'resurface_wiki_archives', { limit: 5, maxChars: 5000, accessToken });
     expect(archives.value.items).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'Archives/Old.md', incomingLinks: 1, reason: 'referenced_by_current_visible_note' })]));
 
-    const board = await callJson(client, 'get_wiki_exception_board', { limit: 20, maxChars: 7000, accessToken });
+    const board = await callJson(client, 'get_wiki_exception_board', { grouped: false, limit: 20, maxChars: 7000, accessToken });
     expect(board.value).toMatchObject({ advisory: true, items: expect.any(Array), counts: expect.any(Object) });
     expect(board.value.items).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'Projects/Incomplete.md' })]));
     expect(JSON.stringify(board.value).length).toBeLessThanOrEqual(7000);

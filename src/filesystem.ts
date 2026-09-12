@@ -40,6 +40,19 @@ export const MAX_NOTE_CONTENT_BYTES = 8 * 1024 * 1024;
 /** Health scans never load arbitrarily large derived views into memory. */
 export const MAX_DERIVED_VIEW_READ_BYTES = 512 * 1024;
 
+/** Trusted service assertions, never a client-supplied permission grant. */
+export interface ChangeSetGuardPolicy {
+  guards: Array<{ path: string; expectedRevision: string }>;
+  assertAccess?: () => void | Promise<void>;
+  /** Synchronous host observation fence at the final physical dispatch. */
+  assertCurrent?: () => void;
+}
+export interface DerivedViewWritePolicy {
+  assertAccess?: () => void | Promise<void>;
+  assertCurrent?: () => void;
+  beforeWrite?: (intent: { before: string; after: string; previousRevision: string; revision: string }) => Promise<void>;
+}
+
 function assertNoteContentSize(content: string, path: string): void {
   const byteLength = Buffer.byteLength(content, 'utf8');
   if (byteLength > MAX_NOTE_CONTENT_BYTES) {
@@ -160,6 +173,18 @@ interface MoveReferenceRewritePlan {
   linkChanges: MoveLinkChange[];
   propertyChanges: MovePropertyChange[];
   ambiguous: AmbiguousMoveReference[];
+}
+
+/** Private host intent only; completion still requires a successful move and
+ * exact post-move verification. It is not an API or a permission certificate. */
+export interface MoveRecoveryCapture {
+  version: 1;
+  oldPath: string;
+  newPath: string;
+  sourceRevision: string;
+  destinationRevision: 'missing';
+  references: Array<{ path: string; previousRevision: string; revision: string;
+    before: string; after: string; links: MoveLinkChange[]; properties: MovePropertyChange[] }>;
 }
 
 function frontmatterEndLine(content: string): number {
@@ -877,14 +902,17 @@ export class FileSystemService {
   }
 
   /** Recheck live host notice authority at dispatch, after awaited preparation. */
-  private async writeProtectedFile(path: string, content: string | Buffer, options: Parameters<typeof writeFile>[2] = 'utf8') {
+  private async writeProtectedFile(path: string, content: string | Buffer, options: Parameters<typeof writeFile>[2] = 'utf8', beforeDispatch?: () => Promise<void>, assertCurrent?: () => void) {
     const physicalPath = relative(this.vaultPath, path).replace(/\\/g, '/');
     assertOriginalMutation(physicalPath, typeof options === 'object' && options !== null && 'flag' in options && options.flag === 'wx');
     await prepareDocumentWrite(physicalPath);
+    await beforeDispatch?.();
+    assertOriginalMutation(physicalPath, typeof options === 'object' && options !== null && 'flag' in options && options.flag === 'wx');
     assertEnterpriseStorageAccess(physicalPath, true);
     assertStoryMutationBoundary(physicalPath);
     assertSkillEvolutionMutationBoundary(physicalPath);
     this.assertNoticeMutation(physicalPath);
+    assertCurrent?.();
     return writeFile(path, content, options);
   }
   private async removeProtectedFile(path: string) {
@@ -1136,7 +1164,7 @@ export class FileSystemService {
     });
   }
 
-  private async writeDerivedViewFile(params: { path: string; content: string; expectedRevision: string }, extension: 'base' | 'canvas'): Promise<{ path: string; previousRevision: string; revision: string }> {
+  private async writeDerivedViewFile(params: { path: string; content: string; expectedRevision: string }, extension: 'base' | 'canvas', policy?: DerivedViewWritePolicy): Promise<{ path: string; previousRevision: string; revision: string }> {
     const path = this.normalizePath(params.path);
     const allowed = new RegExp(`^(?:Community/|_scopes/(?:models|agents)/[A-Za-z0-9._-]+/)?Views/[^/]+\\.${extension}$`, 'i');
     const label = extension === 'base' ? 'Bases' : 'Canvas';
@@ -1146,18 +1174,29 @@ export class FileSystemService {
     const content = String(params.content ?? '');
     assertNoteContentSize(content, path);
     return this.withMutationLock(path, async () => {
+      await policy?.assertAccess?.();
       const fullPath = this.resolveWritablePath(path);
       let previousRevision = 'missing';
+      let previousContent: string | undefined;
       try {
-        previousRevision = this.revision(await readFile(fullPath, 'utf-8'));
+        previousContent = policy ? await readBoundedSource(fullPath, MAX_DERIVED_VIEW_READ_BYTES) : await readFile(fullPath, 'utf-8');
+        previousRevision = this.revision(previousContent);
       } catch (error) {
         if (!(error instanceof Error && 'code' in error && (error as NodeJS.ErrnoException).code === 'ENOENT')) throw error;
       }
       if (params.expectedRevision !== previousRevision) {
         throw guidanceError(new Error(`Revision conflict for ${path}: expected ${params.expectedRevision}, current ${previousRevision}. Read the ${label} file again before replacing it.`), 'guid-8a35a2238c3cdb2f');
       }
+      if (policy) {
+        if (previousContent === undefined) throw new Error('Guarded derived repair requires an existing view');
+        await policy.beforeWrite?.({ before: previousContent, after: content, previousRevision, revision: this.revision(content) });
+      }
       await mkdir(dirname(fullPath), { recursive: true });
-      await this.writeProtectedFile(fullPath, content, 'utf-8');
+      await this.writeProtectedFile(fullPath, content, 'utf-8', policy ? async () => {
+        await policy.assertAccess?.();
+        const current = await readBoundedSource(this.resolveWritablePath(path), MAX_DERIVED_VIEW_READ_BYTES);
+        if (this.revision(current) !== previousRevision) throw new Error('Derived output changed during write admission; user data preserved');
+      } : undefined, policy?.assertCurrent);
       return { path, previousRevision, revision: this.revision(content) };
     });
   }
@@ -1172,12 +1211,12 @@ export class FileSystemService {
   }
 
   /** Write a validated JSON Canvas 1.0 projection as a disposable view. */
-  async writeCanvasFile(params: { path: string; content: string; expectedRevision: string }): Promise<{ path: string; previousRevision: string; revision: string }> {
+  async writeCanvasFile(params: { path: string; content: string; expectedRevision: string }, policy?: DerivedViewWritePolicy): Promise<{ path: string; previousRevision: string; revision: string }> {
     let parsed: unknown;
     try { parsed = JSON.parse(String(params.content ?? '')); }
     catch { throw guidanceError(new Error('Canvas content must be valid JSON'), 'guid-6bca86081a98f1b0'); }
     validateJsonCanvasDocument(parsed);
-    return this.writeDerivedViewFile(params, 'canvas');
+    return this.writeDerivedViewFile(params, 'canvas', policy);
   }
 
   /** Read one scope-local Canvas for bounded derived-view maintenance. */
@@ -1192,7 +1231,7 @@ export class FileSystemService {
     const boundedBytes = Math.min(Math.max(Number(maxBytes) || MAX_DERIVED_VIEW_READ_BYTES, 1024), MAX_DERIVED_VIEW_READ_BYTES);
     if (info.size > boundedBytes) throw guidanceError(new Error(`Canvas exceeds the ${boundedBytes}-byte health-read limit: ${path}`), 'guid-f0f3671005746560');
     assertEnterpriseStorageAccess(path);
-    const content = await readFile(fullPath, 'utf8');
+    const content = await readBoundedSource(fullPath, boundedBytes);
     let document: unknown;
     try { document = JSON.parse(content); }
     catch { throw guidanceError(new Error(`Canvas is not valid JSON: ${path}`), 'guid-aa0db2f41daca3b5'); }
@@ -1538,7 +1577,7 @@ export class FileSystemService {
    * transaction. Filesystem writes are not globally atomic, so a failed write
    * is restored from the in-memory originals and reported explicitly.
    */
-  async patchMultipleNotes(params: PatchMultipleNotesParams, projectPath: (path: string) => string = path => path): Promise<PatchMultipleNotesResult> {
+  async patchMultipleNotes(params: PatchMultipleNotesParams, projectPath: (path: string) => string = path => path, policy?: ChangeSetGuardPolicy): Promise<PatchMultipleNotesResult> {
     if (!params || !Array.isArray(params.changes)) throw guidanceError(new Error('changes must be an array'), 'guid-56275582a4671b0b');
     if (params.changes.length < 1 || params.changes.length > 10) throw guidanceError(new Error('A note change set must contain between 1 and 10 changes'), 'guid-f78b834a8f1a2c46');
     const previewMaxChars = Math.min(Math.max(Number(params.previewMaxChars ?? 400), 200), 1000);
@@ -1569,7 +1608,23 @@ export class FileSystemService {
     if (totalHunks > 50) throw guidanceError(new Error('A note change set may contain at most 50 total patch hunks'), 'guid-843cf02526f0ff4c');
     if (totalPatchBytes > 2 * 1024 * 1024) throw guidanceError(new Error('A note change set may contain at most 2 MiB of patch text'), 'guid-243148697f06f3dd');
 
-    return this.withMutationLocks(normalized.map(change => change.path), async () => {
+    if (policy && (!Array.isArray(policy.guards) || policy.guards.length < 1 || policy.guards.length > 9)) throw new Error('Guarded change sets require 1..9 related revision guards');
+    const guardIdentities = new Set<string>();
+    const guards = (policy?.guards || []).map(guard => {
+      const path = this.normalizeReferenceMutationPath(guard?.path);
+      if (!path || !this.pathFilter.isAllowed(path)) throw new Error('Change-set guard unavailable');
+      const identity = this.resolvePath(path).toLowerCase();
+      if (targetIdentities.has(identity) || guardIdentities.has(identity)) throw new Error('Change-set guard duplicates a target or another guard');
+      guardIdentities.add(identity);
+      if (guard?.expectedRevision !== 'missing' && !/^[a-f0-9]{64}$/i.test(String(guard?.expectedRevision || ''))) throw new Error('Change-set guard requires a revision or missing');
+      return { path, expectedRevision: guard.expectedRevision };
+    }).sort((a, b) => a.path.toLowerCase().localeCompare(b.path.toLowerCase()));
+    const assertGuards = async () => {
+      await policy?.assertAccess?.();
+      for (const guard of guards) await this.assertExpectedRevision(guard.path, guard.expectedRevision, MAX_NOTE_CONTENT_BYTES);
+    };
+    return this.withMutationLocks([...normalized.map(change => change.path), ...guards.map(guard => guard.path)], async () => {
+      await assertGuards();
       const plans: Array<{ path: string; original: string; content: string; item: NoteChangeSetResultItem }> = [];
       for (const change of normalized) {
         const note = await this.readNote(change.path, MAX_NOTE_CONTENT_BYTES);
@@ -1615,6 +1670,7 @@ export class FileSystemService {
       }
       const planFingerprint = this.revision(JSON.stringify({
         version: 1,
+        ...(policy && { guards: guards.map(guard => ({ ...guard, path: guard.path.toLowerCase() })) }),
         changes: plans.map(plan => ({ path: plan.path.toLowerCase(), previousRevision: plan.item.previousRevision, revision: plan.item.revision }))
           .sort((left, right) => left.path.localeCompare(right.path)),
       }));
@@ -1671,7 +1727,11 @@ export class FileSystemService {
               throw guidanceError(new Error(`Revision conflict for ${plan.path}: it changed before its individual write`), 'guid-f89bdbd4251d29c7');
             }
             attempted.push(plan);
-            await this.writeProtectedFile(fullPath, plan.content, 'utf8');
+            await this.writeProtectedFile(fullPath, plan.content, 'utf8', policy ? async () => {
+              await assertGuards();
+              const current = await readBoundedSource(this.resolveWritablePath(plan.path), MAX_NOTE_CONTENT_BYTES);
+              if (this.revision(current) !== plan.item.previousRevision) throw new Error('Guarded change-set target changed during write admission');
+            } : undefined, policy?.assertCurrent);
           }
         } catch (error) {
           const rollbackFailures: string[] = [];
@@ -1686,7 +1746,10 @@ export class FileSystemService {
                 rollbackFailures.push(`${plan.path}: content changed after our write; current content preserved`);
                 continue;
               }
-              await this.writeProtectedFile(fullPath, plan.original, 'utf8');
+              await this.writeProtectedFile(fullPath, plan.original, 'utf8', policy ? async () => {
+                await policy.assertAccess?.();
+                if (await readBoundedSource(this.resolveWritablePath(plan.path), MAX_NOTE_CONTENT_BYTES) !== plan.content) throw new Error('Guarded rollback no longer owns the current output');
+              } : undefined, policy?.assertCurrent);
             } catch {
               rollbackFailures.push(`${plan.path}: could not safely read or restore the target; inspect its current state`);
             } finally {
@@ -1832,17 +1895,26 @@ export class FileSystemService {
     newPath: string,
     canAccessPath: (path: string) => boolean,
     includeMovedSource = true,
+    budget?: { maxFileBytes: number; maxTotalBytes: number; maxFiles: number },
   ): Promise<{ plans: Array<{ sourcePath: string; sourceContent: string; plan: MoveReferenceRewritePlan }>; hiddenReferencesPresent: boolean }> {
     const physicalPaths = (await this.collectVaultFiles())
       .filter(path => this.pathFilter.isAllowed(path) && /\.(?:md|markdown|txt)$/i.test(path))
       .sort((a, b) => a.localeCompare(b));
+    if (budget && physicalPaths.length > budget.maxFiles) throw new Error('Bounded move capture requires host review');
+    let capturedBytes = 0;
     const documents: Array<{ sourcePath: string; sourceContent: string; descriptor: NoteReferenceDescriptor }> = [];
     const readBatchSize = 32;
     for (let offset = 0; offset < physicalPaths.length; offset += readBatchSize) {
       const batch = await Promise.all(physicalPaths.slice(offset, offset + readBatchSize).map(async sourcePath => {
         try {
           assertEnterpriseStorageAccess(sourcePath);
-          const sourceContent = await this.vaultIo.readUtf8(this.resolvePath(sourcePath));
+          const sourceContent = budget
+            ? await this.vaultIo.readUtf8Bounded(this.resolvePath(sourcePath), budget.maxFileBytes, 'background')
+            : await this.vaultIo.readUtf8(this.resolvePath(sourcePath));
+          if (budget) {
+            capturedBytes += Buffer.byteLength(sourceContent);
+            if (capturedBytes > budget.maxTotalBytes) throw new Error('Bounded move capture requires host review');
+          }
           const frontmatter = this.frontmatterHandler.parse(sourceContent).frontmatter || {};
           return {
             sourcePath,
@@ -3569,6 +3641,55 @@ export class FileSystemService {
     assertEnterpriseStorageFresh();
     return this.metadataIndex?.prepareSituation(input, intent, explain, path =>
       path === this.normalizePath(path) && this.pathFilter.isAllowed(path) && canAccessPath(path) && canReadEnterpriseStoragePath(path));
+  }
+
+  /** Reuse the canonical move planner while holding the same source/destination
+   * locks as the move. Incomplete/private/oversized scans grant no repair intent.
+   * The callback must persist privately before returning; normal move semantics
+   * remain available when capture cannot be admitted. */
+  async moveNoteWithRecovery(params: MoveNoteParams, canAccessPath: (path: string) => boolean,
+    recordIntent: (capture: MoveRecoveryCapture) => Promise<void>): Promise<MoveResult> {
+    const oldPath = this.normalizeReferenceMutationPath(params.oldPath);
+    const newPath = this.normalizeReferenceMutationPath(params.newPath);
+    return this.withMutationLocks([oldPath, newPath], async () => {
+      let capture: MoveRecoveryCapture | undefined;
+      try {
+        if (!params.updateLinks && !params.overwrite && /^[a-f0-9]{64}$/i.test(params.expectedRevision || '')
+          && oldPath.toLowerCase() !== newPath.toLowerCase() && canAccessPath(oldPath) && canAccessPath(newPath)
+          && !await this.noteExists(newPath)) {
+          const source = await this.readNote(oldPath, 128 * 1024);
+          const ordinary = (path: string, raw: string) => !isOriginalPath(path)
+            && !/^(?:Community|PublicCommunity|_wiki|_collaboration)(?:\/|$)/i.test(path)
+            && !isModerationHidden(this.frontmatterHandler.parse(raw).frontmatter)
+            && this.frontmatterHandler.parse(raw).frontmatter.llm_wiki_type === 'knowledge';
+          if (source.revision !== params.expectedRevision || !ordinary(oldPath, source.originalContent)) throw new Error('Source capture unavailable');
+          this.resolveWritablePath(oldPath); this.resolveWritablePath(newPath);
+          const scan = await this.collectMoveReferencePlans(oldPath, newPath, canAccessPath, true,
+            { maxFileBytes: 128 * 1024, maxTotalBytes: 4 * 1024 * 1024, maxFiles: 4096 });
+          if (scan.hiddenReferencesPresent || scan.plans.some(row => row.plan.ambiguous.length > 0)) throw new Error('Reference capture incomplete');
+          const changed = scan.plans.filter(row => row.plan.content !== row.sourceContent);
+          if (changed.length < 1 || changed.length > 16) throw new Error('No bounded inbound repair set');
+          if (changed.some(row => row.sourcePath.toLowerCase() === oldPath.toLowerCase()
+            || !ordinary(row.sourcePath, row.sourceContent) || row.plan.linkChanges.some(link => link.direction !== 'inbound')
+            || row.plan.propertyChanges.some(property => property.direction !== 'inbound'))) throw new Error('Move needs manual reference review');
+          for (const row of changed) this.resolveWritablePath(row.sourcePath);
+          const proposed: MoveRecoveryCapture = { version: 1, oldPath, newPath, sourceRevision: source.revision,
+            destinationRevision: 'missing', references: changed.map(row => ({ path: row.sourcePath,
+              previousRevision: this.revision(row.sourceContent), revision: this.revision(row.plan.content),
+              before: row.sourceContent, after: row.plan.content, links: row.plan.linkChanges, properties: row.plan.propertyChanges })) };
+          if (Buffer.byteLength(JSON.stringify(proposed)) > 1024 * 1024) throw new Error('Move recovery intent is too large');
+          await recordIntent(proposed);
+          capture = proposed;
+        }
+      } catch { /* Unrecorded moves grant no automatic repair authority. */ }
+      if (capture) {
+        try {
+          await this.assertExpectedRevision(oldPath, capture.sourceRevision, 128 * 1024);
+          await this.assertExpectedRevision(newPath, 'missing');
+        } catch { return { success: false, oldPath, newPath, message: 'Move capture changed during private persistence; current user data preserved. Re-read before retrying.' }; }
+      }
+      return this.moveNoteUnlocked({ ...params, oldPath, newPath }, canAccessPath);
+    });
   }
 
   async queryAuthorityShelf(params: {

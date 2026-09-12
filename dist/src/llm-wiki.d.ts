@@ -1,5 +1,5 @@
 import { type AuthoringContext } from './authoring-assist.js';
-import { type FileSystemService } from './filesystem.js';
+import { type FileSystemService, type DerivedViewWritePolicy } from './filesystem.js';
 import type { ScopeAccessPolicy } from './scope-access.js';
 import type { ScopePrincipal } from './scope-auth.js';
 import type { ReferenceService } from './references.js';
@@ -2450,7 +2450,7 @@ export declare class LlmWikiService {
         expectedSourceRevision?: string;
         expectedSnapshotFingerprint?: string;
         expectedRevision: string;
-    }): Promise<{
+    }, policy?: DerivedViewWritePolicy): Promise<{
         persisted: boolean;
         path: string;
         previousRevision: string;
@@ -3608,7 +3608,7 @@ export declare class LlmWikiService {
      * bounded visual-management board.  It is intentionally a projection:
      * Markdown, Properties, and Git remain authoritative.
      */
-    exceptionBoard(principal?: ScopePrincipal, limit?: number, maxChars?: number): Promise<import("./exception-board.js").ExceptionBoardResult>;
+    exceptionBoard(principal?: ScopePrincipal, limit?: number, maxChars?: number, grouped?: boolean): Promise<import("./maintenance-review.js").MaintenanceReviewResult | import("./exception-board.js").ExceptionBoardResult>;
     /**
      * Check one note against a small role-specific quality rubric.  The rubric
      * is advisory and deliberately does not become a publication gate.

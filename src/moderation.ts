@@ -176,10 +176,10 @@ export class ModerationService {
     }
   }
 
-  private async readDatabase(): Promise<ModerationDatabase> {
+  private async readDatabase(fresh = false): Promise<ModerationDatabase> {
     const cached = this.databaseCache;
-    if (cached && cached.expiresAt > Date.now()) return cached.value;
-    if (this.databaseInFlight) return this.databaseInFlight;
+    if (!fresh && cached && cached.expiresAt > Date.now()) return cached.value;
+    if (!fresh && this.databaseInFlight) return this.databaseInFlight;
     const computation = (async (): Promise<ModerationDatabase> => {
       let database: ModerationDatabase;
       try {
@@ -212,10 +212,10 @@ export class ModerationService {
         if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw error;
       }
       database!.eventCursor = cursor;
-      this.databaseEventCursor = cursor;
-      this.databaseEventCount = pending;
+      if (!fresh) { this.databaseEventCursor = cursor; this.databaseEventCount = pending; }
       return database!;
     })();
+    if (fresh) return computation;
     this.databaseInFlight = computation;
     try {
       const database = await computation;
@@ -420,8 +420,8 @@ export class ModerationService {
     });
   }
 
-  async isBanned(accountId: string, userId?: string): Promise<boolean> {
-    const database = await this.readDatabase();
+  async isBanned(accountId: string, userId?: string, options: { fresh?: boolean } = {}): Promise<boolean> {
+    const database = await this.readDatabase(options.fresh);
     return database.bans.some(item => item.active && (item.accountId === accountId || Boolean(userId && item.userId === userId)));
   }
 

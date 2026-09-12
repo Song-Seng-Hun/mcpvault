@@ -590,18 +590,25 @@ test('exception board keeps a bounded private next action executable through MCP
   const { server, client, accessToken } = await connectClient();
   try {
     expect((await client.listTools()).tools).toHaveLength(5);
-    for (const maxChars of [512, 7000]) {
+    for (const grouped of [false, true]) for (const maxChars of [512, 7000]) {
       const result = await client.callTool({ name: 'call_endpoint', arguments: {
-        endpointId: 'wiki.exception_board', arguments: { limit: 10, maxChars, prettyPrint: true, accessToken },
+        endpointId: 'wiki.exception_board', arguments: { grouped, limit: 10, maxChars, prettyPrint: true, accessToken },
       } });
       expect(result.isError).toBeFalsy();
       const text = (result.content as any)[0].text;
       expect(text.length).toBeLessThanOrEqual(maxChars);
       expect(text).not.toMatch(/_scopes|Hidden|Private body/);
       expect(text).not.toContain(accessToken);
-      const board = JSON.parse(text);
+      let board = JSON.parse(text);
       expect(board).toMatchObject({ countScope: 'validated_candidates', coverage: 'partial', advisory: true });
-      const item = board.items[0];
+      if (grouped && board.groups.length === 0) {
+        expect(board.retry).toMatchObject({ endpointId: 'wiki.exception_board', reuseOriginalArguments: true });
+        const continued = await client.callTool({ name: 'call_endpoint', arguments: {
+          endpointId: board.retry.endpointId, arguments: { grouped, limit: 10, accessToken, ...board.retry.overrides },
+        } });
+        expect(continued.isError).toBeFalsy(); board = JSON.parse((continued.content as any)[0].text);
+      }
+      const item = (grouped ? board.groups : board.items)[0];
       expect(item.path).toBe('scope://model/codex/Concept.md');
       const read = await client.callTool({ name: 'call_endpoint', arguments: {
         endpointId: item.nextAction.endpointId, arguments: { ...item.nextAction.arguments, accessToken },

@@ -31,6 +31,9 @@ import { ScopeAuthService } from "./scope-auth.js";
 import { ScopeAccessPolicy } from "./scope-access.js";
 import { EnterpriseRegistry } from './enterprise-registry.js';
 import { withEnterpriseStorageContext } from './enterprise-storage-context.js';
+import { MaintenanceService } from './maintenance-service.js';
+import { MaintenanceDerivedService } from './maintenance-derived.js';
+import { maintenanceExecution } from './maintenance-execution.js';
 import { OwnerActivityRuntime } from './owner-activity-runtime.js';
 import { DocumentPolicyStore } from './document-policy-store.js';
 import { documentPolicyPath } from './document-authority.js';
@@ -615,6 +618,28 @@ export function createServer(vaultPath, options = {}) {
     const llmWiki = new LlmWikiService(fileSystem, scopeAccess, references, semanticSearch);
     llmWikiCache = llmWiki;
     const moderation = new ModerationService(resolvedVaultPath, fileSystem, scopeAuth);
+    const maintenance = new MaintenanceService({ fs: fileSystem, access: scopeAccess,
+        ...(!readOnly && options.maintenance && { host: options.maintenance }),
+        ...maintenanceExecution(scopeAuth, scopeAccess, moderation, refreshDocumentPolicy),
+        derived: new MaintenanceDerivedService(fileSystem, scopeAccess, llmWiki, async (path, principal) => {
+            // Reuse disposable public indexes. The execution boundary rejects any
+            // protected source; no private bodies or new embedding/model calls here.
+            const visible = (candidate) => publicIndexFilter.isAllowed(candidate) && scopeAccess.canAccessPhysicalPath(candidate, principal);
+            if (!visible(path))
+                throw new Error('Maintenance cache source unavailable');
+            metadataIndex.invalidate(path, 'upsert');
+            searchService.invalidate(path);
+            graphIndex.invalidate(path);
+            await metadataIndex.getMany([path], visible);
+            await searchService.search({ query: 'path:"' + path + '"', limit: 1, canAccessPath: visible });
+            await graphIndex.getOutlinks(path, 1, visible);
+        }),
+    });
+    if (!readOnly && options.maintenance)
+        void maintenance.notify().catch(() => undefined);
+    const maintenanceReconcileUnsubscribe = fileCatalog.subscribeReconcile(() => {
+        void maintenance.notify().catch(() => undefined);
+    });
     const wikiViews = new WikiViewService(fileSystem, scopeAccess);
     const mocRegions = new MocRegionService(resolvedVaultPath, fileSystem, scopeAccess, async (accountId) => {
         const owner = (await scopeAuth.listPrincipals()).find(account => account.accountId === accountId);
@@ -650,6 +675,7 @@ export function createServer(vaultPath, options = {}) {
     // process) cannot leave notifications, reputation, community discovery,
     // or Wiki catalog/lint caches stale until a restart.
     const readModelCatalogUnsubscribe = fileCatalog.subscribeBatch(changes => {
+        void maintenance.notify(changes).catch(() => undefined);
         void mocRegions.notify(changes).catch(() => undefined);
         if (changes) {
             reputationCache?.invalidateMany(changes);
@@ -2101,7 +2127,8 @@ export function createServer(vaultPath, options = {}) {
                         return jsonResult(await llmWiki.maintenanceDebt(principal, trimmedArgs.olderThanDays, trimmedArgs.limit, trimmedArgs.maxChars), trimmedArgs.prettyPrint);
                     }
                     case "get_wiki_exception_board": {
-                        return jsonResult(await llmWiki.exceptionBoard(principal, trimmedArgs.limit, trimmedArgs.maxChars), trimmedArgs.prettyPrint);
+                        const grouped = trimmedArgs.grouped !== false;
+                        return jsonResult(await llmWiki.exceptionBoard(principal, trimmedArgs.limit, trimmedArgs.maxChars, grouped), grouped ? false : trimmedArgs.prettyPrint);
                     }
                     case "get_wiki_quality_check": {
                         return jsonResult(await llmWiki.qualityCheck(principal, trimmedArgs.path, trimmedArgs.maxChars), trimmedArgs.prettyPrint);
@@ -3063,12 +3090,13 @@ export function createServer(vaultPath, options = {}) {
                         return jsonResult(searchService.improvementCandidates(principal?.accountId || principal?.agentId || 'anonymous', trimmedArgs.limit, trimmedArgs.maxChars), trimmedArgs.prettyPrint);
                     }
                     case "move_note": {
-                        const result = await fileSystem.moveNote({
+                        const result = await maintenance.move({
                             oldPath: trimmedArgs.oldPath,
                             newPath: trimmedArgs.newPath,
                             overwrite: trimmedArgs.overwrite,
+                            ...(trimmedArgs.expectedRevision !== undefined && { expectedRevision: String(trimmedArgs.expectedRevision) }),
                             ...(trimmedArgs.updateLinks === true ? { updateLinks: true, expectedRevision: String(trimmedArgs.expectedRevision || '') } : {})
-                        }, canAccessPath);
+                        }, principal);
                         return {
                             content: [{ type: "text", text: JSON.stringify({ ...result, oldPath: scopeAccess.toPublicPath(result.oldPath), newPath: scopeAccess.toPublicPath(result.newPath) }, null, 2) }],
                             isError: !result.success
@@ -3543,19 +3571,23 @@ export function createServer(vaultPath, options = {}) {
     });
     const closeServer = server.close.bind(server);
     server.close = async () => {
-        readModelCatalogUnsubscribe();
-        llmWiki.invalidate();
-        documentSearch?.close();
-        await documentIndex?.close();
-        await mocRegions.close();
-        await metadataIndex.close();
-        await searchService.close();
-        await semanticSearch.close();
-        graphIndex.close();
-        await notifications?.close();
-        await communityFeatures?.close();
-        fileCatalog.close();
-        return closeServer();
+        const failures = [];
+        // Preserve order, but never let a refused foreign-lock cleanup strand the
+        // remaining workers/watchers or the underlying protocol server.
+        for (const close of [readModelCatalogUnsubscribe, maintenanceReconcileUnsubscribe,
+            () => maintenance.close(), () => llmWiki.invalidate(), () => documentSearch?.close(),
+            () => documentIndex?.close(), () => mocRegions.close(), () => metadataIndex.close(),
+            () => searchService.close(), () => semanticSearch.close(), () => graphIndex.close(),
+            () => notifications?.close(), () => communityFeatures?.close(), () => fileCatalog.close(), closeServer]) {
+            try {
+                await close();
+            }
+            catch (error) {
+                failures.push(error);
+            }
+        }
+        if (failures.length)
+            throw new AggregateError(failures, 'Runtime cleanup reported failures; protected recovery data was preserved');
     };
     return server;
 }

@@ -732,6 +732,14 @@ freshness, typed evidence, alias/ID collision, and typed-link problems.
 `get_wiki_review_packet` returns a smaller priority-ordered maintenance view
 for the next agent. `review_snoozed_until` defers only that action routing; it
 does not hide the finding from graph, lint, health, or exception views. The
+grouped `wiki.exception_board` additionally accepts a revision-safe stored
+`maintenance_review_basis` matching its returned `reviewBasis` alongside that
+date. This advisory stamp covers the review rule, current note content/Properties,
+and bounded visible dependency revisions; changed or incomplete evidence requires
+rechecking the deferral. It never grants execution permission or certifies a
+repair. Only re-running the diagnostic can establish that its finding is gone.
+Grouped responses use `groups`; `grouped: false` preserves legacy `items`.
+The
 packet exposes `counts.snoozedPriorities`, the earliest
 `nextSnoozedReviewAt`, and `priorityScanTruncated` for its bounded visible
 candidate scan. `get_wiki_bases_view` returns an

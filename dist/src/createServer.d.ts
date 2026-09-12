@@ -2,6 +2,7 @@ import { type HostFeatureConfig } from './host-features.js';
 import { Server } from "@modelcontextprotocol/server";
 import { FrontmatterHandler } from "./frontmatter.js";
 import { PathFilter } from "./pathfilter.js";
+import type { MaintenanceHost } from './maintenance-host.js';
 import { type OwnerActivityRuntimeOptions } from './owner-activity-runtime.js';
 import { type DocumentAuthorityOptions } from './document-authority.js';
 import { type PublicFederationHostConfig } from './enterprise-federation.js';
@@ -27,6 +28,8 @@ export interface CreateServerOptions extends DocumentAuthorityOptions {
     workCollaboration?: Pick<import('./work-service.js').WorkServiceOptions, 'executionProfiles' | 'readReviewGitSource' | 'verifyReviewExecution' | 'deterministicCoverage'>;
     /** Trusted human-owner consent and independently verified execution identity. */
     ownerActivity?: OwnerActivityRuntimeOptions;
+    /** Explicit host-private allowlist; never enabled by client arguments or features. */
+    maintenance?: MaintenanceHost;
     /** Explicit trusted host registration. Never loaded from a request or Vault note. */
     skillEvolution?: SkillEvolutionHost;
     /** Host-private notice registration/delegation file, reloaded before operations. */

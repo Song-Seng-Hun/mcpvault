@@ -237,10 +237,10 @@ export class ScopeAuthService {
     return Array.from(new Set(capabilities));
   }
 
-  private async readDatabase(): Promise<AuthDatabase> {
+  private async readDatabase(fresh = false): Promise<AuthDatabase> {
     const cached = this.databaseCache;
-    if (cached && cached.expiresAt > Date.now()) return cached.value;
-    if (this.databaseInFlight) return this.databaseInFlight;
+    if (!fresh && cached && cached.expiresAt > Date.now()) return cached.value;
+    if (!fresh && this.databaseInFlight) return this.databaseInFlight;
     const computation = (async (): Promise<AuthDatabase> => {
       try {
         const parsed = JSON.parse(await readFile(this.authPath, 'utf8')) as Partial<AuthDatabase>;
@@ -265,6 +265,9 @@ export class ScopeAuthService {
         throw error;
       }
     })();
+    // Host workers need a new disk snapshot even while a legacy read is in flight.
+    // Keep the forced read independent of both short-lived cache publications.
+    if (fresh) return computation;
     this.databaseInFlight = computation;
     try {
       const database = await computation;
@@ -645,12 +648,12 @@ export class ScopeAuthService {
       nextAction: { tool: 'call_endpoint', arguments: { endpointId: 'auth.login', arguments: { accountId: principal.accountId, sessionId: lease.sessionId } } } };
   }
 
-  async listPrincipals(): Promise<ScopePrincipal[]> {
+  async listPrincipals(options: { fresh?: boolean } = {}): Promise<ScopePrincipal[]> {
     const cached = this.principalCache;
-    if (!this.enterpriseRegistry && cached && cached.expiresAt > Date.now()) {
+    if (!options.fresh && !this.enterpriseRegistry && cached && cached.expiresAt > Date.now()) {
       return cached.value.map(principal => ({ ...principal, ...(principal.capabilities && { capabilities: [...principal.capabilities] }) }));
     }
-    const database = await this.readDatabase();
+    const database = await this.readDatabase(options.fresh);
     const value = database.accounts
       .filter(account => !account.commandCenterId || account.commandCenterId === this.commandCenterId)
       .map(account => ({
@@ -685,7 +688,7 @@ export class ScopeAuthService {
             ...verifiedDepartments(employee) } }];
       });
     }
-    this.principalCache = { expiresAt: Date.now() + AUTH_DATABASE_CACHE_TTL_MS, value };
+    if (!options.fresh) this.principalCache = { expiresAt: Date.now() + AUTH_DATABASE_CACHE_TTL_MS, value };
     return value.map(principal => ({ ...principal, ...(principal.capabilities && { capabilities: [...principal.capabilities] }) }));
   }
 

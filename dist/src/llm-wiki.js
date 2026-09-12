@@ -23,6 +23,7 @@ import { getOrganizationPropertyContract, getOrganizationRelationContract, hasEx
 import { extractObsidianLinkOccurrences } from './backlinks.js';
 import { collectPlainFrontmatterReferences, isNavigationalFrontmatterReference } from './property-references.js';
 import { packExceptionBoard } from './exception-board.js';
+import { MaintenanceReviewService } from './maintenance-review.js';
 import { packLintReport } from './lint-report.js';
 import { packProjectPacket } from './project-packet.js';
 import { packNextActionPacket } from './next-action-packet.js';
@@ -9363,7 +9364,7 @@ export class LlmWikiService {
         }
     }
     /** Persist a fresh derived Canvas after rechecking every included revision. */
-    async writeCanvasView(params) {
+    async writeCanvasView(params, policy) {
         if (!params.expectedRevision)
             throw guidanceError(new Error("expectedRevision is required; use 'missing' for a new Canvas file"), 'guid-a1fc2b74a3306df0');
         if (params.expectedSnapshotFingerprint !== undefined && !/^[a-fA-F0-9]{64}$/.test(params.expectedSnapshotFingerprint)) {
@@ -9385,7 +9386,11 @@ export class LlmWikiService {
         }
         await this.assertCurrentCanvasSources(params.principal, graph.root.path, fitted.notes);
         const content = `${JSON.stringify(fitted.canvas, null, 2)}\n`;
-        const written = await this.fileSystem.writeCanvasFile({ path: outputPath, content, expectedRevision: params.expectedRevision });
+        const written = await this.fileSystem.writeCanvasFile({ path: outputPath, content, expectedRevision: params.expectedRevision }, policy && {
+            ...(policy.beforeWrite && { beforeWrite: policy.beforeWrite }),
+            ...(policy.assertCurrent && { assertCurrent: policy.assertCurrent }),
+            assertAccess: async () => { await policy.assertAccess?.(); await this.assertCurrentCanvasSources(params.principal, graph.root.path, fitted.notes); },
+        });
         this.invalidate();
         return {
             persisted: true,
@@ -13380,7 +13385,7 @@ export class LlmWikiService {
      * bounded visual-management board.  It is intentionally a projection:
      * Markdown, Properties, and Git remain authoritative.
      */
-    async exceptionBoard(principal, limit = 20, maxChars = 7000) {
+    async exceptionBoard(principal, limit = 20, maxChars = 7000, grouped = false) {
         const boundedLimit = Math.floor(Math.min(Math.max(Number(limit) || 20, 1), 60));
         const boundedChars = Math.min(Math.max(Number(maxChars) || 7000, 512), 16000);
         // Child budgets select candidates, not the final response size or a census.
@@ -13500,7 +13505,10 @@ export class LlmWikiService {
                     : `Review the ${argument ? 'argument integrity' : candidate.category.replace(/_/g, ' ')} signal in the current note. Inspect context and dependencies before changing its Properties or body.`,
             });
         }
-        return packExceptionBoard(items, boundedLimit, boundedChars, Boolean(health.truncated) || Boolean(canvases.truncated));
+        const partial = Boolean(health.truncated) || Boolean(canvases.truncated);
+        if (grouped)
+            return new MaintenanceReviewService(this.fileSystem, this.access).group(items, principal, boundedLimit, boundedChars, partial);
+        return packExceptionBoard(items, boundedLimit, boundedChars, partial);
     }
     /**
      * Check one note against a small role-specific quality rubric.  The rubric

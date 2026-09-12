@@ -210,11 +210,11 @@ export class ScopeAuthService {
             capabilities.push('moderate');
         return Array.from(new Set(capabilities));
     }
-    async readDatabase() {
+    async readDatabase(fresh = false) {
         const cached = this.databaseCache;
-        if (cached && cached.expiresAt > Date.now())
+        if (!fresh && cached && cached.expiresAt > Date.now())
             return cached.value;
-        if (this.databaseInFlight)
+        if (!fresh && this.databaseInFlight)
             return this.databaseInFlight;
         const computation = (async () => {
             try {
@@ -243,6 +243,10 @@ export class ScopeAuthService {
                 throw error;
             }
         })();
+        // Host workers need a new disk snapshot even while a legacy read is in flight.
+        // Keep the forced read independent of both short-lived cache publications.
+        if (fresh)
+            return computation;
         this.databaseInFlight = computation;
         try {
             const database = await computation;
@@ -604,12 +608,12 @@ export class ScopeAuthService {
         return { success: true, agentId: principal.agentId, generation: lease.generation, currentSession: lease.sessionId,
             nextAction: { tool: 'call_endpoint', arguments: { endpointId: 'auth.login', arguments: { accountId: principal.accountId, sessionId: lease.sessionId } } } };
     }
-    async listPrincipals() {
+    async listPrincipals(options = {}) {
         const cached = this.principalCache;
-        if (!this.enterpriseRegistry && cached && cached.expiresAt > Date.now()) {
+        if (!options.fresh && !this.enterpriseRegistry && cached && cached.expiresAt > Date.now()) {
             return cached.value.map(principal => ({ ...principal, ...(principal.capabilities && { capabilities: [...principal.capabilities] }) }));
         }
-        const database = await this.readDatabase();
+        const database = await this.readDatabase(options.fresh);
         const value = database.accounts
             .filter(account => !account.commandCenterId || account.commandCenterId === this.commandCenterId)
             .map(account => ({
@@ -650,7 +654,8 @@ export class ScopeAuthService {
                             ...verifiedDepartments(employee) } }];
             });
         }
-        this.principalCache = { expiresAt: Date.now() + AUTH_DATABASE_CACHE_TTL_MS, value };
+        if (!options.fresh)
+            this.principalCache = { expiresAt: Date.now() + AUTH_DATABASE_CACHE_TTL_MS, value };
         return value.map(principal => ({ ...principal, ...(principal.capabilities && { capabilities: [...principal.capabilities] }) }));
     }
     async updateAgentCapabilities(params) {
