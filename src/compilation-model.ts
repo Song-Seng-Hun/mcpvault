@@ -1,0 +1,87 @@
+import { createHash } from 'node:crypto';
+import { GRAPH_CONTRACT_VERSION } from './graph-contract.js';
+import { compilationHash, compilationPath, COMPILATION_OPERATIONS, type CompilationOperation } from './compilation-policy.js';
+
+export const COMPILATION_STATUSES = ['prepared', 'generated', 'checked', 'applying', 'applied', 'completed', 'partial', 'failed', 'review_required', 'stopped'] as const;
+export type CompilationStatus = typeof COMPILATION_STATUSES[number];
+export interface CompilationInput { path: string; revision: string; role: 'source' | 'member' | 'concept' | 'topic' }
+export interface CompilationIntent { fingerprint: string; revision: string }
+export interface CompilationJob {
+  requestId: string; requestFingerprint: string; projectId: string; accountId: string; operation: CompilationOperation;
+  inputs: CompilationInput[]; outputPath: string; outputRevision: string; ruleVersion: string;
+  graphContractVersion: number; authorityFingerprint: string; status: CompilationStatus; attempts: number;
+  protection: 'pending' | 'ready';
+  reason?: string; draft?: { content: string; fingerprint: string };
+  validation?: { status: 'passed' | 'partial'; ruleVersion: string; basis: string };
+  intent?: CompilationIntent;
+  applied?: { outputRevision: string; basis: string };
+  receipt?: { outputRevision: string; basis: string };
+}
+export interface CompilationHistory { version: 1; jobs: CompilationJob[] }
+export const compilationContentHash = (content: string) => createHash('sha256').update(content).digest('hex');
+export const isCompilationRevision = (value: unknown): value is string => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
+export const compilationJobRevision = (job: CompilationJob) => compilationHash(job);
+export const compilationValidationBasis = (job: CompilationJob) => compilationHash({ inputs: job.inputs, authority: job.authorityFingerprint,
+  rule: job.ruleVersion, graph: job.graphContractVersion, draft: job.draft?.fingerprint });
+export const compilationReceiptBasis = (job: CompilationJob) => compilationHash({ inputs: job.inputs, authority: job.authorityFingerprint,
+  rule: job.ruleVersion, graph: job.graphContractVersion, draft: job.draft?.fingerprint, validation: job.validation, intent: job.intent });
+export const compilationId = (value: unknown): value is string => typeof value === 'string' && /^[a-z0-9][a-z0-9._-]{0,99}$/.test(value);
+
+/** Strict bounded receipts. Unknown or damaged history is never silently reset. */
+export function parseCompilationHistory(value: unknown): CompilationHistory {
+  if (value === undefined) return { version: 1, jobs: [] };
+  const invalid = () => Error('Compilation history unavailable; preserve it for host review');
+  const record = (v: unknown, keys: string[]): Record<string, any> => {
+    if (!v || typeof v !== 'object' || Array.isArray(v) || Object.keys(v).some(k => !keys.includes(k))) throw invalid();
+    return v as Record<string, any>;
+  };
+  try {
+    const state = record(value, ['version', 'jobs']);
+    if (state.version !== 1 || !Array.isArray(state.jobs) || state.jobs.length > 64) throw invalid();
+    const ids = new Set<string>();
+    for (const value of state.jobs) {
+      const job = record(value, ['requestId', 'requestFingerprint', 'projectId', 'accountId', 'operation', 'inputs', 'outputPath', 'outputRevision',
+        'ruleVersion', 'graphContractVersion', 'authorityFingerprint', 'status', 'attempts', 'protection', 'reason', 'draft', 'validation', 'intent', 'applied', 'receipt']);
+      if (![job.requestId, job.projectId, job.accountId, job.ruleVersion].every(compilationId) || ids.has(job.requestId)
+        || !isCompilationRevision(job.requestFingerprint) || !isCompilationRevision(job.authorityFingerprint)
+        || !COMPILATION_OPERATIONS.includes(job.operation) || !COMPILATION_STATUSES.includes(job.status)
+        || !Number.isInteger(job.attempts) || job.attempts < 0 || job.attempts > 3 || job.graphContractVersion !== GRAPH_CONTRACT_VERSION
+        || !['pending', 'ready'].includes(job.protection) || job.reason !== undefined && !compilationId(job.reason)) throw invalid();
+      ids.add(job.requestId); compilationPath(job.outputPath);
+      if (job.outputRevision !== 'missing' && !isCompilationRevision(job.outputRevision)) throw invalid();
+      if (!Array.isArray(job.inputs) || !job.inputs.length || job.inputs.length > 8) throw invalid();
+      const paths = new Set<string>();
+      for (const value of job.inputs) {
+        const input = record(value, ['path', 'revision', 'role']); const path = compilationPath(input.path).toLowerCase();
+        if (!isCompilationRevision(input.revision) || !['source', 'member', 'concept', 'topic'].includes(input.role)
+          || paths.has(path) || path === job.outputPath.toLowerCase()) throw invalid();
+        paths.add(path);
+      }
+      if (job.draft) {
+        const draft = record(job.draft, ['content', 'fingerprint']);
+        if (job.protection !== 'ready' || typeof draft.content !== 'string' || !draft.content.trim() || draft.content.length > 24000
+          || draft.fingerprint !== compilationContentHash(draft.content)) throw invalid();
+      }
+      if (job.validation) {
+        const validation = record(job.validation, ['status', 'ruleVersion', 'basis']);
+        if (!['passed', 'partial'].includes(validation.status) || !compilationId(validation.ruleVersion)
+          || validation.basis !== compilationValidationBasis(job as CompilationJob)) throw invalid();
+      }
+      if (job.intent) {
+        const intent = record(job.intent, ['fingerprint', 'revision']);
+        if (!isCompilationRevision(intent.fingerprint) || !isCompilationRevision(intent.revision) || !job.draft || job.validation?.status !== 'passed') throw invalid();
+      }
+      for (const proof of [job.applied, job.receipt]) if (proof) {
+        const receipt = record(proof, ['outputRevision', 'basis']);
+        if (!isCompilationRevision(receipt.outputRevision) || receipt.basis !== compilationReceiptBasis(job as CompilationJob)
+          || receipt.outputRevision !== job.intent?.revision) throw invalid();
+      }
+      if (['generated', 'checked', 'applying', 'applied', 'completed'].includes(job.status) && !job.draft
+        || ['checked', 'applying', 'applied', 'completed'].includes(job.status) && job.validation?.status !== 'passed'
+        || ['applying', 'applied', 'completed'].includes(job.status) && !job.intent
+        || (job.status === 'applied' || job.receipt) && !job.applied
+        || job.status === 'completed' && !job.receipt) throw invalid();
+    }
+    return structuredClone(state) as CompilationHistory;
+  } catch { throw invalid(); }
+}

@@ -69,6 +69,7 @@ export function hostFeatureConfigFingerprint(input) {
  */
 const toolsByFeature = {
     'wiki-core': [
+        'manage_wiki_compilation',
         'orient_wiki', 'get_agent_pulse', 'list_active_capabilities', 'search_capabilities', 'call_endpoint',
         'read_note', 'write_note', 'patch_note', 'list_directory', 'delete_note', 'search_notes',
         'preview_delete_note', 'patch_multiple_notes', 'record_search_feedback', 'get_search_improvement_candidates',

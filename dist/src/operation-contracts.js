@@ -4,6 +4,9 @@ const reads = (alias, policy, ...ops) => Object.fromEntries(ops.map(op => [op, {
 /** Code-owned mixed-operation contracts, not an authorization or plugin registry.
  * Schemas still own valid writes; services still own all final domain guards. */
 const CONTRACTS = {
+    manage_wiki_compilation: { defaultOp: 'diagnose', summary: 'public', reads: {
+            ...reads('read_wiki_compilation', 'public', 'diagnose'), ...reads('read_wiki_compilation', 'authenticated', 'read'),
+        } },
     ...Object.fromEntries(Object.entries(STORY_OPERATIONS).map(([name, spec]) => [spec.tool, {
             defaultOp: spec.defaultOp, story: true, summary: spec.reads.length ? 'public' : 'write',
             reads: Object.fromEntries(spec.reads.map(op => [op, { alias: spec.writes.length ? `read_story_${name}` : spec.tool,

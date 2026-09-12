@@ -22,6 +22,8 @@ export declare class ScopeAccessPolicy {
     } | undefined;
     hasDocumentPolicy(): boolean;
     documentPolicyFingerprint(): string;
+    /** Dependency-scoped invalidation only, not proof of present read or execution authority. */
+    documentDependencyFingerprint(paths: readonly string[]): string;
     /** Navigation only; the principal must originate from current host authentication. */
     defaultDepartment(principal?: ScopePrincipal): string | undefined;
     defaultNavigation(principal?: ScopePrincipal): {

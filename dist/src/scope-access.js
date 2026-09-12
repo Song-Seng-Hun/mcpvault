@@ -1,6 +1,7 @@
 import { guidanceError } from './guidance-runtime.js';
 import { expandScopePath, parseScopePath } from './scopes.js';
 import { posix } from 'node:path';
+import { createHash } from 'node:crypto';
 import { assertOriginalMutation } from './original-boundary.js';
 import { documentAuthorityReader } from './document-authority.js';
 import { activeDocumentStorageContext } from './enterprise-storage-context.js';
@@ -60,6 +61,14 @@ export class ScopeAccessPolicy {
     getEnterpriseProfile() { return this.enterprise; }
     hasDocumentPolicy() { return this.documentAuthority() !== undefined; }
     documentPolicyFingerprint() { return this.documentAuthority()?.fingerprint ?? 'none'; }
+    /** Dependency-scoped invalidation only, not proof of present read or execution authority. */
+    documentDependencyFingerprint(paths) {
+        if (paths.length > 32)
+            throw new Error('Protected dependency budget exceeded');
+        const authority = this.documentAuthority();
+        return createHash('sha256').update(JSON.stringify(paths.map(path => [path,
+            authority?.effectiveConstraints(path) ?? []]))).digest('hex');
+    }
     /** Navigation only; the principal must originate from current host authentication. */
     defaultDepartment(principal) {
         const verified = principal?.enterprise;

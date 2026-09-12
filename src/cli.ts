@@ -15,6 +15,7 @@ export interface ParsedCliArgs {
   featuresConfig?: string;
   ownerActivityConfig?: string;
   maintenanceConfig?: string;
+  compilationConfig?: string;
   /** Dedicated HTTP process; omitted preserves legacy stdio behavior. */
   stdio?: false;
 }
@@ -41,9 +42,15 @@ export function parseCliArgs(args: string[]): ParsedCliArgs {
   let featuresConfig: string | undefined;
   let ownerActivityConfig: string | undefined;
   let maintenanceConfig: string | undefined;
+  let compilationConfig: string | undefined;
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index]!;
+    if (arg === '--compilation-config' || arg.startsWith('--compilation-config=')) {
+      const value = arg === '--compilation-config' ? args[++index] : arg.slice('--compilation-config='.length);
+      if (!value || !value.trim() || value.startsWith('--') || compilationConfig !== undefined) throw new Error('--compilation-config requires one private host configuration file');
+      compilationConfig = value; continue;
+    }
     if (arg === '--maintenance-config' || arg.startsWith('--maintenance-config=')) {
       const value = arg === '--maintenance-config' ? args[++index] : arg.slice('--maintenance-config='.length);
       if (!value || !value.trim() || value.startsWith('--') || maintenanceConfig !== undefined) throw new Error('--maintenance-config requires one private host configuration file');
@@ -211,5 +218,6 @@ export function parseCliArgs(args: string[]): ParsedCliArgs {
     ...(featuresConfig !== undefined && { featuresConfig }),
     ...(ownerActivityConfig !== undefined && { ownerActivityConfig }),
     ...(maintenanceConfig !== undefined && { maintenanceConfig }),
+    ...(compilationConfig !== undefined && { compilationConfig }),
   };
 }

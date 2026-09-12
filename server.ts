@@ -5,6 +5,7 @@ import { createServer, getServerRuntime } from "./src/createServer.js";
 import { loadHostFeatureConfig } from './src/host-feature-config.js';
 import { loadOwnerActivityHostConfig } from './src/owner-activity-host.js';
 import { loadMaintenanceHostConfig } from './src/maintenance-host.js';
+import { loadCompilationHostConfig } from './src/compilation-host.js';
 import { createServerLifecycle } from "./src/server-lifecycle.js";
 import { parseCliArgs } from "./src/cli.js";
 import { startRestApi } from "./src/rest-api.js";
@@ -112,7 +113,7 @@ Examples:
 
 // Remove runtime options before joining trailing args, preserving support for
 // unquoted vault paths with spaces. When omitted, use the current directory.
-const { vaultPathArg, readOnly, restPort, mcpHttpPort, mcpHttpHost, mcpHttpTlsCert, mcpHttpTlsKey, stdio, economyConfig, roleplayConfig, skillEvolutionConfig, explanationConfig, benchmarkConfig, featuresConfig, ownerActivityConfig, maintenanceConfig } = parseCliArgs(cliArgs);
+const { vaultPathArg, readOnly, restPort, mcpHttpPort, mcpHttpHost, mcpHttpTlsCert, mcpHttpTlsKey, stdio, economyConfig, roleplayConfig, skillEvolutionConfig, explanationConfig, benchmarkConfig, featuresConfig, ownerActivityConfig, maintenanceConfig, compilationConfig } = parseCliArgs(cliArgs);
 const vaultPath = resolve(vaultPathArg || process.cwd());
 const featurePath = featuresConfig ?? process.env.MCPVAULT_FEATURE_CONFIG;
 const ownerConsentPath = ownerActivityConfig ?? process.env.MCPVAULT_OWNER_ACTIVITY_CONFIG;
@@ -144,11 +145,15 @@ let benchmarkWriter: BenchmarkWriter | undefined;
 try {
   if (hostBenchmark?.enabled && !readOnly) benchmarkWriter = await acquireBenchmarkWriter(hostBenchmark);
   const maintenance = maintenanceConfig && !readOnly ? await loadMaintenanceHostConfig(resolve(maintenanceConfig), vaultPath) : undefined;
+  const compilationHost = compilationConfig ? await loadCompilationHostConfig(resolve(compilationConfig), vaultPath) : undefined;
   const skillEvolution = features.selected.includes('skill-evolution') && skillEvolutionConfig ? await loadSkillEvolutionHostConfig(resolve(skillEvolutionConfig), vaultPath) : undefined;
   const explanations = features.selected.includes('explanation-translation') && explanationConfig ? await loadExplanationHostConfig(resolve(explanationConfig), vaultPath) : undefined;
   if (features.selected.includes('roleplay') && roleplayConfig) roleplay = await RoleplayStore.open(await loadRoleplayHostConfig(resolve(roleplayConfig), vaultPath));
   mcpServer=createServer(vaultPath, { version: VERSION, readOnly, features, ...(economy&&{economy}), ...(roleplay && { roleplay }), ...(skillEvolution && { skillEvolution }),
     ...(maintenance && { maintenance }),
+    // A configuration file is not execution attestation. CLI admission stays
+    // waiting without a real host verifier and validated application adapter.
+    ...(compilationHost && { compilation: { host: compilationHost } }),
     // A legacy bridge cannot verify the execution behind a client. A policy
     // file alone must not turn labels or localhost into runtime attestation.
     ...(ownerConsentPath && { ownerActivity: { ...await loadOwnerActivityHostConfig(resolve(ownerConsentPath), vaultPath), execution: () => undefined } }),

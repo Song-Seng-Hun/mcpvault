@@ -14,6 +14,7 @@ export interface ParsedCliArgs {
     featuresConfig?: string;
     ownerActivityConfig?: string;
     maintenanceConfig?: string;
+    compilationConfig?: string;
     /** Dedicated HTTP process; omitted preserves legacy stdio behavior. */
     stdio?: false;
 }

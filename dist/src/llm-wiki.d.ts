@@ -2548,16 +2548,16 @@ export declare class LlmWikiService {
             useWhen: string;
             endpointId: string;
             arguments: {
+                path?: never;
+                limit?: never;
                 expectedRevision?: never;
                 query: string;
                 maxChars: number;
                 intent?: never;
                 maxDepth?: never;
-                path?: never;
                 mode?: never;
                 context?: never;
                 includeReadiness?: never;
-                limit?: never;
             };
             requiredArguments: string[];
             mutating?: never;
@@ -2567,13 +2567,13 @@ export declare class LlmWikiService {
             useWhen: string;
             endpointId: string;
             arguments: {
+                path?: never;
                 expectedRevision?: never;
                 query: string;
                 limit: number;
                 maxChars: number;
                 intent?: never;
                 maxDepth?: never;
-                path?: never;
                 mode?: never;
                 context?: never;
                 includeReadiness?: never;
@@ -2586,15 +2586,15 @@ export declare class LlmWikiService {
             useWhen: string;
             endpointId: string;
             arguments: {
+                path?: never;
+                limit?: never;
                 query?: never;
                 expectedRevision: string;
                 intent?: never;
                 maxDepth?: never;
-                path?: never;
                 mode?: never;
                 context?: never;
                 includeReadiness?: never;
-                limit?: never;
                 maxChars?: never;
             };
             requiredArguments: string[];
@@ -2606,13 +2606,13 @@ export declare class LlmWikiService {
             useWhen: string;
             endpointId: string;
             arguments: {
+                path?: never;
                 expectedRevision?: never;
                 query?: never;
                 limit: number;
                 maxChars: number;
                 intent?: never;
                 maxDepth?: never;
-                path?: never;
                 mode?: never;
                 context?: never;
                 includeReadiness?: never;
@@ -2645,13 +2645,13 @@ export declare class LlmWikiService {
             useWhen: string;
             endpointId: string;
             arguments: {
+                path?: never;
                 expectedRevision?: never;
                 query?: never;
                 intent?: never;
                 limit: number;
                 maxChars: number;
                 maxDepth?: never;
-                path?: never;
                 mode?: never;
                 context?: never;
                 includeReadiness?: never;
@@ -2702,11 +2702,11 @@ export declare class LlmWikiService {
             useWhen: string;
             endpointId: string;
             arguments: {
+                path?: never;
                 expectedRevision?: never;
                 query?: never;
                 intent?: never;
                 maxDepth?: never;
-                path?: never;
                 mode?: never;
                 context: string;
                 limit: number;
@@ -2722,11 +2722,11 @@ export declare class LlmWikiService {
             useWhen: string;
             endpointId: string;
             arguments: {
+                path?: never;
                 expectedRevision?: never;
                 query?: never;
                 intent?: never;
                 maxDepth?: never;
-                path?: never;
                 mode?: never;
                 context?: never;
                 includeReadiness: boolean;

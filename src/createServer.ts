@@ -32,6 +32,8 @@ import { ScopeAccessPolicy } from "./scope-access.js";
 import { EnterpriseRegistry } from './enterprise-registry.js';
 import { withEnterpriseStorageContext } from './enterprise-storage-context.js';
 import type { MaintenanceHost } from './maintenance-host.js';
+import { CompilationService, type CompilationOptions } from './compilation-service.js';
+import { getCompilationTools } from './compilation-tools.js';
 import { MaintenanceService } from './maintenance-service.js';
 import { MaintenanceDerivedService } from './maintenance-derived.js';
 import { maintenanceExecution } from './maintenance-execution.js';
@@ -264,6 +266,8 @@ export interface CreateServerOptions extends DocumentAuthorityOptions {
   ownerActivity?: OwnerActivityRuntimeOptions;
   /** Explicit host-private allowlist; never enabled by client arguments or features. */
   maintenance?: MaintenanceHost;
+  /** Separate host approval and actual execution verifier; never client/feature authority. */
+  compilation?: Pick<CompilationOptions, 'host' | 'runtime' | 'adapter'>;
   /** Explicit trusted host registration. Never loaded from a request or Vault note. */
   skillEvolution?: SkillEvolutionHost;
   /** Host-private notice registration/delegation file, reloaded before operations. */
@@ -289,6 +293,7 @@ export interface CreateServerOptions extends DocumentAuthorityOptions {
 }
 
 const MUTATING_TOOLS = new Set([
+  'manage_wiki_compilation',
   ...EXPLANATION_MUTATING_TOOLS,
   ...BENCHMARK_MUTATING_TOOLS,
   ...STORY_MUTATING_TOOLS,
@@ -332,6 +337,7 @@ const MUTATING_TOOLS = new Set([
 ]);
 
 const CAPABILITY_FOR_TOOL: Partial<Record<string, ScopeCapability>> = {
+  manage_wiki_compilation: 'write',
   public_federation_pull: 'write', public_federation_retry: 'publish',
   update_wiki_projection: 'write',
   manage_wiki_moc_region: 'write',
@@ -671,6 +677,8 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
   const llmWiki = new LlmWikiService(fileSystem, scopeAccess, references, semanticSearch);
   llmWikiCache = llmWiki;
   const moderation = new ModerationService(resolvedVaultPath, fileSystem, scopeAuth);
+  const compilation = new CompilationService({ fs: fileSystem, access: scopeAccess, readOnly,
+    ...options.compilation, authorize: maintenanceExecution(scopeAuth, scopeAccess, moderation, refreshDocumentPolicy).authorize });
   const maintenance = new MaintenanceService({ fs: fileSystem, access: scopeAccess,
     ...(!readOnly && options.maintenance && { host: options.maintenance }),
     ...maintenanceExecution(scopeAuth, scopeAccess, moderation, refreshDocumentPolicy),
@@ -688,6 +696,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
   if (!readOnly && options.maintenance) void maintenance.notify().catch(() => undefined);
   const maintenanceReconcileUnsubscribe = fileCatalog.subscribeReconcile(() => {
     void maintenance.notify().catch(() => undefined);
+    void compilation.notify().catch(() => undefined);
   });
   const wikiViews = new WikiViewService(fileSystem, scopeAccess);
   const mocRegions = new MocRegionService(resolvedVaultPath, fileSystem, scopeAccess, async accountId => {
@@ -726,6 +735,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
   // or Wiki catalog/lint caches stale until a restart.
   const readModelCatalogUnsubscribe = fileCatalog.subscribeBatch(changes => {
     void maintenance.notify(changes).catch(() => undefined);
+    void compilation.notify(changes?.map(change => change.path)).catch(() => undefined);
     void mocRegions.notify(changes).catch(() => undefined);
     if (changes) {
       reputationCache?.invalidateMany(changes);
@@ -1163,6 +1173,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         ...getCollaborationTools(),
         ...getScopeAuthTools(),
         ...getLlmWikiTools(),
+        ...getCompilationTools(),
         ...getSocialTools(),
         ...(federation ? getEnterpriseFederationTools() : []),
         ...getLayeredMemoryTools(),
@@ -1668,9 +1679,10 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         if (!sources.has(root) && sources.size >= 32) throw new Error('Protected source budget exceeded; use a smaller isolated job');
         sources.add(root);
       };
-      const inheritDocument = async (path: string) => {
+      const inheritDocument = async (path: string, explicitSources: readonly string[] = []) => {
         const target = documentPolicyPath(path);
-        const sources = [...(documentSessionKey ? documentSessionSources.get(documentSessionKey) ?? [] : [])].filter(source => source !== target);
+        const sources = [...new Set([...(documentSessionKey ? documentSessionSources.get(documentSessionKey) ?? [] : []),
+          ...explicitSources].map(documentPolicyPath))].filter(source => source !== target);
         if (!sources.length) return;
         assertStorageFresh();
         if (sources.some(source => !scopeAccess.canReadProtectedDocument(source, principal))) throw new Error('Protected source authority was revoked before inheritance');
@@ -1759,6 +1771,18 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         return jsonResult(await service.execute(storyEndpoint, storyArgs, principal), false);
       }
       switch (toolName) {
+        case 'manage_wiki_compilation':
+        case 'read_wiki_compilation': {
+          const compilationArgs = { ...trimmedArgs, ...(Array.isArray(trimmedArgs.inputs) && {
+            inputs: trimmedArgs.inputs.map((input: any) => ({ ...input, path: scopeAccess.resolveExternalPath(input.path, principal) })),
+          }) };
+          return jsonResult(await compilation.execute(compilationArgs, principal, async (job, assertCurrent) => {
+            await assertCurrent();
+            // Reuse the request-local inheritance path so its active storage
+            // boundary advances to exactly the policy revision just written.
+            await inheritDocument(job.outputPath, job.inputs.map(input => input.path));
+          }), false);
+        }
         case "get_scope_context": {
           if (principal?.enterprise) return jsonResult({
             identity: scopeAuth.whoami(rawArgs.accessToken),
@@ -3760,7 +3784,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
     // Preserve order, but never let a refused foreign-lock cleanup strand the
     // remaining workers/watchers or the underlying protocol server.
     for (const close of [readModelCatalogUnsubscribe, maintenanceReconcileUnsubscribe,
-      () => maintenance.close(), () => llmWiki.invalidate(), () => documentSearch?.close(),
+      () => maintenance.close(), () => compilation.close(), () => llmWiki.invalidate(), () => documentSearch?.close(),
       () => documentIndex?.close(), () => mocRegions.close(), () => metadataIndex.close(),
       () => searchService.close(), () => semanticSearch.close(), () => graphIndex.close(),
       () => notifications?.close(), () => communityFeatures?.close(), () => fileCatalog.close(), closeServer]) {
