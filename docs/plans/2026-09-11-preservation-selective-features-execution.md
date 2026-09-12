@@ -1,6 +1,6 @@
 # Preservation, selective features and measured context cost
 
-Status: application release deployed and live-verified on 2026-09-12; Git delivery pending. NAS direct-write hardening remains incomplete with the user's explicit approval. Performance claims are limited to the recorded synthetic measurements.
+Status: application release deployed, live-verified, committed and pushed to the user's existing fork main on 2026-09-12. NAS direct-write hardening remains incomplete with the user's explicit approval. Performance claims are limited to the recorded synthetic measurements.
 
 ## Contract
 
@@ -19,7 +19,7 @@ Status: application release deployed and live-verified on 2026-09-12; Git delive
 - [x] P5: document I/O/cache/ranking/memory, situation metadata and endpoint/cache invalidation optimizations.
 - [x] P6: deterministic synthetic scale/quality and fair vanilla evaluation harness; no paid runs or measured monetary-cost claim.
 - [x] P7: independent spec and quality reviews, targeted tests, build, full tests, diff/staged/secret review.
-- [ ] P8: NAS-backed deployment and live smoke, rollback artifacts, source+dist commit and push to existing user-fork main.
+- [x] P8: NAS-backed application deployment and live smoke, rollback artifacts, source+dist commit and verified push to existing user-fork main. NAS direct-write hardening remains deferred.
 
 ## Ownership and execution constraints
 
@@ -27,7 +27,12 @@ Main worker owns integration, originals, access, feature configuration and deplo
 
 ## Verification record
 
-Latest checkpoint (2026-09-12 10:47 KST): application deployment and live verification passed. Commit and user-fork push remain pending; NAS direct-write hardening is explicitly deferred.
+Final checkpoint (2026-09-12): application deployment, live verification, source+dist commit and user-fork push passed. NAS direct-write hardening is explicitly deferred.
+
+- Implementation commit `8b91121210745bcab472ddf2bd0affa1cb261e8a` was pushed
+  without force to `Song-Seng-Hun/mcpvault` main. A fresh remote-tip read matched
+  the local commit. This completion-record follow-up changes no tested or
+  deployed application bytes. The unrelated seven research files remain excluded.
 
 - Final gate `final-validated-v3`: all 32 test processes exited zero. The collector
   verified all 439 configured files with no overlaps or unreceipted reports:
