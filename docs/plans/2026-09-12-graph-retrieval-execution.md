@@ -1,6 +1,6 @@
 # Graph retrieval, topic packets and local Graphify execution
 
-Status: P1 code/review/build, full regression, final evaluation and NAS-backed live verification complete; source/dist commit and fork push in progress. P2/P3 not started.
+Status: P1 complete: code/review/build, full regression, final evaluation, NAS-backed live verification, source/dist commit and user-fork main push. Implementation commit2e6bc86b. P2/P3 follow next.
 
 ## Authority and coordination
 
