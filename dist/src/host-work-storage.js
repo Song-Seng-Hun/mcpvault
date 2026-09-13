@@ -5,6 +5,7 @@ import { dirname, join } from 'node:path';
 import { canonicalRoleplayPath, validateRoleplayStorage } from './roleplay-storage-host.js';
 import { assertHostPrivateStorage } from './skill-evolution-host.js';
 import { readFederationFile, removeFederationFile, writeFederationFileAtomic } from './public-federation-storage.js';
+const HOST_WORK_NAMESPACES = ['maintenance', 'compilation', 'codex-hooks', 'codex-checkpoints'];
 const hash = (value) => createHash('sha256').update(value).digest('hex');
 const missing = (error) => error?.code === 'ENOENT';
 const sameIdentity = (left, right) => left.dev === right.dev && left.ino === right.ino;
@@ -17,7 +18,11 @@ const namespaceName = (namespace) => {
         return 'Maintenance';
     if (namespace === 'compilation')
         return 'Compilation';
-    throw new Error('Host work storage namespace must be maintenance or compilation');
+    if (namespace === 'codex-hooks')
+        return 'Codex hook';
+    if (namespace === 'codex-checkpoints')
+        return 'Codex checkpoint';
+    throw new Error('Invalid host work storage namespace');
 };
 export async function loadHostWorkStorage(path, expectedVault, options) {
     const { namespace, maxStateBytes, validate } = options;
@@ -32,10 +37,8 @@ export async function loadHostWorkStorage(path, expectedVault, options) {
     const managed = (name) => join(hostPath, `${name}-${identity}`);
     const statePath = managed(namespace) + '.json';
     const lockPath = managed(namespace) + '.writer.lock';
-    const other = namespace === 'maintenance' ? 'compilation' : 'maintenance';
-    const otherStatePath = managed(other) + '.json';
-    const otherLockPath = managed(other) + '.writer.lock';
-    if ([statePath, lockPath, otherStatePath, otherLockPath].some(target => target.toLowerCase() === canonical.toLowerCase()))
+    const managedPaths = HOST_WORK_NAMESPACES.flatMap(name => [managed(name) + '.json', managed(name) + '.writer.lock']);
+    if (managedPaths.some(target => target.toLowerCase() === canonical.toLowerCase()))
         throw new Error(`${label} configuration overlaps managed host storage`);
     let active;
     let stateRevision;

@@ -59,6 +59,28 @@ test('a namespace lease does not block the other namespace', async () => {
   await maintenanceWriter.close(); await compilationWriter.close();
 });
 
+test('hook receipts and leases are separate from both prior grants', async () => {
+  const stores = await Promise.all((['maintenance', 'compilation', 'codex-hooks', 'codex-checkpoints'] as const).map(namespace =>
+    loadHostWorkStorage(config, vault, { namespace, maxStateBytes: 4096, validate })));
+  for (const [index, store] of stores.entries()) {
+    writers.push(await store.acquire()); await store.readState();
+    await store.writeState({ version: 1, marker: String(index) });
+  }
+  for (const [index, store] of stores.entries()) expect(await store.readState()).toEqual({ version: 1, marker: String(index) });
+});
+
+test.each(['maintenance', 'compilation', 'codex-hooks'] as const)('rejects %s configuration overlapping hook receipts', async namespace => {
+  const target = join(hostRoot, `codex-hooks-${identity}.json`);
+  await writeFile(target, '{}', { mode: 0o600 });
+  await expect(loadHostWorkStorage(target, vault, { namespace, maxStateBytes: 4096, validate })).rejects.toThrow(/overlaps managed host storage/);
+});
+
+test.each(['maintenance', 'compilation', 'codex-hooks', 'codex-checkpoints'] as const)('rejects %s configuration overlapping prepared checkpoints', async namespace => {
+  const target = join(hostRoot, `codex-checkpoints-${identity}.json`);
+  await writeFile(target, '{}', { mode: 0o600 });
+  await expect(loadHostWorkStorage(target, vault, { namespace, maxStateBytes: 4096, validate })).rejects.toThrow(/overlaps managed host storage/);
+});
+
 test('captures namespace, limit, and validator before and after asynchronous loading', async () => {
   let options: { namespace: 'maintenance' | 'compilation'; maxStateBytes: number; validate: typeof validate } = {
     namespace: 'maintenance', maxStateBytes: 4096, validate,

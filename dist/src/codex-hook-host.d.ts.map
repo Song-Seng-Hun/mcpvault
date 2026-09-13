@@ -1,0 +1,1 @@
+{"version":3,"file":"codex-hook-host.d.ts","sourceRoot":"","sources":["../../src/codex-hook-host.ts"],"names":[],"mappings":"AAAA,OAAO,EAAuB,KAAK,eAAe,EAAE,MAAM,wBAAwB,CAAC;AACnF,OAAO,EAA2B,KAAK,eAAe,EAAE,MAAM,wBAAwB,CAAC;AAEvF,MAAM,MAAM,aAAa,GAAG,eAAe,CAAC,eAAe,CAAC,CAAC;AAC7D,+EAA+E;AAC/E,eAAO,MAAM,uBAAuB,SAAU,MAAM,aAAa,MAAM,KAAG,OAAO,CAAC,aAAa,CACoC,CAAC"}

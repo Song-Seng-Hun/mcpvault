@@ -34,6 +34,7 @@ import { withEnterpriseStorageContext } from './enterprise-storage-context.js';
 import type { MaintenanceHost } from './maintenance-host.js';
 import { CompilationService, type CompilationOptions } from './compilation-service.js';
 import { attachCompilationReview } from './compilation-review-view.js';
+import { connectCodexHooks, type CodexHookConnectionOptions } from './codex-hook-connection.js';
 import type { CompilationPublicationOptions } from './compilation-publication-adapter.js';
 import { getCompilationTools } from './compilation-tools.js';
 import { FidelityService } from './fidelity-service.js';
@@ -270,6 +271,9 @@ export interface CreateServerOptions extends DocumentAuthorityOptions {
   ownerActivity?: OwnerActivityRuntimeOptions;
   /** Explicit host-private allowlist; never enabled by client arguments or features. */
   maintenance?: MaintenanceHost;
+  /** Explicit trusted host lifecycle transport. No CLI default, new MCP tool,
+   * model runtime, or implicit grant from feature/maintenance selection. */
+  codexHooks?: CodexHookConnectionOptions;
   /** Separate host approval and actual execution verifier; never client/feature authority. */
   compilation?: Pick<CompilationOptions, 'host' | 'runtime' | 'adapter'> & {
     /** Trusted host code only; factory selection is not an execution grant.
@@ -3821,11 +3825,13 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
   });
 
   const closeServer = server.close.bind(server);
+  const disconnectCodexHooks = connectCodexHooks(options.codexHooks, { fs: fileSystem, access: scopeAccess, continuity,
+    questionPacket, compilation, ...(participation && { participation }), authorize: compilationAuthorize, ownerActivity: ownerActivityRuntime }, readOnly);
   server.close = async () => {
     const failures: unknown[] = [];
     // Preserve order, but never let a refused foreign-lock cleanup strand the
     // remaining workers/watchers or the underlying protocol server.
-    for (const close of [readModelCatalogUnsubscribe, maintenanceReconcileUnsubscribe,
+    for (const close of [disconnectCodexHooks, readModelCatalogUnsubscribe, maintenanceReconcileUnsubscribe,
       () => maintenance.close(), () => compilation.close(), () => llmWiki.invalidate(), () => documentSearch?.close(),
       () => documentIndex?.close(), () => mocRegions.close(), () => metadataIndex.close(),
       () => searchService.close(), () => semanticSearch.close(), () => graphIndex.close(),

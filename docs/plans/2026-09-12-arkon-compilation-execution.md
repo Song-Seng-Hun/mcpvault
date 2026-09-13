@@ -84,14 +84,17 @@ after bundle1 delivery.
 - [x] Deterministic literals checker: match/suspect/out-of-scope/unavailable.
 - [x] Existing source compare/publication/change-set integration, one refinement.
 - [x] Frozen synthetic diagnostic fixtures; old80 queries untouched. Actual-model quality is not verified.
-- [ ] Same verification/deployment/fork delivery gates as bundle1.
+- [x] Targeted/build/full/staged/NAS/live/fork delivery completed through
+  `b69a21941630d84fd4b7de88849cc1e21947cfec`; user-directed solo review exception
+  below, not an independent review or operational automatic-synthesis approval.
 
 ### Bundle3 — host hooks and community
 
 - [ ] Installed Codex event support verified without user data.
-- [ ] Bounded event bridge, Plan mode diagnostic-only, no transcript scanning.
-- [ ] Existing consent, participation receipts and heartbeat reused; no new wakeups.
-- [ ] Quota/cancellation/reentrancy/duplicate-public-action tests.
+- [x] Bounded host event bridge, Plan mode diagnostic-only, no transcript scanning.
+- [x] Existing consent and participation pulse reused; same-cause heartbeat
+  coalescing. No new wakeup, participation start or public writer is introduced.
+- [x] Quota/cancellation/reentrancy/duplicate-action and physical-write-guard tests.
 - [ ] Same delivery gates. Enable only actually authorized/verified configuration.
 
 ## Acceptance and operations
@@ -196,3 +199,35 @@ fidelity,invalid-input non-disclosure and compilation diagnosis. No operational
 documents were created. Automatic application and model-quality gates remain off.
 The user-directed solo workflow is retained; code inspection is not described as
 independent review. No messages/wakeups to the second agent are permitted.
+
+### Bundle3 host bridge — full regression verified
+
+Added explicit host-only event transport, minimized routing input, separate
+private receipts/checkpoints, current attestation gates, one worker and bounded
+cancellation. Existing continuity, evidence search, compilation invalidation/
+retry and participation pulse are reused under current document/owner consent
+guards. There are no new tools, models, transcripts, public writers or wakeups.
+Prepared checkpoints persist restrictions before body and remain recoverable
+without an end-of-session NAS write. Same-cause lifecycle/heartbeat delivery
+cannot cause a second action; uncertain writes require read-only reconciliation.
+
+Details and exact integration obligations are in `docs/codex-hooks.md`.
+Installed CLI metadata verification is not native event acceptance: zero hooks
+are configured. No production listener, trust change or automatic application is
+enabled. Actual Codex event/mode/trust verification and actual-model quality
+remain distinct outstanding gates. The user's solo-review exception continues.
+Targeted184tests/9files and strict production build passed. Full regression then
+passed:472files,6688passed,zero failures,four existing conditional skips. All
+expected files have valid nonoverlapping receipts; minimum free memory5.357GiB.
+Source/test/build basis:
+`224e2f13b7a59b611260a52cbc4700165fca14cbdb358615ba0fd1e95158b74c`.
+An earlier run was stopped for a reproduced empty-continuity identity disclosure
+outside the hook grant. Added failing regression tests, checked nested returned
+locators, and reran targeted/build/full verification. The compiled probe now
+denies the request. The stopped run is not passing evidence or a deployed build.
+NAS-backed runtime now uses the retained954-file B3-r2 release (PID17880 at
+verification). Read-only live checks passed:fixed five tools, fidelity, invalid
+input rejection, compilation and public diagnosis; no operational documents were
+created. Rollback launcher and prior release are retained. Automatic application
+and native hooks remain off. Fork delivery is the next gate; the graph handoff
+is still untouched.

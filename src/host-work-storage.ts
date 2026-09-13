@@ -6,7 +6,8 @@ import { canonicalRoleplayPath, validateRoleplayStorage } from './roleplay-stora
 import { assertHostPrivateStorage } from './skill-evolution-host.js';
 import { readFederationFile, removeFederationFile, writeFederationFileAtomic } from './public-federation-storage.js';
 
-export type HostWorkNamespace = 'maintenance' | 'compilation';
+const HOST_WORK_NAMESPACES = ['maintenance', 'compilation', 'codex-hooks', 'codex-checkpoints'] as const;
+export type HostWorkNamespace = typeof HOST_WORK_NAMESPACES[number];
 export interface HostWorkWriter { assertHeld(): Promise<void>; close(): Promise<void> }
 export interface HostWorkStorage<T extends { enabled: boolean }> {
   refresh(): Promise<T>;
@@ -25,10 +26,12 @@ const sameSnapshot = (left: BigIntStats | undefined, right: BigIntStats | undefi
       && left.ctimeNs === right.ctimeNs && left.birthtimeNs === right.birthtimeNs
       && left.mode === right.mode && left.uid === right.uid && left.gid === right.gid && left.nlink === right.nlink;
 
-const namespaceName = (namespace: HostWorkNamespace): 'Maintenance' | 'Compilation' => {
+const namespaceName = (namespace: HostWorkNamespace): 'Maintenance' | 'Compilation' | 'Codex hook' | 'Codex checkpoint' => {
   if (namespace === 'maintenance') return 'Maintenance';
   if (namespace === 'compilation') return 'Compilation';
-  throw new Error('Host work storage namespace must be maintenance or compilation');
+  if (namespace === 'codex-hooks') return 'Codex hook';
+  if (namespace === 'codex-checkpoints') return 'Codex checkpoint';
+  throw new Error('Invalid host work storage namespace');
 };
 
 export async function loadHostWorkStorage<T extends { enabled: boolean }>(
@@ -46,10 +49,8 @@ export async function loadHostWorkStorage<T extends { enabled: boolean }>(
   const managed = (name: string) => join(hostPath, `${name}-${identity}`);
   const statePath = managed(namespace) + '.json';
   const lockPath = managed(namespace) + '.writer.lock';
-  const other = namespace === 'maintenance' ? 'compilation' : 'maintenance';
-  const otherStatePath = managed(other) + '.json';
-  const otherLockPath = managed(other) + '.writer.lock';
-  if ([statePath, lockPath, otherStatePath, otherLockPath].some(target => target.toLowerCase() === canonical.toLowerCase())) throw new Error(`${label} configuration overlaps managed host storage`);
+  const managedPaths = HOST_WORK_NAMESPACES.flatMap(name => [managed(name) + '.json', managed(name) + '.writer.lock']);
+  if (managedPaths.some(target => target.toLowerCase() === canonical.toLowerCase())) throw new Error(`${label} configuration overlaps managed host storage`);
   let active: HostWorkWriter | undefined;
   let stateRevision: PrivateSnapshot | undefined;
   const privateFile = async (target: string, optional = false) => {

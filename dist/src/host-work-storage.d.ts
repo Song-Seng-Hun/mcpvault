@@ -1,4 +1,5 @@
-export type HostWorkNamespace = 'maintenance' | 'compilation';
+declare const HOST_WORK_NAMESPACES: readonly ['maintenance', 'compilation', 'codex-hooks', 'codex-checkpoints'];
+export type HostWorkNamespace = typeof HOST_WORK_NAMESPACES[number];
 export interface HostWorkWriter {
     assertHeld(): Promise<void>;
     close(): Promise<void>;
@@ -18,4 +19,5 @@ export declare function loadHostWorkStorage<T extends {
     maxStateBytes: number;
     validate: (value: unknown) => T;
 }): Promise<HostWorkStorage<T>>;
+export {};
 //# sourceMappingURL=host-work-storage.d.ts.map

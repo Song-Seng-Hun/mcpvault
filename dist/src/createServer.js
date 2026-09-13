@@ -33,6 +33,7 @@ import { EnterpriseRegistry } from './enterprise-registry.js';
 import { withEnterpriseStorageContext } from './enterprise-storage-context.js';
 import { CompilationService } from './compilation-service.js';
 import { attachCompilationReview } from './compilation-review-view.js';
+import { connectCodexHooks } from './codex-hook-connection.js';
 import { getCompilationTools } from './compilation-tools.js';
 import { FidelityService } from './fidelity-service.js';
 import { getFidelityTools } from './fidelity-tools.js';
@@ -3642,11 +3643,13 @@ export function createServer(vaultPath, options = {}) {
         },
     });
     const closeServer = server.close.bind(server);
+    const disconnectCodexHooks = connectCodexHooks(options.codexHooks, { fs: fileSystem, access: scopeAccess, continuity,
+        questionPacket, compilation, ...(participation && { participation }), authorize: compilationAuthorize, ownerActivity: ownerActivityRuntime }, readOnly);
     server.close = async () => {
         const failures = [];
         // Preserve order, but never let a refused foreign-lock cleanup strand the
         // remaining workers/watchers or the underlying protocol server.
-        for (const close of [readModelCatalogUnsubscribe, maintenanceReconcileUnsubscribe,
+        for (const close of [disconnectCodexHooks, readModelCatalogUnsubscribe, maintenanceReconcileUnsubscribe,
             () => maintenance.close(), () => compilation.close(), () => llmWiki.invalidate(), () => documentSearch?.close(),
             () => documentIndex?.close(), () => mocRegions.close(), () => metadataIndex.close(),
             () => searchService.close(), () => semanticSearch.close(), () => graphIndex.close(),

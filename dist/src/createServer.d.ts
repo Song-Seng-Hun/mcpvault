@@ -4,6 +4,7 @@ import { FrontmatterHandler } from "./frontmatter.js";
 import { PathFilter } from "./pathfilter.js";
 import type { MaintenanceHost } from './maintenance-host.js';
 import { type CompilationOptions } from './compilation-service.js';
+import { type CodexHookConnectionOptions } from './codex-hook-connection.js';
 import type { CompilationPublicationOptions } from './compilation-publication-adapter.js';
 import { type OwnerActivityRuntimeOptions } from './owner-activity-runtime.js';
 import { type DocumentAuthorityOptions } from './document-authority.js';
@@ -32,6 +33,9 @@ export interface CreateServerOptions extends DocumentAuthorityOptions {
     ownerActivity?: OwnerActivityRuntimeOptions;
     /** Explicit host-private allowlist; never enabled by client arguments or features. */
     maintenance?: MaintenanceHost;
+    /** Explicit trusted host lifecycle transport. No CLI default, new MCP tool,
+     * model runtime, or implicit grant from feature/maintenance selection. */
+    codexHooks?: CodexHookConnectionOptions;
     /** Separate host approval and actual execution verifier; never client/feature authority. */
     compilation?: Pick<CompilationOptions, 'host' | 'runtime' | 'adapter'> & {
         /** Trusted host code only; factory selection is not an execution grant.
