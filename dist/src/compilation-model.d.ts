@@ -1,3 +1,4 @@
+import { type CompilationEvidence } from './compilation-evidence.js';
 import { type CompilationOperation } from './compilation-policy.js';
 export declare const COMPILATION_STATUSES: readonly ['prepared', 'generated', 'checked', 'applying', 'applied', 'completed', 'partial', 'failed', 'review_required', 'stopped'];
 export type CompilationStatus = typeof COMPILATION_STATUSES[number];
@@ -29,7 +30,10 @@ export interface CompilationJob {
     draft?: {
         content: string;
         fingerprint: string;
+        generatedAt?: string;
     };
+    evidence?: CompilationEvidence;
+    refinements?: number;
     validation?: {
         status: 'passed' | 'partial';
         ruleVersion: string;

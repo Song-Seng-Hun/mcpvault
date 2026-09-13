@@ -229,6 +229,7 @@ export declare class LlmWikiService {
         summaryHighlights?: unknown;
         expectedRevision: string;
     }): Promise<{
+        revision: string;
         noteKind: "area" | "assumption" | "atomic" | "decision" | "experiment" | "fleeting" | "hypothesis" | "journal" | "knowledge" | "literature" | "moc" | "project" | "question" | "resource" | "skill" | "task";
         distilledFrom: {
             path: string;
@@ -255,9 +256,28 @@ export declare class LlmWikiService {
             path: string;
         }[];
         claims?: Record<string, unknown>[];
+    }>;
+    publishKnowledge(params: Parameters<LlmWikiService['prepareKnowledgePublication']>[0], internal?: Parameters<LlmWikiService['prepareKnowledgePublication']>[1]): Promise<{
+        success: boolean;
+        created: boolean;
+        path: string;
+        evidencePaths: string[];
+        evidence: {
+            heading?: string;
+            blockId?: string;
+            revision?: string;
+            startLine?: number;
+            endLine?: number;
+            quoteHash?: string;
+            path: string;
+        }[];
+        claims?: Record<string, unknown>[];
+    } & {
         revision: string;
     }>;
-    publishKnowledge(params: {
+    /** Host-internal canonical preparation. Public publication keeps its existing
+     * contract; compilation pins timestamp and confirms the preview fingerprint. */
+    prepareKnowledgePublication(params: {
         knowledgeSynthesis?: unknown;
         knowledgeInvestigation?: unknown;
         knowledgeApplications?: unknown;
@@ -390,22 +410,29 @@ export declare class LlmWikiService {
         }>;
         workshopOutput?: import('./workshop-output.js').WorkshopOutputReceipt;
         assertOutputAccess?: () => Promise<void>;
+        timestamp?: string;
     }): Promise<{
-        success: boolean;
-        created: boolean;
-        path: string;
-        evidencePaths: string[];
-        evidence: {
-            heading?: string;
-            blockId?: string;
-            revision?: string;
-            startLine?: number;
-            endLine?: number;
-            quoteHash?: string;
-            path: string;
-        }[];
-        claims?: Record<string, unknown>[];
+        raw: string;
         revision: string;
+        fingerprint: string;
+        apply: (confirmedFingerprint: string) => Promise<{
+            success: boolean;
+            created: boolean;
+            path: string;
+            evidencePaths: string[];
+            evidence: {
+                heading?: string;
+                blockId?: string;
+                revision?: string;
+                startLine?: number;
+                endLine?: number;
+                quoteHash?: string;
+                path: string;
+            }[];
+            claims?: Record<string, unknown>[];
+        } & {
+            revision: string;
+        }>;
     }>;
     catalog(principal?: ScopePrincipal, options?: WikiCatalogOptions): Promise<any>;
     private computeCatalog;
@@ -3963,6 +3990,7 @@ export declare class LlmWikiService {
         workshopOutput?: import('./workshop-output.js').WorkshopOutputReceipt;
         assertOutputAccess?: () => Promise<void>;
     }): Promise<{
+        revision: string;
         success: boolean;
         created: boolean;
         path: string;
@@ -3977,7 +4005,6 @@ export declare class LlmWikiService {
             path: string;
         }[];
         claims?: Record<string, unknown>[];
-        revision: string;
         decisionStatus: "accepted" | "proposed" | "rejected" | "superseded";
     }>;
     /**

@@ -75,7 +75,8 @@ after bundle1 delivery.
 - [x] Dynamic service entry point and bounded diagnostic projections.
 - [x] Targeted RED/GREEN, strict build, full regression, independent SPEC/QUALITY.
 - [x] Staged paths/content review, rollback-preserving NAS deployment and live checks.
-- [ ] Source plus dist committed/pushed to existing user-fork main; remote verified.
+- [x] Source plus dist committed/pushed as `c670fe9e1672991fc7d821734fa450e542eeda19`
+  to existing user-fork main; remote verified again on2026-09-13.
 
 ### Bundle2 — evidence and automatic knowledge
 
@@ -119,3 +120,55 @@ dynamic compilation discovery and a 67-character diagnostic response. With no
 compilation host configuration, the response remains `diagnostic_only` with
 `host_configuration_required`; automatic application is disabled. Acceptance
 created no Wiki documents and performed no content mutations. Telnet was not used.
+
+### Bundle2 diagnostic checkpoint — 2026-09-13 KST
+
+This is an intermediate implementation, not completion of bundle2 or bundle3.
+The user's latest instruction is solo work: do not message/wake `llm_wiki2` or
+start its graph handoff before this task is complete. Its untracked graph files
+and the seven unrelated research documents remain excluded from this delivery.
+
+Implemented: read-only `wiki.fidelity_check`, bounded revision/locator reports,
+separate agent semantic judgments, local number/date/version/quote checks,
+one refinement preserving required source anchors, deterministic prepared
+publication through the existing guarded writer, and a host-only publication
+adapter. The adapter is not selected or enabled by the deployed server. Missing
+host grants still mean diagnosis only. No provider, model, hook or scheduler was
+started; no original conversion or live content mutation is authorized here.
+
+Recovery checks cover real publication acknowledgement loss, manual edits after
+interruption, manual target creation after preview, unchanged receipt writes and
+revocation after restart. Follow-up reads preserve complete verified source spans;
+invalid locators cannot create nonexistent line ranges. Targeted verification:
+eight files,243 passed. Production build passed with guarded single-threaded tsc.
+Full regression passed:466files,6571passed,zero failures,four existing conditional
+skips. Immutable source/test/build basis:
+`f3e2609770d7abbb370900e3ba0eedc2c4304375c6a2944e1df32004363d0d3e`.
+Minimum free memory was4.348GiB. The full checkout test set includes the peer's
+untracked pure graph tests; its source and generated artifacts are not delivered
+in this checkpoint. NAS activation and read-only live acceptance passed using
+the same924-file build. Original/world/economy bytes and prior release/launcher
+were preserved. Live MCP verified fixed5, compilation diagnosis, read-only
+fidelity discovery and invalid-input non-disclosure. Automatic application is
+false; no operational documents were created. Staged path/whitespace/content
+checks passed, excluding host data, credentials and unrelated files. This
+checkpoint's source-plus-dist commit/push follows these completed delivery gates.
+
+The 24-case synthetic diagnostic fixture is distinct from the untouched frozen80
+retrieval evaluation. Four inconsistent labels/bodies in an initial research
+fixture were corrected to their original no-literal texts; the invalid initial
+run is not evaluation evidence. Reviewed fixture SHA256:
+`84c2d7555b78c34c9ada9f5d8eecae623841d690a2614c2d048cef36d6bdcc9f`.
+No actual-model +5pp quality claim is made. No independent bundle2 review was
+recovered after the desktop restart; solo inspection is not independent review.
+In response to the explicit question about substituting solo review for this
+diagnostic checkpoint, the user instructed continued execution without further
+interruptions. This checkpoint uses that exception with automatic application
+disabled; it is not an independent-review claim or automatic-synthesis approval.
+
+Remaining: explicit host/runtime activation and quality gates, source-only and
+already-covered no-write receipts, omission/permission/manual-edit projections
+in answer packets and the exception board, complete rationale/checkpoint flow,
+actual-model evaluation, and all bundle3 hook/community implementation and event
+verification. Automatic knowledge application remains disabled. This checkpoint
+must not mark those requirements completed or start the graph handoff early.

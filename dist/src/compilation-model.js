@@ -1,14 +1,16 @@
 import { createHash } from 'node:crypto';
 import { GRAPH_CONTRACT_VERSION } from './graph-contract.js';
+import { normalizeCompilationEvidence } from './compilation-evidence.js';
 import { compilationHash, compilationPath, COMPILATION_OPERATIONS } from './compilation-policy.js';
 export const COMPILATION_STATUSES = ['prepared', 'generated', 'checked', 'applying', 'applied', 'completed', 'partial', 'failed', 'review_required', 'stopped'];
 export const compilationContentHash = (content) => createHash('sha256').update(content).digest('hex');
 export const isCompilationRevision = (value) => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
 export const compilationJobRevision = (job) => compilationHash(job);
 export const compilationValidationBasis = (job) => compilationHash({ inputs: job.inputs, authority: job.authorityFingerprint,
-    rule: job.ruleVersion, graph: job.graphContractVersion, draft: job.draft?.fingerprint });
+    rule: job.ruleVersion, graph: job.graphContractVersion, draft: job.draft?.fingerprint, evidence: job.evidence, generatedAt: job.draft?.generatedAt });
 export const compilationReceiptBasis = (job) => compilationHash({ inputs: job.inputs, authority: job.authorityFingerprint,
-    rule: job.ruleVersion, graph: job.graphContractVersion, draft: job.draft?.fingerprint, validation: job.validation, intent: job.intent });
+    rule: job.ruleVersion, graph: job.graphContractVersion, draft: job.draft?.fingerprint, validation: job.validation, intent: job.intent,
+    evidence: job.evidence, generatedAt: job.draft?.generatedAt });
 export const compilationId = (value) => typeof value === 'string' && /^[a-z0-9][a-z0-9._-]{0,99}$/.test(value);
 /** Strict bounded receipts. Unknown or damaged history is never silently reset. */
 export function parseCompilationHistory(value) {
@@ -27,7 +29,7 @@ export function parseCompilationHistory(value) {
         const ids = new Set();
         for (const value of state.jobs) {
             const job = record(value, ['requestId', 'requestFingerprint', 'projectId', 'accountId', 'operation', 'inputs', 'outputPath', 'outputRevision',
-                'ruleVersion', 'graphContractVersion', 'authorityFingerprint', 'status', 'attempts', 'protection', 'reason', 'draft', 'validation', 'intent', 'applied', 'receipt']);
+                'ruleVersion', 'graphContractVersion', 'authorityFingerprint', 'status', 'attempts', 'protection', 'reason', 'draft', 'validation', 'intent', 'applied', 'receipt', 'evidence', 'refinements']);
             if (![job.requestId, job.projectId, job.accountId, job.ruleVersion].every(compilationId) || ids.has(job.requestId)
                 || !isCompilationRevision(job.requestFingerprint) || !isCompilationRevision(job.authorityFingerprint)
                 || !COMPILATION_OPERATIONS.includes(job.operation) || !COMPILATION_STATUSES.includes(job.status)
@@ -50,10 +52,18 @@ export function parseCompilationHistory(value) {
                 paths.add(path);
             }
             if (job.draft) {
-                const draft = record(job.draft, ['content', 'fingerprint']);
+                const draft = record(job.draft, ['content', 'fingerprint', 'generatedAt']);
                 if (job.protection !== 'ready' || typeof draft.content !== 'string' || !draft.content.trim() || draft.content.length > 24000
-                    || draft.fingerprint !== compilationContentHash(draft.content))
+                    || draft.fingerprint !== compilationContentHash(draft.content)
+                    || draft.generatedAt !== undefined && (typeof draft.generatedAt !== 'string' || new Date(draft.generatedAt).toISOString() !== draft.generatedAt))
                     throw invalid();
+            }
+            if (job.refinements !== undefined && (!job.evidence || !Number.isInteger(job.refinements) || job.refinements < 0 || job.refinements > 1))
+                throw invalid();
+            if (job.evidence) {
+                if (!job.draft)
+                    throw invalid();
+                normalizeCompilationEvidence(job.evidence, job.inputs, job.draft);
             }
             if (job.validation) {
                 const validation = record(job.validation, ['status', 'ruleVersion', 'basis']);

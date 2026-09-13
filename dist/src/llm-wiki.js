@@ -1,6 +1,7 @@
 import { guidanceError, guidanceText } from './guidance-runtime.js';
 import { CLAIM_RELATION_FIELDS, typedRelationTargetKindReason } from './graph-contract.js';
 import { prepareDocumentWrite } from './enterprise-storage-context.js';
+import { preparePublicationWrite } from './prepared-publication.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { fingerprint as workFingerprintForOutput } from './work-model.js';
 import { workshopDecisionSeal } from './workshop-output.js';
@@ -2263,6 +2264,12 @@ export class LlmWikiService {
         };
     }
     async publishKnowledge(params, internal = {}) {
+        const prepared = await this.prepareKnowledgePublication(params, internal);
+        return prepared.apply(prepared.fingerprint);
+    }
+    /** Host-internal canonical preparation. Public publication keeps its existing
+     * contract; compilation pins timestamp and confirms the preview fingerprint. */
+    async prepareKnowledgePublication(params, internal = {}) {
         const content = String(params.content ?? '');
         if (!content.trim())
             throw guidanceError(new Error('content is required'), 'guid-75ac615305149ea7');
@@ -2337,7 +2344,9 @@ export class LlmWikiService {
             if (!this.access.canReferenceFrom(params.path, evidencePath)) {
                 throw guidanceError(new Error(`A more-private source cannot ground a more-public knowledge note: ${this.access.toPublicPath(evidencePath)}`), 'guid-2c172f5c483210b7');
             }
-        const timestamp = now();
+        const timestamp = internal.timestamp ?? now();
+        if (new Date(timestamp).toISOString() !== timestamp)
+            throw new Error('Invalid publication timestamp');
         const references = await this.references.validateAndNormalize(params.references ?? existing?.frontmatter.references, params.path, params.principal, content);
         const reviewBasisLinks = await this.collectReviewBasisLinks(content, references, params.principal, params.path);
         const relationFrontmatter = {
@@ -2531,19 +2540,16 @@ export class LlmWikiService {
         const assertAccess = () => internal.assertOutputAccess
             ? internal.assertOutputAccess().then(assertPaths) : assertPaths();
         await assertAccess();
-        const updated = guards.length
-            ? await this.fileSystem.writeNoteWithRevisionGuardsAndReceipt(write, guards, { maxBytes: 8 * 1024 * 1024, assertAccess, ...(internal.workshopOutput && { maxGuards: 128 }) })
-            : await this.fileSystem.writeNoteWithReceipt(write);
-        return {
-            success: true,
-            created: !exists,
-            path: this.access.toPublicPath(params.path),
-            evidencePaths: evidencePaths.map(path => this.access.toPublicPath(path)),
-            evidence: evidence.map(item => ({ ...item, path: this.access.toPublicPath(item.path) })),
-            ...(claims && { claims }),
-            ...(disposition && this.knowledgeDispositionProjection(disposition)),
-            revision: updated.revision,
-        };
+        return preparePublicationWrite({ fs: this.fileSystem, write, guards, assertAccess,
+            ...(internal.workshopOutput && { maxGuards: 128 }), projection: {
+                success: true,
+                created: !exists,
+                path: this.access.toPublicPath(params.path),
+                evidencePaths: evidencePaths.map(path => this.access.toPublicPath(path)),
+                evidence: evidence.map(item => ({ ...item, path: this.access.toPublicPath(item.path) })),
+                ...(claims && { claims }),
+                ...(disposition && this.knowledgeDispositionProjection(disposition)),
+            } });
     }
     async catalog(principal, options = {}) {
         principal = principal ? structuredClone(principal) : undefined;

@@ -7,10 +7,19 @@ import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
 import { createServer } from '../tests/server-fixture.js';
 import { parseCliArgs } from './cli.js';
 import type { CompilationHost } from './compilation-host.js';
+import { getCompilationTools } from './compilation-tools.js';
 
 let vault: string, client: Client, server: ReturnType<typeof createServer>;
 afterEach(async () => { try { await client?.close(); } finally { try { await server?.close(); } finally { if (vault) await rm(vault, { recursive: true, force: true }); } } });
 const parse = (r: any) => JSON.parse(r.content.filter((c: any) => c.type === 'text').map((c: any) => c.text).join(''));
+
+test('compilation submission schema exposes pinned preservation reports without granting authority', () => {
+  const schema: any = getCompilationTools()[0]!.inputSchema;
+  expect(schema.properties.evidence).toBeDefined();
+  expect(schema.properties.evidence.properties.facts.maxItems).toBe(32);
+  expect(schema.properties.evidence.properties.coverage.maxItems).toBe(128);
+  expect(schema.properties).not.toHaveProperty('approved');
+});
 
 test('compilation is dynamic with public diagnosis, authenticated reads and read-only mutation rejection', async () => {
   vault = await mkdtemp(join(tmpdir(), 'compilation-endpoint-'));

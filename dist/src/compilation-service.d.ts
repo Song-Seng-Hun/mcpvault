@@ -40,6 +40,7 @@ export interface CompilationParams {
     expectedOutputRevision?: string;
     expectedJobRevision?: string;
     content?: string;
+    evidence?: unknown;
     maxChars?: number;
 }
 /** Host-owned bounded journal. No scheduler, model invocation or raw Vault writer.

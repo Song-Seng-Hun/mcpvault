@@ -5,6 +5,7 @@ import type { CompilationHost } from './compilation-host.js';
 import { GRAPH_CONTRACT_VERSION } from './graph-contract.js';
 import { isModerationHidden } from './moderation-policy.js';
 import { isMissingVaultPath } from './vault-read-errors.js';
+import { normalizeCompilationEvidence, retainsCompilationObligations } from './compilation-evidence.js';
 import { inspectCompilationPolicy, validateCompilationConfig, compilationHash, compilationPath, type CompilationRuntime,
   type CompilationOperation, type CompilationConfig } from './compilation-policy.js';
 import { parseCompilationHistory, compilationContentHash, compilationId, compilationJobRevision, isCompilationRevision,
@@ -30,7 +31,7 @@ export interface CompilationOptions {
 export interface CompilationParams {
   op?: string; requestId?: string; projectId?: string; operation?: CompilationOperation;
   inputs?: Array<{ path: string; expectedRevision: string; role: 'source' | 'member' | 'concept' | 'topic' }>;
-  outputPath?: string; expectedOutputRevision?: string; expectedJobRevision?: string; content?: string; maxChars?: number;
+  outputPath?: string; expectedOutputRevision?: string; expectedJobRevision?: string; content?: string; evidence?: unknown; maxChars?: number;
 }
 const unavailable = () => Error('Compilation unavailable; revalidate current authorization and inputs');
 const actorBasis = (p?: ScopePrincipal) => p && compilationHash({ account: p.accountId, model: p.modelId, agent: p.agentId,
@@ -151,6 +152,7 @@ export class CompilationService {
         const managed = [...state.jobs].reverse().find(j => j.outputPath.toLowerCase() === outputPath.toLowerCase() && j.applied);
         if ((outputRevision !== 'missing' || managed) && managed?.applied?.outputRevision !== outputRevision) return { status: 'review_required', reason: 'unmanaged_or_edited_output' };
         if (state.jobs.some(j => j.requestFingerprint === requestFingerprint && j.attempts >= 3)) return { status: 'review_required', reason: 'prior_attempts_exhausted' };
+        if (state.jobs.some(j => j.requestFingerprint === requestFingerprint && j.refinements === 1)) return { status: 'review_required', reason: 'prior_refinement_exhausted' };
         if (state.jobs.length >= 64 || state.jobs.some(j => j.outputPath.toLowerCase() === outputPath.toLowerCase() && !['completed', 'review_required', 'stopped'].includes(j.status))) throw Error('Compilation queue requires host review before adding work');
         job = { ...provisional, requestId: params.requestId, requestFingerprint, accountId: principal.accountId, outputRevision,
           ruleVersion: config.projects.find(p => p.id === params.projectId)!.ruleVersion, graphContractVersion: GRAPH_CONTRACT_VERSION,
@@ -191,9 +193,17 @@ export class CompilationService {
       const recoverApplied = op === 'retry' && job.intent && await this.revision(job.outputPath, principal, true) === job.intent.revision;
       if (['completed', 'review_required'].includes(job.status) || job.status === 'stopped' && !recoverApplied) return this.projection(job, maxChars);
       if (op === 'submit') {
-        if (job.operation !== 'synthesize' || job.intent || job.draft || typeof params.content !== 'string' || !params.content.trim() || params.content.length > 24000) throw Error('Compilation accepts one bounded generated draft before application');
+        if (job.operation !== 'synthesize' || job.intent || typeof params.content !== 'string' || !params.content.trim() || params.content.length > 24000) throw Error('Invalid generated draft');
+        const draft = { content: params.content, fingerprint: compilationContentHash(params.content), generatedAt: new Date().toISOString() };
+        const evidence = params.evidence === undefined ? undefined : normalizeCompilationEvidence(params.evidence, job.inputs, draft);
+        if (job.draft) {
+          if (job.validation?.status !== 'partial' || !job.evidence || !evidence || job.refinements === 1
+            || job.draft.fingerprint === draft.fingerprint || !retainsCompilationObligations(job.evidence, evidence)) throw Error('Compilation refinement requires preserved obligations and an unused single refinement');
+          job.refinements = 1;
+        }
         await this.assertCurrent(job, principal);
-        job.draft = { content: params.content, fingerprint: compilationContentHash(params.content) }; job.status = 'generated'; delete job.reason;
+        job.draft = draft; if (evidence) { job.evidence = evidence; job.refinements ??= 0; }
+        job.status = 'generated'; delete job.reason; delete job.validation;
         await save(); return this.projection(job, maxChars);
       }
       const adapter = this.options.adapter;
@@ -206,8 +216,11 @@ export class CompilationService {
       if (!job.intent) {
         const validation = await adapter.check(snapshot(), assertCurrent); await assertCurrent();
         if (!['passed', 'partial'].includes(validation.status) || !compilationId(validation.ruleVersion)) throw Error('Invalid compilation validation receipt');
+        const before = compilationJobRevision(job);
         job.validation = { ...validation, basis: compilationValidationBasis(job) }; job.status = validation.status === 'passed' ? 'checked' : 'partial';
-        delete job.reason; await save();
+        // Checks still revalidate current authority and deterministic evidence;
+        // unchanged receipts must not cause repeated journal writes on restart.
+        delete job.reason; if (compilationJobRevision(job) !== before) await save();
         if (op === 'check' || validation.status !== 'passed') return this.projection(job, maxChars);
       }
       if (op === 'check') return this.projection(job, maxChars);

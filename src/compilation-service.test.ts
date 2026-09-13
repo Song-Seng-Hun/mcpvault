@@ -80,6 +80,55 @@ test('submission is revision-checked, persisted privately and never called compl
   expect(JSON.stringify(result)).not.toContain('Only if');
 });
 
+async function preservationEvidence(content: string, judgment = 'missing') {
+  const source = await fs.readNote('Source.md');
+  return { query: 'Only if enabled', decision: 'new_knowledge', facts: [{ id: 'condition', kind: 'condition', sourcePath: 'Source.md',
+    sourceLocator: { revision: source.revision, startLine: 1, endLine: 1, quoteHash: digest(source.content) },
+    outputLocator: { revision: digest(content), startLine: 1, endLine: 1, quoteHash: digest(content) },
+    comparisonMode: 'exact', semanticJudgment: judgment }],
+    coverage: [{ sourcePath: 'Source.md', locator: { revision: source.revision, startLine: 1, endLine: 1, quoteHash: digest(source.content) } }] };
+}
+test('persists required source facts privately and allows one checked-partial refinement with unchanged preservation obligations', async () => {
+  const s = service({ adapter: { check: async () => ({ status: 'partial', ruleVersion: 'fidelity-v1' }) } });
+  const ready = await s.execute(await request(), actor);
+  const content = 'Use version 2.0.', evidence = await preservationEvidence(content);
+  const submitted = await s.execute({ op: 'submit', requestId: 'job-one', expectedJobRevision: ready.jobRevision, content, evidence } as any, actor);
+  expect(durable.jobs[0].evidence).toEqual(evidence); expect(durable.jobs[0].draft.generatedAt).toMatch(/^\d{4}-/);
+  expect(JSON.stringify(submitted)).not.toContain('Only if enabled');
+  const checked = await s.execute({ op: 'check', requestId: 'job-one', expectedJobRevision: submitted.jobRevision }, actor);
+  const refined = 'Only if enabled, use version 2.0.';
+  const second = await s.execute({ op: 'submit', requestId: 'job-one', expectedJobRevision: checked.jobRevision,
+    content: refined, evidence: await preservationEvidence(refined, 'preserved') } as any, actor);
+  expect(second.status).toBe('generated'); expect(durable.jobs[0].refinements).toBe(1);
+  expect(durable.jobs[0].validation).toBeUndefined();
+  const checkedAgain = await s.execute({ op: 'check', requestId: 'job-one', expectedJobRevision: second.jobRevision }, actor);
+  await expect(s.execute({ op: 'submit', requestId: 'job-one', expectedJobRevision: checkedAgain.jobRevision,
+    content: refined + ' Again.', evidence: await preservationEvidence(refined + ' Again.') } as any, actor)).rejects.toThrow();
+});
+test('refinement cannot silently drop or re-anchor a mandatory source fact', async () => {
+  const s = service({ adapter: { check: async () => ({ status: 'partial', ruleVersion: 'fidelity-v1' }) } });
+  const ready = await s.execute(await request(), actor), content = 'Use version 2.0.';
+  const submitted = await s.execute({ op: 'submit', requestId: 'job-one', expectedJobRevision: ready.jobRevision,
+    content, evidence: await preservationEvidence(content) } as any, actor);
+  const checked = await s.execute({ op: 'check', requestId: 'job-one', expectedJobRevision: submitted.jobRevision }, actor);
+  for (const change of ['drop', 'anchor']) {
+    const evidence = await preservationEvidence('Only if enabled, use version 2.0.');
+    if (change === 'drop') evidence.facts = [];
+    else evidence.facts[0]!.sourceLocator.quoteHash = digest('different fact');
+    await expect(s.execute({ op: 'submit', requestId: 'job-one', expectedJobRevision: checked.jobRevision,
+      content: 'Only if enabled, use version 2.0.', evidence } as any, actor)).rejects.toThrow();
+  }
+});
+test('unlisted source paths and stale draft locators cannot be submitted as preservation evidence', async () => {
+  const s = service(), ready = await s.execute(await request(), actor), content = 'Use version 2.0.';
+  for (const change of ['source', 'draft']) {
+    const evidence = await preservationEvidence(content);
+    if (change === 'source') evidence.facts[0]!.sourcePath = 'Unlisted.md';
+    else evidence.facts[0]!.outputLocator.revision = digest('old draft');
+    await expect(s.execute({ op: 'submit', requestId: 'job-one', expectedJobRevision: ready.jobRevision, content, evidence } as any, actor)).rejects.toThrow();
+  }
+});
+
 test.each(['source', 'concept', 'rule', 'runtime'])('%s drift invalidates prior plan without applying its draft', async changed => {
   let runtimeRevision = 'one'; const s = service({ runtime: async () => ({ id: 'local', revision: runtimeRevision, local: true, operations: ['synthesize', 'index'] }) });
   const ready = await s.execute(await request(), actor);
@@ -140,6 +189,22 @@ function adapter(events: string[] = []) {
     },
   };
 }
+test.each(['passed', 'partial'] as const)('unchanged %s checks revalidate but do not rewrite durable history across restart', async status => {
+  const impl = adapter(); impl.check = vi.fn(async () => ({ status, ruleVersion: 'checker-1' })) as typeof impl.check;
+  const s = service({ adapter: impl }), draft = await generated(s);
+  const first = await s.execute({ op: 'check', requestId: 'job-one', expectedJobRevision: draft.jobRevision }, actor);
+  const count = saves;
+  const restarted = service({ adapter: impl });
+  for (let i = 0; i < 3; i++) {
+    expect(await restarted.execute({ op: 'check', requestId: 'job-one', expectedJobRevision: first.jobRevision }, actor)).toEqual(first);
+  }
+  expect(impl.check).toHaveBeenCalledTimes(4);
+  expect(saves).toBe(count);
+  current = undefined;
+  await expect(restarted.execute({ op: 'check', requestId: 'job-one', expectedJobRevision: first.jobRevision }, actor)).rejects.toThrow('Compilation unavailable');
+  expect(saves).toBe(count);
+});
+
 async function generated(s: CompilationService) {
   const ready = await s.execute(await request(), actor);
   return s.execute({ op: 'submit', requestId: 'job-one', expectedJobRevision: ready.jobRevision, content: '# Result\nPreserved condition.' }, actor);

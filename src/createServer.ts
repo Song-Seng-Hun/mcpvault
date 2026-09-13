@@ -34,6 +34,8 @@ import { withEnterpriseStorageContext } from './enterprise-storage-context.js';
 import type { MaintenanceHost } from './maintenance-host.js';
 import { CompilationService, type CompilationOptions } from './compilation-service.js';
 import { getCompilationTools } from './compilation-tools.js';
+import { FidelityService } from './fidelity-service.js';
+import { getFidelityTools } from './fidelity-tools.js';
 import { MaintenanceService } from './maintenance-service.js';
 import { MaintenanceDerivedService } from './maintenance-derived.js';
 import { maintenanceExecution } from './maintenance-execution.js';
@@ -670,6 +672,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
   const researchBridge = hasFeature('ideation-research') ? new ResearchBridgeService(fileSystem, scopeAccess, retrieval) : undefined;
   const questionPacket = new QuestionPacketService(fileSystem, scopeAccess, retrieval);
   const sourceComparison = new SourceComparisonService(fileSystem, scopeAccess, retrieval);
+  const fidelity = new FidelityService(fileSystem, scopeAccess);
   const sourceChange = new SourceChangeService(fileSystem, scopeAccess);
   const knowledgeApplications = new KnowledgeApplicationService(fileSystem, scopeAccess);
   const references = new ReferenceService(fileSystem, scopeAccess);
@@ -1174,6 +1177,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         ...getScopeAuthTools(),
         ...getLlmWikiTools(),
         ...getCompilationTools(),
+        ...getFidelityTools(),
         ...getSocialTools(),
         ...(federation ? getEnterpriseFederationTools() : []),
         ...getLayeredMemoryTools(),
@@ -1771,11 +1775,20 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         return jsonResult(await service.execute(storyEndpoint, storyArgs, principal), false);
       }
       switch (toolName) {
+        case 'check_wiki_fidelity':
+          return jsonResult(await fidelity.check({ ...trimmedArgs, principal }, async () => { await revalidateActor(); }), false);
         case 'manage_wiki_compilation':
         case 'read_wiki_compilation': {
           const compilationArgs = { ...trimmedArgs, ...(Array.isArray(trimmedArgs.inputs) && {
             inputs: trimmedArgs.inputs.map((input: any) => ({ ...input, path: scopeAccess.resolveExternalPath(input.path, principal) })),
           }) };
+          if (compilationArgs.evidence) {
+            compilationArgs.evidence = { ...compilationArgs.evidence };
+            for (const key of ['facts', 'coverage']) if (Array.isArray(compilationArgs.evidence[key])) {
+              compilationArgs.evidence[key] = compilationArgs.evidence[key].map((item: any) => ({ ...item,
+                sourcePath: scopeAccess.resolveExternalPath(item.sourcePath, principal) }));
+            }
+          }
           return jsonResult(await compilation.execute(compilationArgs, principal, async (job, assertCurrent) => {
             await assertCurrent();
             // Reuse the request-local inheritance path so its active storage

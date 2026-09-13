@@ -1,6 +1,7 @@
 import { GRAPH_CONTRACT_VERSION } from './graph-contract.js';
 import { isModerationHidden } from './moderation-policy.js';
 import { isMissingVaultPath } from './vault-read-errors.js';
+import { normalizeCompilationEvidence, retainsCompilationObligations } from './compilation-evidence.js';
 import { inspectCompilationPolicy, validateCompilationConfig, compilationHash, compilationPath } from './compilation-policy.js';
 import { parseCompilationHistory, compilationContentHash, compilationId, compilationJobRevision, isCompilationRevision, compilationValidationBasis, compilationReceiptBasis } from './compilation-model.js';
 const unavailable = () => Error('Compilation unavailable; revalidate current authorization and inputs');
@@ -165,6 +166,8 @@ export class CompilationService {
                     return { status: 'review_required', reason: 'unmanaged_or_edited_output' };
                 if (state.jobs.some(j => j.requestFingerprint === requestFingerprint && j.attempts >= 3))
                     return { status: 'review_required', reason: 'prior_attempts_exhausted' };
+                if (state.jobs.some(j => j.requestFingerprint === requestFingerprint && j.refinements === 1))
+                    return { status: 'review_required', reason: 'prior_refinement_exhausted' };
                 if (state.jobs.length >= 64 || state.jobs.some(j => j.outputPath.toLowerCase() === outputPath.toLowerCase() && !['completed', 'review_required', 'stopped'].includes(j.status)))
                     throw Error('Compilation queue requires host review before adding work');
                 job = { ...provisional, requestId: params.requestId, requestFingerprint, accountId: principal.accountId, outputRevision,
@@ -229,12 +232,25 @@ export class CompilationService {
             if (['completed', 'review_required'].includes(job.status) || job.status === 'stopped' && !recoverApplied)
                 return this.projection(job, maxChars);
             if (op === 'submit') {
-                if (job.operation !== 'synthesize' || job.intent || job.draft || typeof params.content !== 'string' || !params.content.trim() || params.content.length > 24000)
-                    throw Error('Compilation accepts one bounded generated draft before application');
+                if (job.operation !== 'synthesize' || job.intent || typeof params.content !== 'string' || !params.content.trim() || params.content.length > 24000)
+                    throw Error('Invalid generated draft');
+                const draft = { content: params.content, fingerprint: compilationContentHash(params.content), generatedAt: new Date().toISOString() };
+                const evidence = params.evidence === undefined ? undefined : normalizeCompilationEvidence(params.evidence, job.inputs, draft);
+                if (job.draft) {
+                    if (job.validation?.status !== 'partial' || !job.evidence || !evidence || job.refinements === 1
+                        || job.draft.fingerprint === draft.fingerprint || !retainsCompilationObligations(job.evidence, evidence))
+                        throw Error('Compilation refinement requires preserved obligations and an unused single refinement');
+                    job.refinements = 1;
+                }
                 await this.assertCurrent(job, principal);
-                job.draft = { content: params.content, fingerprint: compilationContentHash(params.content) };
+                job.draft = draft;
+                if (evidence) {
+                    job.evidence = evidence;
+                    job.refinements ??= 0;
+                }
                 job.status = 'generated';
                 delete job.reason;
+                delete job.validation;
                 await save();
                 return this.projection(job, maxChars);
             }
@@ -254,10 +270,14 @@ export class CompilationService {
                 await assertCurrent();
                 if (!['passed', 'partial'].includes(validation.status) || !compilationId(validation.ruleVersion))
                     throw Error('Invalid compilation validation receipt');
+                const before = compilationJobRevision(job);
                 job.validation = { ...validation, basis: compilationValidationBasis(job) };
                 job.status = validation.status === 'passed' ? 'checked' : 'partial';
+                // Checks still revalidate current authority and deterministic evidence;
+                // unchanged receipts must not cause repeated journal writes on restart.
                 delete job.reason;
-                await save();
+                if (compilationJobRevision(job) !== before)
+                    await save();
                 if (op === 'check' || validation.status !== 'passed')
                     return this.projection(job, maxChars);
             }
