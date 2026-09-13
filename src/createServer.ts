@@ -33,6 +33,8 @@ import { EnterpriseRegistry } from './enterprise-registry.js';
 import { withEnterpriseStorageContext } from './enterprise-storage-context.js';
 import type { MaintenanceHost } from './maintenance-host.js';
 import { CompilationService, type CompilationOptions } from './compilation-service.js';
+import { attachCompilationReview } from './compilation-review-view.js';
+import type { CompilationPublicationOptions } from './compilation-publication-adapter.js';
 import { getCompilationTools } from './compilation-tools.js';
 import { FidelityService } from './fidelity-service.js';
 import { getFidelityTools } from './fidelity-tools.js';
@@ -269,7 +271,11 @@ export interface CreateServerOptions extends DocumentAuthorityOptions {
   /** Explicit host-private allowlist; never enabled by client arguments or features. */
   maintenance?: MaintenanceHost;
   /** Separate host approval and actual execution verifier; never client/feature authority. */
-  compilation?: Pick<CompilationOptions, 'host' | 'runtime' | 'adapter'>;
+  compilation?: Pick<CompilationOptions, 'host' | 'runtime' | 'adapter'> & {
+    /** Trusted host code only; factory selection is not an execution grant.
+     * Current host config, runtime, account and source gates still apply. */
+    adapterFactory?: (services: CompilationPublicationOptions) => NonNullable<CompilationOptions['adapter']>;
+  };
   /** Explicit trusted host registration. Never loaded from a request or Vault note. */
   skillEvolution?: SkillEvolutionHost;
   /** Host-private notice registration/delegation file, reloaded before operations. */
@@ -680,8 +686,11 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
   const llmWiki = new LlmWikiService(fileSystem, scopeAccess, references, semanticSearch);
   llmWikiCache = llmWiki;
   const moderation = new ModerationService(resolvedVaultPath, fileSystem, scopeAuth);
+  const compilationAuthorize = maintenanceExecution(scopeAuth, scopeAccess, moderation, refreshDocumentPolicy).authorize;
+  const compilationAdapter = options.compilation?.adapter ?? (!readOnly && options.compilation?.host && options.compilation.runtime
+    ? options.compilation.adapterFactory?.({ fs: fileSystem, access: scopeAccess, wiki: llmWiki, comparison: sourceComparison, authorize: compilationAuthorize }) : undefined);
   const compilation = new CompilationService({ fs: fileSystem, access: scopeAccess, readOnly,
-    ...options.compilation, authorize: maintenanceExecution(scopeAuth, scopeAccess, moderation, refreshDocumentPolicy).authorize });
+    ...options.compilation, ...(compilationAdapter && { adapter: compilationAdapter }), authorize: compilationAuthorize });
   const maintenance = new MaintenanceService({ fs: fileSystem, access: scopeAccess,
     ...(!readOnly && options.maintenance && { host: options.maintenance }),
     ...maintenanceExecution(scopeAuth, scopeAccess, moderation, refreshDocumentPolicy),
@@ -1774,6 +1783,15 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         });
         return jsonResult(await service.execute(storyEndpoint, storyArgs, principal), false);
       }
+      const withCompilationReview = async (result: Record<string, any>, maxChars: number, allJobs = false, prettyPrint = false) => {
+        if (!options.compilation?.host || !principal) return result;
+        const retryArgs = Object.fromEntries((allJobs ? ['limit', 'grouped'] : ['query', 'path', 'expectedRevision', 'includeSemantic', 'retrievalMode', 'graphDepth', 'intent'])
+          .filter(key => trimmedArgs[key] !== undefined).map(key => [key, key === 'path' ? scopeAccess.toPublicPath(trimmedArgs[key]) : trimmedArgs[key]]));
+        return attachCompilationReview({ fs: fileSystem, access: scopeAccess, principal, result, maxChars, allJobs, prettyPrint,
+          review: paths => compilation.review(principal, paths), revalidateActor: async () => { await revalidateActor(); },
+          retry: { endpointId: allJobs ? 'wiki.exception_board' : 'wiki.answer_packet', arguments: { ...retryArgs, maxChars: allJobs ? 16000 : 12000 } },
+        });
+      };
       switch (toolName) {
         case 'check_wiki_fidelity':
           return jsonResult(await fidelity.check({ ...trimmedArgs, principal }, async () => { await revalidateActor(); }), false);
@@ -1787,6 +1805,15 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
             for (const key of ['facts', 'coverage']) if (Array.isArray(compilationArgs.evidence[key])) {
               compilationArgs.evidence[key] = compilationArgs.evidence[key].map((item: any) => ({ ...item,
                 sourcePath: scopeAccess.resolveExternalPath(item.sourcePath, principal) }));
+            }
+          }
+          if (compilationArgs.observation) {
+            compilationArgs.observation = { ...compilationArgs.observation };
+            for (const key of ['coverage', 'matches']) if (Array.isArray(compilationArgs.observation[key])) {
+              compilationArgs.observation[key] = compilationArgs.observation[key].map((item: any) => ({ ...item,
+                sourcePath: scopeAccess.resolveExternalPath(item.sourcePath, principal),
+                ...(key === 'matches' && { knowledgePath: scopeAccess.resolveExternalPath(item.knowledgePath, principal) }),
+              }));
             }
           }
           return jsonResult(await compilation.execute(compilationArgs, principal, async (job, assertCurrent) => {
@@ -2149,11 +2176,12 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
           if (trimmedArgs.query !== undefined) {
             const result = await questionPacket.read({ ...trimmedArgs, principal });
             if (trimmedArgs.graphDepth === 2 && JSON.stringify(await scopeAuth.authenticate(rawArgs.accessToken)) !== JSON.stringify(principal)) throw new Error('Authentication changed; retry graph request');
-            return jsonResult(result, trimmedArgs.prettyPrint);
+            return jsonResult(await withCompilationReview(result, trimmedArgs.maxChars ?? 4000, false, trimmedArgs.prettyPrint), trimmedArgs.prettyPrint);
           }
           if (trimmedArgs.graphDepth !== undefined && trimmedArgs.graphDepth !== 1) throw new Error('graphDepth 2 requires query and evidence retrieval');
           if (trimmedArgs.retrievalMode !== undefined) throw new Error('retrievalMode requires query');
-          return jsonResult(await llmWiki.answerPacket(principal, trimmedArgs.path, trimmedArgs.maxChars, trimmedArgs.includeSemantic !== false, trimmedArgs.intent), trimmedArgs.prettyPrint);
+          return jsonResult(await withCompilationReview(await llmWiki.answerPacket(principal, trimmedArgs.path, trimmedArgs.maxChars,
+            trimmedArgs.includeSemantic !== false, trimmedArgs.intent), trimmedArgs.maxChars ?? 7000, false, trimmedArgs.prettyPrint), trimmedArgs.prettyPrint);
         }
 
         case "get_wiki_claim_matrix": {
@@ -2229,7 +2257,8 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
 
         case "get_wiki_exception_board": {
           const grouped = trimmedArgs.grouped !== false;
-          return jsonResult(await llmWiki.exceptionBoard(principal, trimmedArgs.limit, trimmedArgs.maxChars, grouped), grouped ? false : trimmedArgs.prettyPrint);
+          return jsonResult(await withCompilationReview(await llmWiki.exceptionBoard(principal, trimmedArgs.limit, trimmedArgs.maxChars, grouped),
+            trimmedArgs.maxChars ?? 7000, true, grouped ? false : trimmedArgs.prettyPrint), grouped ? false : trimmedArgs.prettyPrint);
         }
 
         case "get_wiki_quality_check": {

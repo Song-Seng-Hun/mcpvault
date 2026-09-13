@@ -7,7 +7,7 @@ function record(value, keys) {
         throw invalid();
     return value;
 }
-function locator(value, expectedRevision) {
+export function compilationLocator(value, expectedRevision) {
     const l = record(value, ['revision', 'startLine', 'endLine', 'quoteHash', 'heading', 'blockId']);
     if (!revision(l.revision) || l.revision !== expectedRevision || !revision(l.quoteHash)
         || !Number.isSafeInteger(l.startLine) || l.startLine < 1 || !Number.isSafeInteger(l.endLine) || l.endLine < l.startLine
@@ -20,13 +20,27 @@ function locator(value, expectedRevision) {
 /** Bounds and pins reports. Actual source content, completeness and semantic
  * correspondence are checked separately; a client report is not a pass. */
 export function normalizeCompilationEvidence(value, inputs, draft) {
-    const e = record(value, ['query', 'decision', 'facts', 'coverage']);
+    const e = record(value, ['query', 'decision', 'facts', 'coverage', 'rationale']);
     if (typeof e.query !== 'string' || !e.query.trim() || e.query.length > 1000
         || !['new_knowledge', 'extend_existing', 'already_covered', 'conflicting', 'uncertain'].includes(e.decision)
         || !Array.isArray(e.facts) || !e.facts.length || e.facts.length > 32
         || !Array.isArray(e.coverage) || !e.coverage.length || e.coverage.length > 128
         || JSON.stringify(e).length > 24000)
         throw invalid();
+    if (e.rationale !== undefined) {
+        const r = record(e.rationale, ['constraints', 'rejectedAlternatives', 'failureConditions']);
+        const text = (v) => typeof v === 'string' && Boolean(v.trim()) && v.length <= 300;
+        for (const key of ['constraints', 'failureConditions'])
+            if (!Array.isArray(r[key]) || r[key].length > 8 || !r[key].every(text))
+                throw invalid();
+        if (!Array.isArray(r.rejectedAlternatives) || r.rejectedAlternatives.length > 8)
+            throw invalid();
+        for (const value of r.rejectedAlternatives) {
+            const alternative = record(value, ['option', 'reason']);
+            if (!text(alternative.option) || !text(alternative.reason))
+                throw invalid();
+        }
+    }
     const source = (path) => {
         const p = compilationPath(path);
         const input = inputs.find(input => input.path === p && input.role === 'source');
@@ -43,16 +57,16 @@ export function normalizeCompilationEvidence(value, inputs, draft) {
             || !['preserved', 'missing', 'uncertain'].includes(f.semanticJudgment))
             throw invalid();
         ids.add(f.id);
-        locator(f.sourceLocator, source(f.sourcePath).revision);
+        compilationLocator(f.sourceLocator, source(f.sourcePath).revision);
         if (f.outputLocator !== undefined) {
-            const output = locator(f.outputLocator, draft.fingerprint);
+            const output = compilationLocator(f.outputLocator, draft.fingerprint);
             if (!resolveEvidenceLocator(draft.content, output, draft.fingerprint).valid)
                 throw invalid();
         }
     }
     for (const value of e.coverage) {
         const c = record(value, ['sourcePath', 'locator']);
-        locator(c.locator, source(c.sourcePath).revision);
+        compilationLocator(c.locator, source(c.sourcePath).revision);
     }
     return structuredClone(e);
 }

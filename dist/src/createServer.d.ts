@@ -4,6 +4,7 @@ import { FrontmatterHandler } from "./frontmatter.js";
 import { PathFilter } from "./pathfilter.js";
 import type { MaintenanceHost } from './maintenance-host.js';
 import { type CompilationOptions } from './compilation-service.js';
+import type { CompilationPublicationOptions } from './compilation-publication-adapter.js';
 import { type OwnerActivityRuntimeOptions } from './owner-activity-runtime.js';
 import { type DocumentAuthorityOptions } from './document-authority.js';
 import { type PublicFederationHostConfig } from './enterprise-federation.js';
@@ -32,7 +33,11 @@ export interface CreateServerOptions extends DocumentAuthorityOptions {
     /** Explicit host-private allowlist; never enabled by client arguments or features. */
     maintenance?: MaintenanceHost;
     /** Separate host approval and actual execution verifier; never client/feature authority. */
-    compilation?: Pick<CompilationOptions, 'host' | 'runtime' | 'adapter'>;
+    compilation?: Pick<CompilationOptions, 'host' | 'runtime' | 'adapter'> & {
+        /** Trusted host code only; factory selection is not an execution grant.
+         * Current host config, runtime, account and source gates still apply. */
+        adapterFactory?: (services: CompilationPublicationOptions) => NonNullable<CompilationOptions['adapter']>;
+    };
     /** Explicit trusted host registration. Never loaded from a request or Vault note. */
     skillEvolution?: SkillEvolutionHost;
     /** Host-private notice registration/delegation file, reloaded before operations. */

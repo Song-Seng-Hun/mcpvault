@@ -2,11 +2,17 @@ import type { FileSystemService } from './filesystem.js';
 import type { ScopeAccessPolicy } from './scope-access.js';
 import type { ScopePrincipal } from './scope-auth.js';
 import type { CompilationHost } from './compilation-host.js';
+import { type CompilationFinding } from './compilation-review.js';
 import { type CompilationRuntime, type CompilationOperation } from './compilation-policy.js';
 import { type CompilationJob, type CompilationIntent } from './compilation-model.js';
 export interface CompilationAdapter {
     /** Code-owned deterministic checks, not an incoming client's success assertion. */
     check(job: Readonly<CompilationJob>, assertCurrent: () => Promise<void>): Promise<{
+        status: 'passed' | 'partial';
+        ruleVersion: string;
+    }>;
+    /** Must verify real immutable sources/coverage; never synthesize or publish. */
+    checkObservation?(job: Readonly<CompilationJob>, assertCurrent: () => Promise<void>): Promise<{
         status: 'passed' | 'partial';
         ruleVersion: string;
     }>;
@@ -41,7 +47,10 @@ export interface CompilationParams {
     expectedJobRevision?: string;
     content?: string;
     evidence?: unknown;
+    observation?: unknown;
     maxChars?: number;
+    includeInspection?: boolean;
+    inspectionCursor?: number;
 }
 /** Host-owned bounded journal. No scheduler, model invocation or raw Vault writer.
  * Every entry point reauthorizes; checkpoints are never bearer access grants. */
@@ -55,6 +64,9 @@ export declare class CompilationService {
     constructor(options: CompilationOptions);
     private serial;
     close(): Promise<void>;
+    /** Optional host-private diagnostics for existing views. No registration,
+     * history repair, counters for omitted jobs, execution, or journal writes. */
+    review(principal?: ScopePrincipal, paths?: readonly string[]): Promise<CompilationFinding[]>;
     private actor;
     private revision;
     private gate;

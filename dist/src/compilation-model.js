@@ -1,16 +1,17 @@
 import { createHash } from 'node:crypto';
 import { GRAPH_CONTRACT_VERSION } from './graph-contract.js';
 import { normalizeCompilationEvidence } from './compilation-evidence.js';
+import { normalizeCompilationObservation } from './compilation-observation.js';
 import { compilationHash, compilationPath, COMPILATION_OPERATIONS } from './compilation-policy.js';
 export const COMPILATION_STATUSES = ['prepared', 'generated', 'checked', 'applying', 'applied', 'completed', 'partial', 'failed', 'review_required', 'stopped'];
 export const compilationContentHash = (content) => createHash('sha256').update(content).digest('hex');
 export const isCompilationRevision = (value) => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
 export const compilationJobRevision = (job) => compilationHash(job);
 export const compilationValidationBasis = (job) => compilationHash({ inputs: job.inputs, authority: job.authorityFingerprint,
-    rule: job.ruleVersion, graph: job.graphContractVersion, draft: job.draft?.fingerprint, evidence: job.evidence, generatedAt: job.draft?.generatedAt });
+    rule: job.ruleVersion, graph: job.graphContractVersion, draft: job.draft?.fingerprint, evidence: job.evidence, generatedAt: job.draft?.generatedAt, observation: job.observation });
 export const compilationReceiptBasis = (job) => compilationHash({ inputs: job.inputs, authority: job.authorityFingerprint,
     rule: job.ruleVersion, graph: job.graphContractVersion, draft: job.draft?.fingerprint, validation: job.validation, intent: job.intent,
-    evidence: job.evidence, generatedAt: job.draft?.generatedAt });
+    evidence: job.evidence, generatedAt: job.draft?.generatedAt, observation: job.observation });
 export const compilationId = (value) => typeof value === 'string' && /^[a-z0-9][a-z0-9._-]{0,99}$/.test(value);
 /** Strict bounded receipts. Unknown or damaged history is never silently reset. */
 export function parseCompilationHistory(value) {
@@ -29,7 +30,7 @@ export function parseCompilationHistory(value) {
         const ids = new Set();
         for (const value of state.jobs) {
             const job = record(value, ['requestId', 'requestFingerprint', 'projectId', 'accountId', 'operation', 'inputs', 'outputPath', 'outputRevision',
-                'ruleVersion', 'graphContractVersion', 'authorityFingerprint', 'status', 'attempts', 'protection', 'reason', 'draft', 'validation', 'intent', 'applied', 'receipt', 'evidence', 'refinements']);
+                'ruleVersion', 'graphContractVersion', 'authorityFingerprint', 'status', 'attempts', 'protection', 'reason', 'draft', 'validation', 'intent', 'applied', 'receipt', 'evidence', 'refinements', 'observation', 'noWriteReceipt']);
             if (![job.requestId, job.projectId, job.accountId, job.ruleVersion].every(compilationId) || ids.has(job.requestId)
                 || !isCompilationRevision(job.requestFingerprint) || !isCompilationRevision(job.authorityFingerprint)
                 || !COMPILATION_OPERATIONS.includes(job.operation) || !COMPILATION_STATUSES.includes(job.status)
@@ -65,6 +66,11 @@ export function parseCompilationHistory(value) {
                     throw invalid();
                 normalizeCompilationEvidence(job.evidence, job.inputs, job.draft);
             }
+            if (job.observation) {
+                if (job.protection !== 'ready' || job.draft || job.evidence || job.refinements !== undefined || job.intent || job.applied || job.receipt || job.attempts !== 0)
+                    throw invalid();
+                normalizeCompilationObservation(job.observation, job.inputs, job.operation);
+            }
             if (job.validation) {
                 const validation = record(job.validation, ['status', 'ruleVersion', 'basis']);
                 if (!['passed', 'partial'].includes(validation.status) || !compilationId(validation.ruleVersion)
@@ -83,11 +89,17 @@ export function parseCompilationHistory(value) {
                         || receipt.outputRevision !== job.intent?.revision)
                         throw invalid();
                 }
-            if (['generated', 'checked', 'applying', 'applied', 'completed'].includes(job.status) && !job.draft
+            if (job.noWriteReceipt) {
+                const receipt = record(job.noWriteReceipt, ['kind', 'basis']);
+                if (!job.observation || job.validation?.status !== 'passed' || receipt.kind !== job.observation.kind
+                    || receipt.basis !== compilationReceiptBasis(job))
+                    throw invalid();
+            }
+            if (['generated', 'checked', 'completed'].includes(job.status) && !job.draft && !job.observation
                 || ['checked', 'applying', 'applied', 'completed'].includes(job.status) && job.validation?.status !== 'passed'
-                || ['applying', 'applied', 'completed'].includes(job.status) && !job.intent
+                || ['applying', 'applied'].includes(job.status) && !job.intent
                 || (job.status === 'applied' || job.receipt) && !job.applied
-                || job.status === 'completed' && !job.receipt)
+                || job.status === 'completed' && !job.receipt && !job.noWriteReceipt)
                 throw invalid();
         }
         return structuredClone(state);

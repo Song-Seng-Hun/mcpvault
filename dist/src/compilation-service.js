@@ -2,6 +2,9 @@ import { GRAPH_CONTRACT_VERSION } from './graph-contract.js';
 import { isModerationHidden } from './moderation-policy.js';
 import { isMissingVaultPath } from './vault-read-errors.js';
 import { normalizeCompilationEvidence, retainsCompilationObligations } from './compilation-evidence.js';
+import { normalizeCompilationObservation } from './compilation-observation.js';
+import { compilationInspection } from './compilation-view.js';
+import { compilationFindings } from './compilation-review.js';
 import { inspectCompilationPolicy, validateCompilationConfig, compilationHash, compilationPath } from './compilation-policy.js';
 import { parseCompilationHistory, compilationContentHash, compilationId, compilationJobRevision, isCompilationRevision, compilationValidationBasis, compilationReceiptBasis } from './compilation-model.js';
 const unavailable = () => Error('Compilation unavailable; revalidate current authorization and inputs');
@@ -25,6 +28,69 @@ export class CompilationService {
         return pending;
     }
     async close() { this.closed = true; await this.tail; }
+    /** Optional host-private diagnostics for existing views. No registration,
+     * history repair, counters for omitted jobs, execution, or journal writes. */
+    review(principal, paths) {
+        if (this.closed || !this.options.host || !principal)
+            return Promise.resolve([]);
+        return this.serial(async () => {
+            try {
+                const host = this.options.host, current = await this.actor(principal);
+                const config = validateCompilationConfig(await host.refresh());
+                if (!config.enabled || config.accountId !== current.accountId)
+                    return [];
+                const boundary = this.options.access.captureDocumentBoundary(current);
+                const state = parseCompilationHistory(await host.readState());
+                const staged = [];
+                for (const job of state.jobs) {
+                    if (job.accountId !== current.accountId || paths && ![job.outputPath, ...job.inputs.map(i => i.path)].some(p => paths.includes(p)))
+                        continue;
+                    try {
+                        const revisions = new Map();
+                        for (const input of job.inputs)
+                            revisions.set(input.path, await this.revision(input.path, current));
+                        revisions.set(job.outputPath, await this.revision(job.outputPath, current, true));
+                        const admission = await this.gate(config, job, current);
+                        if (admission.status === 'unavailable')
+                            continue;
+                        const drift = await this.drift(job, current, admission);
+                        const path = revisions.get(job.outputPath) !== 'missing' ? job.outputPath : job.inputs[0].path;
+                        const affectedEvidence = [...revisions].filter(([, revision]) => revision !== 'missing')
+                            .map(([path, revision]) => ({ path: this.options.access.toPublicPath(path), revision }));
+                        staged.push({ job, revisions, findings: compilationFindings(job, this.options.access.toPublicPath(path), revisions.get(path), drift)
+                                .map(finding => ({ ...finding, affectedEvidence })) });
+                    }
+                    catch { /* Do not reveal which job or dependency was unavailable. */ }
+                }
+                const findings = [];
+                for (const item of staged) {
+                    let valid = true;
+                    try {
+                        for (const [path, revision] of item.revisions)
+                            if (await this.revision(path, current, path === item.job.outputPath) !== revision) {
+                                valid = false;
+                                break;
+                            }
+                    }
+                    catch {
+                        valid = false;
+                    }
+                    if (valid)
+                        findings.push(...item.findings);
+                }
+                await this.actor(current);
+                if (compilationHash(validateCompilationConfig(await host.refresh())) !== compilationHash(config))
+                    return [];
+                boundary();
+                if (staged.some(item => [...item.revisions.keys()].some(path => !this.options.access.canAccessPhysicalPath(path, current, false))))
+                    return [];
+                return findings;
+            }
+            catch {
+                return [];
+            }
+        });
+    }
     async actor(principal) {
         if (!principal)
             throw unavailable();
@@ -68,8 +134,11 @@ export class CompilationService {
         const result = { requestId: job.requestId, status: override?.status ?? job.status, jobRevision: compilationJobRevision(job),
             ...(override?.reason || job.reason ? { reason: override?.reason ?? job.reason } : {}),
             ...(job.receipt && !override && { outputRevision: job.receipt.outputRevision }),
+            ...(job.noWriteReceipt && job.status === 'completed' && !override && { outcome: job.noWriteReceipt.kind, wroteOutput: false,
+                verification: { mechanical: 'passed', semantic: job.noWriteReceipt.kind === 'already_covered' ? 'agent_report' : 'not_assessed' } }),
             ...(['partial', 'review_required'].includes(override?.status ?? job.status) && { partial: true,
-                nextAction: { endpointId: 'wiki.compilation', arguments: { op: 'read', requestId: job.requestId, maxChars: 4000 } } }) };
+                nextAction: { endpointId: 'wiki.compilation', arguments: { op: 'read', requestId: job.requestId, includeInspection: true,
+                        expectedJobRevision: compilationJobRevision(job), maxChars: 4000 } } }) };
         if (JSON.stringify(result).length <= maxChars)
             return result;
         return { requestId: job.requestId, status: result.status, jobRevision: result.jobRevision, partial: true };
@@ -94,6 +163,10 @@ export class CompilationService {
         const op = params.op ?? 'diagnose', maxChars = params.maxChars ?? 4000;
         if (!['diagnose', 'prepare', 'read', 'submit', 'check', 'retry'].includes(op) || !Number.isInteger(maxChars) || maxChars < 512 || maxChars > 12000)
             throw Error('Invalid compilation operation or response budget');
+        if (params.includeInspection !== undefined && (op !== 'read' || typeof params.includeInspection !== 'boolean')
+            || params.inspectionCursor !== undefined && (!params.includeInspection || !Number.isSafeInteger(params.inspectionCursor) || params.inspectionCursor < 0
+                || params.inspectionCursor > 0 && !isCompilationRevision(params.expectedJobRevision)))
+            throw unavailable();
         if (this.options.readOnly && !['diagnose', 'read'].includes(op))
             throw Error('Compilation mutations disabled in read-only mode');
         const host = this.options.host;
@@ -212,13 +285,23 @@ export class CompilationService {
                 throw Error('Compilation job revision changed; read again');
             const drift = await this.drift(job, principal, admission) ?? (job.protection === 'pending' ? 'protection_incomplete' : undefined);
             if (op === 'read') {
+                if (params.includeInspection && params.expectedJobRevision !== undefined && params.expectedJobRevision !== compilationJobRevision(job))
+                    throw unavailable();
+                // Drift may short-circuit on the first changed input. Inspection must
+                // still authorize every later input before exposing any report.
+                if (params.includeInspection) {
+                    for (const input of job.inputs)
+                        await this.revision(input.path, principal);
+                    await this.revision(job.outputPath, principal, true);
+                }
                 await this.actor(principal);
                 const latest = await this.gate(validateCompilationConfig(await host.refresh()), job, principal);
                 if (latest.status === 'unavailable')
                     throw unavailable();
                 await this.actor(principal);
-                return this.projection(job, maxChars, drift ? { status: 'review_required', reason: drift }
+                const result = this.projection(job, maxChars, drift ? { status: 'review_required', reason: drift }
                     : latest.status !== 'ready' || latest.fingerprint !== job.authorityFingerprint ? { status: 'review_required', reason: 'authority_or_rule_changed' } : undefined);
+                return params.includeInspection ? compilationInspection(job, result, maxChars, params.inspectionCursor ?? 0, path => this.options.access.toPublicPath(path)) : result;
             }
             if (drift) {
                 if (job.status !== 'review_required' || job.reason !== drift) {
@@ -232,6 +315,20 @@ export class CompilationService {
             if (['completed', 'review_required'].includes(job.status) || job.status === 'stopped' && !recoverApplied)
                 return this.projection(job, maxChars);
             if (op === 'submit') {
+                if (params.observation !== undefined) {
+                    if (params.content !== undefined || params.evidence !== undefined || job.draft || job.observation || job.intent)
+                        throw unavailable();
+                    const observation = normalizeCompilationObservation(params.observation, job.inputs, job.operation);
+                    await this.assertCurrent(job, principal);
+                    job.observation = observation;
+                    job.status = 'generated';
+                    delete job.reason;
+                    delete job.validation;
+                    await save();
+                    return this.projection(job, maxChars);
+                }
+                if (job.observation)
+                    throw unavailable();
                 if (job.operation !== 'synthesize' || job.intent || typeof params.content !== 'string' || !params.content.trim() || params.content.length > 24000)
                     throw Error('Invalid generated draft');
                 const draft = { content: params.content, fingerprint: compilationContentHash(params.content), generatedAt: new Date().toISOString() };
@@ -255,6 +352,33 @@ export class CompilationService {
                 return this.projection(job, maxChars);
             }
             const adapter = this.options.adapter;
+            if (job.observation) {
+                if (!adapter?.checkObservation) {
+                    if (job.status !== 'partial' || job.reason !== 'validation_unavailable') {
+                        job.status = 'partial';
+                        job.reason = 'validation_unavailable';
+                        await save();
+                    }
+                    return this.projection(job, maxChars);
+                }
+                const validation = await adapter.checkObservation(structuredClone(job), () => this.assertCurrent(job, principal));
+                await this.assertCurrent(job, principal);
+                if (!['passed', 'partial'].includes(validation.status) || !compilationId(validation.ruleVersion))
+                    throw unavailable();
+                const before = compilationJobRevision(job);
+                job.validation = { ...validation, basis: compilationValidationBasis(job) };
+                job.status = validation.status === 'passed' ? 'checked' : 'partial';
+                delete job.reason;
+                if (compilationJobRevision(job) !== before)
+                    await save();
+                if (op === 'check' || validation.status !== 'passed')
+                    return this.projection(job, maxChars);
+                await this.assertCurrent(job, principal);
+                job.noWriteReceipt = { kind: job.observation.kind, basis: compilationReceiptBasis(job) };
+                job.status = 'completed';
+                await save();
+                return this.projection(job, maxChars);
+            }
             if (!job.draft || !adapter) {
                 if (job.status !== 'partial' || job.reason !== 'validation_unavailable') {
                     job.status = 'partial';
@@ -340,7 +464,8 @@ export class CompilationService {
         // rollback, not permission to replay the prior write after a receipt loss.
         if (job.applied && output !== job.applied.outputRevision)
             return 'manual_edit_conflict';
-        if (output !== job.outputRevision && output !== job.intent?.revision || job.status === 'completed' && output !== job.receipt?.outputRevision)
+        if (output !== job.outputRevision && output !== job.intent?.revision
+            || job.status === 'completed' && output !== (job.noWriteReceipt ? job.outputRevision : job.receipt?.outputRevision))
             return 'manual_edit_conflict';
         return undefined;
     }

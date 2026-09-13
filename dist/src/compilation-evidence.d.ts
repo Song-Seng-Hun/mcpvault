@@ -11,7 +11,16 @@ export interface CompilationEvidence {
         sourcePath: string;
         locator: EvidenceLocator;
     }>;
+    rationale?: {
+        constraints: string[];
+        rejectedAlternatives: Array<{
+            option: string;
+            reason: string;
+        }>;
+        failureConditions: string[];
+    };
 }
+export declare function compilationLocator(value: unknown, expectedRevision: string): EvidenceLocator;
 /** Bounds and pins reports. Actual source content, completeness and semantic
  * correspondence are checked separately; a client report is not a pass. */
 export declare function normalizeCompilationEvidence(value: unknown, inputs: readonly CompilationInput[], draft: {

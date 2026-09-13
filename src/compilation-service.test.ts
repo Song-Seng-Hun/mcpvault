@@ -43,10 +43,131 @@ async function request() {
 }
 const readJob = (s: CompilationService, requestId = 'job-one', maxChars = 4000) => s.execute({ op: 'read', requestId, maxChars }, actor);
 
+async function observation(kind: 'source_only' | 'already_covered' = 'source_only') {
+  const source = await fs.readNote('Source.md');
+  const locator = { revision: source.revision, startLine: 1, endLine: 1, quoteHash: digest(source.content) };
+  const knowledge = await fs.readNote('Concept.md');
+  return { kind, reason: 'Agent assessment of the pinned source; not a truth score.',
+    coverage: [{ sourcePath: 'Source.md', locator }], ...(kind === 'already_covered' && {
+      query: 'enabled', matches: [{ sourcePath: 'Source.md', sourceLocator: locator, knowledgePath: 'Concept.md',
+        knowledgeLocator: { revision: knowledge.revision, startLine: 1, endLine: 1, quoteHash: digest(knowledge.content) },
+        semanticJudgment: 'covered' }] }) };
+}
+
+test.each(['source_only', 'already_covered'] as const)('%s completion records verification without a draft, publication intent or output write', async kind => {
+  const impl = { ...adapter(), checkObservation: async () => ({ status: 'passed', ruleVersion: 'observation-v1' }) };
+  const apply = vi.spyOn(impl, 'apply'), s = service({ adapter: impl });
+  const input = await request(); input.operation = kind === 'source_only' ? 'index' : 'synthesize';
+  input.inputs[1]!.role = 'member';
+  const ready = await s.execute(input, actor);
+  const submitted = await s.execute({ op: 'submit', requestId: 'job-one', expectedJobRevision: ready.jobRevision,
+    observation: await observation(kind) } as any, actor);
+  expect(submitted.status).toBe('generated'); expect(durable.jobs[0].draft).toBeUndefined();
+  const done = await s.execute({ op: 'retry', requestId: 'job-one', expectedJobRevision: submitted.jobRevision }, actor);
+  expect(done).toMatchObject({ status: 'completed', outcome: kind, wroteOutput: false });
+  expect(done.verification).toEqual({ mechanical: 'passed', semantic: kind === 'already_covered' ? 'agent_report' : 'not_assessed' });
+  expect(done).not.toHaveProperty('outputRevision');
+  expect(durable.jobs[0].noWriteReceipt.kind).toBe(kind);
+  for (const key of ['draft', 'intent', 'applied', 'receipt']) expect(durable.jobs[0][key]).toBeUndefined();
+  expect(await fs.noteExists('Result.md')).toBe(false); expect(apply).not.toHaveBeenCalled();
+  const count = saves, restarted = service({ adapter: impl });
+  expect(await readJob(restarted)).toEqual(done);
+  expect(await restarted.execute({ op: 'retry', requestId: 'job-one', expectedJobRevision: done.jobRevision }, actor)).toEqual(done);
+  expect(saves).toBe(count);
+  await seed('Source.md', 'Changed source.');
+  expect((await readJob(restarted)).status).toBe('review_required');
+});
+
+test('interrupted no-write completion requires durable verification on retry and cannot call publication', async () => {
+  const impl = { ...adapter(), checkObservation: async () => ({ status: 'passed', ruleVersion: 'observation-v1' }) };
+  const apply = vi.spyOn(impl, 'apply'), s = service({ adapter: impl });
+  const ready = await s.execute({ ...await request(), operation: 'index' }, actor);
+  const submitted = await s.execute({ op: 'submit', requestId: 'job-one', expectedJobRevision: ready.jobRevision,
+    observation: await observation() } as any, actor);
+  const save = host.writeState; let interrupted = false;
+  host.writeState = async value => {
+    if (!interrupted && (value as any).jobs[0].status === 'completed') { interrupted = true; throw Error('Receipt storage interrupted'); }
+    await save(value);
+  };
+  await expect(s.execute({ op: 'retry', requestId: 'job-one', expectedJobRevision: submitted.jobRevision }, actor)).rejects.toThrow();
+  expect(durable.jobs[0].noWriteReceipt).toBeUndefined();
+  const restarted = service({ adapter: impl }), checked = await readJob(restarted);
+  expect(checked.status).toBe('checked');
+  const done = await restarted.execute({ op: 'retry', requestId: 'job-one', expectedJobRevision: checked.jobRevision }, actor);
+  expect(done.status).toBe('completed'); expect(apply).not.toHaveBeenCalled();
+  current = undefined; await expect(readJob(restarted)).rejects.toThrow('Compilation unavailable');
+});
+
+test.each(['content', 'operation', 'unlisted', 'stale_locator', 'unknown_field'] as const)('no-write observation rejects %s without storing report bytes', async mode => {
+  const s = service(), ready = await s.execute({ ...await request(), operation: 'index' }, actor);
+  const report: any = await observation();
+  if (mode === 'operation') report.kind = 'already_covered';
+  if (mode === 'unlisted') report.coverage[0].sourcePath = 'Unlisted.md';
+  if (mode === 'stale_locator') report.coverage[0].locator.revision = digest('old');
+  if (mode === 'unknown_field') report.approved = true;
+  const count = saves;
+  await expect(s.execute({ op: 'submit', requestId: 'job-one', expectedJobRevision: ready.jobRevision,
+    observation: report, ...(mode === 'content' && { content: 'Do not combine with synthesis.' }) }, actor)).rejects.toThrow();
+  expect(saves).toBe(count); expect(durable.jobs[0].observation).toBeUndefined();
+});
+
+test.each(['absent_checker', 'partial_checker'] as const)('no-write %s never becomes completed or calls publication', async mode => {
+  const impl = { ...adapter(), ...(mode === 'partial_checker' && { checkObservation: async () => ({ status: 'partial', ruleVersion: 'observation-v1' }) }) };
+  const apply = vi.spyOn(impl, 'apply'), s = service({ adapter: impl });
+  const prepared = await s.execute({ ...await request(), operation: 'index' }, actor);
+  const submitted = await s.execute({ op: 'submit', requestId: 'job-one', expectedJobRevision: prepared.jobRevision,
+    observation: await observation() }, actor);
+  const result = await s.execute({ op: 'retry', requestId: 'job-one', expectedJobRevision: submitted.jobRevision }, actor);
+  expect(result.status).toBe('partial'); expect(durable.jobs[0].noWriteReceipt).toBeUndefined();
+  expect(apply).not.toHaveBeenCalled(); const count = saves;
+  await s.execute({ op: 'retry', requestId: 'job-one', expectedJobRevision: result.jobRevision }, actor); expect(saves).toBe(count);
+});
+
+test('tampered no-write receipt or attribution fails closed and preserves durable history', async () => {
+  const s = service({ adapter: { ...adapter(), checkObservation: async () => ({ status: 'passed', ruleVersion: 'observation-v1' }) } });
+  const prepared = await s.execute({ ...await request(), operation: 'index' }, actor);
+  const submitted = await s.execute({ op: 'submit', requestId: 'job-one', expectedJobRevision: prepared.jobRevision,
+    observation: await observation() }, actor);
+  await s.execute({ op: 'retry', requestId: 'job-one', expectedJobRevision: submitted.jobRevision }, actor);
+  const valid = structuredClone(durable);
+  for (const mode of ['receipt', 'attribution', 'publication']) {
+    durable = structuredClone(valid);
+    if (mode === 'receipt') durable.jobs[0].noWriteReceipt.basis = digest('tampered');
+    if (mode === 'attribution') durable.jobs[0].observation.reason = 'Different assessment';
+    if (mode === 'publication') durable.jobs[0].draft = { content: 'Smuggled draft', fingerprint: digest('Smuggled draft') };
+    const count = saves; await expect(readJob(s)).rejects.toThrow(/history unavailable/);
+    expect(saves).toBe(count);
+  }
+});
+
 test('no host configuration means diagnosis only and no durable state or source writes', async () => {
   const s = service({ host: undefined });
   expect(await s.execute(await request(), actor)).toMatchObject({ status: 'diagnostic_only' });
   expect(durable).toBeUndefined(); expect(await fs.noteExists('Result.md')).toBe(false);
+});
+
+test('review projections expose attributed omissions and current revisions without draft bodies or writes', async () => {
+  const s = service(), ready = await s.execute(await request(), actor), content = 'Private generated draft.';
+  const submitted = await s.execute({ op: 'submit', requestId: 'job-one', expectedJobRevision: ready.jobRevision,
+    content, evidence: await preservationEvidence(content) }, actor);
+  const count = saves;
+  const findings = await (s as any).review(actor, ['Source.md']);
+  expect(findings).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'Source.md', code: 'compilation_evidence_missing',
+    basis: submitted.jobRevision, attribution: 'agent_report', nextAction: expect.objectContaining({ endpointId: 'wiki.compilation' }) })]));
+  expect(JSON.stringify(findings)).not.toContain(content); expect(saves).toBe(count);
+  expect(findings[0].affectedEvidence).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'Concept.md', revision: await fs.readNoteRevision('Concept.md') })]));
+  expect(await (s as any).review(actor, ['Unrelated.md'])).toEqual([]);
+  await seed('Result.md', 'Human edit.');
+  expect(await (s as any).review(actor)).toEqual(expect.arrayContaining([expect.objectContaining({ code: 'compilation_manual_edit_conflict' })]));
+});
+
+test('review never exposes counts, paths or titles of revoked, hidden or other-account jobs', async () => {
+  const s = service(); await s.execute(await request(), actor); const count = saves;
+  current = undefined; expect(await (s as any).review(actor)).toEqual([]); current = actor;
+  await seed('Source.md', 'Changed source.'); await seed('Concept.md', '---\nmoderation_status: hidden\n---\nHidden later input.');
+  expect(await (s as any).review(actor)).toEqual([]);
+  expect(await (s as any).review({ ...actor, accountId: 'other' })).toEqual([]);
+  expect(await (s as any).review(undefined)).toEqual([]); expect(saves).toBe(count);
 });
 
 test('plan pins input revisions, shared contract/rules, authority and output before any body; duplicate request is read-only', async () => {
@@ -88,6 +209,46 @@ async function preservationEvidence(content: string, judgment = 'missing') {
     comparisonMode: 'exact', semanticJudgment: judgment }],
     coverage: [{ sourcePath: 'Source.md', locator: { revision: source.revision, startLine: 1, endLine: 1, quoteHash: digest(source.content) } }] };
 }
+test('explicit inspection resumes pinned preservation obligations without returning the draft body', async () => {
+  const s = service(), ready = await s.execute(await request(), actor), content = 'Private generated draft: use version 2.0.';
+  await s.execute({ op: 'submit', requestId: 'job-one', expectedJobRevision: ready.jobRevision,
+    content, evidence: await preservationEvidence(content) }, actor);
+  const count = saves;
+  const result = await s.execute({ op: 'read', requestId: 'job-one', includeInspection: true, maxChars: 4000 } as any, actor);
+  expect(result.inspection.attribution).toBe('agent_report');
+  expect(result.inspection.records).toEqual(expect.arrayContaining([expect.objectContaining({ type: 'fact', id: 'condition',
+    sourcePath: 'Source.md', semanticJudgment: 'missing', sourceLocator: expect.objectContaining({ revision: await fs.readNoteRevision('Source.md') }) })]));
+  expect(JSON.stringify(result)).not.toContain(content); expect(saves).toBe(count);
+});
+test('inspection pagination is bounded, revision-pinned and never silently loses checkpoints', async () => {
+  const s = service(), ready = await s.execute(await request(), actor), content = 'Use version 2.0.';
+  const evidence = await preservationEvidence(content);
+  evidence.coverage = Array.from({ length: 40 }, () => structuredClone(evidence.coverage[0]!));
+  await s.execute({ op: 'submit', requestId: 'job-one', expectedJobRevision: ready.jobRevision, content, evidence }, actor);
+  let params: any = { op: 'read', requestId: 'job-one', includeInspection: true, maxChars: 2000 }, checkpoints = 0;
+  const count = saves;
+  for (let page = 0; page < 50; page++) {
+    const result = await s.execute(params, actor); expect(JSON.stringify(result).length).toBeLessThanOrEqual(params.maxChars);
+    expect(result.inspection).toBeDefined();
+    checkpoints += result.inspection.records.filter((r: any) => r.type === 'checkpoint').length;
+    if (!result.partial) break;
+    expect(result.nextAction.arguments.expectedJobRevision).toBe(result.jobRevision);
+    expect(result.nextAction.arguments.inspectionCursor).toBeGreaterThan(params.inspectionCursor ?? 0);
+    params = { ...result.nextAction.arguments, maxChars: 2000 };
+  }
+  expect(checkpoints).toBe(40); expect(saves).toBe(count);
+  await expect(s.execute({ ...params, expectedJobRevision: digest('stale inspection') }, actor)).rejects.toThrow();
+});
+
+test('bounded decision rationale remains an attributed agent report across inspection and restart', async () => {
+  const s = service(), ready = await s.execute(await request(), actor), content = 'Use version 2.0.';
+  const evidence = { ...await preservationEvidence(content), rationale: { constraints: ['No external provider.'],
+    rejectedAlternatives: [{ option: 'Cloud fallback', reason: 'Source policy forbids it.' }], failureConditions: ['Runtime authorization revoked.'] } };
+  await s.execute({ op: 'submit', requestId: 'job-one', expectedJobRevision: ready.jobRevision, content, evidence }, actor);
+  const result = await service().execute({ op: 'read', requestId: 'job-one', includeInspection: true, maxChars: 12000 }, actor);
+  expect(result.inspection.records).toEqual(expect.arrayContaining([expect.objectContaining({ type: 'assessment',
+    rationale: evidence.rationale, attribution: 'agent_report' })]));
+});
 test('persists required source facts privately and allows one checked-partial refinement with unchanged preservation obligations', async () => {
   const s = service({ adapter: { check: async () => ({ status: 'partial', ruleVersion: 'fidelity-v1' }) } });
   const ready = await s.execute(await request(), actor);
@@ -104,6 +265,37 @@ test('persists required source facts privately and allows one checked-partial re
   const checkedAgain = await s.execute({ op: 'check', requestId: 'job-one', expectedJobRevision: second.jobRevision }, actor);
   await expect(s.execute({ op: 'submit', requestId: 'job-one', expectedJobRevision: checkedAgain.jobRevision,
     content: refined + ' Again.', evidence: await preservationEvidence(refined + ' Again.') } as any, actor)).rejects.toThrow();
+});
+
+test('tiny inspection retries the same checkpoint with a larger budget and no draft exposure', async () => {
+  const s = service(), input = { ...await request(), requestId: 'j'.repeat(100) };
+  const ready = await s.execute(input, actor), content = 'Private draft 🧪 한글.';
+  await s.execute({ op: 'submit', requestId: input.requestId, expectedJobRevision: ready.jobRevision,
+    content, evidence: await preservationEvidence(content) }, actor);
+  const page = await s.execute({ op: 'read', requestId: input.requestId, includeInspection: true, maxChars: 512 }, actor);
+  expect(JSON.stringify(page).length).toBeLessThanOrEqual(512); expect(page.partial).toBe(true);
+  expect(page.nextAction.arguments.inspectionCursor).toBe(0);
+  const resumed = await s.execute(page.nextAction.arguments, actor);
+  expect(resumed.inspection.records.some((r: any) => r.type === 'fact')).toBe(true);
+  expect(JSON.stringify(resumed)).not.toContain(content);
+});
+
+test('inspection rejects an unpinned or invalid cursor without journal writes', async () => {
+  const s = service(), ready = await s.execute(await request(), actor), count = saves;
+  for (const extra of [{ inspectionCursor: 1 }, { inspectionCursor: -1 }, { inspectionCursor: 1.5 },
+    { inspectionCursor: 999, expectedJobRevision: ready.jobRevision }, { includeInspection: false, inspectionCursor: 0 }]) {
+    await expect(s.execute({ op: 'read', requestId: 'job-one', includeInspection: true, ...extra }, actor)).rejects.toThrow();
+  }
+  expect(saves).toBe(count);
+});
+
+test('inspection hides all reports when a later input becomes unavailable after earlier input drift', async () => {
+  const s = service(); await s.execute(await request(), actor);
+  await seed('Source.md', 'Changed first input.');
+  await seed('Concept.md', '---\nmoderation_status: hidden\n---\nPrivate concept.');
+  const count = saves;
+  await expect(s.execute({ op: 'read', requestId: 'job-one', includeInspection: true }, actor)).rejects.toThrow(/Compilation unavailable/);
+  expect(saves).toBe(count);
 });
 test('refinement cannot silently drop or re-anchor a mandatory source fact', async () => {
   const s = service({ adapter: { check: async () => ({ status: 'partial', ruleVersion: 'fidelity-v1' }) } });

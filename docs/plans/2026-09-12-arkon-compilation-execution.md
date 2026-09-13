@@ -80,10 +80,10 @@ after bundle1 delivery.
 
 ### Bundle2 — evidence and automatic knowledge
 
-- [ ] Required facts with revision/locator and separate semantic judgment.
-- [ ] Deterministic literals checker: match/suspect/out-of-scope/unavailable.
-- [ ] Existing source compare/publication/change-set integration, one refinement.
-- [ ] Frozen diagnostic/evaluation fixtures; old80 queries untouched.
+- [x] Required facts with revision/locator and separate semantic judgment.
+- [x] Deterministic literals checker: match/suspect/out-of-scope/unavailable.
+- [x] Existing source compare/publication/change-set integration, one refinement.
+- [x] Frozen synthetic diagnostic fixtures; old80 queries untouched. Actual-model quality is not verified.
 - [ ] Same verification/deployment/fork delivery gates as bundle1.
 
 ### Bundle3 — host hooks and community
@@ -172,3 +172,27 @@ in answer packets and the exception board, complete rationale/checkpoint flow,
 actual-model evaluation, and all bundle3 hook/community implementation and event
 verification. Automatic knowledge application remains disabled. This checkpoint
 must not mark those requirements completed or start the graph handoff early.
+
+### Bundle2 continuation — verified NAS delivery
+
+The diagnostic checkpoint above is committed/pushed as `33df8a42` and live verified.
+Its remaining-work list is historical. The next continuation implements strict
+source-only/already-covered no-write reports and receipts, full paired source
+coverage, attributed semantic outcomes, host-only adapter factory connection,
+revision-pinned paginated inspection, optional decision rationale, and current
+owner-only findings in existing answer packets/exception board. No separate
+dashboard, provider, model, transcript collection or automatic execution is added.
+
+Targeted RED/GREEN passes206 tests across ten files after the final dependency
+guard fixes. Strict production build passed with the guarded single-threaded
+compiler. Full regression passed:467 files,6605 passed,zero failures,four existing
+conditional skips. Source/test/build basis:
+`ea483ba23b86a2d076664ce464ae052e9f9e824bb44d70f9713b9085fe404b13`.
+All expected files have matching receipts; minimum free memory was3.582GiB.
+The same936-file build was activated on the NAS-backed service with the previous
+release and launcher retained. Original/world/economy bytes were unchanged.
+Read-only live acceptance passed:fixed five tools,orientation and primary action,
+fidelity,invalid-input non-disclosure and compilation diagnosis. No operational
+documents were created. Automatic application and model-quality gates remain off.
+The user-directed solo workflow is retained; code inspection is not described as
+independent review. No messages/wakeups to the second agent are permitted.

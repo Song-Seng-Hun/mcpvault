@@ -38,6 +38,39 @@ beforeEach(async () => {
 });
 afterEach(async () => { vi.restoreAllMocks(); await rm(vault, { recursive: true, force: true }); });
 const current = async () => {};
+
+async function observe(kind: 'source_only' | 'already_covered') {
+  const coverage = job.evidence!.coverage;
+  delete job.draft; delete job.evidence;
+  job.operation = kind === 'source_only' ? 'index' : 'synthesize';
+  job.observation = { kind, reason: 'Agent inspected exact revision and applicable conditions.', coverage };
+  if (kind === 'already_covered') {
+    await writeFile(join(vault, 'Existing.md'), `---\nllm_wiki_type: knowledge\nknowledge_status: draft\n---\n${body}`);
+    const revision = await fs.readNoteRevision('Existing.md');
+    job.inputs.push({ path: 'Existing.md', revision, role: 'member' });
+    job.observation.query = 'retry';
+    job.observation.matches = [{ sourcePath: 'Source.md', sourceLocator: coverage[0]!.locator, knowledgePath: 'Existing.md',
+      knowledgeLocator: { revision, startLine: 1, endLine: 1, quoteHash: hash(body) }, semanticJudgment: 'covered' }];
+  }
+}
+test.each(['source_only', 'already_covered'] as const)('verifies actual %s observations without generating or publishing a draft', async kind => {
+  await observe(kind);
+  expect(adapter.checkObservation).toBeTypeOf('function');
+  const result = await adapter.checkObservation(job, current);
+  expect(result.status).toBe('passed');
+  expect(await fs.noteExists('Result.md')).toBe(false); expect(job.draft).toBeUndefined();
+});
+test.each(['unverified', 'missing_chunk', 'stale_target', 'uncertain', 'revoke'] as const)('no-write verification cannot complete for %s', async change => {
+  await observe('already_covered');
+  if (change === 'unverified') await writeFile(join(vault, 'Source.md'), body);
+  if (change === 'missing_chunk') job.observation!.coverage = [];
+  if (change === 'stale_target') await writeFile(join(vault, 'Existing.md'), 'A human edit after the observation.');
+  if (change === 'uncertain') job.observation!.matches![0]!.semanticJudgment = 'uncertain';
+  if (change === 'revoke') vi.spyOn(access, 'canAccessPhysicalPath').mockReturnValue(false);
+  expect(adapter.checkObservation).toBeTypeOf('function');
+  expect((await adapter.checkObservation(job, current)).status).toBe('partial');
+  expect(await fs.noteExists('Result.md')).toBe(false);
+});
 test('checks intact acquired source, previews publication and applies exactly the guarded revision', async () => {
   expect((await adapter.check(job, current)).status).toBe('passed');
   const intent = await adapter.preview(job, current); expect(await fs.noteExists('Result.md')).toBe(false);

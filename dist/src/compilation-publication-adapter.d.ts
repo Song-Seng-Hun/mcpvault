@@ -20,6 +20,13 @@ export declare class CompilationPublicationAdapter implements CompilationAdapter
     constructor(options: CompilationPublicationOptions);
     private principal;
     protect(job: Readonly<CompilationJob>, current: () => Promise<void>): Promise<void>;
+    private covers;
+    /** Verifies acquired source bytes and attributed no-change observations only.
+     * Does not call preview/apply, generate text, or assert semantic equivalence. */
+    checkObservation(job: Readonly<CompilationJob>, current: () => Promise<void>): Promise<{
+        status: "partial" | "passed";
+        ruleVersion: string;
+    }>;
     check(job: Readonly<CompilationJob>, current: () => Promise<void>): Promise<{
         status: "partial" | "passed";
         ruleVersion: string;

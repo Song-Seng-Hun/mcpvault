@@ -1,4 +1,5 @@
 import { type CompilationEvidence } from './compilation-evidence.js';
+import { type CompilationObservation } from './compilation-observation.js';
 import { type CompilationOperation } from './compilation-policy.js';
 export declare const COMPILATION_STATUSES: readonly ['prepared', 'generated', 'checked', 'applying', 'applied', 'completed', 'partial', 'failed', 'review_required', 'stopped'];
 export type CompilationStatus = typeof COMPILATION_STATUSES[number];
@@ -34,6 +35,11 @@ export interface CompilationJob {
     };
     evidence?: CompilationEvidence;
     refinements?: number;
+    observation?: CompilationObservation;
+    noWriteReceipt?: {
+        kind: CompilationObservation['kind'];
+        basis: string;
+    };
     validation?: {
         status: 'passed' | 'partial';
         ruleVersion: string;

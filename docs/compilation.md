@@ -2,9 +2,9 @@
 
 `wiki.compilation` is a dynamic endpoint, not a sixth MCP tool. Markdown,
 Properties, exact revisions and the existing access rules remain authoritative.
-This is the first Arkon-inspired delivery bundle: policy admission and durable
-processing records. The later fidelity/publication adapter and Codex hook bundles
-are not supplied by this foundation. No model, provider or scheduler is started.
+Policy admission and durable processing records are complemented by local
+fidelity diagnostics and a host-selected publication adapter. Codex hook activation
+is a separate gate. No model, provider or scheduler is started.
 
 ## Independent permission checks
 
@@ -54,8 +54,8 @@ Operational auto-application stays disabled until quality and real-host gates pa
 | --- | --- | --- |
 | `diagnose` (default) | Compact availability, no source body or persistent job | none |
 | `prepare` | Persist policy/basis header and inherit restrictions | stable request ID, project, input revisions/roles, output revision |
-| `read` | Current-authority metadata projection; never draft body | authenticated job owner and request ID |
-| `submit` | Store one bounded generated draft in private history | current job revision |
+| `read` | Current-authority metadata, optional pinned inspection; never draft body | authenticated job owner and request ID |
+| `submit` | Store a bounded draft/evidence OR a no-write observation privately | current job revision |
 | `check` | Record actual checker result, or report incomplete validation | current job revision |
 | `retry` | Revalidate and reconcile a prior application before attempting work | current job revision and actual host adapter |
 
@@ -98,6 +98,56 @@ application attempts stop retries. A single worker serializes processing; change
 and reconcile events only invalidate affected work, without model execution or
 automatic publication. Unchanged events leave receipts unchanged.
 
-This foundation does not assert model quality, semantic understanding or truth.
-Fidelity checks, one-refinement preservation, source comparison/publication and
-host-hook activation have their own subsequent implementation and acceptance gates.
+## Evidence, observations and progressive inspection
+
+Draft `evidence` pins required facts and complete source coverage to exact source
+revisions and locators. Semantic judgments remain attributed agent reports;
+the server separately checks source bytes, locators and literal correspondence.
+One refinement may preserve or add obligations, never silently discard or re-anchor
+them. Optional `rationale` records actual constraints, rejected alternatives with
+reasons, and failure conditions. It is agent analysis, not proof of a user decision
+or consent. Do not invent decisions to populate it. The complete report is bounded
+to24000 characters and remains in the restricted host history.
+
+Alternatively, submit `observation` without draft or evidence:
+
+- `source_only`: requires `index`, a reason and complete pinned source coverage.
+  The concrete checker verifies immutable bytes/local metadata and checkpoints.
+  It does not synthesize, embed, call a provider, or claim an embedding rebuild.
+- `already_covered`: requires `synthesize`, query, reason, full coverage and paired
+  source/member locators. Existing lexical source comparison, lifecycle and ACL
+  checks precede exact literal correspondence checks. This is an agent's coverage
+  assessment, not a machine guarantee of semantic equivalence.
+
+Successful no-write verification stores a completion receipt without a publication
+intent or output revision. `wroteOutput:false` distinguishes this outcome from
+publication. Missing/partial checks cannot complete it; unchanged repetitions do
+not rewrite history. Restart and authority/source/output drift are revalidated.
+
+Use `read` with `includeInspection:true` for bounded input actions, attributed
+assessments, mandatory facts, checkpoints and paired matches. Follow the returned
+`inspectionCursor` and `expectedJobRevision`; nonzero cursors require the exact
+job revision. Small budgets return `partial` with a larger-budget continuation,
+never silently skip a checkpoint. Execution status and inspection-page coverage
+are separate. Draft bodies are never returned. Every dependency is authorized
+again, including later inputs after an earlier input changed.
+
+When a host is configured, existing answer packets and the exception board also
+include current, owner-only `compilationReview` findings: missing evidence,
+incomplete checks, conflicts, changed sources, authority and manual edits. They
+carry source revision, job basis, attribution and an exact inspection action.
+Hidden or revoked jobs contribute no identifiers or counts. Reading diagnostics
+revalidates the original packet too. If both views cannot fit, a partial response
+preserves the inspection action instead of silently dropping warnings or evidence.
+
+Programmatic hosts may supply `compilation.adapterFactory` to construct the
+concrete adapter using current filesystem, access, source comparison, publication
+and authorizer services. It is considered only with explicit host and runtime
+configuration and outside read-only mode. An explicitly supplied adapter takes
+precedence. This connection is not an execution grant and is not selected by the
+CLI or live runtime by default.
+
+Unit tests and deterministic checks do not establish model quality or truth.
+Actual-model evaluation, explicit production grants, runtime verification and
+host-hook activation remain separate acceptance gates; automatic application
+stays disabled until those gates pass.
