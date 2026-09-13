@@ -38,8 +38,14 @@ export interface CompilationParams {
     documentPath?: string;
     expectedDocumentRevision?: string;
     bundleId?: string;
-    projection?: 'summary' | 'original';
+    projection?: 'summary' | 'original' | 'plan' | 'candidate';
     startOffset?: number;
+    endOffset?: number;
+    chapterCursor?: number;
+    expectedPlanRevision?: string;
+    chapterId?: string;
+    expectedCandidateRevision?: string;
+    metadata?: unknown;
     op?: string;
     requestId?: string;
     projectId?: string;

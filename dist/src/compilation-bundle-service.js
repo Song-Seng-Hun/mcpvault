@@ -2,11 +2,14 @@ import { guidanceError } from './guidance-runtime.js';
 import { PathFilter } from './pathfilter.js';
 import { FrontmatterHandler } from './frontmatter.js';
 import { DocumentResourceReader } from './document-resource.js';
-import { withDocumentWork, reserveDocumentWork, documentFrontmatterEstimate } from './document-work-memory.js';
+import { withDocumentWork, reserveDocumentWork, documentFrontmatterEstimate, documentParseEstimate } from './document-work-memory.js';
 import { compilationId, isCompilationRevision } from './compilation-model.js';
 import { compilationHash, compilationPath, inspectCompilationPolicy, validateCompilationConfig } from './compilation-policy.js';
 import { isDocumentBundleId } from './document-bundle-identities.js';
 import { bundleIdentity, bundleRecordId, parseCompilationBundle, parseBundleOriginal } from './compilation-bundle-model.js';
+import { parseDocumentStructure } from './document-structure.js';
+import { createBundlePlan } from './document-bundle-plan.js';
+import { chapterCandidate, chapterPlanPage } from './compilation-bundle-candidates.js';
 const unavailable = () => guidanceError(new Error('Document bundle unavailable'), 'guid-72ba6eede0a50b17');
 const actorBasis = (p) => compilationHash({ account: p.accountId, model: p.modelId, agent: p.agentId,
     user: p.userId, center: p.commandCenterId, role: p.role, capabilities: p.capabilities, enterprise: p.enterprise });
@@ -70,11 +73,17 @@ export class CompilationBundleService {
     async run(params, principal) {
         const op = params.op ?? 'diagnose', maxChars = params.maxChars ?? 4000;
         const allowed = ['kind', 'op', 'maxChars', ...(op === 'prepare' ? ['requestId', 'projectId', 'documentPath', 'expectedDocumentRevision'] :
-                op === 'read' ? ['bundleId', 'expectedJobRevision', 'projection', 'startOffset'] : [])];
-        if (Object.keys(params).some(key => !allowed.includes(key)) || !['diagnose', 'prepare', 'read'].includes(op)
+                op === 'read' ? ['bundleId', 'expectedJobRevision', 'projection', 'startOffset', 'endOffset', 'chapterCursor', 'expectedPlanRevision', 'chapterId', 'expectedCandidateRevision'] :
+                    op === 'submit' ? ['bundleId', 'expectedJobRevision', 'expectedPlanRevision', 'chapterId', 'requestId', 'metadata', 'content'] : [])];
+        if (Object.keys(params).some(key => !allowed.includes(key)) || !['diagnose', 'prepare', 'read', 'submit'].includes(op)
             || !Number.isSafeInteger(maxChars) || maxChars < 512 || maxChars > 12000
-            || params.startOffset !== undefined && params.projection !== 'original'
-            || params.projection === 'original' && maxChars < 1024
+            || params.startOffset !== undefined && !['original', 'candidate'].includes(params.projection)
+            || params.endOffset !== undefined && params.projection !== 'original'
+            || ['original', 'plan', 'candidate'].includes(params.projection) && maxChars < 1024
+            || params.chapterCursor !== undefined && params.projection !== 'plan'
+            || op === 'read' && params.chapterId !== undefined && params.projection !== 'candidate'
+            || params.expectedCandidateRevision !== undefined && params.projection !== 'candidate'
+            || op === 'read' && params.expectedPlanRevision !== undefined && !['plan', 'candidate'].includes(params.projection)
             || this.options.readOnly && !['diagnose', 'read'].includes(op))
             throw unavailable();
         const host = this.options.host;
@@ -214,19 +223,54 @@ export class CompilationBundleService {
         const original = bundle.status === 'source_preserved' ? parseBundleOriginal(saved.value, bundle) : undefined;
         reserveDocumentWork((original?.text.length ?? 0) * 4 + 65536);
         let response = this.summary(bundle, manifest.revision);
-        if (op === 'read' && params.projection === 'original') {
+        if (op === 'submit' || ['plan', 'candidate'].includes(params.projection)) {
             if (!original || params.expectedJobRevision !== manifest.revision)
                 throw unavailable();
-            const start = params.startOffset ?? 0, text = original.text;
+            reserveDocumentWork(documentParseEstimate(original.text));
+            const source = parseDocumentStructure({ path: bundle.documentPath, raw: original.text });
+            reserveDocumentWork(source.fragments.length * 1200 + original.text.length * 8 + 65536);
+            const plan = createBundlePlan(source, { documentId: bundle.documentId, bundleId: bundle.bundleId, chapterRoot: bundle.chapterRoot,
+                ruleVersion: config.projects.find(p => p.id === bundle.projectId).ruleVersion });
+            const assertReferences = (paths) => {
+                if (!paths.every(path => this.options.access.canAccessPhysicalPath(path, current, false)))
+                    throw unavailable();
+            };
+            const guard = async () => {
+                await assertCurrent();
+                await reader.assertCurrent(snapshot, current);
+                assertReferences(plan.items.map(item => item.path));
+            };
+            // Host record writes serialize their callbacks. Never reenter records.read
+            // from that callback; the outer call verifies parent records before/after.
+            if ((await records.read(manifestId)).revision !== manifest.revision || (await records.read(originalId)).revision !== saved.revision)
+                throw unavailable();
+            await guard();
+            const reservedBodies = new Set();
+            const context = { bundle, source, plan, jobRevision: manifest.revision, records,
+                acquire: () => host.acquire(), assertCurrent: guard, assertReferences, reserveCandidate: (raw) => {
+                    if (!reservedBodies.has(raw)) {
+                        reserveDocumentWork(documentParseEstimate(raw));
+                        reservedBodies.add(raw);
+                    }
+                } };
+            response = params.projection === 'plan' ? chapterPlanPage(context, params) : await chapterCandidate(context, params);
+            await guard();
+        }
+        else if (op === 'read' && params.projection === 'original') {
+            if (!original || params.expectedJobRevision !== manifest.revision)
+                throw unavailable();
+            const start = params.startOffset ?? 0, text = original.text, stop = params.endOffset ?? text.length;
             if (!Number.isSafeInteger(start) || start < 0 || start > text.length
+                || !Number.isSafeInteger(stop) || stop < start || stop > text.length
+                || stop > 0 && /[\ud800-\udbff]/.test(text[stop - 1]) && /[\udc00-\udfff]/.test(text[stop] ?? '')
                 || start > 0 && /[\ud800-\udbff]/.test(text[start - 1]) && /[\udc00-\udfff]/.test(text[start] ?? ''))
                 throw unavailable();
             const page = (end) => ({ bundleId: bundle.bundleId, sourceRevision: original.revision,
                 sourceState: snapshot.revision === original.revision ? 'current' : 'historical',
-                part: { startOffset: start, endOffset: end, text: text.slice(start, end) }, partial: end < text.length,
-                ...(end < text.length && { nextAction: { endpointId: 'wiki.compilation', arguments: { kind: 'document_bundle', op: 'read', bundleId: bundle.bundleId,
-                            expectedJobRevision: manifest.revision, projection: 'original', startOffset: end, maxChars } } }) });
-            let low = start, high = Math.min(text.length, start + maxChars);
+                part: { startOffset: start, endOffset: end, text: text.slice(start, end) }, partial: end < stop,
+                ...(end < stop && { nextAction: { endpointId: 'wiki.compilation', arguments: { kind: 'document_bundle', op: 'read', bundleId: bundle.bundleId,
+                            expectedJobRevision: manifest.revision, projection: 'original', startOffset: end, ...(params.endOffset !== undefined && { endOffset: stop }), maxChars } } }) });
+            let low = start, high = Math.min(stop, start + maxChars);
             while (low < high) {
                 const mid = Math.ceil((low + high) / 2);
                 if (JSON.stringify(page(mid)).length <= maxChars)
@@ -236,7 +280,7 @@ export class CompilationBundleService {
             }
             if (low > start && low < text.length && /[\ud800-\udbff]/.test(text[low - 1]) && /[\udc00-\udfff]/.test(text[low]))
                 low--;
-            if (low === start && start < text.length)
+            if (low === start && start < stop)
                 throw unavailable();
             response = page(low);
         }

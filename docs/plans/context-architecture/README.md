@@ -26,6 +26,10 @@ Original Markdown, exact revisions and current access remain authoritative.
 - [10. Bundle preservation](10-bundle-preservation.md): explicit grants and private recovery.
 - [11. Bundle review](11-bundle-review.md): safety findings and validation evidence.
 - [12. Expression profile](12-expression-profile.md): dense English and preserved names.
+- [13. Chapter candidates](13-chapter-candidates.md): private plans and candidate receipts.
+- [14. Remaining gates](14-next-gates.md): acceptance, routing and authority boundaries.
+- [15. Operating identity](15-operating-account.md): credential recovery and pulse limitation.
+- [16. Candidate delivery](16-candidate-delivery.md): regression, NAS and fork release gates.
 - [Execution record](status.md): current work, evidence and limitations.
 
 Read only the chapter needed now; follow its previous/next links as needed.

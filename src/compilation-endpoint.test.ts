@@ -27,7 +27,10 @@ test('compilation submission schema exposes pinned preservation reports without 
   expect(schema.properties.inspectionCursor).toMatchObject({ type: 'integer', minimum: 0 });
   expect(schema.properties.kind.enum).toEqual(['single_output', 'document_bundle']);
   expect(schema.properties.documentPath).toMatchObject({ type: 'string', maxLength: 400 });
-  expect(schema.properties.projection.enum).toEqual(['summary', 'original']);
+  expect(schema.properties.projection.enum).toEqual(['summary', 'original', 'plan', 'candidate']);
+  expect(schema.properties.metadata.additionalProperties).toBe(false);
+  expect(schema.properties.metadata.properties).not.toHaveProperty('authority');
+  expect(schema.properties.expectedPlanRevision.maxLength).toBe(64);
 });
 
 test('compilation is dynamic with public diagnosis, authenticated reads and read-only mutation rejection', async () => {

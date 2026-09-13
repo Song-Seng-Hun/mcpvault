@@ -32,6 +32,49 @@ const service = () => new CompilationBundleService({ fs, access: new ScopeAccess
   runtime: async () => ({ id: 'local', revision: 'verified-1', local: true, operations: ['index', 'synthesize'] }) });
 const prepare = async () => ({ op: 'prepare', projectId: 'p', requestId: 'bundle-one', documentPath: 'Manual.md', expectedDocumentRevision: await fs.readNoteRevision('Manual.md') });
 
+const candidateFields = () => ({ title: 'Safe deployment', description: 'Approval before deployment.', kind: 'manual',
+  domain: 'software', useWhen: 'Deploying.', avoidWhen: 'Reading only.', stage: 'execute', aliases: ['배포'],
+  prerequisites: [], tools: ['notes.change_set'], counterexamples: [] });
+test('chapter plan is revision-pinned and private candidates survive restart without duplicate writes', async () => {
+  const bundle = await service().execute(await prepare(), actor);
+  const args = { op: 'read', projection: 'plan', bundleId: bundle.bundleId, expectedJobRevision: bundle.jobRevision, maxChars: 12000 };
+  const plan = await service().execute(args, actor);
+  expect(plan.items).toHaveLength(2); expect(plan.automaticApplication).toBe(false);
+  const exact = await service().execute(plan.items[0].readAction.arguments, actor);
+  expect(exact.part.text).toBe(raw.slice(plan.items[0].startOffset, plan.items[0].endOffset)); expect(exact.partial).toBe(false);
+  const submit = { op: 'submit', bundleId: bundle.bundleId, expectedJobRevision: bundle.jobRevision,
+    expectedPlanRevision: plan.planRevision, chapterId: plan.items[0].chapterId, requestId: 'chapter-one',
+    metadata: candidateFields(), content: 'Only deploy after approval. 검증 required. 😀\nExample: preview the change before applying.\n' };
+  const saved = await service().execute(submit, actor);
+  expect(saved).toMatchObject({ status: 'candidate_stored', semantic: 'not_assessed', automaticApplication: false });
+  const before = await Promise.all((await readdir(privateRoot)).sort().map(async name => [name, await readFile(join(privateRoot, name), 'utf8')]));
+  expect(await service().execute(submit, actor)).toEqual(saved);
+  expect(await Promise.all((await readdir(privateRoot)).sort().map(async name => [name, await readFile(join(privateRoot, name), 'utf8')]))).toEqual(before);
+  const read = await service().execute({ ...args, projection: 'candidate', chapterId: submit.chapterId,
+    expectedPlanRevision: plan.planRevision, expectedCandidateRevision: saved.candidateRevision }, actor);
+  expect(read.part.text).toContain(submit.content);
+  expect(read.part.text).toContain('semantic_review: not_assessed');
+  expect(await readdir(vault)).toEqual(['Manual.md']); expect(await readFile(join(vault, 'Manual.md'), 'utf8')).toBe(raw);
+  await expect(service().execute({ ...submit, content: 'Overwrite previous candidate.' }, actor)).rejects.toThrow();
+  const changed = await service().execute({ ...submit, requestId: 'different-request', content: 'Different candidate.' }, actor);
+  expect(changed).toMatchObject({ status: 'review_required', reason: 'candidate_conflict' });
+}, 30000);
+
+test('candidate admission rejects stale plans, source-only synthesis and incoming authority fields', async () => {
+  const bundle = await service().execute(await prepare(), actor);
+  const args = { op: 'read', projection: 'plan', bundleId: bundle.bundleId, expectedJobRevision: bundle.jobRevision, maxChars: 12000 };
+  const plan = await service().execute(args, actor);
+  const submit = { op: 'submit', bundleId: bundle.bundleId, expectedJobRevision: bundle.jobRevision, expectedPlanRevision: plan.planRevision,
+    chapterId: plan.items[0].chapterId, requestId: 'candidate', metadata: candidateFields(), content: 'Preserve approval.\nExample: read the rule.\n' };
+  await expect(service().execute({ ...submit, expectedPlanRevision: '0'.repeat(64) }, actor)).rejects.toThrow();
+  await expect(service().execute({ ...submit, metadata: { ...candidateFields(), absolute: true } }, actor)).rejects.toThrow();
+  config.projects[0].sources[0].mode = 'source_only'; await writeFile(configPath, JSON.stringify(config));
+  const sourceOnly = await service().execute({ ...await prepare(), requestId: 'source-only' }, actor);
+  const exactPlan = await service().execute({ ...args, bundleId: sourceOnly.bundleId, expectedJobRevision: sourceOnly.jobRevision }, actor);
+  await expect(service().execute({ ...submit, bundleId: sourceOnly.bundleId, expectedJobRevision: sourceOnly.jobRevision,
+    expectedPlanRevision: exactPlan.planRevision }, actor)).rejects.toThrow();
+}, 30000);
+
 test('bundle preparation preserves exact source privately without rewriting the Vault', async () => {
   const input = await prepare(), s = service();
   const result = await s.execute(input, actor);
@@ -60,6 +103,9 @@ test('original reads use pinned bundle/source revisions and bounded Unicode-safe
     args = page.nextAction.arguments;
   }
   expect(collected).toBe(raw.repeat(15));
+  const segment = await service().execute({ op: 'read', bundleId: result.bundleId, expectedJobRevision: result.jobRevision,
+    projection: 'original', startOffset: 0, endOffset: raw.length, maxChars: 1100 }, actor);
+  expect(segment.part.text).toBe(raw); expect(segment.partial).toBe(false);
   await expect(service().execute({ ...args, expectedJobRevision: undefined }, actor)).rejects.toThrow();
 });
 

@@ -5,7 +5,7 @@ description: P1c language/style chapters and exact Caveman provenance; no migrat
 keywords: [English, Korean, Caveman, persona, names, 표현]
 parent: README.md
 previous: 11-bundle-review.md
-next: status.md
+next: 13-chapter-candidates.md
 ---
 # Expression profile — P1c
 
@@ -35,7 +35,7 @@ Use for new Vault explanations. Do not rewrite existing facts or speech.
 - Source/license hashes were compared with the separately pinned upstream values.
 - Guidance:42 new entries; existing eager prose changed only by the style pointer.
 - [x] Targets/build/solo review; full498files:6912passed,4skipped,0failed.
-- [x] NAS P1c/PID15640:3chapters,exact reads,budgets,stale/access denial; commit next.
+- [x] NAS P1c/PID15640:3chapters,reads,budgets,denials; committed/pushed6bf665627.
 - [ ] Owner-service skill registration after current target/grant validation.
 
 ## Boundaries

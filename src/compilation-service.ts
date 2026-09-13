@@ -38,7 +38,8 @@ export interface CompilationOptions {
 }
 export interface CompilationParams {
   kind?: 'single_output' | 'document_bundle'; documentPath?: string; expectedDocumentRevision?: string;
-  bundleId?: string; projection?: 'summary' | 'original'; startOffset?: number;
+  bundleId?: string; projection?: 'summary' | 'original' | 'plan' | 'candidate'; startOffset?: number; endOffset?: number;
+  chapterCursor?: number; expectedPlanRevision?: string; chapterId?: string; expectedCandidateRevision?: string; metadata?: unknown;
   op?: string; requestId?: string; projectId?: string; operation?: CompilationOperation;
   inputs?: Array<{ path: string; expectedRevision: string; role: 'source' | 'member' | 'concept' | 'topic' }>;
   outputPath?: string; expectedOutputRevision?: string; expectedJobRevision?: string; content?: string; evidence?: unknown; observation?: unknown; maxChars?: number;
@@ -179,7 +180,7 @@ export class CompilationService {
   private async run(params: CompilationParams, principal: ScopePrincipal | undefined, protectSources: CompilationOptions['protectSources']): Promise<any> {
     if (params.kind === 'document_bundle') return this.bundles.execute(params, principal);
     if (params.kind !== undefined && params.kind !== 'single_output'
-      || ['documentPath', 'expectedDocumentRevision', 'bundleId', 'projection', 'startOffset'].some(key => (params as any)[key] !== undefined)) throw unavailable();
+      || ['documentPath', 'expectedDocumentRevision', 'bundleId', 'projection', 'startOffset', 'endOffset', 'chapterCursor', 'expectedPlanRevision', 'chapterId', 'expectedCandidateRevision', 'metadata'].some(key => (params as any)[key] !== undefined)) throw unavailable();
     const op = params.op ?? 'diagnose', maxChars = params.maxChars ?? 4000;
     if (!['diagnose', 'prepare', 'read', 'submit', 'check', 'retry'].includes(op) || !Number.isInteger(maxChars) || maxChars < 512 || maxChars > 12000) throw guidanceError(Error('Invalid compilation operation or response budget'), 'guid-1c133560b489d77c');
     if (params.includeInspection !== undefined && (op !== 'read' || typeof params.includeInspection !== 'boolean')

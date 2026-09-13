@@ -189,7 +189,7 @@ export class CompilationService {
         if (params.kind === 'document_bundle')
             return this.bundles.execute(params, principal);
         if (params.kind !== undefined && params.kind !== 'single_output'
-            || ['documentPath', 'expectedDocumentRevision', 'bundleId', 'projection', 'startOffset'].some(key => params[key] !== undefined))
+            || ['documentPath', 'expectedDocumentRevision', 'bundleId', 'projection', 'startOffset', 'endOffset', 'chapterCursor', 'expectedPlanRevision', 'chapterId', 'expectedCandidateRevision', 'metadata'].some(key => params[key] !== undefined))
             throw unavailable();
         const op = params.op ?? 'diagnose', maxChars = params.maxChars ?? 4000;
         if (!['diagnose', 'prepare', 'read', 'submit', 'check', 'retry'].includes(op) || !Number.isInteger(maxChars) || maxChars < 512 || maxChars > 12000)
