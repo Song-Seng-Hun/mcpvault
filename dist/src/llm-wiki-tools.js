@@ -471,6 +471,8 @@ export function getLlmWikiTools() {
             description: guidanceText('guid-464d44ffea61aa74', 'Return a bounded machine-readable organization constitution. Omit topic for the compact overview and available topic index; select exactly one topic only when the current job needs detailed guidance. Policy is guidance, not an access grant or mutation.'),
             inputSchema: { type: 'object', properties: {
                     topic: { type: 'string', enum: [...WIKI_POLICY_TOPICS], default: 'overview', description: guidanceText('guid-ed65c9136a025055', 'Load one relevant policy slice instead of the whole handbook') },
+                    chapter: { type: 'string', enum: ['language', 'precision', 'fiction'], description: guidanceText('guid-7a5d9d6885ec8a44', 'For topic=expression only; omit for its compact chapter index.') },
+                    expectedProfileRevision: { type: 'string', pattern: '^[a-f0-9]{64}$', description: guidanceText('guid-1e2e36cfd5023477', 'Pin a selected expression chapter to the profile revision returned by its index.') },
                     maxChars: { type: 'integer', minimum: 1024, maximum: 16000, default: 7000 }, accessToken, prettyPrint,
                 } },
         },

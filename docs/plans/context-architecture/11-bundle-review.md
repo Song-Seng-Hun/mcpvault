@@ -5,7 +5,7 @@ description: P1b solo review, interrupted validation and release evidence bounda
 keywords: [bundle, review, recovery, tests, 이력, 검증]
 parent: README.md
 previous: 10-bundle-preservation.md
-next: status.md
+next: 12-expression-profile.md
 ---
 # P1b review and validation
 

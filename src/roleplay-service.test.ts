@@ -44,6 +44,11 @@ it('keeps character context current, bounded, and excludes unwitnessed events; n
     expect(queries).toContain('hall');
     expect(context.items.some((item: any) => item.kind === 'lore')).toBe(true);
     expect(context.items.some((item: any) => item.kind === 'registered_action' && item.ruleId === 'inspect-door')).toBe(true);
+    const beforeStyle = roleplayRevision(await store.snapshot());
+    const roomy = await service.execute('context', { characterId: 'iris', maxChars: 12000 }, host);
+    expect(roomy.expressionProfile).toMatchObject({ profileId: 'vault-dense-english', executionAuthority: false });
+    expect(roomy.expressionProfile.readAction.arguments).toMatchObject({ topic: 'expression', chapter: 'fiction' });
+    expect(roleplayRevision(await store.snapshot())).toBe(beforeStyle);
     await write('character', { op: 'definition', characterId: 'iris', generation: 1, definition: 'Long background. '.repeat(200), coreMemory: 'Inspect doors carefully.' });
     const compact = await service.execute('context', { characterId: 'iris', maxChars: 2000 }, host);
     expect(compact.items.some((item: any) => item.kind === 'coreMemory')).toBe(true);

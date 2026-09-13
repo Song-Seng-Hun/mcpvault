@@ -3,14 +3,14 @@ id: context-architecture-status
 kind: execution-record
 description: Current implementation evidence and remaining work; not a completion claim.
 parent: README.md
-previous: 11-bundle-review.md
+previous: 12-expression-profile.md
 ---
 # Execution record
 
 2026-09-13: plan accepted; solo/current-main execution started.
 Baseline4607bc233 matches local HEAD; no tracked edits before this task.
 Seven unrelated research files remain untracked and untouched.
-Prior releases/launchers retained; P1b runtime PID24168 verified on2026-09-14.
+Prior releases/launchers retained; P1c runtime PID15640 verified on2026-09-14.
 
 ## Current
 
@@ -18,8 +18,8 @@ Prior releases/launchers retained; P1b runtime PID24168 verified on2026-09-14.
 - Inventory candidates: source1, owner-managed294, unclassified3; no processing grant.
 - Private scopes/binary members and a cross-request snapshot are not covered.
 - P1a: source-chapter outline/read integrated through existing MCP/REST adapters.
-- P1a committed/pushed as c3af22e1c; P1b private preservation deployed and verified.
-- See [P1b checklist](10-bundle-preservation.md); language/profile/cutover remain pending.
+- P1a c3af22e1c and P1b6db3a78a deployed, verified, committed/pushed.
+- [P1c profile](12-expression-profile.md) deployed/verified; generation/cutover pending.
 - P2-P5 not started; no Vault migration or model download performed.
 - Production automatic synthesis/librarian activation not granted by this record.
 

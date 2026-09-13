@@ -2,3 +2,6 @@
 /AGENTS.md text eol=lf
 /plugins/mcpvault-local/skills/mcpvault-agent/SKILL.md text eol=lf
 /plugins/mcpvault-local/skills/mcpvault-agent/resources/DOCUMENTS.md text eol=lf
+# Pinned upstream bytes are evidence; never normalize their line endings.
+/docs/skills/caveman-source/* -text
+/docs/skills/vault-dense-english/*.md text eol=lf

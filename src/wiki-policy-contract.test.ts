@@ -36,6 +36,22 @@ function getRoutes(policy: Record<string, unknown>): string[] {
 }
 
 describe('get_wiki_policy contract', () => {
+  test('expression topics select one complete revision-pinned chapter, with whole JSON budgets', () => {
+    const index = getWikiPolicyTopic('expression', 4000);
+    expect(index.items).toHaveLength(3);
+    const chapter = getWikiPolicyTopic('expression', 4000, { chapter: 'language' });
+    expect(chapter.body).toContain('Use a verified English name only');
+    for (const maxChars of [512, 1024, 2000, 4000]) for (const prettyPrint of [false, true]) {
+      const result = getWikiPolicyTopic('expression', maxChars, { chapter: 'precision', prettyPrint });
+      expect(JSON.stringify(result, null, prettyPrint ? 2 : undefined).length).toBeLessThanOrEqual(maxChars);
+      if (result.partial) expect(result.body).toBeUndefined();
+    }
+    expect(() => getWikiPolicyTopic('expression', 4000, { chapter: 'language', expectedProfileRevision: '0'.repeat(64) })).toThrow();
+    expect(() => getWikiPolicyTopic('work', 4000, { chapter: 'language' })).toThrow();
+    const action = (index.items as any[])[0]!.readAction;
+    expect(action.endpointId).toBe('wiki.policy');
+    expect((getWikiPolicyTopic(action.arguments.topic, action.arguments.maxChars, action.arguments)).body).toBe(chapter.body);
+  });
   test('creative work guidance is opt-in and routes only through the nine story endpoints', () => {
     expect([...WIKI_POLICY_TOPICS]).toContain('story');
     const policy = getWikiPolicyTopic('story', 12000);

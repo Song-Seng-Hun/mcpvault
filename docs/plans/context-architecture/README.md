@@ -25,6 +25,7 @@ Original Markdown, exact revisions and current access remain authoritative.
 - [9. Librarian preflight](09-librarian-preflight.md): dependencies and artifact caveats.
 - [10. Bundle preservation](10-bundle-preservation.md): explicit grants and private recovery.
 - [11. Bundle review](11-bundle-review.md): safety findings and validation evidence.
+- [12. Expression profile](12-expression-profile.md): dense English and preserved names.
 - [Execution record](status.md): current work, evidence and limitations.
 
 Read only the chapter needed now; follow its previous/next links as needed.

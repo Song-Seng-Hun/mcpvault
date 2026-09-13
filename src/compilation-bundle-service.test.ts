@@ -150,7 +150,9 @@ test('BOM and empty original bytes round-trip exactly; managed frontmatter is ex
   }
   await writeFile(join(vault, 'Manual.md'), '---\nmcpvault_type: managed\n---\nProtected record.');
   await expect(service().execute({ ...await prepare(), requestId: 'managed' }, actor)).rejects.toThrow();
-});
+// Two full captures/reads verify real private Windows ACLs at each save boundary.
+// The combined integration case can exceed Vitest's five-second unit default.
+}, 20000);
 
 test('a pinned historical original never borrows the revision of edited current content', async () => {
   const bundle = await service().execute(await prepare(), actor);

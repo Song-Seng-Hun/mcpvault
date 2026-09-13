@@ -9,6 +9,7 @@ import { ROLEPLAY_ROOT, roleplayTurnPath, RoleplayStore } from './roleplay-store
 import { posix } from 'node:path';
 import { characterItems, worldItems, textRows } from './roleplay-projections.js';
 import { endpointIdForTool } from './endpoint-registry.js';
+import { expressionReference } from './expression-profile.js';
 import { readChatReplyTarget } from './chat.js';
 import { activeEvolution, evolutionPreview } from './roleplay-evolution-model.js';
 import { currentLore, evolutionRows, evolutionProposalRows } from './roleplay-evolution-projections.js';
@@ -487,6 +488,14 @@ export class RoleplayService {
             throw guidanceError(new Error('Room visibility changed; refresh context'), 'guid-07374536cef1606a');
         if (roleplayRevision(await this.store.snapshot()) !== revision)
             throw guidanceError(new Error('World changed during read; refresh context'), 'guid-c20d424236bb50b1');
+        if (endpoint === 'context') {
+            // Style is lower priority than state/evidence. Never evict a selected row.
+            const reference = expressionReference();
+            const candidate = { ...result, expressionProfile: { ...reference,
+                    readAction: { ...reference.readAction, arguments: { ...reference.readAction.arguments, chapter: 'fiction' } } } };
+            if (JSON.stringify(candidate, null, params.prettyPrint ? 2 : undefined).length <= (params.maxChars ?? 4000))
+                return candidate;
+        }
         return result;
     }
 }

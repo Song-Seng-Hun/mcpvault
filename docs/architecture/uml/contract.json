@@ -9,7 +9,7 @@
     "src/knowledge-synthesis-model.ts": "d350499a25ceed7241b1442cbc99830d7929ea2b16af84f474264a8c09fb3002",
     "src/organization.ts": "10dea8d47164e96bff3c870e2f61e22937c107ad6221339b0840c09818698a49",
     "src/endpoint-registry.ts": "21053ed193df50f6f757d7f860c66405e5a17c8a395d8778d79c9be7e38bc7ee",
-    "src/createServer.ts": "0b1b5dba415d289c8bdca7698fad2e36b16babd6b7051e61285a61831da0e34e",
+    "src/createServer.ts": "f9f0669a86c9b8df41d074035f9be960d6a35d8abba156eff73891047d0dcf48",
     "src/filesystem.ts": "5fd95ce1e238b8cc0bb15f7ef166e5f7d9e40fe678bca56b73a315063cfeffff",
     "src/graph-assertion-packet.ts": "b85f0a098a3648877e8ee2b2974c3b9d454acea873f98ddf03c03ca3d6b2b2e3",
     "src/llm-wiki.test.ts": "a5a49733abd2f0e46c495379060e6c4becde560532d6f01a3c332cf2d53dff08",

@@ -45,6 +45,6 @@ Read-only servers permit reads; prepare/submit/check/retry mutations remain deni
 - [x] Private page storage, explicit grants, source preservation and MCP read path.
 - [x] Initial targets: restart, corruption, source-only, request and policy drift.
 - [x] Final targets, build, frozen full suite, solo review and NAS verification.
-- [ ] Commit/push this batch to existing main in the user fork.
+- [x] Commit/push6db3a78a to existing main in the user fork.
 - [ ] Candidate submission, semantic checks, hidden staging and actual cutover.
 - [ ] Language profile, P2-P5, real inference and context-cost evaluation.

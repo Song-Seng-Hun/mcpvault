@@ -1,0 +1,30 @@
+{
+  "origin": "https://github.com/JuliusBrussee/caveman",
+  "commit": "15581d14007fd01fb3f132016741962f34936ca2",
+  "scope": "skills/caveman/SKILL.md is MIT; engine-linked modules not imported",
+  "execution": "forbidden",
+  "files": [
+    {
+      "path": "SKILL.md",
+      "sha256": "c4d7354b4b063d54601fcdd5097a5b1713d1a1a2e386ac39efa438aa1ffef8ce"
+    },
+    {
+      "path": "LICENSING.md",
+      "sha256": "84e8dfe4096a9989640ed5d544355cc8878a874346245ec3b643bd5001c7b106"
+    },
+    {
+      "path": "LICENSE",
+      "sha256": "94fe75d355887f84ee7eefca68e06d8d082a23dad47a8e1f58a94d98900edf5b"
+    }
+  ],
+  "derivedProfile": "../vault-dense-english/SKILL.md",
+  "omitted": [
+    "caveman-compress",
+    "engine",
+    "proxy",
+    "rewriter",
+    "remote model calls",
+    "overwrite commands"
+  ],
+  "assessment": "static source/license review; no independent behavior or token savings claim"
+}

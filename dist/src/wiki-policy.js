@@ -1,6 +1,7 @@
 import { guidanceError, guidanceText } from './guidance-runtime.js';
 import { createHash } from 'node:crypto';
 import { projectGuidance } from './guidance-runtime.js';
+import { expressionPolicy, EXPRESSION_REVISION } from './expression-profile.js';
 export const WIKI_POLICY_TOPICS = [
     'overview',
     'onboarding',
@@ -20,8 +21,9 @@ export const WIKI_POLICY_TOPICS = [
     'story',
     'portability',
     'safety',
+    'expression',
 ];
-export const WIKI_POLICY_VERSION = 40;
+export const WIKI_POLICY_VERSION = 41;
 /**
  * The only policy that every MCP client must receive eagerly. Detailed
  * organization guidance is selected through wiki.policy so a rich Wiki does
@@ -31,6 +33,7 @@ export const MCPVAULT_SERVER_INSTRUCTIONS = [
     'MCPVault is an Obsidian-backed LLM Wiki and peer community with exactly five MCP tools: orient_wiki, get_agent_pulse, list_active_capabilities, search_capabilities, and call_endpoint.',
     'Call orient_wiki first. Execute exactly its one primary action, then stop tool use and answer the user unless the current request explicitly requires another step. Never preload the welcome, schema, policy, community, and dashboards together.',
     'Keep reads bounded with limit, maxChars, cursors, and local context. Use wiki.policy with one topic only when the current job needs detailed organization guidance.',
+    'New Vault guidance uses concise English with necessary Korean names; exact sources and scene language remain unchanged. Read wiki.policy topic=expression for its style-only chapters.',
     'Ordinary Markdown, YAML Properties, Obsidian [[wikilinks]], current revisions, and Git are authoritative. Use expectedRevision for edits and re-read the same target after every mutation; a Git commit is history, not a visibility requirement.',
     'Global is public and synchronizable; Community is public only in this command center; User storage is host-only and unavailable through MCP; model and agent scopes are private to authenticated identities. Never copy private material into public scopes.',
     'If registration is needed, use the real model family, a unique agentId, stable accountId and opaque human-family userId. Generate a 12+ character password and persist it only in a host secret store or verified private sandbox before auth.register; otherwise remain a public reader.',
@@ -39,6 +42,10 @@ export const MCPVAULT_SERVER_INSTRUCTIONS = [
     'This is shared working memory, not a passive browser. For an explicit request to participate in a project, orientation and pulse are preparation: follow the task packet to one useful authorized contribution or report a concrete blocker. A generic first look still ends after the primary action. Do not create filler activity. Detailed collaboration guidance is wiki.policy topic=work.',
 ].join(' ');
 const POLICY_TOPICS = {
+    expression: {
+        purpose: 'Author concise English guidance without losing Korean identifiers, evidence or scene language.',
+        rules: [], routes: ['wiki.policy'], avoid: [],
+    },
     story: {
         purpose: 'Create, draft, review and explicitly select one fictional work with real participants and bounded host execution.',
         rules: [
@@ -320,12 +327,12 @@ const POLICY_TOPICS = {
     },
 };
 export const WIKI_POLICY_FINGERPRINT = createHash('sha256')
-    .update(JSON.stringify({ version: WIKI_POLICY_VERSION, eager: MCPVAULT_SERVER_INSTRUCTIONS, topics: POLICY_TOPICS }))
+    .update(JSON.stringify({ version: WIKI_POLICY_VERSION, eager: MCPVAULT_SERVER_INSTRUCTIONS, topics: POLICY_TOPICS, expression: EXPRESSION_REVISION }))
     .digest('hex');
 function boundedMaxChars(value) {
     return Math.min(Math.max(Number(value) || 7000, 512), 16000);
 }
-export function getWikiPolicyTopic(topic, maxChars = 7000) {
+export function getWikiPolicyTopic(topic, maxChars = 7000, options = {}) {
     const requested = String(topic || 'overview').trim().toLocaleLowerCase();
     if (!WIKI_POLICY_TOPICS.includes(requested)) {
         throw guidanceError(new Error(`Unknown policy topic '${requested}'. Choose one of: ${WIKI_POLICY_TOPICS.join(', ')}`), 'guid-dec8912a126a8f95');
@@ -336,6 +343,12 @@ export function getWikiPolicyTopic(topic, maxChars = 7000) {
     const currentTopics = projectGuidance(POLICY_TOPICS);
     const effectiveFingerprint = JSON.stringify(currentTopics) === JSON.stringify(POLICY_TOPICS) ? WIKI_POLICY_FINGERPRINT
         : createHash('sha256').update(JSON.stringify([WIKI_POLICY_FINGERPRINT, currentTopics])).digest('hex');
+    if (requested === 'expression')
+        return expressionPolicy({ ...options, maxChars: boundedChars }, {
+            topic: 'expression', policyVersion: WIKI_POLICY_VERSION, policyFingerprint: effectiveFingerprint,
+        });
+    if (options.chapter !== undefined || options.expectedProfileRevision !== undefined)
+        throw guidanceError(new Error('Chapter options require the expression topic'), 'guid-eea31cc4f80f4240');
     if (requested === 'overview') {
         const overview = {
             topic: 'overview',

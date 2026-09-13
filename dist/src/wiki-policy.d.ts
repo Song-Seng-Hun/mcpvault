@@ -1,6 +1,7 @@
-export declare const WIKI_POLICY_TOPICS: readonly ['overview', 'onboarding', 'notices', 'capture', 'retrieval', 'knowledge', 'evidence', 'review', 'work', 'moc', 'memory', 'maintenance', 'ideation', 'community', 'roleplay', 'story', 'portability', 'safety'];
+import { type ExpressionPolicyOptions } from './expression-profile.js';
+export declare const WIKI_POLICY_TOPICS: readonly ['overview', 'onboarding', 'notices', 'capture', 'retrieval', 'knowledge', 'evidence', 'review', 'work', 'moc', 'memory', 'maintenance', 'ideation', 'community', 'roleplay', 'story', 'portability', 'safety', 'expression'];
 export type WikiPolicyTopicId = typeof WIKI_POLICY_TOPICS[number];
-export declare const WIKI_POLICY_VERSION = 40;
+export declare const WIKI_POLICY_VERSION = 41;
 /**
  * The only policy that every MCP client must receive eagerly. Detailed
  * organization guidance is selected through wiki.policy so a rich Wiki does
@@ -8,5 +9,5 @@ export declare const WIKI_POLICY_VERSION = 40;
  */
 export declare const MCPVAULT_SERVER_INSTRUCTIONS: string;
 export declare const WIKI_POLICY_FINGERPRINT: string;
-export declare function getWikiPolicyTopic(topic: unknown, maxChars?: unknown): Record<string, unknown>;
+export declare function getWikiPolicyTopic(topic: unknown, maxChars?: unknown, options?: Omit<ExpressionPolicyOptions, 'maxChars'>): Record<string, unknown>;
 //# sourceMappingURL=wiki-policy.d.ts.map

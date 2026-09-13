@@ -24,8 +24,8 @@ async function makeDirectories(root, parts) {
 export async function sourceBasis(root, files) {
   await safeDirectory(root);
   const inputs = new Set(['package.json', 'package-lock.json', 'vitest.config.ts', 'tsconfig.json', 'tsconfig.build.json', 'node_modules/vitest/package.json']);
-  for (const entry of await readdir(root, { withFileTypes: true })) if (entry.isFile() && /\.(ts|md)$/.test(entry.name)) inputs.add(entry.name);
-  for (const tree of ['src', 'tests', 'scripts', 'dist', 'docs/architecture']) {
+  for (const entry of await readdir(root, { withFileTypes: true })) if (entry.isFile() && (/\.(ts|md)$/.test(entry.name) || entry.name === '.gitattributes')) inputs.add(entry.name);
+  for (const tree of ['src', 'tests', 'scripts', 'dist', 'docs/architecture', 'docs/skills']) {
     try { await safeDirectory(join(root, tree)); } catch (e) { if (e.code === 'ENOENT') continue; throw e; }
     const pending = [tree];
     for (const dir of pending) for (const entry of await readdir(join(root, dir), { withFileTypes: true })) {
