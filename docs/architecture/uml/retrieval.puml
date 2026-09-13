@@ -1,0 +1,40 @@
+@startuml
+title Current authorized retrieval (optimistic revalidation)
+actor Caller
+participant "Five-tool control plane" as MCP
+participant "Endpoint registry" as Registry
+participant "Existing access policy" as ACL
+participant "Request-local service" as Service
+participant "Filesystem / Markdown" as FS
+participant "Derived index" as Index
+Caller -> MCP : call_endpoint
+MCP -> ACL : authenticate / current account and runtime
+MCP -> Registry : resolve existing dynamic endpoint / schema
+Registry -> Service : authorized bounded arguments
+Service -> ACL : root visibility and source-reference boundary
+Service -> FS : current root metadata / bounded body
+Service -> Index : discover candidate references
+note right of Index
+  Advisory candidates, not authority.
+  Assertion view parses the pinned root directly.
+end note
+loop admitted candidates only
+  Service -> ACL : filter before resolution/aggregation
+  Service -> FS : fresh selected metadata and needed bodies
+  Service -> Service : preserve revisions, locators and occurrences
+end
+Service -> FS : refresh reference inventory / membership when applicable
+Service -> ACL : current access / edge boundary
+Service -> FS : final current revisions
+alt drift, ambiguity or revocation observed
+  Service --> Caller : discard unavailable context; no hidden details
+else current observed inputs
+  Service -> Service : compact whole response with pinned read action
+  Service --> Caller : packet / explicit partial scope
+end
+note over Service,FS
+  Current inputs != complete topic != verified evidence.
+  Metadata/body budgets do not bound inventory or cold-index I/O.
+  No NAS-wide atomic snapshot is claimed.
+end note
+@enduml

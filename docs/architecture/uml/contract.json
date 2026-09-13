@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "graphContractVersion": 1,
+  "hashPolicy": "utf8_lf_sha256",
+  "files": {
+    "src/graph-contract.ts": "7b12f8e01aefa5adcd9b9f6fab914eb0ef7df88c5c89ac43dac323746e787185",
+    "src/graph-assertion.ts": "7829c070b5344259e8421d9af2f4a1f30472bd1f01957e4253e0e70e760448a0",
+    "src/evidence-locator.ts": "b4873113d03d0bc1ac84ef776de4c1b6e5aed7e96f66e177c480e04fcc08512f",
+    "src/knowledge-synthesis-model.ts": "d350499a25ceed7241b1442cbc99830d7929ea2b16af84f474264a8c09fb3002",
+    "src/organization.ts": "10dea8d47164e96bff3c870e2f61e22937c107ad6221339b0840c09818698a49",
+    "src/endpoint-registry.ts": "83ca6d6d5179da51ce806ad571baa040c70d379de72e3b7fa738014c6c29ea2e",
+    "src/createServer.ts": "ecd0273f48a6970ffc446fb74388619def6e2b899206997c6d1d08e779926fe9",
+    "src/filesystem.ts": "152700ff3a6f7e05365793a06e157bf7f3850fd6c2d0f086abea60ac42bfeb5b",
+    "src/graph-assertion-packet.ts": "73e5ccc5f5f4eefc0ff23fe36768159be982310f45bc064563bd0ecc876f79ce",
+    "src/llm-wiki.test.ts": "a5a49733abd2f0e46c495379060e6c4becde560532d6f01a3c332cf2d53dff08",
+    "src/neighborhood-snapshot.test.ts": "6adae70e9afaff52f7d929a16480aad345963424d707ce867091cf45d318a55c",
+    "src/topic-packet.test.ts": "9d10fc0a3f5165bb984bcee2f5a6d42543f95d2f012e3ac96a9c880ee7549742",
+    "src/graph-assertion-packet.test.ts": "af55c2f052e9b869157e168366f877abf1530e8b5224783282c5392efb148f0e",
+    "src/architecture-transitions.test.ts": "8f06c4fb160b03b0625619b42b224a71aab11849ce80f43ae39fdf43428f7846",
+    "package-lock.json": "8384aaa0949ed6c1c7f39008ac34b83e3179ff158324a6125711221b2b065b79",
+    "docs/architecture/uml/domain.puml": "226082f81c24f739bef5057233b9190ac44a8966bab5eb6f973b7db709f7c7e5",
+    "docs/architecture/uml/retrieval.puml": "31f92656218feca1036a714c0b84c54f8f31f156be761b64a2722dcf048f3fd0",
+    "docs/architecture/uml/states.puml": "eec9b789904aa2b9ca1e09d3f65d6f16f7f43c0f62980de36f9638c2a046f6bb",
+    "docs/architecture/uml/deployment.puml": "31a572da41e47653c836635d47b4a8a0489ff1fa06ebe4817c84b98a426b735a"
+  },
+  "testLinks": [
+    {
+      "category": "domain",
+      "path": "src/graph-assertion-packet.test.ts",
+      "title": "occurrences preserve kind, direction and both revisions without raw authored labels"
+    },
+    {
+      "category": "retrieval",
+      "path": "src/neighborhood-snapshot.test.ts",
+      "title": "neighborhood rejects a peer hidden after enrichment reads return their captured bodies"
+    },
+    {
+      "category": "topic",
+      "path": "src/topic-packet.test.ts",
+      "title": "new membership during a request invalidates its old topic context"
+    },
+    {
+      "category": "mutation",
+      "path": "src/llm-wiki.test.ts",
+      "title": "lifecycle transition planner keeps retirement and reactivation metadata coherent"
+    },
+    {
+      "category": "preservation",
+      "path": "src/llm-wiki.test.ts",
+      "title": "lifecycle transition planner blocks preservation and unsafe lineage without leaking hidden paths"
+    },
+    {
+      "category": "state",
+      "path": "src/architecture-transitions.test.ts",
+      "title": "architecture reactivation cannot infer epistemic state or accept a retirement target"
+    }
+  ]
+}

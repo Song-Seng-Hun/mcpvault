@@ -1,0 +1,39 @@
+@startuml
+title MCPVault components and authority boundaries
+node "Approved host" {
+  component "Codex / existing client" as Client
+  component "Five MCP tools" as MCP
+  component "Endpoint registry" as Registry
+  component "Knowledge / retrieval / publication services" as Services
+  component "Filesystem + PathFilter + current access policy" as Boundary
+  database "Disposable indexes / metadata / semantic cache" as Cache
+  component "Opt-in host-only Graphify" as Graphify
+  database "Explicit source allowlist + private derived cache" as CodeCache
+  database "Verified private work receipts / checkpoints" as Journal
+  Client --> MCP
+  MCP --> Registry
+  Registry --> Services
+  Services --> Boundary
+  Services --> Cache : discovery only
+  Services --> Journal : explicit separate host grant only
+  Graphify --> CodeCache : pinned local AST; no model provider
+  Graphify ..> Client : structural candidates, not test evidence
+}
+node "NAS" {
+  database "Authoritative Markdown / Properties / source bytes" as Vault
+}
+Boundary --> Vault : bounded revision-safe reads / guarded writes
+Vault ..> Cache : rebuildable read model
+note bottom of MCP
+  orient_wiki, get_agent_pulse, list_active_capabilities,
+  search_capabilities, call_endpoint
+end note
+note bottom of Vault
+  Source preservation, live data and rollback remain separate obligations.
+  Application guards do not prove NAS direct-write protection.
+end note
+note bottom of Graphify
+  No graph DB, RDF server, external renderer or public writer.
+  Neither caches nor model names grant access or execution permission.
+end note
+@enduml

@@ -1,0 +1,90 @@
+@startuml
+title MCPVault domain boundaries (conceptual, not storage ownership)
+hide empty methods
+class Note {
+  path
+  lifecycle
+  task_status
+  epistemic_status
+}
+class Revision {
+  repositoryId
+  path
+  sha256
+}
+class Claim {
+  normalizedId
+  text
+  status
+}
+class EvidenceLocator {
+  revision
+  heading
+  blockId
+  startLine
+  endLine
+  quoteHash
+}
+class RelationOccurrence {
+  id
+  source
+  relation
+  direction
+  targetReference
+  target
+  syntax
+  locator
+  kind
+  extraction
+  evidenceState
+}
+class MOCMembership {
+  mocPath
+  memberPath
+  inputRevision
+}
+class SynthesisBasis {
+  question
+  inputs
+  explanations
+  choices
+  counterexamples
+  unresolvedQuestions
+}
+enum RelationKind {
+  supports
+  contradicts
+  supersedes
+  derived_from
+  depends_on
+  implements
+  blocked_by
+  answers_questions
+  tests
+  related
+  same_as
+  close_match
+  version_of
+  refines
+}
+RelationOccurrence --> RelationKind : typed relation or extracted link
+Note "1" -- "1..*" Revision : observed versions
+Revision "1" -- "0..*" Claim : scoped IDs, not global keys
+RelationOccurrence "0..*" --> "1" Revision : source
+RelationOccurrence "0..*" --> "0..1" Revision : resolved target
+RelationOccurrence "0..*" --> "0..1" Claim : source claim
+Claim "0..*" --> "0..*" EvidenceLocator : authored evidence
+MOCMembership "0..*" --> "1" Note : member
+MOCMembership "0..*" --> "1" Note : MOC
+SynthesisBasis "0..*" --> "2..8" Revision : exact input pins
+note bottom of MOCMembership
+  Membership is topic composition, not subclass inheritance.
+  Parent navigation and saved input coverage are separate.
+end note
+note bottom of RelationOccurrence
+  Repeated same-pair occurrences remain distinct.
+  Authored / extracted / inferred are not truth scores.
+  stable_id is not an unchecked global identity.
+  No association implies deletion or grants access.
+end note
+@enduml

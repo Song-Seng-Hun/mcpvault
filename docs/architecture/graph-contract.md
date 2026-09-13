@@ -53,6 +53,23 @@ profile catalog documents, rather than widens, existing constraints. Current
 source revisions, valid syntax, complete topic coverage, verified evidence and
 passing tests remain independent claims. UML/measurement delivery is separate.
 
+## Offline design checks and index measurements
+
+The subsequent [four UML sources and checker](uml/README.md) compare selected
+fields, multiplicities, vocabularies, imports and guard markers against actual
+TypeScript AST declarations and pinned test links. They do not render diagrams,
+prove exhaustive semantic equivalence or execute the linked tests. Current user
+instructions require solo review; no independent review is claimed for this phase.
+
+The [existing-index measurement](graph-index-measurement.md) reports actual
+1,000/10,000-note synthetic runs, separately counting bounded-body reads, latency
+and RSS. The 50,000-note scale and alternative databases were not tested. Current
+index retention is a bounded decision, not proof that another store cannot help.
+Exact full-regression evidence is recorded in the
+[phase4/5 execution record](../plans/2026-09-12-graph-ontology-uml-improvement-proposal.md).
+These are offline tools/tests/docs: all966 production dist files remain identical
+to the already live graph release. No new deployment, model, renderer or authority.
+
 ## Phase1 execution evidence, 2026-09-12
 
 - The two public characterization tests passed before extraction; four new shared

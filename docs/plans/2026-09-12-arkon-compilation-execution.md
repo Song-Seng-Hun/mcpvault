@@ -95,7 +95,11 @@ after bundle1 delivery.
 - [x] Existing consent and participation pulse reused; same-cause heartbeat
   coalescing. No new wakeup, participation start or public writer is introduced.
 - [x] Quota/cancellation/reentrancy/duplicate-action and physical-write-guard tests.
-- [ ] Same delivery gates. Enable only actually authorized/verified configuration.
+- [x] Targeted/build/full/staged/NAS/live/fork delivery completed as
+  `6b2e042d3127bf10da9d1807078ec2bdb4dc22ed`, under the user-directed solo review
+  exception, not independent review or native event acceptance.
+- [ ] Operational activation: enable only actually authorized configuration after
+  native event/mode/trust verification. Hooks and automatic application remain off.
 
 ## Acceptance and operations
 
@@ -111,7 +115,8 @@ Quality gates remain per-language Recall@5/MRR non-regression, required evidence
 coverage +5pp at4000/12000 characters, and no extra negative false positives.
 Unit checks do not establish model quality; incomplete evaluation never passes.
 Automatic knowledge application stays disabled until its quality and host gates
-are verified. Unchecked bundles are not shipped implementation.
+are verified. Unchecked operational gates are not activation approval; they are
+distinct from the delivered implementation foundations recorded above and below.
 
 ### Bundle1 NAS acceptance — 2026-09-13 KST
 
@@ -237,4 +242,10 @@ and four existing skips on basis05088d12a3061c8e60c4613d9901a023bd83b46ec6ecc017
 The966-file NAS-backed graph release and read-only live assertion view were
 verified, retaining rollback and original/world/economy protection. Delivery is
 recorded by this change's Git history. This is not native-hook or actual-model
-automatic-application acceptance; UML and index measurement follow separately.
+automatic-application acceptance. UML and index measurement subsequently passed
+their separate479-file regression:6745passed,zero failures,four existing skips,
+basis7f9ea8eb1969443d3815e804b52848b2a1501e85c965897039161ecde8b95c0e,
+plus six separately frozen UML inputs. See the phase4/5 execution record in
+`docs/plans/2026-09-12-graph-ontology-uml-improvement-proposal.md`. The offline
+tooling leaves all966 live dist files unchanged; no native hook, automatic model
+application or new database was activated by that verification.

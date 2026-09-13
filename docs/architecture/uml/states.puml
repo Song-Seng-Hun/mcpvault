@@ -1,0 +1,53 @@
+@startuml
+title Independent knowledge, work and epistemic state
+state "Knowledge lifecycle" as Lifecycle {
+  state inbox
+  state active
+  state review
+  state evergreen
+  state superseded
+  state archived
+  active --> archived : archive or tombstone without replacement [approved plan]
+  evergreen --> superseded : supersede or tombstone with replacement [validated lineage]
+  archived --> review : reactivate [current permissions/revision]
+  superseded --> review : reactivate [explicit nextKnowledgeStatus + lineage]
+}
+state "Task vocabulary (not a stricter transition whitelist)" as Work {
+  state "open" as task_open
+  state "next_action" as task_next_action
+  state "waiting" as task_waiting
+  state "blocked" as task_blocked
+  state "someday" as task_someday
+  state "completed" as task_completed
+  state "cancelled" as task_cancelled
+}
+state "Epistemic vocabulary depends on note_kind" as Epistemic {
+  state "question: open, answered, blocked, abandoned" as question
+  state "hypothesis: proposed, supported, refuted, inconclusive" as hypothesis
+  state "experiment: planned, running, completed, failed, inconclusive, reproduced" as experiment
+  state "assumption: active, verified, invalidated, replaced" as assumption
+}
+state "Mutation protocol" as Mutation {
+  [*] --> Requested
+  Requested --> Preview : existing workflow planner
+  Preview --> DryRun : current authorized candidate revisions
+  DryRun --> Apply : same request + confirmPlanFingerprint
+  Apply --> ReRead : current ACL/revision/source protection
+  ReRead --> [*] : confirmed result
+  Preview --> Refused : legal hold / preserve_until / unsafe lineage
+  Apply --> Refused : drift / revocation / confirmation mismatch
+}
+note bottom of Lifecycle
+  Arrows are characterized examples, not an exhaustive transition matrix.
+  Retirement uses wiki.lifecycle_transition then notes.change_set.
+  Body/path are preserved; no automatic expiry or cascade deletion.
+end note
+note bottom of Work
+  Completion requires an auditable knowledge disposition.
+  Task completion does not certify knowledge or evidence.
+end note
+note bottom of Epistemic
+  No inferred transitions from time, popularity or graph adjacency.
+  Review/publish guards remain authoritative.
+end note
+@enduml
