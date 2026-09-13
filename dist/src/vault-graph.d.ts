@@ -61,6 +61,7 @@ export declare class VaultGraphIndex {
     private incomingBacklinks;
     private matchingBacklinks;
     private startWatcher;
+    private reconcileMetadata;
     private refreshAll;
     private refreshDirty;
     private readBatch;

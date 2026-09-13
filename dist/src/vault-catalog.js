@@ -46,6 +46,7 @@ export class VaultFileCatalog {
     changeGeneration = 0;
     pendingChanges = new Map();
     pendingFullRefresh = false;
+    pendingDirectoryMetadata = false;
     pendingTimer;
     flushPromise = Promise.resolve();
     readBarrier;
@@ -160,6 +161,7 @@ export class VaultFileCatalog {
                 // Keep the serialization chain usable and reconcile after a failed
                 // batch. The reading caller still receives the original rejection.
                 this.invalidate();
+                this.pendingDirectoryMetadata = false;
                 if (!this.pendingChanges.size)
                     this.pendingFullRefresh = true;
             });
@@ -238,6 +240,7 @@ export class VaultFileCatalog {
         this.pendingTimer = undefined;
         this.pendingChanges.clear();
         this.pendingFullRefresh = false;
+        this.pendingDirectoryMetadata = false;
         this.watcher?.close();
         this.watcher = undefined;
         this.listeners.clear();
@@ -298,8 +301,8 @@ export class VaultFileCatalog {
             return;
         this.watcherStarted = true;
         try {
-            this.watcher = watch(this.vaultPath, { recursive: true }, (_event, filename) => {
-                this.onFilesystemEvent(filename ? String(filename) : undefined);
+            this.watcher = watch(this.vaultPath, { recursive: true }, (event, filename) => {
+                this.onFilesystemEvent(filename ? String(filename) : undefined, event);
             });
             this.watcher.on('error', () => {
                 this.watcher?.close();
@@ -315,7 +318,7 @@ export class VaultFileCatalog {
             this.watcher = undefined;
         }
     }
-    onFilesystemEvent(filename) {
+    onFilesystemEvent(filename, event) {
         if (this.closed)
             return;
         if (!filename) {
@@ -329,17 +332,23 @@ export class VaultFileCatalog {
         if (!path || this.excludePath(path) || !this.pathFilter.isAllowedForListing(path))
             return;
         if (!isNote(path) || !this.pathFilter.isAllowed(path)) {
+            const knownDirectoryChange = event === 'change' && Boolean(this.allPaths?.some(candidate => candidate.startsWith(path + '/')));
             this.invalidate();
-            this.queueFullRefreshEvent();
+            this.queueFullRefreshEvent(knownDirectoryChange);
             return;
         }
         this.invalidate(path);
         this.pendingChanges.set(path, true);
         this.scheduleFlush();
     }
-    queueFullRefreshEvent() {
+    queueFullRefreshEvent(directoryMetadata = false) {
+        // Unknown/rename notifications dominate in either order. Preserve explicit
+        // note events when coalescing a known folder hint: stat equality must never
+        // erase an observed body/moderation edit.
+        this.pendingDirectoryMetadata = directoryMetadata && (!this.pendingFullRefresh || this.pendingDirectoryMetadata);
         this.pendingFullRefresh = true;
-        this.pendingChanges.clear();
+        if (!this.pendingDirectoryMetadata)
+            this.pendingChanges.clear();
         this.directoryCache.clear();
         this.dirtyDirectories.clear();
         derivedCacheBudget.clearOwner(this.cacheOwner);
@@ -358,11 +367,14 @@ export class VaultFileCatalog {
         if (this.closed)
             return;
         const fullRefresh = this.pendingFullRefresh;
-        const paths = fullRefresh ? [] : [...this.pendingChanges.keys()];
+        const directoryMetadata = fullRefresh && this.pendingDirectoryMetadata;
+        const paths = fullRefresh && !directoryMetadata ? [] : [...this.pendingChanges.keys()];
         this.pendingFullRefresh = false;
+        this.pendingDirectoryMetadata = false;
         this.pendingChanges.clear();
         if (fullRefresh) {
-            this.emitBatch();
+            this.emitBatch(undefined, directoryMetadata
+                ? Object.freeze({ kind: 'directory_metadata', dirtyPaths: Object.freeze(paths) }) : undefined);
             return;
         }
         for (let start = 0; start < paths.length; start += WATCH_EVENT_STAT_BATCH_SIZE) {
@@ -388,6 +400,9 @@ export class VaultFileCatalog {
             catch (error) {
                 // The batch was not delivered. Preserve its tail without scheduling
                 // an automatic retry loop during a storage outage.
+                // A concurrent folder hint cannot erase an uncertain explicit edit,
+                // including when this delivery came from the debounce timer.
+                this.pendingDirectoryMetadata = false;
                 if (!this.closed && !this.pendingFullRefresh) {
                     for (const path of paths.slice(start))
                         this.pendingChanges.set(path, true);
@@ -410,10 +425,13 @@ export class VaultFileCatalog {
             }
         }
     }
-    emitBatch(changes) {
+    emitBatch(changes, context) {
         for (const listener of this.batchListeners) {
             try {
-                listener(changes);
+                if (context)
+                    listener(changes, context);
+                else
+                    listener(changes);
             }
             catch {
                 // A read model must not be able to break the shared watcher.

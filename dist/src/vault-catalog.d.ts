@@ -9,7 +9,13 @@ export interface VaultCatalogFileStat {
     mtimeMs: number;
 }
 export type VaultCatalogListener = (path?: string, kind?: VaultCatalogChangeKind) => void;
-export type VaultCatalogBatchListener = (changes?: readonly VaultCatalogChange[]) => void;
+/** Optional host-internal context. A directory hint is not byte/permission proof.
+ * Existing consumers still receive undefined (full invalidation). */
+export interface VaultCatalogBatchContext {
+    readonly kind: 'directory_metadata';
+    readonly dirtyPaths: readonly string[];
+}
+export type VaultCatalogBatchListener = (changes?: readonly VaultCatalogChange[], context?: VaultCatalogBatchContext) => void;
 /**
  * Shared, disposable vault file inventory for the read models.
  *
@@ -36,6 +42,7 @@ export declare class VaultFileCatalog {
     private changeGeneration;
     private pendingChanges;
     private pendingFullRefresh;
+    private pendingDirectoryMetadata;
     private pendingTimer;
     private flushPromise;
     private readBarrier;

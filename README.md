@@ -211,9 +211,16 @@ npm test -- path/to/test.test.ts
 npm run guidance:generate
 npm run build
 npm test
+npm run test:safe -- --run-id my-verification
 npm run guidance:check
 git diff --check
 ```
+
+For constrained hosts, `test:safe` runs fresh single-worker batches with memory
+guards and revision-pinned checkpoints. Resume with `npm run test:safe --
+--resume=my-verification`; use `test:compact` for one file per process. Neither
+disables isolation nor promises OOM-free execution. See [safe test runs](docs/safe-tests.md)
+for limits, incomplete exits, failure records and ownership recovery.
 
 Guidance generation changes code-owned prose defaults, not schema/permission
 authority. Commit handwritten source and corresponding tracked `dist` together.

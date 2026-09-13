@@ -5,6 +5,7 @@ import { benchmarkGraphIndex, parseBenchmarkArguments, sampleSummary } from '../
 test('graph measurement arguments permit only explicit synthetic scales, never a caller vault', () => {
   expect(parseBenchmarkArguments([])).toEqual({ notes: 1000, samples: 8 });
   expect(parseBenchmarkArguments(['--notes', '10000'])).toEqual({ notes: 10000, samples: 8 });
+  expect(parseBenchmarkArguments(['--notes', '1000', '--shared'])).toEqual({ notes: 1000, samples: 8, sharedCatalog: true });
   for (const args of [['--notes', '42'], ['--notes', '50001'], ['--vault', '//nas/private'], ['--notes', '1000', '--notes', '1000'], ['--samples', '0']]) {
     expect(() => parseBenchmarkArguments(args)).toThrow();
   }
@@ -14,13 +15,14 @@ test('graph measurements report nearest-rank quantiles and actual sample counts'
   expect(() => sampleSummary([])).toThrow();
   expect(() => sampleSummary([NaN])).toThrow();
 });
-test('graph fixture validates actual index mutation, alias drift and same-predicate permission revocation', async () => {
-  const result = await benchmarkGraphIndex({ notes: 32, samples: 2 });
-  expect(result).toMatchObject({ notes: 32, synthetic: true, canonicalVaultUsed: false, fixtureRemoved: true,
+test.each([false, true])('graph fixture validates actual index mutation, alias drift and same-predicate permission revocation (shared=%s)', async sharedCatalog => {
+  const result = await benchmarkGraphIndex({ notes: 32, samples: 2, sharedCatalog });
+  expect(result).toMatchObject({ notes: 32, sharedCatalog, synthetic: true, canonicalVaultUsed: false, fixtureRemoved: true,
     correctness: { occurrenceKinds: true, revisionsChanged: true, deletion: true, aliasDrift: true, permissionRevocation: true },
     dense: { reverseCacheCap: 16384, exceedsCacheCap: false },
     smbBytes: null, alternativeDatabaseTested: false });
-  expect(result.scenarios.map((s: any) => s.name)).toEqual(['cold_build', 'warm_query', 'upsert', 'delete', 'alias_add', 'alias_remove', 'permission_revoke', 'dense_build', 'dense_warm']);
+  expect(result.scenarios.map((s: any) => s.name)).toEqual(['cold_build', 'warm_query', 'upsert', 'delete', 'alias_add', 'alias_remove',
+    'alias_target_only', 'alias_reference_only', 'alias_combined', 'permission_revoke', 'dense_build', 'dense_warm']);
   expect(result.scenarios[0].logicalReads.calls).toBeGreaterThanOrEqual(32);
   expect(result.scenarios[0].logicalReads.bytes).toBeGreaterThan(0);
   expect(result.scenarios.every((s: any) => s.latency.samples > 0 && s.latency.p95Ms >= s.latency.p50Ms)).toBe(true);
@@ -29,4 +31,5 @@ test('graph fixture validates actual index mutation, alias drift and same-predic
 test('graph fixture refuses invalid scale or extra path options before generating files', async () => {
   await expect(benchmarkGraphIndex({ notes: 10, samples: 2 })).rejects.toThrow();
   await expect(benchmarkGraphIndex({ notes: 32, samples: 2, root: 'C:/private' })).rejects.toThrow();
+  await expect(benchmarkGraphIndex({ notes: 32, samples: 2, sharedCatalog: 'true' })).rejects.toThrow();
 });

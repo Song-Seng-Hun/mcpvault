@@ -185,8 +185,9 @@ export class VaultGraphIndex {
   ) {
     this.vaultPath = resolve(vaultPath);
     if (catalog) {
-      this.catalogUnsubscribe = catalog.subscribeBatch(changes => {
+      this.catalogUnsubscribe = catalog.subscribeBatch((changes, context) => {
         if (changes) this.invalidateMany(changes);
+        else if (context?.kind === 'directory_metadata') this.reconcileMetadata(context.dirtyPaths);
         else this.invalidate();
       });
     }
@@ -586,6 +587,15 @@ export class VaultGraphIndex {
         const path = filename ? normalizePath(String(filename)) : '';
         if (path && !this.pathFilter.isAllowedForListing(path)) return;
         if (path && isNote(path) && this.pathFilter.isAllowed(path)) this.invalidate(path);
+        else if (_event === 'change' && path && this.initialized
+          && [...this.allPaths].some(candidate => candidate.startsWith(path + '/'))) {
+          // Windows also reports the known parent directory when a child is
+          // removed. Reconcile membership and stat changes immediately, using
+          // the existing metadata reuse rules; this is not an unknown event
+          // requiring every unchanged body to be rehashed. Never clear a
+          // pending forced read or postpone the independent content audit.
+          this.reconcileMetadata();
+        }
         else this.invalidate();
       });
       this.watcher.on('error', () => {
@@ -597,6 +607,13 @@ export class VaultGraphIndex {
     } catch {
       this.watcher = undefined;
     }
+  }
+
+  private reconcileMetadata(dirtyPaths: readonly string[] = []): void {
+    if (dirtyPaths.length) this.invalidateMany(dirtyPaths.map(path => ({ path, kind: 'upsert' })));
+    else this.changeGeneration += 1;
+    this.needsFullRefresh = true;
+    // Do not clear dirty entries, pending forceFullRead or lastContentAuditAt.
   }
 
   private async refreshAll(auditContent = false): Promise<void> {

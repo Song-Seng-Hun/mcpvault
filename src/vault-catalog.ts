@@ -56,7 +56,13 @@ export interface VaultCatalogFileStat {
   mtimeMs: number;
 }
 export type VaultCatalogListener = (path?: string, kind?: VaultCatalogChangeKind) => void;
-export type VaultCatalogBatchListener = (changes?: readonly VaultCatalogChange[]) => void;
+/** Optional host-internal context. A directory hint is not byte/permission proof.
+ * Existing consumers still receive undefined (full invalidation). */
+export interface VaultCatalogBatchContext {
+  readonly kind: 'directory_metadata';
+  readonly dirtyPaths: readonly string[];
+}
+export type VaultCatalogBatchListener = (changes?: readonly VaultCatalogChange[], context?: VaultCatalogBatchContext) => void;
 
 function normalizePath(value: string): string {
   return value.trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
@@ -90,6 +96,7 @@ export class VaultFileCatalog {
   private changeGeneration = 0;
   private pendingChanges = new Map<string, true>();
   private pendingFullRefresh = false;
+  private pendingDirectoryMetadata = false;
   private pendingTimer: ReturnType<typeof setTimeout> | undefined;
   private flushPromise: Promise<void> = Promise.resolve();
   private readBarrier: Promise<void> | undefined;
@@ -203,6 +210,7 @@ export class VaultFileCatalog {
         // Keep the serialization chain usable and reconcile after a failed
         // batch. The reading caller still receives the original rejection.
         this.invalidate();
+        this.pendingDirectoryMetadata = false;
         if (!this.pendingChanges.size) this.pendingFullRefresh = true;
       });
       await flush;
@@ -277,6 +285,7 @@ export class VaultFileCatalog {
     this.pendingTimer = undefined;
     this.pendingChanges.clear();
     this.pendingFullRefresh = false;
+    this.pendingDirectoryMetadata = false;
     this.watcher?.close();
     this.watcher = undefined;
     this.listeners.clear();
@@ -333,8 +342,8 @@ export class VaultFileCatalog {
     if (this.closed || this.watcherStarted) return;
     this.watcherStarted = true;
     try {
-      this.watcher = watch(this.vaultPath, { recursive: true }, (_event, filename) => {
-        this.onFilesystemEvent(filename ? String(filename) : undefined);
+      this.watcher = watch(this.vaultPath, { recursive: true }, (event, filename) => {
+        this.onFilesystemEvent(filename ? String(filename) : undefined, event);
       });
       this.watcher.on('error', () => {
         this.watcher?.close();
@@ -350,7 +359,7 @@ export class VaultFileCatalog {
     }
   }
 
-  private onFilesystemEvent(filename: string | undefined): void {
+  private onFilesystemEvent(filename: string | undefined, event?: string): void {
     if (this.closed) return;
     if (!filename) {
       this.invalidate();
@@ -362,8 +371,9 @@ export class VaultFileCatalog {
     // writes must not trigger a full public-vault refresh.
     if (!path || this.excludePath(path) || !this.pathFilter.isAllowedForListing(path)) return;
     if (!isNote(path) || !this.pathFilter.isAllowed(path)) {
+      const knownDirectoryChange = event === 'change' && Boolean(this.allPaths?.some(candidate => candidate.startsWith(path + '/')));
       this.invalidate();
-      this.queueFullRefreshEvent();
+      this.queueFullRefreshEvent(knownDirectoryChange);
       return;
     }
     this.invalidate(path);
@@ -371,9 +381,13 @@ export class VaultFileCatalog {
     this.scheduleFlush();
   }
 
-  private queueFullRefreshEvent(): void {
+  private queueFullRefreshEvent(directoryMetadata = false): void {
+    // Unknown/rename notifications dominate in either order. Preserve explicit
+    // note events when coalescing a known folder hint: stat equality must never
+    // erase an observed body/moderation edit.
+    this.pendingDirectoryMetadata = directoryMetadata && (!this.pendingFullRefresh || this.pendingDirectoryMetadata);
     this.pendingFullRefresh = true;
-    this.pendingChanges.clear();
+    if (!this.pendingDirectoryMetadata) this.pendingChanges.clear();
     this.directoryCache.clear();
     this.dirtyDirectories.clear();
     derivedCacheBudget.clearOwner(this.cacheOwner);
@@ -392,11 +406,14 @@ export class VaultFileCatalog {
   private async flushPendingChanges(): Promise<void> {
     if (this.closed) return;
     const fullRefresh = this.pendingFullRefresh;
-    const paths = fullRefresh ? [] : [...this.pendingChanges.keys()];
+    const directoryMetadata = fullRefresh && this.pendingDirectoryMetadata;
+    const paths = fullRefresh && !directoryMetadata ? [] : [...this.pendingChanges.keys()];
     this.pendingFullRefresh = false;
+    this.pendingDirectoryMetadata = false;
     this.pendingChanges.clear();
     if (fullRefresh) {
-      this.emitBatch();
+      this.emitBatch(undefined, directoryMetadata
+        ? Object.freeze({ kind: 'directory_metadata', dirtyPaths: Object.freeze(paths) }) : undefined);
       return;
     }
     for (let start = 0; start < paths.length; start += WATCH_EVENT_STAT_BATCH_SIZE) {
@@ -418,6 +435,9 @@ export class VaultFileCatalog {
       } catch (error) {
         // The batch was not delivered. Preserve its tail without scheduling
         // an automatic retry loop during a storage outage.
+        // A concurrent folder hint cannot erase an uncertain explicit edit,
+        // including when this delivery came from the debounce timer.
+        this.pendingDirectoryMetadata = false;
         if (!this.closed && !this.pendingFullRefresh) {
           for (const path of paths.slice(start)) this.pendingChanges.set(path, true);
         }
@@ -438,10 +458,10 @@ export class VaultFileCatalog {
     }
   }
 
-  private emitBatch(changes?: readonly VaultCatalogChange[]): void {
+  private emitBatch(changes?: readonly VaultCatalogChange[], context?: VaultCatalogBatchContext): void {
     for (const listener of this.batchListeners) {
       try {
-        listener(changes);
+        if (context) listener(changes, context); else listener(changes);
       } catch {
         // A read model must not be able to break the shared watcher.
       }

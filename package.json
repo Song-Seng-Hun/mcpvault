@@ -36,6 +36,8 @@
     "guidance:sync": "tsx guidance-host.ts",
     "check:staged": "node scripts/check-staged-paths.mjs",
     "test": "vitest run",
+    "test:safe": "node --max-old-space-size=128 scripts/run-chunked-tests.mjs",
+    "test:compact": "node --max-old-space-size=128 scripts/run-chunked-tests.mjs --chunk-size=1",
     "test:watch": "vitest",
     "prepublishOnly": "npm run build && npm test",
     "prepack": "npm install",
