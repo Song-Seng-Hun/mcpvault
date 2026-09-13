@@ -2,6 +2,7 @@ import type { FileSystemService } from './filesystem.js';
 import type { ScopeAccessPolicy } from './scope-access.js';
 import type { ScopePrincipal } from './scope-auth.js';
 import type { CompilationHost } from './compilation-host.js';
+import { type CompilationSession, type CompilationSessionRequest } from './compilation-session.js';
 import { type CompilationFinding } from './compilation-review.js';
 import { type CompilationRuntime, type CompilationOperation } from './compilation-policy.js';
 import { type CompilationJob, type CompilationIntent } from './compilation-model.js';
@@ -61,9 +62,12 @@ export declare class CompilationService {
     private pendingPaths;
     private pendingReconcile;
     private notificationTask;
+    private sessionBusy;
     constructor(options: CompilationOptions);
     private serial;
     close(): Promise<void>;
+    /** Host-only existing-session driver, never an endpoint-supplied callback. */
+    runSession(request: CompilationSessionRequest, principal: ScopePrincipal, context: CompilationSession): Promise<any>;
     /** Optional host-private diagnostics for existing views. No registration,
      * history repair, counters for omitted jobs, execution, or journal writes. */
     review(principal?: ScopePrincipal, paths?: readonly string[]): Promise<CompilationFinding[]>;

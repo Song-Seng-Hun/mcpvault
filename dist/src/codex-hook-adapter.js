@@ -110,9 +110,12 @@ export class CodexHookServiceAdapter {
                     case 'compilation': {
                         if (!this.options.compilation)
                             break;
-                        const packet = await this.options.compilation.execute({ op: reconcile ? 'read' : 'retry', requestId: work.requestId,
-                            ...(!reconcile && { expectedJobRevision: work.expectedJobRevision }), maxChars: context.maxChars }, principal);
-                        if (packet.status === 'completed' && hookHash(packet.jobRevision))
+                        const session = this.options.compilationSession;
+                        const packet = session && !reconcile ? await this.options.compilation.runSession({ requestId: work.requestId, expectedJobRevision: work.expectedJobRevision }, principal, { ...session, signal: context.signal, deadline: context.deadline, assertCurrent: check })
+                            : await this.options.compilation.execute({ op: reconcile ? 'read' : 'retry', requestId: work.requestId,
+                                ...(!reconcile && { expectedJobRevision: work.expectedJobRevision }), maxChars: context.maxChars }, principal);
+                        if ((packet.status === 'completed' || session && session.application !== 'apply_verified' && packet.status === 'checked')
+                            && hookHash(packet.jobRevision))
                             result = { status: 'completed', revision: packet.jobRevision };
                         break;
                     }

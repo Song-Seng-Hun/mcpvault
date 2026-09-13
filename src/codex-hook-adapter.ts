@@ -4,6 +4,7 @@ import type { ScopePrincipal } from './scope-auth.js';
 import type { ContinuityService } from './continuity.js';
 import type { QuestionPacketService } from './question-packet.js';
 import type { CompilationService } from './compilation-service.js';
+import type { CompilationSession } from './compilation-session.js';
 import type { CommunityParticipationService } from './community-participation.js';
 import type { OwnerActivityRuntime } from './owner-activity-runtime.js';
 import { compilationHash, compilationPath } from './compilation-policy.js';
@@ -25,6 +26,7 @@ export interface CodexHookAdapterOptions {
   authorize(accountId: string): Promise<ScopePrincipal | undefined>;
   checkpoint?: CodexPreparedCheckpointStore;
   ownerActivity?: OwnerActivityRuntime;
+  compilationSession?: Pick<CompilationSession, 'generate' | 'application'>;
 }
 /** Narrow host adapter over existing services, not an arbitrary endpoint runner.
  * Public participation is an opportunity for the current agent only. Its actual
@@ -102,9 +104,13 @@ export class CodexHookServiceAdapter implements CodexHookAdapter {
             break;
           case 'compilation': {
             if (!this.options.compilation) break;
-            const packet = await this.options.compilation.execute({ op: reconcile ? 'read' : 'retry', requestId: work.requestId,
+            const session = this.options.compilationSession;
+            const packet = session && !reconcile ? await this.options.compilation.runSession({ requestId: work.requestId, expectedJobRevision: work.expectedJobRevision }, principal,
+              { ...session, signal: context.signal, deadline: context.deadline, assertCurrent: check })
+              : await this.options.compilation.execute({ op: reconcile ? 'read' : 'retry', requestId: work.requestId,
               ...(!reconcile && { expectedJobRevision: work.expectedJobRevision }), maxChars: context.maxChars }, principal);
-            if (packet.status === 'completed' && hookHash(packet.jobRevision)) result = { status: 'completed', revision: packet.jobRevision };
+            if ((packet.status === 'completed' || session && session.application !== 'apply_verified' && packet.status === 'checked')
+              && hookHash(packet.jobRevision)) result = { status: 'completed', revision: packet.jobRevision };
             break;
           }
           case 'community':

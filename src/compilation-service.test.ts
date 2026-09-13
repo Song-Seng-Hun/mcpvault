@@ -43,6 +43,16 @@ async function request() {
 }
 const readJob = (s: CompilationService, requestId = 'job-one', maxChars = 4000) => s.execute({ op: 'read', requestId, maxChars }, actor);
 
+test('diagnosis distinguishes connected components from verified automatic permission', async () => {
+  const absent = await service({ host: undefined }).execute({ op: 'diagnose', maxChars: 512 });
+  expect(absent).toMatchObject({ automaticApplication: false, missingComponents: ['host_policy'] });
+  const incomplete = await service({ runtime: undefined }).execute({ op: 'diagnose', maxChars: 512 }, actor);
+  expect(incomplete).toMatchObject({ automaticApplication: false, missingComponents: ['runtime_verifier', 'publication_adapter'] });
+  const connected = await service({ adapter: adapter() }).execute({ op: 'diagnose', maxChars: 512 }, actor);
+  expect(connected).toMatchObject({ automaticApplication: false, missingComponents: [], admission: 'per_job_required', modelQuality: 'not_attested' });
+  expect(JSON.stringify(connected).length).toBeLessThanOrEqual(512);
+});
+
 async function observation(kind: 'source_only' | 'already_covered' = 'source_only') {
   const source = await fs.readNote('Source.md');
   const locator = { revision: source.revision, startLine: 1, endLine: 1, quoteHash: digest(source.content) };

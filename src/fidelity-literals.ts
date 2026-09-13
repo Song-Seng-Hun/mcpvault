@@ -32,6 +32,23 @@ export function checkFidelityLiterals(input: FidelityLiteralInput): FidelityLite
   return result(JSON.stringify(a) === JSON.stringify(b) ? 'match' : 'suspect', kinds);
 }
 
+/** Verbatim preservation is distinct from literal correspondence and semantic
+ * understanding. Natural-language obligations require the entire selected span
+ * to survive unchanged; matching a number cannot establish a condition/negation.
+ * This does not broaden the literal checker's scope or certify omitted facts. */
+export function checkFidelityPreservation(input: FidelityLiteralInput,
+  kind: 'condition' | 'negation' | 'counterexample' | 'contradiction' | 'number' | 'date' | 'version' | 'quote') {
+  const literal = checkFidelityLiterals(input);
+  const source = select(input.source, input.sourceLocator), output = select(input.output, input.outputLocator);
+  const verbatim = source.status === 'unavailable' || output.status === 'unavailable' ? 'unavailable'
+    : source.status !== 'ready' || output.status !== 'ready' || input.comparisonMode !== 'exact'
+      || !source.text?.trim() || !output.text?.trim() ? 'out_of_scope'
+      : source.text === output.text ? 'match' : 'different';
+  const prose = ['condition', 'negation', 'counterexample', 'contradiction'].includes(kind);
+  const preserved = prose ? verbatim === 'match' : ['number', 'date', 'version', 'quote'].includes(kind) && literal.status === 'match';
+  return { literal, verbatim, preserved, semanticJudgment: 'not_assessed' as const };
+}
+
 function select(snapshot: FidelitySnapshot | undefined, locator: EvidenceLocator | undefined): {
   status: 'ready' | 'out_of_scope' | 'unavailable'; text?: string;
 } {

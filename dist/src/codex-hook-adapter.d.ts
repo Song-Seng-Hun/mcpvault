@@ -4,6 +4,7 @@ import type { ScopePrincipal } from './scope-auth.js';
 import type { ContinuityService } from './continuity.js';
 import type { QuestionPacketService } from './question-packet.js';
 import type { CompilationService } from './compilation-service.js';
+import type { CompilationSession } from './compilation-session.js';
 import type { CommunityParticipationService } from './community-participation.js';
 import type { OwnerActivityRuntime } from './owner-activity-runtime.js';
 import type { CodexHookAdapter, CodexHookContext, CodexHookOutcome, CodexHookWork } from './codex-hook-service.js';
@@ -23,6 +24,7 @@ export interface CodexHookAdapterOptions {
     authorize(accountId: string): Promise<ScopePrincipal | undefined>;
     checkpoint?: CodexPreparedCheckpointStore;
     ownerActivity?: OwnerActivityRuntime;
+    compilationSession?: Pick<CompilationSession, 'generate' | 'application'>;
 }
 /** Narrow host adapter over existing services, not an arbitrary endpoint runner.
  * Public participation is an opportunity for the current agent only. Its actual

@@ -30,7 +30,7 @@ export function parseCompilationHistory(value) {
         const ids = new Set();
         for (const value of state.jobs) {
             const job = record(value, ['requestId', 'requestFingerprint', 'projectId', 'accountId', 'operation', 'inputs', 'outputPath', 'outputRevision',
-                'ruleVersion', 'graphContractVersion', 'authorityFingerprint', 'status', 'attempts', 'protection', 'reason', 'draft', 'validation', 'intent', 'applied', 'receipt', 'evidence', 'refinements', 'observation', 'noWriteReceipt']);
+                'ruleVersion', 'graphContractVersion', 'authorityFingerprint', 'status', 'attempts', 'protection', 'reason', 'draft', 'validation', 'intent', 'applied', 'receipt', 'evidence', 'refinements', 'observation', 'noWriteReceipt', 'generation']);
             if (![job.requestId, job.projectId, job.accountId, job.ruleVersion].every(compilationId) || ids.has(job.requestId)
                 || !isCompilationRevision(job.requestFingerprint) || !isCompilationRevision(job.authorityFingerprint)
                 || !COMPILATION_OPERATIONS.includes(job.operation) || !COMPILATION_STATUSES.includes(job.status)
@@ -61,6 +61,12 @@ export function parseCompilationHistory(value) {
             }
             if (job.refinements !== undefined && (!job.evidence || !Number.isInteger(job.refinements) || job.refinements < 0 || job.refinements > 1))
                 throw invalid();
+            if (job.generation !== undefined) {
+                const generation = record(job.generation, ['basis', 'priorDraftRevision']);
+                if (!isCompilationRevision(generation.basis) || generation.priorDraftRevision !== 'missing' && !isCompilationRevision(generation.priorDraftRevision)
+                    || job.operation !== 'synthesize' || job.protection !== 'ready')
+                    throw invalid();
+            }
             if (job.evidence) {
                 if (!job.draft)
                     throw invalid();

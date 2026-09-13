@@ -1,7 +1,7 @@
 import { compilationContentHash } from './compilation-model.js';
 import { normalizeCompilationEvidence } from './compilation-evidence.js';
 import { normalizeCompilationObservation } from './compilation-observation.js';
-import { checkFidelityLiterals } from './fidelity-literals.js';
+import { checkFidelityPreservation } from './fidelity-literals.js';
 import { resolveEvidenceLocator } from './evidence-locator.js';
 import { isModerationHidden } from './moderation-policy.js';
 const unavailable = () => Error('Compilation publication unavailable; review current evidence and authority');
@@ -40,7 +40,7 @@ export class CompilationPublicationAdapter {
     /** Verifies acquired source bytes and attributed no-change observations only.
      * Does not call preview/apply, generate text, or assert semantic equivalence. */
     async checkObservation(job, current) {
-        const answer = (status) => ({ status, ruleVersion: 'observation-v1' });
+        const answer = (status) => ({ status, ruleVersion: 'observation-v2' });
         try {
             if (!job.observation || job.draft || job.evidence || job.protection !== 'ready')
                 return answer('partial');
@@ -94,10 +94,10 @@ export class CompilationPublicationAdapter {
                         || !compared.candidates.some((c) => c.path === this.options.access.toPublicPath(match.knowledgePath)
                             && c.revision === target.revision && c.integrationAllowed))
                         return answer('partial');
-                    const literal = checkFidelityLiterals({ source: { body: note.content, revision: note.revision },
+                    const preservation = checkFidelityPreservation({ source: { body: note.content, revision: note.revision },
                         output: { body: target.content, revision: target.revision }, sourceLocator: match.sourceLocator,
-                        outputLocator: match.knowledgeLocator, comparisonMode: 'exact' });
-                    if (literal.status !== 'match')
+                        outputLocator: match.knowledgeLocator, comparisonMode: 'exact' }, 'condition');
+                    if (!preservation.preserved)
                         return answer('partial');
                 }
             }
@@ -114,7 +114,7 @@ export class CompilationPublicationAdapter {
         }
     }
     async check(job, current) {
-        const answer = (status) => ({ status, ruleVersion: 'fidelity-v1' });
+        const answer = (status) => ({ status, ruleVersion: 'fidelity-v2' });
         try {
             if (job.operation !== 'synthesize' || !job.draft?.generatedAt || !job.evidence)
                 return answer('partial');
@@ -158,10 +158,10 @@ export class CompilationPublicationAdapter {
                 const source = bodies.get(fact.sourcePath);
                 if (!source || fact.semanticJudgment !== 'preserved')
                     return answer('partial');
-                const result = checkFidelityLiterals({ source: { body: source.content, revision: source.revision },
+                const result = checkFidelityPreservation({ source: { body: source.content, revision: source.revision },
                     output: { body: job.draft.content, revision: job.draft.fingerprint }, sourceLocator: fact.sourceLocator,
-                    outputLocator: fact.outputLocator, comparisonMode: fact.comparisonMode });
-                if (result.status !== 'match')
+                    outputLocator: fact.outputLocator, comparisonMode: fact.comparisonMode }, fact.kind);
+                if (!result.preserved)
                     return answer('partial');
             }
             if (job.outputRevision !== 'missing') {

@@ -3,7 +3,7 @@ import type { CompilationJob, CompilationIntent } from './compilation-model.js';
 import { compilationContentHash } from './compilation-model.js';
 import { normalizeCompilationEvidence } from './compilation-evidence.js';
 import { normalizeCompilationObservation } from './compilation-observation.js';
-import { checkFidelityLiterals } from './fidelity-literals.js';
+import { checkFidelityPreservation } from './fidelity-literals.js';
 import { resolveEvidenceLocator, type EvidenceLocator } from './evidence-locator.js';
 import { isModerationHidden } from './moderation-policy.js';
 import type { FileSystemService } from './filesystem.js';
@@ -45,7 +45,7 @@ export class CompilationPublicationAdapter implements CompilationAdapter {
   /** Verifies acquired source bytes and attributed no-change observations only.
    * Does not call preview/apply, generate text, or assert semantic equivalence. */
   async checkObservation(job: Readonly<CompilationJob>, current: () => Promise<void>) {
-    const answer = (status: 'passed' | 'partial') => ({ status, ruleVersion: 'observation-v1' });
+    const answer = (status: 'passed' | 'partial') => ({ status, ruleVersion: 'observation-v2' });
     try {
       if (!job.observation || job.draft || job.evidence || job.protection !== 'ready') return answer('partial');
       const observation = normalizeCompilationObservation(job.observation, job.inputs, job.operation);
@@ -84,10 +84,10 @@ export class CompilationPublicationAdapter implements CompilationAdapter {
             || !this.options.access.canReferenceFrom(match.knowledgePath, input.path)
             || !compared.candidates.some((c: any) => c.path === this.options.access.toPublicPath(match.knowledgePath)
               && c.revision === target.revision && c.integrationAllowed)) return answer('partial');
-          const literal = checkFidelityLiterals({ source: { body: note.content, revision: note.revision },
+          const preservation = checkFidelityPreservation({ source: { body: note.content, revision: note.revision },
             output: { body: target.content, revision: target.revision }, sourceLocator: match.sourceLocator,
-            outputLocator: match.knowledgeLocator, comparisonMode: 'exact' });
-          if (literal.status !== 'match') return answer('partial');
+            outputLocator: match.knowledgeLocator, comparisonMode: 'exact' }, 'condition');
+          if (!preservation.preserved) return answer('partial');
         }
       }
       const refreshed = await this.principal(job, current, false);
@@ -97,7 +97,7 @@ export class CompilationPublicationAdapter implements CompilationAdapter {
     } catch { return answer('partial'); }
   }
   async check(job: Readonly<CompilationJob>, current: () => Promise<void>) {
-    const answer = (status: 'passed' | 'partial') => ({ status, ruleVersion: 'fidelity-v1' });
+    const answer = (status: 'passed' | 'partial') => ({ status, ruleVersion: 'fidelity-v2' });
     try {
       if (job.operation !== 'synthesize' || !job.draft?.generatedAt || !job.evidence) return answer('partial');
       const evidence = normalizeCompilationEvidence(job.evidence, job.inputs, job.draft);
@@ -129,10 +129,10 @@ export class CompilationPublicationAdapter implements CompilationAdapter {
       for (const fact of evidence.facts) {
         const source = bodies.get(fact.sourcePath);
         if (!source || fact.semanticJudgment !== 'preserved') return answer('partial');
-        const result = checkFidelityLiterals({ source: { body: source.content, revision: source.revision },
+        const result = checkFidelityPreservation({ source: { body: source.content, revision: source.revision },
           output: { body: job.draft.content, revision: job.draft.fingerprint }, sourceLocator: fact.sourceLocator,
-          outputLocator: fact.outputLocator, comparisonMode: fact.comparisonMode });
-        if (result.status !== 'match') return answer('partial');
+          outputLocator: fact.outputLocator, comparisonMode: fact.comparisonMode }, fact.kind);
+        if (!result.preserved) return answer('partial');
       }
       if (job.outputRevision !== 'missing') {
         const output = await this.options.fs.readNote(job.outputPath, 512 * 1024);

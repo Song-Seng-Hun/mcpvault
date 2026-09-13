@@ -6,7 +6,7 @@ import { createHash } from 'node:crypto';
 import { compilationId, isCompilationRevision } from './compilation-model.js';
 import { compilationPath } from './compilation-policy.js';
 import { isModerationHidden } from './moderation-policy.js';
-import { checkFidelityLiterals } from './fidelity-literals.js';
+import { checkFidelityPreservation } from './fidelity-literals.js';
 import { bodyStartLine, passageAction } from './retrieval-service.js';
 
 export interface FidelityFact {
@@ -56,13 +56,15 @@ export class FidelityService {
         || source.frontmatter.content_sha256 !== createHash('sha256').update(source.content).digest('hex')) throw unavailable();
       const output = await load(outputPath, params.outputRevision);
       const checks = params.facts.map(fact => {
-        const literal = checkFidelityLiterals({ source: { body: source.content, revision: source.revision },
+        const preservation = checkFidelityPreservation({ source: { body: source.content, revision: source.revision },
           output: { body: output.content, revision: output.revision }, sourceLocator: fact.sourceLocator,
-          outputLocator: fact.outputLocator, comparisonMode: fact.comparisonMode });
-        return { id: fact.id, kind: fact.kind, literalStatus: literal.status, literalKinds: literal.kinds,
+          outputLocator: fact.outputLocator, comparisonMode: fact.comparisonMode }, fact.kind);
+        return { id: fact.id, kind: fact.kind, literalStatus: preservation.literal.status, literalKinds: preservation.literal.kinds,
+          verbatimStatus: preservation.verbatim, preservation: !preservation.preserved ? 'incomplete'
+            : preservation.verbatim === 'match' ? 'verified_verbatim' : 'literal_correspondence_only',
           semanticJudgment: { source: 'agent_report', judgment: fact.semanticJudgment } };
       });
-      const incomplete = checks.findIndex(check => check.literalStatus !== 'match' || check.semanticJudgment.judgment !== 'preserved');
+      const incomplete = checks.findIndex(check => check.preservation === 'incomplete' || check.semanticJudgment.judgment !== 'preserved');
       const index = incomplete < 0 ? 0 : incomplete;
       const selected = params.facts[index]!.sourceLocator;
       // Body coordinates are translated only at the existing physical-line read boundary.

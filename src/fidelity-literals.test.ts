@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import { checkFidelityLiterals } from './fidelity-literals.js';
+import { checkFidelityLiterals, checkFidelityPreservation } from './fidelity-literals.js';
 import { fidelityDiagnosticCorpus } from '../tests/fixtures/fidelity-diagnostic-corpus.js';
 
 const hash = (text: string) => createHash('sha256').update(text).digest('hex');
@@ -11,6 +11,29 @@ const locator = (body: string, startLine = 1, endLine = startLine) => ({
 });
 const pair = (source: string, output: string) => ({ source: snapshot(source), output: snapshot(output),
   sourceLocator: locator(source), outputLocator: locator(output), comparisonMode: 'exact' as const });
+
+describe('separate verbatim preservation without semantic promotion', () => {
+  it.each(['승인된 요청만 실행한다. 외부 전송은 금지한다. 🙂', 'Only approved requests may proceed.'])('preserves exact prose: %s', body => {
+    expect(checkFidelityPreservation(pair(body, body), 'condition')).toMatchObject({
+      preserved: true, verbatim: 'match', literal: { status: 'out_of_scope' }, semanticJudgment: 'not_assessed' });
+    expect(checkFidelityLiterals(pair(body, body)).status).toBe('out_of_scope');
+  });
+  it.each(['condition', 'negation', 'counterexample', 'contradiction'] as const)('matching numbers do not establish %s preservation', kind => {
+    expect(checkFidelityPreservation(pair('Only if approved, allow 12.', 'Allow 12.'), kind)).toMatchObject({
+      preserved: false, verbatim: 'different', literal: { status: 'match' } });
+  });
+  it('does not promote exclusions, blank spans, or translation to verbatim approval', () => {
+    for (const body of ['`Do not send.`', '    Do not send.', '']) {
+      expect(checkFidelityPreservation(pair(body, body), 'negation').preserved).toBe(false);
+    }
+    expect(checkFidelityPreservation({ ...pair('Do not send.', 'Do not send.'), comparisonMode: 'translation' }, 'negation').preserved).toBe(false);
+  });
+  it('requires exact locators and emits no selected prose', () => {
+    const args = pair('Do not send.', 'Do not send.');
+    expect(checkFidelityPreservation({ ...args, outputLocator: { ...args.outputLocator, quoteHash: hash('other') } }, 'negation')).toMatchObject({ preserved: false, verbatim: 'unavailable' });
+    expect(JSON.stringify(checkFidelityPreservation(args, 'negation'))).not.toContain('Do not send');
+  });
+});
 
 describe('fixed synthetic diagnostic specification (not model-quality evaluation)', () => {
   it('keeps the reviewed 24-case diagnostic basis fixed independently of retrieval80', () => {

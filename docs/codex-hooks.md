@@ -65,7 +65,7 @@ the evidence mode with semantic/provider calls disabled.
 | UserPromptSubmit | bounded host-selected query |
 | PostToolUse | verified immutable source candidate/change coalescing |
 | PreCompact | prepared host-local checkpoint verification |
-| Stop | one compilation retry, checkpoint or community opportunity |
+| Stop | one compilation session/retry, checkpoint or community opportunity |
 | Interrupt / SessionEnd | prepared checkpoint only |
 
 The host supplies work parameters, never arbitrary endpoint names. A source
@@ -74,9 +74,16 @@ content checksum. A search URL does not count as acquired content. The existing
 compilation invalidation path handles affected jobs; no new source fetch is
 implied. Inputs outside the explicit automation policy remain for manual review.
 
-Compilation executes one pinned `retry`, not generation or transcript harvesting.
-Its existing source, runtime, revision, publication, three-failure and single-
-refinement gates remain in force. An incomplete job remains review-required.
+By default compilation executes one pinned `retry`, without generation. A host
+may explicitly provide `codexHooks.session` backed by its existing authorized
+session. That host-only callback uses the compilation coordinator to reserve,
+generate, submit and check one prepared job; default application is check-only.
+Only a host with actual quality/operation grants may select `apply_verified`.
+This option neither binds a native hook nor supplies runtime attestation or trust.
+There is no transcript harvesting or background model. Duplicate deliveries use
+read-only reconciliation and never regenerate. Existing source, runtime, revision,
+publication, three-failure and single-refinement gates remain in force. An
+incomplete job remains review-required; a checked draft is not publication.
 Community returns only the current participation pulse, never starts a run or
 posts. The current agent uses existing participation records/publicRequestId for
 at most one public action. Existing30-minute coalescing, owner6-start/1-new-topic

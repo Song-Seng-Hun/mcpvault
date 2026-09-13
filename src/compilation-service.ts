@@ -8,6 +8,7 @@ import { isMissingVaultPath } from './vault-read-errors.js';
 import { normalizeCompilationEvidence, retainsCompilationObligations } from './compilation-evidence.js';
 import { normalizeCompilationObservation } from './compilation-observation.js';
 import { compilationInspection } from './compilation-view.js';
+import { runCompilationSession, type CompilationSession, type CompilationSessionRequest } from './compilation-session.js';
 import { compilationFindings, type CompilationFinding } from './compilation-review.js';
 import { inspectCompilationPolicy, validateCompilationConfig, compilationHash, compilationPath, type CompilationRuntime,
   type CompilationOperation, type CompilationConfig } from './compilation-policy.js';
@@ -51,11 +52,29 @@ export class CompilationService {
   private pendingPaths = new Set<string>();
   private pendingReconcile = false;
   private notificationTask: Promise<void> | undefined;
+  private sessionBusy = false;
   constructor(private readonly options: CompilationOptions) {}
   private serial<T>(operation: () => Promise<T>): Promise<T> {
     const pending = this.tail.then(operation, operation); this.tail = pending.catch(() => undefined); return pending;
   }
   async close(): Promise<void> { this.closed = true; await this.tail; }
+  /** Host-only existing-session driver, never an endpoint-supplied callback. */
+  runSession(request: CompilationSessionRequest, principal: ScopePrincipal, context: CompilationSession): Promise<any> {
+    if (this.closed) return Promise.resolve({ status: 'review_required', reason: 'session_unavailable' });
+    if (this.sessionBusy) return Promise.resolve({ status: 'deferred' });
+    this.sessionBusy = true;
+    const operation = this.serial(() => runCompilationSession(this.options, request, principal, context,
+      params => this.run(params, principal, this.options.protectSources))).finally(() => { this.sessionBusy = false; });
+    if (!context?.signal || !Number.isFinite(context.deadline)) return operation;
+    let cancel!: () => void;
+    const interrupted = new Promise(resolve => { cancel = () => resolve({ status: 'review_required', reason: 'session_interrupted_or_unavailable', partial: true }); });
+    const timer = setTimeout(cancel, Math.max(0, Math.min(300000, context.deadline - Date.now())));
+    context.signal.addEventListener('abort', cancel, { once: true });
+    if (context.signal.aborted) cancel();
+    // Return promptly, but keep the serial worker until generation actually
+    // settles. A cancelled provider cannot hand its lease to a second writer.
+    return Promise.race([operation, interrupted]).finally(() => { clearTimeout(timer); context.signal.removeEventListener('abort', cancel); });
+  }
   /** Optional host-private diagnostics for existing views. No registration,
    * history repair, counters for omitted jobs, execution, or journal writes. */
   review(principal?: ScopePrincipal, paths?: readonly string[]): Promise<CompilationFinding[]> {
@@ -160,12 +179,14 @@ export class CompilationService {
         || params.inspectionCursor > 0 && !isCompilationRevision(params.expectedJobRevision))) throw unavailable();
     if (this.options.readOnly && !['diagnose', 'read'].includes(op)) throw Error('Compilation mutations disabled in read-only mode');
     const host = this.options.host;
-    if (!host) return { status: 'diagnostic_only', reason: 'host_configuration_required' };
+    if (!host) return { status: 'diagnostic_only', reason: 'host_configuration_required', automaticApplication: false, missingComponents: ['host_policy'] };
     const config = validateCompilationConfig(await host.refresh());
-    if (!config.enabled) return { status: 'diagnostic_only', reason: 'host_configuration_required' };
+    if (!config.enabled) return { status: 'diagnostic_only', reason: 'host_configuration_required', automaticApplication: false, missingComponents: ['host_policy'] };
     principal = await this.actor(principal);
     if (config.accountId !== principal.accountId) throw unavailable();
-    if (op === 'diagnose') return { status: 'diagnostic_only', reason: 'prepare_exact_revision_plan', automaticApplication: Boolean(this.options.adapter) };
+    if (op === 'diagnose') return { status: 'diagnostic_only', reason: 'prepare_exact_revision_plan', automaticApplication: false,
+      missingComponents: [...(!this.options.runtime ? ['runtime_verifier'] : []), ...(!this.options.adapter ? ['publication_adapter'] : [])],
+      admission: 'per_job_required', modelQuality: 'not_attested' };
     if (!compilationId(params.requestId)) throw Error('Compilation requires a stable requestId');
     const writer = ['read'].includes(op) ? undefined : await host.acquire();
     try {

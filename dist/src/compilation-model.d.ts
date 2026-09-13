@@ -35,6 +35,10 @@ export interface CompilationJob {
     };
     evidence?: CompilationEvidence;
     refinements?: number;
+    generation?: {
+        basis: string;
+        priorDraftRevision: string;
+    };
     observation?: CompilationObservation;
     noWriteReceipt?: {
         kind: CompilationObservation['kind'];

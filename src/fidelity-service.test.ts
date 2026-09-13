@@ -43,11 +43,24 @@ test('keeps agent-reported omission distinct from verified literal correspondenc
   expect(await fs.readNoteRevision(params.outputPath)).toBe(before);
   expect(JSON.stringify(result)).not.toContain('Only if approved');
 });
-test('records exact comparison as checked, never as true or publish authorization', async () => {
+test('agent preservation report cannot override a mechanically changed condition', async () => {
   const params = await inputs(); params.facts[0]!.semanticJudgment = 'preserved';
   const result = await service.check(params);
-  expect(result.status).toBe('checked'); expect(result.automaticApplication).toBe(false);
+  expect(result.status).toBe('partial'); expect(result.automaticApplication).toBe(false);
+  expect(result.checks[0].verbatimStatus).toBe('different');
   expect(result).not.toHaveProperty('confidence'); expect(result).not.toHaveProperty('truth');
+});
+test('checks verbatim natural language independently of absent numeric literals', async () => {
+  const body = '외부 전송 금지. 승인된 작업만 실행한다. 🙂';
+  await note('Source.md', `---\nllm_wiki_type: source\nimmutable: true\ncontent_sha256: ${hash(body)}\n---\n${body}`);
+  await note('Result.md', body);
+  const sourceRevision = await fs.readNoteRevision('Source.md'), outputRevision = await fs.readNoteRevision('Result.md');
+  const result = await service.check({ sourcePath: 'Source.md', outputPath: 'Result.md', sourceRevision, outputRevision,
+    facts: [{ id: 'negation', kind: 'negation', comparisonMode: 'exact', semanticJudgment: 'preserved',
+      sourceLocator: { revision: sourceRevision, startLine: 1, endLine: 1, quoteHash: hash(body) },
+      outputLocator: { revision: outputRevision, startLine: 1, endLine: 1, quoteHash: hash(body) } }] });
+  expect(result.status).toBe('checked'); expect(result.automaticApplication).toBe(false);
+  expect(result.checks[0]).toMatchObject({ literalStatus: 'out_of_scope', verbatimStatus: 'match', preservation: 'verified_verbatim' });
 });
 test.each(['hidden', 'private', 'missing', 'traversal', 'policy'] as const)('does not reveal input existence for %s', async mode => {
   const params = await inputs();

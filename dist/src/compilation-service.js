@@ -4,6 +4,7 @@ import { isMissingVaultPath } from './vault-read-errors.js';
 import { normalizeCompilationEvidence, retainsCompilationObligations } from './compilation-evidence.js';
 import { normalizeCompilationObservation } from './compilation-observation.js';
 import { compilationInspection } from './compilation-view.js';
+import { runCompilationSession } from './compilation-session.js';
 import { compilationFindings } from './compilation-review.js';
 import { inspectCompilationPolicy, validateCompilationConfig, compilationHash, compilationPath } from './compilation-policy.js';
 import { parseCompilationHistory, compilationContentHash, compilationId, compilationJobRevision, isCompilationRevision, compilationValidationBasis, compilationReceiptBasis } from './compilation-model.js';
@@ -19,6 +20,7 @@ export class CompilationService {
     pendingPaths = new Set();
     pendingReconcile = false;
     notificationTask;
+    sessionBusy = false;
     constructor(options) {
         this.options = options;
     }
@@ -28,6 +30,26 @@ export class CompilationService {
         return pending;
     }
     async close() { this.closed = true; await this.tail; }
+    /** Host-only existing-session driver, never an endpoint-supplied callback. */
+    runSession(request, principal, context) {
+        if (this.closed)
+            return Promise.resolve({ status: 'review_required', reason: 'session_unavailable' });
+        if (this.sessionBusy)
+            return Promise.resolve({ status: 'deferred' });
+        this.sessionBusy = true;
+        const operation = this.serial(() => runCompilationSession(this.options, request, principal, context, params => this.run(params, principal, this.options.protectSources))).finally(() => { this.sessionBusy = false; });
+        if (!context?.signal || !Number.isFinite(context.deadline))
+            return operation;
+        let cancel;
+        const interrupted = new Promise(resolve => { cancel = () => resolve({ status: 'review_required', reason: 'session_interrupted_or_unavailable', partial: true }); });
+        const timer = setTimeout(cancel, Math.max(0, Math.min(300000, context.deadline - Date.now())));
+        context.signal.addEventListener('abort', cancel, { once: true });
+        if (context.signal.aborted)
+            cancel();
+        // Return promptly, but keep the serial worker until generation actually
+        // settles. A cancelled provider cannot hand its lease to a second writer.
+        return Promise.race([operation, interrupted]).finally(() => { clearTimeout(timer); context.signal.removeEventListener('abort', cancel); });
+    }
     /** Optional host-private diagnostics for existing views. No registration,
      * history repair, counters for omitted jobs, execution, or journal writes. */
     review(principal, paths) {
@@ -171,15 +193,17 @@ export class CompilationService {
             throw Error('Compilation mutations disabled in read-only mode');
         const host = this.options.host;
         if (!host)
-            return { status: 'diagnostic_only', reason: 'host_configuration_required' };
+            return { status: 'diagnostic_only', reason: 'host_configuration_required', automaticApplication: false, missingComponents: ['host_policy'] };
         const config = validateCompilationConfig(await host.refresh());
         if (!config.enabled)
-            return { status: 'diagnostic_only', reason: 'host_configuration_required' };
+            return { status: 'diagnostic_only', reason: 'host_configuration_required', automaticApplication: false, missingComponents: ['host_policy'] };
         principal = await this.actor(principal);
         if (config.accountId !== principal.accountId)
             throw unavailable();
         if (op === 'diagnose')
-            return { status: 'diagnostic_only', reason: 'prepare_exact_revision_plan', automaticApplication: Boolean(this.options.adapter) };
+            return { status: 'diagnostic_only', reason: 'prepare_exact_revision_plan', automaticApplication: false,
+                missingComponents: [...(!this.options.runtime ? ['runtime_verifier'] : []), ...(!this.options.adapter ? ['publication_adapter'] : [])],
+                admission: 'per_job_required', modelQuality: 'not_attested' };
         if (!compilationId(params.requestId))
             throw Error('Compilation requires a stable requestId');
         const writer = ['read'].includes(op) ? undefined : await host.acquire();

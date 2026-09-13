@@ -48,6 +48,33 @@ can be supplied in endpoint arguments. Without a host configuration all operatio
 are diagnostic-only; without the actual checker/writer, work remains incomplete.
 Operational auto-application stays disabled until quality and real-host gates pass.
 
+`diagnose` reports missing `host_policy`, `runtime_verifier` or
+`publication_adapter` components without paths or job counts. Even with those
+objects supplied, it reports `automaticApplication:false`, per-job admission and
+unattested model quality: connectivity is not an execution grant.
+
+## Existing-session coordinator
+
+Trusted programmatic hosts can call `CompilationService.runSession` for one
+already-prepared synthesis job, with its exact job revision. The host supplies
+the current session's `generate` callback, fresh `assertCurrent`, cancellation
+signal and a deadline of at most five minutes. No model or provider is started
+by the service. The callback returns draft/evidence or a no-write observation;
+it cannot write documents, including from late asynchronous continuations.
+
+The coordinator reserves generation durably before calling the session, then
+uses existing submit/check operations. Default `application:'check_only'` stops
+at a checked private draft. Host-only `apply_verified` additionally permits the
+existing retry/publication/reread path, but requires actual quality and operation
+grants; client arguments cannot select it. Source-only jobs never generate.
+
+Existing drafts are checked first. One partial draft may be refined once.
+An uncertain generation reservation is retained across restart and requires
+review, not another model call. Cancellation returns promptly while the worker
+remains held until the actual callback settles. Completed jobs reconcile without
+generation; manual output changes remain conflicts. Missing or corrupt history
+is never reset to make a session run.
+
 ## Endpoint operations
 
 | Operation | Effect | Required basis |
@@ -103,6 +130,13 @@ automatic publication. Unchanged events leave receipts unchanged.
 Draft `evidence` pins required facts and complete source coverage to exact source
 revisions and locators. Semantic judgments remain attributed agent reports;
 the server separately checks source bytes, locators and literal correspondence.
+The v2 checker reports verbatim preservation separately from literal matching.
+Conditions, negations, counterexamples and contradictions require exact selected
+text preservation; an unchanged number cannot prove a changed condition safe.
+Identical prose without numbers can be verified verbatim while its literal
+status remains out-of-scope. Paraphrases and translations are not inferred to
+match. Code, examples and metadata remain excluded. Literal-only correspondence
+for numbers/dates/versions/quotes is not a claim of semantic equivalence.
 One refinement may preserve or add obligations, never silently discard or re-anchor
 them. Optional `rationale` records actual constraints, rejected alternatives with
 reasons, and failure conditions. It is agent analysis, not proof of a user decision
@@ -116,7 +150,7 @@ Alternatively, submit `observation` without draft or evidence:
   It does not synthesize, embed, call a provider, or claim an embedding rebuild.
 - `already_covered`: requires `synthesize`, query, reason, full coverage and paired
   source/member locators. Existing lexical source comparison, lifecycle and ACL
-  checks precede exact literal correspondence checks. This is an agent's coverage
+  checks precede exact selected-text preservation checks. This is an agent's coverage
   assessment, not a machine guarantee of semantic equivalence.
 
 Successful no-write verification stores a completion receipt without a publication

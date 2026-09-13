@@ -39,6 +39,25 @@ beforeEach(async () => {
 afterEach(async () => { vi.restoreAllMocks(); await rm(vault, { recursive: true, force: true }); });
 const current = async () => {};
 
+test.each([
+  ['승인된 요청만 실행한다. 외부 전송은 금지한다.', '승인된 요청만 실행한다. 외부 전송은 금지한다.', 'passed'],
+  ['Only approved calls may retry 3 times.', 'Calls may retry 3 times.', 'partial'],
+])('publication distinguishes exact prose from lost conditions: %s', async (source, output, status) => {
+  await writeFile(join(vault, 'Source.md'), `---\nllm_wiki_type: source\nimmutable: true\ncontent_sha256: ${hash(source)}\n---\n${source}`);
+  const revision = await fs.readNoteRevision('Source.md');
+  const locator = { revision, startLine: 1, endLine: 1, quoteHash: hash(source) };
+  job.inputs[0]!.revision = revision;
+  job.draft!.content = output; job.draft!.fingerprint = hash(output);
+  job.evidence!.coverage = [{ sourcePath: 'Source.md', locator }];
+  job.evidence!.facts[0]!.sourceLocator = locator;
+  job.evidence!.facts[0]!.outputLocator = { ...locator, revision: hash(output), quoteHash: hash(output) };
+  expect((await adapter.check(job, current)).status).toBe(status);
+  if (status === 'passed') {
+    const intent = await adapter.preview(job, current); await adapter.apply(job, intent, current);
+    expect((await fs.readNote('Result.md')).content).toContain(output);
+  } else await expect(adapter.preview(job, current)).rejects.toThrow();
+});
+
 async function observe(kind: 'source_only' | 'already_covered') {
   const coverage = job.evidence!.coverage;
   delete job.draft; delete job.evidence;
