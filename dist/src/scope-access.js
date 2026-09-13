@@ -64,7 +64,7 @@ export class ScopeAccessPolicy {
     /** Dependency-scoped invalidation only, not proof of present read or execution authority. */
     documentDependencyFingerprint(paths) {
         if (paths.length > 32)
-            throw new Error('Protected dependency budget exceeded');
+            throw guidanceError(new Error('Protected dependency budget exceeded'), 'guid-ccdabbe5e3e30db0');
         const authority = this.documentAuthority();
         return createHash('sha256').update(JSON.stringify(paths.map(path => [path,
             authority?.effectiveConstraints(path) ?? []]))).digest('hex');
@@ -101,7 +101,7 @@ export class ScopeAccessPolicy {
         return () => {
             if (this.documentAuthority()?.fingerprint !== fingerprint
                 || Boolean(principal && this.localInferenceAllowed?.(principal) === true) !== local) {
-                throw new Error('Protected document authorization changed; retry with current authorization');
+                throw guidanceError(new Error('Protected document authorization changed; retry with current authorization'), 'guid-4699500b4f292b95');
             }
         };
     }

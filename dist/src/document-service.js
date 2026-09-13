@@ -5,7 +5,8 @@ import { fingerprint, page } from './work-model.js';
 import { resourceBundleLocation, parseResourceBundleManifest } from './resource-bundle.js';
 import { pdfRangeProvenance } from './document-pdf.js';
 import { boundedHeadingLabel, documentPage } from './document-page.js';
-import { withDocumentWork } from './document-work-memory.js';
+import { withDocumentWork, reserveDocumentWork } from './document-work-memory.js';
+import { documentChapters, DOCUMENT_CHAPTER_PROFILE } from './document-chapters.js';
 const RANGE_KEYS = ['fragmentId', 'relation', 'edge', 'lineCount', 'startLine', 'endLine', 'startOffset', 'endOffset', 'mode'];
 const budget = (value) => {
     const n = value ?? 4000;
@@ -51,6 +52,10 @@ export class DocumentService {
     binding(doc, p) {
         return fingerprint({ path: doc.path, revision: doc.revision, profile: doc.profile, actor: actor(p) });
     }
+    chapters(doc) {
+        reserveDocumentWork(doc.raw.length * 8 + doc.fragments.length * 1200 + 65536);
+        return documentChapters(doc);
+    }
     sign(kind, binding, a, b) {
         const payload = `${a.toString(36)}.${b.toString(36)}`;
         return `${payload}.${createHmac('sha256', this.signingKey).update(`${kind}\0${binding}\0${payload}`).digest('base64url')}`;
@@ -70,9 +75,23 @@ export class DocumentService {
     }
     async outlineWithinWork(params) {
         const maxChars = budget(params.maxChars);
+        if (params.view !== undefined && !['structure', 'chapters'].includes(params.view))
+            throw guidanceError(new Error('Invalid document outline view'), 'guid-2eef7fe1ff5bb3fd');
+        if (params.view === 'chapters' && params.parentId !== undefined)
+            throw guidanceError(new Error('Chapter outline does not accept a structure parentId'), 'guid-6e485520138353de');
         if ((params.parentId || params.cursor) && !params.expectedRevision)
             throw guidanceError(new Error('expectedRevision is required for a fragment or cursor'), 'guid-66554315e040b071');
         const { structure: doc } = await this.index.load(params.path, params.principal, params.expectedRevision);
+        if (params.view === 'chapters') {
+            return documentPage(this.chapters(doc), c => ({ ...c }), {
+                path: this.index.reader.access.toPublicPath(doc.path), revision: doc.revision, profile: DOCUMENT_CHAPTER_PROFILE,
+                view: 'chapters', status: 'source_projection', identityScope: 'unchanged content at current path; not a durable bundle ID',
+                locator: doc.locator ?? 'source UTF-16 half-open offsets; one-based lines',
+                readAction: { endpointId: 'documents.read', required: ['path', 'expectedRevision', 'chapterId'], defaultMaxChars: 2000 },
+                ...(doc.gaps && { gaps: doc.gaps.slice(0, 12), gapsOmitted: Math.max(0, doc.gaps.length - 12) }),
+            }, fingerprint({ binding: this.binding(doc, params.principal), access: this.index.reader.access.documentPolicyFingerprint(),
+                view: 'chapters', profile: DOCUMENT_CHAPTER_PROFILE }), { ...params, maxChars }, 'documents.outline');
+        }
         if (params.parentId && !doc.fragments.some(f => f.id === params.parentId))
             throw guidanceError(new Error('Stale document parent fragment'), 'guid-3c8ea2c73e83b0c4');
         const items = doc.fragments.filter(f => !params.parentId || f.parent === params.parentId);
@@ -84,12 +103,20 @@ export class DocumentService {
         return withDocumentWork(() => this.readWithinWork(params));
     }
     async readWithinWork(params) {
-        const maxChars = budget(params.maxChars);
+        if (params.chapterId !== undefined) {
+            if (typeof params.chapterId !== 'string' || !/^[a-f0-9]{64}$/.test(params.chapterId))
+                throw guidanceError(new Error('Invalid document chapterId'), 'guid-ff1ec80daf92bf9a');
+            if (!params.expectedRevision)
+                throw guidanceError(new Error('expectedRevision is required for a chapter'), 'guid-ad74697a99348b5d');
+            if (params.ranges !== undefined || RANGE_KEYS.some(k => params[k] !== undefined))
+                throw guidanceError(new Error('Use chapterId or source ranges, not both'), 'guid-b21159489ee9f62d');
+        }
+        const maxChars = budget(params.maxChars ?? (params.chapterId !== undefined ? 2000 : undefined));
         if (params.ranges !== undefined && (!Array.isArray(params.ranges) || !params.ranges.length || params.ranges.length > 8))
             throw guidanceError(new Error('ranges must contain 1..8 selections'), 'guid-b609b40e5e87ac09');
         if (params.ranges && RANGE_KEYS.some(k => params[k] !== undefined))
             throw guidanceError(new Error('Use ranges or a single selection, not both'), 'guid-e6833ec64f3ace02');
-        const requests = params.ranges ? params.ranges.map(rangeRequest) : [rangeRequest(params)];
+        let requests = params.ranges ? params.ranges.map(rangeRequest) : [rangeRequest(params)];
         if ((requests.some(r => r.fragmentId !== undefined) || params.cursor) && !params.expectedRevision)
             throw guidanceError(new Error('expectedRevision is required for a fragment or cursor'), 'guid-66554315e040b071');
         if (params.knownReads !== undefined && (!Array.isArray(params.knownReads) || params.knownReads.length > 16))
@@ -97,6 +124,12 @@ export class DocumentService {
         if (params.forceRead !== undefined && typeof params.forceRead !== 'boolean')
             throw guidanceError(new Error('forceRead must be boolean'), 'guid-b27abdaedca1a1f6');
         const { structure: doc } = await this.index.load(params.path, params.principal, params.expectedRevision);
+        if (params.chapterId !== undefined) {
+            const chapter = this.chapters(doc).find(c => c.id === params.chapterId);
+            if (!chapter)
+                throw guidanceError(new Error('Stale document chapter; repeat the chapter outline'), 'guid-cbcfb6a57ab7c21c');
+            requests = [{ startOffset: chapter.startOffset, endOffset: chapter.endOffset, mode: 'exact' }];
+        }
         const binding = this.binding(doc, params.principal);
         if (params.knownReads?.length && !params.principal?.sessionId)
             throw guidanceError(new Error('Reading receipts require an authenticated session'), 'guid-22ce2a1bdff8d193');

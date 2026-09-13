@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { createHash } from 'node:crypto';
 import { FrontmatterHandler } from './frontmatter.js';
 /** Canonical preview and existing guarded writer share the same validated write
@@ -9,14 +10,14 @@ export function preparePublicationWrite(input) {
     const revision = digest(raw), fingerprint = digest(JSON.stringify({ path: write.path, expectedRevision: write.expectedRevision, raw, guards }));
     return { raw, revision, fingerprint, apply: async (confirmedFingerprint) => {
             if (confirmedFingerprint !== fingerprint)
-                throw Error('Prepared publication fingerprint changed');
+                throw guidanceError(Error('Prepared publication fingerprint changed'), 'guid-74e0ade2fb359c32');
             await input.assertAccess();
             const policy = { maxBytes: 8 * 1024 * 1024, assertAccess: input.assertAccess, ...(input.maxGuards && { maxGuards: input.maxGuards }) };
             const updated = guards.length
                 ? await input.fs.writeNoteWithRevisionGuardsAndReceipt(write, guards, policy)
                 : await input.fs.writeNoteWithReceipt(write, policy);
             if (updated.revision !== revision)
-                throw Error('Publication output differs from prepared revision');
+                throw guidanceError(Error('Publication output differs from prepared revision'), 'guid-d3edb02fa0050439');
             return { ...projection, revision: updated.revision };
         } };
 }

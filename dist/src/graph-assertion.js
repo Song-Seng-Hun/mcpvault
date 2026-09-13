@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { createHash } from 'node:crypto';
 import { posix } from 'node:path';
 import { extractObsidianLinkOccurrences } from './backlinks.js';
@@ -14,7 +15,7 @@ export function extractGraphAssertions(input) {
     if (!repositoryId || repositoryId.length > 200 || !path || /^(?:\/|~)|\\|:|[\u0000-\u001f]/.test(path)
         || path.split('/').includes('..') || posix.normalize(path) !== path || !/^[a-f0-9]{64}$/i.test(revision)
         || !Number.isInteger(limit) || limit < 1 || limit > 80)
-        throw Error('Invalid graph assertion basis or limit.');
+        throw guidanceError(Error('Invalid graph assertion basis or limit.'), 'guid-979012080a31465c');
     const documentId = digest([repositoryId, path]);
     const source = { repositoryId, documentId, versionId: digest([documentId, revision]), path, revision,
         identityBasis: 'repository_path_not_rename_stable' };

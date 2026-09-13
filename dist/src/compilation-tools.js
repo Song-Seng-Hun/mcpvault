@@ -1,3 +1,4 @@
+import { guidanceText } from './guidance-runtime.js';
 import { COMPILATION_OPERATIONS } from './compilation-policy.js';
 import { getFidelityTools } from './fidelity-tools.js';
 /** Dynamic registration only. These arguments cannot approve processing or runtime access. */
@@ -7,7 +8,7 @@ export function getCompilationTools() {
     const fact = fidelity.facts.items;
     const evidence = { type: 'object', additionalProperties: false, required: ['query', 'decision', 'facts', 'coverage'], properties: {
             rationale: { type: 'object', additionalProperties: false, required: ['constraints', 'rejectedAlternatives', 'failureConditions'],
-                description: 'Attributed agent analysis only. Record actual constraints and rejected alternatives; never invent user decisions or consent.', properties: {
+                description: guidanceText('guid-fc12146cbd36ee8d', 'Attributed agent analysis only. Record actual constraints and rejected alternatives; never invent user decisions or consent.'), properties: {
                     constraints: { type: 'array', maxItems: 8, items: text(300) }, failureConditions: { type: 'array', maxItems: 8, items: text(300) },
                     rejectedAlternatives: { type: 'array', maxItems: 8, items: { type: 'object', additionalProperties: false, required: ['option', 'reason'],
                             properties: { option: text(300), reason: text(300) } } },
@@ -27,7 +28,7 @@ export function getCompilationTools() {
                     } } },
         } };
     return [{ name: 'manage_wiki_compilation',
-            description: 'Diagnose or manage one host-approved, revision-pinned compilation. No host configuration means diagnosis only. Read does not expose draft bodies. Prepare pins explicit dependencies; submit stores a draft with preservation evidence OR a no-write observation, never both. source_only observations require index operation; already_covered requires synthesize, agent reason and paired source/member locators. They record verification, not publication or semantic truth. Check records actual verification; retry reconciles uncertain application before any new write. No model is started. Existing user edits, revoked authority and damaged history require review. Actual writing requires a separately verified host adapter; a client approval assertion is never permission.',
+            description: guidanceText('guid-2879fc5d83ca78cf', 'Diagnose or manage one host-approved, revision-pinned compilation. No host configuration means diagnosis only. Read does not expose draft bodies. Prepare pins explicit dependencies; submit stores a draft with preservation evidence OR a no-write observation, never both. source_only observations require index operation; already_covered requires synthesize, agent reason and paired source/member locators. They record verification, not publication or semantic truth. Check records actual verification; retry reconciles uncertain application before any new write. No model is started. Existing user edits, revoked authority and damaged history require review. Actual writing requires a separately verified host adapter; a client approval assertion is never permission.'),
             inputSchema: { type: 'object', additionalProperties: false, properties: {
                     op: { type: 'string', enum: ['diagnose', 'prepare', 'read', 'submit', 'check', 'retry'], default: 'diagnose' },
                     requestId: text(100), projectId: text(100), operation: { type: 'string', enum: [...COMPILATION_OPERATIONS] },
@@ -35,8 +36,8 @@ export function getCompilationTools() {
                             required: ['path', 'expectedRevision', 'role'], properties: { path: text(400), expectedRevision: text(64),
                                 role: { type: 'string', enum: ['source', 'member', 'concept', 'topic'] } } } },
                     outputPath: text(400), expectedOutputRevision: text(64), expectedJobRevision: text(64), content: text(24000), evidence, observation,
-                    includeInspection: { type: 'boolean', description: 'Read only: return bounded pinned facts and checkpoints, not draft bodies or semantic guarantees.' },
-                    inspectionCursor: { type: 'integer', minimum: 0, description: 'Read inspection continuation; nonzero cursors require expectedJobRevision from the previous page.' },
+                    includeInspection: { type: 'boolean', description: guidanceText('guid-8fc3dc514025bb24', 'Read only: return bounded pinned facts and checkpoints, not draft bodies or semantic guarantees.') },
+                    inspectionCursor: { type: 'integer', minimum: 0, description: guidanceText('guid-c5232abc4b4e9b44', 'Read inspection continuation; nonzero cursors require expectedJobRevision from the previous page.') },
                     maxChars: { type: 'integer', minimum: 512, maximum: 12000, default: 4000 }, accessToken: text(4096),
                 } } }];
 }

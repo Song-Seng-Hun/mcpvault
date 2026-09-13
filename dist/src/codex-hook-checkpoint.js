@@ -1,7 +1,8 @@
+import { guidanceError } from './guidance-runtime.js';
 import { compilationHash, compilationPath } from './compilation-policy.js';
 import { hookHash, hookId, validateCodexHookConfig } from './codex-hook-policy.js';
 import { loadHostWorkStorage } from './host-work-storage.js';
-const unavailable = () => Error('Prepared checkpoint unavailable');
+const unavailable = () => guidanceError(Error('Prepared checkpoint unavailable'), 'guid-67d96c92a5ae75b9');
 const record = (v, keys) => {
     if (!v || typeof v !== 'object' || Array.isArray(v) || Object.keys(v).some(k => !keys.includes(k)))
         throw unavailable();

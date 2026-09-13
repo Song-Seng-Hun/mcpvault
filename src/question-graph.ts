@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import type { FileSystemService } from './filesystem.js';
 import type { QueryNote } from './types.js';
 import { QUESTION_GRAPH_PROFILE } from './graph-contract.js';
@@ -86,7 +87,7 @@ export async function discoverQuestionGraph(ctx: Context): Promise<GraphCandidat
     for (const path of authors) {
       if (resolvedEdges.has(path)) continue;
       const note = candidates.get(path)!.note;
-      if (!note.revision) throw Error('Graph author revision unavailable');
+      if (!note.revision) throw guidanceError(Error('Graph author revision unavailable'), 'guid-f3ba8bde3042aed6');
       resolvedEdges.set(path, []);
       const declared = declarations(note);
       if (declared.truncated) ctx.gap('evidence_declaration_window_exhausted', path, note.revision);
@@ -137,7 +138,7 @@ export async function discoverQuestionGraph(ctx: Context): Promise<GraphCandidat
       if (ctx.metadataExhausted() && (needsAliases || resolved.length !== 1 || visible.length !== 1)) { ctx.gap('metadata_window_exhausted', path, author.revision); continue; }
       if (visible.length !== 1) { ctx.gap('unresolved_evidence_or_relation'); continue; }
       const next = visible[0]!;
-      if (!author.revision || !next.note.revision || (ref.revision && next.note.revision !== ref.revision)) throw Error('Graph context changed');
+      if (!author.revision || !next.note.revision || (ref.revision && next.note.revision !== ref.revision)) throw guidanceError(Error('Graph context changed'), 'guid-7189502ebb2d5fd8');
       if (ref.incoming) {
         // Backlink indexes may match several meanings of an authored target.
         // Re-resolve the original declaration, not just its author filename.

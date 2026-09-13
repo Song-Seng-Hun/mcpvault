@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { join } from 'node:path';
 
@@ -31,7 +32,7 @@ while($null -ne ($line=[Console]::ReadLine())) {
 
 type Pending = { resolve: () => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> };
 let inspector: Inspector | undefined;
-const unavailable = () => new Error('Host private storage permissions could not be verified');
+const unavailable = () => guidanceError(new Error('Host private storage permissions could not be verified'), 'guid-9c19fcb53e0bc52c');
 
 class Inspector {
   private readonly child: ChildProcessWithoutNullStreams;

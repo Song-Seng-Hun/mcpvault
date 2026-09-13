@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { spawn } from 'node:child_process';
 import { join } from 'node:path';
 // Only the interpreter is reused. Every request reads the current native ACLs.
@@ -28,7 +29,7 @@ while($null -ne ($line=[Console]::ReadLine())) {
   [Console]::WriteLine([string]$id+':'+[string]$status)
 }`;
 let inspector;
-const unavailable = () => new Error('Host private storage permissions could not be verified');
+const unavailable = () => guidanceError(new Error('Host private storage permissions could not be verified'), 'guid-9c19fcb53e0bc52c');
 class Inspector {
     child;
     pending = new Map();

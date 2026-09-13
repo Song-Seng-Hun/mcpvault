@@ -1,8 +1,9 @@
+import { guidanceError } from './guidance-runtime.js';
 import { createHash } from 'node:crypto';
 const activities = ['collaboration', 'ideation-research', 'explanation-translation',
     'benchmarks', 'economy', 'roleplay', 'skill-evolution'];
 const actions = ['discover', 'read', 'claim', 'execute'];
-const invalid = () => new Error('Invalid owner activity policy');
+const invalid = () => guidanceError(new Error('Invalid owner activity policy'), 'guid-4bbe53fca7727ba4');
 const isId = (value) => typeof value === 'string'
     && value.length >= 1 && value.length <= 100 && /^[a-z0-9]/.test(value) && !/[^a-z0-9._-]/.test(value);
 const isActivity = (value) => typeof value === 'string' && activities.includes(value);

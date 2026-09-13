@@ -408,7 +408,7 @@ export class ScopeAuthService {
             const department = normalizeScopeId(params.departmentId, 'departmentId');
             const employee = registry.getEmployee(binding.userId);
             if (department !== params.departmentId || !employee?.departmentIds?.includes(department)) {
-                throw new Error('Department claim requires administrator-verified membership');
+                throw guidanceError(new Error('Department claim requires administrator-verified membership'), 'guid-b9590dbc3af48e8b');
             }
         }
         const principal = await this.exclusive(async () => {
@@ -441,12 +441,12 @@ export class ScopeAuthService {
     }
     async register(params) {
         if (params.accountType !== undefined && !['personal', 'enterprise'].includes(params.accountType))
-            throw new Error('Invalid account type');
+            throw guidanceError(new Error('Invalid account type'), 'guid-bdaf1fb04e268780');
         if (params.accountType !== undefined && params.accountType !== (this.enterpriseRegistry ? 'enterprise' : 'personal')) {
-            throw new Error('Account type must match the personal or enterprise host authority');
+            throw guidanceError(new Error('Account type must match the personal or enterprise host authority'), 'guid-68463003c8e6b2da');
         }
         if (!this.enterpriseRegistry && params.departmentId !== undefined)
-            throw new Error('Department claims require an enterprise host');
+            throw guidanceError(new Error('Department claims require an enterprise host'), 'guid-de1766001aa94a40');
         if (this.enterpriseRegistry)
             return this.registerEnterprise(params);
         const accountId = normalizeScopeId(params.accountId, 'accountId');

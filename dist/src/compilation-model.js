@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { createHash } from 'node:crypto';
 import { GRAPH_CONTRACT_VERSION } from './graph-contract.js';
 import { normalizeCompilationEvidence } from './compilation-evidence.js';
@@ -17,7 +18,7 @@ export const compilationId = (value) => typeof value === 'string' && /^[a-z0-9][
 export function parseCompilationHistory(value) {
     if (value === undefined)
         return { version: 1, jobs: [] };
-    const invalid = () => Error('Compilation history unavailable; preserve it for host review');
+    const invalid = () => guidanceError(Error('Compilation history unavailable; preserve it for host review'), 'guid-b6e432e0131960ff');
     const record = (v, keys) => {
         if (!v || typeof v !== 'object' || Array.isArray(v) || Object.keys(v).some(k => !keys.includes(k)))
             throw invalid();

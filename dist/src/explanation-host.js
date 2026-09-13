@@ -25,7 +25,7 @@ export function validateExplanationHostConfig(input) {
             throw guidanceError(Error('Invalid host execution profile'), 'guid-577a3438bd997d6a');
         if (p.executionLocality !== undefined && !['local', 'remote', 'unknown'].includes(p.executionLocality)
             || p.bookkeepingSuitable !== undefined && typeof p.bookkeepingSuitable !== 'boolean')
-            throw new Error('Invalid host execution profile');
+            throw guidanceError(new Error('Invalid host execution profile'), 'guid-577a3438bd997d6a');
         for (const key of ['family', 'version']) {
             const label = textField(p[key], key, 80, true);
             if (!label || label.toLowerCase() === 'unknown')

@@ -165,13 +165,13 @@ export class EnterpriseFederationAdapter {
     assertPublicPath(logical, write = false) {
         activeDocumentStorageContext()?.assertFresh();
         if (!this.pathFilter.isAllowed(logical))
-            throw new Error('Federation destination unavailable');
+            throw guidanceError(new Error('Federation destination unavailable'), 'guid-631ce1bc2304f93c');
         assertEnterpriseStorageAccess(logical, write);
     }
     async preparePublicWrite(path) {
         const logical = this.logicalPublicPath(path);
         if (!logical)
-            throw new Error('Federation destination unavailable');
+            throw guidanceError(new Error('Federation destination unavailable'), 'guid-631ce1bc2304f93c');
         this.assertPublicPath(logical, true);
         await prepareDocumentWrite(logical);
         this.assertPublicPath(logical, true);
@@ -194,13 +194,13 @@ export class EnterpriseFederationAdapter {
     }
     remoteCommentPath(objectId) {
         if (!/^comment:[a-z0-9][a-z0-9._-]*:[a-z0-9][a-z0-9._-]*:[a-z0-9][a-z0-9._-]*$/.test(objectId))
-            throw new Error('Federation destination unavailable');
+            throw guidanceError(new Error('Federation destination unavailable'), 'guid-631ce1bc2304f93c');
         return join(this.vaultPath, 'PublicCommunity', 'Local', 'FederatedComments', `${federationStorageName(objectId)}.md`);
     }
     assertImportedSource(objectId) {
         const match = /^(post|comment):([a-z0-9][a-z0-9._-]*):[a-z0-9][a-z0-9._-]*:[a-z0-9][a-z0-9._-]*$/.exec(objectId);
         if (!match)
-            throw new Error('Federation source unavailable');
+            throw guidanceError(new Error('Federation source unavailable'), 'guid-f88acc469d998779');
         this.assertPublicPath(`PublicCommunity/Imported/${match[2]}/${match[1] === 'post' ? 'Posts' : 'Comments'}/${federationStorageName(objectId)}.md`);
     }
     async authorizeIntent(intent) {
@@ -237,7 +237,7 @@ export class EnterpriseFederationAdapter {
         const path = this.remoteCommentPath(this.targetObjectId(intent.input));
         // A persisted sidecar is not authority to redirect replay to another file.
         if (intent.local.path !== path)
-            throw new Error('Federation destination unavailable');
+            throw guidanceError(new Error('Federation destination unavailable'), 'guid-631ce1bc2304f93c');
         await this.preparePublicWrite(path);
     }
     async load() {
@@ -790,7 +790,7 @@ export class EnterpriseFederationAdapter {
                     await this.authorizeIntent(pending);
                 return;
             }
-            throw new Error('Federation replay authority unavailable');
+            throw guidanceError(new Error('Federation replay authority unavailable'), 'guid-f13d0425ab26876a');
         } : undefined);
         for (const objectId of outbox.published)
             (this.state.deliveries ||= {})[objectId] = 'published';

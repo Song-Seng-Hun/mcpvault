@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { compilationHash, compilationPath } from './compilation-policy.js';
 import { compilationContentHash } from './compilation-model.js';
 import { hookHash } from './codex-hook-policy.js';
@@ -14,7 +15,7 @@ export class CodexHookServiceAdapter {
     execute(work, context) { return this.run(work, context, false); }
     reconcile(work, context) { return this.run(work, context, true); }
     async run(work, context, reconcile) {
-        const { fs, access } = this.options, unavailable = () => Error('Hook operation unavailable');
+        const { fs, access } = this.options, unavailable = () => guidanceError(Error('Hook operation unavailable'), 'guid-abb06c6aacbfcde7');
         try {
             await context.assertCurrent();
             const principal = await this.options.authorize(context.ticket.accountId);

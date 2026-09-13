@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import type { CompilationInput } from './compilation-model.js';
 import type { CompilationOperation } from './compilation-policy.js';
 import { compilationPath } from './compilation-policy.js';
@@ -12,7 +13,7 @@ export interface CompilationObservation {
     knowledgeLocator: EvidenceLocator; semanticJudgment: 'covered' | 'uncertain' }>;
 }
 export function normalizeCompilationObservation(value: unknown, inputs: readonly CompilationInput[], operation: CompilationOperation): CompilationObservation {
-  const invalid = () => Error('Invalid compilation observation');
+  const invalid = () => guidanceError(Error('Invalid compilation observation'), 'guid-b2440665e83c6085');
   const record = (v: unknown, keys: readonly string[]): Record<string, any> => {
     if (!v || typeof v !== 'object' || Array.isArray(v) || Object.keys(v).some(k => !keys.includes(k))) throw invalid();
     return v as Record<string, any>;

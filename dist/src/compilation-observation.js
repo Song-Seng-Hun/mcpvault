@@ -1,7 +1,8 @@
+import { guidanceError } from './guidance-runtime.js';
 import { compilationPath } from './compilation-policy.js';
 import { compilationLocator } from './compilation-evidence.js';
 export function normalizeCompilationObservation(value, inputs, operation) {
-    const invalid = () => Error('Invalid compilation observation');
+    const invalid = () => guidanceError(Error('Invalid compilation observation'), 'guid-b2440665e83c6085');
     const record = (v, keys) => {
         if (!v || typeof v !== 'object' || Array.isArray(v) || Object.keys(v).some(k => !keys.includes(k)))
             throw invalid();

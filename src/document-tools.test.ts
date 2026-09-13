@@ -27,9 +27,23 @@ test('five fixed MCP tools expose shared bounded read-only document endpoints an
   expect(result.isError).not.toBe(true);
   const text = (result.content as any[])[0].text, value = JSON.parse(text);
   expect(text.length).toBeLessThanOrEqual(1500); expect(value.parts[0].text).toBe('한 줄 답변.');
+  const chapterResult = await client.callTool({ name: 'call_endpoint', arguments: {
+    endpointId: 'documents.outline', arguments: { path: 'note.md', view: 'chapters', maxChars: 2000 },
+  } });
+  expect(chapterResult.isError).not.toBe(true);
+  const chapters = JSON.parse((chapterResult.content as any[])[0].text);
+  expect(chapters.status).toBe('source_projection');
+  const chapterRead = await client.callTool({ name: 'call_endpoint', arguments: {
+    endpointId: 'documents.read', arguments: { path: 'note.md', expectedRevision: chapters.revision, chapterId: chapters.items[0].id },
+  } });
+  expect(chapterRead.isError).not.toBe(true);
+  expect(JSON.parse((chapterRead.content as any[])[0].text).parts[0].text).toBe('# Topic\n\n한 줄 답변.');
   const api = await startRestApi(server, { port: 0 }); cleanup.push(() => api.close());
   const response = await fetch(`http://127.0.0.1:${api.port}/api/endpoint/documents.read?path=note.md&startLine=3&endLine=3&mode=exact&maxChars=1500`);
   expect(response.status).toBe(200); expect(await response.json()).toEqual(value);
+  const chapterResponse = await fetch(`http://127.0.0.1:${api.port}/api/endpoint/documents.outline?path=note.md&view=chapters&maxChars=2000`);
+  expect(chapterResponse.status).toBe(200);
+  expect(await chapterResponse.json()).toEqual(chapters);
   const ranges = [{ startLine: 1, mode: 'exact' }, { startLine: 3, mode: 'exact' }];
   const batch = await fetch(`http://127.0.0.1:${api.port}/api/endpoint/documents.read?path=note.md&ranges=${encodeURIComponent(JSON.stringify(ranges))}`);
   expect(batch.status).toBe(200);

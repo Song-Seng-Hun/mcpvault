@@ -1,3 +1,4 @@
+import { guidanceText } from './guidance-runtime.js';
 /** Bounded review instructions, not read receipts or a shortcut to ready. */
 export function learningRevalidation(input) {
     const targets = new Map();
@@ -14,6 +15,6 @@ export function learningRevalidation(input) {
         pathReviewRequired: input.structureChanged || input.sourceSnapshotChanged,
         changedReadsTotal: targets.size, reads, readsOmitted: Math.max(0, targets.size - reads.length),
         checkpoint: { endpointId: 'continuity.save', requiredArguments: ['topic', 'summary', 'nextAction', 'expectedRevision', 'learningProgress'] },
-        guidance: 'Read changed sources at these revisions; follow read continuations for omitted content. Review route/dependencies when required. Save reviewed progress using the resume checkpoint revision, preserving only still-valid completedThrough. Read receipts do not validate understanding; its checks remain separate.',
+        guidance: guidanceText('guid-df49b207811a0768', 'Read changed sources at these revisions; follow read continuations for omitted content. Review route/dependencies when required. Save reviewed progress using the resume checkpoint revision, preserving only still-valid completedThrough. Read receipts do not validate understanding; its checks remain separate.'),
     };
 }

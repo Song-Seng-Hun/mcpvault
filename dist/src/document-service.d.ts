@@ -13,12 +13,14 @@ export interface DocumentOutlineParams extends DocumentParams {
     parentId?: string;
     limit?: number;
     cursor?: string;
+    view?: 'structure' | 'chapters';
 }
 export interface DocumentReadParams extends DocumentParams, DocumentRangeRequest {
     ranges?: DocumentRangeRequest[];
     cursor?: string;
     knownReads?: string[];
     forceRead?: boolean;
+    chapterId?: string;
 }
 export interface DocumentExportParams extends DocumentParams {
     startByte?: number;
@@ -75,6 +77,7 @@ export declare class DocumentService {
     private readonly signingKey;
     constructor(index: DocumentIndex);
     private binding;
+    private chapters;
     private sign;
     private verify;
     outline(params: DocumentOutlineParams): Promise<import("./work-model.js").WorkPage>;

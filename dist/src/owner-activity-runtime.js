@@ -1,5 +1,6 @@
-const denied = () => new Error('Owner activity consent or trusted execution authority is unavailable');
-const changed = () => new Error('Owner activity authority changed; retry with current consent');
+import { guidanceError } from './guidance-runtime.js';
+const denied = () => guidanceError(new Error('Owner activity consent or trusted execution authority is unavailable'), 'guid-69aa4acecffe7b26');
+const changed = () => guidanceError(new Error('Owner activity authority changed; retry with current consent'), 'guid-35e0fa696588e7ab');
 /** Additional consent boundary for optional activities. This runtime accepts
  * authority only through trusted host construction options. Request fields,
  * principal labels, feature selection and document ACLs cannot create it. */

@@ -1,10 +1,11 @@
+import { guidanceError } from './guidance-runtime.js';
 import { compilationContentHash } from './compilation-model.js';
 import { normalizeCompilationEvidence } from './compilation-evidence.js';
 import { normalizeCompilationObservation } from './compilation-observation.js';
 import { checkFidelityPreservation } from './fidelity-literals.js';
 import { resolveEvidenceLocator } from './evidence-locator.js';
 import { isModerationHidden } from './moderation-policy.js';
-const unavailable = () => Error('Compilation publication unavailable; review current evidence and authority');
+const unavailable = () => guidanceError(Error('Compilation publication unavailable; review current evidence and authority'), 'guid-0d63d904f90d518c');
 /** Trusted host adapter, not enabled by feature/model/client declarations. All
  * inference comes from the current agent's submitted draft; comparison is local
  * lexical-only and no provider, source capture, merge or claim promotion runs. */

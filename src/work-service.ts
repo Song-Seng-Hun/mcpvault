@@ -963,13 +963,13 @@ export class WorkService {
       // Host coverage is generation-specific advice, not a reusable approval.
       for (const target of [...selected, { path: projectPath(id), revision: project.revision }]) {
         if (!target.revision || (await this.visible(target.path)).revision !== target.revision) {
-          throw new Error('Staffing generation changed during host assessment; retry');
+          throw guidanceError(new Error('Staffing generation changed during host assessment; retry'), 'guid-e08611cb31795889');
         }
       }
       const generation = (tasks: Array<{ path: string; revision?: string }>) =>
         fingerprint(tasks.map(n => ({ path: n.path, revision: n.revision })).sort((a, b) => a.path.localeCompare(b.path)));
       if (generation((await this.inventory(id)).filter(n => n.fm.mcpvault_type === 'agent_task')) !== generation(projectTasks)) {
-        throw new Error('Staffing task membership or generation changed during host assessment; retry');
+        throw guidanceError(new Error('Staffing task membership or generation changed during host assessment; retry'), 'guid-ce3f106212aee9b5');
       }
     }
     return page(items, { projectId: id, projectRevision: project.revision, advisory: true, summary: result.summary,

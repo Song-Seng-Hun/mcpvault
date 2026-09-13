@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { compilationHash, compilationPath } from './compilation-policy.js';
 import { hookHash, hookId, validateCodexHookConfig } from './codex-hook-policy.js';
 import { loadHostWorkStorage } from './host-work-storage.js';
@@ -9,7 +10,7 @@ interface Payload { topic: string; summary: string; nextAction: string; referenc
 interface Entry { id: string; accountId: string; projectId: string; paths: string[]; authorityRevision: string; inputRevision: string;
   configRevision: string; payloadHash: string; revision: string; payload?: Payload }
 interface State { version: 1; entries: Entry[] }
-const unavailable = () => Error('Prepared checkpoint unavailable');
+const unavailable = () => guidanceError(Error('Prepared checkpoint unavailable'), 'guid-67d96c92a5ae75b9');
 const record = (v: unknown, keys: string[]): Record<string, any> => {
   if (!v || typeof v !== 'object' || Array.isArray(v) || Object.keys(v).some(k => !keys.includes(k))) throw unavailable();
   return v as Record<string, any>;

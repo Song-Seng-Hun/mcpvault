@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import type { FileSystemService } from './filesystem.js';
 import type { ScopeAccessPolicy } from './scope-access.js';
 import type { LlmWikiService } from './llm-wiki.js';
@@ -18,7 +19,7 @@ export class MaintenanceDerivedService implements MaintenanceDerivedAdapter {
   private accessible(path: string, principal: ScopePrincipal) {
     if (!path || path.trim() !== path || path.includes('\\') || !new PathFilter().isAllowed(path) || /^(?:\/|~|[a-z][a-z0-9+.-]*:)/i.test(path)
       || path.split('/').some(part => !part || part === '.' || part === '..')
-      || !this.access.canAccessPhysicalPath(path, principal)) throw new Error('Derived maintenance path unavailable');
+      || !this.access.canAccessPhysicalPath(path, principal)) throw guidanceError(new Error('Derived maintenance path unavailable'), 'guid-1a675962165a78f7');
   }
   private async plan(operation: MaintenanceOperation, path: string, principal: ScopePrincipal): Promise<Snapshot> {
     this.accessible(path, principal);
@@ -26,7 +27,7 @@ export class MaintenanceDerivedService implements MaintenanceDerivedAdapter {
     if (operation === 'cache_refresh') {
       if (!/\.(?:md|markdown|txt)$/i.test(path)) return skip;
       const note = await this.fs.readNote(path, 256 * 1024); this.accessible(path, principal);
-      if (isModerationHidden(note.frontmatter)) throw new Error('Derived source unavailable');
+      if (isModerationHidden(note.frontmatter)) throw guidanceError(new Error('Derived source unavailable'), 'guid-3041e550c20bee6f');
       return { fingerprint: hash(['cache', this.cacheEpoch, path, note.revision]), revision: note.revision, needed: true };
     }
     if (operation !== 'managed_canvas_regenerate' || !/\.canvas$/i.test(path)) return skip;
@@ -36,18 +37,18 @@ export class MaintenanceDerivedService implements MaintenanceDerivedAdapter {
     validateJsonCanvasDocument(opened.document);
     const nodes = new Map(opened.document.nodes.filter(node => node.type === 'file').map(node => [node.id, node]));
     const root = nodes.get(metadata.rootNodeId)?.file;
-    if (!root || !/\.(?:md|markdown|txt)$/i.test(root)) throw new Error('Managed Canvas root unavailable');
+    if (!root || !/\.(?:md|markdown|txt)$/i.test(root)) throw guidanceError(new Error('Managed Canvas root unavailable'), 'guid-eac87bf5acf4116c');
     this.accessible(root, principal);
     let stale = false;
     const sources: Array<{ path: string; revision: string }> = [];
     for (const [id, expectedRevision] of Object.entries(metadata.revisions)) {
       const target = nodes.get(id)?.file;
-      if (!target || !/\.(?:md|markdown|txt)$/i.test(target)) throw new Error('Managed Canvas source unavailable');
+      if (!target || !/\.(?:md|markdown|txt)$/i.test(target)) throw guidanceError(new Error('Managed Canvas source unavailable'), 'guid-3924f0e061d498dd');
       this.accessible(target, principal);
-      if (!this.access.canReferenceFrom(root, target)) throw new Error('Managed Canvas reference unavailable');
+      if (!this.access.canReferenceFrom(root, target)) throw guidanceError(new Error('Managed Canvas reference unavailable'), 'guid-9947d8f286c8748a');
       if (!await this.fs.noteExists(target)) { sources.push({ path: target, revision: 'missing' }); stale = true; continue; }
       const note = await this.fs.readNote(target, 256 * 1024); this.accessible(target, principal);
-      if (isModerationHidden(note.frontmatter)) throw new Error('Managed Canvas source unavailable');
+      if (isModerationHidden(note.frontmatter)) throw guidanceError(new Error('Managed Canvas source unavailable'), 'guid-3924f0e061d498dd');
       sources.push({ path: target, revision: note.revision });
       if (note.revision !== expectedRevision) stale = true;
     }
@@ -59,8 +60,8 @@ export class MaintenanceDerivedService implements MaintenanceDerivedAdapter {
       Math.min(Object.keys(metadata.revisions).length, 50), 12000, false);
     const args = preview.exportAction?.arguments;
     if (!args || preview.exportAction.endpointId !== 'wiki.canvas_export'
-      || typeof args.expectedSnapshotFingerprint !== 'string' || typeof args.expectedSourceRevision !== 'string') throw new Error('Managed Canvas preview unavailable');
-    if ((await this.fs.readCanvasFile(path)).revision !== opened.revision) throw new Error('Managed Canvas output changed during preview');
+      || typeof args.expectedSnapshotFingerprint !== 'string' || typeof args.expectedSourceRevision !== 'string') throw guidanceError(new Error('Managed Canvas preview unavailable'), 'guid-f5e8a0bcd8a22e9b');
+    if ((await this.fs.readCanvasFile(path)).revision !== opened.revision) throw guidanceError(new Error('Managed Canvas output changed during preview'), 'guid-5b10ea9e38813b5d');
     this.accessible(path, principal);
     return { ...base, fingerprint: hash([base.fingerprint, args.expectedSnapshotFingerprint, args.expectedSourceRevision]),
       exportArguments: { ...args, path: root, outputPath: path, expectedRevision: opened.revision, includeSemantic: false } };
@@ -72,18 +73,18 @@ export class MaintenanceDerivedService implements MaintenanceDerivedAdapter {
     recordIntent: (intent: MaintenanceWriteIntent) => Promise<void>, expected: { fingerprint: string; revision: string }, assertCurrent?: () => void): Promise<{ revision: string }> {
     await assertAccess();
     const snapshot = await this.plan(operation, path, principal);
-    if (!snapshot.needed || snapshot.revision !== expected.revision || snapshot.fingerprint !== expected.fingerprint) throw new Error('Derived maintenance input changed or needs no repair');
+    if (!snapshot.needed || snapshot.revision !== expected.revision || snapshot.fingerprint !== expected.fingerprint) throw guidanceError(new Error('Derived maintenance input changed or needs no repair'), 'guid-45951b7e8532f449');
     if (operation === 'cache_refresh') {
       await assertAccess(); assertCurrent?.(); await this.refreshCache(path, principal); await assertAccess();
-      if ((await this.fs.readNote(path, 256 * 1024)).revision !== snapshot.revision) throw new Error('Cache source changed during rebuild');
+      if ((await this.fs.readNote(path, 256 * 1024)).revision !== snapshot.revision) throw guidanceError(new Error('Cache source changed during rebuild'), 'guid-e3f808dd5b41e165');
       return { revision: snapshot.revision };
     }
-    if (!snapshot.exportArguments) throw new Error('Managed Canvas export unavailable');
+    if (!snapshot.exportArguments) throw guidanceError(new Error('Managed Canvas export unavailable'), 'guid-70cc0441467f0f49');
     const result = await this.wiki.writeCanvasView({ ...snapshot.exportArguments, principal } as Parameters<LlmWikiService['writeCanvasView']>[0],
       { assertAccess, beforeWrite: recordIntent, ...(assertCurrent && { assertCurrent }) });
     await assertAccess();
     const current = await this.fs.readCanvasFile(path);
-    if (current.revision !== result.revision || readJsonCanvasMetadata(current.document)?.snapshotFingerprint !== result.snapshotFingerprint) throw new Error('Managed Canvas repair verification changed');
+    if (current.revision !== result.revision || readJsonCanvasMetadata(current.document)?.snapshotFingerprint !== result.snapshotFingerprint) throw guidanceError(new Error('Managed Canvas repair verification changed'), 'guid-bab6132c4d8ed675');
     return { revision: result.revision };
   }
 }

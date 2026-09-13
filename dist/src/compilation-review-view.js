@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { isModerationHidden } from './moderation-policy.js';
 export async function attachCompilationReview(options) {
     const { fs, access, principal, result, maxChars } = options;
@@ -70,6 +71,6 @@ export async function attachCompilationReview(options) {
         return actionOnly;
     }
     catch {
-        throw Error('Compilation context unavailable; retry with current authorization');
+        throw guidanceError(Error('Compilation context unavailable; retry with current authorization'), 'guid-d20c7fea90f9ee9a');
     }
 }

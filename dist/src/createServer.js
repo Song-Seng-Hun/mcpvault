@@ -453,7 +453,7 @@ function ownerRequestPaths(toolName, args) {
     if (typeof args.slug === 'string' && !args.slug.startsWith('post:') && /blog_post|blog_posts/.test(toolName))
         add(`Community/Posts/${args.slug}.md`);
     if (result.size > 32)
-        throw new Error('Owner activity path budget exceeded');
+        throw guidanceError(new Error('Owner activity path budget exceeded'), 'guid-4649dae5c45131ae');
     if (result.size)
         return Object.freeze([...result]);
     return ownerActionForEndpointTool(toolName, MUTATING_TOOLS.has(toolName)) === 'discover' ? undefined : Object.freeze([]);
@@ -501,7 +501,7 @@ export function createServer(vaultPath, options = {}) {
     };
     const requiredService = (service) => {
         if (!service)
-            throw new Error('This operation requires an additional selected host feature');
+            throw guidanceError(new Error('This operation requires an additional selected host feature'), 'guid-4cf44c89978181b6');
         return service;
     };
     const { name = "mcpvault", version = "0.0.0", pathFilter = new PathFilter(), frontmatterHandler = new FrontmatterHandler(), readOnly = false, moderatorAccounts, commandCenterId, } = options;
@@ -641,7 +641,7 @@ export function createServer(vaultPath, options = {}) {
             // protected source; no private bodies or new embedding/model calls here.
             const visible = (candidate) => publicIndexFilter.isAllowed(candidate) && scopeAccess.canAccessPhysicalPath(candidate, principal);
             if (!visible(path))
-                throw new Error('Maintenance cache source unavailable');
+                throw guidanceError(new Error('Maintenance cache source unavailable'), 'guid-21935749ad324bf4');
             metadataIndex.invalidate(path, 'upsert');
             searchService.invalidate(path);
             graphIndex.invalidate(path);
@@ -1261,7 +1261,7 @@ export function createServer(vaultPath, options = {}) {
             inputSchema: {
                 type: "object",
                 properties: {
-                    department: { type: "string", enum: ["default"], description: "Restrict navigation to the current administrator-verified default department using protected document policy. This never grants access; omit for ordinary company-wide navigation." },
+                    department: { type: "string", enum: ["default"], description: guidanceText('guid-17ae46e033421422', "Restrict navigation to the current administrator-verified default department using protected document policy. This never grants access; omit for ordinary company-wide navigation.") },
                     filters: { type: "object", description: guidanceText('guid-6c6012de673b180a', "Frontmatter filters, including dot notation for nested properties, e.g. {\"status\": \"active\", \"project\": \"alpha\"}") },
                     pathPrefix: { type: "string", description: guidanceText('guid-c27dd20a75e3f799', "Restrict results to a vault subtree, e.g. Projects/2026") },
                     sortBy: { type: "string", description: guidanceText('guid-bb398a2d64650d6a', "path (default) or a frontmatter property, including nested dot notation") },
@@ -1589,7 +1589,7 @@ export function createServer(vaultPath, options = {}) {
                     : toolName === 'read_community_participation' ? 'manage_community_participation' : toolName;
             ownerRegistrationName = registrationName;
             if (!featureToolAllowed(registrationName))
-                throw new Error('Endpoint feature is disabled or unavailable in this host selection');
+                throw guidanceError(new Error('Endpoint feature is disabled or unavailable in this host selection'), 'guid-e735b30a3e528734');
             toolName = operationReadAlias(toolName, rawArgs.op) || toolName;
             if (readOnly && MUTATING_TOOLS.has(toolName)) {
                 throw guidanceError(new Error(`Endpoint '${toolName}' is disabled because MCPVault is running in read-only mode.`), 'guid-189f788b35f642fb');
@@ -1634,21 +1634,21 @@ export function createServer(vaultPath, options = {}) {
             const principalSnapshot = JSON.stringify(principal);
             const assertStorageFresh = () => {
                 if (JSON.stringify(scopeAuth.authenticate(rawArgs.accessToken)) !== principalSnapshot)
-                    throw new Error('Authenticated authority changed; retry with current authorization');
+                    throw guidanceError(new Error('Authenticated authority changed; retry with current authorization'), 'guid-5391aec645e7f720');
                 assertDocumentFresh();
             };
             const documentSessionKey = principal ? `${principal.enterprise?.runtimeId ?? ''}\0${principal.accountId}` : undefined;
             const observeDocument = (root) => {
                 if (!documentSessionKey)
-                    throw new Error('Protected document requires an authenticated execution');
+                    throw guidanceError(new Error('Protected document requires an authenticated execution'), 'guid-c0c811f86d3356c5');
                 let sources = documentSessionSources.get(documentSessionKey);
                 if (!sources) {
                     if (documentSessionSources.size >= 256)
-                        throw new Error('Protected execution capacity reached; host review required');
+                        throw guidanceError(new Error('Protected execution capacity reached; host review required'), 'guid-24ec546daa18e611');
                     documentSessionSources.set(documentSessionKey, sources = new Set());
                 }
                 if (!sources.has(root) && sources.size >= 32)
-                    throw new Error('Protected source budget exceeded; use a smaller isolated job');
+                    throw guidanceError(new Error('Protected source budget exceeded; use a smaller isolated job'), 'guid-e30f79c10755cfe7');
                 sources.add(root);
             };
             const inheritDocument = async (path, explicitSources = []) => {
@@ -1659,11 +1659,11 @@ export function createServer(vaultPath, options = {}) {
                     return;
                 assertStorageFresh();
                 if (sources.some(source => !scopeAccess.canReadProtectedDocument(source, principal)))
-                    throw new Error('Protected source authority was revoked before inheritance');
+                    throw guidanceError(new Error('Protected source authority was revoked before inheritance'), 'guid-ca4d7d5eebfbacb2');
                 // Ephemeral programmatic rules are useful for host read admission but
                 // cannot be the sole durable classification of a persisted derivative.
                 if (options.documentRules?.().length)
-                    throw new Error('Persist source classifications before creating protected derivatives');
+                    throw guidanceError(new Error('Persist source classifications before creating protected derivatives'), 'guid-5b79738a8c19104e');
                 await documentPolicy.inherit(target, sources, documentPolicy.revision());
                 assertDocumentFresh = scopeAccess.captureDocumentBoundary(principal);
                 assertStorageFresh();
@@ -1824,10 +1824,10 @@ export function createServer(vaultPath, options = {}) {
                         const result = endpointRegistry.list(undefined, trimmedArgs.limit, trimmedArgs.maxChars, { readOnly, skillEvolutionEnabled: Boolean(skillEvolution?.enabled), authenticated: Boolean(principal), capabilities: new Set(principal?.capabilities || []), principalKey: JSON.stringify(principal), roleplayConfigured: Boolean(options.roleplay), roleplayWritesConfigured: Boolean(options.roleplay?.options.policy.administrators.length), economyConfigured: Boolean(options.economy?.policy.enabled), explanationsConfigured: Boolean(explanations), benchmarksConfigured: Boolean(benchmarks), ownerActivity: ownerState }, true, { compact: true, cursor: trimmedArgs.cursor });
                         if (JSON.stringify(await ownerCatalogState(principal)) !== JSON.stringify(ownerState)
                             || JSON.stringify(ownerCatalogSnapshot(principal)) !== JSON.stringify(ownerState))
-                            throw new Error('Capability owner authority changed; restart the catalog request');
+                            throw guidanceError(new Error('Capability owner authority changed; restart the catalog request'), 'guid-0a62aacbd9767914');
                         finalOwnerValidator = () => {
                             if (JSON.stringify(ownerCatalogSnapshot(principal)) !== JSON.stringify(ownerState))
-                                throw new Error('Capability owner authority changed; restart the catalog request');
+                                throw guidanceError(new Error('Capability owner authority changed; restart the catalog request'), 'guid-0a62aacbd9767914');
                         };
                         finalOwnerRefresh = async () => { await options.ownerActivity?.refresh?.(); };
                         return jsonResult(result, false);
@@ -1845,10 +1845,10 @@ export function createServer(vaultPath, options = {}) {
                         const result = endpointRegistry.list(trimmedArgs.query, trimmedArgs.limit, trimmedArgs.maxChars, { readOnly, skillEvolutionEnabled: Boolean(skillEvolution?.enabled), authenticated: Boolean(principal), capabilities: new Set(principal?.capabilities || []), roleplayConfigured: Boolean(options.roleplay), roleplayWritesConfigured: Boolean(options.roleplay?.options.policy.administrators.length), economyConfigured: Boolean(options.economy?.policy.enabled), explanationsConfigured: Boolean(explanations), benchmarksConfigured: Boolean(benchmarks), ownerActivity: ownerState }, false);
                         if (JSON.stringify(await ownerCatalogState(principal)) !== JSON.stringify(ownerState)
                             || JSON.stringify(ownerCatalogSnapshot(principal)) !== JSON.stringify(ownerState))
-                            throw new Error('Capability owner authority changed; retry with current consent');
+                            throw guidanceError(new Error('Capability owner authority changed; retry with current consent'), 'guid-4d8026375f487ffa');
                         finalOwnerValidator = () => {
                             if (JSON.stringify(ownerCatalogSnapshot(principal)) !== JSON.stringify(ownerState))
-                                throw new Error('Capability owner authority changed; retry with current consent');
+                                throw guidanceError(new Error('Capability owner authority changed; retry with current consent'), 'guid-4d8026375f487ffa');
                         };
                         finalOwnerRefresh = async () => { await options.ownerActivity?.refresh?.(); };
                         return jsonResult(result, trimmedArgs.prettyPrint);
@@ -2122,13 +2122,13 @@ export function createServer(vaultPath, options = {}) {
                         if (trimmedArgs.query !== undefined) {
                             const result = await questionPacket.read({ ...trimmedArgs, principal });
                             if (trimmedArgs.graphDepth === 2 && JSON.stringify(await scopeAuth.authenticate(rawArgs.accessToken)) !== JSON.stringify(principal))
-                                throw new Error('Authentication changed; retry graph request');
+                                throw guidanceError(new Error('Authentication changed; retry graph request'), 'guid-1a1ed288ac427073');
                             return jsonResult(await withCompilationReview(result, trimmedArgs.maxChars ?? 4000, false, trimmedArgs.prettyPrint), trimmedArgs.prettyPrint);
                         }
                         if (trimmedArgs.graphDepth !== undefined && trimmedArgs.graphDepth !== 1)
-                            throw new Error('graphDepth 2 requires query and evidence retrieval');
+                            throw guidanceError(new Error('graphDepth 2 requires query and evidence retrieval'), 'guid-62e06c26e89f8b01');
                         if (trimmedArgs.retrievalMode !== undefined)
-                            throw new Error('retrievalMode requires query');
+                            throw guidanceError(new Error('retrievalMode requires query'), 'guid-4adf212454627e03');
                         return jsonResult(await withCompilationReview(await llmWiki.answerPacket(principal, trimmedArgs.path, trimmedArgs.maxChars, trimmedArgs.includeSemantic !== false, trimmedArgs.intent), trimmedArgs.maxChars ?? 7000, false, trimmedArgs.prettyPrint), trimmedArgs.prettyPrint);
                     }
                     case "get_wiki_claim_matrix": {
@@ -2837,7 +2837,7 @@ export function createServer(vaultPath, options = {}) {
                     case "get_wiki_topic_packet": {
                         const result = await llmWiki.topicPacket(principal, trimmedArgs);
                         if (JSON.stringify(await scopeAuth.authenticate(rawArgs.accessToken)) !== JSON.stringify(principal))
-                            throw new Error('Authentication changed; retry topic request');
+                            throw guidanceError(new Error('Authentication changed; retry topic request'), 'guid-f7cbf440ff304bd3');
                         return jsonResult(result, trimmedArgs.prettyPrint);
                     }
                     case 'list_benchmarks':
@@ -3423,25 +3423,25 @@ export function createServer(vaultPath, options = {}) {
                             await audit.record({ tool: toolName, ...(principal && { principal }), args: rawArgs, outcome: 'error', error });
                             finalOwnerRefresh = async () => {
                                 if (!canAccessPath(path))
-                                    throw new Error('Task unavailable or changed; repeat the read.');
+                                    throw guidanceError(new Error('Task unavailable or changed; repeat the read.'), 'guid-6d2bba5db7a62dd4');
                                 const current = await fileSystem.readNote(path);
                                 if (isModerationHidden(current.frontmatter) || current.revision !== error.recovery.currentRevision)
-                                    throw new Error('Task unavailable or changed; repeat the read.');
+                                    throw guidanceError(new Error('Task unavailable or changed; repeat the read.'), 'guid-6d2bba5db7a62dd4');
                             };
                             finalOwnerValidator = () => {
                                 assertNoticeActorFresh();
                                 if (!canAccessPath(path))
-                                    throw new Error('Task unavailable or changed; repeat the read.');
+                                    throw guidanceError(new Error('Task unavailable or changed; repeat the read.'), 'guid-6d2bba5db7a62dd4');
                             };
                             return { ...jsonResult(error.recovery, trimmedArgs.prettyPrint), isError: true };
                         }
                     }
                     case "query_notes": {
                         if (trimmedArgs.department !== undefined && trimmedArgs.department !== 'default')
-                            throw new Error('department must be default or omitted');
+                            throw guidanceError(new Error('department must be default or omitted'), 'guid-aafd6a5d31d54fa8');
                         const department = trimmedArgs.department === 'default' ? scopeAccess.defaultDepartment(principal) : undefined;
                         if (trimmedArgs.department === 'default' && !department)
-                            throw new Error('No administrator-verified default department is available');
+                            throw guidanceError(new Error('No administrator-verified default department is available'), 'guid-7e94b392cdd6d92c');
                         const cursorContext = department ? createHash('sha256').update(JSON.stringify({
                             principal, department, policy: scopeAccess.documentPolicyFingerprint(), filters: trimmedArgs.filters ?? {},
                             pathPrefix: trimmedArgs.pathPrefix ?? '', sortBy: trimmedArgs.sortBy ?? 'path', sortOrder: trimmedArgs.sortOrder ?? 'asc',

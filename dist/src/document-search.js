@@ -20,7 +20,7 @@ export class DocumentSearch {
     resourceCandidates;
     closed = false;
     assertOpen() { if (this.closed)
-        throw new Error('Document search is closed'); }
+        throw guidanceError(new Error('Document search is closed'), 'guid-3c9884eed1efafad'); }
     close() {
         this.closed = true;
         this.pages.clear();
@@ -148,11 +148,11 @@ export class DocumentSearch {
             reserveDocumentWork(cached.bytes);
             for (const pin of cached.pins) {
                 if (!admitted(pin.path))
-                    throw new Error('Document search visibility changed; repeat the query');
+                    throw guidanceError(new Error('Document search visibility changed; repeat the query'), 'guid-3fc1b15902289614');
                 await this.index.revalidatePin(pin, params.principal);
             }
             if (!params.path && fingerprint(await resourcePaths()) !== fingerprint(catalogPaths))
-                throw new Error('Document search catalog changed; repeat the query');
+                throw guidanceError(new Error('Document search catalog changed; repeat the query'), 'guid-e8a785c8d7869c14');
             for (const pin of cached.pins)
                 reader.assertAdmitted(reader.access.toPublicPath(pin.path), params.principal);
             this.assertOpen();

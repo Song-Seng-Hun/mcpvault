@@ -33,7 +33,7 @@ export class DerivedCacheBudget {
         }
         this.maxAccountedBytes = BigInt(Math.floor(maxBytes));
         if (!Number.isFinite(maxWorkingBytes) || maxWorkingBytes <= 0 || maxWorkingBytes > Number.MAX_SAFE_INTEGER)
-            throw new Error('Invalid working memory budget');
+            throw guidanceError(new Error('Invalid working memory budget'), 'guid-66dbd7715ccc3591');
         this.maxWorkingAccountedBytes = BigInt(Math.floor(maxWorkingBytes));
     }
     /** Pinned work cannot be evicted or overbooked. Reserve before allocating. */

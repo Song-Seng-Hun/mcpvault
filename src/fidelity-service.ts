@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import type { FileSystemService } from './filesystem.js';
 import type { ScopeAccessPolicy } from './scope-access.js';
 import type { ScopePrincipal } from './scope-auth.js';
@@ -24,7 +25,7 @@ export class FidelityService {
   /** Read-only, bounded comparison. Agent reports are attributed, never upgraded
    * to server-certified semantic truth or a grant to publish derived content. */
   async check(params: FidelityCheckParams, assertCurrent: () => Promise<void> = async () => {}): Promise<any> {
-    const unavailable = () => Error('Fidelity input unavailable or changed');
+    const unavailable = () => guidanceError(Error('Fidelity input unavailable or changed'), 'guid-35c2d5ec0be259ce');
     try {
       const budget = params.maxChars ?? 4000;
       if (!Number.isSafeInteger(budget) || budget < 512 || budget > 12000

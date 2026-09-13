@@ -148,7 +148,7 @@ export class RetrievalService {
     }
     async retrieve(params, allowExpansion = false) {
         if (params.retrievalMode !== undefined && !['legacy', 'evidence'].includes(params.retrievalMode))
-            throw new Error('Invalid retrievalMode');
+            throw guidanceError(new Error('Invalid retrievalMode'), 'guid-fa16d4425906bd99');
         const evidence = params.retrievalMode === 'evidence' && !constrainedQuery(params.query);
         const admitted = (path) => this.access.canAccessPhysicalPath(path, params.principal) && (!params.canAccessPath || params.canAccessPath(path)) && (this.skillEvolution?.discoveryAllowed(path) ?? true);
         // Runtime payloads are not typed: only the authenticated principal supplies identity.
@@ -291,7 +291,7 @@ export class RetrievalService {
     }
     async searchNotes(params) {
         if (params.retrievalMode !== undefined)
-            throw new Error('retrievalMode is available only for question packets');
+            throw guidanceError(new Error('retrievalMode is available only for question packets'), 'guid-a9237987113050f7');
         if (params.excerptMode !== undefined && !['compact', 'context'].includes(params.excerptMode))
             throw guidanceError(new Error('Invalid excerptMode'), 'guid-aeb6cd862871ecc0');
         const outcome = await this.retrieve({ ...params, ...(params.fictionDomain && params.excerptMode === 'context' && { includeRevisions: true }) });

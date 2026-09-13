@@ -2222,10 +2222,10 @@ export class LlmWikiService {
       const existing = await this.fileSystem.readNote(path);
       if (existing.frontmatter.content_sha256 === contentHash && existing.content === content) {
         if (existing.frontmatter.original_sha256 && existing.frontmatter.original_sha256 !== hash(String(params.content ?? ''))) {
-          throw new Error('Existing immutable original has different bytes; capture a new sourceId');
+          throw guidanceError(new Error('Existing immutable original has different bytes; capture a new sourceId'), 'guid-f6af7e6473636d59');
         }
         if (existing.frontmatter.original_path) {
-          if (existing.frontmatter.original_path !== joinRoot(params.scopeRoot, `_sources/${sourceId}/original.txt`)) throw new Error('Immutable original metadata mismatch');
+          if (existing.frontmatter.original_path !== joinRoot(params.scopeRoot, `_sources/${sourceId}/original.txt`)) throw guidanceError(new Error('Immutable original metadata mismatch'), 'guid-de6ba11c5fed8975');
           await this.fileSystem.preserveOriginal(existing.frontmatter.original_path, Buffer.from(String(params.content ?? ''), 'utf8'));
         }
         if (provenance && JSON.stringify(existing.frontmatter.source_derivations || []) !== JSON.stringify(provenance.records)) {
@@ -2537,7 +2537,7 @@ export class LlmWikiService {
     if (evidencePaths.length === 0) throw guidanceError(new Error('At least one immutable source evidence path is required'), 'guid-0d8e9ba13f3f7e1f');
     for (const evidenceItem of evidence) {
       const evidencePath = evidenceItem.path;
-      if (!this.access.canAccessPhysicalPath(evidencePath, params.principal)) throw new Error('Evidence source is not accessible');
+      if (!this.access.canAccessPhysicalPath(evidencePath, params.principal)) throw guidanceError(new Error('Evidence source is not accessible'), 'guid-71a08fc572f6f2fc');
       const evidence = await this.fileSystem.readNote(evidencePath);
       if (evidence.frontmatter.llm_wiki_type !== 'source' || evidence.frontmatter.immutable !== true) {
         throw guidanceError(new Error(`Evidence is not an immutable LLM Wiki source: ${this.access.toPublicPath(evidencePath)}`), 'guid-6df470e7610f2255');
@@ -2556,7 +2556,7 @@ export class LlmWikiService {
       throw guidanceError(new Error(`A more-private source cannot ground a more-public knowledge note: ${this.access.toPublicPath(evidencePath)}`), 'guid-2c172f5c483210b7');
     }
     const timestamp = internal.timestamp ?? now();
-    if (new Date(timestamp).toISOString() !== timestamp) throw new Error('Invalid publication timestamp');
+    if (new Date(timestamp).toISOString() !== timestamp) throw guidanceError(new Error('Invalid publication timestamp'), 'guid-9917fda17acb08cf');
     const references = await this.references.validateAndNormalize(params.references ?? existing?.frontmatter.references, params.path, params.principal, content);
     const reviewBasisLinks = await this.collectReviewBasisLinks(content, references, params.principal, params.path);
     const relationFrontmatter = {
@@ -2764,12 +2764,12 @@ export class LlmWikiService {
     const authorityKey = this.principalKey(principal);
     const preparation = this.fileSystem.prepareMetadataRead();
     if (preparation) await preparation;
-    if (authorityKey !== this.principalKey(principal)) throw new Error('Wiki catalog or authorization changed; retry with current context');
+    if (authorityKey !== this.principalKey(principal)) throw guidanceError(new Error('Wiki catalog or authorization changed; retry with current context'), 'guid-d0e89296e82b0383');
     const requestGeneration = this.generation;
     const assertCurrent = (basis: Set<string>, generation = requestGeneration) => {
       if (generation !== this.generation || authorityKey !== this.principalKey(principal)
         || [...basis].some(path => !this.access.canAccessPhysicalPath(path, principal))) {
-        throw new Error('Wiki catalog or authorization changed; retry with current context');
+        throw guidanceError(new Error('Wiki catalog or authorization changed; retry with current context'), 'guid-d0e89296e82b0383');
       }
     };
     // A relative "now" validity filter is time-dependent even when the vault

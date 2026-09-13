@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { createHash } from 'node:crypto';
 
 /** Pure, data-only optional-activity consent. Host integration supplies trusted
@@ -61,7 +62,7 @@ export interface OwnerActivityDecision {
 const activities: readonly Activity[] = ['collaboration', 'ideation-research', 'explanation-translation',
   'benchmarks', 'economy', 'roleplay', 'skill-evolution'];
 const actions: readonly OwnerActivityAction[] = ['discover', 'read', 'claim', 'execute'];
-const invalid = () => new Error('Invalid owner activity policy');
+const invalid = () => guidanceError(new Error('Invalid owner activity policy'), 'guid-4bbe53fca7727ba4');
 const isId = (value: unknown): value is string => typeof value === 'string'
   && value.length >= 1 && value.length <= 100 && /^[a-z0-9]/.test(value) && !/[^a-z0-9._-]/.test(value);
 const isActivity = (value: unknown): value is Activity => typeof value === 'string' && activities.includes(value as Activity);

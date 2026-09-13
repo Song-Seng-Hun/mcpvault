@@ -1120,7 +1120,7 @@ export class GlobalSyncReplica {
       const previous = this.state.documents[entry.documentId];
       const current = await this.currentContent(path);
       if (original && (entry.operation === 'tombstone' || current.exists && current.hash !== entry.contentHash)) {
-        conflicts.push({ documentId: entry.documentId, revisionId: entry.revisionId, reason: 'Immutable original cannot be replaced or removed; capture a new source path.' });
+        conflicts.push({ documentId: entry.documentId, revisionId: entry.revisionId, reason: guidanceText('guid-e6b911629a6e89ec', 'Immutable original cannot be replaced or removed; capture a new source path.') });
         break;
       }
       if (previous?.revisionId === entry.revisionId) {
@@ -1236,14 +1236,14 @@ export class GlobalSyncReplica {
 
   private async assertPublicDocument(path: string): Promise<void> {
     await this.documentPolicy.refresh();
-    if (!this.pathFilter.isAllowed(path) || !new DocumentAuthority(this.documentPolicy.rules()).canRead(path)) throw new Error('Protected documents cannot be exported to public Global');
+    if (!this.pathFilter.isAllowed(path) || !new DocumentAuthority(this.documentPolicy.rules()).canRead(path)) throw guidanceError(new Error('Protected documents cannot be exported to public Global'), 'guid-302c099cfe3221b1');
     // Tombstones may refer to missing files. Validate the closest existing
     // ancestor too; a missing child does not excuse a confidential junction.
     for (let candidate = path;; candidate = dirname(candidate).replace(/\\/g, '/')) {
       try {
         const canonical = this.fileSystem.canonicalReferencePath(candidate);
         const lexical = candidate === '.' ? '' : candidate;
-        if (process.platform === 'win32' ? canonical.toLowerCase() !== lexical.toLowerCase() : canonical !== lexical) throw new Error('Public Global export refuses canonical aliases');
+        if (process.platform === 'win32' ? canonical.toLowerCase() !== lexical.toLowerCase() : canonical !== lexical) throw guidanceError(new Error('Public Global export refuses canonical aliases'), 'guid-bf3bf9c17e94b12c');
         break;
       } catch (error) {
         if (candidate !== '.' && error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') continue;

@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import type { FileSystemService } from './filesystem.js';
 import type { ScopeAccessPolicy } from './scope-access.js';
 import type { ScopePrincipal } from './scope-auth.js';
@@ -59,5 +60,5 @@ export async function attachCompilationReview(options: Options): Promise<Record<
     const actionOnly = { status: 'partial', partial: true, nextAction: findings[0]!.nextAction };
     if (length(actionOnly) > maxChars) throw Error();
     return actionOnly;
-  } catch { throw Error('Compilation context unavailable; retry with current authorization'); }
+  } catch { throw guidanceError(Error('Compilation context unavailable; retry with current authorization'), 'guid-d20c7fea90f9ee9a'); }
 }

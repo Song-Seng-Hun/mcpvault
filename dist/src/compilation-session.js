@@ -1,10 +1,11 @@
+import { guidanceError } from './guidance-runtime.js';
 import { compilationId, compilationJobRevision, isCompilationRevision, parseCompilationHistory } from './compilation-model.js';
 import { withEnterpriseStorageContext } from './enterprise-storage-context.js';
 /** Called under CompilationService's single-worker lease. Durable generation
  * reservations prevent uncertain generation from being repeated after restart.
  * Persistence and publication continue through the existing job services. */
 export async function runCompilationSession(options, request, principal, context, execute) {
-    const unavailable = () => Error('Compilation session unavailable');
+    const unavailable = () => guidanceError(Error('Compilation session unavailable'), 'guid-823a0ce73370411c');
     try {
         if (options.readOnly || !options.host || !options.runtime || !options.adapter
             || !compilationId(request.requestId) || !isCompilationRevision(request.expectedJobRevision)

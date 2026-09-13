@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { validateMaintenanceConfig, MAX_MAINTENANCE_STATE_BYTES } from './maintenance-host.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { AsyncResource } from 'node:async_hooks';
@@ -74,23 +75,23 @@ export class MaintenanceService {
     }
     validateState(raw) {
         if (!raw || typeof raw !== 'object' || Array.isArray(raw))
-            throw new Error('Maintenance history invalid; preserve for host review');
+            throw guidanceError(new Error('Maintenance history invalid; preserve for host review'), 'guid-f4fe03e59569e72f');
         const state = raw;
         if (state.version !== 1 || !Array.isArray(state.jobs) || state.jobs.length > MAX_JOBS
             || Buffer.byteLength(JSON.stringify(raw)) > MAX_MAINTENANCE_STATE_BYTES)
-            throw new Error('Maintenance history exceeds its contract');
+            throw guidanceError(new Error('Maintenance history exceeds its contract'), 'guid-78fe52bc1e6be3e7');
         const ids = new Set();
         for (const job of state.jobs) {
             if (!job || !sha(job.id) || ids.has(job.id) || !sha(job.fingerprint) || !sha(job.revision)
                 || typeof job.epoch !== 'string' || !Number.isInteger(job.attempts) || job.attempts < 0 || job.attempts > 3
                 || !['capturing', 'queued', 'applying', 'failed', 'stopped', 'review_required', 'verified'].includes(job.status))
-                throw new Error('Maintenance receipt invalid');
+                throw guidanceError(new Error('Maintenance receipt invalid'), 'guid-f845f8382dc7302a');
             validateMaintenanceConfig({ version: 1, enabled: true, accountId: job.accountId, paths: [job.path], operations: [job.operation] });
             ids.add(job.id);
             if (job.intent && (!sha(job.intent.previousRevision) || !sha(job.intent.revision)
                 || typeof job.intent.before !== 'string' || typeof job.intent.after !== 'string'
                 || digest(job.intent.before) !== job.intent.previousRevision || digest(job.intent.after) !== job.intent.revision))
-                throw new Error('Maintenance recovery bytes mismatch');
+                throw guidanceError(new Error('Maintenance recovery bytes mismatch'), 'guid-d4182bde1d350dad');
             if (job.operation === 'moved_link_repair') {
                 const move = job.move;
                 if (!move || move.version !== 1 || move.destinationRevision !== 'missing' || !sha(move.sourceRevision)
@@ -98,7 +99,7 @@ export class MaintenanceService {
                     || move.reference.after !== job.intent.after || move.reference.previousRevision !== job.intent.previousRevision
                     || move.reference.revision !== job.intent.revision || !Array.isArray(move.reference.links)
                     || !Array.isArray(move.reference.properties))
-                    throw new Error('Maintenance move history incomplete');
+                    throw guidanceError(new Error('Maintenance move history incomplete'), 'guid-4d08b718b8c676fc');
                 validateMaintenanceConfig({ version: 1, enabled: true, accountId: job.accountId,
                     paths: [move.oldPath, move.newPath, job.path], operations: ['moved_link_repair'] });
             }
@@ -122,17 +123,17 @@ export class MaintenanceService {
         const granted = (current) => current && current.accountId === job.accountId
             && current.operations.includes(job.operation) && paths.every(path => current.paths.includes(path));
         if (!granted(config))
-            throw new Error('Maintenance host approval unavailable');
+            throw guidanceError(new Error('Maintenance host approval unavailable'), 'guid-08c67460ba61d170');
         const principal = await this.options.authorize(job.accountId, job.operation);
         if (!principal || principal.accountId !== job.accountId)
-            throw new Error('Maintenance current document authority unavailable');
+            throw guidanceError(new Error('Maintenance current document authority unavailable'), 'guid-1449651f4704f639');
         await this.writer.assertHeld();
         // Account/lease IO may yield while the host removes just one grant. Enabled
         // alone is not permission: revalidate the complete job grant at admission.
         if (!granted(await this.config()))
-            throw new Error('Maintenance host approval changed');
+            throw guidanceError(new Error('Maintenance host approval changed'), 'guid-a2e601c1f130ab4f');
         if (paths.some(path => !this.options.access.canAccessPhysicalPath(path, principal)))
-            throw new Error('Maintenance current document authority unavailable');
+            throw guidanceError(new Error('Maintenance current document authority unavailable'), 'guid-1449651f4704f639');
         return principal;
     }
     runAs(principal, operation) {
@@ -149,7 +150,7 @@ export class MaintenanceService {
     async move(params, principal) {
         return this.serial(async () => {
             if (this.closed)
-                throw new Error('Maintenance worker is closed');
+                throw guidanceError(new Error('Maintenance worker is closed'), 'guid-15adeee5c8ed5369');
             const canAccess = (path) => this.options.access.canAccessPhysicalPath(path, principal);
             let config;
             try {
@@ -166,7 +167,7 @@ export class MaintenanceService {
             let oldKey, startingEvents = 0;
             const result = await this.options.fs.moveNoteWithRecovery(params, canAccess, async (capture) => {
                 if (this.state.jobs.length + capture.references.length > MAX_JOBS)
-                    throw new Error('Maintenance receipt capacity reached');
+                    throw guidanceError(new Error('Maintenance receipt capacity reached'), 'guid-d0e89f9634b43c89');
                 const moveId = randomUUID();
                 const jobs = capture.references.map(reference => ({
                     id: digest(moveId + '\0' + reference.path), accountId: config.accountId, operation: 'moved_link_repair', path: reference.path,
@@ -179,7 +180,7 @@ export class MaintenanceService {
                 for (const job of jobs)
                     await this.authority(job);
                 if (Buffer.byteLength(JSON.stringify({ version: 1, jobs: [...this.state.jobs, ...jobs] })) > MAX_MAINTENANCE_STATE_BYTES)
-                    throw new Error('Maintenance recovery storage full');
+                    throw guidanceError(new Error('Maintenance recovery storage full'), 'guid-63f830fa470a518b');
                 this.state.jobs.push(...jobs);
                 await this.save();
                 captured.push(...jobs);
@@ -191,13 +192,13 @@ export class MaintenanceService {
                 for (const job of captured) {
                     try {
                         if (!result.success || job.status !== 'capturing' || this.observed.get(oldKey) !== startingEvents + 1)
-                            throw new Error('Move observation incomplete');
+                            throw guidanceError(new Error('Move observation incomplete'), 'guid-f463585936de6b7f');
                         await this.authority(job);
                         if (await this.options.fs.noteExists(job.move.oldPath)
                             || (await this.options.fs.readNote(job.move.newPath, 128 * 1024)).revision !== job.move.sourceRevision)
-                            throw new Error('Move state changed');
+                            throw guidanceError(new Error('Move state changed'), 'guid-2561fc63da8eea98');
                         if (job.status !== 'capturing' || this.observed.get(oldKey) !== startingEvents + 1)
-                            throw new Error('Move observation changed during verification');
+                            throw guidanceError(new Error('Move observation changed during verification'), 'guid-6228a08a501adb58');
                         job.status = 'queued';
                     }
                     catch {
@@ -350,11 +351,11 @@ export class MaintenanceService {
         const assertAccess = async () => {
             await this.authority(job);
             if (job.status === 'review_required')
-                throw new Error('Move observation invalidated');
+                throw guidanceError(new Error('Move observation invalidated'), 'guid-4e35232553dad7b3');
             const source = await this.options.fs.readNote(move.newPath, 128 * 1024);
             const reference = await this.options.fs.readNote(job.path, 128 * 1024);
             if (!ordinary(move.newPath, source.frontmatter) || !ordinary(job.path, reference.frontmatter))
-                throw new Error('Only ordinary knowledge may be repaired');
+                throw guidanceError(new Error('Only ordinary knowledge may be repaired'), 'guid-cf853b0647781c2d');
         };
         await assertAccess();
         if (await this.options.fs.noteExists(move.oldPath) || (await this.options.fs.readNote(move.newPath, 128 * 1024)).revision !== move.sourceRevision) {
@@ -376,16 +377,16 @@ export class MaintenanceService {
                 assertCurrent: () => this.assertCurrentJob(job) };
             const preview = await this.options.fs.patchMultipleNotes({ changes, dryRun: true }, path => this.options.access.toPublicPath(path), policy);
             if (preview.changes[0]?.revision !== ref.revision)
-                throw new Error('Recorded move plan differs from preview');
+                throw guidanceError(new Error('Recorded move plan differs from preview'), 'guid-8c0a3ff8b9c8094c');
             if (this.closed || this.fatal || !['queued', 'failed', 'applying'].includes(job.status))
-                throw new Error('Move observation changed during preview');
+                throw guidanceError(new Error('Move observation changed during preview'), 'guid-f36563ff479202f7');
             job.status = 'applying';
             await this.save();
             await this.options.fs.patchMultipleNotes({ changes, dryRun: false, confirmPlanFingerprint: preview.planFingerprint }, path => this.options.access.toPublicPath(path), policy);
         }
         await assertAccess();
         if ((await this.options.fs.readNote(job.path, 128 * 1024)).revision !== ref.revision)
-            throw new Error('Move repair reread changed');
+            throw guidanceError(new Error('Move repair reread changed'), 'guid-66d546287a9ec208');
         this.assertCurrentJob(job);
         job.status = 'verified';
         job.resultRevision = ref.revision;
@@ -411,13 +412,13 @@ export class MaintenanceService {
         await this.save();
         const result = await derived.repair(job.operation, job.path, principal, assertAccess, async (intent) => {
             if (digest(intent.before) !== intent.previousRevision || digest(intent.after) !== intent.revision || intent.previousRevision !== job.revision)
-                throw new Error('Derived recovery intent mismatch');
+                throw guidanceError(new Error('Derived recovery intent mismatch'), 'guid-2d11bd690f2420aa');
             job.intent = intent;
             await this.save();
         }, { fingerprint: job.fingerprint, revision: job.revision }, () => this.assertCurrentJob(job));
         await assertAccess();
         if (await this.currentRevision(job.path) !== result.revision)
-            throw new Error('Derived repair reread changed');
+            throw guidanceError(new Error('Derived repair reread changed'), 'guid-619f06cb3052db85');
         this.assertCurrentJob(job);
         job.status = 'verified';
         job.resultRevision = result.revision;
@@ -440,6 +441,6 @@ export class MaintenanceService {
     }
     assertCurrentJob(job) {
         if (this.closed || this.fatal || job.status !== 'applying')
-            throw new Error('Maintenance dispatch observation is no longer current');
+            throw guidanceError(new Error('Maintenance dispatch observation is no longer current'), 'guid-fd09a62cc9a4a46f');
     }
 }

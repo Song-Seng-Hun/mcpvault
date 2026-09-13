@@ -260,7 +260,7 @@ export class PublicFederationReplica {
 
   private assertProjection(path: string): void {
     const logical = this.logicalProjection(path);
-    if (logical && !this.projectionAllowed(logical)) throw new Error('Federation projection unavailable');
+    if (logical && !this.projectionAllowed(logical)) throw guidanceError(new Error('Federation projection unavailable'), 'guid-16c2d15a8aec8dc8');
   }
 
   private objectPath(objectId: string, object: ReplicaObjectState): string {

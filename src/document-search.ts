@@ -28,7 +28,7 @@ export class DocumentSearch {
   private readonly candidateOwner = createDerivedCacheOwner('documents.search.candidates');
   private resourceCandidates: ResourceCandidates | undefined;
   private closed = false;
-  private assertOpen(): void { if (this.closed) throw new Error('Document search is closed'); }
+  private assertOpen(): void { if (this.closed) throw guidanceError(new Error('Document search is closed'), 'guid-3c9884eed1efafad'); }
   close(): void {
     this.closed = true;
     this.pages.clear(); derivedCacheBudget.clearOwner(this.pageOwner);
@@ -128,10 +128,10 @@ export class DocumentSearch {
     if (cached && offset >= cached.offset && offset < cached.offset + cached.rows.length) {
       reserveDocumentWork(cached.bytes);
       for (const pin of cached.pins) {
-        if (!admitted(pin.path)) throw new Error('Document search visibility changed; repeat the query');
+        if (!admitted(pin.path)) throw guidanceError(new Error('Document search visibility changed; repeat the query'), 'guid-3fc1b15902289614');
         await this.index.revalidatePin(pin, params.principal);
       }
-      if (!params.path && fingerprint(await resourcePaths()) !== fingerprint(catalogPaths)) throw new Error('Document search catalog changed; repeat the query');
+      if (!params.path && fingerprint(await resourcePaths()) !== fingerprint(catalogPaths)) throw guidanceError(new Error('Document search catalog changed; repeat the query'), 'guid-e8a785c8d7869c14');
       for (const pin of cached.pins) reader.assertAdmitted(reader.access.toPublicPath(pin.path), params.principal);
       this.assertOpen();
       derivedCacheBudget.touch(this.pageOwner, cacheKey);

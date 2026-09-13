@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { compilationHash, compilationPath } from './compilation-policy.js';
 import type { CodexHookHost } from './codex-hook-host.js';
 import { decodeCodexHookEvent, hookHash, hookId, validateCodexHookConfig, type CodexHookEvent, type CodexHookEventName,
@@ -46,7 +47,7 @@ const actions: Record<CodexHookEventName, readonly CodexHookAction[]> = {
   SessionStart: ['resume', 'community'], PostCompact: ['resume'], UserPromptSubmit: ['search'], PostToolUse: ['candidate'],
   PreCompact: ['checkpoint'], Stop: ['checkpoint', 'compilation', 'community'], Interrupt: ['checkpoint'], SessionEnd: ['checkpoint'],
 };
-const invalid = () => Error('Hook state unavailable');
+const invalid = () => guidanceError(Error('Hook state unavailable'), 'guid-da48d1293aee1586');
 function validateWork(work: CodexHookWork): void {
   if (!work || typeof work !== 'object') throw invalid();
   const keys: Record<CodexHookAction, string[]> = { resume: ['action'], community: ['action'], search: ['action', 'query'],

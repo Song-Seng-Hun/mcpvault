@@ -255,7 +255,7 @@ export class VaultMetadataIndex {
         const states = new Map();
         const assertFresh = () => {
             if (this.closed || generation !== this.situationGeneration || changes !== this.changeGeneration)
-                throw guidanceError(new Error('Situation metadata changed; retry the request.'), 'guid-cb0beec6f8a0e1c5');
+                throw guidanceError(new Error('Situation metadata changed; retry the request.'), 'guid-0cba079ccb574ddc');
         };
         const visible = (path) => this.pathFilter.isAllowed(path) && canAccessPath(path);
         const canSelect = (path) => {

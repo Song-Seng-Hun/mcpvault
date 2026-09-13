@@ -80,7 +80,7 @@ export class EconomyLedger {
     static async open(options) { return this.acquire(options, false); }
     static async acquire(options, initialize) {
         if (activeDocumentStorageContext())
-            throw new Error('Economy ledger acquisition requires host initialization outside an agent request');
+            throw guidanceError(new Error('Economy ledger acquisition requires host initialization outside an agent request'), 'guid-60c360cb33db3914');
         validateEconomyPolicy(options.policy);
         if (!options.storageVerified)
             throw guidanceError(new Error('Economy requires verified local storage; network/unknown storage is refused'), 'guid-1a13954061586bf2');
@@ -215,7 +215,7 @@ export class EconomyLedger {
             const fence = async () => {
                 await this.assertLock();
                 if (await realpath(this.host) !== this.host || await realpath(this.vault) !== this.vault)
-                    throw new Error('Economy storage binding changed');
+                    throw guidanceError(new Error('Economy storage binding changed'), 'guid-662b13d37f5cf3d1');
                 const target = join(this.journal, `${String(checkpoint.sequence + 1).padStart(10, '0')}.md`);
                 try {
                     await lstat(target);
@@ -225,13 +225,13 @@ export class EconomyLedger {
                         return;
                     throw error;
                 }
-                throw new Error('Published economy intent cannot be cancelled');
+                throw guidanceError(new Error('Published economy intent cannot be cancelled'), 'guid-6cb2e6a11e643dd1');
             };
             await fence();
             const current = await this.checkpoint();
             if (current.sequence !== checkpoint.sequence || current.hash !== checkpoint.hash
                 || current.pending?.hash !== pendingHash || current.pending.sequence !== checkpoint.sequence + 1)
-                throw new Error('Economy pending intent changed');
+                throw guidanceError(new Error('Economy pending intent changed'), 'guid-c9cb884ae0a5f0b6');
             const restored = { version: 1, vault: this.vault, sequence: checkpoint.sequence, hash: checkpoint.hash };
             await writeFederationFileAtomic(this.host, this.checkpointPath, JSON.stringify(restored), { maxBytes: 2048, beforeCommit: fence });
             await removeFederationFile(this.host, this.preparedPath, fence);

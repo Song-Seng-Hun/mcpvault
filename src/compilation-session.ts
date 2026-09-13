@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import type { CompilationOptions, CompilationParams } from './compilation-service.js';
 import type { ScopePrincipal } from './scope-auth.js';
 import { compilationId, compilationJobRevision, isCompilationRevision, parseCompilationHistory, type CompilationJob } from './compilation-model.js';
@@ -21,7 +22,7 @@ export interface CompilationSessionRequest { requestId: string; expectedJobRevis
  * Persistence and publication continue through the existing job services. */
 export async function runCompilationSession(options: CompilationOptions, request: CompilationSessionRequest,
   principal: ScopePrincipal, context: CompilationSession, execute: (params: CompilationParams) => Promise<any>): Promise<any> {
-  const unavailable = () => Error('Compilation session unavailable');
+  const unavailable = () => guidanceError(Error('Compilation session unavailable'), 'guid-823a0ce73370411c');
   try {
     if (options.readOnly || !options.host || !options.runtime || !options.adapter
       || !compilationId(request.requestId) || !isCompilationRevision(request.expectedJobRevision)

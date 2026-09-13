@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { compilationPath } from './compilation-policy.js';
 export const CODEX_HOOK_EVENTS = ['SessionStart', 'UserPromptSubmit', 'PostToolUse', 'PreCompact', 'PostCompact', 'Stop', 'SessionEnd', 'Interrupt'];
 export const CODEX_HOOK_ACTIONS = ['resume', 'search', 'candidate', 'checkpoint', 'compilation', 'community'];
@@ -15,11 +16,11 @@ export function decodeCodexHookEvent(value) {
         return { event: raw.hook_event_name, sessionId: raw.session_id, reentrant: raw.stop_hook_active === true };
     }
     catch {
-        throw Error('Hook input unavailable');
+        throw guidanceError(Error('Hook input unavailable'), 'guid-5ebea93ef32cd20a');
     }
 }
 export function validateCodexHookConfig(value) {
-    const invalid = () => Error('Invalid hook configuration');
+    const invalid = () => guidanceError(Error('Invalid hook configuration'), 'guid-498a3f7b6f9ed7e7');
     const record = (v, keys) => {
         if (!v || typeof v !== 'object' || Array.isArray(v) || Object.keys(v).some(k => !keys.includes(k)))
             throw invalid();

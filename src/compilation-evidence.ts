@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import type { EvidenceLocator } from './evidence-locator.js';
 import { resolveEvidenceLocator } from './evidence-locator.js';
 import type { FidelityFact } from './fidelity-service.js';
@@ -11,7 +12,7 @@ export interface CompilationEvidence {
   rationale?: { constraints: string[]; rejectedAlternatives: Array<{ option: string; reason: string }>; failureConditions: string[] };
 }
 const revision = (v: unknown): v is string => typeof v === 'string' && /^[a-f0-9]{64}$/.test(v);
-const invalid = () => Error('Invalid compilation evidence');
+const invalid = () => guidanceError(Error('Invalid compilation evidence'), 'guid-fa300fc27be79c49');
 function record(value: unknown, keys: string[]): Record<string, any> {
   if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).some(key => !keys.includes(key))) throw invalid();
   return value as Record<string, any>;

@@ -1,6 +1,7 @@
+import { guidanceError } from './guidance-runtime.js';
 import { posix } from 'node:path';
 import { createHash } from 'node:crypto';
-const invalid = () => new Error('Invalid or cyclic protected document policy');
+const invalid = () => guidanceError(new Error('Invalid or cyclic protected document policy'), 'guid-9e190590d1e92418');
 const id = (value) => typeof value === 'string' && /^[a-z0-9][a-z0-9._-]{0,63}$/.test(value);
 export function documentPolicyPath(value) {
     if (typeof value !== 'string' || !value || value.length > 32768 || value !== value.trim() || /^[\\/]|:|[\x00-\x1f\x7f]/.test(value))

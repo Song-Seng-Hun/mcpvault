@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { compilationHash, compilationPath } from './compilation-policy.js';
 import { decodeCodexHookEvent, hookHash, hookId, validateCodexHookConfig } from './codex-hook-policy.js';
 const shutdown = (event) => event === 'Interrupt' || event === 'SessionEnd';
@@ -5,7 +6,7 @@ const actions = {
     SessionStart: ['resume', 'community'], PostCompact: ['resume'], UserPromptSubmit: ['search'], PostToolUse: ['candidate'],
     PreCompact: ['checkpoint'], Stop: ['checkpoint', 'compilation', 'community'], Interrupt: ['checkpoint'], SessionEnd: ['checkpoint'],
 };
-const invalid = () => Error('Hook state unavailable');
+const invalid = () => guidanceError(Error('Hook state unavailable'), 'guid-da48d1293aee1586');
 function validateWork(work) {
     if (!work || typeof work !== 'object')
         throw invalid();

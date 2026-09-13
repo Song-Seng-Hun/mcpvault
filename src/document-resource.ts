@@ -184,13 +184,13 @@ export class DocumentResourceReader {
 
   pin(snapshot: DocumentResourceSnapshot): DocumentRevision {
     const pin = this.sourceRevisions.get(snapshot);
-    if (!pin || pin.path !== snapshot.path || pin.revision !== snapshot.revision || pin.byteLength !== snapshot.bytes.length) throw new Error('Document revision pin unavailable; reread the source');
+    if (!pin || pin.path !== snapshot.path || pin.revision !== snapshot.revision || pin.byteLength !== snapshot.bytes.length) throw guidanceError(new Error('Document revision pin unavailable; reread the source'), 'guid-0c04d12cb22ffa39');
     this.pins.set(pin, this.bundleRevisions.get(snapshot)?.manifest);
     return pin;
   }
 
   async assertPin(pin: DocumentRevision, principal?: ScopePrincipal): Promise<void> {
-    if (!this.pins.has(pin)) throw new Error('Document revision pin unavailable; reread the source');
+    if (!this.pins.has(pin)) throw guidanceError(new Error('Document revision pin unavailable; reread the source'), 'guid-0c04d12cb22ffa39');
     return withDocumentWork(() => this.assertRevisionCurrent(pin, this.pins.get(pin), principal));
   }
 
@@ -208,7 +208,7 @@ export class DocumentResourceReader {
     const bundle = resourceBundleLocation(path);
     if (bundle && bundle.relative !== 'manifest.md'
       && (!bundle.relative.startsWith('files/') || manifest?.path !== `${bundle.root}/manifest.md`)) {
-      throw guidanceError(new Error('Resource bundle member unavailable; reread the original snapshot'), 'guid-f561038c0f652993');
+      throw guidanceError(new Error('Resource bundle member unavailable; reread the original snapshot'), 'guid-0b36932920456f8c');
     }
     const authorize = () => {
       this.canonical(path, principal);

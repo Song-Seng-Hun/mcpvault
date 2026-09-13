@@ -1,9 +1,10 @@
+import { guidanceError } from './guidance-runtime.js';
 import { createHash } from 'node:crypto';
 import { PathFilter } from './pathfilter.js';
 import { isOriginalPath } from './original-boundary.js';
 export const COMPILATION_OPERATIONS = ['index', 'synthesize', 'embed', 'vision', 'convert'];
 export const compilationHash = (value) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
-const invalid = () => Error('Invalid compilation configuration');
+const invalid = () => guidanceError(Error('Invalid compilation configuration'), 'guid-7b4c064460fbd43d');
 const id = (v) => typeof v === 'string' && /^[a-z0-9][a-z0-9._-]{0,99}$/.test(v);
 function record(v, keys) {
     if (!v || typeof v !== 'object' || Array.isArray(v) || Object.keys(v).some(k => !keys.includes(k)))

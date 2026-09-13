@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { resolveEvidenceLocator } from './evidence-locator.js';
 import { createHash } from 'node:crypto';
 import { compilationId, isCompilationRevision } from './compilation-model.js';
@@ -15,7 +16,7 @@ export class FidelityService {
     /** Read-only, bounded comparison. Agent reports are attributed, never upgraded
      * to server-certified semantic truth or a grant to publish derived content. */
     async check(params, assertCurrent = async () => { }) {
-        const unavailable = () => Error('Fidelity input unavailable or changed');
+        const unavailable = () => guidanceError(Error('Fidelity input unavailable or changed'), 'guid-35c2d5ec0be259ce');
         try {
             const budget = params.maxChars ?? 4000;
             if (!Number.isSafeInteger(budget) || budget < 512 || budget > 12000

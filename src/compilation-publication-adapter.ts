@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import type { CompilationAdapter } from './compilation-service.js';
 import type { CompilationJob, CompilationIntent } from './compilation-model.js';
 import { compilationContentHash } from './compilation-model.js';
@@ -17,7 +18,7 @@ export interface CompilationPublicationOptions {
   fs: FileSystemService; access: ScopeAccessPolicy; wiki: LlmWikiService; comparison: SourceComparisonService;
   authorize(accountId: string): Promise<ScopePrincipal | undefined>;
 }
-const unavailable = () => Error('Compilation publication unavailable; review current evidence and authority');
+const unavailable = () => guidanceError(Error('Compilation publication unavailable; review current evidence and authority'), 'guid-0d63d904f90d518c');
 /** Trusted host adapter, not enabled by feature/model/client declarations. All
  * inference comes from the current agent's submitted draft; comparison is local
  * lexical-only and no provider, source capture, merge or claim promotion runs. */

@@ -1,7 +1,8 @@
+import { guidanceError } from './guidance-runtime.js';
 import { resolveEvidenceLocator } from './evidence-locator.js';
 import { compilationHash, compilationPath } from './compilation-policy.js';
 const revision = (v) => typeof v === 'string' && /^[a-f0-9]{64}$/.test(v);
-const invalid = () => Error('Invalid compilation evidence');
+const invalid = () => guidanceError(Error('Invalid compilation evidence'), 'guid-fa300fc27be79c49');
 function record(value, keys) {
     if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).some(key => !keys.includes(key)))
         throw invalid();

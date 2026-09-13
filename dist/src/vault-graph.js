@@ -223,7 +223,7 @@ export class VaultGraphIndex {
     }
     async getBacklinks(path, limit, canAccessPath, offset = 0, canIncludeSource, includeSourceRevision = false, includeSnapshot = false, validateTargets, relations, inspectionBudget, compact = false, propertyRoots) {
         if (inspectionBudget && (!Number.isSafeInteger(inspectionBudget.remaining) || inspectionBudget.remaining < 0))
-            throw Error('Invalid backlink inspection budget');
+            throw guidanceError(Error('Invalid backlink inspection budget'), 'guid-25fd97a6ce88dff3');
         await this.ensure();
         const startGeneration = this.changeGeneration;
         const target = normalizePath(path);
@@ -437,7 +437,7 @@ export class VaultGraphIndex {
                 unresolved.push({ ...project(entry, link), path: entry.path });
         }
         if (this.visibilityContext(canAccessPath) !== context)
-            throw new Error('Graph or visibility changed during maintenance navigation; retry.');
+            throw guidanceError(new Error('Graph or visibility changed during maintenance navigation; retry.'), 'guid-edf7574e0731b8cc');
         return { unresolved, ...(snapshot && { snapshotFingerprint: snapshot.finish() }), total, truncated: total > offset + unresolved.length };
     }
     *scanUnresolved(context, allResolver) {
@@ -482,7 +482,7 @@ export class VaultGraphIndex {
                 orphans.push(row);
         }
         if (this.visibilityContext(canAccessPath) !== context)
-            throw new Error('Graph or visibility changed during maintenance navigation; retry.');
+            throw guidanceError(new Error('Graph or visibility changed during maintenance navigation; retry.'), 'guid-edf7574e0731b8cc');
         return { orphans, ...(snapshot && { snapshotFingerprint: snapshot.finish() }), total, truncated: total > offset + limit };
     }
     *scanOrphans(context) {
@@ -533,7 +533,7 @@ export class VaultGraphIndex {
             // Independent callers have their own context; real invalidations still
             // fail closed, as do visibility/revision changes at the read boundaries.
             if (captured !== this.changeGeneration || this.needsFullRefresh || this.dirty.size) {
-                throw Error('Graph changed during stable read; retry the query.');
+                throw guidanceError(Error('Graph changed during stable read; retry the query.'), 'guid-48ee112c87993778');
             }
             return;
         }

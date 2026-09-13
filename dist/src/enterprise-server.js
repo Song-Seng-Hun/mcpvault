@@ -282,7 +282,7 @@ export async function startEnterpriseServer(config) {
         throw guidanceError(new Error(`Enterprise registry realm '${profile.realmId}' does not match configured realm '${realmId}'`), 'guid-df09bbabd6aee122');
     const canonicalVaultPath = await realpath(profile.vaultPath);
     if (config.features && config.featuresConfigPath)
-        throw new Error('Select one explicit host feature configuration');
+        throw guidanceError(new Error('Select one explicit host feature configuration'), 'guid-ca12e78c9f350eff');
     const features = config.features ? parseHostFeatureConfig(config.features)
         : await loadHostFeatureConfig(config.featuresConfigPath ?? process.env.MCPVAULT_FEATURE_CONFIG, canonicalVaultPath);
     const ownerConsentPath = config.ownerActivityConfigPath ?? process.env.MCPVAULT_OWNER_ACTIVITY_CONFIG;

@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { createHash } from 'node:crypto';
 import { posix } from 'node:path';
 import type { FileSystemService } from './filesystem.js';
@@ -13,7 +14,7 @@ import { isModerationHidden } from './moderation-policy.js';
 
 export interface GraphAssertionPacketOptions { path: string; limit?: number; maxChars?: number; prettyPrint?: boolean }
 const MAX_BYTES = 1024 * 1024;
-const changed = () => Error('Graph context unavailable or changed; re-read the note and retry.');
+const changed = () => guidanceError(Error('Graph context unavailable or changed; re-read the note and retry.'), 'guid-49670269a06d455f');
 export interface PublicAssertion {
   id: string; source: GraphAssertion['source']; relation: string; direction: 'source_to_target';
   target: { path: string; revision: string; blockId?: string; heading?: string };
@@ -25,7 +26,7 @@ export interface PublicAssertion {
 export async function buildGraphAssertionPacket(fs: FileSystemService, access: ScopeAccessPolicy,
   principal: ScopePrincipal | undefined, options: GraphAssertionPacketOptions) {
   const { limit = 12, maxChars = 6000, prettyPrint = false } = options;
-  if (!Number.isInteger(limit) || limit < 1 || limit > 40 || !Number.isInteger(maxChars) || maxChars < 512 || maxChars > 16000) throw Error('Invalid assertion limit or maxChars.');
+  if (!Number.isInteger(limit) || limit < 1 || limit > 40 || !Number.isInteger(maxChars) || maxChars < 512 || maxChars > 16000) throw guidanceError(Error('Invalid assertion limit or maxChars.'), 'guid-a747b255aa4fe0d5');
   try {
     const path = access.resolveExternalPath(options.path, principal).replace(/\\/g, '/');
     if (!path || /^(?:\/|~)|:|[\x00-\x1f]/.test(path) || path.split('/').includes('..') || posix.normalize(path) !== path) throw changed();
@@ -123,7 +124,7 @@ export async function buildGraphAssertionPacket(fs: FileSystemService, access: S
     while (!fits(result) && assertions.length) { assertions.pop(); result.partial = true; }
     if (!fits(result)) {
       const minimal = { view: 'assertions', assertions: [] as PublicAssertion[], coverage: { globalIntegrity: false }, partial: true, nextAction };
-      if (!fits(minimal)) throw Error('budget');
+      if (!fits(minimal)) throw guidanceError(Error('budget'), 'guid-ac92056bf8ddf54c');
       return minimal;
     }
     return result;

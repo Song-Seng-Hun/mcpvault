@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { derivedCacheBudget } from './cache-budget.js';
 import type { DocumentStructure } from './document-structure.js';
@@ -26,7 +27,7 @@ export async function withDocumentWork<T>(operation: () => Promise<T>): Promise<
 /** Private owner-scoped values cannot survive their foreground operation. */
 export function documentWorkMemo<T>(owner: object): Map<string, T> {
   const scope = active.getStore();
-  if (!scope || scope.closed) throw new Error('Document memo requires an active operation');
+  if (!scope || scope.closed) throw guidanceError(new Error('Document memo requires an active operation'), 'guid-725976f0d0930547');
   let values = scope.memo.get(owner);
   if (!values) { values = new Map(); scope.memo.set(owner, values); }
   return values as Map<string, T>;
@@ -49,7 +50,7 @@ export function documentResidentEstimate(document: DocumentStructure): number {
 
 export function reserveDocumentWork(bytes: number): { release(): void } {
   const scope = active.getStore();
-  if (!scope || scope.closed) throw new Error('Document working memory requires an active operation');
+  if (!scope || scope.closed) throw guidanceError(new Error('Document working memory requires an active operation'), 'guid-ef57783f07c03e9c');
   const reservation = derivedCacheBudget.reserveWork(bytes);
   scope.reservations.add(reservation);
   return { release: () => { reservation.release(); scope.reservations.delete(reservation); } };

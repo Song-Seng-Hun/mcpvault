@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { compilationJobRevision } from './compilation-model.js';
 import { endpointIdForTool } from './endpoint-registry.js';
 /** Only call after authorizing every dependency. No draft bodies or semantic
@@ -22,7 +23,7 @@ export function compilationInspection(job, base, maxChars, cursor, publicPath) {
         records.push({ type: 'match', ...match,
             sourcePath: publicPath(match.sourcePath), knowledgePath: publicPath(match.knowledgePath) });
     if (cursor > records.length)
-        throw Error('Invalid compilation inspection cursor');
+        throw guidanceError(Error('Invalid compilation inspection cursor'), 'guid-5d17e5bfc5cb7168');
     const selected = [];
     const revision = compilationJobRevision(job);
     const result = (next) => {

@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import type { ScopePrincipal } from './scope-auth.js';
 import type { Activity, OwnerActivityAction, OwnerActivityPolicy } from './owner-activity.js';
 
@@ -21,8 +22,8 @@ export interface OwnerActivityOperation {
   beforeWrite(path: string): Promise<void>;
 }
 
-const denied = () => new Error('Owner activity consent or trusted execution authority is unavailable');
-const changed = () => new Error('Owner activity authority changed; retry with current consent');
+const denied = () => guidanceError(new Error('Owner activity consent or trusted execution authority is unavailable'), 'guid-69aa4acecffe7b26');
+const changed = () => guidanceError(new Error('Owner activity authority changed; retry with current consent'), 'guid-35e0fa696588e7ab');
 
 /** Additional consent boundary for optional activities. This runtime accepts
  * authority only through trusted host construction options. Request fields,

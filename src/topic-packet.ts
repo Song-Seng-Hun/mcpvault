@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { posix } from 'node:path';
 import type { FileSystemService } from './filesystem.js';
 import type { ScopeAccessPolicy } from './scope-access.js';
@@ -18,7 +19,7 @@ export interface TopicPacketOptions {
 }
 const MAX_BYTES = 8 * 1024 * 1024;
 const list = (value: unknown): unknown[] => Array.isArray(value) ? value : typeof value === 'string' ? [value] : [];
-const changed = () => Error('Topic context unavailable or changed; re-read the MOC and retry.');
+const changed = () => guidanceError(Error('Topic context unavailable or changed; re-read the MOC and retry.'), 'guid-bf3cb5d93bd69043');
 
 /** Request-local worksheet. Authored assertions are data, not instructions or
  * verified conclusions. No model invocation, persistent summary or write. */
@@ -26,10 +27,10 @@ export async function buildTopicPacket(fs: FileSystemService, access: ScopeAcces
   principal: ScopePrincipal | undefined, options: TopicPacketOptions) {
   const { limit = 8, maxChars = 7000, query, prettyPrint = false } = options;
   if (!Number.isInteger(limit) || limit < 1 || limit > 8 || !Number.isInteger(maxChars) || maxChars < 768 || maxChars > 16000
-    || (query !== undefined && (typeof query !== 'string' || query.length > 1024))) throw Error('Invalid topic packet limit, query or maxChars.');
-  if (typeof options.mocPath !== 'string' || !options.mocPath.trim()) throw Error('mocPath is required.');
+    || (query !== undefined && (typeof query !== 'string' || query.length > 1024))) throw guidanceError(Error('Invalid topic packet limit, query or maxChars.'), 'guid-f6c1eaefff8897f4');
+  if (typeof options.mocPath !== 'string' || !options.mocPath.trim()) throw guidanceError(Error('mocPath is required.'), 'guid-eb292536e606a84e');
   const physical = access.resolveExternalPath(options.mocPath, principal).replace(/\\/g, '/');
-  if (/^(?:\/|~)|:|[\u0000-\u001f]/.test(physical) || physical.split('/').includes('..')) throw Error('Invalid mocPath.');
+  if (/^(?:\/|~)|:|[\u0000-\u001f]/.test(physical) || physical.split('/').includes('..')) throw guidanceError(Error('Invalid mocPath.'), 'guid-78d11ca3bd3752b3');
   const path = posix.normalize(physical);
   const allowed = (p: string) => access.canAccessPhysicalPath(p, principal);
   const observed = new Map<string, QueryNote | undefined>();
@@ -49,7 +50,7 @@ export async function buildTopicPacket(fs: FileSystemService, access: ScopeAcces
     observed.set(p, note); return note;
   };
   const moc = await read(path);
-  if (!moc?.revision || moc.frontmatter.note_kind !== 'moc') throw Error('mocPath must be an available MOC note.');
+  if (!moc?.revision || moc.frontmatter.note_kind !== 'moc') throw guidanceError(Error('mocPath must be an available MOC note.'), 'guid-890008c299275fad');
   const mocRevision = moc.revision;
   const body = await fs.readNote(path, MAX_BYTES);
   if (body.revision !== moc.revision || !allowed(path)) throw changed();
@@ -247,7 +248,7 @@ export async function buildTopicPacket(fs: FileSystemService, access: ScopeAcces
   if (!fits()) {
     const minimal = { mode: 'topic_packet', partial: true, completeTopic: false, nextAction: readAction(moc),
       notice: 'Packet exceeds budget. Read the pinned MOC and retry with maxChars:16000. No summary or publication was performed.' };
-    if (JSON.stringify(minimal, null, prettyPrint ? 2 : undefined).length > maxChars) throw Error('maxChars cannot preserve the exact MOC locator; retry with maxChars:16000.');
+    if (JSON.stringify(minimal, null, prettyPrint ? 2 : undefined).length > maxChars) throw guidanceError(Error('maxChars cannot preserve the exact MOC locator; retry with maxChars:16000.'), 'guid-1ee0c66e0714dc00');
     return minimal;
   }
   return result;

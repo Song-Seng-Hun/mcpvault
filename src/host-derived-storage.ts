@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, lstat, rename, unlink, open, opendir, type FileHandle } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -11,11 +12,11 @@ export class HostDerivedStorage {
   constructor(readonly vaultPath: string, readonly cacheDir?: string) {}
 
   private name(name: string): void {
-    if (!/^[a-z0-9][a-z0-9.-]{0,119}$/.test(name) || name.includes('..') || name.endsWith('.')) throw new Error('Invalid derivative snapshot name');
+    if (!/^[a-z0-9][a-z0-9.-]{0,119}$/.test(name) || name.includes('..') || name.endsWith('.')) throw guidanceError(new Error('Invalid derivative snapshot name'), 'guid-5672fabdfeac923d');
   }
 
   private async namespace(create = false): Promise<string> {
-    if (!this.cacheDir) throw new Error('Private host derivative storage is not configured');
+    if (!this.cacheDir) throw guidanceError(new Error('Private host derivative storage is not configured'), 'guid-5c0b9f0b423f319c');
     const { vaultPath, hostPath } = await validateRoleplayStorage({ vaultPath: this.vaultPath, hostPath: this.cacheDir });
     await assertHostPrivateStorage([hostPath]);
     const namespace = createHash('sha256').update(vaultPath).digest('hex');
@@ -43,21 +44,21 @@ export class HostDerivedStorage {
     for (let index = 0; index < pending.length; index++) {
       const directory = pending[index]!;
       for await (const entry of await opendir(directory)) {
-        if (++count > 4096) throw new Error('Private derivative storage tree exceeds verification budget');
+        if (++count > 4096) throw guidanceError(new Error('Private derivative storage tree exceeds verification budget'), 'guid-3fa7afc78515deda');
         const path = join(directory, entry.name), info = await lstat(path);
-        if (info.isSymbolicLink() || (!info.isFile() && !info.isDirectory()) || (info.isFile() && info.nlink !== 1)) throw new Error('Private derivative storage refuses linked files or directories');
+        if (info.isSymbolicLink() || (!info.isFile() && !info.isDirectory()) || (info.isFile() && info.nlink !== 1)) throw guidanceError(new Error('Private derivative storage refuses linked files or directories'), 'guid-42cc538afc8dbc34');
         paths.push(path);
         if (info.isDirectory()) pending.push(path);
       }
     }
     for (let offset = 0; offset < paths.length; offset += 32) await assertHostPrivateStorage(paths.slice(offset, offset + 32));
-    if (await this.directory(name) !== root) throw new Error('Private derivative storage changed during verification');
+    if (await this.directory(name) !== root) throw guidanceError(new Error('Private derivative storage changed during verification'), 'guid-8a05e76ab584b1ce');
     return root;
   }
 
   private async assertFile(path: string): Promise<void> {
     await canonicalRoleplayPath(path, true, true);
-    if ((await lstat(path)).nlink !== 1) throw new Error('Derivative snapshots cannot use shared file links');
+    if ((await lstat(path)).nlink !== 1) throw guidanceError(new Error('Derivative snapshots cannot use shared file links'), 'guid-9851057459247eb5');
     await assertHostPrivateStorage([path]);
   }
 
@@ -66,13 +67,13 @@ export class HostDerivedStorage {
     const directory = await this.namespace(), path = join(directory, name);
     await this.assertFile(path);
     const bytes = await readSnapshotBytes(path, options);
-    if (await this.namespace() !== directory) throw new Error('Derivative storage changed during read');
+    if (await this.namespace() !== directory) throw guidanceError(new Error('Derivative storage changed during read'), 'guid-46523cdd936ae5b1');
     await this.assertFile(path);
     return bytes;
   }
 
   async write(name: string, bytes: Buffer, maxBytes: number): Promise<void> {
-    if (!Number.isSafeInteger(maxBytes) || maxBytes < 1 || bytes.byteLength > maxBytes) throw new Error('Derivative snapshot byte limit exceeded');
+    if (!Number.isSafeInteger(maxBytes) || maxBytes < 1 || bytes.byteLength > maxBytes) throw guidanceError(new Error('Derivative snapshot byte limit exceeded'), 'guid-bee6a89d760ecf20');
     await this.publish(name, handle => handle.writeFile(bytes));
   }
 
@@ -88,10 +89,10 @@ export class HostDerivedStorage {
     let handle: FileHandle | undefined;
     try {
       handle = await open(temporary, 'wx', 0o600); written = true;
-      if (await this.namespace() !== directory) throw new Error('Derivative storage changed before write');
+      if (await this.namespace() !== directory) throw guidanceError(new Error('Derivative storage changed before write'), 'guid-f7ee46f68a9209db');
       await this.assertFile(temporary);
       await write(handle);
-      if (await this.namespace() !== directory) throw new Error('Derivative storage changed during write');
+      if (await this.namespace() !== directory) throw guidanceError(new Error('Derivative storage changed during write'), 'guid-17de8d70dc9d6415');
       await this.assertFile(temporary);
       try { await this.assertFile(destination); } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
       await rename(temporary, destination); written = false;

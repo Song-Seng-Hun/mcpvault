@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import type { CompilationJob } from './compilation-model.js';
 import { compilationJobRevision } from './compilation-model.js';
 import { endpointIdForTool } from './endpoint-registry.js';
@@ -19,7 +20,7 @@ export function compilationInspection(job: CompilationJob, base: Record<string, 
     ...checkpoint, sourcePath: publicPath(checkpoint.sourcePath) });
   for (const match of job.observation?.matches ?? []) records.push({ type: 'match', ...match,
     sourcePath: publicPath(match.sourcePath), knowledgePath: publicPath(match.knowledgePath) });
-  if (cursor > records.length) throw Error('Invalid compilation inspection cursor');
+  if (cursor > records.length) throw guidanceError(Error('Invalid compilation inspection cursor'), 'guid-5d17e5bfc5cb7168');
   const selected: Array<Record<string, unknown>> = [];
   const revision = compilationJobRevision(job);
   const result = (next: number): Record<string, any> => {

@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import type { FileSystemService } from './filesystem.js';
 import type { ScopeAccessPolicy } from './scope-access.js';
 import type { ScopePrincipal } from './scope-auth.js';
@@ -40,7 +41,7 @@ export interface CompilationParams {
   outputPath?: string; expectedOutputRevision?: string; expectedJobRevision?: string; content?: string; evidence?: unknown; observation?: unknown; maxChars?: number;
   includeInspection?: boolean; inspectionCursor?: number;
 }
-const unavailable = () => Error('Compilation unavailable; revalidate current authorization and inputs');
+const unavailable = () => guidanceError(Error('Compilation unavailable; revalidate current authorization and inputs'), 'guid-0b631ee180ea1a88');
 const actorBasis = (p?: ScopePrincipal) => p && compilationHash({ account: p.accountId, model: p.modelId, agent: p.agentId,
   user: p.userId, center: p.commandCenterId, capabilities: p.capabilities, enterprise: p.enterprise });
 
@@ -160,7 +161,7 @@ export class CompilationService {
     return { requestId: job.requestId, status: result.status, jobRevision: result.jobRevision, partial: true };
   }
   execute(params: CompilationParams, principal?: ScopePrincipal, protectSources = this.options.protectSources): Promise<any> {
-    if (this.closed) return Promise.reject(Error('Compilation service closed'));
+    if (this.closed) return Promise.reject(guidanceError(Error('Compilation service closed'), 'guid-c26533bd8b3de58a'));
     return this.serial(async () => {
       try { return await this.run(params, principal, protectSources); }
       catch (error) {
@@ -173,11 +174,11 @@ export class CompilationService {
   }
   private async run(params: CompilationParams, principal: ScopePrincipal | undefined, protectSources: CompilationOptions['protectSources']): Promise<any> {
     const op = params.op ?? 'diagnose', maxChars = params.maxChars ?? 4000;
-    if (!['diagnose', 'prepare', 'read', 'submit', 'check', 'retry'].includes(op) || !Number.isInteger(maxChars) || maxChars < 512 || maxChars > 12000) throw Error('Invalid compilation operation or response budget');
+    if (!['diagnose', 'prepare', 'read', 'submit', 'check', 'retry'].includes(op) || !Number.isInteger(maxChars) || maxChars < 512 || maxChars > 12000) throw guidanceError(Error('Invalid compilation operation or response budget'), 'guid-1c133560b489d77c');
     if (params.includeInspection !== undefined && (op !== 'read' || typeof params.includeInspection !== 'boolean')
       || params.inspectionCursor !== undefined && (!params.includeInspection || !Number.isSafeInteger(params.inspectionCursor) || params.inspectionCursor < 0
         || params.inspectionCursor > 0 && !isCompilationRevision(params.expectedJobRevision))) throw unavailable();
-    if (this.options.readOnly && !['diagnose', 'read'].includes(op)) throw Error('Compilation mutations disabled in read-only mode');
+    if (this.options.readOnly && !['diagnose', 'read'].includes(op)) throw guidanceError(Error('Compilation mutations disabled in read-only mode'), 'guid-f8f80b7706c2aae8');
     const host = this.options.host;
     if (!host) return { status: 'diagnostic_only', reason: 'host_configuration_required', automaticApplication: false, missingComponents: ['host_policy'] };
     const config = validateCompilationConfig(await host.refresh());
@@ -187,7 +188,7 @@ export class CompilationService {
     if (op === 'diagnose') return { status: 'diagnostic_only', reason: 'prepare_exact_revision_plan', automaticApplication: false,
       missingComponents: [...(!this.options.runtime ? ['runtime_verifier'] : []), ...(!this.options.adapter ? ['publication_adapter'] : [])],
       admission: 'per_job_required', modelQuality: 'not_attested' };
-    if (!compilationId(params.requestId)) throw Error('Compilation requires a stable requestId');
+    if (!compilationId(params.requestId)) throw guidanceError(Error('Compilation requires a stable requestId'), 'guid-7cb98a1501abe904');
     const writer = ['read'].includes(op) ? undefined : await host.acquire();
     try {
       const state = parseCompilationHistory(await host.readState());
@@ -203,16 +204,16 @@ export class CompilationService {
         if (job && !['review_required', 'failed', 'stopped', 'partial'].includes(job.status)) await this.assertCurrent(job, principal!);
       };
       if (op === 'prepare') {
-        if (!compilationId(params.projectId) || !params.operation || !Array.isArray(params.inputs) || !params.inputs.length || params.inputs.length > 8) throw Error('Compilation requires bounded explicit dependencies');
+        if (!compilationId(params.projectId) || !params.operation || !Array.isArray(params.inputs) || !params.inputs.length || params.inputs.length > 8) throw guidanceError(Error('Compilation requires bounded explicit dependencies'), 'guid-26f71b090d486c3f');
         const inputs = params.inputs.map(input => {
-          if (!isCompilationRevision(input.expectedRevision) || !['source', 'member', 'concept', 'topic'].includes(input.role)) throw Error('Compilation requires exact dependency revisions and roles');
+          if (!isCompilationRevision(input.expectedRevision) || !['source', 'member', 'concept', 'topic'].includes(input.role)) throw guidanceError(Error('Compilation requires exact dependency revisions and roles'), 'guid-334ee39cfe1240a9');
           return { path: compilationPath(input.path), revision: input.expectedRevision, role: input.role };
         });
         const outputPath = compilationPath(params.outputPath);
         if (new Set(inputs.map(i => i.path.toLowerCase())).size !== inputs.length || inputs.some(i => i.path.toLowerCase() === outputPath.toLowerCase())
-          || params.expectedOutputRevision !== 'missing' && !isCompilationRevision(params.expectedOutputRevision)) throw Error('Invalid compilation output or dependency identity');
+          || params.expectedOutputRevision !== 'missing' && !isCompilationRevision(params.expectedOutputRevision)) throw guidanceError(Error('Invalid compilation output or dependency identity'), 'guid-e3fe31f933bbc1b6');
         const requestFingerprint = compilationHash({ projectId: params.projectId, operation: params.operation, inputs, outputPath, outputRevision: params.expectedOutputRevision });
-        if (job && job.requestFingerprint !== requestFingerprint) throw Error('Compilation requestId already binds different inputs');
+        if (job && job.requestFingerprint !== requestFingerprint) throw guidanceError(Error('Compilation requestId already binds different inputs'), 'guid-f7f07cd55f8433a4');
         const provisional = { projectId: params.projectId, operation: params.operation, inputs, outputPath };
         const admission = await this.gate(config, provisional, principal);
         if (admission.status === 'unavailable') throw unavailable();
@@ -230,7 +231,7 @@ export class CompilationService {
         if ((outputRevision !== 'missing' || managed) && managed?.applied?.outputRevision !== outputRevision) return { status: 'review_required', reason: 'unmanaged_or_edited_output' };
         if (state.jobs.some(j => j.requestFingerprint === requestFingerprint && j.attempts >= 3)) return { status: 'review_required', reason: 'prior_attempts_exhausted' };
         if (state.jobs.some(j => j.requestFingerprint === requestFingerprint && j.refinements === 1)) return { status: 'review_required', reason: 'prior_refinement_exhausted' };
-        if (state.jobs.length >= 64 || state.jobs.some(j => j.outputPath.toLowerCase() === outputPath.toLowerCase() && !['completed', 'review_required', 'stopped'].includes(j.status))) throw Error('Compilation queue requires host review before adding work');
+        if (state.jobs.length >= 64 || state.jobs.some(j => j.outputPath.toLowerCase() === outputPath.toLowerCase() && !['completed', 'review_required', 'stopped'].includes(j.status))) throw guidanceError(Error('Compilation queue requires host review before adding work'), 'guid-155215a0794ef720');
         job = { ...provisional, requestId: params.requestId, requestFingerprint, accountId: principal.accountId, outputRevision,
           ruleVersion: config.projects.find(p => p.id === params.projectId)!.ruleVersion, graphContractVersion: GRAPH_CONTRACT_VERSION,
           authorityFingerprint: admission.fingerprint, status: 'prepared', attempts: 0, protection: 'pending' };
@@ -256,7 +257,7 @@ export class CompilationService {
       const admission = await this.gate(config, job, principal);
       if (admission.status === 'unavailable') throw unavailable();
       if (admission.status === 'diagnostic_only') return admission;
-      if (op !== 'read' && params.expectedJobRevision !== compilationJobRevision(job)) throw Error('Compilation job revision changed; read again');
+      if (op !== 'read' && params.expectedJobRevision !== compilationJobRevision(job)) throw guidanceError(Error('Compilation job revision changed; read again'), 'guid-81b06321d024daae');
       const drift = await this.drift(job, principal, admission) ?? (job.protection === 'pending' ? 'protection_incomplete' : undefined);
       if (op === 'read') {
         if (params.includeInspection && params.expectedJobRevision !== undefined && params.expectedJobRevision !== compilationJobRevision(job)) throw unavailable();
@@ -286,12 +287,12 @@ export class CompilationService {
           delete job.reason; delete job.validation; await save(); return this.projection(job, maxChars);
         }
         if (job.observation) throw unavailable();
-        if (job.operation !== 'synthesize' || job.intent || typeof params.content !== 'string' || !params.content.trim() || params.content.length > 24000) throw Error('Invalid generated draft');
+        if (job.operation !== 'synthesize' || job.intent || typeof params.content !== 'string' || !params.content.trim() || params.content.length > 24000) throw guidanceError(Error('Invalid generated draft'), 'guid-507ab17f88f4c18f');
         const draft = { content: params.content, fingerprint: compilationContentHash(params.content), generatedAt: new Date().toISOString() };
         const evidence = params.evidence === undefined ? undefined : normalizeCompilationEvidence(params.evidence, job.inputs, draft);
         if (job.draft) {
           if (job.validation?.status !== 'partial' || !job.evidence || !evidence || job.refinements === 1
-            || job.draft.fingerprint === draft.fingerprint || !retainsCompilationObligations(job.evidence, evidence)) throw Error('Compilation refinement requires preserved obligations and an unused single refinement');
+            || job.draft.fingerprint === draft.fingerprint || !retainsCompilationObligations(job.evidence, evidence)) throw guidanceError(Error('Compilation refinement requires preserved obligations and an unused single refinement'), 'guid-f5d34e17dbe46f2f');
           job.refinements = 1;
         }
         await this.assertCurrent(job, principal);
@@ -327,7 +328,7 @@ export class CompilationService {
       const snapshot = () => structuredClone(job!);
       if (!job.intent) {
         const validation = await adapter.check(snapshot(), assertCurrent); await assertCurrent();
-        if (!['passed', 'partial'].includes(validation.status) || !compilationId(validation.ruleVersion)) throw Error('Invalid compilation validation receipt');
+        if (!['passed', 'partial'].includes(validation.status) || !compilationId(validation.ruleVersion)) throw guidanceError(Error('Invalid compilation validation receipt'), 'guid-4803a46631dccc83');
         const before = compilationJobRevision(job);
         job.validation = { ...validation, basis: compilationValidationBasis(job) }; job.status = validation.status === 'passed' ? 'checked' : 'partial';
         // Checks still revalidate current authority and deterministic evidence;
@@ -341,7 +342,7 @@ export class CompilationService {
       if (!priorIntent || await this.revision(job.outputPath, principal, true) !== priorIntent.revision) {
         await adapter.protect(snapshot(), assertCurrent); await assertCurrent();
         const intent = await adapter.preview(snapshot(), assertCurrent); await assertCurrent();
-        if (!isCompilationRevision(intent.revision) || !isCompilationRevision(intent.fingerprint)) throw Error('Invalid compilation application intent');
+        if (!isCompilationRevision(intent.revision) || !isCompilationRevision(intent.fingerprint)) throw guidanceError(Error('Invalid compilation application intent'), 'guid-d94a3d6b8a82a576');
         job.intent = intent; job.status = 'applying'; job.attempts++; await save();
         try { await adapter.apply(snapshot(), intent, assertCurrent); }
         catch {
@@ -351,7 +352,7 @@ export class CompilationService {
         }
       }
       await assertCurrent();
-      if (await this.revision(job.outputPath, principal, true) !== job.intent!.revision) throw Error('Compilation output verification failed');
+      if (await this.revision(job.outputPath, principal, true) !== job.intent!.revision) throw guidanceError(Error('Compilation output verification failed'), 'guid-a894c4d054b26059');
       job.applied = { outputRevision: job.intent!.revision, basis: compilationReceiptBasis(job) };
       job.status = 'applied'; delete job.reason; await save();
       await assertCurrent();

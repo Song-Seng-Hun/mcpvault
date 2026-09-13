@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { dirname } from 'node:path';
 import { OwnerActivityPolicy } from './owner-activity.js';
 import { canonicalRoleplayPath, validateRoleplayStorage } from './roleplay-storage-host.js';
@@ -20,7 +21,7 @@ export async function loadOwnerActivityHostConfig(path, expectedVault) {
                 await assertHostPrivateStorage([hostPath, canonical]);
                 if (!raw || typeof raw !== 'object' || Array.isArray(raw) || typeof raw.vaultPath !== 'string'
                     || await canonicalRoleplayPath(raw.vaultPath, false) !== vaultPath)
-                    throw new Error('Owner consent belongs to another Vault');
+                    throw guidanceError(new Error('Owner consent belongs to another Vault'), 'guid-77083bace6dff5c5');
                 const { vaultPath: _vault, ...definition } = raw;
                 current = new OwnerActivityPolicy(definition);
             }

@@ -50,7 +50,7 @@ export class DerivedCacheBudget {
       throw guidanceError(new Error('maxBytes must be a positive finite number no greater than Number.MAX_SAFE_INTEGER'), 'guid-73767f404babc2c2');
     }
     this.maxAccountedBytes = BigInt(Math.floor(maxBytes));
-    if (!Number.isFinite(maxWorkingBytes) || maxWorkingBytes <= 0 || maxWorkingBytes > Number.MAX_SAFE_INTEGER) throw new Error('Invalid working memory budget');
+    if (!Number.isFinite(maxWorkingBytes) || maxWorkingBytes <= 0 || maxWorkingBytes > Number.MAX_SAFE_INTEGER) throw guidanceError(new Error('Invalid working memory budget'), 'guid-66dbd7715ccc3591');
     this.maxWorkingAccountedBytes = BigInt(Math.floor(maxWorkingBytes));
   }
 

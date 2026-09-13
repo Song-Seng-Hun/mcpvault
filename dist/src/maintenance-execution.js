@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { withEnterpriseStorageContext } from './enterprise-storage-context.js';
 /** A fresh host execution, never an inherited model/session's authority.
  * Protected derivatives require the dedicated classification workflow and stay
@@ -13,12 +14,12 @@ export function maintenanceExecution(auth, access, moderation, refreshPolicy) {
         const expected = JSON.stringify(principal);
         const recheck = async () => {
             if (JSON.stringify(await authorize(principal.accountId)) !== expected)
-                throw new Error('Maintenance execution authority changed');
+                throw guidanceError(new Error('Maintenance execution authority changed'), 'guid-394a3156c03ed535');
         };
         await recheck();
         const assertFresh = access.captureDocumentBoundary(principal);
         return withEnterpriseStorageContext({ access, principal, assertFresh,
-            observe: () => { throw new Error('Protected maintenance sources require manual classified repair'); },
+            observe: () => { throw guidanceError(new Error('Protected maintenance sources require manual classified repair'), 'guid-4b6125b3fdcf171b'); },
             beforeWrite: async () => { await recheck(); assertFresh(); },
         }, operation);
     };

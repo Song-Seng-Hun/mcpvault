@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { open, lstat, unlink } from 'node:fs/promises';
@@ -6,7 +7,7 @@ import { readFederationFile, writeFederationFileAtomic } from './public-federati
 import { DocumentAuthority, documentPolicyPath } from './document-authority.js';
 import { isOriginalPath } from './original-boundary.js';
 export const DOCUMENT_POLICY_PATH = '_wiki/_policies/documents.md';
-const unavailable = () => new Error('Protected document policy unavailable; host review required');
+const unavailable = () => guidanceError(new Error('Protected document policy unavailable; host review required'), 'guid-9690a0ffb67e9c3d');
 /** Authoritative Markdown metadata, deliberately outside the generic note API.
  * No raw original is changed and no request can claim or downgrade its rules.
  * Each request refreshes before work and before returning, including on NAS.
@@ -74,29 +75,29 @@ export class DocumentPolicyStore {
     async inherit(targetInput, sourceInputs, expectedRevision) {
         const target = documentPolicyPath(targetInput);
         if (isOriginalPath(target))
-            throw new Error('Original classification cannot be changed by derivative inheritance');
+            throw guidanceError(new Error('Original classification cannot be changed by derivative inheritance'), 'guid-bf3a46d519f8033b');
         if (!Array.isArray(sourceInputs) || !sourceInputs.length || sourceInputs.length > 32)
-            throw new Error('Derived sources must be a bounded nonempty list');
+            throw guidanceError(new Error('Derived sources must be a bounded nonempty list'), 'guid-36a4912b05458b6a');
         const sources = [...new Set(sourceInputs.map(documentPolicyPath))];
         if (sources.includes(target))
-            throw new Error('Cyclic derived document policy');
+            throw guidanceError(new Error('Cyclic derived document policy'), 'guid-f3bd9bf8b5ffb8c9');
         const update = async () => {
             await this.read();
             if (this.revision() !== expectedRevision)
-                throw new Error('Protected document policy revision changed');
+                throw guidanceError(new Error('Protected document policy revision changed'), 'guid-1bc997e4b0c7d462');
             const lockPath = join(this.vault, '_wiki', '_policies', '.documents.lock');
             let lock;
             try {
                 lock = await open(lockPath, 'wx', 0o600);
             }
             catch {
-                throw new Error('Protected document policy is locked; retry or ask the host to inspect an interrupted writer');
+                throw guidanceError(new Error('Protected document policy is locked; retry or ask the host to inspect an interrupted writer'), 'guid-1eeee5d513578437');
             }
             const identity = await lock.stat();
             try {
                 await this.read();
                 if (this.revision() !== expectedRevision)
-                    throw new Error('Protected document policy revision changed');
+                    throw guidanceError(new Error('Protected document policy revision changed'), 'guid-1bc997e4b0c7d462');
                 const existing = this.definition.find(rule => rule.path === target);
                 // Equal audiences today are not proof they will stay equal tomorrow.
                 // Keep ancestry even when current constraints happen to coincide.
@@ -111,11 +112,11 @@ export class DocumentPolicyStore {
                 // cross-process; out-of-band NAS edits still cause a conflict on reread.
                 await this.read();
                 if (this.revision() !== expectedRevision)
-                    throw new Error('Protected document policy revision changed');
+                    throw guidanceError(new Error('Protected document policy revision changed'), 'guid-1bc997e4b0c7d462');
                 await writeFederationFileAtomic(this.vault, join(this.vault, DOCUMENT_POLICY_PATH), body, { maxBytes: 2 * 1024 * 1024 });
                 await this.read();
                 if (this.digest !== createHash('sha256').update(body).digest('hex'))
-                    throw new Error('Protected document policy changed while committing inheritance');
+                    throw guidanceError(new Error('Protected document policy changed while committing inheritance'), 'guid-677722ecff6dd218');
             }
             finally {
                 await lock.close();

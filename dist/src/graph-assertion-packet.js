@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { createHash } from 'node:crypto';
 import { posix } from 'node:path';
 import { extractGraphAssertions } from './graph-assertion.js';
@@ -7,13 +8,13 @@ import { extractObsidianLinkOccurrences } from './backlinks.js';
 import { resolveEvidenceLocator } from './evidence-locator.js';
 import { isModerationHidden } from './moderation-policy.js';
 const MAX_BYTES = 1024 * 1024;
-const changed = () => Error('Graph context unavailable or changed; re-read the note and retry.');
+const changed = () => guidanceError(Error('Graph context unavailable or changed; re-read the note and retry.'), 'guid-49670269a06d455f');
 /** One-note outgoing occurrence view. No raw candidates/labels, aggregate hidden
  * counts, model calls, writes, inference or global-integrity claim. */
 export async function buildGraphAssertionPacket(fs, access, principal, options) {
     const { limit = 12, maxChars = 6000, prettyPrint = false } = options;
     if (!Number.isInteger(limit) || limit < 1 || limit > 40 || !Number.isInteger(maxChars) || maxChars < 512 || maxChars > 16000)
-        throw Error('Invalid assertion limit or maxChars.');
+        throw guidanceError(Error('Invalid assertion limit or maxChars.'), 'guid-a747b255aa4fe0d5');
     try {
         const path = access.resolveExternalPath(options.path, principal).replace(/\\/g, '/');
         if (!path || /^(?:\/|~)|:|[\x00-\x1f]/.test(path) || path.split('/').includes('..') || posix.normalize(path) !== path)
@@ -176,7 +177,7 @@ export async function buildGraphAssertionPacket(fs, access, principal, options) 
         if (!fits(result)) {
             const minimal = { view: 'assertions', assertions: [], coverage: { globalIntegrity: false }, partial: true, nextAction };
             if (!fits(minimal))
-                throw Error('budget');
+                throw guidanceError(Error('budget'), 'guid-ac92056bf8ddf54c');
             return minimal;
         }
         return result;

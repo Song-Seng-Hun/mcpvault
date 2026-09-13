@@ -10,7 +10,7 @@ function ownerPath(options) {
         return undefined;
     const path = options.ownerPath.replace(/\\/g, '/');
     if (!path || path.startsWith('/') || path.split('/').some(part => !part || part === '.' || part === '..')) {
-        throw guidanceError(new Error('Invalid owner activity storage path'), 'guid-c151366effa760d3');
+        throw guidanceError(new Error('Invalid owner activity storage path'), 'guid-48299d78ec39bf08');
     }
     return path;
 }
@@ -69,19 +69,19 @@ async function assertSafeExistingPath(root, target, requireFile) {
  * and dispatching the native mutation. This is not an OS administrator lock. */
 function assertFinalPath(root, target, expected) {
     if (realpathSync(root.lexical) !== root.canonical)
-        throw new Error('Federation trusted root binding changed');
+        throw guidanceError(new Error('Federation trusted root binding changed'), 'guid-4c04a99af8deaefc');
     let current = root.lexical;
     let info = lstatSync(current);
     for (const part of components(root.lexical, target)) {
         if (!info.isDirectory())
-            throw new Error('Federation storage parent is not a directory');
+            throw guidanceError(new Error('Federation storage parent is not a directory'), 'guid-e842f9b2e9d1b059');
         current = join(current, part);
         info = lstatSync(current);
         if (info.isSymbolicLink() || !isInside(root.canonical, realpathSync(current)))
-            throw new Error('Federation storage path changed to a symbolic link or junction');
+            throw guidanceError(new Error('Federation storage path changed to a symbolic link or junction'), 'guid-72040e96b744216d');
     }
     if (expected && (info.ino !== expected.ino || info.dev !== expected.dev || info.isFile() !== expected.isFile()))
-        throw new Error('Federation storage file binding changed');
+        throw guidanceError(new Error('Federation storage file binding changed'), 'guid-6086c69bdbed2b02');
     return info;
 }
 async function ensureSafeParent(root, parent) {
@@ -216,7 +216,7 @@ export async function writeFederationFileAtomic(rootInput, targetInput, content,
         try {
             const destination = assertFinalPath(root, target);
             if (!destination.isFile())
-                throw new Error('Federation destination is not a regular file');
+                throw guidanceError(new Error('Federation destination is not a regular file'), 'guid-279fdb5a0071af90');
         }
         catch (error) {
             if (error.code !== 'ENOENT')

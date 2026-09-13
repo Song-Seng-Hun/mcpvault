@@ -43,10 +43,10 @@ export class QuestionPacketService {
   }
 
   async read(params: QuestionParams, situation?: SituationOptions): Promise<Record<string, any>> {
-    if (params.retrievalMode !== undefined && !['legacy', 'evidence'].includes(params.retrievalMode)) throw new Error('Invalid retrievalMode');
+    if (params.retrievalMode !== undefined && !['legacy', 'evidence'].includes(params.retrievalMode)) throw guidanceError(new Error('Invalid retrievalMode'), 'guid-fa16d4425906bd99');
     const evidenceMode = !situation && params.retrievalMode === 'evidence';
-    if (params.graphDepth !== undefined && params.graphDepth !== 1 && params.graphDepth !== 2) throw Error('graphDepth must be 1 or 2');
-    if (params.graphDepth === 2 && !evidenceMode) throw Error('graphDepth 2 requires query and evidence retrieval');
+    if (params.graphDepth !== undefined && params.graphDepth !== 1 && params.graphDepth !== 2) throw guidanceError(Error('graphDepth must be 1 or 2'), 'guid-919282f590a93b19');
+    if (params.graphDepth === 2 && !evidenceMode) throw guidanceError(Error('graphDepth 2 requires query and evidence retrieval'), 'guid-62e06c26e89f8b01');
     const graphMode = params.graphDepth === 2;
     if (typeof params.query !== 'string' || !params.query.trim() || params.query.length > 1000) throw guidanceError(new Error('query must contain 1–1000 characters'), 'guid-81281f7bddea83f8');
     const maxChars = params.maxChars ?? 4000;
@@ -84,7 +84,7 @@ export class QuestionPacketService {
     const load = async (path: string, expectedRevision?: string) => {
       if (sources.has(path)) {
         const cached = sources.get(path)!;
-        if (expectedRevision && cached.revision !== expectedRevision) throw new Error('Context changed; retry the question');
+        if (expectedRevision && cached.revision !== expectedRevision) throw guidanceError(new Error('Context changed; retry the question'), 'guid-9e2c5234ada24056');
         return cached;
       }
       if (sources.size >= 8) { gaps.add('source_window_exhausted'); return; }
@@ -173,7 +173,7 @@ export class QuestionPacketService {
       while (length() > maxChars && envelope.candidates?.length > 1) { envelope.candidates.pop(); envelope.truncated = true; }
       if (length() > maxChars) throw new PacketBudgetError('Response envelope exceeds maxChars; retry with a larger budget');
       if ([...sources.keys()].some(path => !canAccess(path))) throw guidanceError(new Error('Context changed; retry the question'), 'guid-9e2c5234ada24056');
-      if (graphMode && [...metadata].some(([path, note]) => note && !canAccess(path))) throw Error('Graph context changed');
+      if (graphMode && [...metadata].some(([path, note]) => note && !canAccess(path))) throw guidanceError(Error('Graph context changed'), 'guid-7189502ebb2d5fd8');
       return envelope;
     };
     try {
@@ -275,7 +275,7 @@ export class QuestionPacketService {
         return row;
       };
       if (graphMode && !constrainedQuery(query)) {
-        for (const root of roots) if (root.hit.rv && root.note.revision !== root.hit.rv) throw Error('Graph root changed');
+        for (const root of roots) if (root.hit.rv && root.note.revision !== root.hit.rv) throw guidanceError(Error('Graph root changed'), 'guid-abd1d017a9291006');
         const graph = await discoverQuestionGraph({ fs: this.fs, roots, metadata: getMetadata, allowed: canAccess,
           referenceAllowed: (from, to) => this.access.canReferenceFrom(from, to),
           eligible: (path, note) => !social(path, note.frontmatter), metadataExhausted: () => examined > 40,
@@ -362,7 +362,7 @@ export class QuestionPacketService {
         const path = visible[0]!;
         const meta = await getMetadata(path);
         if (evidenceMode && meta && sources.size >= 8 && !sources.has(path)) {
-          if (!meta.revision) throw new Error('Context revision unavailable');
+          if (!meta.revision) throw guidanceError(new Error('Context revision unavailable'), 'guid-f7ce8a1dd794aad6');
           // This exact, current target remains metadata-only until the next read.
           deferredAction = undefined;
           deferContext(path, meta.revision, link.role === 'counterpoint' ? 'counterpoint_omitted_read_before_deciding' : link.prerequisite ? 'prerequisite_omitted_read_before_deciding' : 'linked_context_window_exhausted');

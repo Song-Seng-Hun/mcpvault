@@ -142,7 +142,7 @@ export class CommunityFeaturesService {
     }
     requireReputation() {
         if (!this.reputation)
-            throw new Error('Social activity requires the collaboration feature');
+            throw guidanceError(new Error('Social activity requires the collaboration feature'), 'guid-bb8f4b2620e30861');
         return this.reputation;
     }
     async close() {

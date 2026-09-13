@@ -159,7 +159,7 @@ export class CommunityFeaturesService {
   ) { this.snapshotStorage = new HostDerivedStorage(vaultPath, cacheDir); }
 
   private requireReputation(): ReputationService {
-    if (!this.reputation) throw new Error('Social activity requires the collaboration feature');
+    if (!this.reputation) throw guidanceError(new Error('Social activity requires the collaboration feature'), 'guid-bb8f4b2620e30861');
     return this.reputation;
   }
 

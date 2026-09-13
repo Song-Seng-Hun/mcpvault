@@ -135,12 +135,12 @@ export class DocumentIndex {
     key(path, revision) { return hash(`${this.namespace}\0${path}\0${revision}\0${DOCUMENT_STRUCTURE_PROFILE}`); }
     async assertPrivateCache(file) {
         if (!this.options.cacheDir)
-            throw new Error('Confidential parsing requires provisioned private host derivative storage');
+            throw guidanceError(new Error('Confidential parsing requires provisioned private host derivative storage'), 'guid-46d997e09e10aea0');
         await validateRoleplayStorage({ vaultPath: this.reader.fs.getVaultPath(), hostPath: this.options.cacheDir });
         if (file) {
             await canonicalRoleplayPath(file, true, true);
             if ((await lstat(file)).nlink !== 1)
-                throw new Error('Document cache cannot use shared file links');
+                throw guidanceError(new Error('Document cache cannot use shared file links'), 'guid-9709d47ad4b3e978');
         }
         await assertHostPrivateStorage([this.options.cacheDir, ...(file ? [file] : [])]);
     }
@@ -150,7 +150,7 @@ export class DocumentIndex {
     /** Revalidate metadata-only pages without retaining or decoding source bodies. */
     async revalidatePin(pin, principal) {
         if (this.closed)
-            throw new Error('Document index is closed');
+            throw guidanceError(new Error('Document index is closed'), 'guid-5d0fa2a802028c72');
         this.reader.assertAdmitted(this.reader.access.toPublicPath(pin.path), principal);
         if (this.reader.access.isConfidentialDocument(pin.path)) {
             await this.assertPrivateCache();
@@ -166,7 +166,7 @@ export class DocumentIndex {
         // The final hash/admission check follows the last asynchronous privacy check.
         await this.reader.assertPin(pin, principal);
         if (this.closed)
-            throw new Error('Document index is closed');
+            throw guidanceError(new Error('Document index is closed'), 'guid-5d0fa2a802028c72');
     }
     async loadWithinWork(path, principal, expectedRevision) {
         if (this.closed)
@@ -328,7 +328,7 @@ export class DocumentIndex {
         const submittingPrincipal = principal === undefined ? undefined : structuredClone(principal);
         const assert = () => {
             if (this.reader.assertAdmitted(publicPath, submittingPrincipal) !== path)
-                throw new Error('Document source admission changed');
+                throw guidanceError(new Error('Document source admission changed'), 'guid-89630fc0ad77e53f');
         };
         return { assert, refresh: async () => { await prepareOwnerActivityStorageWrite(path); assert(); } };
     }
@@ -349,7 +349,7 @@ export class DocumentIndex {
         await this.assertPrivateCache(path);
         const held = await this.writerLease.stat(), current = await lstat(path);
         if (!current.isFile() || current.nlink !== 1 || held.ino !== current.ino || held.dev !== current.dev) {
-            throw new Error('Document cache writer lease changed');
+            throw guidanceError(new Error('Document cache writer lease changed'), 'guid-e8a91a7844fb7d8f');
         }
         return true;
     }

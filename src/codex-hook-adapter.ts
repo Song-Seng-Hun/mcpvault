@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import type { FileSystemService } from './filesystem.js';
 import type { ScopeAccessPolicy } from './scope-access.js';
 import type { ScopePrincipal } from './scope-auth.js';
@@ -36,7 +37,7 @@ export class CodexHookServiceAdapter implements CodexHookAdapter {
   execute(work: CodexHookWork, context: CodexHookContext): Promise<CodexHookOutcome> { return this.run(work, context, false); }
   reconcile(work: CodexHookWork, context: CodexHookContext): Promise<CodexHookOutcome> { return this.run(work, context, true); }
   private async run(work: CodexHookWork, context: CodexHookContext, reconcile: boolean): Promise<CodexHookOutcome> {
-    const { fs, access } = this.options, unavailable = () => Error('Hook operation unavailable');
+    const { fs, access } = this.options, unavailable = () => guidanceError(Error('Hook operation unavailable'), 'guid-abb06c6aacbfcde7');
     try {
       await context.assertCurrent();
       const principal = await this.options.authorize(context.ticket.accountId);

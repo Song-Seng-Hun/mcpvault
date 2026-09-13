@@ -65,7 +65,7 @@ export function assertOwnerActivityStorageAccess(path) {
     const document = activeDocumentStorageContext();
     document?.assertFresh();
     if (document?.canAccessPath?.(path) === false)
-        throw new Error('Access denied: owner activity data scope unavailable');
+        throw guidanceError(new Error('Access denied: owner activity data scope unavailable'), 'guid-c0c9e18369c559ac');
 }
 /** Refresh owner consent before an optional adapter performs its physical write. */
 export async function prepareOwnerActivityStorageWrite(path) {
@@ -78,11 +78,11 @@ export async function prepareOwnerActivityStorageWrite(path) {
 export function assertEnterpriseStorageAccess(path, write = false) {
     const current = context.getStore();
     if (current?.documentContext?.canAccessPath?.(path) === false)
-        throw new Error('Access denied: owner activity data scope unavailable');
+        throw guidanceError(new Error('Access denied: owner activity data scope unavailable'), 'guid-c0c9e18369c559ac');
     if (current?.documentContext?.access.hasDocumentPolicy()) {
         current.documentContext.assertFresh();
         if (!current.documentContext.access.canReadProtectedDocument(path, current.documentContext.principal))
-            throw new Error('Access denied: protected document unavailable');
+            throw guidanceError(new Error('Access denied: protected document unavailable'), 'guid-5f2a63e873739df9');
     }
     if (!current?.access.getEnterpriseProfile())
         return;

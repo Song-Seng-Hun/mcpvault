@@ -48,22 +48,22 @@ export function parseCliArgs(args: string[]): ParsedCliArgs {
     const arg = args[index]!;
     if (arg === '--compilation-config' || arg.startsWith('--compilation-config=')) {
       const value = arg === '--compilation-config' ? args[++index] : arg.slice('--compilation-config='.length);
-      if (!value || !value.trim() || value.startsWith('--') || compilationConfig !== undefined) throw new Error('--compilation-config requires one private host configuration file');
+      if (!value || !value.trim() || value.startsWith('--') || compilationConfig !== undefined) throw guidanceError(new Error('--compilation-config requires one private host configuration file'), 'guid-a5df95d10a0e23ce');
       compilationConfig = value; continue;
     }
     if (arg === '--maintenance-config' || arg.startsWith('--maintenance-config=')) {
       const value = arg === '--maintenance-config' ? args[++index] : arg.slice('--maintenance-config='.length);
-      if (!value || !value.trim() || value.startsWith('--') || maintenanceConfig !== undefined) throw new Error('--maintenance-config requires one private host configuration file');
+      if (!value || !value.trim() || value.startsWith('--') || maintenanceConfig !== undefined) throw guidanceError(new Error('--maintenance-config requires one private host configuration file'), 'guid-07f33594579e4cf0');
       maintenanceConfig = value; continue;
     }
     if (arg === '--owner-activity-config' || arg.startsWith('--owner-activity-config=')) {
       const value = arg === '--owner-activity-config' ? args[++index] : arg.slice('--owner-activity-config='.length);
-      if (!value || !value.trim() || value.startsWith('--') || ownerActivityConfig !== undefined) throw new Error('--owner-activity-config requires one host configuration file');
+      if (!value || !value.trim() || value.startsWith('--') || ownerActivityConfig !== undefined) throw guidanceError(new Error('--owner-activity-config requires one host configuration file'), 'guid-e95fe85bad0b4904');
       ownerActivityConfig = value; continue;
     }
     if (arg === '--features-config' || arg.startsWith('--features-config=')) {
       const value = arg === '--features-config' ? args[++index] : arg.slice('--features-config='.length);
-      if (!value || !value.trim() || value.startsWith('--') || featuresConfig !== undefined) throw new Error('--features-config requires one host configuration file');
+      if (!value || !value.trim() || value.startsWith('--') || featuresConfig !== undefined) throw guidanceError(new Error('--features-config requires one host configuration file'), 'guid-fc0e1ded2f8c054c');
       featuresConfig = value; continue;
     }
     if (arg === '--benchmark-config' || arg.startsWith('--benchmark-config=')) {

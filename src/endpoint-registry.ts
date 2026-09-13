@@ -783,7 +783,7 @@ export class EndpointRegistry {
         const activity = ownerActivityForEndpointTool(item.toolName);
         const consent = (action: OwnerActivityAction) => !activity || context.ownerActivity?.eligibility[activity]?.[action] === true;
         const ownerProject = <T extends { available: boolean; state: 'ready' | 'locked' | 'disabled'; reason?: string }>(value: T, action: OwnerActivityAction): T =>
-          value.state === 'disabled' || consent(action) ? value : { ...value, available: false, state: 'locked', reason: 'owner consent required' };
+          value.state === 'disabled' || consent(action) ? value : { ...value, available: false, state: 'locked', reason: guidanceText('guid-664ea33a123e5a04', 'owner consent required') };
         const base = ownerProject({ available: parentAvailable, state: parentState, requires: item.requires, ...(parentReason && { reason: parentReason }) },
           ownerActionForEndpointTool(item.toolName, item.mutating));
         const operations = operationAvailability(item, context, { available: parentAvailable, state: parentState, requires: item.requires, ...(parentReason && { reason: parentReason }) });

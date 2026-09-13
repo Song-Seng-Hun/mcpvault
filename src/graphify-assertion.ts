@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { createHash } from 'node:crypto';
 import { posix } from 'node:path';
 import type { GraphAssertion } from './graph-assertion.js';
@@ -59,5 +60,5 @@ export async function adaptGraphifyAssertions(input: unknown, host: GraphifyAsse
     await verify();
     return { assertions, partial: true, testStatus: 'not_executed', tool: { name: 'graphifyy', version: '0.9.58', adapterVersion: 1 },
       notice: 'Host-private structural candidates; upstream may deduplicate identical payloads. Not a complete occurrence trace or a public ACL-safe view.' };
-  } catch { throw Error('Graphify result unavailable or changed; rebuild the explicit host corpus.'); }
+  } catch { throw guidanceError(Error('Graphify result unavailable or changed; rebuild the explicit host corpus.'), 'guid-333fbaec56a4ba90'); }
 }

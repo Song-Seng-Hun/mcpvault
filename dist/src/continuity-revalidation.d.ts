@@ -32,7 +32,7 @@ export declare function learningRevalidation(input: {
         endpointId: string;
         requiredArguments: string[];
     };
-    guidance: string;
+    guidance: "Read changed sources at these revisions; follow read continuations for omitted content. Review route/dependencies when required. Save reviewed progress using the resume checkpoint revision, preserving only still-valid completedThrough. Read receipts do not validate understanding; its checks remain separate.";
 };
 export {};
 //# sourceMappingURL=continuity-revalidation.d.ts.map

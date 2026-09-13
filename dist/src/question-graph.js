@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { QUESTION_GRAPH_PROFILE } from './graph-contract.js';
 const array = (value) => Array.isArray(value) ? value : typeof value === 'string' ? [value] : [];
 const priority = (r) => r.relation === 'contradicts' || r.relation === 'depends_on' ? 0 : r.relation === 'evidence' ? 1 : 2;
@@ -82,7 +83,7 @@ export async function discoverQuestionGraph(ctx) {
                 continue;
             const note = candidates.get(path).note;
             if (!note.revision)
-                throw Error('Graph author revision unavailable');
+                throw guidanceError(Error('Graph author revision unavailable'), 'guid-f3ba8bde3042aed6');
             resolvedEdges.set(path, []);
             const declared = declarations(note);
             if (declared.truncated)
@@ -154,7 +155,7 @@ export async function discoverQuestionGraph(ctx) {
             }
             const next = visible[0];
             if (!author.revision || !next.note.revision || (ref.revision && next.note.revision !== ref.revision))
-                throw Error('Graph context changed');
+                throw guidanceError(Error('Graph context changed'), 'guid-7189502ebb2d5fd8');
             if (ref.incoming) {
                 // Backlink indexes may match several meanings of an authored target.
                 // Re-resolve the original declaration, not just its author filename.

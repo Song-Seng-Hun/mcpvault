@@ -738,7 +738,7 @@ export class EndpointRegistry {
             const parentReason = hostMissing ? 'host configuration is missing' : roleplaySetupMissing ? 'host administrator configuration is missing' : skillDisabled ? 'skill evolution is disabled by the host' : disabled ? 'server is read-only' : !context.authenticated && item.requires.length > 0 && item.endpointId !== 'auth.register' && item.endpointId !== 'auth.login' ? 'authentication required' : missing.length > 0 ? `capability required: ${missing.join(', ')}` : undefined;
             const activity = ownerActivityForEndpointTool(item.toolName);
             const consent = (action) => !activity || context.ownerActivity?.eligibility[activity]?.[action] === true;
-            const ownerProject = (value, action) => value.state === 'disabled' || consent(action) ? value : { ...value, available: false, state: 'locked', reason: 'owner consent required' };
+            const ownerProject = (value, action) => value.state === 'disabled' || consent(action) ? value : { ...value, available: false, state: 'locked', reason: guidanceText('guid-664ea33a123e5a04', 'owner consent required') };
             const base = ownerProject({ available: parentAvailable, state: parentState, requires: item.requires, ...(parentReason && { reason: parentReason }) }, ownerActionForEndpointTool(item.toolName, item.mutating));
             const operations = operationAvailability(item, context, { available: parentAvailable, state: parentState, requires: item.requires, ...(parentReason && { reason: parentReason }) });
             if (operations) {

@@ -70,13 +70,13 @@ function validateEmployeeDepartments(value) {
     if (departmentIds !== undefined) {
         if (!Array.isArray(departmentIds) || departmentIds.length > MAX_EMPLOYEE_DEPARTMENTS
             || !Array.from(departmentIds).every(validId) || new Set(departmentIds).size !== departmentIds.length) {
-            throw new Error('departmentIds must contain at most 32 unique opaque lowercase IDs of 1-64 characters');
+            throw guidanceError(new Error('departmentIds must contain at most 32 unique opaque lowercase IDs of 1-64 characters'), 'guid-daef418f49200d8b');
         }
         departments.departmentIds = [...departmentIds];
     }
     if (defaultDepartmentId !== undefined) {
         if (!validId(defaultDepartmentId) || !departments.departmentIds?.includes(defaultDepartmentId)) {
-            throw new Error('defaultDepartmentId must be a valid ID in departmentIds');
+            throw guidanceError(new Error('defaultDepartmentId must be a valid ID in departmentIds'), 'guid-8ae8416426ff14da');
         }
         departments.defaultDepartmentId = defaultDepartmentId;
     }
@@ -84,7 +84,7 @@ function validateEmployeeDepartments(value) {
 }
 function assertDepartmentRevision(value, field) {
     if (!Number.isSafeInteger(value) || Number(value) < 0)
-        throw new Error(`${field} must be a non-negative safe integer`);
+        throw guidanceError(new Error(`${field} must be a non-negative safe integer`), 'guid-27a1f5c939c7a8b2');
 }
 function normalizeBinding(value) {
     if (!isRecord(value))
@@ -426,7 +426,7 @@ export class EnterpriseRegistry {
         return await this.exclusive(async () => {
             const database = this.readDatabase();
             if (database.profile.mode !== 'company' && departments.departmentIds?.length)
-                throw new Error('Public mode cannot grant company departments');
+                throw guidanceError(new Error('Public mode cannot grant company departments'), 'guid-ce3c6be69ef2378d');
             entryCapacity(database, 'employees');
             if (database.employees.some(item => item.userId === userId))
                 throw guidanceError(new Error(`Enterprise employee already exists: ${userId}`), 'guid-d28f2d52be263dff');
@@ -441,21 +441,21 @@ export class EnterpriseRegistry {
         const userId = normalizeScopeId(params.userId, 'userId');
         const departments = validateEmployeeDepartments(params);
         if (departments.departmentIds === undefined)
-            throw new Error('departmentIds is required');
+            throw guidanceError(new Error('departmentIds is required'), 'guid-3dbe89140dcde411');
         const expectedRevision = params.expectedDepartmentRevision;
         assertDepartmentRevision(expectedRevision, 'expectedDepartmentRevision');
         return await this.exclusive(async () => {
             const database = this.readDatabase();
             if (database.profile.mode !== 'company')
-                throw new Error('Department updates require company mode');
+                throw guidanceError(new Error('Department updates require company mode'), 'guid-f468167527ea01be');
             const employee = database.employees.find(item => item.userId === userId);
             if (!employee)
                 throw guidanceError(new Error(`Unknown enterprise employee: ${userId}`), 'guid-fa77b46d6e0bca27');
             const currentRevision = employee.departmentRevision ?? 0;
             if (currentRevision !== expectedRevision)
-                throw new Error(`Stale department revision: expected ${expectedRevision}, current ${currentRevision}`);
+                throw guidanceError(new Error(`Stale department revision: expected ${expectedRevision}, current ${currentRevision}`), 'guid-9aadc427a1eadda1');
             if (currentRevision === Number.MAX_SAFE_INTEGER)
-                throw new Error('departmentRevision capacity reached');
+                throw guidanceError(new Error('departmentRevision capacity reached'), 'guid-ef742f0ca3c79d48');
             const updated = { ...employee, ...departments, departmentRevision: currentRevision + 1 };
             if (departments.defaultDepartmentId === undefined)
                 delete updated.defaultDepartmentId;

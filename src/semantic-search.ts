@@ -1044,7 +1044,7 @@ export class SemanticSearchService {
 
   private async indexDirectory(create = false): Promise<string> {
     const path = await this.snapshotStorage.verifiedTree(INDEX_DIR, create);
-    if (this.indexPath && this.indexPath !== path) throw new Error('Semantic private storage changed; restart required');
+    if (this.indexPath && this.indexPath !== path) throw guidanceError(new Error('Semantic private storage changed; restart required'), 'guid-ce87bde12e15e0b9');
     this.indexPath = path;
     return path;
   }

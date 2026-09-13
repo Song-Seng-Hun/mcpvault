@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { createHash } from 'node:crypto';
 import { posix } from 'node:path';
 import { GRAPH_CONTRACT_VERSION } from './graph-contract.js';
@@ -58,6 +59,6 @@ export async function adaptGraphifyAssertions(input, host) {
             notice: 'Host-private structural candidates; upstream may deduplicate identical payloads. Not a complete occurrence trace or a public ACL-safe view.' };
     }
     catch {
-        throw Error('Graphify result unavailable or changed; rebuild the explicit host corpus.');
+        throw guidanceError(Error('Graphify result unavailable or changed; rebuild the explicit host corpus.'), 'guid-333fbaec56a4ba90');
     }
 }

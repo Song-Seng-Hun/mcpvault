@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { createHash } from 'node:crypto';
 import { PathFilter } from './pathfilter.js';
 import { isOriginalPath } from './original-boundary.js';
@@ -18,7 +19,7 @@ export type CompilationAdmission = { status: 'ready'; fingerprint: string; sourc
   status: 'diagnostic_only' | 'unavailable' | 'review_required' | 'waiting_runtime'; fingerprint?: never;
 };
 export const compilationHash = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
-const invalid = () => Error('Invalid compilation configuration');
+const invalid = () => guidanceError(Error('Invalid compilation configuration'), 'guid-7b4c064460fbd43d');
 const id = (v: unknown): v is string => typeof v === 'string' && /^[a-z0-9][a-z0-9._-]{0,99}$/.test(v);
 function record(v: unknown, keys: string[]): Record<string, any> {
   if (!v || typeof v !== 'object' || Array.isArray(v) || Object.keys(v).some(k => !keys.includes(k))) throw invalid();

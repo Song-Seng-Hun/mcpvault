@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { createHash } from 'node:crypto';
 import { types } from 'node:util';
 import { validateCapabilitySelection } from './capability-graph.js';
@@ -19,36 +20,36 @@ const graph = HOST_FEATURE_IDS_V1.map(id => ({
 export function parseHostFeatureConfig(input) {
     if (!input || typeof input !== 'object' || types.isProxy(input) || Array.isArray(input)
         || ![Object.prototype, null].includes(Object.getPrototypeOf(input))) {
-        throw new Error('Host feature configuration must be a plain data object');
+        throw guidanceError(new Error('Host feature configuration must be a plain data object'), 'guid-8cc3e0bbc4d56326');
     }
     const keys = Reflect.ownKeys(input);
     if (keys.length !== 2 || !keys.includes('version') || !keys.includes('selected')) {
-        throw new Error('Host feature configuration requires exactly version and selected fields');
+        throw guidanceError(new Error('Host feature configuration requires exactly version and selected fields'), 'guid-c8d6bdd82febaacb');
     }
     const fields = Object.getOwnPropertyDescriptors(input);
     if (Object.values(fields).some(field => !Object.hasOwn(field, 'value') || !field.enumerable)) {
-        throw new Error('Host feature configuration fields must be enumerable data');
+        throw guidanceError(new Error('Host feature configuration fields must be enumerable data'), 'guid-e81fcbaa21d1ac35');
     }
     if (fields.version.value !== 1)
-        throw new Error('Unsupported host feature configuration version');
+        throw guidanceError(new Error('Unsupported host feature configuration version'), 'guid-69e0395c276e6794');
     const list = fields.selected.value;
     if (!Array.isArray(list) || types.isProxy(list) || Object.getPrototypeOf(list) !== Array.prototype
         || list.length < 1 || list.length > HOST_FEATURE_IDS_V1.length
         || Reflect.ownKeys(list).length !== list.length + 1) {
-        throw new Error('Host feature selected list outside bounds');
+        throw guidanceError(new Error('Host feature selected list outside bounds'), 'guid-c15bfe68dd910864');
     }
     const selected = [];
     for (let i = 0; i < list.length; i++) {
         const element = Object.getOwnPropertyDescriptor(list, String(i));
         if (!element || !Object.hasOwn(element, 'value') || !element.enumerable || typeof element.value !== 'string') {
-            throw new Error('Host feature selected list must contain explicit data IDs');
+            throw guidanceError(new Error('Host feature selected list must contain explicit data IDs'), 'guid-e709e3464f2abfe2');
         }
         selected.push(element.value);
     }
     const validated = validateCapabilitySelection(graph, selected);
     // The shared DAG permits an empty selection; a host configuration requires core.
     if (!validated.includes('wiki-core'))
-        throw new Error('Host feature selection requires wiki-core');
+        throw guidanceError(new Error('Host feature selection requires wiki-core'), 'guid-a7900400ce6fb967');
     return Object.freeze({ version: 1, selected: Object.freeze(validated.sort()) });
 }
 /** Config identity only, not a deployment, permission or endpoint-catalog hash. */
