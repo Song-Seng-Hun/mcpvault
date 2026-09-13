@@ -1765,9 +1765,12 @@ export function createServer(vaultPath, options = {}) {
                         return jsonResult(await fidelity.check({ ...trimmedArgs, principal }, async () => { await revalidateActor(); }), false);
                     case 'manage_wiki_compilation':
                     case 'read_wiki_compilation': {
-                        const compilationArgs = { ...trimmedArgs, ...(Array.isArray(trimmedArgs.inputs) && {
+                        const { accessToken: _compilationToken, ...operationArgs } = trimmedArgs;
+                        const compilationArgs = { ...operationArgs, ...(Array.isArray(trimmedArgs.inputs) && {
                                 inputs: trimmedArgs.inputs.map((input) => ({ ...input, path: scopeAccess.resolveExternalPath(input.path, principal) })),
                             }) };
+                        if (compilationArgs.documentPath !== undefined)
+                            compilationArgs.documentPath = scopeAccess.resolveExternalPath(compilationArgs.documentPath, principal);
                         if (compilationArgs.evidence) {
                             compilationArgs.evidence = { ...compilationArgs.evidence };
                             for (const key of ['facts', 'coverage'])

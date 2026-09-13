@@ -4,13 +4,17 @@ import { PathFilter } from './pathfilter.js';
 import { isOriginalPath } from './original-boundary.js';
 import type { ScopeAccessPolicy } from './scope-access.js';
 import type { ScopePrincipal } from './scope-auth.js';
+import { isDocumentBundleId } from './document-bundle-identities.js';
 
 export const COMPILATION_OPERATIONS = ['index', 'synthesize', 'embed', 'vision', 'convert'] as const;
 export type CompilationOperation = typeof COMPILATION_OPERATIONS[number];
 export interface CompilationSourcePolicy { path: string; classification: 'resolved' | 'unresolved'; mode: 'source_only' | 'synthesis_allowed' }
+export interface CompilationBundleGrant { documentPath: string; documentId: string; chapterRoot: string }
 export interface CompilationProject {
   id: string; ruleVersion: string; sources: CompilationSourcePolicy[]; outputPaths: string[];
   runtimeIds: string[]; operations: CompilationOperation[];
+  /** Separate explicit grant; existing output/maintenance rights do not imply it. */
+  chapterBundles?: CompilationBundleGrant[];
 }
 export interface CompilationConfig { version: 1; enabled: boolean; accountId: string; projects: CompilationProject[] }
 /** Only returned by a trusted host verifier. Provider/model/client names are not verification. */
@@ -42,11 +46,16 @@ export function compilationPath(value: unknown): string {
   return value;
 }
 
+/** Generic migration must not take ownership of service records or templates. */
+export const ordinaryCompilationDocument = (path: string): boolean => !isOriginalPath(path)
+  && !/(?:^|\/)(?:Community|PublicCommunity|_continuity|_collaboration|_wiki|_roleplay)(?:\/|$)/i.test(path)
+  && !/^Templates\/MCPVault(?:\/|$)/i.test(path) && path.toLowerCase() !== '환영합니다!.md';
+
 export function validateCompilationConfig(value: unknown): CompilationConfig {
   const raw = record(value, ['version', 'enabled', 'accountId', 'projects']);
   if (raw.version !== 1 || typeof raw.enabled !== 'boolean' || !id(raw.accountId)) throw invalid();
   const projects = unique(array(raw.projects, 32, value => {
-    const p = record(value, ['id', 'ruleVersion', 'sources', 'outputPaths', 'runtimeIds', 'operations']);
+    const p = record(value, ['id', 'ruleVersion', 'sources', 'outputPaths', 'runtimeIds', 'operations', 'chapterBundles']);
     if (!id(p.id) || !id(p.ruleVersion)) throw invalid();
     const sources = unique(array(p.sources, 64, value => {
       const s = record(value, ['path', 'classification', 'mode']);
@@ -62,8 +71,24 @@ export function validateCompilationConfig(value: unknown): CompilationConfig {
     const operations = unique(array(p.operations, 5, v => {
       if (!(COMPILATION_OPERATIONS as readonly unknown[]).includes(v)) throw invalid(); return v as CompilationOperation;
     }), v => v);
-    return { id: p.id as string, ruleVersion: p.ruleVersion as string, sources, outputPaths, runtimeIds, operations };
+    const chapterBundles = p.chapterBundles === undefined ? undefined : unique(array(p.chapterBundles, 64, value => {
+      const b = record(value, ['documentPath', 'documentId', 'chapterRoot']);
+      const documentPath = compilationPath(b.documentPath);
+      if (!isDocumentBundleId(b.documentId) || !ordinaryCompilationDocument(documentPath)
+        || !sources.some(source => source.path === documentPath) || typeof b.chapterRoot !== 'string'
+        || /[#\[\]^]/.test(b.chapterRoot) || !ordinaryCompilationDocument(compilationPath(`${b.chapterRoot}/chapter.md`))) throw invalid();
+      return { documentPath, documentId: b.documentId, chapterRoot: b.chapterRoot };
+    }), grant => grant.documentPath.toLowerCase());
+    return { id: p.id as string, ruleVersion: p.ruleVersion as string, sources, outputPaths, runtimeIds, operations,
+      ...(chapterBundles && { chapterBundles }) };
   }), p => p.id);
+  const identities = new Map<string, string>(), documents = new Map<string, string>();
+  for (const project of projects) for (const grant of project.chapterBundles ?? []) {
+    const binding = `${grant.documentPath.toLowerCase()}\0${grant.chapterRoot.toLowerCase()}`;
+    if (identities.has(grant.documentId) && identities.get(grant.documentId) !== binding
+      || documents.has(grant.documentPath.toLowerCase()) && documents.get(grant.documentPath.toLowerCase()) !== grant.documentId) throw invalid();
+    identities.set(grant.documentId, binding); documents.set(grant.documentPath.toLowerCase(), grant.documentId);
+  }
   return { version: 1, enabled: raw.enabled, accountId: raw.accountId, projects };
 }
 

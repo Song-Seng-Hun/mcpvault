@@ -3,6 +3,7 @@ import type { FileSystemService } from './filesystem.js';
 import type { ScopeAccessPolicy } from './scope-access.js';
 import type { ScopePrincipal } from './scope-auth.js';
 import type { CompilationHost } from './compilation-host.js';
+import { CompilationBundleService } from './compilation-bundle-service.js';
 import { GRAPH_CONTRACT_VERSION } from './graph-contract.js';
 import { isModerationHidden } from './moderation-policy.js';
 import { isMissingVaultPath } from './vault-read-errors.js';
@@ -36,6 +37,8 @@ export interface CompilationOptions {
   protectSources?(job: Readonly<CompilationJob>, assertCurrent: () => Promise<void>): Promise<void>;
 }
 export interface CompilationParams {
+  kind?: 'single_output' | 'document_bundle'; documentPath?: string; expectedDocumentRevision?: string;
+  bundleId?: string; projection?: 'summary' | 'original'; startOffset?: number;
   op?: string; requestId?: string; projectId?: string; operation?: CompilationOperation;
   inputs?: Array<{ path: string; expectedRevision: string; role: 'source' | 'member' | 'concept' | 'topic' }>;
   outputPath?: string; expectedOutputRevision?: string; expectedJobRevision?: string; content?: string; evidence?: unknown; observation?: unknown; maxChars?: number;
@@ -54,7 +57,8 @@ export class CompilationService {
   private pendingReconcile = false;
   private notificationTask: Promise<void> | undefined;
   private sessionBusy = false;
-  constructor(private readonly options: CompilationOptions) {}
+  private readonly bundles: CompilationBundleService;
+  constructor(private readonly options: CompilationOptions) { this.bundles = new CompilationBundleService(options); }
   private serial<T>(operation: () => Promise<T>): Promise<T> {
     const pending = this.tail.then(operation, operation); this.tail = pending.catch(() => undefined); return pending;
   }
@@ -173,6 +177,9 @@ export class CompilationService {
     });
   }
   private async run(params: CompilationParams, principal: ScopePrincipal | undefined, protectSources: CompilationOptions['protectSources']): Promise<any> {
+    if (params.kind === 'document_bundle') return this.bundles.execute(params, principal);
+    if (params.kind !== undefined && params.kind !== 'single_output'
+      || ['documentPath', 'expectedDocumentRevision', 'bundleId', 'projection', 'startOffset'].some(key => (params as any)[key] !== undefined)) throw unavailable();
     const op = params.op ?? 'diagnose', maxChars = params.maxChars ?? 4000;
     if (!['diagnose', 'prepare', 'read', 'submit', 'check', 'retry'].includes(op) || !Number.isInteger(maxChars) || maxChars < 512 || maxChars > 12000) throw guidanceError(Error('Invalid compilation operation or response budget'), 'guid-1c133560b489d77c');
     if (params.includeInspection !== undefined && (op !== 'read' || typeof params.includeInspection !== 'boolean')

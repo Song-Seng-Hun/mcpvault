@@ -25,6 +25,24 @@ test('compilation requires its own exact host grant; maintenance and client appr
   expect(check()).toMatchObject({ status: 'ready' });
 });
 
+test('chapter bundles need an additional exact host grant and preserve legacy grants unchanged', () => {
+  const grant = { documentPath: 'Knowledge/A.md', documentId: '9cac42de-e32d-41e2-8370-df5f19d3b19c', chapterRoot: 'Knowledge/Chapters' };
+  const candidate = config(); Object.assign(candidate.projects[0]!, { chapterBundles: [grant] });
+  expect(validateCompilationConfig(candidate).projects[0]!.chapterBundles).toEqual([grant]);
+  expect(validateCompilationConfig(config()).projects[0]).not.toHaveProperty('chapterBundles');
+  for (const bad of [
+    { ...grant, documentPath: 'Knowledge/Unregistered.md' }, { ...grant, chapterRoot: '../Chapters' },
+    { ...grant, chapterRoot: 'Community/Chapters' }, { ...grant, chapterRoot: 'Knowledge/.git/Chapters' },
+    { ...grant, chapterRoot: 'Templates/MCPVault/Chapters' }, { ...grant, documentId: 'from-model-name' },
+    { ...grant, approval: true },
+  ]) {
+    const invalid = config(); Object.assign(invalid.projects[0]!, { chapterBundles: [bad] });
+    expect(() => validateCompilationConfig(invalid)).toThrow();
+  }
+  const duplicated = config(); Object.assign(duplicated.projects[0]!, { chapterBundles: [grant, grant] });
+  expect(() => validateCompilationConfig(duplicated)).toThrow();
+});
+
 test.each(['../A.md', 'Knowledge/*', 'Knowledge/./A.md', 'C:/A.md', 'Knowledge/A.md ', 'Knowledge/CON.md', 'Knowledge\\A.md'])('rejects ambiguous host path %s', path => {
   const value = config(); value.projects[0]!.sources[0]!.path = path;
   expect(() => validateCompilationConfig(value)).toThrow();

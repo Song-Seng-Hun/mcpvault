@@ -2,6 +2,7 @@ import { guidanceError } from './guidance-runtime.js';
 import { createHash } from 'node:crypto';
 import { PathFilter } from './pathfilter.js';
 import { isOriginalPath } from './original-boundary.js';
+import { isDocumentBundleId } from './document-bundle-identities.js';
 export const COMPILATION_OPERATIONS = ['index', 'synthesize', 'embed', 'vision', 'convert'];
 export const compilationHash = (value) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const invalid = () => guidanceError(Error('Invalid compilation configuration'), 'guid-7b4c064460fbd43d');
@@ -30,12 +31,16 @@ export function compilationPath(value) {
         throw invalid();
     return value;
 }
+/** Generic migration must not take ownership of service records or templates. */
+export const ordinaryCompilationDocument = (path) => !isOriginalPath(path)
+    && !/(?:^|\/)(?:Community|PublicCommunity|_continuity|_collaboration|_wiki|_roleplay)(?:\/|$)/i.test(path)
+    && !/^Templates\/MCPVault(?:\/|$)/i.test(path) && path.toLowerCase() !== '환영합니다!.md';
 export function validateCompilationConfig(value) {
     const raw = record(value, ['version', 'enabled', 'accountId', 'projects']);
     if (raw.version !== 1 || typeof raw.enabled !== 'boolean' || !id(raw.accountId))
         throw invalid();
     const projects = unique(array(raw.projects, 32, value => {
-        const p = record(value, ['id', 'ruleVersion', 'sources', 'outputPaths', 'runtimeIds', 'operations']);
+        const p = record(value, ['id', 'ruleVersion', 'sources', 'outputPaths', 'runtimeIds', 'operations', 'chapterBundles']);
         if (!id(p.id) || !id(p.ruleVersion))
             throw invalid();
         const sources = unique(array(p.sources, 64, value => {
@@ -57,8 +62,28 @@ export function validateCompilationConfig(value) {
                 throw invalid();
             return v;
         }), v => v);
-        return { id: p.id, ruleVersion: p.ruleVersion, sources, outputPaths, runtimeIds, operations };
+        const chapterBundles = p.chapterBundles === undefined ? undefined : unique(array(p.chapterBundles, 64, value => {
+            const b = record(value, ['documentPath', 'documentId', 'chapterRoot']);
+            const documentPath = compilationPath(b.documentPath);
+            if (!isDocumentBundleId(b.documentId) || !ordinaryCompilationDocument(documentPath)
+                || !sources.some(source => source.path === documentPath) || typeof b.chapterRoot !== 'string'
+                || /[#\[\]^]/.test(b.chapterRoot) || !ordinaryCompilationDocument(compilationPath(`${b.chapterRoot}/chapter.md`)))
+                throw invalid();
+            return { documentPath, documentId: b.documentId, chapterRoot: b.chapterRoot };
+        }), grant => grant.documentPath.toLowerCase());
+        return { id: p.id, ruleVersion: p.ruleVersion, sources, outputPaths, runtimeIds, operations,
+            ...(chapterBundles && { chapterBundles }) };
     }), p => p.id);
+    const identities = new Map(), documents = new Map();
+    for (const project of projects)
+        for (const grant of project.chapterBundles ?? []) {
+            const binding = `${grant.documentPath.toLowerCase()}\0${grant.chapterRoot.toLowerCase()}`;
+            if (identities.has(grant.documentId) && identities.get(grant.documentId) !== binding
+                || documents.has(grant.documentPath.toLowerCase()) && documents.get(grant.documentPath.toLowerCase()) !== grant.documentId)
+                throw invalid();
+            identities.set(grant.documentId, binding);
+            documents.set(grant.documentPath.toLowerCase(), grant.documentId);
+        }
     return { version: 1, enabled: raw.enabled, accountId: raw.accountId, projects };
 }
 /** Admission is metadata-only and emits no rejected path, title, count or department. */

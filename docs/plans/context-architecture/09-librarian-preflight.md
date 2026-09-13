@@ -5,7 +5,7 @@ description: Local dependency and upstream artifact checks; not an inference res
 keywords: [ONNX, CPU, offline, librarian, resource-limit]
 parent: README.md
 previous: 08-source-review.md
-next: status.md
+next: 10-bundle-preservation.md
 ---
 # Librarian preflight
 

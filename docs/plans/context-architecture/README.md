@@ -23,6 +23,8 @@ Original Markdown, exact revisions and current access remain authoritative.
 - [7. Source chapter use](07-source-chapter-use.md): first read-only P1 slice.
 - [8. Source review](08-source-review.md): pinned Caveman and hook limitations.
 - [9. Librarian preflight](09-librarian-preflight.md): dependencies and artifact caveats.
+- [10. Bundle preservation](10-bundle-preservation.md): explicit grants and private recovery.
+- [11. Bundle review](11-bundle-review.md): safety findings and validation evidence.
 - [Execution record](status.md): current work, evidence and limitations.
 
 Read only the chapter needed now; follow its previous/next links as needed.

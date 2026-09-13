@@ -7,6 +7,11 @@ export interface CompilationSourcePolicy {
     classification: 'resolved' | 'unresolved';
     mode: 'source_only' | 'synthesis_allowed';
 }
+export interface CompilationBundleGrant {
+    documentPath: string;
+    documentId: string;
+    chapterRoot: string;
+}
 export interface CompilationProject {
     id: string;
     ruleVersion: string;
@@ -14,6 +19,8 @@ export interface CompilationProject {
     outputPaths: string[];
     runtimeIds: string[];
     operations: CompilationOperation[];
+    /** Separate explicit grant; existing output/maintenance rights do not imply it. */
+    chapterBundles?: CompilationBundleGrant[];
 }
 export interface CompilationConfig {
     version: 1;
@@ -39,6 +46,8 @@ export type CompilationAdmission = {
 export declare const compilationHash: (value: unknown) => string;
 /** Exact physical Markdown paths. Never normalize a wildcard, traversal or alias into a grant. */
 export declare function compilationPath(value: unknown): string;
+/** Generic migration must not take ownership of service records or templates. */
+export declare const ordinaryCompilationDocument: (path: string) => boolean;
 export declare function validateCompilationConfig(value: unknown): CompilationConfig;
 /** Admission is metadata-only and emits no rejected path, title, count or department. */
 export declare function inspectCompilationPolicy(params: {

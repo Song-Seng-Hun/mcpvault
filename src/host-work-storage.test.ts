@@ -1,11 +1,12 @@
 import { afterEach, beforeEach, expect, test } from 'vitest';
 import { createHash } from 'node:crypto';
 import { execFile } from 'node:child_process';
-import { mkdtemp, mkdir, realpath, rm, writeFile, readdir } from 'node:fs/promises';
+import { mkdtemp, mkdir, realpath, rm, writeFile, readFile, readdir, rename, link } from 'node:fs/promises';
 import { promisify } from 'node:util';
 import { tmpdir, userInfo } from 'node:os';
 import { join } from 'node:path';
 import { loadHostWorkStorage, type HostWorkWriter } from './host-work-storage.js';
+import { loadCompilationHostConfig } from './compilation-host.js';
 
 type FixtureState = { version: 1; marker: string };
 const validate = (value: unknown): FixtureState & { enabled: boolean } => {
@@ -111,4 +112,99 @@ test.each([
 
 test('rejects an invalid namespace at runtime', async () => {
   await expect(loadHostWorkStorage(config, vault, { namespace: 'maintenance\u0000' as never, maxStateBytes: 4096, validate })).rejects.toThrow(/namespace/i);
+});
+
+const recordId = (text: string) => createHash('sha256').update(text).digest('hex');
+const recordPath = (id: string) => join(hostRoot, `compilation-${identity}.record-${id}.json`);
+const paged = () => loadHostWorkStorage(config, vault, { namespace: 'compilation', maxStateBytes: 4096, maxRecordBytes: 1024, validate });
+
+test('bounded host records survive restart without replacing legacy state', async () => {
+  const store = await paged();
+  expect(store.records).toBeDefined();
+  writers.push(await store.acquire()); await store.readState();
+  const legacy = { version: 1, jobs: [{ requestId: 'keep-original' }] };
+  await store.writeState(legacy);
+  for (const name of ['page-0', 'page-1', 'receipt-1']) {
+    const id = recordId(name), prior = await store.records!.read(id);
+    expect(prior).toEqual({ revision: 'missing', value: undefined });
+    const saved = await store.records!.write(id, { name, text: '승인 required. 😀' }, prior.revision);
+    expect(saved.revision).toMatch(/^[a-f0-9]{64}$/);
+  }
+  await writers[0]!.close();
+  const restarted = await paged();
+  expect(await restarted.readState()).toEqual(legacy);
+  expect((await restarted.records!.read(recordId('page-1'))).value).toEqual({ name: 'page-1', text: '승인 required. 😀' });
+  expect(await readdir(vault)).toEqual([]);
+  const unpaged = await loadHostWorkStorage(config, vault, { namespace: 'compilation', maxStateBytes: 4096, validate });
+  expect(unpaged.records).toBeUndefined();
+});
+
+test('host record writes require a read, live lease and current record revision', async () => {
+  const store = await paged(); expect(store.records).toBeDefined();
+  const id = recordId('record');
+  await store.records!.read(id);
+  await expect(store.records!.write(id, {}, 'missing')).rejects.toThrow(/writer/i);
+  writers.push(await store.acquire());
+  await expect(store.records!.write(recordId('unread'), {}, 'missing')).rejects.toThrow(/read/i);
+  const saved = await store.records!.write(id, { kept: true }, 'missing');
+  await expect(store.records!.write(id, {}, 'missing')).rejects.toThrow(/revision|changed/i);
+  await writeFile(recordPath(id), JSON.stringify({ manual: true }));
+  await expect(store.records!.write(id, {}, saved.revision)).rejects.toThrow(/changed/i);
+  expect(JSON.parse(await readFile(recordPath(id), 'utf8'))).toEqual({ manual: true });
+});
+
+test('same-byte replacement and hard links never authorize record replacement', async () => {
+  const store = await paged(); expect(store.records).toBeDefined();
+  writers.push(await store.acquire());
+  const id = recordId('identity'); await store.records!.read(id);
+  const saved = await store.records!.write(id, { original: true }, 'missing');
+  const bytes = await readFile(recordPath(id), 'utf8');
+  await rename(recordPath(id), recordPath(id) + '.previous');
+  await writeFile(recordPath(id), bytes, { mode: 0o600 });
+  await expect(store.records!.write(id, {}, saved.revision)).rejects.toThrow(/changed/i);
+  await link(recordPath(id), recordPath(id) + '.link');
+  await expect(store.records!.read(id)).rejects.toThrow(/hard link/i);
+  expect(await readFile(recordPath(id), 'utf8')).toBe(bytes);
+});
+
+test('corrupt history and revoked approval leave existing record bytes untouched', async () => {
+  const store = await paged(); expect(store.records).toBeDefined();
+  writers.push(await store.acquire()); const id = recordId('corrupt');
+  await store.records!.read(id); const saved = await store.records!.write(id, { kept: true }, 'missing');
+  await writeFile(config, JSON.stringify({ version: 1, enabled: false, marker: 'config', vaultPath: vault }));
+  await expect(store.records!.write(id, {}, saved.revision)).rejects.toThrow(/revoked|closed/i);
+  expect(JSON.parse(await readFile(recordPath(id), 'utf8'))).toEqual({ kept: true });
+  await writeFile(recordPath(id), '{damaged');
+  await expect(store.records!.read(id)).rejects.toThrow();
+  expect(await readFile(recordPath(id), 'utf8')).toBe('{damaged');
+});
+
+test('record storage enforces opaque IDs, individual byte limits and configuration separation', async () => {
+  const store = await paged(); expect(store.records).toBeDefined(); writers.push(await store.acquire());
+  for (const id of ['../config', 'A'.repeat(64), 'page-1', '']) await expect(store.records!.read(id)).rejects.toThrow(/record/i);
+  const id = recordId('bounded'); await store.records!.read(id);
+  await expect(store.records!.write(id, { text: '한'.repeat(400) }, 'missing')).rejects.toThrow(/size|full|limit/i);
+  expect((await store.records!.read(id)).revision).toBe('missing');
+  await writeFile(recordPath(id), '{}', { mode: 0o600 });
+  await expect(loadHostWorkStorage(recordPath(id), vault, { namespace: 'maintenance', maxStateBytes: 4096, validate })).rejects.toThrow(/overlap/i);
+});
+
+test('compilation host exposes bounded pages without granting chapter conversion', async () => {
+  await writeFile(config, JSON.stringify({ vaultPath: vault, version: 1, enabled: true, accountId: 'owner', projects: [{
+    id: 'project', ruleVersion: '1', sources: [{ path: 'Source.md', classification: 'resolved', mode: 'source_only' }],
+    outputPaths: ['Draft.md'], runtimeIds: ['local'], operations: ['index'],
+  }] }));
+  const store = await loadCompilationHostConfig(config, vault);
+  expect(store.records).toBeDefined();
+  expect((await store.refresh()).projects[0]).not.toHaveProperty('chapterBundles');
+});
+
+test('host record commit rechecks the owner guard after preparing temporary bytes', async () => {
+  const store = await paged(); writers.push(await store.acquire());
+  const id = recordId('guard'); await store.records!.read(id); let calls = 0;
+  await expect(store.records!.write(id, { body: 'new' }, 'missing', async () => {
+    if (++calls === 2) throw new Error('Source or authority changed');
+  })).rejects.toThrow('Source or authority changed');
+  expect((await store.records!.read(id)).value).toBeUndefined();
+  expect(calls).toBe(2);
 });

@@ -655,7 +655,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/host-work-storage.ts",
-                "line": 116
+                "line": 176
             }
         ]
     },
@@ -761,7 +761,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 3969
+                "line": 3971
             }
         ]
     },
@@ -1239,7 +1239,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 3144
+                "line": 3146
             }
         ]
     },
@@ -2382,11 +2382,11 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/host-work-storage.ts",
-                "line": 111
+                "line": 171
             },
             {
                 "file": "src/host-work-storage.ts",
-                "line": 113
+                "line": 173
             }
         ]
     },
@@ -2568,7 +2568,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 3183
+                "line": 3185
             }
         ]
     },
@@ -3222,11 +3222,11 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1867
+                "line": 1869
             },
             {
                 "file": "src/createServer.ts",
-                "line": 1869
+                "line": 1871
             }
         ]
     },
@@ -3358,7 +3358,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 4273
+                "line": 4275
             }
         ]
     },
@@ -3514,7 +3514,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 4327
+                "line": 4329
             }
         ]
     },
@@ -3727,7 +3727,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/compilation-service.ts",
-                "line": 44
+                "line": 47
             }
         ]
     },
@@ -4274,6 +4274,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/public-federation-replica.ts",
                 "line": 578
+            }
+        ]
+    },
+    {
+        "id": "guid-0ce2f2a922fd4faa",
+        "kind": "error",
+        "template": "Host record size limit exceeded; preserve existing history",
+        "parts": [
+            "Host record size limit exceeded; preserve existing history"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/host-work-storage.ts",
+                "line": 136
             }
         ]
     },
@@ -4921,7 +4936,7 @@ export const GUIDANCE_DEFINITIONS = [
             },
             {
                 "file": "src/createServer.ts",
-                "line": 2736
+                "line": 2738
             }
         ]
     },
@@ -5633,7 +5648,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/host-work-storage.ts",
-                "line": 45
+                "line": 51
             }
         ]
     },
@@ -5743,6 +5758,21 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/document-ranges.ts",
+                "line": 38
+            }
+        ]
+    },
+    {
+        "id": "guid-118282feabfe32af",
+        "kind": "error",
+        "template": "Document bundle original unavailable; preserve it for host review",
+        "parts": [
+            "Document bundle original unavailable; preserve it for host review"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/compilation-bundle-model.ts",
                 "line": 38
             }
         ]
@@ -6329,7 +6359,22 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1930
+                "line": 1932
+            }
+        ]
+    },
+    {
+        "id": "guid-1351a0fd57dc13dd",
+        "kind": "error",
+        "template": "Chapter natural-language line exceeds 240 characters",
+        "parts": [
+            "Chapter natural-language line exceeds 240 characters"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/document-chapter-format.ts",
+                "line": 67
             }
         ]
     },
@@ -6814,15 +6859,15 @@ export const GUIDANCE_DEFINITIONS = [
             },
             {
                 "file": "src/createServer.ts",
-                "line": 3545
+                "line": 3547
             },
             {
                 "file": "src/createServer.ts",
-                "line": 3602
+                "line": 3604
             },
             {
                 "file": "src/createServer.ts",
-                "line": 3664
+                "line": 3666
             },
             {
                 "file": "src/endpoint-registry.ts",
@@ -7068,6 +7113,25 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-150989fe3bbf1009",
+        "kind": "error",
+        "template": "Host record changed; preserve it for review",
+        "parts": [
+            "Host record changed; preserve it for review"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/host-work-storage.ts",
+                "line": 141
+            },
+            {
+                "file": "src/host-work-storage.ts",
+                "line": 143
+            }
+        ]
+    },
+    {
         "id": "guid-150cc557644a4d01",
         "kind": "prose",
         "template": "Archive a public chat room created by the authenticated identity. Existing messages remain readable; new messages are rejected.",
@@ -7139,7 +7203,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/compilation-service.ts",
-                "line": 234
+                "line": 241
             }
         ]
     },
@@ -8595,7 +8659,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 2184
+                "line": 2186
             }
         ]
     },
@@ -8901,7 +8965,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/host-work-storage.ts",
-                "line": 70
+                "line": 81
             }
         ]
     },
@@ -8995,7 +9059,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 3229
+                "line": 3231
             }
         ]
     },
@@ -9187,7 +9251,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/compilation-service.ts",
-                "line": 177
+                "line": 184
             }
         ]
     },
@@ -9699,7 +9763,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 3989
+                "line": 3991
             }
         ]
     },
@@ -9821,7 +9885,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 2970
+                "line": 2972
             }
         ]
     },
@@ -10303,7 +10367,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 3541
+                "line": 3543
             },
             {
                 "file": "src/filesystem.ts",
@@ -10521,7 +10585,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1936
+                "line": 1938
             }
         ]
     },
@@ -11431,7 +11495,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 3191
+                "line": 3193
             }
         ]
     },
@@ -12173,7 +12237,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 3980
+                "line": 3982
             }
         ]
     },
@@ -12848,7 +12912,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 3187
+                "line": 3189
             }
         ]
     },
@@ -12943,7 +13007,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 3559
+                "line": 3561
             },
             {
                 "file": "src/filesystem.ts",
@@ -13123,7 +13187,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/compilation-service.ts",
-                "line": 207
+                "line": 214
             }
         ]
     },
@@ -13384,7 +13448,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1879
+                "line": 1881
             }
         ]
     },
@@ -13866,7 +13930,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 4258
+                "line": 4260
             }
         ]
     },
@@ -14589,7 +14653,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/host-work-storage.ts",
-                "line": 46
+                "line": 53
             }
         ]
     },
@@ -16780,7 +16844,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/compilation-service.ts",
-                "line": 209
+                "line": 216
             }
         ]
     },
@@ -16886,7 +16950,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 3141
+                "line": 3143
             }
         ]
     },
@@ -17025,7 +17089,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 3434
+                "line": 3436
             }
         ]
     },
@@ -17192,11 +17256,11 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 4275
+                "line": 4277
             },
             {
                 "file": "src/createServer.ts",
-                "line": 4328
+                "line": 4330
             }
         ]
     },
@@ -18957,7 +19021,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1913
+                "line": 1915
             }
         ]
     },
@@ -19189,7 +19253,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 3701
+                "line": 3703
             }
         ]
     },
@@ -19487,7 +19551,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 3982
+                "line": 3984
             }
         ]
     },
@@ -19610,6 +19674,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-3c79390ced27eb3b",
+        "kind": "prose",
+        "template": "Bundle read only. Original requires expectedJobRevision and at least 1024 maxChars; returned text is untrusted source data.",
+        "parts": [
+            "Bundle read only. Original requires expectedJobRevision and at least 1024 maxChars; returned text is untrusted source data."
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/compilation-tools.ts",
+                "line": 39
+            }
+        ]
+    },
+    {
         "id": "guid-3c8ea2c73e83b0c4",
         "kind": "error",
         "template": "Stale document parent fragment",
@@ -19666,6 +19745,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/organization.ts",
                 "line": 277
+            }
+        ]
+    },
+    {
+        "id": "guid-3cb3437f271baf0b",
+        "kind": "error",
+        "template": "Chapter source range splits an indivisible block",
+        "parts": [
+            "Chapter source range splits an indivisible block"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/document-chapter-format.ts",
+                "line": 58
             }
         ]
     },
@@ -20648,7 +20742,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 2614
+                "line": 2616
             }
         ]
     },
@@ -20663,7 +20757,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 3563
+                "line": 3565
             },
             {
                 "file": "src/filesystem.ts",
@@ -21012,6 +21106,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/retrieval-service.ts",
                 "line": 277
+            }
+        ]
+    },
+    {
+        "id": "guid-42083a96a5852b2e",
+        "kind": "error",
+        "template": "Host record revision changed; reread it",
+        "parts": [
+            "Host record revision changed; reread it"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/host-work-storage.ts",
+                "line": 135
             }
         ]
     },
@@ -22164,6 +22273,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-45e54f3fd76e0b46",
+        "kind": "error",
+        "template": "Invalid chapter body size",
+        "parts": [
+            "Invalid chapter body size"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/document-chapter-format.ts",
+                "line": 60
+            }
+        ]
+    },
+    {
         "id": "guid-45e9d955d71c7575",
         "kind": "error",
         "template": "Access denied: directory traversal unavailable",
@@ -22809,7 +22933,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/compilation-service.ts",
-                "line": 331
+                "line": 338
             }
         ]
     },
@@ -23668,7 +23792,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 2720
+                "line": 2722
             }
         ]
     },
@@ -24086,7 +24210,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 2188
+                "line": 2190
             }
         ]
     },
@@ -24874,11 +24998,11 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1893
+                "line": 1895
             },
             {
                 "file": "src/createServer.ts",
-                "line": 1895
+                "line": 1897
             }
         ]
     },
@@ -24938,7 +25062,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 4114
+                "line": 4116
             }
         ]
     },
@@ -25401,6 +25525,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-4f266ef7757529ad",
+        "kind": "error",
+        "template": "Host record size limit is invalid",
+        "parts": [
+            "Host record size limit is invalid"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/host-work-storage.ts",
+                "line": 52
+            }
+        ]
+    },
+    {
         "id": "guid-4f3423434ac44189",
         "kind": "error",
         "template": "Story source belongs to a different branch",
@@ -25780,7 +25919,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1924
+                "line": 1926
             }
         ]
     },
@@ -25840,7 +25979,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/compilation-service.ts",
-                "line": 290
+                "line": 297
             }
         ]
     },
@@ -26154,7 +26293,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 3494
+                "line": 3496
             }
         ]
     },
@@ -28577,7 +28716,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 3463
+                "line": 3465
             }
         ]
     },
@@ -31041,7 +31180,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 4429
+                "line": 4431
             }
         ]
     },
@@ -31835,7 +31974,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 4004
+                "line": 4006
             }
         ]
     },
@@ -31996,7 +32135,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 2187
+                "line": 2189
             },
             {
                 "file": "src/question-packet.ts",
@@ -32291,7 +32430,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/host-work-storage.ts",
-                "line": 54
+                "line": 65
             }
         ]
     },
@@ -32738,7 +32877,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/host-work-storage.ts",
-                "line": 89
+                "line": 100
             }
         ]
     },
@@ -33122,6 +33261,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-66c9a4aa1306a849",
+        "kind": "error",
+        "template": "Chapter source revision changed",
+        "parts": [
+            "Chapter source revision changed"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/document-chapter-format.ts",
+                "line": 51
+            }
+        ]
+    },
+    {
         "id": "guid-66d546287a9ec208",
         "kind": "error",
         "template": "Move repair reread changed",
@@ -33208,6 +33362,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/organization.ts",
                 "line": 303
+            }
+        ]
+    },
+    {
+        "id": "guid-676a4b44848a6abd",
+        "kind": "error",
+        "template": "Read the host record and hold its writer before saving",
+        "parts": [
+            "Read the host record and hold its writer before saving"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/host-work-storage.ts",
+                "line": 134
             }
         ]
     },
@@ -34546,11 +34715,11 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 4115
+                "line": 4117
             },
             {
                 "file": "src/createServer.ts",
-                "line": 4274
+                "line": 4276
             }
         ]
     },
@@ -35047,15 +35216,15 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 3579
-            },
-            {
-                "file": "src/createServer.ts",
                 "line": 3581
             },
             {
                 "file": "src/createServer.ts",
-                "line": 3585
+                "line": 3583
+            },
+            {
+                "file": "src/createServer.ts",
+                "line": 3587
             }
         ]
     },
@@ -36158,7 +36327,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 4116
+                "line": 4118
             }
         ]
     },
@@ -36686,7 +36855,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 2204
+                "line": 2206
             }
         ]
     },
@@ -37001,6 +37170,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/work-service.ts",
                 "line": 784
+            }
+        ]
+    },
+    {
+        "id": "guid-72ba6eede0a50b17",
+        "kind": "error",
+        "template": "Document bundle unavailable",
+        "parts": [
+            "Document bundle unavailable"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/compilation-bundle-service.ts",
+                "line": 13
             }
         ]
     },
@@ -38593,7 +38777,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 2993
+                "line": 2995
             }
         ]
     },
@@ -39718,7 +39902,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/compilation-policy.ts",
-                "line": 22
+                "line": 26
             }
         ]
     },
@@ -40184,7 +40368,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/compilation-service.ts",
-                "line": 191
+                "line": 198
             }
         ]
     },
@@ -40415,7 +40599,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/host-work-storage.ts",
-                "line": 120
+                "line": 180
             }
         ]
     },
@@ -40476,7 +40660,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/host-work-storage.ts",
-                "line": 137
+                "line": 197
             }
         ]
     },
@@ -40698,7 +40882,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 3182
+                "line": 3184
             }
         ]
     },
@@ -40828,7 +41012,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 3594
+                "line": 3596
             }
         ]
     },
@@ -41122,7 +41306,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 4033
+                "line": 4035
             }
         ]
     },
@@ -41578,6 +41762,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-8171371e41608907",
+        "kind": "error",
+        "template": "Invalid chapter source ranges",
+        "parts": [
+            "Invalid chapter source ranges"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/document-chapter-format.ts",
+                "line": 55
+            }
+        ]
+    },
+    {
         "id": "guid-8171832eaec72d25",
         "kind": "error",
         "template": "slug is required for a post context",
@@ -41648,7 +41847,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/compilation-service.ts",
-                "line": 260
+                "line": 267
             }
         ]
     },
@@ -41803,7 +42002,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 3430
+                "line": 3432
             }
         ]
     },
@@ -41895,7 +42094,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 2978
+                "line": 2980
             }
         ]
     },
@@ -43760,7 +43959,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 3693
+                "line": 3695
             }
         ]
     },
@@ -43809,7 +44008,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 4627
+                "line": 4629
             }
         ]
     },
@@ -45385,7 +45584,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 3690
+                "line": 3692
             }
         ]
     },
@@ -45662,7 +45861,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 3195
+                "line": 3197
             }
         ]
     },
@@ -45753,7 +45952,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/host-work-storage.ts",
-                "line": 77
+                "line": 88
             }
         ]
     },
@@ -46055,7 +46254,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/compilation-tools.ts",
-                "line": 41
+                "line": 46
             }
         ]
     },
@@ -46604,7 +46803,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 3811
+                "line": 3813
             }
         ]
     },
@@ -48031,7 +48230,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 4243
+                "line": 4245
             }
         ]
     },
@@ -48266,7 +48465,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 3565
+                "line": 3567
             },
             {
                 "file": "src/filesystem.ts",
@@ -49717,7 +49916,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/host-work-storage.ts",
-                "line": 104
+                "line": 164
             }
         ]
     },
@@ -50182,7 +50381,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 2847
+                "line": 2849
             }
         ]
     },
@@ -51015,7 +51214,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1851
+                "line": 1853
             }
         ]
     },
@@ -51190,6 +51389,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-a23d7b06ffbef938",
+        "kind": "error",
+        "template": "Chapter metadata line exceeds its bounded field budget",
+        "parts": [
+            "Chapter metadata line exceeds its bounded field budget"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/document-chapter-format.ts",
+                "line": 84
+            }
+        ]
+    },
+    {
         "id": "guid-a24555988af707c7",
         "kind": "error",
         "template": "Derived output changed during write admission; user data preserved",
@@ -51216,7 +51430,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 3145
+                "line": 3147
             }
         ]
     },
@@ -51277,6 +51491,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/roleplay-model.ts",
                 "line": 126
+            }
+        ]
+    },
+    {
+        "id": "guid-a2781a3bc5770ebc",
+        "kind": "error",
+        "template": "Invalid host record ID",
+        "parts": [
+            "Invalid host record ID"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/host-work-storage.ts",
+                "line": 112
             }
         ]
     },
@@ -53229,7 +53458,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/compilation-service.ts",
-                "line": 355
+                "line": 362
             }
         ]
     },
@@ -53790,7 +54019,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/host-work-storage.ts",
-                "line": 132
+                "line": 192
             }
         ]
     },
@@ -54076,7 +54305,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 3592
+                "line": 3594
             }
         ]
     },
@@ -55582,6 +55811,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-b05684b66a40d1e8",
+        "kind": "error",
+        "template": "Document bundle history unavailable; preserve it for host review",
+        "parts": [
+            "Document bundle history unavailable; preserve it for host review"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/compilation-bundle-model.ts",
+                "line": 27
+            }
+        ]
+    },
+    {
         "id": "guid-b0593b305da0dc87",
         "kind": "error",
         "template": "{arg0} containment could not be verified.",
@@ -56625,7 +56869,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 3181
+                "line": 3183
             }
         ]
     },
@@ -58394,7 +58638,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 3427
+                "line": 3429
             }
         ]
     },
@@ -59344,6 +59588,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-bc6fbbe76da04754",
+        "kind": "error",
+        "template": "Chapter body must not supply frontmatter",
+        "parts": [
+            "Chapter body must not supply frontmatter"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/document-chapter-format.ts",
+                "line": 62
+            }
+        ]
+    },
+    {
         "id": "guid-bc7e09b48c409a26",
         "kind": "prose",
         "template": "Event that re-enters review",
@@ -59767,7 +60026,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 3998
+                "line": 4000
             }
         ]
     },
@@ -61064,7 +61323,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/compilation-service.ts",
-                "line": 164
+                "line": 168
             }
         ]
     },
@@ -61421,6 +61680,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/resource-bundle-host.ts",
                 "line": 15
+            }
+        ]
+    },
+    {
+        "id": "guid-c3a04da41ddea7bc",
+        "kind": "error",
+        "template": "Host record changed after saving; preserve it for review",
+        "parts": [
+            "Host record changed after saving; preserve it for review"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/host-work-storage.ts",
+                "line": 146
             }
         ]
     },
@@ -61881,7 +62155,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/compilation-tools.ts",
-                "line": 42
+                "line": 47
             }
         ]
     },
@@ -62700,7 +62974,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 4512
+                "line": 4514
             }
         ]
     },
@@ -62895,7 +63169,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 3126
+                "line": 3128
             }
         ]
     },
@@ -63822,7 +64096,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 4017
+                "line": 4019
             }
         ]
     },
@@ -64335,7 +64609,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 4026
+                "line": 4028
             },
             {
                 "file": "src/filesystem.ts",
@@ -64889,6 +65163,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-cddc1659224cc9da",
+        "kind": "error",
+        "template": "Managed chapter exceeds 50 physical lines including metadata",
+        "parts": [
+            "Managed chapter exceeds 50 physical lines including metadata"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/document-chapter-format.ts",
+                "line": 87
+            }
+        ]
+    },
+    {
         "id": "guid-cde80782a66d134d",
         "kind": "prose",
         "template": "Advisory maximum of task_status=next_action items",
@@ -65385,7 +65674,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/host-work-storage.ts",
-                "line": 124
+                "line": 184
             }
         ]
     },
@@ -65749,7 +66038,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 4235
+                "line": 4237
             }
         ]
     },
@@ -66019,15 +66308,15 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 1935
+                "line": 1937
             },
             {
                 "file": "src/createServer.ts",
-                "line": 1940
+                "line": 1942
             },
             {
                 "file": "src/createServer.ts",
-                "line": 1941
+                "line": 1943
             }
         ]
     },
@@ -66323,7 +66612,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 3787
+                "line": 3789
             }
         ]
     },
@@ -66673,7 +66962,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 3806
+                "line": 3808
             }
         ]
     },
@@ -67550,7 +67839,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 3991
+                "line": 3993
             }
         ]
     },
@@ -67664,7 +67953,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/host-work-storage.ts",
-                "line": 65
+                "line": 76
             }
         ]
     },
@@ -68482,7 +68771,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/compilation-service.ts",
-                "line": 345
+                "line": 352
             }
         ]
     },
@@ -69298,6 +69587,21 @@ export const GUIDANCE_DEFINITIONS = [
             {
                 "file": "src/benchmark-service.ts",
                 "line": 310
+            }
+        ]
+    },
+    {
+        "id": "guid-dbd6bb096045db67",
+        "kind": "error",
+        "template": "Invalid managed chapter metadata",
+        "parts": [
+            "Invalid managed chapter metadata"
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/document-chapter-format.ts",
+                "line": 19
             }
         ]
     },
@@ -70395,7 +70699,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 3633
+                "line": 3635
             }
         ]
     },
@@ -71515,7 +71819,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 4233
+                "line": 4235
             }
         ]
     },
@@ -72044,7 +72348,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/compilation-service.ts",
-                "line": 214
+                "line": 221
             }
         ]
     },
@@ -73208,11 +73512,11 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/host-work-storage.ts",
-                "line": 60
+                "line": 71
             },
             {
                 "file": "src/host-work-storage.ts",
-                "line": 78
+                "line": 89
             }
         ]
     },
@@ -73519,7 +73823,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 3472
+                "line": 3474
             }
         ]
     },
@@ -73572,6 +73876,21 @@ export const GUIDANCE_DEFINITIONS = [
         ]
     },
     {
+        "id": "guid-e91de68bcd3eb6d2",
+        "kind": "prose",
+        "template": "document_bundle supports diagnose/prepare/read only: explicit host document grant, private original preservation, no generation or Vault cutover.",
+        "parts": [
+            "document_bundle supports diagnose/prepare/read only: explicit host document grant, private original preservation, no generation or Vault cutover."
+        ],
+        "binding": "call",
+        "sources": [
+            {
+                "file": "src/compilation-tools.ts",
+                "line": 37
+            }
+        ]
+    },
+    {
         "id": "guid-e92829f3e237a9bf",
         "kind": "prose",
         "template": "Exact public model or agent identity; omit only when authenticated to read your own reputation",
@@ -73612,7 +73931,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 2897
+                "line": 2899
             }
         ]
     },
@@ -74124,7 +74443,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 3314
+                "line": 3316
             }
         ]
     },
@@ -76252,7 +76571,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 3742
+                "line": 3744
             }
         ]
     },
@@ -76618,7 +76937,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/host-work-storage.ts",
-                "line": 107
+                "line": 167
             }
         ]
     },
@@ -77313,7 +77632,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 3687
+                "line": 3689
             }
         ]
     },
@@ -77662,7 +77981,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 3117
+                "line": 3119
             }
         ]
     },
@@ -77771,7 +78090,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/compilation-service.ts",
-                "line": 295
+                "line": 302
             }
         ]
     },
@@ -78260,7 +78579,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/createServer.ts",
-                "line": 2988
+                "line": 2990
             }
         ]
     },
@@ -78380,7 +78699,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/compilation-service.ts",
-                "line": 216
+                "line": 223
             }
         ]
     },
@@ -78671,7 +78990,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/compilation-service.ts",
-                "line": 181
+                "line": 188
             }
         ]
     },
@@ -79228,7 +79547,7 @@ export const GUIDANCE_DEFINITIONS = [
         "sources": [
             {
                 "file": "src/host-work-storage.ts",
-                "line": 35
+                "line": 41
             }
         ]
     },

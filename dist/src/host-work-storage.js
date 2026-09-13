@@ -26,10 +26,12 @@ const namespaceName = (namespace) => {
     throw guidanceError(new Error('Invalid host work storage namespace'), 'guid-fa304995bd4283e9');
 };
 export async function loadHostWorkStorage(path, expectedVault, options) {
-    const { namespace, maxStateBytes, validate } = options;
+    const { namespace, maxStateBytes, maxRecordBytes, validate } = options;
     const label = namespaceName(namespace);
     if (!Number.isSafeInteger(maxStateBytes) || maxStateBytes < 1)
         throw guidanceError(new Error('Host work storage state size limit is invalid'), 'guid-1130e7a06f2ced9e');
+    if (maxRecordBytes !== undefined && (!Number.isSafeInteger(maxRecordBytes) || maxRecordBytes < 1 || maxRecordBytes > 4 * 1024 * 1024))
+        throw guidanceError(new Error('Host record size limit is invalid'), 'guid-4f266ef7757529ad');
     if (typeof validate !== 'function')
         throw guidanceError(new Error('Host work storage validator is invalid'), 'guid-2c2345389dd2b683');
     const canonical = await canonicalRoleplayPath(path, true, true);
@@ -39,7 +41,11 @@ export async function loadHostWorkStorage(path, expectedVault, options) {
     const statePath = managed(namespace) + '.json';
     const lockPath = managed(namespace) + '.writer.lock';
     const managedPaths = HOST_WORK_NAMESPACES.flatMap(name => [managed(name) + '.json', managed(name) + '.writer.lock']);
-    if (managedPaths.some(target => target.toLowerCase() === canonical.toLowerCase()))
+    const recordCollision = HOST_WORK_NAMESPACES.some(name => {
+        const prefix = `${managed(name)}.record-`.toLowerCase();
+        return canonical.toLowerCase().startsWith(prefix) && /^[a-f0-9]{64}\.json$/i.test(canonical.slice(prefix.length));
+    });
+    if (recordCollision || managedPaths.some(target => target.toLowerCase() === canonical.toLowerCase()))
         throw guidanceError(new Error(`${label} configuration overlaps managed host storage`), 'guid-64054a4a6cd30b6b');
     let active;
     let stateRevision;
@@ -95,9 +101,74 @@ export async function loadHostWorkStorage(path, expectedVault, options) {
         return { raw, revision: raw === undefined ? 'missing' : hash(raw), identity: after };
     };
     const readRawState = () => readPrivateSnapshot(statePath, maxStateBytes, true);
+    // Keep only CAS identities, never up to128 full record bodies in the cache.
+    const recordSnapshots = new Map();
+    let recordQueue = Promise.resolve();
+    const serialRecord = (operation) => {
+        const next = recordQueue.then(operation, operation);
+        recordQueue = next.then(() => undefined, () => undefined);
+        return next;
+    };
+    const recordPath = (id) => {
+        if (typeof id !== 'string' || !/^[a-f0-9]{64}$/.test(id))
+            throw guidanceError(new Error('Invalid host record ID'), 'guid-a2781a3bc5770ebc');
+        return `${managed(namespace)}.record-${id}.json`;
+    };
+    const rememberRecord = (id, snapshot) => {
+        recordSnapshots.delete(id);
+        recordSnapshots.set(id, { revision: snapshot.revision, identity: snapshot.identity });
+        // Eviction removes a write precondition, never durable history. Reread it.
+        if (recordSnapshots.size > 128)
+            recordSnapshots.delete(recordSnapshots.keys().next().value);
+    };
+    const records = maxRecordBytes === undefined ? undefined : Object.freeze({
+        read: (id) => serialRecord(async () => {
+            const target = recordPath(id);
+            recordSnapshots.delete(id);
+            await refresh();
+            const snapshot = await readPrivateSnapshot(target, maxRecordBytes, true);
+            const value = snapshot.raw === undefined ? undefined : JSON.parse(snapshot.raw);
+            await refresh();
+            rememberRecord(id, snapshot);
+            return { revision: snapshot.revision, value };
+        }),
+        write: (id, value, expectedRevision, assertCurrent) => {
+            // Capture caller data before queuing; later mutation cannot change this write.
+            const content = JSON.stringify(value);
+            return serialRecord(async () => {
+                const target = recordPath(id), writer = active, expected = recordSnapshots.get(id);
+                if (!writer || !expected)
+                    throw guidanceError(new Error('Read the host record and hold its writer before saving'), 'guid-676a4b44848a6abd');
+                if (expectedRevision !== expected.revision)
+                    throw guidanceError(new Error('Host record revision changed; reread it'), 'guid-42083a96a5852b2e');
+                if (typeof content !== 'string' || Buffer.byteLength(content) > maxRecordBytes)
+                    throw guidanceError(new Error('Host record size limit exceeded; preserve existing history'), 'guid-0ce2f2a922fd4faa');
+                await writer.assertHeld();
+                await assertCurrent?.();
+                await writeFederationFileAtomic(hostPath, target, content, { maxBytes: maxRecordBytes, beforeCommit: async () => {
+                        await writer.assertHeld();
+                        const current = await readPrivateSnapshot(target, maxRecordBytes, true);
+                        if (current.revision !== expected.revision || !sameSnapshot(current.identity, expected.identity))
+                            throw guidanceError(new Error('Host record changed; preserve it for review'), 'guid-150989fe3bbf1009');
+                        await assertCurrent?.();
+                        await writer.assertHeld();
+                        if (active !== writer || !sameSnapshot(fileIdentity(target, true), current.identity))
+                            throw guidanceError(new Error('Host record changed; preserve it for review'), 'guid-150989fe3bbf1009');
+                    } });
+                const saved = await readPrivateSnapshot(target, maxRecordBytes, true);
+                if (saved.revision !== hash(content))
+                    throw guidanceError(new Error('Host record changed after saving; preserve it for review'), 'guid-c3a04da41ddea7bc');
+                await writer.assertHeld();
+                await assertCurrent?.();
+                rememberRecord(id, saved);
+                return { revision: saved.revision };
+            });
+        },
+    });
     await refresh();
     return Object.freeze({
         refresh,
+        ...(records && { records }),
         readState: async () => {
             await refresh();
             const snapshot = await readRawState();

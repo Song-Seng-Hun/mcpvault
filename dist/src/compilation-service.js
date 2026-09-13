@@ -1,4 +1,5 @@
 import { guidanceError } from './guidance-runtime.js';
+import { CompilationBundleService } from './compilation-bundle-service.js';
 import { GRAPH_CONTRACT_VERSION } from './graph-contract.js';
 import { isModerationHidden } from './moderation-policy.js';
 import { isMissingVaultPath } from './vault-read-errors.js';
@@ -22,8 +23,10 @@ export class CompilationService {
     pendingReconcile = false;
     notificationTask;
     sessionBusy = false;
+    bundles;
     constructor(options) {
         this.options = options;
+        this.bundles = new CompilationBundleService(options);
     }
     serial(operation) {
         const pending = this.tail.then(operation, operation);
@@ -183,6 +186,11 @@ export class CompilationService {
         });
     }
     async run(params, principal, protectSources) {
+        if (params.kind === 'document_bundle')
+            return this.bundles.execute(params, principal);
+        if (params.kind !== undefined && params.kind !== 'single_output'
+            || ['documentPath', 'expectedDocumentRevision', 'bundleId', 'projection', 'startOffset'].some(key => params[key] !== undefined))
+            throw unavailable();
         const op = params.op ?? 'diagnose', maxChars = params.maxChars ?? 4000;
         if (!['diagnose', 'prepare', 'read', 'submit', 'check', 'retry'].includes(op) || !Number.isInteger(maxChars) || maxChars < 512 || maxChars > 12000)
             throw guidanceError(Error('Invalid compilation operation or response budget'), 'guid-1c133560b489d77c');

@@ -34,6 +34,12 @@ export interface CompilationOptions {
     protectSources?(job: Readonly<CompilationJob>, assertCurrent: () => Promise<void>): Promise<void>;
 }
 export interface CompilationParams {
+    kind?: 'single_output' | 'document_bundle';
+    documentPath?: string;
+    expectedDocumentRevision?: string;
+    bundleId?: string;
+    projection?: 'summary' | 'original';
+    startOffset?: number;
     op?: string;
     requestId?: string;
     projectId?: string;
@@ -63,6 +69,7 @@ export declare class CompilationService {
     private pendingReconcile;
     private notificationTask;
     private sessionBusy;
+    private readonly bundles;
     constructor(options: CompilationOptions);
     private serial;
     close(): Promise<void>;

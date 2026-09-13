@@ -25,6 +25,9 @@ test('compilation submission schema exposes pinned preservation reports without 
   expect(schema.properties.observation.properties.matches.maxItems).toBe(32);
   expect(schema.properties.includeInspection).toMatchObject({ type: 'boolean' });
   expect(schema.properties.inspectionCursor).toMatchObject({ type: 'integer', minimum: 0 });
+  expect(schema.properties.kind.enum).toEqual(['single_output', 'document_bundle']);
+  expect(schema.properties.documentPath).toMatchObject({ type: 'string', maxLength: 400 });
+  expect(schema.properties.projection.enum).toEqual(['summary', 'original']);
 });
 
 test('compilation is dynamic with public diagnosis, authenticated reads and read-only mutation rejection', async () => {
@@ -39,6 +42,8 @@ test('compilation is dynamic with public diagnosis, authenticated reads and read
   expect(endpoint.operations.prepare.available).toBe(false);
   const result = await client.callTool({ name: 'call_endpoint', arguments: { endpointId: 'wiki.compilation', arguments: { op: 'diagnose', maxChars: 512 } } });
   expect(result.isError).toBeFalsy(); expect(parse(result).status).toBe('diagnostic_only');
+  const bundle = await client.callTool({ name: 'call_endpoint', arguments: { endpointId: 'wiki.compilation', arguments: { kind: 'document_bundle', op: 'diagnose', maxChars: 512 } } });
+  expect(bundle.isError).toBeFalsy(); expect(parse(bundle).status).toBe('diagnostic_only');
   for (const op of ['prepare', 'submit', 'check', 'retry']) {
     const denied = await client.callTool({ name: 'call_endpoint', arguments: { endpointId: 'wiki.compilation', arguments: { op, requestId: 'job' } } });
     expect(denied.isError).toBe(true);
