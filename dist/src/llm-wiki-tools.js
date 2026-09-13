@@ -264,6 +264,7 @@ export function getLlmWikiTools() {
             name: 'get_wiki_neighborhood',
             description: guidanceText('guid-84e3ccf8a6b5b6fc', 'Return a bounded knowledge neighborhood: direct links/backlinks, shared metadata, then optional semantic matches. Metadata and derivation revisions are checked together; on drift re-read the root and retry. A neighbor path/revision identifies the target; contextPath/contextRevision identify the document containing context and line (direct-link context belongs to the root, not the neighbor). No full bodies. maxChars bounds both compact and pretty JSON.'),
             inputSchema: { type: 'object', properties: {
+                    view: { type: 'string', enum: ['neighbors', 'assertions'], default: 'neighbors', description: 'Optional outgoing occurrence view: current source/target revisions and locators, not verified evidence. No semantic expansion in assertions view.' },
                     path: { type: 'string', description: guidanceText('guid-db9c563cb001d361', 'Existing visible Markdown note path') },
                     limit: { type: 'integer', minimum: 1, maximum: 40, default: 12 },
                     maxChars: { type: 'integer', minimum: 512, maximum: 16000, default: 6000 },

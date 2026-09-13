@@ -229,5 +229,12 @@ NAS-backed runtime now uses the retained954-file B3-r2 release (PID17880 at
 verification). Read-only live checks passed:fixed five tools, fidelity, invalid
 input rejection, compilation and public diagnosis; no operational documents were
 created. Rollback launcher and prior release are retained. Automatic application
-and native hooks remain off. Fork delivery is the next gate; the graph handoff
-is still untouched.
+and native hooks remain off. Fork delivery completed as
+`6b2e042d3127bf10da9d1807078ec2bdb4dc22ed`; origin/main matched exactly. The graph
+handoff was then read without contacting or waking the other agent. Sole-owner
+graph phase2/3 implementation subsequently passed476files/6715tests, zero failures
+and four existing skips on basis05088d12a3061c8e60c4613d9901a023bd83b46ec6ecc017321a830907feb2b9.
+The966-file NAS-backed graph release and read-only live assertion view were
+verified, retaining rollback and original/world/economy protection. Delivery is
+recorded by this change's Git history. This is not native-hook or actual-model
+automatic-application acceptance; UML and index measurement follow separately.

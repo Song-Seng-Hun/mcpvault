@@ -36,7 +36,22 @@ organization, claim authoring, VaultGraph and question-packet integration tests.
 They pin exact public descriptions/error strings and all three claim backlinks;
 the question fixture prevents widening retrieval to all fourteen relation types.
 Links to tests identify verification targets, not evidence of a passing execution.
-This phase does not implement the later assertion, validation or UML phases.
+Phase1 did not implement the later assertion, validation or UML phases.
+
+## Subsequent occurrence and local-validation contract
+
+The optional [assertion view](../graph-assertions.md) extends existing
+`wiki.neighborhood` without changing the default or fixed five MCP tools.
+`graph-assertion.ts` is the private occurrence model; only the separate bounded
+packet service may release currently visible, revision-checked target identities.
+The Graphify adapter consumes the existing host-only P3 result and never becomes
+a second AST extractor or public runtime endpoint.
+
+`graph-validation.ts` now owns the exact existing claim ID/reference/anchor
+helpers used by lint and preview as well as occurrence inspection. The local
+profile catalog documents, rather than widens, existing constraints. Current
+source revisions, valid syntax, complete topic coverage, verified evidence and
+passing tests remain independent claims. UML/measurement delivery is separate.
 
 ## Phase1 execution evidence, 2026-09-12
 

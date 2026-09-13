@@ -1,3 +1,4 @@
+import { type GraphAssertionPacketOptions } from './graph-assertion-packet.js';
 import { type TopicPacketOptions } from './topic-packet.js';
 import { type AuthoringContext } from './authoring-assist.js';
 import { type FileSystemService, type DerivedViewWritePolicy } from './filesystem.js';
@@ -482,6 +483,23 @@ export declare class LlmWikiService {
     /** Resolve an authored navigation edge using its syntax and source scope. */
     private resolveNavigationLink;
     /** Bounded, explainable neighbors; Markdown identity remains authoritative. */
+    graphAssertions(principal: ScopePrincipal | undefined, options: GraphAssertionPacketOptions): Promise<{
+        view: string;
+        assertions: import("./graph-assertion-packet.js").PublicAssertion[];
+        coverage: {
+            globalIntegrity: boolean;
+        };
+        partial: boolean;
+        nextAction: {
+            endpointId: string;
+            arguments: {
+                path: string;
+                expectedRevision: string;
+                maxChars: number;
+            };
+        };
+    }>;
+    /** Legacy neighborhood remains unchanged unless the adapter selects assertions. */
     neighborhood(principal: ScopePrincipal | undefined, path: string, limit?: number, maxChars?: number, includeSemantic?: boolean): Promise<{
         source: {
             path: string;

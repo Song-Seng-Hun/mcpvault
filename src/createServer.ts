@@ -2153,6 +2153,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         }
 
         case "get_wiki_neighborhood": {
+          if (trimmedArgs.view === 'assertions') return jsonResult(await llmWiki.graphAssertions(principal, trimmedArgs), trimmedArgs.prettyPrint);
           return jsonResult(await llmWiki.neighborhood(principal, trimmedArgs.path, trimmedArgs.limit, trimmedArgs.maxChars, trimmedArgs.includeSemantic === true), trimmedArgs.prettyPrint);
         }
 
