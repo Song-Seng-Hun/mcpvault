@@ -16,6 +16,7 @@ import { SourceReadLimitError } from './bounded-source-read.js';
 import { NavigationViewFingerprint } from './navigation-view.js';
 import { createGraphLinkProjector } from './graph-link-projection.js';
 import { createBoundedTopK } from './search-limits.js';
+import { BacklinkOccurrenceCache } from './graph/backlink-occurrence-cache.js';
 const GRAPH_RECONCILE_INTERVAL_MS = 60_000;
 const NO_WATCHER_RECONCILE_INTERVAL_MS = 5_000;
 const GRAPH_CONTENT_AUDIT_INTERVAL_MS = 15 * 60_000;
@@ -260,7 +261,8 @@ export class VaultGraphIndex {
         // Encounter order makes same-line ties stable across heap selection/pages.
         const backlinks = createBoundedTopK(offset + limit, (a, b) => compare(a.link, b.link) || a.order - b.order);
         const incoming = this.incomingBacklinks(visible);
-        const edges = incoming ? incoming.get(normalizedTarget) || [] : this.matchingBacklinks(visible, normalizedTarget);
+        const edges = incoming ? incoming.get(normalizedTarget) || []
+            : (visible.incomingSegments ??= new BacklinkOccurrenceCache()).read(normalizedTarget, () => this.matchingBacklinks(visible, normalizedTarget));
         const checkedSources = new Map();
         let inspectionTruncated = false;
         for (const { entry, link } of edges) {
