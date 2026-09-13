@@ -124,6 +124,28 @@ export declare class ContinuityService {
                 };
             };
             drift?: Record<string, unknown>;
+            revalidation?: {
+                state: string;
+                understandingVerified: boolean;
+                pathReviewRequired: boolean;
+                changedReadsTotal: number;
+                reads: {
+                    endpointId: string;
+                    arguments: {
+                        path: string;
+                        expectedRevision: string;
+                        startLine: number;
+                        endLine: number;
+                        maxChars: number;
+                    };
+                }[];
+                readsOmitted: number;
+                checkpoint: {
+                    endpointId: string;
+                    requiredArguments: string[];
+                };
+                guidance: string;
+            };
             canResume?: boolean;
             nextAction?: {
                 endpointId: string;

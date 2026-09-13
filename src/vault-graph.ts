@@ -58,6 +58,8 @@ interface VisibilityContext {
   incoming?: Map<string, Array<{ entry: GraphEntry; link: OutlinkMatch }>>;
   incomingOverflow?: boolean;
   incomingSegments?: BacklinkOccurrenceCache<{ entry: GraphEntry; link: OutlinkMatch }>;
+  orphanPaths?: BacklinkOccurrenceCache<string>;
+  unresolvedOccurrences?: BacklinkOccurrenceCache<{ entry: GraphEntry; link: OutlinkMatch }>;
 }
 
 function normalizePath(value: string): string {
@@ -422,12 +424,25 @@ export class VaultGraphIndex {
 
   async findUnresolvedLinks(limit: number, canAccessPath: (path: string) => boolean, offset = 0, includeSnapshot = false): Promise<UnresolvedLinksResult> {
     await this.ensure();
-    const { paths: visiblePaths, pathSet: visible, resolver } = this.visibilityContext(canAccessPath);
+    const context = this.visibilityContext(canAccessPath);
+    const { resolver } = context;
     const allResolver = buildResolver([...this.allPaths], this.entries);
     const project = this.linkProjector(resolver, allResolver);
     const unresolved: UnresolvedLinksResult['unresolved'] = [];
     const snapshot = includeSnapshot ? new NavigationViewFingerprint(['unresolved']) : undefined;
     let total = 0;
+    context.unresolvedOccurrences ??= new BacklinkOccurrenceCache(1, 4096, 4096);
+    for (const { entry, link } of context.unresolvedOccurrences.read('unresolved', () => this.scanUnresolved(context, allResolver))) {
+      total += 1;
+      snapshot?.add(entry.path, entry.revision, project(entry, link));
+      if (total > offset && unresolved.length < limit) unresolved.push({ ...project(entry, link), path: entry.path });
+    }
+    if (this.visibilityContext(canAccessPath) !== context) throw new Error('Graph or visibility changed during maintenance navigation; retry.');
+    return { unresolved, ...(snapshot && { snapshotFingerprint: snapshot.finish() }), total, truncated: total > offset + unresolved.length };
+  }
+
+  private *scanUnresolved(context: VisibilityContext, allResolver: Resolver) {
+    const { paths: visiblePaths, pathSet: visible, resolver } = context;
     for (const path of visiblePaths) {
       if (!isNote(path)) continue;
       const entry = this.entries.get(path);
@@ -439,17 +454,33 @@ export class VaultGraphIndex {
         // A known invisible target is not an actionable broken-link repair.
         // Never return its resolution candidates or count its hidden edges.
         if (resolveTargets(link.target, allResolver, entry.path, link.link).length > 0) continue;
-        total += 1;
-        snapshot?.add(entry.path, entry.revision, project(entry, link));
-        if (total > offset && unresolved.length < limit) unresolved.push({ ...project(entry, link), path: entry.path });
+        yield { entry, link };
       }
     }
-    return { unresolved, ...(snapshot && { snapshotFingerprint: snapshot.finish() }), total, truncated: total > offset + unresolved.length };
   }
 
   async findOrphanNotes(limit: number, canAccessPath: (path: string) => boolean, offset = 0, includeSnapshot = false, includeCandidate?: (path: string) => boolean): Promise<OrphanNotesResult> {
     await this.ensure();
-    const { paths: allVisiblePaths, resolver } = this.visibilityContext(canAccessPath);
+    const context = this.visibilityContext(canAccessPath);
+    context.orphanPaths ??= new BacklinkOccurrenceCache(1, 4096, 4096);
+    const orphans: OrphanNotesResult['orphans'] = [];
+    const snapshot = includeSnapshot ? new NavigationViewFingerprint(['orphans']) : undefined;
+    let total = 0;
+    for (const path of context.orphanPaths.read('orphans', () => this.scanOrphans(context))) {
+      // Candidate filters may change independently of visibility. Never cache
+      // their decision, counts, pages, fingerprints or caller-owned rows.
+      if (includeCandidate && !includeCandidate(path)) continue;
+      total += 1;
+      const row = { path, incomingLinks: 0 };
+      snapshot?.add(path, this.entries.get(path)!.revision, row);
+      if (total > offset && orphans.length < limit) orphans.push(row);
+    }
+    if (this.visibilityContext(canAccessPath) !== context) throw new Error('Graph or visibility changed during maintenance navigation; retry.');
+    return { orphans, ...(snapshot && { snapshotFingerprint: snapshot.finish() }), total, truncated: total > offset + limit };
+  }
+
+  private *scanOrphans(context: VisibilityContext) {
+    const { paths: allVisiblePaths, resolver } = context;
     const notePaths = allVisiblePaths.filter(isNote);
     const visible = new Set(notePaths);
     const incoming = new Set<string>();
@@ -465,21 +496,11 @@ export class VaultGraphIndex {
         }
       }
     }
-    const orphans: OrphanNotesResult['orphans'] = [];
-    const snapshot = includeSnapshot ? new NavigationViewFingerprint(['orphans']) : undefined;
-    let total = 0;
     // visibilityContext already sorts paths using the same locale comparator.
     for (const path of notePaths) {
       if (incoming.has(normalizedPath(path))) continue;
-      // Candidate selection is not visibility: excluded candidates still supply
-      // real incoming links. Apply it before counting/paging/fingerprinting.
-      if (includeCandidate && !includeCandidate(path)) continue;
-      total += 1;
-      const row = { path, incomingLinks: 0 };
-      snapshot?.add(path, this.entries.get(path)!.revision, row);
-      if (total > offset && orphans.length < limit) orphans.push(row);
+      yield path;
     }
-    return { orphans, ...(snapshot && { snapshotFingerprint: snapshot.finish() }), total, truncated: total > offset + limit };
   }
 
   async listAllTags(canAccessPath: (path: string) => boolean): Promise<Array<{ tag: string; count: number }>> {

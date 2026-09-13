@@ -48,7 +48,9 @@ export declare class VaultGraphIndex {
     }>;
     private targetValidationResolver;
     findUnresolvedLinks(limit: number, canAccessPath: (path: string) => boolean, offset?: number, includeSnapshot?: boolean): Promise<UnresolvedLinksResult>;
+    private scanUnresolved;
     findOrphanNotes(limit: number, canAccessPath: (path: string) => boolean, offset?: number, includeSnapshot?: boolean, includeCandidate?: (path: string) => boolean): Promise<OrphanNotesResult>;
+    private scanOrphans;
     listAllTags(canAccessPath: (path: string) => boolean): Promise<Array<{
         tag: string;
         count: number;

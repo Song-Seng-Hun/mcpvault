@@ -24,6 +24,7 @@ import { assertLegacyDiscussionMutationAllowed, ScopeAccessPolicy } from './scop
 import { assertEnterpriseStorageAccess, assertEnterpriseStorageFresh, canReadEnterpriseStoragePath, canTraverseEnterpriseStoragePath, prepareDocumentWrite } from './enterprise-storage-context.js';
 import { expandScopePath, parseScopePath, scopeRoot } from './scopes.js';
 import { extractMarkdownTasks, iterateMarkdownTasks } from './markdown-tasks.js';
+import { TaskReanchorError } from './task-reanchoring.js';
 import { extractInlineTags } from './markdown-tags.js';
 import { isModerationHidden } from './moderation-policy.js';
 import { projectNoteOutline, projectNoteLineWindow } from './note-projections.js';
@@ -3251,19 +3252,23 @@ export class FileSystemService {
         if (!params.expectedRevision || !String(params.expectedRevision).trim())
             throw guidanceError(new Error('expectedRevision is required; read the note first'), 'guid-daa24c6dc3a34e33');
         return this.withMutationLock(path, async () => {
-            await this.assertExpectedRevision(path, params.expectedRevision);
             const note = await this.readNote(path);
             if (isModerationHidden(note.frontmatter))
                 throw guidanceError(new Error(`Access denied: ${path}`), 'guid-26a1bd21fd48991f');
+            const reanchor = async (reason) => {
+                if (await this.readNoteRevision(path) !== note.revision)
+                    throw new Error('Task changed during inspection; read the note again.');
+                throw new TaskReanchorError(path, note.revision, note.originalContent, params.taskId, reason);
+            };
             if (note.revision !== params.expectedRevision)
-                throw guidanceError(new Error(`Revision conflict for ${path}: refresh list_tasks and retry`), 'guid-7947bdeae123b557');
+                return reanchor('revision_conflict');
             const lines = note.originalContent.split('\n');
             const candidates = extractMarkdownTasks(note.originalContent, path).filter(task => params.taskId ? task.taskId === params.taskId : task.line === params.line);
             if (candidates.length > 1)
-                throw guidanceError(new Error(`Task identity is ambiguous in ${path}; read the current note and use an explicit line without taskId, or repair duplicate block IDs`), 'guid-8f746dad735fa98d');
+                return reanchor('ambiguous_identity');
             const locatedTask = candidates[0];
             if (params.taskId && !locatedTask)
-                throw guidanceError(new Error(`Task ${params.taskId} was not found in ${path}; refresh list_tasks and retry`), 'guid-a3324e681d909535');
+                return reanchor('missing_identity');
             const targetLine = locatedTask?.line ?? params.line;
             if (targetLine > lines.length)
                 throw guidanceError(new Error(`Task line ${targetLine} is outside ${path}`), 'guid-582a62891a8696c6');

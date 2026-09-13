@@ -8,6 +8,7 @@ import { isModerationHidden } from './moderation-policy.js';
 import { inspectUnderstanding, prepareUnderstanding, UNDERSTANDING_READ_BYTES, UNDERSTANDING_UNAVAILABLE } from './continuity-understanding.js';
 import { inspectContinuityPins, type ContinuityPinSelection, type ContinuityValidation } from './continuity-pins.js';
 import { prepareLearningConfiguration, isLearningConfigurationState, type LearningConfigurationState } from './learning-configuration.js';
+import { learningRevalidation } from './continuity-revalidation.js';
 
 const MAX_TEXT = 4000;
 const MAX_LEARNING_ENTRIES = 50;
@@ -98,7 +99,7 @@ function packResumeState(full: ResumeState, maxChars: number, prettyPrint: boole
   if (full.understanding) result.nextAction = { endpointId: 'continuity.resume', arguments: { maxChars: 12000, prettyPrint: false } };
   // Keep the validated next target before optional history and duplicate prose.
   if (!fits(result) && result.learningProgress?.drift) {
-    const { drift: _drift, ...progress } = result.learningProgress;
+    const { drift: _drift, revalidation: _revalidation, ...progress } = result.learningProgress;
     result.learningProgress = { ...progress, detailsOmitted: true };
   }
   if (!fits(result)) {
@@ -350,7 +351,7 @@ export class ContinuityService {
     return result;
   }
 
-  private compactLearningProgress(progress: LearningProgress, state: 'saved_unchecked' | 'ready' | 'complete' | 'stale', drift?: Record<string, unknown>) {
+  private compactLearningProgress(progress: LearningProgress, state: 'saved_unchecked' | 'ready' | 'complete' | 'stale', drift?: Record<string, unknown>, revalidation?: ReturnType<typeof learningRevalidation>) {
     const completedIndex = progress.completed_through ? progress.entries.findIndex(item => item.path === progress.completed_through) : -1;
     const next = progress.entries[completedIndex + 1];
     return {
@@ -364,6 +365,7 @@ export class ContinuityService {
       ...(progress.completed_through && { completedThrough: progress.completed_through }),
       ...(state === 'ready' && next && { next: { ...next, endpointId: 'notes.read', arguments: { path: next.path, maxChars: 6000 } } }),
       ...(drift && { drift }),
+      ...(revalidation && { revalidation }),
       ...(state === 'stale' ? { canResume: false, nextAction: { endpointId: 'wiki.learning_path', arguments: { path: progress.root_path, maxDepth: progress.max_depth, limit: MAX_LEARNING_ENTRIES, maxChars: 7000 } } } : {}),
       ...(state === 'ready' ? { canResume: true } : {}),
       ...(state === 'complete' ? { canResume: true, complete: true } : {}),
@@ -436,7 +438,8 @@ export class ContinuityService {
           ...(stored.source_revision_fingerprint === undefined && { sourceSnapshotMissing: true }),
           changedEntries: changedEntries.slice(0, 8),
           changedEntriesTotal: changedEntries.length,
-        });
+        }, learningRevalidation({ root: { path: current.root_path, revision: current.root_revision },
+          rootChanged: current.root_revision !== stored.root_revision, structureChanged, sourceSnapshotChanged, changedEntries }));
       }
       const completedIndex = current.completed_through ? current.entries.findIndex(item => item.path === current.completed_through) : -1;
       return this.compactLearningProgress(current, completedIndex + 1 >= current.entries.length ? 'complete' : 'ready');

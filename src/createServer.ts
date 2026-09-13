@@ -1,4 +1,5 @@
 import { guidanceError } from './guidance-runtime.js';
+import { TaskReanchorError } from './task-reanchoring.js';
 import { createHash } from 'node:crypto';
 import { DEFAULT_HOST_FEATURE_CONFIG, parseHostFeatureConfig, hostFeatureForTool, type HostFeatureConfig, type HostFeatureId } from './host-features.js';
 import { Server, type Tool } from "@modelcontextprotocol/server";
@@ -3562,14 +3563,29 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
           if (!taskId && (!Number.isInteger(line) || line! < 1)) throw guidanceError(new Error('taskId or line must identify a task'), 'guid-40a11acf501ea9bc');
           const status = String(trimmedArgs.status || '');
           if (status !== 'open' && status !== 'completed') throw guidanceError(new Error('status must be open or completed'), 'guid-978b748c0ffab0dd');
-          const result = await fileSystem.updateTask({
-            path,
-            ...(taskId ? { taskId } : {}),
-            ...(line !== undefined ? { line } : {}),
-            status,
-            expectedRevision: String(trimmedArgs.expectedRevision),
-          });
-          return jsonResult(result, trimmedArgs.prettyPrint);
+          try {
+            const result = await fileSystem.updateTask({
+              path,
+              ...(taskId ? { taskId } : {}),
+              ...(line !== undefined ? { line } : {}),
+              status,
+              expectedRevision: String(trimmedArgs.expectedRevision),
+            });
+            return jsonResult(result, trimmedArgs.prettyPrint);
+          } catch (error) {
+            if (!(error instanceof TaskReanchorError)) throw error;
+            await audit.record({ tool: toolName, ...(principal && { principal }), args: rawArgs, outcome: 'error', error });
+            finalOwnerRefresh = async () => {
+              if (!canAccessPath(path)) throw new Error('Task unavailable or changed; repeat the read.');
+              const current = await fileSystem.readNote(path);
+              if (isModerationHidden(current.frontmatter) || current.revision !== error.recovery.currentRevision) throw new Error('Task unavailable or changed; repeat the read.');
+            };
+            finalOwnerValidator = () => {
+              assertNoticeActorFresh();
+              if (!canAccessPath(path)) throw new Error('Task unavailable or changed; repeat the read.');
+            };
+            return { ...jsonResult(error.recovery, trimmedArgs.prettyPrint), isError: true };
+          }
         }
 
         case "query_notes": {
