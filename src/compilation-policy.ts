@@ -49,7 +49,7 @@ export function compilationPath(value: unknown): string {
 /** Generic migration must not take ownership of service records or templates. */
 export const ordinaryCompilationDocument = (path: string): boolean => !isOriginalPath(path)
   && !/(?:^|\/)(?:Community|PublicCommunity|_continuity|_collaboration|_wiki|_roleplay)(?:\/|$)/i.test(path)
-  && !/^Templates\/MCPVault(?:\/|$)/i.test(path) && path.toLowerCase() !== '환영합니다!.md';
+  && !/^Templates\/MCPVault(?:\/|$)/i.test(path) && path.toLowerCase() !== '환영합니다!.md' && path.toLowerCase() !== 'welcome.md';
 
 export function validateCompilationConfig(value: unknown): CompilationConfig {
   const raw = record(value, ['version', 'enabled', 'accountId', 'projects']);

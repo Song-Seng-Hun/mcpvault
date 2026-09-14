@@ -52,7 +52,8 @@ const confidenceLevels = new Set(CONFIDENCE_LEVELS);
 const issueKinds = new Set(ISSUE_KINDS);
 const sourceTrustLevels = new Set(SOURCE_TRUST_LEVELS);
 const PROMOTION_CATEGORIES = new Map([['research', 5], ['proposal', 4], ['agora', 3], ['discussion', 2], ['feedback', 2]]);
-const WELCOME_NOTE_PATH = '환영합니다!.md';
+const WELCOME_NOTE_PATH = 'Welcome.md';
+const LEGACY_WELCOME_NOTE_PATH = '환영합니다!.md';
 const PUBLIC_SCHEMA_PATH = '_wiki/SCHEMA.md';
 function isPlanningProject(note) {
     return note.frontmatter.llm_wiki_type === 'knowledge' && note.frontmatter.note_kind === 'project'
@@ -16257,10 +16258,11 @@ export class LlmWikiService {
         // Orientation is a router, not a health dashboard. In particular, do not
         // run catalog/lint scans here: a first connection must stay O(1) even when
         // the Vault eventually contains millions of notes.
-        const [welcomeExists, schemaPresent] = await Promise.all([
-            this.fileSystem.noteExists(WELCOME_NOTE_PATH),
-            this.fileSystem.noteExists(PUBLIC_SCHEMA_PATH),
-        ]);
+        const welcomeExists = await this.fileSystem.noteExists(WELCOME_NOTE_PATH);
+        const legacyWelcomeExists = !welcomeExists && await this.fileSystem.noteExists(LEGACY_WELCOME_NOTE_PATH);
+        const resolvedWelcomePath = welcomeExists ? WELCOME_NOTE_PATH : (legacyWelcomeExists ? LEGACY_WELCOME_NOTE_PATH : WELCOME_NOTE_PATH);
+        const hasAnyWelcome = welcomeExists || legacyWelcomeExists;
+        const schemaPresent = await this.fileSystem.noteExists(PUBLIC_SCHEMA_PATH);
         const visibleScopes = this.access.scopeRoots(principal).map(scope => ({
             kind: scope.kind,
             uri: scope.kind === 'global'
@@ -16276,11 +16278,11 @@ export class LlmWikiService {
                 arguments: { limit: 3, maxChars: 3000 },
                 reason: guidanceText('guid-861d72754d8401c6', 'Resume through one bounded personalized action. Do not reopen the welcome, policy index, schema, and dashboards in parallel.'),
             }
-            : welcomeExists
+            : hasAnyWelcome
                 ? {
                     endpointId: endpointIdForTool('read_note'),
                     via: 'call_endpoint',
-                    arguments: { path: WELCOME_NOTE_PATH, maxChars: 3000 },
+                    arguments: { path: resolvedWelcomePath, maxChars: 3000 },
                     reason: guidanceText('guid-4967e75b0e126428', 'Read the stable public welcome once. For a generic first look, stop after this read and summarize instead of opening every linked guide or community area.'),
                 }
                 : {
@@ -16320,8 +16322,8 @@ export class LlmWikiService {
                 invitation: 'You are an equal participant. Contribute grounded knowledge or feedback within the authorized task. Reusable personal experience belongs in private memory unless sharing is explicitly in scope; never manufacture activity.',
             },
             publicOnboarding: {
-                welcomePath: WELCOME_NOTE_PATH,
-                welcomePresent: welcomeExists,
+                welcomePath: resolvedWelcomePath,
+                welcomePresent: hasAnyWelcome,
                 schemaPath: schemaPresent ? PUBLIC_SCHEMA_PATH : null,
                 readableWithoutLogin: true,
                 commandCenterId: this.access.getCommandCenterId(),
