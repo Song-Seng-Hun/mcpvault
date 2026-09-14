@@ -7,18 +7,9 @@ import { endpointIdForTool } from './endpoint-registry.js';
 import { posix } from 'node:path';
 import { positiveSearchTerms, memoryCandidateLimit } from './search.js';
 import { isFictionDomain } from './fiction-domain.js';
+import { constrainedQuery, plainQueryExpansion, semanticQueryState } from './retrieval/query-policy.js';
+export { constrainedQuery, plainQueryExpansion } from './retrieval/query-policy.js';
 export const RETRIEVAL_NOTE_BYTES = 8 * 1024 * 1024;
-export function constrainedQuery(query) {
-    return /["'\[\]:()]|(?:^|\s)-\S|(?:^|\s)OR(?:\s|$)/i.test(query);
-}
-export function plainQueryExpansion(query) {
-    if (constrainedQuery(query))
-        return;
-    const terms = [...new Set(query.trim().replace(/[?？]+$/, '').split(/\s+/))];
-    if (terms.length < 2 || terms.length > 12 || terms.some(t => !/^[\p{L}\p{N}_]+$/u.test(t)))
-        return;
-    return terms.join(' OR ');
-}
 export function bodyStartLine(note) {
     const suffix = note.originalContent.length - note.content.length;
     return note.originalContent.slice(0, Math.max(0, suffix)).split('\n').length;
@@ -101,8 +92,9 @@ export class RetrievalService {
         let complete = lexical.complete;
         let semantic = { state: 'disabled' };
         const byPath = new Map(lexical.results.map(hit => [hit.p, hit]));
-        if (params.semantic === true) {
-            if (constrainedQuery(params.query) || params.caseSensitive)
+        const semanticPolicy = semanticQueryState(params.query, params.semantic, params.caseSensitive);
+        if (semanticPolicy !== 'disabled') {
+            if (semanticPolicy === 'filtered')
                 semantic = { state: 'filtered' };
             else {
                 let timer;
@@ -186,9 +178,10 @@ export class RetrievalService {
             }
         }
         let semantic = { state: 'disabled' };
-        if (params.semantic === true) {
+        const semanticPolicy = semanticQueryState(params.query, params.semantic, params.caseSensitive);
+        if (semanticPolicy !== 'disabled') {
             // Preserve exact phrases and exclusions as well as structured filters.
-            if (constrainedQuery(params.query))
+            if (semanticPolicy === 'filtered')
                 semantic = { state: 'filtered' };
             else {
                 let timer;

@@ -23,7 +23,7 @@ Fixture evidence is not active instructions or a permission grant.
 - [x] Pin plugin/manual trees and discovery catalog in future full-test manifests.
 - [x] Verify targets, build and frozen full regression; staged review follows.
 - [x] Back up/refresh13guides; direct NAS-backed live reads passed; link timeout recorded separately.
-- [ ] Commit and push this verified batch to existing user-fork main.
+- [x] Commit9a4ce5160 pushed to existing user-fork main; remote hash verified.
 
 ## Checks and exclusions
 

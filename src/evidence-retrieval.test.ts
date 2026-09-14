@@ -68,6 +68,18 @@ test.each(['"token"', 'token -forbidden', 'path:Missing token'])('strict evidenc
   const result = await services(backend).retrieval.retrieve({ query, semantic: true, retrievalMode: 'evidence', limit: 2 } as any);
   expect(backend.search).not.toHaveBeenCalled(); expect(result.semantic.state).toBe('filtered');
 });
+
+test.each(['legacy', 'evidence'] as const)('case-sensitive %s search preserves the same strict contract as memory discovery', async retrievalMode => {
+  await seed('Exact.md', '# TOKEN\nTOKEN permitted');
+  await seed('Other.md', '# token\ntoken only');
+  const backend = { search: vi.fn(async (): Promise<any> => ({ available: true, results: [
+    { p: 'Other.md', t: 'token', ex: 'token only', mc: 1 },
+  ] })) };
+  const result = await services(backend).retrieval.retrieve({ query: 'TOKEN', caseSensitive: true, semantic: true, retrievalMode });
+  expect(result.results.map(hit => hit.p)).toEqual(['Exact.md']);
+  expect(result.semantic.state).toBe('filtered');
+  expect(backend.search).not.toHaveBeenCalled();
+});
 test('semantic-only evidence candidate reads its current exact source anchor', async () => {
   const raw = '# Guide\n\nUnrelated introductory paragraph.\n\n## 제한\n\n결제는 자동 재전송하면 안 됩니다.\n';
   await seed('A.md', raw);

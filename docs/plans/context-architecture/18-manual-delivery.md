@@ -35,7 +35,7 @@ Coverage verifier reread every batch/report and matched current source/build bas
 - [x] Installed13guides reread; two protected configuration files and rollback retained.
 - [x] NAS-backed release activated; originals/world/economy bytes preserved.
 - [x] Direct-path live fixed tools, source/chapter reads, small budgets and denials checked.
-- [ ] Existing main committed and pushed to the user fork; no PR or upstream action.
+- [x] Commit9a4ce5160 pushed to user-fork main; remote hash matched; no PR/upstream action.
 
 P2-P5 and retrieval R0-R6 remain separate, unfinished work.
 Runtime PID7664:20260914-context-manuals-p1e/release/dist/server.js on127.0.0.1:8788.

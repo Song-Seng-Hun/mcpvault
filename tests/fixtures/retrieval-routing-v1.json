@@ -1,0 +1,4629 @@
+{
+  "version": 1,
+  "measurement": "synthetic-contract-only",
+  "description": "Frozen routing/exposure specification, not model or scale performance evidence. Input fields are fixture conditions, not client-granted authority.",
+  "frozenSha256": "93870ec4aa27ada8dacedd8419b5a2fb2c32ab42ffa7ad798a69dbaf43c33fb9",
+  "sources": [
+    {
+      "family": "routing-release-file",
+      "split": "development",
+      "document": "Ops/Release7.md",
+      "body": "Before release7, disconnect the write replica; reconnect only after rollback verification.",
+      "classification": "synthetic",
+      "authority": "fixture-only"
+    },
+    {
+      "family": "routing-seed-file",
+      "split": "holdout",
+      "document": "Gardens/Seed42.md",
+      "body": "Soak seed42 for6 hours only when water stays below20 C.",
+      "classification": "synthetic",
+      "authority": "fixture-only"
+    },
+    {
+      "family": "routing-mercury",
+      "split": "development",
+      "document": "Evaluation/mercury/source.md",
+      "body": "Two visible Mercury.md files describe a database and a telescope; the caller supplied no folder.",
+      "classification": "synthetic",
+      "authority": "fixture-only"
+    },
+    {
+      "family": "routing-comet",
+      "split": "holdout",
+      "document": "Evaluation/comet/source.md",
+      "body": "Two visible 유성.md files describe a game item and a weather record; neither is selected.",
+      "classification": "synthetic",
+      "authority": "fixture-only"
+    },
+    {
+      "family": "routing-readonly",
+      "split": "development",
+      "document": "Evaluation/readonly/source.md",
+      "body": "The exact phrase read only applies to the audit endpoint, not every endpoint.",
+      "classification": "synthetic",
+      "authority": "fixture-only"
+    },
+    {
+      "family": "routing-refund",
+      "split": "holdout",
+      "document": "Evaluation/refund/source.md",
+      "body": "The exact phrase no refund applies after activation; unopened packages remain refundable.",
+      "classification": "synthetic",
+      "authority": "fixture-only"
+    },
+    {
+      "family": "routing-solar",
+      "split": "development",
+      "document": "Evaluation/solar/source.md",
+      "body": "The inverter guide describes solar export limits without any battery instructions.",
+      "classification": "synthetic",
+      "authority": "fixture-only"
+    },
+    {
+      "family": "routing-snack",
+      "split": "holdout",
+      "document": "Evaluation/snack/source.md",
+      "body": "The nut-free snack note covers oat portions; allergy-treatment notes are outside this request.",
+      "classification": "synthetic",
+      "authority": "fixture-only"
+    },
+    {
+      "family": "routing-approved",
+      "split": "development",
+      "document": "Evaluation/approved/source.md",
+      "body": "Only the approved network plan is eligible; the draft with stronger keyword overlap is excluded.",
+      "classification": "synthetic",
+      "authority": "fixture-only"
+    },
+    {
+      "family": "routing-version2",
+      "split": "holdout",
+      "document": "Evaluation/version2/source.md",
+      "body": "The version2 data layout uses a checksum; version1 omits it and cannot satisfy the requested filter.",
+      "classification": "synthetic",
+      "authority": "fixture-only"
+    },
+    {
+      "family": "routing-healing-spring",
+      "split": "development",
+      "document": "Evaluation/healing-spring/source.md",
+      "body": "Healing Spring (치유의 샘) restores20 health only outside combat in game A version3.",
+      "classification": "synthetic",
+      "authority": "fixture-only"
+    },
+    {
+      "family": "routing-moonblade",
+      "split": "holdout",
+      "document": "Evaluation/moonblade/source.md",
+      "body": "Moonlight Blade (달빛검) deals12 damage at night in game B; a same-name mod item is different.",
+      "classification": "synthetic",
+      "authority": "fixture-only"
+    },
+    {
+      "family": "routing-original",
+      "split": "development",
+      "document": "Evaluation/original/source.md",
+      "body": "Host-approved rule R-original forbids modifying immutable source bytes even when a project default suggests rewriting.",
+      "classification": "synthetic",
+      "authority": "fixture-only"
+    },
+    {
+      "family": "routing-read-only",
+      "split": "holdout",
+      "document": "Evaluation/read-only/source.md",
+      "body": "Host-approved rule R-readonly rejects writes on this read-only runtime; administrator role does not add write capability.",
+      "classification": "synthetic",
+      "authority": "fixture-only"
+    },
+    {
+      "family": "routing-safe-patch",
+      "split": "development",
+      "document": "Evaluation/safe-patch/source.md",
+      "body": "The reviewed patch procedure reads the current revision, previews the patch, applies it, then rereads the result.",
+      "classification": "synthetic",
+      "authority": "fixture-only"
+    },
+    {
+      "family": "routing-retry",
+      "split": "holdout",
+      "document": "Evaluation/retry/source.md",
+      "body": "The reviewed retry procedure requires a stable request ID and checks an uncertain receipt before retrying a payment simulation.",
+      "classification": "synthetic",
+      "authority": "fixture-only"
+    },
+    {
+      "family": "routing-inventory",
+      "split": "development",
+      "document": "Inventory/Shelf3.md",
+      "body": "Shelf3 contains8 sealed boxes; reading this one inventory row requires no optional procedure.",
+      "classification": "synthetic",
+      "authority": "fixture-only"
+    },
+    {
+      "family": "routing-revision",
+      "split": "holdout",
+      "document": "Calibration/Sensor17.md",
+      "body": "Sensor17 calibration revision is C4; this request asks only for the exact current value.",
+      "classification": "synthetic",
+      "authority": "fixture-only"
+    },
+    {
+      "family": "routing-api-v2",
+      "split": "development",
+      "document": "Evaluation/api-v2/source.md",
+      "body": "The available skill targets APIv1. Project Delta uses APIv2, where that argument was removed.",
+      "classification": "synthetic",
+      "authority": "fixture-only"
+    },
+    {
+      "family": "routing-windows",
+      "split": "holdout",
+      "document": "Evaluation/windows/source.md",
+      "body": "The only offered shell procedure requires macOS launchctl; the Forge project runs on Windows.",
+      "classification": "synthetic",
+      "authority": "fixture-only"
+    },
+    {
+      "family": "routing-translations",
+      "split": "development",
+      "document": "Evaluation/translations/source.md",
+      "body": "A filter test original and its English translation report the same10 minute run; both share family F-filter.",
+      "classification": "synthetic",
+      "authority": "fixture-only"
+    },
+    {
+      "family": "routing-copies",
+      "split": "holdout",
+      "document": "Evaluation/copies/source.md",
+      "body": "Two imported copies share the turbine inspection SHA256 and describe one cracked blade, not two independent inspections.",
+      "classification": "synthetic",
+      "authority": "fixture-only"
+    },
+    {
+      "family": "routing-format-card",
+      "split": "development",
+      "document": "Evaluation/format-card/source.md",
+      "body": "The unchanged CSV-format card was acknowledged as retained in this same worker, task and context epoch.",
+      "classification": "synthetic",
+      "authority": "fixture-only"
+    },
+    {
+      "family": "routing-drawing-card",
+      "split": "holdout",
+      "document": "Evaluation/drawing-card/source.md",
+      "body": "The unchanged drawing-export card remains host-confirmed in the same design task and session.",
+      "classification": "synthetic",
+      "authority": "fixture-only"
+    },
+    {
+      "family": "routing-unacknowledged",
+      "split": "development",
+      "document": "Evaluation/unacknowledged/source.md",
+      "body": "The batch-size card was sent but never acknowledged; its presence in the current context is unknown.",
+      "classification": "synthetic",
+      "authority": "fixture-only"
+    },
+    {
+      "family": "routing-other-worker",
+      "split": "holdout",
+      "document": "Evaluation/other-worker/source.md",
+      "body": "A different worker acknowledged the lint card; that receipt does not establish retention in this worker.",
+      "classification": "synthetic",
+      "authority": "fixture-only"
+    },
+    {
+      "family": "routing-compressed",
+      "split": "development",
+      "document": "Evaluation/compressed/source.md",
+      "body": "The backup prerequisite was read before compaction; the context epoch changed and retention was not reconfirmed.",
+      "classification": "synthetic",
+      "authority": "fixture-only"
+    },
+    {
+      "family": "routing-restarted",
+      "split": "holdout",
+      "document": "Evaluation/restarted/source.md",
+      "body": "The coordinate-system warning belonged to the previous application session; a restart invalidated its retention claim.",
+      "classification": "synthetic",
+      "authority": "fixture-only"
+    },
+    {
+      "family": "routing-ack-base",
+      "split": "development",
+      "document": "Evaluation/ack-base/source.md",
+      "body": "The acknowledged limit was8. An unacknowledged response changed it to6; the current limit is4 with no emergency exception.",
+      "classification": "synthetic",
+      "authority": "fixture-only"
+    },
+    {
+      "family": "routing-expired-base",
+      "split": "holdout",
+      "document": "Evaluation/expired-base/source.md",
+      "body": "The acknowledged kiln-setting base expired; current settings are900 C for12 minutes, with no reliable delta base.",
+      "classification": "synthetic",
+      "authority": "fixture-only"
+    },
+    {
+      "family": "routing-department",
+      "split": "development",
+      "document": "Evaluation/department/source.md",
+      "body": "Synthetic restricted memo says the lab opens at06:00; the caller left that department after a previous read.",
+      "classification": "synthetic",
+      "authority": "fixture-only"
+    },
+    {
+      "family": "routing-policy",
+      "split": "holdout",
+      "document": "Evaluation/policy/source.md",
+      "body": "Synthetic restricted forecast says volume90; its policy changed without a body edit and the old search cache is invalid.",
+      "classification": "synthetic",
+      "authority": "fixture-only"
+    },
+    {
+      "family": "routing-battery-cold",
+      "split": "development",
+      "document": "Evaluation/battery-cold/source.md",
+      "body": "The new accessible cold-weather trial found battery failures below-10 C; it invalidates the earlier unconditional cache answer.",
+      "classification": "synthetic",
+      "authority": "fixture-only"
+    },
+    {
+      "family": "routing-adhesive-wet",
+      "split": "holdout",
+      "document": "Evaluation/adhesive-wet/source.md",
+      "body": "A newly added wet-surface test found adhesive failure above80 percent humidity; the previously cached dry-only result is incomplete.",
+      "classification": "synthetic",
+      "authority": "fixture-only"
+    },
+    {
+      "family": "routing-private-neighbor",
+      "split": "development",
+      "document": "Evaluation/private-neighbor/source.md",
+      "body": "The public route note names a safe detour.",
+      "classification": "synthetic",
+      "authority": "fixture-only"
+    },
+    {
+      "family": "routing-hub-budget",
+      "split": "holdout",
+      "document": "Evaluation/hub-budget/source.md",
+      "body": "The public storage hub has an unresolved humidity condition; the200 inspected edges do not prove exhaustive coverage.",
+      "classification": "synthetic",
+      "authority": "fixture-only"
+    },
+    {
+      "family": "routing-code-tests",
+      "split": "development",
+      "document": "Evaluation/code-tests/source.md",
+      "body": "The compiler patch was applied, but its targeted test and build have not run; completion must remain unverified.",
+      "classification": "synthetic",
+      "authority": "fixture-only"
+    },
+    {
+      "family": "routing-document-reread",
+      "split": "holdout",
+      "document": "Evaluation/document-reread/source.md",
+      "body": "The orchard note edit returned success, but the written revision and links have not been reread.",
+      "classification": "synthetic",
+      "authority": "fixture-only"
+    },
+    {
+      "family": "routing-network-not-tree",
+      "split": "development",
+      "document": "Evaluation/network-not-tree/source.md",
+      "body": "Cedar here names a router project, not a tree. The inferred botany topic may expand once while project access stays fixed.",
+      "classification": "synthetic",
+      "authority": "fixture-only"
+    },
+    {
+      "family": "routing-fiction-hard",
+      "split": "holdout",
+      "document": "Evaluation/fiction-hard/source.md",
+      "body": "The query explicitly requests factual navigation. The only match is an invented starship route in a fictional scene.",
+      "classification": "synthetic",
+      "authority": "fixture-only"
+    }
+  ],
+  "cases": [
+    {
+      "id": "routing-release-file-ko",
+      "family": "routing-release-file",
+      "split": "development",
+      "scenario": "exact-path",
+      "language": "ko",
+      "query": "Ops/Release7.md의 현재 원문만 읽어줘.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "unknown",
+        "path": "Ops/Release7.md"
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "direct_read",
+        "delivery": "full",
+        "documents": [
+          "Ops/Release7.md"
+        ],
+        "requiredEvidence": [
+          "Before release7, disconnect the write replica; reconnect only after rollback verification."
+        ],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": []
+      }
+    },
+    {
+      "id": "routing-release-file-en",
+      "family": "routing-release-file",
+      "split": "development",
+      "scenario": "exact-path",
+      "language": "en",
+      "query": "Read only the current original at Ops/Release7.md.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "unknown",
+        "path": "Ops/Release7.md"
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "direct_read",
+        "delivery": "full",
+        "documents": [
+          "Ops/Release7.md"
+        ],
+        "requiredEvidence": [
+          "Before release7, disconnect the write replica; reconnect only after rollback verification."
+        ],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": []
+      }
+    },
+    {
+      "id": "routing-release-file-mixed",
+      "family": "routing-release-file",
+      "split": "development",
+      "scenario": "exact-path",
+      "language": "mixed",
+      "query": "Ops/Release7.md current source만 읽어줘.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "unknown",
+        "path": "Ops/Release7.md"
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "direct_read",
+        "delivery": "full",
+        "documents": [
+          "Ops/Release7.md"
+        ],
+        "requiredEvidence": [
+          "Before release7, disconnect the write replica; reconnect only after rollback verification."
+        ],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": []
+      }
+    },
+    {
+      "id": "routing-seed-file-ko",
+      "family": "routing-seed-file",
+      "split": "holdout",
+      "scenario": "exact-path",
+      "language": "ko",
+      "query": "Gardens/Seed42.md의 담금 조건을 읽어줘.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "unknown",
+        "path": "Gardens/Seed42.md"
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "direct_read",
+        "delivery": "full",
+        "documents": [
+          "Gardens/Seed42.md"
+        ],
+        "requiredEvidence": [
+          "Soak seed42 for6 hours only when water stays below20 C."
+        ],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": []
+      }
+    },
+    {
+      "id": "routing-seed-file-en",
+      "family": "routing-seed-file",
+      "split": "holdout",
+      "scenario": "exact-path",
+      "language": "en",
+      "query": "Read the soaking condition at Gardens/Seed42.md.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "unknown",
+        "path": "Gardens/Seed42.md"
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "direct_read",
+        "delivery": "full",
+        "documents": [
+          "Gardens/Seed42.md"
+        ],
+        "requiredEvidence": [
+          "Soak seed42 for6 hours only when water stays below20 C."
+        ],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": []
+      }
+    },
+    {
+      "id": "routing-seed-file-mixed",
+      "family": "routing-seed-file",
+      "split": "holdout",
+      "scenario": "exact-path",
+      "language": "mixed",
+      "query": "Gardens/Seed42.md soaking 조건을 읽어줘.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "unknown",
+        "path": "Gardens/Seed42.md"
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "direct_read",
+        "delivery": "full",
+        "documents": [
+          "Gardens/Seed42.md"
+        ],
+        "requiredEvidence": [
+          "Soak seed42 for6 hours only when water stays below20 C."
+        ],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": []
+      }
+    },
+    {
+      "id": "routing-mercury-ko",
+      "family": "routing-mercury",
+      "split": "development",
+      "scenario": "ambiguous-name",
+      "language": "ko",
+      "query": "[[Mercury.md]]를 열어줘.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "unknown",
+        "document": "[[Mercury.md]]",
+        "visibleMatches": 2
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "disambiguate",
+        "delivery": "card",
+        "documents": [],
+        "requiredEvidence": [],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": []
+      }
+    },
+    {
+      "id": "routing-mercury-en",
+      "family": "routing-mercury",
+      "split": "development",
+      "scenario": "ambiguous-name",
+      "language": "en",
+      "query": "Open [[Mercury.md]] without choosing a folder for me.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "unknown",
+        "document": "[[Mercury.md]]",
+        "visibleMatches": 2
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "disambiguate",
+        "delivery": "card",
+        "documents": [],
+        "requiredEvidence": [],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": []
+      }
+    },
+    {
+      "id": "routing-mercury-mixed",
+      "family": "routing-mercury",
+      "split": "development",
+      "scenario": "ambiguous-name",
+      "language": "mixed",
+      "query": "[[Mercury.md]] 열기; folder는 지정하지 않았어.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "unknown",
+        "document": "[[Mercury.md]]",
+        "visibleMatches": 2
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "disambiguate",
+        "delivery": "card",
+        "documents": [],
+        "requiredEvidence": [],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": []
+      }
+    },
+    {
+      "id": "routing-comet-ko",
+      "family": "routing-comet",
+      "split": "holdout",
+      "scenario": "ambiguous-name",
+      "language": "ko",
+      "query": "[[유성.md]]가 뭔지 보여줘.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "unknown",
+        "document": "[[유성.md]]",
+        "visibleMatches": 2
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "disambiguate",
+        "delivery": "card",
+        "documents": [],
+        "requiredEvidence": [],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": []
+      }
+    },
+    {
+      "id": "routing-comet-en",
+      "family": "routing-comet",
+      "split": "holdout",
+      "scenario": "ambiguous-name",
+      "language": "en",
+      "query": "Show [[유성.md]]; I have not selected the game or weather note.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "unknown",
+        "document": "[[유성.md]]",
+        "visibleMatches": 2
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "disambiguate",
+        "delivery": "card",
+        "documents": [],
+        "requiredEvidence": [],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": []
+      }
+    },
+    {
+      "id": "routing-comet-mixed",
+      "family": "routing-comet",
+      "split": "holdout",
+      "scenario": "ambiguous-name",
+      "language": "mixed",
+      "query": "[[유성.md]] open; game/weather 미선택.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "unknown",
+        "document": "[[유성.md]]",
+        "visibleMatches": 2
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "disambiguate",
+        "delivery": "card",
+        "documents": [],
+        "requiredEvidence": [],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": []
+      }
+    },
+    {
+      "id": "routing-readonly-ko",
+      "family": "routing-readonly",
+      "split": "development",
+      "scenario": "quoted-phrase",
+      "language": "ko",
+      "query": "\"read only\"라는 정확한 문구를 찾아줘.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "unknown",
+        "queryConstraint": "quote",
+        "phrase": "read only"
+      },
+      "expected": {
+        "route": "lexical",
+        "action": "read",
+        "delivery": "full",
+        "documents": [
+          "Evaluation/readonly/source.md"
+        ],
+        "requiredEvidence": [
+          "The exact phrase read only applies to the audit endpoint, not every endpoint."
+        ],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": [
+          "strict_phrase"
+        ]
+      }
+    },
+    {
+      "id": "routing-readonly-en",
+      "family": "routing-readonly",
+      "split": "development",
+      "scenario": "quoted-phrase",
+      "language": "en",
+      "query": "Find the exact phrase \"read only\" in the audit reference.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "unknown",
+        "queryConstraint": "quote",
+        "phrase": "read only"
+      },
+      "expected": {
+        "route": "lexical",
+        "action": "read",
+        "delivery": "full",
+        "documents": [
+          "Evaluation/readonly/source.md"
+        ],
+        "requiredEvidence": [
+          "The exact phrase read only applies to the audit endpoint, not every endpoint."
+        ],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": [
+          "strict_phrase"
+        ]
+      }
+    },
+    {
+      "id": "routing-readonly-mixed",
+      "family": "routing-readonly",
+      "split": "development",
+      "scenario": "quoted-phrase",
+      "language": "mixed",
+      "query": "audit reference에서 \"read only\" exact phrase 검색.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "unknown",
+        "queryConstraint": "quote",
+        "phrase": "read only"
+      },
+      "expected": {
+        "route": "lexical",
+        "action": "read",
+        "delivery": "full",
+        "documents": [
+          "Evaluation/readonly/source.md"
+        ],
+        "requiredEvidence": [
+          "The exact phrase read only applies to the audit endpoint, not every endpoint."
+        ],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": [
+          "strict_phrase"
+        ]
+      }
+    },
+    {
+      "id": "routing-refund-ko",
+      "family": "routing-refund",
+      "split": "holdout",
+      "scenario": "quoted-phrase",
+      "language": "ko",
+      "query": "\"no refund\"의 예외도 함께 찾아줘.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "unknown",
+        "queryConstraint": "quote",
+        "phrase": "no refund"
+      },
+      "expected": {
+        "route": "lexical",
+        "action": "read",
+        "delivery": "full",
+        "documents": [
+          "Evaluation/refund/source.md"
+        ],
+        "requiredEvidence": [
+          "The exact phrase no refund applies after activation; unopened packages remain refundable."
+        ],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": [
+          "preserve_exception"
+        ]
+      }
+    },
+    {
+      "id": "routing-refund-en",
+      "family": "routing-refund",
+      "split": "holdout",
+      "scenario": "quoted-phrase",
+      "language": "en",
+      "query": "Find \"no refund\" together with its exception.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "unknown",
+        "queryConstraint": "quote",
+        "phrase": "no refund"
+      },
+      "expected": {
+        "route": "lexical",
+        "action": "read",
+        "delivery": "full",
+        "documents": [
+          "Evaluation/refund/source.md"
+        ],
+        "requiredEvidence": [
+          "The exact phrase no refund applies after activation; unopened packages remain refundable."
+        ],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": [
+          "preserve_exception"
+        ]
+      }
+    },
+    {
+      "id": "routing-refund-mixed",
+      "family": "routing-refund",
+      "split": "holdout",
+      "scenario": "quoted-phrase",
+      "language": "mixed",
+      "query": "\"no refund\" exact match와 exception을 찾아줘.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "unknown",
+        "queryConstraint": "quote",
+        "phrase": "no refund"
+      },
+      "expected": {
+        "route": "lexical",
+        "action": "read",
+        "delivery": "full",
+        "documents": [
+          "Evaluation/refund/source.md"
+        ],
+        "requiredEvidence": [
+          "The exact phrase no refund applies after activation; unopened packages remain refundable."
+        ],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": [
+          "preserve_exception"
+        ]
+      }
+    },
+    {
+      "id": "routing-solar-ko",
+      "family": "routing-solar",
+      "split": "development",
+      "scenario": "excluded-term",
+      "language": "ko",
+      "query": "solar -battery 조건으로 인버터 지침을 찾아줘.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "unknown",
+        "queryConstraint": "exclude",
+        "excluded": [
+          "battery"
+        ]
+      },
+      "expected": {
+        "route": "lexical",
+        "action": "read",
+        "delivery": "full",
+        "documents": [
+          "Evaluation/solar/source.md"
+        ],
+        "requiredEvidence": [
+          "The inverter guide describes solar export limits without any battery instructions."
+        ],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": [
+          "keep_exclusion"
+        ]
+      }
+    },
+    {
+      "id": "routing-solar-en",
+      "family": "routing-solar",
+      "split": "development",
+      "scenario": "excluded-term",
+      "language": "en",
+      "query": "Find inverter guidance for solar -battery.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "unknown",
+        "queryConstraint": "exclude",
+        "excluded": [
+          "battery"
+        ]
+      },
+      "expected": {
+        "route": "lexical",
+        "action": "read",
+        "delivery": "full",
+        "documents": [
+          "Evaluation/solar/source.md"
+        ],
+        "requiredEvidence": [
+          "The inverter guide describes solar export limits without any battery instructions."
+        ],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": [
+          "keep_exclusion"
+        ]
+      }
+    },
+    {
+      "id": "routing-solar-mixed",
+      "family": "routing-solar",
+      "split": "development",
+      "scenario": "excluded-term",
+      "language": "mixed",
+      "query": "inverter 지침 검색: solar -battery.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "unknown",
+        "queryConstraint": "exclude",
+        "excluded": [
+          "battery"
+        ]
+      },
+      "expected": {
+        "route": "lexical",
+        "action": "read",
+        "delivery": "full",
+        "documents": [
+          "Evaluation/solar/source.md"
+        ],
+        "requiredEvidence": [
+          "The inverter guide describes solar export limits without any battery instructions."
+        ],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": [
+          "keep_exclusion"
+        ]
+      }
+    },
+    {
+      "id": "routing-snack-ko",
+      "family": "routing-snack",
+      "split": "holdout",
+      "scenario": "excluded-term",
+      "language": "ko",
+      "query": "oat -treatment 조건으로 간식 분량을 찾아줘.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "unknown",
+        "queryConstraint": "exclude",
+        "excluded": [
+          "treatment"
+        ]
+      },
+      "expected": {
+        "route": "lexical",
+        "action": "read",
+        "delivery": "full",
+        "documents": [
+          "Evaluation/snack/source.md"
+        ],
+        "requiredEvidence": [
+          "The nut-free snack note covers oat portions; allergy-treatment notes are outside this request."
+        ],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": [
+          "keep_exclusion"
+        ]
+      }
+    },
+    {
+      "id": "routing-snack-en",
+      "family": "routing-snack",
+      "split": "holdout",
+      "scenario": "excluded-term",
+      "language": "en",
+      "query": "Find snack portions using oat -treatment.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "unknown",
+        "queryConstraint": "exclude",
+        "excluded": [
+          "treatment"
+        ]
+      },
+      "expected": {
+        "route": "lexical",
+        "action": "read",
+        "delivery": "full",
+        "documents": [
+          "Evaluation/snack/source.md"
+        ],
+        "requiredEvidence": [
+          "The nut-free snack note covers oat portions; allergy-treatment notes are outside this request."
+        ],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": [
+          "keep_exclusion"
+        ]
+      }
+    },
+    {
+      "id": "routing-snack-mixed",
+      "family": "routing-snack",
+      "split": "holdout",
+      "scenario": "excluded-term",
+      "language": "mixed",
+      "query": "snack portions 검색: oat -treatment.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "unknown",
+        "queryConstraint": "exclude",
+        "excluded": [
+          "treatment"
+        ]
+      },
+      "expected": {
+        "route": "lexical",
+        "action": "read",
+        "delivery": "full",
+        "documents": [
+          "Evaluation/snack/source.md"
+        ],
+        "requiredEvidence": [
+          "The nut-free snack note covers oat portions; allergy-treatment notes are outside this request."
+        ],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": [
+          "keep_exclusion"
+        ]
+      }
+    },
+    {
+      "id": "routing-approved-ko",
+      "family": "routing-approved",
+      "split": "development",
+      "scenario": "structured-filter",
+      "language": "ko",
+      "query": "status:approved 조건을 유지해서 네트워크 계획을 찾아줘.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "unknown",
+        "queryConstraint": "structured",
+        "filters": {
+          "status": "approved"
+        }
+      },
+      "expected": {
+        "route": "lexical",
+        "action": "read",
+        "delivery": "full",
+        "documents": [
+          "Evaluation/approved/source.md"
+        ],
+        "requiredEvidence": [
+          "Only the approved network plan is eligible; the draft with stronger keyword overlap is excluded."
+        ],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": [
+          "keep_structured_filter"
+        ]
+      }
+    },
+    {
+      "id": "routing-approved-en",
+      "family": "routing-approved",
+      "split": "development",
+      "scenario": "structured-filter",
+      "language": "en",
+      "query": "Find the network plan while preserving status:approved.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "unknown",
+        "queryConstraint": "structured",
+        "filters": {
+          "status": "approved"
+        }
+      },
+      "expected": {
+        "route": "lexical",
+        "action": "read",
+        "delivery": "full",
+        "documents": [
+          "Evaluation/approved/source.md"
+        ],
+        "requiredEvidence": [
+          "Only the approved network plan is eligible; the draft with stronger keyword overlap is excluded."
+        ],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": [
+          "keep_structured_filter"
+        ]
+      }
+    },
+    {
+      "id": "routing-approved-mixed",
+      "family": "routing-approved",
+      "split": "development",
+      "scenario": "structured-filter",
+      "language": "mixed",
+      "query": "network plan 검색; status:approved 유지.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "unknown",
+        "queryConstraint": "structured",
+        "filters": {
+          "status": "approved"
+        }
+      },
+      "expected": {
+        "route": "lexical",
+        "action": "read",
+        "delivery": "full",
+        "documents": [
+          "Evaluation/approved/source.md"
+        ],
+        "requiredEvidence": [
+          "Only the approved network plan is eligible; the draft with stronger keyword overlap is excluded."
+        ],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": [
+          "keep_structured_filter"
+        ]
+      }
+    },
+    {
+      "id": "routing-version2-ko",
+      "family": "routing-version2",
+      "split": "holdout",
+      "scenario": "structured-filter",
+      "language": "ko",
+      "query": "version:2로 한정해서 체크섬 배치를 찾아줘.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "unknown",
+        "queryConstraint": "structured",
+        "filters": {
+          "version": 2
+        }
+      },
+      "expected": {
+        "route": "lexical",
+        "action": "read",
+        "delivery": "full",
+        "documents": [
+          "Evaluation/version2/source.md"
+        ],
+        "requiredEvidence": [
+          "The version2 data layout uses a checksum; version1 omits it and cannot satisfy the requested filter."
+        ],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": [
+          "keep_structured_filter"
+        ]
+      }
+    },
+    {
+      "id": "routing-version2-en",
+      "family": "routing-version2",
+      "split": "holdout",
+      "scenario": "structured-filter",
+      "language": "en",
+      "query": "Find the checksum layout restricted to version:2.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "unknown",
+        "queryConstraint": "structured",
+        "filters": {
+          "version": 2
+        }
+      },
+      "expected": {
+        "route": "lexical",
+        "action": "read",
+        "delivery": "full",
+        "documents": [
+          "Evaluation/version2/source.md"
+        ],
+        "requiredEvidence": [
+          "The version2 data layout uses a checksum; version1 omits it and cannot satisfy the requested filter."
+        ],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": [
+          "keep_structured_filter"
+        ]
+      }
+    },
+    {
+      "id": "routing-version2-mixed",
+      "family": "routing-version2",
+      "split": "holdout",
+      "scenario": "structured-filter",
+      "language": "mixed",
+      "query": "checksum layout 검색; version:2만.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "unknown",
+        "queryConstraint": "structured",
+        "filters": {
+          "version": 2
+        }
+      },
+      "expected": {
+        "route": "lexical",
+        "action": "read",
+        "delivery": "full",
+        "documents": [
+          "Evaluation/version2/source.md"
+        ],
+        "requiredEvidence": [
+          "The version2 data layout uses a checksum; version1 omits it and cannot satisfy the requested filter."
+        ],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": [
+          "keep_structured_filter"
+        ]
+      }
+    },
+    {
+      "id": "routing-healing-spring-ko",
+      "family": "routing-healing-spring",
+      "split": "development",
+      "scenario": "proper-name",
+      "language": "ko",
+      "query": "게임 A 3판의 치유의 샘 효과와 조건을 찾아줘.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "unknown",
+        "project": "game-a",
+        "version": 3,
+        "aliases": [
+          "치유의 샘",
+          "Healing Spring"
+        ]
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "read",
+        "delivery": "full",
+        "documents": [
+          "Evaluation/healing-spring/source.md"
+        ],
+        "requiredEvidence": [
+          "Healing Spring (치유의 샘) restores20 health only outside combat in game A version3."
+        ],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": [
+          "preserve_name_and_condition"
+        ]
+      }
+    },
+    {
+      "id": "routing-healing-spring-en",
+      "family": "routing-healing-spring",
+      "split": "development",
+      "scenario": "proper-name",
+      "language": "en",
+      "query": "Find Healing Spring in game A version3 and retain its Korean name.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "unknown",
+        "project": "game-a",
+        "version": 3,
+        "aliases": [
+          "치유의 샘",
+          "Healing Spring"
+        ]
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "read",
+        "delivery": "full",
+        "documents": [
+          "Evaluation/healing-spring/source.md"
+        ],
+        "requiredEvidence": [
+          "Healing Spring (치유의 샘) restores20 health only outside combat in game A version3."
+        ],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": [
+          "preserve_name_and_condition"
+        ]
+      }
+    },
+    {
+      "id": "routing-healing-spring-mixed",
+      "family": "routing-healing-spring",
+      "split": "development",
+      "scenario": "proper-name",
+      "language": "mixed",
+      "query": "game A v3 치유의 샘(Healing Spring) 조건은?",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "unknown",
+        "project": "game-a",
+        "version": 3,
+        "aliases": [
+          "치유의 샘",
+          "Healing Spring"
+        ]
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "read",
+        "delivery": "full",
+        "documents": [
+          "Evaluation/healing-spring/source.md"
+        ],
+        "requiredEvidence": [
+          "Healing Spring (치유의 샘) restores20 health only outside combat in game A version3."
+        ],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": [
+          "preserve_name_and_condition"
+        ]
+      }
+    },
+    {
+      "id": "routing-moonblade-ko",
+      "family": "routing-moonblade",
+      "split": "holdout",
+      "scenario": "proper-name",
+      "language": "ko",
+      "query": "게임 B 달빛검의 밤 효과를 찾아줘.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "unknown",
+        "project": "game-b",
+        "aliases": [
+          "달빛검",
+          "Moonlight Blade"
+        ]
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "read",
+        "delivery": "full",
+        "documents": [
+          "Evaluation/moonblade/source.md"
+        ],
+        "requiredEvidence": [
+          "Moonlight Blade (달빛검) deals12 damage at night in game B; a same-name mod item is different."
+        ],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": [
+          "preserve_name_and_condition"
+        ]
+      }
+    },
+    {
+      "id": "routing-moonblade-en",
+      "family": "routing-moonblade",
+      "split": "holdout",
+      "scenario": "proper-name",
+      "language": "en",
+      "query": "Find Moonlight Blade night effects in game B, excluding the mod item.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "unknown",
+        "project": "game-b",
+        "aliases": [
+          "달빛검",
+          "Moonlight Blade"
+        ]
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "read",
+        "delivery": "full",
+        "documents": [
+          "Evaluation/moonblade/source.md"
+        ],
+        "requiredEvidence": [
+          "Moonlight Blade (달빛검) deals12 damage at night in game B; a same-name mod item is different."
+        ],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": [
+          "preserve_name_and_condition"
+        ]
+      }
+    },
+    {
+      "id": "routing-moonblade-mixed",
+      "family": "routing-moonblade",
+      "split": "holdout",
+      "scenario": "proper-name",
+      "language": "mixed",
+      "query": "game B 달빛검(Moonlight Blade)의 night 효과는?",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "unknown",
+        "project": "game-b",
+        "aliases": [
+          "달빛검",
+          "Moonlight Blade"
+        ]
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "read",
+        "delivery": "full",
+        "documents": [
+          "Evaluation/moonblade/source.md"
+        ],
+        "requiredEvidence": [
+          "Moonlight Blade (달빛검) deals12 damage at night in game B; a same-name mod item is different."
+        ],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": [
+          "preserve_name_and_condition"
+        ]
+      }
+    },
+    {
+      "id": "routing-original-ko",
+      "family": "routing-original",
+      "split": "development",
+      "scenario": "mandatory-rule",
+      "language": "ko",
+      "query": "프로젝트 기본값이 재작성을 권해도 원본을 바꾸면 안 되지?",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "unknown",
+        "ruleIssuer": "host-fixture",
+        "ruleVersion": "R-original-1",
+        "mandatory": true
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "read",
+        "delivery": "full",
+        "documents": [
+          "Evaluation/original/source.md"
+        ],
+        "requiredEvidence": [
+          "Host-approved rule R-original forbids modifying immutable source bytes even when a project default suggests rewriting."
+        ],
+        "allowedTools": [
+          "wiki.policy"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": true,
+        "partial": false,
+        "warnings": [
+          "original_protection"
+        ]
+      }
+    },
+    {
+      "id": "routing-original-en",
+      "family": "routing-original",
+      "split": "development",
+      "scenario": "mandatory-rule",
+      "language": "en",
+      "query": "Which mandatory rule governs a project request to rewrite immutable originals?",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "unknown",
+        "ruleIssuer": "host-fixture",
+        "ruleVersion": "R-original-1",
+        "mandatory": true
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "read",
+        "delivery": "full",
+        "documents": [
+          "Evaluation/original/source.md"
+        ],
+        "requiredEvidence": [
+          "Host-approved rule R-original forbids modifying immutable source bytes even when a project default suggests rewriting."
+        ],
+        "allowedTools": [
+          "wiki.policy"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": true,
+        "partial": false,
+        "warnings": [
+          "original_protection"
+        ]
+      }
+    },
+    {
+      "id": "routing-original-mixed",
+      "family": "routing-original",
+      "split": "development",
+      "scenario": "mandatory-rule",
+      "language": "mixed",
+      "query": "project default보다 R-original 금지가 우선인지 확인해줘.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "unknown",
+        "ruleIssuer": "host-fixture",
+        "ruleVersion": "R-original-1",
+        "mandatory": true
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "read",
+        "delivery": "full",
+        "documents": [
+          "Evaluation/original/source.md"
+        ],
+        "requiredEvidence": [
+          "Host-approved rule R-original forbids modifying immutable source bytes even when a project default suggests rewriting."
+        ],
+        "allowedTools": [
+          "wiki.policy"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": true,
+        "partial": false,
+        "warnings": [
+          "original_protection"
+        ]
+      }
+    },
+    {
+      "id": "routing-read-only-ko",
+      "family": "routing-read-only",
+      "split": "holdout",
+      "scenario": "mandatory-rule",
+      "language": "ko",
+      "query": "관리자여도 읽기 전용 런타임에서 쓰면 안 되지?",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "unknown",
+        "ruleIssuer": "host-fixture",
+        "ruleVersion": "R-readonly-2",
+        "mandatory": true
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "read",
+        "delivery": "full",
+        "documents": [
+          "Evaluation/read-only/source.md"
+        ],
+        "requiredEvidence": [
+          "Host-approved rule R-readonly rejects writes on this read-only runtime; administrator role does not add write capability."
+        ],
+        "allowedTools": [
+          "wiki.policy"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": true,
+        "partial": false,
+        "warnings": [
+          "read_only"
+        ]
+      }
+    },
+    {
+      "id": "routing-read-only-en",
+      "family": "routing-read-only",
+      "split": "holdout",
+      "scenario": "mandatory-rule",
+      "language": "en",
+      "query": "Show the mandatory read-only rule even for an administrator.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "unknown",
+        "ruleIssuer": "host-fixture",
+        "ruleVersion": "R-readonly-2",
+        "mandatory": true
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "read",
+        "delivery": "full",
+        "documents": [
+          "Evaluation/read-only/source.md"
+        ],
+        "requiredEvidence": [
+          "Host-approved rule R-readonly rejects writes on this read-only runtime; administrator role does not add write capability."
+        ],
+        "allowedTools": [
+          "wiki.policy"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": true,
+        "partial": false,
+        "warnings": [
+          "read_only"
+        ]
+      }
+    },
+    {
+      "id": "routing-read-only-mixed",
+      "family": "routing-read-only",
+      "split": "holdout",
+      "scenario": "mandatory-rule",
+      "language": "mixed",
+      "query": "admin이라도 R-readonly write 거부 규칙을 보여줘.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "unknown",
+        "ruleIssuer": "host-fixture",
+        "ruleVersion": "R-readonly-2",
+        "mandatory": true
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "read",
+        "delivery": "full",
+        "documents": [
+          "Evaluation/read-only/source.md"
+        ],
+        "requiredEvidence": [
+          "Host-approved rule R-readonly rejects writes on this read-only runtime; administrator role does not add write capability."
+        ],
+        "allowedTools": [
+          "wiki.policy"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": true,
+        "partial": false,
+        "warnings": [
+          "read_only"
+        ]
+      }
+    },
+    {
+      "id": "routing-safe-patch-ko",
+      "family": "routing-safe-patch",
+      "split": "development",
+      "scenario": "optional-skill",
+      "language": "ko",
+      "query": "리비전 경합이 가능한 노트 수정에 필요한 절차만 보여줘.",
+      "input": {
+        "intent": "change",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "unknown",
+        "compatibleSkill": "safe-patch-v2",
+        "reviewed": true
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "procedure_read",
+        "delivery": "full",
+        "documents": [
+          "Evaluation/safe-patch/source.md"
+        ],
+        "requiredEvidence": [
+          "The reviewed patch procedure reads the current revision, previews the patch, applies it, then rereads the result."
+        ],
+        "allowedTools": [
+          "notes.change_set"
+        ],
+        "optionalSkills": 1,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": []
+      }
+    },
+    {
+      "id": "routing-safe-patch-en",
+      "family": "routing-safe-patch",
+      "split": "development",
+      "scenario": "optional-skill",
+      "language": "en",
+      "query": "Select the reviewed procedure for a revision-racing note patch.",
+      "input": {
+        "intent": "change",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "unknown",
+        "compatibleSkill": "safe-patch-v2",
+        "reviewed": true
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "procedure_read",
+        "delivery": "full",
+        "documents": [
+          "Evaluation/safe-patch/source.md"
+        ],
+        "requiredEvidence": [
+          "The reviewed patch procedure reads the current revision, previews the patch, applies it, then rereads the result."
+        ],
+        "allowedTools": [
+          "notes.change_set"
+        ],
+        "optionalSkills": 1,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": []
+      }
+    },
+    {
+      "id": "routing-safe-patch-mixed",
+      "family": "routing-safe-patch",
+      "split": "development",
+      "scenario": "optional-skill",
+      "language": "mixed",
+      "query": "revision race 가능한 note patch용 skill chapter만 보여줘.",
+      "input": {
+        "intent": "change",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "unknown",
+        "compatibleSkill": "safe-patch-v2",
+        "reviewed": true
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "procedure_read",
+        "delivery": "full",
+        "documents": [
+          "Evaluation/safe-patch/source.md"
+        ],
+        "requiredEvidence": [
+          "The reviewed patch procedure reads the current revision, previews the patch, applies it, then rereads the result."
+        ],
+        "allowedTools": [
+          "notes.change_set"
+        ],
+        "optionalSkills": 1,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": []
+      }
+    },
+    {
+      "id": "routing-retry-ko",
+      "family": "routing-retry",
+      "split": "holdout",
+      "scenario": "optional-skill",
+      "language": "ko",
+      "query": "결과가 불확실한 결제 시뮬레이션 재시도 절차를 골라줘.",
+      "input": {
+        "intent": "diagnose",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "unknown",
+        "compatibleSkill": "receipt-retry-v4",
+        "reviewed": true
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "procedure_read",
+        "delivery": "full",
+        "documents": [
+          "Evaluation/retry/source.md"
+        ],
+        "requiredEvidence": [
+          "The reviewed retry procedure requires a stable request ID and checks an uncertain receipt before retrying a payment simulation."
+        ],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 1,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": [
+          "no_blind_retry"
+        ]
+      }
+    },
+    {
+      "id": "routing-retry-en",
+      "family": "routing-retry",
+      "split": "holdout",
+      "scenario": "optional-skill",
+      "language": "en",
+      "query": "Select a receipt-aware retry procedure for an uncertain simulated payment.",
+      "input": {
+        "intent": "diagnose",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "unknown",
+        "compatibleSkill": "receipt-retry-v4",
+        "reviewed": true
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "procedure_read",
+        "delivery": "full",
+        "documents": [
+          "Evaluation/retry/source.md"
+        ],
+        "requiredEvidence": [
+          "The reviewed retry procedure requires a stable request ID and checks an uncertain receipt before retrying a payment simulation."
+        ],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 1,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": [
+          "no_blind_retry"
+        ]
+      }
+    },
+    {
+      "id": "routing-retry-mixed",
+      "family": "routing-retry",
+      "split": "holdout",
+      "scenario": "optional-skill",
+      "language": "mixed",
+      "query": "uncertain simulated payment의 receipt-aware retry skill을 골라줘.",
+      "input": {
+        "intent": "diagnose",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "unknown",
+        "compatibleSkill": "receipt-retry-v4",
+        "reviewed": true
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "procedure_read",
+        "delivery": "full",
+        "documents": [
+          "Evaluation/retry/source.md"
+        ],
+        "requiredEvidence": [
+          "The reviewed retry procedure requires a stable request ID and checks an uncertain receipt before retrying a payment simulation."
+        ],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 1,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": [
+          "no_blind_retry"
+        ]
+      }
+    },
+    {
+      "id": "routing-inventory-ko",
+      "family": "routing-inventory",
+      "split": "development",
+      "scenario": "no-skill",
+      "language": "ko",
+      "query": "선반3의 상자 수만 읽어줘.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "unknown",
+        "path": "Inventory/Shelf3.md"
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "direct_read",
+        "delivery": "full",
+        "documents": [
+          "Inventory/Shelf3.md"
+        ],
+        "requiredEvidence": [
+          "Shelf3 contains8 sealed boxes; reading this one inventory row requires no optional procedure."
+        ],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": []
+      }
+    },
+    {
+      "id": "routing-inventory-en",
+      "family": "routing-inventory",
+      "split": "development",
+      "scenario": "no-skill",
+      "language": "en",
+      "query": "Read only the box count for shelf3.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "unknown",
+        "path": "Inventory/Shelf3.md"
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "direct_read",
+        "delivery": "full",
+        "documents": [
+          "Inventory/Shelf3.md"
+        ],
+        "requiredEvidence": [
+          "Shelf3 contains8 sealed boxes; reading this one inventory row requires no optional procedure."
+        ],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": []
+      }
+    },
+    {
+      "id": "routing-inventory-mixed",
+      "family": "routing-inventory",
+      "split": "development",
+      "scenario": "no-skill",
+      "language": "mixed",
+      "query": "shelf3 box count만 알려줘; 추가 procedure 불필요.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "unknown",
+        "path": "Inventory/Shelf3.md"
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "direct_read",
+        "delivery": "full",
+        "documents": [
+          "Inventory/Shelf3.md"
+        ],
+        "requiredEvidence": [
+          "Shelf3 contains8 sealed boxes; reading this one inventory row requires no optional procedure."
+        ],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": []
+      }
+    },
+    {
+      "id": "routing-revision-ko",
+      "family": "routing-revision",
+      "split": "holdout",
+      "scenario": "no-skill",
+      "language": "ko",
+      "query": "센서17 교정 리비전 값만 읽어줘.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "unknown",
+        "path": "Calibration/Sensor17.md"
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "direct_read",
+        "delivery": "full",
+        "documents": [
+          "Calibration/Sensor17.md"
+        ],
+        "requiredEvidence": [
+          "Sensor17 calibration revision is C4; this request asks only for the exact current value."
+        ],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": []
+      }
+    },
+    {
+      "id": "routing-revision-en",
+      "family": "routing-revision",
+      "split": "holdout",
+      "scenario": "no-skill",
+      "language": "en",
+      "query": "Read only the current calibration revision for sensor17.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "unknown",
+        "path": "Calibration/Sensor17.md"
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "direct_read",
+        "delivery": "full",
+        "documents": [
+          "Calibration/Sensor17.md"
+        ],
+        "requiredEvidence": [
+          "Sensor17 calibration revision is C4; this request asks only for the exact current value."
+        ],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": []
+      }
+    },
+    {
+      "id": "routing-revision-mixed",
+      "family": "routing-revision",
+      "split": "holdout",
+      "scenario": "no-skill",
+      "language": "mixed",
+      "query": "sensor17 calibration revision value만 읽어줘.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "unknown",
+        "path": "Calibration/Sensor17.md"
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "direct_read",
+        "delivery": "full",
+        "documents": [
+          "Calibration/Sensor17.md"
+        ],
+        "requiredEvidence": [
+          "Sensor17 calibration revision is C4; this request asks only for the exact current value."
+        ],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": []
+      }
+    },
+    {
+      "id": "routing-api-v2-ko",
+      "family": "routing-api-v2",
+      "split": "development",
+      "scenario": "incompatible-skill",
+      "language": "ko",
+      "query": "Delta APIv2 작업에 APIv1 스킬을 넣지 말아줘.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "unknown",
+        "project": "delta",
+        "runtimeVersion": 2,
+        "skillVersion": 1
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "search",
+        "delivery": "full",
+        "documents": [
+          "Evaluation/api-v2/source.md"
+        ],
+        "requiredEvidence": [
+          "The available skill targets APIv1. Project Delta uses APIv2, where that argument was removed."
+        ],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": [
+          "incompatible_skill"
+        ]
+      }
+    },
+    {
+      "id": "routing-api-v2-en",
+      "family": "routing-api-v2",
+      "split": "development",
+      "scenario": "incompatible-skill",
+      "language": "en",
+      "query": "Do not select an APIv1 skill for the Delta APIv2 task.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "unknown",
+        "project": "delta",
+        "runtimeVersion": 2,
+        "skillVersion": 1
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "search",
+        "delivery": "full",
+        "documents": [
+          "Evaluation/api-v2/source.md"
+        ],
+        "requiredEvidence": [
+          "The available skill targets APIv1. Project Delta uses APIv2, where that argument was removed."
+        ],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": [
+          "incompatible_skill"
+        ]
+      }
+    },
+    {
+      "id": "routing-api-v2-mixed",
+      "family": "routing-api-v2",
+      "split": "development",
+      "scenario": "incompatible-skill",
+      "language": "mixed",
+      "query": "Delta APIv2에는 APIv1 skill 주입하지 마.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "unknown",
+        "project": "delta",
+        "runtimeVersion": 2,
+        "skillVersion": 1
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "search",
+        "delivery": "full",
+        "documents": [
+          "Evaluation/api-v2/source.md"
+        ],
+        "requiredEvidence": [
+          "The available skill targets APIv1. Project Delta uses APIv2, where that argument was removed."
+        ],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": [
+          "incompatible_skill"
+        ]
+      }
+    },
+    {
+      "id": "routing-windows-ko",
+      "family": "routing-windows",
+      "split": "holdout",
+      "scenario": "incompatible-skill",
+      "language": "ko",
+      "query": "Windows Forge 작업에 launchctl 스킬은 빼줘.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "unknown",
+        "project": "forge",
+        "runtime": "windows",
+        "skillRuntime": "macos"
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "search",
+        "delivery": "full",
+        "documents": [
+          "Evaluation/windows/source.md"
+        ],
+        "requiredEvidence": [
+          "The only offered shell procedure requires macOS launchctl; the Forge project runs on Windows."
+        ],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": [
+          "incompatible_skill"
+        ]
+      }
+    },
+    {
+      "id": "routing-windows-en",
+      "family": "routing-windows",
+      "split": "holdout",
+      "scenario": "incompatible-skill",
+      "language": "en",
+      "query": "Exclude the launchctl skill from the Windows Forge task.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "unknown",
+        "project": "forge",
+        "runtime": "windows",
+        "skillRuntime": "macos"
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "search",
+        "delivery": "full",
+        "documents": [
+          "Evaluation/windows/source.md"
+        ],
+        "requiredEvidence": [
+          "The only offered shell procedure requires macOS launchctl; the Forge project runs on Windows."
+        ],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": [
+          "incompatible_skill"
+        ]
+      }
+    },
+    {
+      "id": "routing-windows-mixed",
+      "family": "routing-windows",
+      "split": "holdout",
+      "scenario": "incompatible-skill",
+      "language": "mixed",
+      "query": "Windows Forge에는 macOS launchctl skill 제외.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "unknown",
+        "project": "forge",
+        "runtime": "windows",
+        "skillRuntime": "macos"
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "search",
+        "delivery": "full",
+        "documents": [
+          "Evaluation/windows/source.md"
+        ],
+        "requiredEvidence": [
+          "The only offered shell procedure requires macOS launchctl; the Forge project runs on Windows."
+        ],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": [
+          "incompatible_skill"
+        ]
+      }
+    },
+    {
+      "id": "routing-translations-ko",
+      "family": "routing-translations",
+      "split": "development",
+      "scenario": "source-family",
+      "language": "ko",
+      "query": "원문과 번역이 같은 필터 시험이면 근거를 두 개로 세지 마.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "unknown",
+        "candidateFamilies": [
+          "F-filter",
+          "F-filter"
+        ]
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "read",
+        "delivery": "full",
+        "documents": [
+          "Evaluation/translations/source.md"
+        ],
+        "requiredEvidence": [
+          "A filter test original and its English translation report the same10 minute run; both share family F-filter."
+        ],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": [
+          "same_source_family"
+        ],
+        "independentSources": 1
+      }
+    },
+    {
+      "id": "routing-translations-en",
+      "family": "routing-translations",
+      "split": "development",
+      "scenario": "source-family",
+      "language": "en",
+      "query": "Treat the filter original and translation as one source family.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "unknown",
+        "candidateFamilies": [
+          "F-filter",
+          "F-filter"
+        ]
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "read",
+        "delivery": "full",
+        "documents": [
+          "Evaluation/translations/source.md"
+        ],
+        "requiredEvidence": [
+          "A filter test original and its English translation report the same10 minute run; both share family F-filter."
+        ],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": [
+          "same_source_family"
+        ],
+        "independentSources": 1
+      }
+    },
+    {
+      "id": "routing-translations-mixed",
+      "family": "routing-translations",
+      "split": "development",
+      "scenario": "source-family",
+      "language": "mixed",
+      "query": "filter original+translation은 독립 evidence가 아니야.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "unknown",
+        "candidateFamilies": [
+          "F-filter",
+          "F-filter"
+        ]
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "read",
+        "delivery": "full",
+        "documents": [
+          "Evaluation/translations/source.md"
+        ],
+        "requiredEvidence": [
+          "A filter test original and its English translation report the same10 minute run; both share family F-filter."
+        ],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": [
+          "same_source_family"
+        ],
+        "independentSources": 1
+      }
+    },
+    {
+      "id": "routing-copies-ko",
+      "family": "routing-copies",
+      "split": "holdout",
+      "scenario": "source-family",
+      "language": "ko",
+      "query": "터빈 점검 PDF 복사본 둘을 독립 점검 두 건으로 세지 마.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "unknown",
+        "candidateFamilies": [
+          "F-turbine",
+          "F-turbine"
+        ]
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "read",
+        "delivery": "full",
+        "documents": [
+          "Evaluation/copies/source.md"
+        ],
+        "requiredEvidence": [
+          "Two imported copies share the turbine inspection SHA256 and describe one cracked blade, not two independent inspections."
+        ],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": [
+          "same_source_family"
+        ],
+        "independentSources": 1
+      }
+    },
+    {
+      "id": "routing-copies-en",
+      "family": "routing-copies",
+      "split": "holdout",
+      "scenario": "source-family",
+      "language": "en",
+      "query": "Deduplicate two turbine-inspection copies with the same source hash.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "unknown",
+        "candidateFamilies": [
+          "F-turbine",
+          "F-turbine"
+        ]
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "read",
+        "delivery": "full",
+        "documents": [
+          "Evaluation/copies/source.md"
+        ],
+        "requiredEvidence": [
+          "Two imported copies share the turbine inspection SHA256 and describe one cracked blade, not two independent inspections."
+        ],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": [
+          "same_source_family"
+        ],
+        "independentSources": 1
+      }
+    },
+    {
+      "id": "routing-copies-mixed",
+      "family": "routing-copies",
+      "split": "holdout",
+      "scenario": "source-family",
+      "language": "mixed",
+      "query": "same-hash turbine PDFs는 one inspection으로 처리해.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "unknown",
+        "candidateFamilies": [
+          "F-turbine",
+          "F-turbine"
+        ]
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "read",
+        "delivery": "full",
+        "documents": [
+          "Evaluation/copies/source.md"
+        ],
+        "requiredEvidence": [
+          "Two imported copies share the turbine inspection SHA256 and describe one cracked blade, not two independent inspections."
+        ],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": [
+          "same_source_family"
+        ],
+        "independentSources": 1
+      }
+    },
+    {
+      "id": "routing-format-card-ko",
+      "family": "routing-format-card",
+      "split": "development",
+      "scenario": "retained-context",
+      "language": "ko",
+      "query": "같은 컨텍스트에 보유한 CSV 형식 안내는 반복하지 마.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "host_confirmed",
+        "sameEpoch": true,
+        "sameWorker": true,
+        "revisionChanged": false
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "reread_available",
+        "delivery": "notice",
+        "documents": [],
+        "requiredEvidence": [],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": []
+      }
+    },
+    {
+      "id": "routing-format-card-en",
+      "family": "routing-format-card",
+      "split": "development",
+      "scenario": "retained-context",
+      "language": "en",
+      "query": "Do not resend the unchanged retained CSV-format card.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "host_confirmed",
+        "sameEpoch": true,
+        "sameWorker": true,
+        "revisionChanged": false
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "reread_available",
+        "delivery": "notice",
+        "documents": [],
+        "requiredEvidence": [],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": []
+      }
+    },
+    {
+      "id": "routing-format-card-mixed",
+      "family": "routing-format-card",
+      "split": "development",
+      "scenario": "retained-context",
+      "language": "mixed",
+      "query": "same context의 retained CSV card는 짧게 알려줘.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "host_confirmed",
+        "sameEpoch": true,
+        "sameWorker": true,
+        "revisionChanged": false
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "reread_available",
+        "delivery": "notice",
+        "documents": [],
+        "requiredEvidence": [],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": []
+      }
+    },
+    {
+      "id": "routing-drawing-card-ko",
+      "family": "routing-drawing-card",
+      "split": "holdout",
+      "scenario": "retained-context",
+      "language": "ko",
+      "query": "현재 설계 세션에 보유한 도면 내보내기 안내를 또 넣지 마.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "host_confirmed",
+        "sameEpoch": true,
+        "sameWorker": true,
+        "revisionChanged": false
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "reread_available",
+        "delivery": "notice",
+        "documents": [],
+        "requiredEvidence": [],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": []
+      }
+    },
+    {
+      "id": "routing-drawing-card-en",
+      "family": "routing-drawing-card",
+      "split": "holdout",
+      "scenario": "retained-context",
+      "language": "en",
+      "query": "Suppress repeating the retained drawing-export card in this design task.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "host_confirmed",
+        "sameEpoch": true,
+        "sameWorker": true,
+        "revisionChanged": false
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "reread_available",
+        "delivery": "notice",
+        "documents": [],
+        "requiredEvidence": [],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": []
+      }
+    },
+    {
+      "id": "routing-drawing-card-mixed",
+      "family": "routing-drawing-card",
+      "split": "holdout",
+      "scenario": "retained-context",
+      "language": "mixed",
+      "query": "current design task의 drawing-export card 중복 주입은 빼줘.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "host_confirmed",
+        "sameEpoch": true,
+        "sameWorker": true,
+        "revisionChanged": false
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "reread_available",
+        "delivery": "notice",
+        "documents": [],
+        "requiredEvidence": [],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": []
+      }
+    },
+    {
+      "id": "routing-unacknowledged-ko",
+      "family": "routing-unacknowledged",
+      "split": "development",
+      "scenario": "unknown-context",
+      "language": "ko",
+      "query": "배치 크기 안내를 보냈지만 수신 확인이 없으면 다시 보여줘.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "sent_only",
+        "sameEpoch": true
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "read",
+        "delivery": "full",
+        "documents": [
+          "Evaluation/unacknowledged/source.md"
+        ],
+        "requiredEvidence": [
+          "The batch-size card was sent but never acknowledged; its presence in the current context is unknown."
+        ],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": [
+          "context_unknown"
+        ]
+      }
+    },
+    {
+      "id": "routing-unacknowledged-en",
+      "family": "routing-unacknowledged",
+      "split": "development",
+      "scenario": "unknown-context",
+      "language": "en",
+      "query": "Resend the batch-size card when delivery was never acknowledged.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "sent_only",
+        "sameEpoch": true
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "read",
+        "delivery": "full",
+        "documents": [
+          "Evaluation/unacknowledged/source.md"
+        ],
+        "requiredEvidence": [
+          "The batch-size card was sent but never acknowledged; its presence in the current context is unknown."
+        ],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": [
+          "context_unknown"
+        ]
+      }
+    },
+    {
+      "id": "routing-unacknowledged-mixed",
+      "family": "routing-unacknowledged",
+      "split": "development",
+      "scenario": "unknown-context",
+      "language": "mixed",
+      "query": "batch-size card sent-only면 context 보유로 취급하지 마.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "sent_only",
+        "sameEpoch": true
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "read",
+        "delivery": "full",
+        "documents": [
+          "Evaluation/unacknowledged/source.md"
+        ],
+        "requiredEvidence": [
+          "The batch-size card was sent but never acknowledged; its presence in the current context is unknown."
+        ],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": [
+          "context_unknown"
+        ]
+      }
+    },
+    {
+      "id": "routing-other-worker-ko",
+      "family": "routing-other-worker",
+      "split": "holdout",
+      "scenario": "unknown-context",
+      "language": "ko",
+      "query": "다른 작업자가 읽은 린트 안내도 나는 다시 읽어야 해.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "other_worker",
+        "sameWorker": false
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "read",
+        "delivery": "full",
+        "documents": [
+          "Evaluation/other-worker/source.md"
+        ],
+        "requiredEvidence": [
+          "A different worker acknowledged the lint card; that receipt does not establish retention in this worker."
+        ],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": [
+          "context_unknown"
+        ]
+      }
+    },
+    {
+      "id": "routing-other-worker-en",
+      "family": "routing-other-worker",
+      "split": "holdout",
+      "scenario": "unknown-context",
+      "language": "en",
+      "query": "Show the lint card even though another worker acknowledged it.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "other_worker",
+        "sameWorker": false
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "read",
+        "delivery": "full",
+        "documents": [
+          "Evaluation/other-worker/source.md"
+        ],
+        "requiredEvidence": [
+          "A different worker acknowledged the lint card; that receipt does not establish retention in this worker."
+        ],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": [
+          "context_unknown"
+        ]
+      }
+    },
+    {
+      "id": "routing-other-worker-mixed",
+      "family": "routing-other-worker",
+      "split": "holdout",
+      "scenario": "unknown-context",
+      "language": "mixed",
+      "query": "other worker의 lint receipt로 내 read를 생략하지 마.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "other_worker",
+        "sameWorker": false
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "read",
+        "delivery": "full",
+        "documents": [
+          "Evaluation/other-worker/source.md"
+        ],
+        "requiredEvidence": [
+          "A different worker acknowledged the lint card; that receipt does not establish retention in this worker."
+        ],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": [
+          "context_unknown"
+        ]
+      }
+    },
+    {
+      "id": "routing-compressed-ko",
+      "family": "routing-compressed",
+      "split": "development",
+      "scenario": "compaction",
+      "language": "ko",
+      "query": "압축 전 읽은 백업 필수 조건을 새 컨텍스트에서 다시 보여줘.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "previous_epoch",
+        "sameEpoch": false
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "read",
+        "delivery": "full",
+        "documents": [
+          "Evaluation/compressed/source.md"
+        ],
+        "requiredEvidence": [
+          "The backup prerequisite was read before compaction; the context epoch changed and retention was not reconfirmed."
+        ],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": [
+          "context_invalidated"
+        ]
+      }
+    },
+    {
+      "id": "routing-compressed-en",
+      "family": "routing-compressed",
+      "split": "development",
+      "scenario": "compaction",
+      "language": "en",
+      "query": "Restore the backup prerequisite after an unconfirmed compaction.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "previous_epoch",
+        "sameEpoch": false
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "read",
+        "delivery": "full",
+        "documents": [
+          "Evaluation/compressed/source.md"
+        ],
+        "requiredEvidence": [
+          "The backup prerequisite was read before compaction; the context epoch changed and retention was not reconfirmed."
+        ],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": [
+          "context_invalidated"
+        ]
+      }
+    },
+    {
+      "id": "routing-compressed-mixed",
+      "family": "routing-compressed",
+      "split": "development",
+      "scenario": "compaction",
+      "language": "mixed",
+      "query": "compaction 이후 backup prerequisite 다시 읽기.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "previous_epoch",
+        "sameEpoch": false
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "read",
+        "delivery": "full",
+        "documents": [
+          "Evaluation/compressed/source.md"
+        ],
+        "requiredEvidence": [
+          "The backup prerequisite was read before compaction; the context epoch changed and retention was not reconfirmed."
+        ],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": [
+          "context_invalidated"
+        ]
+      }
+    },
+    {
+      "id": "routing-restarted-ko",
+      "family": "routing-restarted",
+      "split": "holdout",
+      "scenario": "compaction",
+      "language": "ko",
+      "query": "앱을 재시작했으니 좌표계 주의사항을 다시 보여줘.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "previous_session",
+        "sameSession": false
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "read",
+        "delivery": "full",
+        "documents": [
+          "Evaluation/restarted/source.md"
+        ],
+        "requiredEvidence": [
+          "The coordinate-system warning belonged to the previous application session; a restart invalidated its retention claim."
+        ],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": [
+          "context_invalidated"
+        ]
+      }
+    },
+    {
+      "id": "routing-restarted-en",
+      "family": "routing-restarted",
+      "split": "holdout",
+      "scenario": "compaction",
+      "language": "en",
+      "query": "Show the coordinate-system warning after the application restart.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "previous_session",
+        "sameSession": false
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "read",
+        "delivery": "full",
+        "documents": [
+          "Evaluation/restarted/source.md"
+        ],
+        "requiredEvidence": [
+          "The coordinate-system warning belonged to the previous application session; a restart invalidated its retention claim."
+        ],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": [
+          "context_invalidated"
+        ]
+      }
+    },
+    {
+      "id": "routing-restarted-mixed",
+      "family": "routing-restarted",
+      "split": "holdout",
+      "scenario": "compaction",
+      "language": "mixed",
+      "query": "app restart 뒤 coordinate-system warning 재노출.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "previous_session",
+        "sameSession": false
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "read",
+        "delivery": "full",
+        "documents": [
+          "Evaluation/restarted/source.md"
+        ],
+        "requiredEvidence": [
+          "The coordinate-system warning belonged to the previous application session; a restart invalidated its retention claim."
+        ],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": [
+          "context_invalidated"
+        ]
+      }
+    },
+    {
+      "id": "routing-ack-base-ko",
+      "family": "routing-ack-base",
+      "split": "development",
+      "scenario": "lost-delta",
+      "language": "ko",
+      "query": "미수신 델타6을 기준으로 삼지 말고 확인된 제한8부터 현재4를 보여줘.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "host_confirmed",
+        "ackRevision": "r1",
+        "lostRevision": "r2",
+        "currentRevision": "r3",
+        "representation": "chapter-v1",
+        "retainedBase": {
+          "revision": "r1",
+          "representation": "chapter-v1",
+          "startOffset": 0,
+          "endOffset": 38,
+          "text": "Limit8; emergency exception permits12."
+        },
+        "sameEpoch": true,
+        "sameWorker": true,
+        "bothRevisionsAccessible": true
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "delta_read",
+        "delivery": "delta",
+        "documents": [
+          "Evaluation/ack-base/source.md"
+        ],
+        "requiredEvidence": [
+          "The acknowledged limit was8. An unacknowledged response changed it to6; the current limit is4 with no emergency exception."
+        ],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": [
+          "preserve_removed_condition"
+        ],
+        "deltaBase": "r1"
+      }
+    },
+    {
+      "id": "routing-ack-base-en",
+      "family": "routing-ack-base",
+      "split": "development",
+      "scenario": "lost-delta",
+      "language": "en",
+      "query": "Compare current limit4 to acknowledged8, not the lost limit6 response.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "host_confirmed",
+        "ackRevision": "r1",
+        "lostRevision": "r2",
+        "currentRevision": "r3",
+        "representation": "chapter-v1",
+        "retainedBase": {
+          "revision": "r1",
+          "representation": "chapter-v1",
+          "startOffset": 0,
+          "endOffset": 38,
+          "text": "Limit8; emergency exception permits12."
+        },
+        "sameEpoch": true,
+        "sameWorker": true,
+        "bothRevisionsAccessible": true
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "delta_read",
+        "delivery": "delta",
+        "documents": [
+          "Evaluation/ack-base/source.md"
+        ],
+        "requiredEvidence": [
+          "The acknowledged limit was8. An unacknowledged response changed it to6; the current limit is4 with no emergency exception."
+        ],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": [
+          "preserve_removed_condition"
+        ],
+        "deltaBase": "r1"
+      }
+    },
+    {
+      "id": "routing-ack-base-mixed",
+      "family": "routing-ack-base",
+      "split": "development",
+      "scenario": "lost-delta",
+      "language": "mixed",
+      "query": "lost delta6 말고 ack8 -> current4로 비교해줘.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "host_confirmed",
+        "ackRevision": "r1",
+        "lostRevision": "r2",
+        "currentRevision": "r3",
+        "representation": "chapter-v1",
+        "retainedBase": {
+          "revision": "r1",
+          "representation": "chapter-v1",
+          "startOffset": 0,
+          "endOffset": 38,
+          "text": "Limit8; emergency exception permits12."
+        },
+        "sameEpoch": true,
+        "sameWorker": true,
+        "bothRevisionsAccessible": true
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "delta_read",
+        "delivery": "delta",
+        "documents": [
+          "Evaluation/ack-base/source.md"
+        ],
+        "requiredEvidence": [
+          "The acknowledged limit was8. An unacknowledged response changed it to6; the current limit is4 with no emergency exception."
+        ],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": [
+          "preserve_removed_condition"
+        ],
+        "deltaBase": "r1"
+      }
+    },
+    {
+      "id": "routing-expired-base-ko",
+      "family": "routing-expired-base",
+      "split": "holdout",
+      "scenario": "lost-delta",
+      "language": "ko",
+      "query": "가마 설정의 기준 수신 기록이 만료됐으니 현재 전체 설정을 읽어줘.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "expired_base",
+        "ackRevision": null,
+        "currentRevision": "k3"
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "direct_read",
+        "delivery": "full",
+        "documents": [
+          "Evaluation/expired-base/source.md"
+        ],
+        "requiredEvidence": [
+          "The acknowledged kiln-setting base expired; current settings are900 C for12 minutes, with no reliable delta base."
+        ],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": [
+          "context_unknown"
+        ]
+      }
+    },
+    {
+      "id": "routing-expired-base-en",
+      "family": "routing-expired-base",
+      "split": "holdout",
+      "scenario": "lost-delta",
+      "language": "en",
+      "query": "Read current kiln settings in full because the delta base expired.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "expired_base",
+        "ackRevision": null,
+        "currentRevision": "k3"
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "direct_read",
+        "delivery": "full",
+        "documents": [
+          "Evaluation/expired-base/source.md"
+        ],
+        "requiredEvidence": [
+          "The acknowledged kiln-setting base expired; current settings are900 C for12 minutes, with no reliable delta base."
+        ],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": [
+          "context_unknown"
+        ]
+      }
+    },
+    {
+      "id": "routing-expired-base-mixed",
+      "family": "routing-expired-base",
+      "split": "holdout",
+      "scenario": "lost-delta",
+      "language": "mixed",
+      "query": "kiln delta base expired면 full current setting을 줘.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "expired_base",
+        "ackRevision": null,
+        "currentRevision": "k3"
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "direct_read",
+        "delivery": "full",
+        "documents": [
+          "Evaluation/expired-base/source.md"
+        ],
+        "requiredEvidence": [
+          "The acknowledged kiln-setting base expired; current settings are900 C for12 minutes, with no reliable delta base."
+        ],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": [
+          "context_unknown"
+        ]
+      }
+    },
+    {
+      "id": "routing-department-ko",
+      "family": "routing-department",
+      "split": "development",
+      "scenario": "revoked-access",
+      "language": "ko",
+      "query": "부서에서 나왔으니 예전 실험실 메모를 캐시로 보여주지 마.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "revoked",
+        "retention": "unknown",
+        "bodyChanged": false,
+        "cacheHit": true
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "deny",
+        "delivery": "none",
+        "documents": [],
+        "requiredEvidence": [],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": [
+          "unavailable"
+        ]
+      }
+    },
+    {
+      "id": "routing-department-en",
+      "family": "routing-department",
+      "split": "development",
+      "scenario": "revoked-access",
+      "language": "en",
+      "query": "Do not return the lab memo after my department membership was revoked.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "revoked",
+        "retention": "unknown",
+        "bodyChanged": false,
+        "cacheHit": true
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "deny",
+        "delivery": "none",
+        "documents": [],
+        "requiredEvidence": [],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": [
+          "unavailable"
+        ]
+      }
+    },
+    {
+      "id": "routing-department-mixed",
+      "family": "routing-department",
+      "split": "development",
+      "scenario": "revoked-access",
+      "language": "mixed",
+      "query": "department revoked 뒤 cached lab memo는 반환 금지.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "revoked",
+        "retention": "unknown",
+        "bodyChanged": false,
+        "cacheHit": true
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "deny",
+        "delivery": "none",
+        "documents": [],
+        "requiredEvidence": [],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": [
+          "unavailable"
+        ]
+      }
+    },
+    {
+      "id": "routing-policy-ko",
+      "family": "routing-policy",
+      "split": "holdout",
+      "scenario": "revoked-access",
+      "language": "ko",
+      "query": "본문이 같아도 권한이 바뀐 전망 문서를 검색 캐시로 보여주지 마.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "revoked",
+        "retention": "unknown",
+        "bodyChanged": false,
+        "policyChanged": true,
+        "cacheHit": true
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "deny",
+        "delivery": "none",
+        "documents": [],
+        "requiredEvidence": [],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": [
+          "unavailable"
+        ]
+      }
+    },
+    {
+      "id": "routing-policy-en",
+      "family": "routing-policy",
+      "split": "holdout",
+      "scenario": "revoked-access",
+      "language": "en",
+      "query": "Reject a cached forecast after a policy-only access revocation.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "revoked",
+        "retention": "unknown",
+        "bodyChanged": false,
+        "policyChanged": true,
+        "cacheHit": true
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "deny",
+        "delivery": "none",
+        "documents": [],
+        "requiredEvidence": [],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": [
+          "unavailable"
+        ]
+      }
+    },
+    {
+      "id": "routing-policy-mixed",
+      "family": "routing-policy",
+      "split": "holdout",
+      "scenario": "revoked-access",
+      "language": "mixed",
+      "query": "policy-only revoke면 unchanged forecast body도 반환하지 마.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "revoked",
+        "retention": "unknown",
+        "bodyChanged": false,
+        "policyChanged": true,
+        "cacheHit": true
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "deny",
+        "delivery": "none",
+        "documents": [],
+        "requiredEvidence": [],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": [
+          "unavailable"
+        ]
+      }
+    },
+    {
+      "id": "routing-battery-cold-ko",
+      "family": "routing-battery-cold",
+      "split": "development",
+      "scenario": "new-counterexample",
+      "language": "ko",
+      "query": "새 저온 반례가 생겼으니 예전 배터리 답을 그대로 쓰지 마.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "unknown",
+        "cacheHit": true,
+        "newCounterexample": true
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "revalidate",
+        "delivery": "full",
+        "documents": [
+          "Evaluation/battery-cold/source.md"
+        ],
+        "requiredEvidence": [
+          "The new accessible cold-weather trial found battery failures below-10 C; it invalidates the earlier unconditional cache answer."
+        ],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": true,
+        "partial": false,
+        "warnings": [
+          "new_evidence"
+        ]
+      }
+    },
+    {
+      "id": "routing-battery-cold-en",
+      "family": "routing-battery-cold",
+      "split": "development",
+      "scenario": "new-counterexample",
+      "language": "en",
+      "query": "Recheck the battery answer after the new cold-weather counterexample.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "unknown",
+        "cacheHit": true,
+        "newCounterexample": true
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "revalidate",
+        "delivery": "full",
+        "documents": [
+          "Evaluation/battery-cold/source.md"
+        ],
+        "requiredEvidence": [
+          "The new accessible cold-weather trial found battery failures below-10 C; it invalidates the earlier unconditional cache answer."
+        ],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": true,
+        "partial": false,
+        "warnings": [
+          "new_evidence"
+        ]
+      }
+    },
+    {
+      "id": "routing-battery-cold-mixed",
+      "family": "routing-battery-cold",
+      "split": "development",
+      "scenario": "new-counterexample",
+      "language": "mixed",
+      "query": "new below-10 C counterexample로 battery cache 재검사.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "unknown",
+        "cacheHit": true,
+        "newCounterexample": true
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "revalidate",
+        "delivery": "full",
+        "documents": [
+          "Evaluation/battery-cold/source.md"
+        ],
+        "requiredEvidence": [
+          "The new accessible cold-weather trial found battery failures below-10 C; it invalidates the earlier unconditional cache answer."
+        ],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": true,
+        "partial": false,
+        "warnings": [
+          "new_evidence"
+        ]
+      }
+    },
+    {
+      "id": "routing-adhesive-wet-ko",
+      "family": "routing-adhesive-wet",
+      "split": "holdout",
+      "scenario": "new-counterexample",
+      "language": "ko",
+      "query": "습도80% 초과 접착 실패가 추가됐으니 마른 표면 답만 재사용하지 마.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "unknown",
+        "cacheHit": true,
+        "newCounterexample": true
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "revalidate",
+        "delivery": "full",
+        "documents": [
+          "Evaluation/adhesive-wet/source.md"
+        ],
+        "requiredEvidence": [
+          "A newly added wet-surface test found adhesive failure above80 percent humidity; the previously cached dry-only result is incomplete."
+        ],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": true,
+        "partial": false,
+        "warnings": [
+          "new_evidence"
+        ]
+      }
+    },
+    {
+      "id": "routing-adhesive-wet-en",
+      "family": "routing-adhesive-wet",
+      "split": "holdout",
+      "scenario": "new-counterexample",
+      "language": "en",
+      "query": "Include the new high-humidity adhesive counterexample before reusing the dry test.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "unknown",
+        "cacheHit": true,
+        "newCounterexample": true
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "revalidate",
+        "delivery": "full",
+        "documents": [
+          "Evaluation/adhesive-wet/source.md"
+        ],
+        "requiredEvidence": [
+          "A newly added wet-surface test found adhesive failure above80 percent humidity; the previously cached dry-only result is incomplete."
+        ],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": true,
+        "partial": false,
+        "warnings": [
+          "new_evidence"
+        ]
+      }
+    },
+    {
+      "id": "routing-adhesive-wet-mixed",
+      "family": "routing-adhesive-wet",
+      "split": "holdout",
+      "scenario": "new-counterexample",
+      "language": "mixed",
+      "query": "new wet-surface adhesive failure를 cache answer에 반영해 검토해.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "unknown",
+        "cacheHit": true,
+        "newCounterexample": true
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "revalidate",
+        "delivery": "full",
+        "documents": [
+          "Evaluation/adhesive-wet/source.md"
+        ],
+        "requiredEvidence": [
+          "A newly added wet-surface test found adhesive failure above80 percent humidity; the previously cached dry-only result is incomplete."
+        ],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": true,
+        "partial": false,
+        "warnings": [
+          "new_evidence"
+        ]
+      }
+    },
+    {
+      "id": "routing-private-neighbor-ko",
+      "family": "routing-private-neighbor",
+      "split": "development",
+      "scenario": "graph-visibility",
+      "language": "ko",
+      "query": "공개 우회로만 찾아줘. 숨겨진 이웃 정보는 표시하지 마.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "unknown",
+        "graph": true,
+        "hiddenNeighbor": true,
+        "maxEdges": 200
+      },
+      "expected": {
+        "route": "graph",
+        "action": "read",
+        "delivery": "full",
+        "documents": [
+          "Evaluation/private-neighbor/source.md"
+        ],
+        "requiredEvidence": [
+          "The public route note names a safe detour."
+        ],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": [
+          "no_hidden_metadata"
+        ]
+      }
+    },
+    {
+      "id": "routing-private-neighbor-en",
+      "family": "routing-private-neighbor",
+      "split": "development",
+      "scenario": "graph-visibility",
+      "language": "en",
+      "query": "Traverse the public detour without exposing restricted neighbors.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "unknown",
+        "graph": true,
+        "hiddenNeighbor": true,
+        "maxEdges": 200
+      },
+      "expected": {
+        "route": "graph",
+        "action": "read",
+        "delivery": "full",
+        "documents": [
+          "Evaluation/private-neighbor/source.md"
+        ],
+        "requiredEvidence": [
+          "The public route note names a safe detour."
+        ],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": [
+          "no_hidden_metadata"
+        ]
+      }
+    },
+    {
+      "id": "routing-private-neighbor-mixed",
+      "family": "routing-private-neighbor",
+      "split": "development",
+      "scenario": "graph-visibility",
+      "language": "mixed",
+      "query": "public detour graph에서 hidden neighbor 정보는 빼줘.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "unknown",
+        "graph": true,
+        "hiddenNeighbor": true,
+        "maxEdges": 200
+      },
+      "expected": {
+        "route": "graph",
+        "action": "read",
+        "delivery": "full",
+        "documents": [
+          "Evaluation/private-neighbor/source.md"
+        ],
+        "requiredEvidence": [
+          "The public route note names a safe detour."
+        ],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": [
+          "no_hidden_metadata"
+        ]
+      }
+    },
+    {
+      "id": "routing-hub-budget-ko",
+      "family": "routing-hub-budget",
+      "split": "holdout",
+      "scenario": "graph-visibility",
+      "language": "ko",
+      "query": "저장 허브 관계200개만 본 결과를 전체 조사라고 하지 마.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "unknown",
+        "graph": true,
+        "edgeBudgetExhausted": true,
+        "maxEdges": 200
+      },
+      "expected": {
+        "route": "graph",
+        "action": "continue",
+        "delivery": "full",
+        "documents": [
+          "Evaluation/hub-budget/source.md"
+        ],
+        "requiredEvidence": [
+          "The public storage hub has an unresolved humidity condition; the200 inspected edges do not prove exhaustive coverage."
+        ],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": true,
+        "warnings": [
+          "bounded_coverage"
+        ]
+      }
+    },
+    {
+      "id": "routing-hub-budget-en",
+      "family": "routing-hub-budget",
+      "split": "holdout",
+      "scenario": "graph-visibility",
+      "language": "en",
+      "query": "Report incomplete storage-hub coverage after inspecting200 edges.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "unknown",
+        "graph": true,
+        "edgeBudgetExhausted": true,
+        "maxEdges": 200
+      },
+      "expected": {
+        "route": "graph",
+        "action": "continue",
+        "delivery": "full",
+        "documents": [
+          "Evaluation/hub-budget/source.md"
+        ],
+        "requiredEvidence": [
+          "The public storage hub has an unresolved humidity condition; the200 inspected edges do not prove exhaustive coverage."
+        ],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": true,
+        "warnings": [
+          "bounded_coverage"
+        ]
+      }
+    },
+    {
+      "id": "routing-hub-budget-mixed",
+      "family": "routing-hub-budget",
+      "split": "holdout",
+      "scenario": "graph-visibility",
+      "language": "mixed",
+      "query": "storage hub edge budget200이면 partial로 밝혀줘.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "unknown",
+        "graph": true,
+        "edgeBudgetExhausted": true,
+        "maxEdges": 200
+      },
+      "expected": {
+        "route": "graph",
+        "action": "continue",
+        "delivery": "full",
+        "documents": [
+          "Evaluation/hub-budget/source.md"
+        ],
+        "requiredEvidence": [
+          "The public storage hub has an unresolved humidity condition; the200 inspected edges do not prove exhaustive coverage."
+        ],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": true,
+        "warnings": [
+          "bounded_coverage"
+        ]
+      }
+    },
+    {
+      "id": "routing-code-tests-ko",
+      "family": "routing-code-tests",
+      "split": "development",
+      "scenario": "finish-check",
+      "language": "ko",
+      "query": "컴파일러 패치를 했어도 테스트와 빌드가 없으면 완료 처리하지 마.",
+      "input": {
+        "intent": "read",
+        "phase": "finish",
+        "access": "allowed",
+        "retention": "unknown",
+        "changedKind": "code",
+        "testsRun": false,
+        "buildRun": false
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "finish_check",
+        "delivery": "full",
+        "documents": [
+          "Evaluation/code-tests/source.md"
+        ],
+        "requiredEvidence": [
+          "The compiler patch was applied, but its targeted test and build have not run; completion must remain unverified."
+        ],
+        "allowedTools": [
+          "wiki.context_session"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": [
+          "verification_missing"
+        ]
+      }
+    },
+    {
+      "id": "routing-code-tests-en",
+      "family": "routing-code-tests",
+      "split": "development",
+      "scenario": "finish-check",
+      "language": "en",
+      "query": "Do not finish the compiler patch before targeted tests and build verification.",
+      "input": {
+        "intent": "read",
+        "phase": "finish",
+        "access": "allowed",
+        "retention": "unknown",
+        "changedKind": "code",
+        "testsRun": false,
+        "buildRun": false
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "finish_check",
+        "delivery": "full",
+        "documents": [
+          "Evaluation/code-tests/source.md"
+        ],
+        "requiredEvidence": [
+          "The compiler patch was applied, but its targeted test and build have not run; completion must remain unverified."
+        ],
+        "allowedTools": [
+          "wiki.context_session"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": [
+          "verification_missing"
+        ]
+      }
+    },
+    {
+      "id": "routing-code-tests-mixed",
+      "family": "routing-code-tests",
+      "split": "development",
+      "scenario": "finish-check",
+      "language": "mixed",
+      "query": "compiler patch applied지만 tests/build 없으면 finish 보류.",
+      "input": {
+        "intent": "read",
+        "phase": "finish",
+        "access": "allowed",
+        "retention": "unknown",
+        "changedKind": "code",
+        "testsRun": false,
+        "buildRun": false
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "finish_check",
+        "delivery": "full",
+        "documents": [
+          "Evaluation/code-tests/source.md"
+        ],
+        "requiredEvidence": [
+          "The compiler patch was applied, but its targeted test and build have not run; completion must remain unverified."
+        ],
+        "allowedTools": [
+          "wiki.context_session"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": [
+          "verification_missing"
+        ]
+      }
+    },
+    {
+      "id": "routing-document-reread-ko",
+      "family": "routing-document-reread",
+      "split": "holdout",
+      "scenario": "finish-check",
+      "language": "ko",
+      "query": "과수원 노트 수정 성공만으로 끝내지 말고 리비전과 링크를 재독해.",
+      "input": {
+        "intent": "read",
+        "phase": "finish",
+        "access": "allowed",
+        "retention": "unknown",
+        "changedKind": "document",
+        "reread": false
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "finish_check",
+        "delivery": "full",
+        "documents": [
+          "Evaluation/document-reread/source.md"
+        ],
+        "requiredEvidence": [
+          "The orchard note edit returned success, but the written revision and links have not been reread."
+        ],
+        "allowedTools": [
+          "wiki.context_session"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": [
+          "reread_missing"
+        ]
+      }
+    },
+    {
+      "id": "routing-document-reread-en",
+      "family": "routing-document-reread",
+      "split": "holdout",
+      "scenario": "finish-check",
+      "language": "en",
+      "query": "Check the orchard note revision and links before marking its edit complete.",
+      "input": {
+        "intent": "read",
+        "phase": "finish",
+        "access": "allowed",
+        "retention": "unknown",
+        "changedKind": "document",
+        "reread": false
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "finish_check",
+        "delivery": "full",
+        "documents": [
+          "Evaluation/document-reread/source.md"
+        ],
+        "requiredEvidence": [
+          "The orchard note edit returned success, but the written revision and links have not been reread."
+        ],
+        "allowedTools": [
+          "wiki.context_session"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": [
+          "reread_missing"
+        ]
+      }
+    },
+    {
+      "id": "routing-document-reread-mixed",
+      "family": "routing-document-reread",
+      "split": "holdout",
+      "scenario": "finish-check",
+      "language": "mixed",
+      "query": "orchard note edit success 뒤 revision/link reread부터.",
+      "input": {
+        "intent": "read",
+        "phase": "finish",
+        "access": "allowed",
+        "retention": "unknown",
+        "changedKind": "document",
+        "reread": false
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "finish_check",
+        "delivery": "full",
+        "documents": [
+          "Evaluation/document-reread/source.md"
+        ],
+        "requiredEvidence": [
+          "The orchard note edit returned success, but the written revision and links have not been reread."
+        ],
+        "allowedTools": [
+          "wiki.context_session"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": [
+          "reread_missing"
+        ]
+      }
+    },
+    {
+      "id": "routing-network-not-tree-ko",
+      "family": "routing-network-not-tree",
+      "split": "development",
+      "scenario": "soft-expansion",
+      "language": "ko",
+      "query": "Cedar를 나무로 잘못 분류했으면 접근 범위는 유지하고 라우터 자료도 찾아줘.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "unknown",
+        "softTopic": "botany",
+        "trueTopic": "network",
+        "hardProject": "cedar",
+        "softExpansionRemaining": 1
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "expand_soft",
+        "delivery": "full",
+        "documents": [
+          "Evaluation/network-not-tree/source.md"
+        ],
+        "requiredEvidence": [
+          "Cedar here names a router project, not a tree. The inferred botany topic may expand once while project access stays fixed."
+        ],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": [
+          "hard_filters_preserved"
+        ]
+      }
+    },
+    {
+      "id": "routing-network-not-tree-en",
+      "family": "routing-network-not-tree",
+      "split": "development",
+      "scenario": "soft-expansion",
+      "language": "en",
+      "query": "Relax the mistaken botany topic once to find the Cedar router project.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "unknown",
+        "softTopic": "botany",
+        "trueTopic": "network",
+        "hardProject": "cedar",
+        "softExpansionRemaining": 1
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "expand_soft",
+        "delivery": "full",
+        "documents": [
+          "Evaluation/network-not-tree/source.md"
+        ],
+        "requiredEvidence": [
+          "Cedar here names a router project, not a tree. The inferred botany topic may expand once while project access stays fixed."
+        ],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": [
+          "hard_filters_preserved"
+        ]
+      }
+    },
+    {
+      "id": "routing-network-not-tree-mixed",
+      "family": "routing-network-not-tree",
+      "split": "development",
+      "scenario": "soft-expansion",
+      "language": "mixed",
+      "query": "Cedar router인데 botany soft filter는 한 번 넓혀줘.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "unknown",
+        "softTopic": "botany",
+        "trueTopic": "network",
+        "hardProject": "cedar",
+        "softExpansionRemaining": 1
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "expand_soft",
+        "delivery": "full",
+        "documents": [
+          "Evaluation/network-not-tree/source.md"
+        ],
+        "requiredEvidence": [
+          "Cedar here names a router project, not a tree. The inferred botany topic may expand once while project access stays fixed."
+        ],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": false,
+        "warnings": [
+          "hard_filters_preserved"
+        ]
+      }
+    },
+    {
+      "id": "routing-fiction-hard-ko",
+      "family": "routing-fiction-hard",
+      "split": "holdout",
+      "scenario": "soft-expansion",
+      "language": "ko",
+      "query": "실제 항로를 요청했는데 허구 우주선 자료로 조건을 풀지 마.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "unknown",
+        "fictionDomain": "exclude",
+        "onlyFictionMatch": true,
+        "softExpansionRemaining": 1
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "continue",
+        "delivery": "none",
+        "documents": [],
+        "requiredEvidence": [],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": true,
+        "warnings": [
+          "hard_filters_preserved"
+        ]
+      }
+    },
+    {
+      "id": "routing-fiction-hard-en",
+      "family": "routing-fiction-hard",
+      "split": "holdout",
+      "scenario": "soft-expansion",
+      "language": "en",
+      "query": "Do not relax a factual-only route query to a fictional starship match.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "unknown",
+        "fictionDomain": "exclude",
+        "onlyFictionMatch": true,
+        "softExpansionRemaining": 1
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "continue",
+        "delivery": "none",
+        "documents": [],
+        "requiredEvidence": [],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": true,
+        "warnings": [
+          "hard_filters_preserved"
+        ]
+      }
+    },
+    {
+      "id": "routing-fiction-hard-mixed",
+      "family": "routing-fiction-hard",
+      "split": "holdout",
+      "scenario": "soft-expansion",
+      "language": "mixed",
+      "query": "factual-only 항로에 fictional starship으로 fallback하지 마.",
+      "input": {
+        "intent": "read",
+        "phase": "work",
+        "access": "allowed",
+        "retention": "unknown",
+        "fictionDomain": "exclude",
+        "onlyFictionMatch": true,
+        "softExpansionRemaining": 1
+      },
+      "expected": {
+        "route": "hybrid",
+        "action": "continue",
+        "delivery": "none",
+        "documents": [],
+        "requiredEvidence": [],
+        "allowedTools": [
+          "documents.read"
+        ],
+        "optionalSkills": 0,
+        "protectedFromPenalty": false,
+        "partial": true,
+        "warnings": [
+          "hard_filters_preserved"
+        ]
+      }
+    }
+  ]
+}

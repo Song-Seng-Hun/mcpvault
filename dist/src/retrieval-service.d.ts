@@ -6,6 +6,7 @@ import type { ScopePrincipal } from './scope-auth.js';
 import type { ScopeAccessPolicy } from './scope-access.js';
 import type { FileSystemService } from './filesystem.js';
 import { type FictionDomainSelection } from './fiction-domain.js';
+export { constrainedQuery, plainQueryExpansion } from './retrieval/query-policy.js';
 export declare const RETRIEVAL_NOTE_BYTES: number;
 export type RetrievalMode = 'legacy' | 'evidence';
 export type RetrievalParams = SearchParams & {
@@ -34,8 +35,6 @@ export type MemoryCandidateParams = MemorySearchParams & {
 export type MemoryCandidateOutcome = RetrievalOutcome & {
     complete: boolean;
 };
-export declare function constrainedQuery(query: string): boolean;
-export declare function plainQueryExpansion(query: string): string | undefined;
 export declare function bodyStartLine(note: ParsedNote): number;
 export declare function passageAction(path: string, revision: string, startLine: number, endLine: number): {
     endpointId: string;
