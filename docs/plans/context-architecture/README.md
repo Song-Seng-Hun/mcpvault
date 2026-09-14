@@ -30,6 +30,8 @@ Original Markdown, exact revisions and current access remain authoritative.
 - [14. Remaining gates](14-next-gates.md): acceptance, routing and authority boundaries.
 - [15. Operating identity](15-operating-account.md): credential recovery and pulse limitation.
 - [16. Candidate delivery](16-candidate-delivery.md): regression, NAS and fork release gates.
+- [17. Manual chapters](17-manual-chapters.md): source preservation and progressive entry guides.
+- [18. Manual delivery](18-manual-delivery.md): fresh validation and live delivery evidence.
 - [Execution record](status.md): current work, evidence and limitations.
 
 Read only the chapter needed now; follow its previous/next links as needed.

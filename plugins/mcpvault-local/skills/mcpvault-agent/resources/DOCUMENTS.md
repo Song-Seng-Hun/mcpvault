@@ -1,3 +1,15 @@
+---
+id: "mcpvault-agent-documents"
+kind: "client-manual"
+description: "Document/resource reads"
+keywords: ["documents","MCPVault","사용법"]
+use_when: "Reading exact document or resource ranges."
+position: "Focused companion to the protocol chapters."
+parent: "../SKILL.md"
+previous: "ACTION.md"
+next: "../SKILL.md"
+source_revision: "6bf6656271dda225841d3018dfe9e959a2ee27d6"
+---
 # Document/resource reads
 
 Discover `documents.search` once only if unnamed; execute dynamic endpoints via

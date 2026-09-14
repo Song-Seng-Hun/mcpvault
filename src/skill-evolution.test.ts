@@ -1,4 +1,4 @@
-import { afterEach, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -234,21 +234,29 @@ test('retained historical Skill use is shareable but cannot seed a current-basis
   await expect(f.experience({ requestId: 'edited-used-version', usedVersion })).rejects.toThrow(/revision|attest/i);
 });
 
-test('a rejected first candidate page returns one explicit continuation to the eligible eleventh candidate', async () => {
-  const f = await fixture();
-  for (let i = 0; i < 11; i++) await f.candidate({ requestId: `page-${i}` });
-  const { items: candidates } = await f.service.candidate({ skillId: 'safe-edit', op: 'list', limit: 20, maxChars: 8000, principal: f.owner });
-  expect(candidates).toHaveLength(11);
-  for (const c of candidates.slice(0, 10)) await f.service.candidate({ skillId: 'safe-edit', principal: f.owner, accessToken: f.ownerToken,
-    op: 'reject', candidateId: c.candidateId, expectedRevision: c.revision, requestId: `reject-${c.candidateId}`, reason: 'Not applicable to this task.' });
-  const query = vi.spyOn(f.fs, 'queryNotes');
-  const action = await f.service.nextAction({ principal: f.owner, skillId: 'safe-edit' });
-  expect(action).toMatchObject({ endpointId: 'skill.candidate', arguments: { skillId: 'safe-edit', op: 'list', limit: 10, maxChars: 4000 } });
-  expect(action!.arguments.cursor).toMatch(/:10$/);
-  expect(query.mock.calls.filter(([p]) => p.pathPrefix?.endsWith('/candidates/'))).toHaveLength(1);
-  const next = await f.service.candidate({ ...action!.arguments, principal: f.owner });
-  expect(next.items).toHaveLength(1); expect(next.items[0].candidateId).toBe(candidates[10]!.candidateId);
-  expect(next.items[0].state).toBe('proposed'); expect(next.truncated).toBe(false);
+describe('candidate pagination beyond a rejected first page', () => {
+  let f: Awaited<ReturnType<typeof fixture>>;
+  let candidates: Array<{ candidateId: string; revision: string }>;
+  beforeEach(async () => {
+    // Real signed history setup measured 46.2s on Windows; pagination took 2.7s.
+    // Keep all creates/rejections, outside the unchanged 30s behavior timeout.
+    f = await fixture();
+    for (let i = 0; i < 11; i++) await f.candidate({ requestId: `page-${i}` });
+    ({ items: candidates } = await f.service.candidate({ skillId: 'safe-edit', op: 'list', limit: 20, maxChars: 8000, principal: f.owner }));
+    expect(candidates).toHaveLength(11);
+    for (const c of candidates.slice(0, 10)) await f.service.candidate({ skillId: 'safe-edit', principal: f.owner, accessToken: f.ownerToken,
+      op: 'reject', candidateId: c.candidateId, expectedRevision: c.revision, requestId: `reject-${c.candidateId}`, reason: 'Not applicable to this task.' });
+  }, 60000);
+  test('a rejected first candidate page returns one explicit continuation to the eligible eleventh candidate', async () => {
+    const query = vi.spyOn(f.fs, 'queryNotes');
+    const action = await f.service.nextAction({ principal: f.owner, skillId: 'safe-edit' });
+    expect(action).toMatchObject({ endpointId: 'skill.candidate', arguments: { skillId: 'safe-edit', op: 'list', limit: 10, maxChars: 4000 } });
+    expect(action!.arguments.cursor).toMatch(/:10$/);
+    expect(query.mock.calls.filter(([p]) => p.pathPrefix?.endsWith('/candidates/'))).toHaveLength(1);
+    const next = await f.service.candidate({ ...action!.arguments, principal: f.owner });
+    expect(next.items).toHaveLength(1); expect(next.items[0].candidateId).toBe(candidates[10]!.candidateId);
+    expect(next.items[0].state).toBe('proposed'); expect(next.truncated).toBe(false);
+  });
 });
 
 test('shared text rejects private aliases and embeds, but accepts visible public links', async () => {

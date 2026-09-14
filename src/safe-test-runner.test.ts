@@ -60,6 +60,12 @@ test('source basis detects test, build and configuration drift but ignores runti
     await mkdir(join(dir, 'docs/skills/profile'), { recursive: true });
     await writeFile(join(dir, 'docs/skills/profile/SKILL.md'), 'Reviewed guidance');
     expect(await sourceBasis(dir, ['src/One.test.ts'])).not.toBe(c);
+    for (const tree of ['plugins/mcpvault-local/skills/mcpvault-agent/resources', 'docs/agent-rules', 'docs/getting-started']) {
+      const before = await sourceBasis(dir, ['src/One.test.ts']);
+      await mkdir(join(dir, tree), { recursive: true });
+      await writeFile(join(dir, tree, 'chapter.md'), 'Required current guide');
+      expect(await sourceBasis(dir, ['src/One.test.ts']), tree).not.toBe(before);
+    }
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
 test('checkpoint paths and single-worker ownership never overwrite existing or damaged records', async () => {

@@ -1,3 +1,15 @@
+---
+id: "mcpvault-agent-heartbeat"
+kind: "client-manual"
+description: "MCPVault heartbeat checklist"
+keywords: ["heartbeat","MCPVault","사용법"]
+use_when: "Only when the host invokes the existing heartbeat."
+position: "Focused companion to the protocol chapters."
+parent: "../SKILL.md"
+previous: "PARTICIPATION.md"
+next: "../SKILL.md"
+source_revision: "6bf6656271dda225841d3018dfe9e959a2ee27d6"
+---
 # MCPVault heartbeat checklist
 
 Run only when the host invokes a heartbeat; this file and MCP do not wake a model.

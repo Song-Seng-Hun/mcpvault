@@ -4,10 +4,19 @@ import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { checkPluginGuidance } from '../scripts/check-plugin-guidance.mjs';
+import { checkPluginGuidance, GUIDES } from '../scripts/check-plugin-guidance.mjs';
 
 const roots: string[] = [];
-const files = ['skills/mcpvault-agent/SKILL.md', 'skills/mcpvault-agent/resources/HEARTBEAT.md'];
+const files: readonly string[] = GUIDES;
+test('document companion drift cannot hide behind current entry and heartbeat guides', async () => {
+  const { source, installed } = await fixture();
+  const companion = 'skills/mcpvault-agent/resources/DOCUMENTS.md';
+  await writeFile(join(source, companion), 'exact locators; preserve original bytes');
+  await writeFile(join(installed, companion), 'obsolete locator guidance');
+  const report = await checkPluginGuidance(source, installed);
+  expect(report.current).toBe(false);
+  expect(report.files.find(item => item.path === companion)?.status).toBe('different');
+});
 afterEach(async () => {
   for (const root of roots.splice(0)) {
     if (!root.startsWith(join(resolve(tmpdir()), 'mcpvault-guidance-'))) throw new Error('Unsafe fixture cleanup');
@@ -33,7 +42,8 @@ test('matching guidance reports current without reading or modifying transport s
   await writeFile(join(installed, '.mcp.json'), config);
   const report = await checkPluginGuidance(source, installed);
   expect(report.current).toBe(true);
-  expect(report.files.map(item => item.status)).toEqual(['current', 'current']);
+  expect(report.files).toHaveLength(13);
+  expect(report.files.every(item => item.status === 'current')).toBe(true);
   expect(JSON.stringify(report)).not.toContain(config);
   expect(await readFile(join(installed, '.mcp.json'), 'utf8')).toBe(config);
 });
@@ -64,7 +74,7 @@ test('oversized guidance is rejected with bounded diagnostic output', async () =
   const report = await checkPluginGuidance(source, installed);
   expect(report.current).toBe(false);
   expect(report.files[0]!.status).toBe('oversized');
-  expect(JSON.stringify(report).length).toBeLessThan(1500);
+  expect(JSON.stringify(report).length).toBeLessThan(8192);
 });
 
 test('missing source guidance fails closed instead of accepting a matching absent file', async () => {

@@ -1,4 +1,4 @@
-import { afterEach, expect, test } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -44,15 +44,32 @@ test('new managed configurations cannot forge completed steps or synthesized out
  await expect(f.service.createWorkshop({principal:f.principal,workshopId:'forged',title:'Invalid',prompt:'Invalid progress',facilitation:{...config,currentStepId:'brainwriting-build'}})).rejects.toThrow(/initial|first|progress/i);
 });
 
-test('earlier transcript volume does not block a later step and large current attendance is guarded',async()=>{
- const f=await fixture();
+describe.each([0,1,2])('workshop with earlier transcript volume and %i current contributions',priorCount=>{
+ let f: Awaited<ReturnType<typeof fixture>>;
+ let revision: string;
+ const accounts=['owner','peer'];
+ const contribute=(accountId:string)=>f.service.contributeWorkshop({principal:{...f.principal,accountId},workshopId:'proof',kind:'extension',content:'Extend earlier idea',expectedRevision:revision,stepId:'brainwriting-build',requestId:accountId,structured:{ideaIds:[{ideaId:`new-${accountId}`,origin:accountId,parentIdeaId:accountId,extension:'Apply a limit'}],extension:'Apply a limit',parentIdeaIds:[accountId]}});
+ beforeEach(async()=>{
+ // Each real operation retains the default 5s timeout. One combined test
+ // included 130-file setup plus two admissions and a completion read.
+ f=await fixture();
  const config={...f.workshop.frontmatter.facilitation,currentStepId:'brainwriting-build'};
  await f.fs.writeNote({path:f.path,content:managedFacilitationMarkdown(config),frontmatter:{...f.workshop.frontmatter,facilitation:config},expectedRevision:f.workshop.revision});
  for(let i=0;i<130;i++)await f.fs.writeNote({path:`Community/Workshops/proof/Contributions/history-${i}.md`,content:'Old input',frontmatter:{mcpvault_type:'workshop_contribution',workshop_id:'proof',account_id:'peer',facilitation_step_id:'brainwriting-independent',workshop_revision:f.workshop.revision,structured:{variant:'async',ideaIds:[{ideaId:`old-${i}`,origin:'peer'}]}}});
- const n=await f.fs.readNote(f.path);
- for(const accountId of ['owner','peer'])await f.service.contributeWorkshop({principal:{...f.principal,accountId},workshopId:'proof',kind:'extension',content:'Extend earlier idea',expectedRevision:n.revision,stepId:'brainwriting-build',requestId:accountId,structured:{ideaIds:[{ideaId:`new-${accountId}`,origin:accountId,parentIdeaId:accountId,extension:'Apply a limit'}],extension:'Apply a limit',parentIdeaIds:[accountId]}});
+ revision=(await f.fs.readNote(f.path)).revision;
+ for(const accountId of accounts.slice(0,priorCount))await contribute(accountId);
+ });
+ test('earlier transcript volume does not block current admission or completion',async()=>{
+ if(priorCount<accounts.length){
+  const accountId=accounts[priorCount]!,submitted=await contribute(accountId);
+  expect(submitted.success).toBe(true);expect(submitted.stepId).toBe('brainwriting-build');
+  const stored=await f.fs.readNote(`Community/Workshops/proof/Contributions/${submitted.contributionId}.md`);
+  expect(stored.frontmatter.account_id).toBe(accountId);expect(stored.frontmatter.facilitation_step_id).toBe('brainwriting-build');
+  return;
+ }
  const read=await f.service.readWorkshopFacilitation({principal:f.principal,workshopId:'proof',limit:1});
  expect(read.nextAction.kind).toBe('record_output');
+ });
 });
 
 test('submission admission cannot race a scan-through-commit transition', async () => {

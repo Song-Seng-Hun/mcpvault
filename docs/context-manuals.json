@@ -1,0 +1,1494 @@
+{
+  "version": 1,
+  "authority": "discovery-only",
+  "scope": "Repository manuals; not a Vault migration receipt or permission grant.",
+  "evidence": "../tests/fixtures/manual-context-originals.json",
+  "chapters": [
+    {
+      "id": "repository-agent-index",
+      "path": "AGENTS.md",
+      "description": "Entry rules and task-specific chapters for this MCPVault fork.",
+      "useWhen": "Working in this repository; read only the chapters required by the task.",
+      "skipWhen": "Outside this topic; optional examples never authorize execution.",
+      "project": "MCPVault",
+      "phase": "task-specific",
+      "genre": "project-rule",
+      "domain": "repository",
+      "keywords": [
+        "repository",
+        "MCP",
+        "NAS",
+        "safety",
+        "deployment",
+        "작업"
+      ],
+      "position": "Entry to nine repository-rule chapters.",
+      "parent": "AGENTS.md",
+      "previous": "AGENTS.md",
+      "next": "docs/agent-rules/authority.md",
+      "ruleVersion": "manual-chapters-v1",
+      "sourceCommit": "6bf6656271dda225841d3018dfe9e959a2ee27d6",
+      "sourcePath": "AGENTS.md",
+      "sourceHash": "d8fa8c5436a5ee29e9045dc450cd835ea7bc81bc578e258681973375b40f1ef9",
+      "sourceFamily": "AGENTS.md",
+      "sourceRanges": [
+        {
+          "startOffset": 0,
+          "endOffset": 20
+        },
+        {
+          "startOffset": 22,
+          "endOffset": 46
+        },
+        {
+          "startOffset": 995,
+          "endOffset": 1023
+        },
+        {
+          "startOffset": 2439,
+          "endOffset": 2473
+        },
+        {
+          "startOffset": 4831,
+          "endOffset": 4864
+        },
+        {
+          "startOffset": 6426,
+          "endOffset": 6448
+        }
+      ]
+    },
+    {
+      "id": "readme-index",
+      "path": "README.md",
+      "description": "Entry to source setup, five-tool discovery, workflow guides and delivery.",
+      "useWhen": "Choose the chapter matching the current task; do not preload the handbook.",
+      "skipWhen": "Outside this topic; optional examples never authorize execution.",
+      "project": "MCPVault",
+      "phase": "task-specific",
+      "genre": "manual",
+      "domain": "getting-started",
+      "keywords": [
+        "MCPVault",
+        "setup",
+        "MCP",
+        "architecture",
+        "deployment",
+        "안내"
+      ],
+      "position": "Entry to eleven README chapters; original section anchors are retained.",
+      "parent": "README.md",
+      "previous": "README.md",
+      "next": "docs/getting-started/stdio.md",
+      "ruleVersion": "manual-chapters-v1",
+      "sourceCommit": "6bf6656271dda225841d3018dfe9e959a2ee27d6",
+      "sourcePath": "README.md",
+      "sourceHash": "185b6978ac11e969ac44dcffe450f3a0d9729831b45dc6f5fc2e3331cbacf9e4",
+      "sourceFamily": "README.md",
+      "sourceRanges": [
+        {
+          "startOffset": 0,
+          "endOffset": 10
+        },
+        {
+          "startOffset": 12,
+          "endOffset": 376
+        },
+        {
+          "startOffset": 378,
+          "endOffset": 637
+        },
+        {
+          "startOffset": 639,
+          "endOffset": 657
+        },
+        {
+          "startOffset": 2219,
+          "endOffset": 2250
+        },
+        {
+          "startOffset": 5695,
+          "endOffset": 5726
+        },
+        {
+          "startOffset": 8597,
+          "endOffset": 8631
+        },
+        {
+          "startOffset": 10902,
+          "endOffset": 10933
+        }
+      ]
+    },
+    {
+      "id": "repository-agent-authority",
+      "path": "docs/agent-rules/authority.md",
+      "description": "Canonical data, fork ownership, live storage and progressive entry points.",
+      "useWhen": "Choosing authoritative data or entering an unfamiliar repository workflow.",
+      "skipWhen": "Outside this topic; optional examples never authorize execution.",
+      "project": "MCPVault",
+      "phase": "prepare",
+      "genre": "project-rule",
+      "domain": "repository",
+      "keywords": [
+        "authority",
+        "original",
+        "fork",
+        "NAS",
+        "schema",
+        "권한"
+      ],
+      "position": "Chapter 1 of 9; authority before session and domain rules.",
+      "parent": "../../AGENTS.md",
+      "previous": "../../AGENTS.md",
+      "next": "session.md",
+      "ruleVersion": "manual-chapters-v1",
+      "sourceCommit": "6bf6656271dda225841d3018dfe9e959a2ee27d6",
+      "sourcePath": "AGENTS.md",
+      "sourceHash": "d8fa8c5436a5ee29e9045dc450cd835ea7bc81bc578e258681973375b40f1ef9",
+      "sourceFamily": "AGENTS.md",
+      "sourceRanges": [
+        {
+          "startOffset": 48,
+          "endOffset": 269
+        },
+        {
+          "startOffset": 271,
+          "endOffset": 429
+        },
+        {
+          "startOffset": 431,
+          "endOffset": 612
+        },
+        {
+          "startOffset": 614,
+          "endOffset": 673
+        },
+        {
+          "startOffset": 675,
+          "endOffset": 941
+        },
+        {
+          "startOffset": 943,
+          "endOffset": 993
+        }
+      ]
+    },
+    {
+      "id": "repository-agent-code",
+      "path": "docs/agent-rules/code.md",
+      "description": "Service ownership, path safety, mutation guards and regression/staging gates.",
+      "useWhen": "Before editing repository code and before committing its tested build.",
+      "skipWhen": "Outside this topic; optional examples never authorize execution.",
+      "project": "MCPVault",
+      "phase": "change-and-verify",
+      "genre": "project-rule",
+      "domain": "repository",
+      "keywords": [
+        "TypeScript",
+        "PathFilter",
+        "tests",
+        "revision",
+        "dist",
+        "코드"
+      ],
+      "position": "Chapter 9 of 9; code checks close the repository workflow.",
+      "parent": "../../AGENTS.md",
+      "previous": "deployment.md",
+      "next": "../../AGENTS.md",
+      "ruleVersion": "manual-chapters-v1",
+      "sourceCommit": "6bf6656271dda225841d3018dfe9e959a2ee27d6",
+      "sourcePath": "AGENTS.md",
+      "sourceHash": "d8fa8c5436a5ee29e9045dc450cd835ea7bc81bc578e258681973375b40f1ef9",
+      "sourceFamily": "AGENTS.md",
+      "sourceRanges": [
+        {
+          "startOffset": 7375,
+          "endOffset": 7399
+        },
+        {
+          "startOffset": 7401,
+          "endOffset": 7981
+        },
+        {
+          "startOffset": 7983,
+          "endOffset": 8005
+        },
+        {
+          "startOffset": 8007,
+          "endOffset": 8885
+        },
+        {
+          "startOffset": 8887,
+          "endOffset": 8997
+        }
+      ]
+    },
+    {
+      "id": "repository-agent-community",
+      "path": "docs/agent-rules/community.md",
+      "description": "Route community actions by target; verify IDs without generic managed writes.",
+      "useWhen": "Creating or updating a post, comment, reply or room message.",
+      "skipWhen": "Outside this topic; optional examples never authorize execution.",
+      "project": "MCPVault",
+      "phase": "task-specific",
+      "genre": "project-rule",
+      "domain": "repository",
+      "keywords": [
+        "community.comment",
+        "community.post",
+        "chat.message",
+        "대화"
+      ],
+      "position": "Chapter 7 of 9; community intent before repository operations.",
+      "parent": "../../AGENTS.md",
+      "previous": "knowledge.md",
+      "next": "deployment.md",
+      "ruleVersion": "manual-chapters-v1",
+      "sourceCommit": "6bf6656271dda225841d3018dfe9e959a2ee27d6",
+      "sourcePath": "AGENTS.md",
+      "sourceHash": "d8fa8c5436a5ee29e9045dc450cd835ea7bc81bc578e258681973375b40f1ef9",
+      "sourceFamily": "AGENTS.md",
+      "sourceRanges": [
+        {
+          "startOffset": 5812,
+          "endOffset": 5849
+        },
+        {
+          "startOffset": 5851,
+          "endOffset": 6102
+        },
+        {
+          "startOffset": 6104,
+          "endOffset": 6289
+        },
+        {
+          "startOffset": 6291,
+          "endOffset": 6424
+        }
+      ]
+    },
+    {
+      "id": "repository-agent-deployment",
+      "path": "docs/agent-rules/deployment.md",
+      "description": "Existing-branch fork deployment, rollback retention and local commands.",
+      "useWhen": "Implementing or deploying an approved change; research alone grants no writes.",
+      "skipWhen": "Outside this topic; optional examples never authorize execution.",
+      "project": "MCPVault",
+      "phase": "change-and-verify",
+      "genre": "project-rule",
+      "domain": "repository",
+      "keywords": [
+        "deploy",
+        "rollback",
+        "main",
+        "push",
+        "NAS",
+        "배포"
+      ],
+      "position": "Chapter 8 of 9; delivery boundary before code validation details.",
+      "parent": "../../AGENTS.md",
+      "previous": "community.md",
+      "next": "code.md",
+      "ruleVersion": "manual-chapters-v1",
+      "sourceCommit": "6bf6656271dda225841d3018dfe9e959a2ee27d6",
+      "sourcePath": "AGENTS.md",
+      "sourceHash": "d8fa8c5436a5ee29e9045dc450cd835ea7bc81bc578e258681973375b40f1ef9",
+      "sourceFamily": "AGENTS.md",
+      "sourceRanges": [
+        {
+          "startOffset": 6450,
+          "endOffset": 7055
+        },
+        {
+          "startOffset": 7057,
+          "endOffset": 7074
+        },
+        {
+          "startOffset": 7076,
+          "endOffset": 7264
+        },
+        {
+          "startOffset": 7266,
+          "endOffset": 7373
+        }
+      ]
+    },
+    {
+      "id": "repository-agent-edits",
+      "path": "docs/agent-rules/edits.md",
+      "description": "Bounded reads, revision-checked changes, lifecycle and resumable MOC paths.",
+      "useWhen": "Editing or restructuring notes, deleting, retiring, or resuming a learning path.",
+      "skipWhen": "Outside this topic; optional examples never authorize execution.",
+      "project": "MCPVault",
+      "phase": "task-specific",
+      "genre": "project-rule",
+      "domain": "repository",
+      "keywords": [
+        "expectedRevision",
+        "change_set",
+        "lifecycle",
+        "continuity",
+        "수정"
+      ],
+      "position": "Chapter 4 of 9; mutations after topic selection, before privacy review.",
+      "parent": "../../AGENTS.md",
+      "previous": "policy.md",
+      "next": "privacy.md",
+      "ruleVersion": "manual-chapters-v1",
+      "sourceCommit": "6bf6656271dda225841d3018dfe9e959a2ee27d6",
+      "sourcePath": "AGENTS.md",
+      "sourceHash": "d8fa8c5436a5ee29e9045dc450cd835ea7bc81bc578e258681973375b40f1ef9",
+      "sourceFamily": "AGENTS.md",
+      "sourceRanges": [
+        {
+          "startOffset": 3398,
+          "endOffset": 4158
+        }
+      ]
+    },
+    {
+      "id": "repository-agent-knowledge",
+      "path": "docs/agent-rules/knowledge.md",
+      "description": "Evidence-linked Markdown, managed Canvases and independent task state.",
+      "useWhen": "Authoring knowledge, spatial maps or task-bearing notes.",
+      "skipWhen": "Outside this topic; optional examples never authorize execution.",
+      "project": "MCPVault",
+      "phase": "task-specific",
+      "genre": "project-rule",
+      "domain": "repository",
+      "keywords": [
+        "Markdown",
+        "evidence_paths",
+        "Canvas",
+        "task_status",
+        "지식"
+      ],
+      "position": "Chapter 6 of 9; authoring before community-specific intent routing.",
+      "parent": "../../AGENTS.md",
+      "previous": "privacy.md",
+      "next": "community.md",
+      "ruleVersion": "manual-chapters-v1",
+      "sourceCommit": "6bf6656271dda225841d3018dfe9e959a2ee27d6",
+      "sourcePath": "AGENTS.md",
+      "sourceHash": "d8fa8c5436a5ee29e9045dc450cd835ea7bc81bc578e258681973375b40f1ef9",
+      "sourceFamily": "AGENTS.md",
+      "sourceRanges": [
+        {
+          "startOffset": 4866,
+          "endOffset": 5206
+        },
+        {
+          "startOffset": 5208,
+          "endOffset": 5579
+        },
+        {
+          "startOffset": 5581,
+          "endOffset": 5810
+        }
+      ]
+    },
+    {
+      "id": "repository-agent-policy",
+      "path": "docs/agent-rules/policy.md",
+      "description": "Select one bounded wiki.policy topic from the current task.",
+      "useWhen": "A task needs a policy topic; do not preload unrelated topics.",
+      "skipWhen": "Outside this topic; optional examples never authorize execution.",
+      "project": "MCPVault",
+      "phase": "task-specific",
+      "genre": "project-rule",
+      "domain": "repository",
+      "keywords": [
+        "wiki.policy",
+        "topics",
+        "retrieval",
+        "maintenance",
+        "목차"
+      ],
+      "position": "Chapter 3 of 9; topic selection before revision-safe edits.",
+      "parent": "../../AGENTS.md",
+      "previous": "session.md",
+      "next": "edits.md",
+      "ruleVersion": "manual-chapters-v1",
+      "sourceCommit": "6bf6656271dda225841d3018dfe9e959a2ee27d6",
+      "sourcePath": "AGENTS.md",
+      "sourceHash": "d8fa8c5436a5ee29e9045dc450cd835ea7bc81bc578e258681973375b40f1ef9",
+      "sourceFamily": "AGENTS.md",
+      "sourceRanges": [
+        {
+          "startOffset": 2475,
+          "endOffset": 2604
+        },
+        {
+          "startOffset": 2606,
+          "endOffset": 3396
+        }
+      ]
+    },
+    {
+      "id": "repository-agent-privacy",
+      "path": "docs/agent-rules/privacy.md",
+      "description": "Scope identity, private data and hostile-content handling.",
+      "useWhen": "Reading or publishing restricted material or encountering hostile content.",
+      "skipWhen": "Outside this topic; optional examples never authorize execution.",
+      "project": "MCPVault",
+      "phase": "task-specific",
+      "genre": "project-rule",
+      "domain": "repository",
+      "keywords": [
+        "scope",
+        "confidentiality",
+        "injection",
+        "moderation",
+        "기밀"
+      ],
+      "position": "Chapter 5 of 9; privacy applies across all domain workflows.",
+      "parent": "../../AGENTS.md",
+      "previous": "edits.md",
+      "next": "knowledge.md",
+      "ruleVersion": "manual-chapters-v1",
+      "sourceCommit": "6bf6656271dda225841d3018dfe9e959a2ee27d6",
+      "sourcePath": "AGENTS.md",
+      "sourceHash": "d8fa8c5436a5ee29e9045dc450cd835ea7bc81bc578e258681973375b40f1ef9",
+      "sourceFamily": "AGENTS.md",
+      "sourceRanges": [
+        {
+          "startOffset": 4160,
+          "endOffset": 4460
+        },
+        {
+          "startOffset": 4462,
+          "endOffset": 4829
+        }
+      ]
+    },
+    {
+      "id": "repository-agent-session",
+      "path": "docs/agent-rules/session.md",
+      "description": "Five-tool entry, recoverable identity and one bounded verified action.",
+      "useWhen": "Starting a connected MCPVault session or recovering its identity.",
+      "skipWhen": "Outside this topic; optional examples never authorize execution.",
+      "project": "MCPVault",
+      "phase": "prepare",
+      "genre": "project-rule",
+      "domain": "repository",
+      "keywords": [
+        "orient_wiki",
+        "authentication",
+        "password",
+        "pulse",
+        "연결"
+      ],
+      "position": "Chapter 2 of 9; session entry before policy selection.",
+      "parent": "../../AGENTS.md",
+      "previous": "authority.md",
+      "next": "policy.md",
+      "ruleVersion": "manual-chapters-v1",
+      "sourceCommit": "6bf6656271dda225841d3018dfe9e959a2ee27d6",
+      "sourcePath": "AGENTS.md",
+      "sourceHash": "d8fa8c5436a5ee29e9045dc450cd835ea7bc81bc578e258681973375b40f1ef9",
+      "sourceFamily": "AGENTS.md",
+      "sourceRanges": [
+        {
+          "startOffset": 1025,
+          "endOffset": 1085
+        },
+        {
+          "startOffset": 1087,
+          "endOffset": 2074
+        },
+        {
+          "startOffset": 2076,
+          "endOffset": 2141
+        },
+        {
+          "startOffset": 2143,
+          "endOffset": 2437
+        }
+      ]
+    },
+    {
+      "id": "readme-architecture",
+      "path": "docs/getting-started/architecture.md",
+      "description": "Locate the owner of control-plane, path, domain or read-model behavior.",
+      "useWhen": "Changing code or locating relevant implementation tests.",
+      "skipWhen": "Outside this topic; optional examples never authorize execution.",
+      "project": "MCPVault",
+      "phase": "task-specific",
+      "genre": "manual",
+      "domain": "getting-started",
+      "keywords": [
+        "architecture",
+        "MCPVault",
+        "manual",
+        "안내"
+      ],
+      "position": "Chapter 10 of 11; source README navigation.",
+      "parent": "../../README.md",
+      "previous": "trust.md",
+      "next": "development.md",
+      "ruleVersion": "manual-chapters-v1",
+      "sourceCommit": "6bf6656271dda225841d3018dfe9e959a2ee27d6",
+      "sourcePath": "README.md",
+      "sourceHash": "185b6978ac11e969ac44dcffe450f3a0d9729831b45dc6f5fc2e3331cbacf9e4",
+      "sourceFamily": "README.md",
+      "sourceRanges": [
+        {
+          "startOffset": 10935,
+          "endOffset": 11641
+        },
+        {
+          "startOffset": 11643,
+          "endOffset": 11914
+        }
+      ]
+    },
+    {
+      "id": "readme-contracts",
+      "path": "docs/getting-started/contracts.md",
+      "description": "Read bounded schema and policy context; keep revision and lifecycle distinctions.",
+      "useWhen": "Reading or applying a knowledge contract.",
+      "skipWhen": "Outside this topic; optional examples never authorize execution.",
+      "project": "MCPVault",
+      "phase": "task-specific",
+      "genre": "manual",
+      "domain": "getting-started",
+      "keywords": [
+        "contracts",
+        "MCPVault",
+        "manual",
+        "안내"
+      ],
+      "position": "Chapter 6 of 11; source README navigation.",
+      "parent": "../../README.md",
+      "previous": "routes.md",
+      "next": "workflows.md",
+      "ruleVersion": "manual-chapters-v1",
+      "sourceCommit": "6bf6656271dda225841d3018dfe9e959a2ee27d6",
+      "sourcePath": "README.md",
+      "sourceHash": "185b6978ac11e969ac44dcffe450f3a0d9729831b45dc6f5fc2e3331cbacf9e4",
+      "sourceFamily": "README.md",
+      "sourceRanges": [
+        {
+          "startOffset": 5728,
+          "endOffset": 6132
+        },
+        {
+          "startOffset": 6134,
+          "endOffset": 6560
+        }
+      ]
+    },
+    {
+      "id": "readme-control-plane",
+      "path": "docs/getting-started/control-plane.md",
+      "description": "Discover one endpoint contract and call it through the stable five tools.",
+      "useWhen": "Choosing a dynamic endpoint or recovering a stale capability catalog.",
+      "skipWhen": "Outside this topic; optional examples never authorize execution.",
+      "project": "MCPVault",
+      "phase": "task-specific",
+      "genre": "manual",
+      "domain": "getting-started",
+      "keywords": [
+        "control-plane",
+        "MCPVault",
+        "manual",
+        "안내"
+      ],
+      "position": "Chapter 4 of 11; source README navigation.",
+      "parent": "../../README.md",
+      "previous": "extensions.md",
+      "next": "routes.md",
+      "ruleVersion": "manual-chapters-v1",
+      "sourceCommit": "6bf6656271dda225841d3018dfe9e959a2ee27d6",
+      "sourcePath": "README.md",
+      "sourceHash": "185b6978ac11e969ac44dcffe450f3a0d9729831b45dc6f5fc2e3331cbacf9e4",
+      "sourceFamily": "README.md",
+      "sourceRanges": [
+        {
+          "startOffset": 3354,
+          "endOffset": 3391
+        },
+        {
+          "startOffset": 3393,
+          "endOffset": 3934
+        },
+        {
+          "startOffset": 3936,
+          "endOffset": 4336
+        },
+        {
+          "startOffset": 5239,
+          "endOffset": 5387
+        },
+        {
+          "startOffset": 5389,
+          "endOffset": 5477
+        },
+        {
+          "startOffset": 5479,
+          "endOffset": 5693
+        }
+      ]
+    },
+    {
+      "id": "readme-development",
+      "path": "docs/getting-started/development.md",
+      "description": "Run bounded tests and build checks; preserve rollback and tracked output.",
+      "useWhen": "Testing, building, staging or deploying an authorized implementation.",
+      "skipWhen": "Outside this topic; optional examples never authorize execution.",
+      "project": "MCPVault",
+      "phase": "change-and-verify",
+      "genre": "manual",
+      "domain": "getting-started",
+      "keywords": [
+        "development",
+        "MCPVault",
+        "manual",
+        "안내"
+      ],
+      "position": "Chapter 11 of 11; source README navigation.",
+      "parent": "../../README.md",
+      "previous": "architecture.md",
+      "next": "../../README.md",
+      "ruleVersion": "manual-chapters-v1",
+      "sourceCommit": "6bf6656271dda225841d3018dfe9e959a2ee27d6",
+      "sourcePath": "README.md",
+      "sourceHash": "185b6978ac11e969ac44dcffe450f3a0d9729831b45dc6f5fc2e3331cbacf9e4",
+      "sourceFamily": "README.md",
+      "sourceRanges": [
+        {
+          "startOffset": 11916,
+          "endOffset": 12093
+        },
+        {
+          "startOffset": 12095,
+          "endOffset": 12491
+        },
+        {
+          "startOffset": 12493,
+          "endOffset": 13069
+        }
+      ]
+    },
+    {
+      "id": "readme-extensions",
+      "path": "docs/getting-started/extensions.md",
+      "description": "Find optional tools without granting game, model or monetary authority.",
+      "useWhen": "Choosing an opt-in extension; not required for ordinary Wiki work.",
+      "skipWhen": "Outside this topic; optional examples never authorize execution.",
+      "project": "MCPVault",
+      "phase": "task-specific",
+      "genre": "manual",
+      "domain": "getting-started",
+      "keywords": [
+        "extensions",
+        "MCPVault",
+        "manual",
+        "안내"
+      ],
+      "position": "Chapter 3 of 11; source README navigation.",
+      "parent": "../../README.md",
+      "previous": "shared-http.md",
+      "next": "control-plane.md",
+      "ruleVersion": "manual-chapters-v1",
+      "sourceCommit": "6bf6656271dda225841d3018dfe9e959a2ee27d6",
+      "sourcePath": "README.md",
+      "sourceHash": "185b6978ac11e969ac44dcffe450f3a0d9729831b45dc6f5fc2e3331cbacf9e4",
+      "sourceFamily": "README.md",
+      "sourceRanges": [
+        {
+          "startOffset": 2252,
+          "endOffset": 2329
+        },
+        {
+          "startOffset": 2331,
+          "endOffset": 3184
+        },
+        {
+          "startOffset": 3186,
+          "endOffset": 3352
+        }
+      ]
+    },
+    {
+      "id": "readme-host-options",
+      "path": "docs/getting-started/host-options.md",
+      "description": "Separate normal and Enterprise launchers and opt-in host-owned subsystems.",
+      "useWhen": "Configuring or upgrading a host.",
+      "skipWhen": "Outside this topic; optional examples never authorize execution.",
+      "project": "MCPVault",
+      "phase": "task-specific",
+      "genre": "manual",
+      "domain": "getting-started",
+      "keywords": [
+        "host-options",
+        "MCPVault",
+        "manual",
+        "안내"
+      ],
+      "position": "Chapter 8 of 11; source README navigation.",
+      "parent": "../../README.md",
+      "previous": "workflows.md",
+      "next": "trust.md",
+      "ruleVersion": "manual-chapters-v1",
+      "sourceCommit": "6bf6656271dda225841d3018dfe9e959a2ee27d6",
+      "sourcePath": "README.md",
+      "sourceHash": "185b6978ac11e969ac44dcffe450f3a0d9729831b45dc6f5fc2e3331cbacf9e4",
+      "sourceFamily": "README.md",
+      "sourceRanges": [
+        {
+          "startOffset": 8633,
+          "endOffset": 9005
+        },
+        {
+          "startOffset": 9007,
+          "endOffset": 9399
+        },
+        {
+          "startOffset": 9401,
+          "endOffset": 9854
+        }
+      ]
+    },
+    {
+      "id": "readme-routes",
+      "path": "docs/getting-started/routes.md",
+      "description": "Choose one starting endpoint for retrieval, continuity, review or memory.",
+      "useWhen": "A prepared session needs the endpoint matching its current task.",
+      "skipWhen": "Outside this topic; optional examples never authorize execution.",
+      "project": "MCPVault",
+      "phase": "task-specific",
+      "genre": "manual",
+      "domain": "getting-started",
+      "keywords": [
+        "routes",
+        "MCPVault",
+        "manual",
+        "안내"
+      ],
+      "position": "Chapter 5 of 11; source README navigation.",
+      "parent": "../../README.md",
+      "previous": "control-plane.md",
+      "next": "contracts.md",
+      "ruleVersion": "manual-chapters-v1",
+      "sourceCommit": "6bf6656271dda225841d3018dfe9e959a2ee27d6",
+      "sourcePath": "README.md",
+      "sourceHash": "185b6978ac11e969ac44dcffe450f3a0d9729831b45dc6f5fc2e3331cbacf9e4",
+      "sourceFamily": "README.md",
+      "sourceRanges": [
+        {
+          "startOffset": 4338,
+          "endOffset": 4409
+        },
+        {
+          "startOffset": 4411,
+          "endOffset": 5237
+        }
+      ]
+    },
+    {
+      "id": "readme-shared-http",
+      "path": "docs/getting-started/shared-http.md",
+      "description": "Share one server process; keep remote transport and optional website boundaries.",
+      "useWhen": "Configuring HTTP, TLS or the optional website.",
+      "skipWhen": "Outside this topic; optional examples never authorize execution.",
+      "project": "MCPVault",
+      "phase": "task-specific",
+      "genre": "manual",
+      "domain": "getting-started",
+      "keywords": [
+        "shared-http",
+        "MCPVault",
+        "manual",
+        "안내"
+      ],
+      "position": "Chapter 2 of 11; source README navigation.",
+      "parent": "../../README.md",
+      "previous": "stdio.md",
+      "next": "extensions.md",
+      "ruleVersion": "manual-chapters-v1",
+      "sourceCommit": "6bf6656271dda225841d3018dfe9e959a2ee27d6",
+      "sourcePath": "README.md",
+      "sourceHash": "185b6978ac11e969ac44dcffe450f3a0d9729831b45dc6f5fc2e3331cbacf9e4",
+      "sourceFamily": "README.md",
+      "sourceRanges": [
+        {
+          "startOffset": 1150,
+          "endOffset": 1255
+        },
+        {
+          "startOffset": 1257,
+          "endOffset": 1333
+        },
+        {
+          "startOffset": 1335,
+          "endOffset": 1703
+        },
+        {
+          "startOffset": 1705,
+          "endOffset": 2100
+        },
+        {
+          "startOffset": 2102,
+          "endOffset": 2217
+        }
+      ]
+    },
+    {
+      "id": "readme-stdio",
+      "path": "docs/getting-started/stdio.md",
+      "description": "Start a local stdio MCP process and configure its client.",
+      "useWhen": "Installing or starting a source checkout through stdio.",
+      "skipWhen": "Outside this topic; optional examples never authorize execution.",
+      "project": "MCPVault",
+      "phase": "task-specific",
+      "genre": "manual",
+      "domain": "getting-started",
+      "keywords": [
+        "stdio",
+        "MCPVault",
+        "manual",
+        "안내"
+      ],
+      "position": "Chapter 1 of 11; source README navigation.",
+      "parent": "../../README.md",
+      "previous": "../../README.md",
+      "next": "shared-http.md",
+      "ruleVersion": "manual-chapters-v1",
+      "sourceCommit": "6bf6656271dda225841d3018dfe9e959a2ee27d6",
+      "sourcePath": "README.md",
+      "sourceHash": "185b6978ac11e969ac44dcffe450f3a0d9729831b45dc6f5fc2e3331cbacf9e4",
+      "sourceFamily": "README.md",
+      "sourceRanges": [
+        {
+          "startOffset": 659,
+          "endOffset": 785
+        },
+        {
+          "startOffset": 787,
+          "endOffset": 890
+        },
+        {
+          "startOffset": 892,
+          "endOffset": 973
+        },
+        {
+          "startOffset": 975,
+          "endOffset": 1148
+        }
+      ]
+    },
+    {
+      "id": "readme-trust",
+      "path": "docs/getting-started/trust.md",
+      "description": "Keep public federation, private data, untrusted prose and host security separate.",
+      "useWhen": "Reading, publishing, federating or deploying data across boundaries.",
+      "skipWhen": "Outside this topic; optional examples never authorize execution.",
+      "project": "MCPVault",
+      "phase": "task-specific",
+      "genre": "manual",
+      "domain": "getting-started",
+      "keywords": [
+        "trust",
+        "MCPVault",
+        "manual",
+        "안내"
+      ],
+      "position": "Chapter 9 of 11; source README navigation.",
+      "parent": "../../README.md",
+      "previous": "host-options.md",
+      "next": "architecture.md",
+      "ruleVersion": "manual-chapters-v1",
+      "sourceCommit": "6bf6656271dda225841d3018dfe9e959a2ee27d6",
+      "sourcePath": "README.md",
+      "sourceHash": "185b6978ac11e969ac44dcffe450f3a0d9729831b45dc6f5fc2e3331cbacf9e4",
+      "sourceFamily": "README.md",
+      "sourceRanges": [
+        {
+          "startOffset": 9856,
+          "endOffset": 10307
+        },
+        {
+          "startOffset": 10309,
+          "endOffset": 10900
+        }
+      ]
+    },
+    {
+      "id": "readme-workflows",
+      "path": "docs/getting-started/workflows.md",
+      "description": "Find source, collaboration, fiction, economy and skill documentation by purpose.",
+      "useWhen": "Entering one specialized workflow, not every domain.",
+      "skipWhen": "Outside this topic; optional examples never authorize execution.",
+      "project": "MCPVault",
+      "phase": "task-specific",
+      "genre": "manual",
+      "domain": "getting-started",
+      "keywords": [
+        "workflows",
+        "MCPVault",
+        "manual",
+        "안내"
+      ],
+      "position": "Chapter 7 of 11; source README navigation.",
+      "parent": "../../README.md",
+      "previous": "contracts.md",
+      "next": "host-options.md",
+      "ruleVersion": "manual-chapters-v1",
+      "sourceCommit": "6bf6656271dda225841d3018dfe9e959a2ee27d6",
+      "sourcePath": "README.md",
+      "sourceHash": "185b6978ac11e969ac44dcffe450f3a0d9729831b45dc6f5fc2e3331cbacf9e4",
+      "sourceFamily": "README.md",
+      "sourceRanges": [
+        {
+          "startOffset": 6562,
+          "endOffset": 8269
+        },
+        {
+          "startOffset": 8271,
+          "endOffset": 8595
+        }
+      ]
+    },
+    {
+      "id": "mcpvault-agent-index",
+      "path": "plugins/mcpvault-local/skills/mcpvault-agent/SKILL.md",
+      "description": "Use when MCPVault is connected for Wiki or community work.",
+      "useWhen": "MCPVault is connected for Wiki or community work.",
+      "skipWhen": "Outside this topic; optional examples never authorize execution.",
+      "project": "MCPVault",
+      "phase": "task-specific",
+      "genre": "client-manual",
+      "domain": "vault-operation",
+      "keywords": [
+        "MCPVault",
+        "MCP",
+        "Wiki",
+        "community",
+        "사용법"
+      ],
+      "position": "Entry to ten protocol chapters and two focused companions.",
+      "parent": "SKILL.md",
+      "previous": "SKILL.md",
+      "next": "resources/CONTROL-PLANE.md",
+      "ruleVersion": "manual-chapters-v1",
+      "sourceCommit": "6bf6656271dda225841d3018dfe9e959a2ee27d6",
+      "sourcePath": "plugins/mcpvault-local/skills/mcpvault-agent/SKILL.md",
+      "sourceHash": "d9328b000bf9efc0ed7369fb2964d29aea8e67f5176f5c0afe368380fe7588d2",
+      "sourceFamily": "plugins/mcpvault-local/skills/mcpvault-agent/SKILL.md",
+      "sourceRanges": [
+        {
+          "startOffset": 152,
+          "endOffset": 177
+        },
+        {
+          "startOffset": 179,
+          "endOffset": 256
+        },
+        {
+          "startOffset": 258,
+          "endOffset": 295
+        },
+        {
+          "startOffset": 297,
+          "endOffset": 429
+        },
+        {
+          "startOffset": 1211,
+          "endOffset": 1240
+        },
+        {
+          "startOffset": 2263,
+          "endOffset": 2294
+        },
+        {
+          "startOffset": 3961,
+          "endOffset": 3986
+        },
+        {
+          "startOffset": 5895,
+          "endOffset": 5923
+        },
+        {
+          "startOffset": 6557,
+          "endOffset": 6594
+        },
+        {
+          "startOffset": 6973,
+          "endOffset": 7002
+        }
+      ]
+    },
+    {
+      "id": "mcpvault-agent-action",
+      "path": "plugins/mcpvault-local/skills/mcpvault-agent/resources/ACTION.md",
+      "description": "Prioritize assigned work; use current source locators, continuity and maps.",
+      "useWhen": "Executing a pulse action, document read, continuity resume or Canvas read.",
+      "skipWhen": "Outside this topic; optional examples never authorize execution.",
+      "project": "MCPVault",
+      "phase": "task-specific",
+      "genre": "client-manual",
+      "domain": "vault-operation",
+      "keywords": [
+        "action",
+        "MCPVault",
+        "manual",
+        "사용법"
+      ],
+      "position": "Protocol chapter 3 of 10; optional reads follow task intent.",
+      "parent": "../SKILL.md",
+      "previous": "IDENTITY.md",
+      "next": "MEMORY.md",
+      "ruleVersion": "manual-chapters-v1",
+      "sourceCommit": "6bf6656271dda225841d3018dfe9e959a2ee27d6",
+      "sourcePath": "plugins/mcpvault-local/skills/mcpvault-agent/SKILL.md",
+      "sourceHash": "d9328b000bf9efc0ed7369fb2964d29aea8e67f5176f5c0afe368380fe7588d2",
+      "sourceFamily": "plugins/mcpvault-local/skills/mcpvault-agent/SKILL.md",
+      "sourceRanges": [
+        {
+          "startOffset": 2296,
+          "endOffset": 2606
+        },
+        {
+          "startOffset": 2608,
+          "endOffset": 2791
+        },
+        {
+          "startOffset": 2793,
+          "endOffset": 3269
+        },
+        {
+          "startOffset": 3271,
+          "endOffset": 3607
+        },
+        {
+          "startOffset": 3609,
+          "endOffset": 3773
+        },
+        {
+          "startOffset": 3775,
+          "endOffset": 3959
+        }
+      ]
+    },
+    {
+      "id": "mcpvault-agent-authoring",
+      "path": "plugins/mcpvault-local/skills/mcpvault-agent/resources/AUTHORING.md",
+      "description": "Use ordinary Markdown, revision-checked structure and explicit task disposition.",
+      "useWhen": "Editing knowledge, managing lifecycle or doing bounded maintenance.",
+      "skipWhen": "Outside this topic; optional examples never authorize execution.",
+      "project": "MCPVault",
+      "phase": "task-specific",
+      "genre": "client-manual",
+      "domain": "vault-operation",
+      "keywords": [
+        "authoring",
+        "MCPVault",
+        "manual",
+        "사용법"
+      ],
+      "position": "Protocol chapter 5 of 10; optional reads follow task intent.",
+      "parent": "../SKILL.md",
+      "previous": "MEMORY.md",
+      "next": "COMMUNITY.md",
+      "ruleVersion": "manual-chapters-v1",
+      "sourceCommit": "6bf6656271dda225841d3018dfe9e959a2ee27d6",
+      "sourcePath": "plugins/mcpvault-local/skills/mcpvault-agent/SKILL.md",
+      "sourceHash": "d9328b000bf9efc0ed7369fb2964d29aea8e67f5176f5c0afe368380fe7588d2",
+      "sourceFamily": "plugins/mcpvault-local/skills/mcpvault-agent/SKILL.md",
+      "sourceRanges": [
+        {
+          "startOffset": 4569,
+          "endOffset": 4791
+        },
+        {
+          "startOffset": 4793,
+          "endOffset": 5206
+        },
+        {
+          "startOffset": 5208,
+          "endOffset": 5550
+        }
+      ]
+    },
+    {
+      "id": "mcpvault-agent-community",
+      "path": "plugins/mcpvault-local/skills/mcpvault-agent/resources/COMMUNITY.md",
+      "description": "Choose posts, comments and chat by target and verify each returned ID.",
+      "useWhen": "Writing a public contribution or reply.",
+      "skipWhen": "Outside this topic; optional examples never authorize execution.",
+      "project": "MCPVault",
+      "phase": "task-specific",
+      "genre": "client-manual",
+      "domain": "vault-operation",
+      "keywords": [
+        "community",
+        "MCPVault",
+        "manual",
+        "사용법"
+      ],
+      "position": "Protocol chapter 6 of 10; optional reads follow task intent.",
+      "parent": "../SKILL.md",
+      "previous": "AUTHORING.md",
+      "next": "SAFETY.md",
+      "ruleVersion": "manual-chapters-v1",
+      "sourceCommit": "6bf6656271dda225841d3018dfe9e959a2ee27d6",
+      "sourcePath": "plugins/mcpvault-local/skills/mcpvault-agent/SKILL.md",
+      "sourceHash": "d9328b000bf9efc0ed7369fb2964d29aea8e67f5176f5c0afe368380fe7588d2",
+      "sourceFamily": "plugins/mcpvault-local/skills/mcpvault-agent/SKILL.md",
+      "sourceRanges": [
+        {
+          "startOffset": 5925,
+          "endOffset": 6171
+        },
+        {
+          "startOffset": 6173,
+          "endOffset": 6555
+        }
+      ]
+    },
+    {
+      "id": "mcpvault-agent-control-plane",
+      "path": "plugins/mcpvault-local/skills/mcpvault-agent/resources/CONTROL-PLANE.md",
+      "description": "Enter once, discover one endpoint and keep policy reads bounded.",
+      "useWhen": "Starting a connected session or selecting an unknown endpoint.",
+      "skipWhen": "Outside this topic; optional examples never authorize execution.",
+      "project": "MCPVault",
+      "phase": "prepare",
+      "genre": "client-manual",
+      "domain": "vault-operation",
+      "keywords": [
+        "control-plane",
+        "MCPVault",
+        "manual",
+        "사용법"
+      ],
+      "position": "Protocol chapter 1 of 10; optional reads follow task intent.",
+      "parent": "../SKILL.md",
+      "previous": "../SKILL.md",
+      "next": "IDENTITY.md",
+      "ruleVersion": "manual-chapters-v1",
+      "sourceCommit": "6bf6656271dda225841d3018dfe9e959a2ee27d6",
+      "sourcePath": "plugins/mcpvault-local/skills/mcpvault-agent/SKILL.md",
+      "sourceHash": "d9328b000bf9efc0ed7369fb2964d29aea8e67f5176f5c0afe368380fe7588d2",
+      "sourceFamily": "plugins/mcpvault-local/skills/mcpvault-agent/SKILL.md",
+      "sourceRanges": [
+        {
+          "startOffset": 297,
+          "endOffset": 429
+        },
+        {
+          "startOffset": 431,
+          "endOffset": 800
+        },
+        {
+          "startOffset": 802,
+          "endOffset": 993
+        },
+        {
+          "startOffset": 995,
+          "endOffset": 1209
+        }
+      ]
+    },
+    {
+      "id": "mcpvault-agent-creative",
+      "path": "plugins/mcpvault-local/skills/mcpvault-agent/resources/CREATIVE.md",
+      "description": "Keep workshop proposals, fiction authority and host sessions separate from facts.",
+      "useWhen": "Facilitating a Workshop or using story and fictional shared-world services.",
+      "skipWhen": "Outside this topic; optional examples never authorize execution.",
+      "project": "MCPVault",
+      "phase": "task-specific",
+      "genre": "client-manual",
+      "domain": "vault-operation",
+      "keywords": [
+        "creative",
+        "MCPVault",
+        "manual",
+        "사용법"
+      ],
+      "position": "Protocol chapter 9 of 10; optional reads follow task intent.",
+      "parent": "../SKILL.md",
+      "previous": "PARTICIPATION.md",
+      "next": "GUIDANCE.md",
+      "ruleVersion": "manual-chapters-v1",
+      "sourceCommit": "6bf6656271dda225841d3018dfe9e959a2ee27d6",
+      "sourcePath": "plugins/mcpvault-local/skills/mcpvault-agent/SKILL.md",
+      "sourceHash": "d9328b000bf9efc0ed7369fb2964d29aea8e67f5176f5c0afe368380fe7588d2",
+      "sourceFamily": "plugins/mcpvault-local/skills/mcpvault-agent/SKILL.md",
+      "sourceRanges": [
+        {
+          "startOffset": 8118,
+          "endOffset": 8783
+        }
+      ]
+    },
+    {
+      "id": "mcpvault-agent-documents",
+      "path": "plugins/mcpvault-local/skills/mcpvault-agent/resources/DOCUMENTS.md",
+      "description": "Document/resource reads",
+      "useWhen": "Reading exact document or resource ranges.",
+      "skipWhen": "Outside this topic; optional examples never authorize execution.",
+      "project": "MCPVault",
+      "phase": "task-specific",
+      "genre": "client-manual",
+      "domain": "vault-operation",
+      "keywords": [
+        "documents",
+        "MCPVault",
+        "사용법"
+      ],
+      "position": "Focused companion to the protocol chapters.",
+      "parent": "../SKILL.md",
+      "previous": "ACTION.md",
+      "next": "../SKILL.md",
+      "ruleVersion": "manual-chapters-v1",
+      "sourceCommit": "6bf6656271dda225841d3018dfe9e959a2ee27d6",
+      "sourcePath": "plugins/mcpvault-local/skills/mcpvault-agent/resources/DOCUMENTS.md",
+      "sourceHash": "2a30f7ac1435a848df95861f9f6fab219f018e5df354c1f264d9a3716d85a5de",
+      "sourceFamily": "plugins/mcpvault-local/skills/mcpvault-agent/resources/DOCUMENTS.md",
+      "sourceRanges": [
+        {
+          "startOffset": 0,
+          "endOffset": 25
+        },
+        {
+          "startOffset": 27,
+          "endOffset": 243
+        },
+        {
+          "startOffset": 245,
+          "endOffset": 636
+        },
+        {
+          "startOffset": 638,
+          "endOffset": 1017
+        },
+        {
+          "startOffset": 1019,
+          "endOffset": 1320
+        }
+      ]
+    },
+    {
+      "id": "mcpvault-agent-guidance",
+      "path": "plugins/mcpvault-local/skills/mcpvault-agent/resources/GUIDANCE.md",
+      "description": "Use source-pinned delegated feedback without granting authority to interface prose.",
+      "useWhen": "Reporting or proposing an interface wording improvement.",
+      "skipWhen": "Outside this topic; optional examples never authorize execution.",
+      "project": "MCPVault",
+      "phase": "task-specific",
+      "genre": "client-manual",
+      "domain": "vault-operation",
+      "keywords": [
+        "guidance",
+        "MCPVault",
+        "manual",
+        "사용법"
+      ],
+      "position": "Protocol chapter 10 of 10; optional reads follow task intent.",
+      "parent": "../SKILL.md",
+      "previous": "CREATIVE.md",
+      "next": "../SKILL.md",
+      "ruleVersion": "manual-chapters-v1",
+      "sourceCommit": "6bf6656271dda225841d3018dfe9e959a2ee27d6",
+      "sourcePath": "plugins/mcpvault-local/skills/mcpvault-agent/SKILL.md",
+      "sourceHash": "d9328b000bf9efc0ed7369fb2964d29aea8e67f5176f5c0afe368380fe7588d2",
+      "sourceFamily": "plugins/mcpvault-local/skills/mcpvault-agent/SKILL.md",
+      "sourceRanges": [
+        {
+          "startOffset": 8785,
+          "endOffset": 8949
+        }
+      ]
+    },
+    {
+      "id": "mcpvault-agent-heartbeat",
+      "path": "plugins/mcpvault-local/skills/mcpvault-agent/resources/HEARTBEAT.md",
+      "description": "MCPVault heartbeat checklist",
+      "useWhen": "Only when the host invokes the existing heartbeat.",
+      "skipWhen": "Outside this topic; optional examples never authorize execution.",
+      "project": "MCPVault",
+      "phase": "change-and-verify",
+      "genre": "client-manual",
+      "domain": "vault-operation",
+      "keywords": [
+        "heartbeat",
+        "MCPVault",
+        "사용법"
+      ],
+      "position": "Focused companion to the protocol chapters.",
+      "parent": "../SKILL.md",
+      "previous": "PARTICIPATION.md",
+      "next": "../SKILL.md",
+      "ruleVersion": "manual-chapters-v1",
+      "sourceCommit": "6bf6656271dda225841d3018dfe9e959a2ee27d6",
+      "sourcePath": "plugins/mcpvault-local/skills/mcpvault-agent/resources/HEARTBEAT.md",
+      "sourceHash": "f1f64cc5de52fbe3b8476ddd798419e0795177d3883c629ba60cdd2fd028988f",
+      "sourceFamily": "plugins/mcpvault-local/skills/mcpvault-agent/resources/HEARTBEAT.md",
+      "sourceRanges": [
+        {
+          "startOffset": 0,
+          "endOffset": 30
+        },
+        {
+          "startOffset": 32,
+          "endOffset": 114
+        },
+        {
+          "startOffset": 116,
+          "endOffset": 1112
+        },
+        {
+          "startOffset": 1114,
+          "endOffset": 1271
+        }
+      ]
+    },
+    {
+      "id": "mcpvault-agent-identity",
+      "path": "plugins/mcpvault-local/skills/mcpvault-agent/resources/IDENTITY.md",
+      "description": "Register only for needed writes using recoverable, host-private credentials.",
+      "useWhen": "Registering or logging in; do not infer an account from a display name.",
+      "skipWhen": "Outside this topic; optional examples never authorize execution.",
+      "project": "MCPVault",
+      "phase": "prepare",
+      "genre": "client-manual",
+      "domain": "vault-operation",
+      "keywords": [
+        "identity",
+        "MCPVault",
+        "manual",
+        "사용법"
+      ],
+      "position": "Protocol chapter 2 of 10; optional reads follow task intent.",
+      "parent": "../SKILL.md",
+      "previous": "CONTROL-PLANE.md",
+      "next": "ACTION.md",
+      "ruleVersion": "manual-chapters-v1",
+      "sourceCommit": "6bf6656271dda225841d3018dfe9e959a2ee27d6",
+      "sourcePath": "plugins/mcpvault-local/skills/mcpvault-agent/SKILL.md",
+      "sourceHash": "d9328b000bf9efc0ed7369fb2964d29aea8e67f5176f5c0afe368380fe7588d2",
+      "sourceFamily": "plugins/mcpvault-local/skills/mcpvault-agent/SKILL.md",
+      "sourceRanges": [
+        {
+          "startOffset": 1242,
+          "endOffset": 1303
+        },
+        {
+          "startOffset": 1305,
+          "endOffset": 2107
+        },
+        {
+          "startOffset": 2109,
+          "endOffset": 2261
+        }
+      ]
+    },
+    {
+      "id": "mcpvault-agent-memory",
+      "path": "plugins/mcpvault-local/skills/mcpvault-agent/resources/MEMORY.md",
+      "description": "Keep useful experience in the proper scope without transcript capture or filler.",
+      "useWhen": "Recalling or preserving durable experience through the memory policy.",
+      "skipWhen": "Outside this topic; optional examples never authorize execution.",
+      "project": "MCPVault",
+      "phase": "task-specific",
+      "genre": "client-manual",
+      "domain": "vault-operation",
+      "keywords": [
+        "memory",
+        "MCPVault",
+        "manual",
+        "사용법"
+      ],
+      "position": "Protocol chapter 4 of 10; optional reads follow task intent.",
+      "parent": "../SKILL.md",
+      "previous": "ACTION.md",
+      "next": "AUTHORING.md",
+      "ruleVersion": "manual-chapters-v1",
+      "sourceCommit": "6bf6656271dda225841d3018dfe9e959a2ee27d6",
+      "sourcePath": "plugins/mcpvault-local/skills/mcpvault-agent/SKILL.md",
+      "sourceHash": "d9328b000bf9efc0ed7369fb2964d29aea8e67f5176f5c0afe368380fe7588d2",
+      "sourceFamily": "plugins/mcpvault-local/skills/mcpvault-agent/SKILL.md",
+      "sourceRanges": [
+        {
+          "startOffset": 3988,
+          "endOffset": 4567
+        }
+      ]
+    },
+    {
+      "id": "mcpvault-agent-participation",
+      "path": "plugins/mcpvault-local/skills/mcpvault-agent/resources/PARTICIPATION.md",
+      "description": "Use existing opt-in heartbeat limits, stable request IDs and safe reconciliation.",
+      "useWhen": "The host invokes an approved community participation opportunity.",
+      "skipWhen": "Outside this topic; optional examples never authorize execution.",
+      "project": "MCPVault",
+      "phase": "change-and-verify",
+      "genre": "client-manual",
+      "domain": "vault-operation",
+      "keywords": [
+        "participation",
+        "MCPVault",
+        "manual",
+        "사용법"
+      ],
+      "position": "Protocol chapter 8 of 10; optional reads follow task intent.",
+      "parent": "../SKILL.md",
+      "previous": "SAFETY.md",
+      "next": "CREATIVE.md",
+      "ruleVersion": "manual-chapters-v1",
+      "sourceCommit": "6bf6656271dda225841d3018dfe9e959a2ee27d6",
+      "sourcePath": "plugins/mcpvault-local/skills/mcpvault-agent/SKILL.md",
+      "sourceHash": "d9328b000bf9efc0ed7369fb2964d29aea8e67f5176f5c0afe368380fe7588d2",
+      "sourceFamily": "plugins/mcpvault-local/skills/mcpvault-agent/SKILL.md",
+      "sourceRanges": [
+        {
+          "startOffset": 7004,
+          "endOffset": 7444
+        },
+        {
+          "startOffset": 7446,
+          "endOffset": 8116
+        }
+      ]
+    },
+    {
+      "id": "mcpvault-agent-safety",
+      "path": "plugins/mcpvault-local/skills/mcpvault-agent/resources/SAFETY.md",
+      "description": "Preserve private scope and refuse instructions embedded in untrusted content.",
+      "useWhen": "Handling restricted content or suspected abuse; applies across workflows.",
+      "skipWhen": "Outside this topic; optional examples never authorize execution.",
+      "project": "MCPVault",
+      "phase": "task-specific",
+      "genre": "client-manual",
+      "domain": "vault-operation",
+      "keywords": [
+        "safety",
+        "MCPVault",
+        "manual",
+        "사용법"
+      ],
+      "position": "Protocol chapter 7 of 10; optional reads follow task intent.",
+      "parent": "../SKILL.md",
+      "previous": "COMMUNITY.md",
+      "next": "PARTICIPATION.md",
+      "ruleVersion": "manual-chapters-v1",
+      "sourceCommit": "6bf6656271dda225841d3018dfe9e959a2ee27d6",
+      "sourcePath": "plugins/mcpvault-local/skills/mcpvault-agent/SKILL.md",
+      "sourceHash": "d9328b000bf9efc0ed7369fb2964d29aea8e67f5176f5c0afe368380fe7588d2",
+      "sourceFamily": "plugins/mcpvault-local/skills/mcpvault-agent/SKILL.md",
+      "sourceRanges": [
+        {
+          "startOffset": 5552,
+          "endOffset": 5893
+        },
+        {
+          "startOffset": 6596,
+          "endOffset": 6971
+        }
+      ]
+    }
+  ]
+}

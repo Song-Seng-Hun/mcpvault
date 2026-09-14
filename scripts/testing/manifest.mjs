@@ -25,7 +25,8 @@ export async function sourceBasis(root, files) {
   await safeDirectory(root);
   const inputs = new Set(['package.json', 'package-lock.json', 'vitest.config.ts', 'tsconfig.json', 'tsconfig.build.json', 'node_modules/vitest/package.json']);
   for (const entry of await readdir(root, { withFileTypes: true })) if (entry.isFile() && (/\.(ts|md)$/.test(entry.name) || entry.name === '.gitattributes')) inputs.add(entry.name);
-  for (const tree of ['src', 'tests', 'scripts', 'dist', 'docs/architecture', 'docs/skills']) {
+  for (const tree of ['src', 'tests', 'scripts', 'dist', 'docs/architecture', 'docs/skills',
+    'docs/agent-rules', 'docs/getting-started', 'plugins/mcpvault-local/skills']) {
     try { await safeDirectory(join(root, tree)); } catch (e) { if (e.code === 'ENOENT') continue; throw e; }
     const pending = [tree];
     for (const dir of pending) for (const entry of await readdir(join(root, dir), { withFileTypes: true })) {
@@ -39,6 +40,8 @@ export async function sourceBasis(root, files) {
     const path = `docs/research/workshop-evaluation-${arm}.json`;
     try { await safeFile(join(root, path)); inputs.add(path); } catch (e) { if (e.code !== 'ENOENT') throw e; }
   }
+  try { await safeFile(join(root, 'docs/context-manuals.json')); inputs.add('docs/context-manuals.json'); }
+  catch (e) { if (e.code !== 'ENOENT') throw e; }
   const digest = createHash('sha256'); digest.update(JSON.stringify({ node: process.version, platform: process.platform, arch: process.arch, files, heapMiB: 512 }));
   for (const path of [...inputs].sort()) { digest.update(path + '\0'); digest.update(await safeFile(join(root, path))); }
   return digest.digest('hex');

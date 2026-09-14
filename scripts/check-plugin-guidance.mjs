@@ -3,7 +3,22 @@ import { lstat, open } from 'node:fs/promises';
 import { dirname, isAbsolute, join, parse, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const GUIDES = ['skills/mcpvault-agent/SKILL.md', 'skills/mcpvault-agent/resources/HEARTBEAT.md'];
+// Code-owned explicit inventory. Never discover arbitrary files or transport secrets.
+export const GUIDES = Object.freeze([
+  "skills/mcpvault-agent/SKILL.md",
+  "skills/mcpvault-agent/resources/HEARTBEAT.md",
+  "skills/mcpvault-agent/resources/ACTION.md",
+  "skills/mcpvault-agent/resources/AUTHORING.md",
+  "skills/mcpvault-agent/resources/COMMUNITY.md",
+  "skills/mcpvault-agent/resources/CONTROL-PLANE.md",
+  "skills/mcpvault-agent/resources/CREATIVE.md",
+  "skills/mcpvault-agent/resources/DOCUMENTS.md",
+  "skills/mcpvault-agent/resources/GUIDANCE.md",
+  "skills/mcpvault-agent/resources/IDENTITY.md",
+  "skills/mcpvault-agent/resources/MEMORY.md",
+  "skills/mcpvault-agent/resources/PARTICIPATION.md",
+  "skills/mcpvault-agent/resources/SAFETY.md"
+]);
 const MAX_GUIDE_BYTES = 32 * 1024;
 const sourceRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../plugins/mcpvault-local');
 

@@ -1,8 +1,16 @@
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { describe, expect, test } from 'vitest';
+import matter from 'gray-matter';
 
 const rootFile = (path: string) => readFile(resolve(process.cwd(), path), 'utf8');
+// Test-only corpus checks retain every prior assertion after chapter extraction.
+// Runtime entry points must not preload this corpus; budget the entry separately.
+async function handbook(entry: string) {
+  const catalog = JSON.parse(await rootFile('docs/context-manuals.json'));
+  const paths = catalog.chapters.filter((card: any) => card.sourcePath === entry && card.path !== entry).map((card: any) => card.path);
+  return [await rootFile(entry), ...await Promise.all(paths.map(async (path: string) => matter(await rootFile(path)).content))].join('\n');
+}
 
 describe('progressive agent instruction budgets', () => {
   test('standalone heartbeat preserves pulse priority and cannot mandate idle browsing', async () => {
@@ -32,11 +40,12 @@ describe('progressive agent instruction budgets', () => {
   });
 
   test('packaged MCPVault skill teaches the safe path without embedding the handbook', async () => {
-    const skill = await rootFile('plugins/mcpvault-local/skills/mcpvault-agent/SKILL.md');
+    const entry = 'plugins/mcpvault-local/skills/mcpvault-agent/SKILL.md';
+    const skill = await handbook(entry);
 
-    expect(skill.length).toBeLessThanOrEqual(9_000);
-    expect(skill).toContain('version: "2.0"');
-    expect(skill).toContain('metadata:\n  version: "2.0"');
+    expect((await rootFile(entry)).length).toBeLessThanOrEqual(4_000);
+    expect(skill).toContain('version: "2.1"');
+    expect(skill).toContain('metadata:\n  version: "2.1"');
     expect(skill).toContain('exactly its `primaryAction`');
     expect(skill).toContain('Only five MCP tools exist');
     expect(skill).toContain('orient_wiki');
@@ -88,8 +97,8 @@ describe('progressive agent instruction budgets', () => {
   });
 
   test('README is an execution and architecture guide linking canonical contracts, not a duplicate API handbook', async () => {
-    const readme = await rootFile('README.md');
-    expect(readme.length).toBeLessThanOrEqual(16000);
+    const readme = await handbook('README.md');
+    expect((await rootFile('README.md')).length).toBeLessThanOrEqual(4_000);
     for (const path of ['_wiki/SCHEMA.md', 'docs/enterprise-deployment.md', 'docs/creative-workspace.md', 'docs/quest-economy.md', 'docs/roleplay.md', 'docs/skill-evolution.md', 'docs/context-aware-collaboration.md']) {
       expect(readme).toContain(path); expect((await rootFile(path)).length).toBeGreaterThan(0);
     }

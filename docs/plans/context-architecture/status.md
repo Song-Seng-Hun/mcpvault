@@ -19,7 +19,8 @@ Prior releases/launchers retained; P1d runtime PID19844 verified on2026-09-14.
 - Private scopes/binary members and a cross-request snapshot are not covered.
 - P1a: source-chapter outline/read integrated through existing MCP/REST adapters.
 - P1a c3af22e1c and P1b6db3a78a deployed, verified, committed/pushed.
-- P1c6bf665627 pushed; [P1d](16-candidate-delivery.md) deployed/live-verified.
+- P1c6bf665627 and P1d9c7e2d4c pushed; P1d deployed/live-verified.
+- [P1e](18-manual-delivery.md):35manual chapters deployed;full6942passed;direct live reads passed.
 - P2-P5 not started; no Vault migration or model download performed.
 - Production automatic synthesis/librarian activation not granted by this record.
 - [Operating account](15-operating-account.md) recovered; saved-checkpoint pulse passed after restart.
