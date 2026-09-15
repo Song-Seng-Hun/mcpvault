@@ -5,7 +5,7 @@ keywords: [Blazor, EF Core, tombstone, mock, metadata, 완료율]
 use_when: Continuing the all-skill review queue or interpreting wave22 evidence.
 parent: 2026-09-15-reviewed-skill-release.md
 previous: 2026-09-16-reviewed-skill-metadata-wave21.md
-next: 2026-09-15-reviewed-skill-release-passport-next.md
+next: 2026-09-16-reviewed-skill-metadata-wave23.md
 ---
 # Wave22: 12 additional records
 
