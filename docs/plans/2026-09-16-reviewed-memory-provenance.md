@@ -5,7 +5,7 @@ keywords: [memory, provenance, MIT-0, source-hash, import-loss, 원문]
 use_when: Preparing a limited memory-recall candidate or diagnosing truncated imports.
 parent: 2026-09-15-reviewed-skill-release.md
 previous: 2026-09-16-reviewed-skill-metadata-wave10.md
-next: 2026-09-15-reviewed-skill-release-passport-next.md
+next: 2026-09-16-reviewed-memory-recall-trial.md
 ---
 # Memory entry recovered
 
@@ -28,5 +28,5 @@ No Git commit was found; the captured hash pins bytes, not the publisher's futur
 Remote companion files were not byte-compared; whole-release equivalence remains unverified.
 A self-contained read-only candidate can exclude optional references, writes, sync and execution.
 Document reduced functionality; verify any separately included reference before providing it.
-Use the seven previously fixed memory-recall cases; no candidate or model trial ran this turn.
+At this provenance checkpoint no candidate or trial existed; see the next chapter for later trials.
 No original, license notice, host grant, approval registry or live availability changed.
