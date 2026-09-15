@@ -5,7 +5,7 @@ keywords: [planning, code review, debugging, hybrid search, injection, 스킬 �
 use_when: Resuming first-candidate metadata or preparing restricted procedural derivatives.
 parent: 2026-09-15-reviewed-skill-release.md
 previous: 2026-09-16-reviewed-skill-metadata-wave3.md
-next: 2026-09-15-reviewed-skill-release-passport-next.md
+next: 2026-09-16-reviewed-skill-metadata-auditor.md
 ---
 # Metadata wave 4
 
