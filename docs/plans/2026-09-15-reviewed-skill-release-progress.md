@@ -35,7 +35,7 @@ Goal: metadata for all 1,610 plus usable verified releases; first ten are canari
 ## Actual library work
 
 All 1,610 targets now have complete snapshots across distinct preserved scan receipts.
-Twenty-four source-matched drafts; [wave 1](2026-09-15-reviewed-skill-metadata-wave1.md). Finalized and live releases remain zero.
+Twenty-four source-matched drafts now have seven axes; [initial-ten supplement](2026-09-15-reviewed-skill-metadata-initial-ten.md). Finalized/live remain zero.
 See [inventory evidence](2026-09-15-reviewed-skill-release-inventory.md) for receipts and limits.
 
 ## Next work

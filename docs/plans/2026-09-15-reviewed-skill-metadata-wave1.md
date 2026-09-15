@@ -5,7 +5,7 @@ keywords: [skill metadata, missing procedures, potential impact, 메타데이터
 use_when: Resuming metadata work after inactive release deployment a99ae7f29.
 parent: 2026-09-15-reviewed-skill-release.md
 previous: 2026-09-15-reviewed-skill-metadata-next.md
-next: 2026-09-15-reviewed-skill-release-passport-next.md
+next: 2026-09-15-reviewed-skill-metadata-initial-ten.md
 ---
 # Metadata wave 1
 
@@ -40,7 +40,7 @@ All ten corrected descriptors passed current schema and exact source-quote check
 Thirty negative controls rejected forged fingerprints, altered quotes and missing evidence.
 Private evidence hash: `fa1dfb4852ffdd2024720752cd7dcf820889231c7d57d48efa6a300e16702680`.
 Aggregate: 24 distinct source-matched drafts / 1,610 baseline targets; finalized 0, live 0.
-Fourteen of the 24 drafts have all seven impact axes; the earlier ten still need expansion.
-Next: complete those ten fields, then continue the unreviewed inventory and canary trials.
+At this wave's close, 14/24 had seven axes; the [initial-ten supplement](2026-09-15-reviewed-skill-metadata-initial-ten.md) brings that to 24/24.
+Next: continue the unreviewed inventory and canary trials; metadata is not admission.
 The deployed code remains a99ae7f29; no production source/dist or access settings changed.
 Example: a metadata description is searchable audit data, not proof of a usable skill.
