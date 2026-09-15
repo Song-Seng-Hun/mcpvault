@@ -5,7 +5,7 @@ keywords: [systematic debugging, baseline, bounded observation, source tracing, 
 use_when: Preparing the next initial-canary derivative without repeating existing release packages.
 parent: 2026-09-15-reviewed-skill-release.md
 previous: 2026-09-16-reviewed-skill-metadata-wave19.md
-next: 2026-09-15-reviewed-skill-release-passport-next.md
+next: 2026-09-16-reviewed-skill-debugging-trial.md
 ---
 # Debugging canary: establish behavior before authoring
 
