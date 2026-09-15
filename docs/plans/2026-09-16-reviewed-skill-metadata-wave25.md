@@ -5,7 +5,7 @@ keywords: [n8n, HMAC, MCP, wrapper, credential, 비밀키]
 use_when: Repairing these bundles or reviewing cross-skill capability escalation.
 parent: 2026-09-15-reviewed-skill-release.md
 previous: 2026-09-16-reviewed-skill-metadata-wave24.md
-next: 2026-09-15-reviewed-skill-release-passport-next.md
+next: 2026-09-16-reviewed-skill-batch-review.md
 ---
 # Code nodes and MCP extension
 
