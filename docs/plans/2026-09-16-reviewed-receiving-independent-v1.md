@@ -5,7 +5,7 @@ keywords: [receiving-code-review, Luna, partial, behavior, 리뷰 검증]
 use_when: Assessing release evidence for the limited receiving-code-review derivative.
 parent: 2026-09-15-reviewed-skill-release.md
 previous: 2026-09-16-reviewed-skill-metadata-wave7.md
-next: 2026-09-15-reviewed-skill-release-passport-next.md
+next: 2026-09-16-reviewed-receiving-v3-package.md
 ---
 # Receiving-review independent text trial
 
