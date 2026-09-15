@@ -35,13 +35,13 @@ Goal: metadata for all 1,610 plus usable verified releases; first ten are canari
 ## Actual library work
 
 All 1,610 targets now have complete snapshots across distinct preserved scan receipts.
-Twenty-four source-matched drafts now have seven axes; [initial-ten supplement](2026-09-15-reviewed-skill-metadata-initial-ten.md). Finalized/live remain zero.
+34 source descriptors: 24 drafts, 10 metadata-reviewed-with-limitations; [wave 2](2026-09-15-reviewed-skill-metadata-wave2.md). Live usable: zero.
 See [inventory evidence](2026-09-15-reviewed-skill-release-inventory.md) for receipts and limits.
 
 ## Next work
 
 Preserve initial timeout receipts and per-run scanner versions; no atomic NAS claim.
-Build bounded persistent per-target metadata work and inspect fuller-source provenance.
+Private 26-page work index tracks all 1,610 IDs; continue 1,576 pending and fuller-source provenance.
 Reviewed descriptor/cards and bounded canary discovery implemented; full catalog/telemetry pending.
 Private store ACL verified; actual operator TLS login/read remains unverified.
 Two evidence packages remain drafts; third corrected text trial and fourth planning review recorded.

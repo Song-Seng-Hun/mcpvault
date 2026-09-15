@@ -5,7 +5,7 @@ keywords: [skill metadata, potential impact, stale sidecar, SQL filters, 잠재�
 use_when: Continuing all-skill metadata or preparing the first ten limited derivatives.
 parent: 2026-09-15-reviewed-skill-release.md
 previous: 2026-09-15-reviewed-skill-metadata-wave1.md
-next: 2026-09-15-reviewed-skill-release-passport-next.md
+next: 2026-09-15-skill-metadata-completion.md
 ---
 # Initial ten: impact supplements
 
