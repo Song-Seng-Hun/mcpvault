@@ -5,7 +5,7 @@ keywords: [receiving-code-review, rejection, continuation, Luna, Terra, 리뷰 �
 use_when: Selecting a reviewed procedure or assessing its actual test and admission limits.
 parent: 2026-09-15-reviewed-skill-release.md
 previous: 2026-09-16-reviewed-receiving-independent-v1.md
-next: 2026-09-15-reviewed-skill-release-passport-next.md
+next: 2026-09-16-reviewed-skill-metadata-wave8.md
 ---
 # Receiving review v3 candidate
 
