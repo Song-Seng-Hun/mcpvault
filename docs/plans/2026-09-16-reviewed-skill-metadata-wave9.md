@@ -5,7 +5,7 @@ keywords: [memory, recall, qualifier, sync, source-markers, 기억, 오기록]
 use_when: Reviewing agent-memory-recall or preparing a bounded read-only memory procedure.
 parent: 2026-09-15-reviewed-skill-release.md
 previous: 2026-09-16-reviewed-skill-metadata-wave8.md
-next: 2026-09-15-reviewed-skill-release-passport-next.md
+next: 2026-09-16-reviewed-skill-metadata-wave10.md
 ---
 # Metadata wave 9
 
