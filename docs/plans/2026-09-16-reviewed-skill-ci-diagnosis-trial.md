@@ -5,7 +5,7 @@ keywords: [CI diagnosis, behavior trial, ownership, negative control, 정적-오
 use_when: Reviewing the held diagnosis-only candidate before any operational admission.
 parent: 2026-09-15-reviewed-skill-release.md
 previous: 2026-09-16-reviewed-skill-metadata-wave17.md
-next: 2026-09-15-reviewed-skill-release-passport-next.md
+next: 2026-09-16-reviewed-skill-metadata-wave18.md
 ---
 # Diagnosis candidate: useful progress, incomplete behavior
 
