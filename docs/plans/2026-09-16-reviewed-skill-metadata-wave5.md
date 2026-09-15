@@ -5,7 +5,7 @@ keywords: [metadata, migration, cleanup, critique, Android, 스킬 검토]
 use_when: Preparing limited derivatives or resuming the remaining metadata queue.
 parent: 2026-09-15-reviewed-skill-release.md
 previous: 2026-09-16-reviewed-skill-metadata-auditor.md
-next: 2026-09-15-reviewed-skill-release-passport-next.md
+next: 2026-09-16-reviewed-skill-metadata-wave6.md
 ---
 # Metadata wave 5
 
