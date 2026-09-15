@@ -5,7 +5,7 @@ keywords: [metadata, fixture, license, MCP, delegation, appeal, 검사용-예제
 use_when: Checking source completeness, potential effects or the private review queue.
 parent: 2026-09-15-reviewed-skill-release.md
 previous: 2026-09-16-reviewed-skill-metadata-wave11.md
-next: 2026-09-15-reviewed-skill-release-passport-next.md
+next: 2026-09-16-reviewed-skill-metadata-wave13.md
 ---
 # Source review and fixture separation
 
