@@ -11,6 +11,8 @@ export interface McpHttpOptions {
     maxConnections?: number;
     /** Require a CA-verified client certificate for every MCP request. */
     requireClientCertificate?: boolean;
+    /** Host-only supplementary read channel; absent preserves normal MCP behavior. */
+    requestProfile?: 'reviewed-skill-read';
     tls?: {
         key: string | Buffer;
         cert: string | Buffer;

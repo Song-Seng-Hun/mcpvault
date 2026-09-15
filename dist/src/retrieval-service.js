@@ -8,6 +8,7 @@ import { posix } from 'node:path';
 import { positiveSearchTerms, memoryCandidateLimit } from './search.js';
 import { isFictionDomain } from './fiction-domain.js';
 import { constrainedQuery, plainQueryExpansion, semanticQueryState } from './retrieval/query-policy.js';
+import { emptyReviewedProcedureDiscovery } from './skill-release-discovery.js';
 export { constrainedQuery, plainQueryExpansion } from './retrieval/query-policy.js';
 export const RETRIEVAL_NOTE_BYTES = 8 * 1024 * 1024;
 export function bodyStartLine(note) {
@@ -27,6 +28,20 @@ export class RetrievalService {
     semantic;
     access;
     fs;
+    reviewedProcedures;
+    attachReviewedProcedures(service) { this.reviewedProcedures = service; }
+    /** Explicit procedural profile. Never turn a reviewed card into a Markdown
+     * evidence hit, and never bypass the original quarantine in note searches. */
+    async searchProcedures(params, capture) {
+        const max = normalizeSearchMaxChars(params.maxChars);
+        // These note-specific filters cannot yet be evaluated on approved cards.
+        // Preserve them by declining recommendations, not by relaxing their meaning.
+        if (max < 1024 || params.pathPrefix !== undefined || params.excludePaths !== undefined || params.caseSensitive === true
+            || params.fictionDomain !== undefined || params.canAccessPath !== undefined || params.searchContent === false
+            || params.searchFrontmatter === true || params.expandAuthority === true || !this.reviewedProcedures)
+            return emptyReviewedProcedureDiscovery();
+        return this.reviewedProcedures.discover({ query: params.query, maxChars: max, limit: Math.min(3, normalizeSearchLimit(params.limit)), accessToken: params.accessToken, principal: params.principal }, capture);
+    }
     skillEvolution;
     attachSkillEvolution(service) { this.skillEvolution = service; }
     async projectSkillDiscovery(hits, principal, admitted) {

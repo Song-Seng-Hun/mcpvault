@@ -6,6 +6,8 @@ import type { ScopePrincipal } from './scope-auth.js';
 import type { ScopeAccessPolicy } from './scope-access.js';
 import type { FileSystemService } from './filesystem.js';
 import { type FictionDomainSelection } from './fiction-domain.js';
+import { type ReviewedProcedureDiscovery } from './skill-release-discovery.js';
+import type { ReviewedSkillDeliveryFence } from './skill-release-reader.js';
 export { constrainedQuery, plainQueryExpansion } from './retrieval/query-policy.js';
 export declare const RETRIEVAL_NOTE_BYTES: number;
 export type RetrievalMode = 'legacy' | 'evidence';
@@ -54,6 +56,13 @@ export declare class RetrievalService {
     private readonly semantic;
     private readonly access;
     private readonly fs;
+    private reviewedProcedures?;
+    attachReviewedProcedures(service: NonNullable<RetrievalService['reviewedProcedures']>): void;
+    /** Explicit procedural profile. Never turn a reviewed card into a Markdown
+     * evidence hit, and never bypass the original quarantine in note searches. */
+    searchProcedures(params: RetrievalParams & {
+        accessToken?: string;
+    }, capture?: (f: ReviewedSkillDeliveryFence) => void): Promise<ReviewedProcedureDiscovery>;
     private skillEvolution?;
     attachSkillEvolution(service: NonNullable<RetrievalService['skillEvolution']>): void;
     projectSkillDiscovery(hits: RetrievalHit[], principal?: ScopePrincipal, admitted?: (path: string) => boolean): Promise<RetrievalHit[]>;

@@ -9,7 +9,7 @@
     "src/knowledge-synthesis-model.ts": "d350499a25ceed7241b1442cbc99830d7929ea2b16af84f474264a8c09fb3002",
     "src/organization.ts": "e1fe0263f27656390f6269c4473abe71e48276e63ceebf7e180f2e52b80a65b2",
     "src/endpoint-registry.ts": "21053ed193df50f6f757d7f860c66405e5a17c8a395d8778d79c9be7e38bc7ee",
-    "src/createServer.ts": "08f95176ca6be437d799df48ca9b8cca0103be32d6b81832c5c173cc2937908c",
+    "src/createServer.ts": "4b0200163e4c077b252f807e625971cea7d559d1112ca868a3621d8a5451dc2f",
     "src/filesystem.ts": "5fd95ce1e238b8cc0bb15f7ef166e5f7d9e40fe678bca56b73a315063cfeffff",
     "src/graph-assertion-packet.ts": "b85f0a098a3648877e8ee2b2974c3b9d454acea873f98ddf03c03ca3d6b2b2e3",
     "src/llm-wiki.test.ts": "fa21d36b3ace98300c980599f32fab2137fcb98775d91465a356abbc169abb96",
@@ -19,9 +19,9 @@
     "src/architecture-transitions.test.ts": "8f06c4fb160b03b0625619b42b224a71aab11849ce80f43ae39fdf43428f7846",
     "package-lock.json": "8384aaa0949ed6c1c7f39008ac34b83e3179ff158324a6125711221b2b065b79",
     "docs/architecture/uml/domain.puml": "226082f81c24f739bef5057233b9190ac44a8966bab5eb6f973b7db709f7c7e5",
-    "docs/architecture/uml/retrieval.puml": "31f92656218feca1036a714c0b84c54f8f31f156be761b64a2722dcf048f3fd0",
+    "docs/architecture/uml/retrieval.puml": "81e5535b59425433e505c861ef199d20db979b197645e5a762303ed0a97fc965",
     "docs/architecture/uml/states.puml": "eec9b789904aa2b9ca1e09d3f65d6f16f7f43c0f62980de36f9638c2a046f6bb",
-    "docs/architecture/uml/deployment.puml": "31a572da41e47653c836635d47b4a8a0489ff1fa06ebe4817c84b98a426b735a"
+    "docs/architecture/uml/deployment.puml": "96f9994d2a6863b0728bbec7d97c69e09c59d06930e1088355cc2092bde336bb"
   },
   "testLinks": [
     {

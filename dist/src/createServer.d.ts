@@ -13,6 +13,8 @@ import { BenchmarkService, type BenchmarkOptions } from './benchmark-service.js'
 import { type SkillEvolutionHost } from './skill-evolution.js';
 import type { GuidanceDefinition } from './guidance-catalog.js';
 import type { RoleplayStore } from './roleplay-store.js';
+import { type ReviewedSkillInspector } from './skill-release-service.js';
+import type { ReviewedSkillHost } from './skill-release-reader.js';
 import { EndpointRegistry } from "./endpoint-registry.js";
 import { type EconomyLedger } from './economy-ledger.js';
 import type { EconomyPolicy } from './economy-model.js';
@@ -44,6 +46,11 @@ export interface CreateServerOptions extends DocumentAuthorityOptions {
     };
     /** Explicit trusted host registration. Never loaded from a request or Vault note. */
     skillEvolution?: SkillEvolutionHost;
+    /** Private host admission only. Never request/Vault metadata; quarantine required. */
+    reviewedSkills?: {
+        host: ReviewedSkillHost;
+        source: ReviewedSkillInspector;
+    };
     /** Host-private notice registration/delegation file, reloaded before operations. */
     noticeConfigPath?: string;
     guidanceDefinitions?: readonly GuidanceDefinition[];

@@ -7,6 +7,7 @@ import { pipeline } from 'node:stream/promises';
 import { createMcpHandler } from '@modelcontextprotocol/server';
 import { getServerRuntime } from './createServer.js';
 import { withEnterpriseRequestContext } from './enterprise-request-context.js';
+import { allowedReviewedSkillRequest } from './skill-release-http-policy.js';
 function headerValues(request) {
     const headers = new Headers();
     for (const [name, value] of Object.entries(request.headers)) {
@@ -162,6 +163,9 @@ export async function startMcpHttpApi(server, options = {}) {
     if (options.requireClientCertificate && (!options.tls || options.tls.ca === undefined)) {
         throw guidanceError(new Error('mTLS required mode requires TLS with a CA'), 'guid-85a675d6f739522a');
     }
+    if (options.requestProfile !== undefined && (options.requestProfile !== 'reviewed-skill-read' || !isLoopbackHost(host) || !options.requireClientCertificate)) {
+        throw new Error('Reviewed skill HTTP profile requires loopback and mandatory mTLS');
+    }
     const path = options.path || '/mcp';
     const maxBodyBytes = Math.min(Math.max(Math.trunc(options.maxBodyBytes ?? 1_048_576), 1_024), MAX_HTTP_BODY_BYTES);
     const allowedOrigins = options.allowedOrigins || [];
@@ -248,6 +252,18 @@ export async function startMcpHttpApi(server, options = {}) {
                 return;
             }
             const rawBody = request.method === 'GET' || request.method === 'HEAD' ? '' : await readBody(request, maxBodyBytes);
+            if (options.requestProfile === 'reviewed-skill-read') {
+                let candidate;
+                try {
+                    candidate = JSON.parse(rawBody);
+                }
+                catch { /* Reject without echoing the payload. */ }
+                if (!allowedReviewedSkillRequest(request.method, candidate)) {
+                    response.statusCode = 403;
+                    response.end('Request unavailable on reviewed-skill read channel');
+                    return;
+                }
+            }
             let body = rawBody;
             const bearerHeader = request.headers.authorization;
             const bearer = typeof bearerHeader === 'string' && /^Bearer\s+/i.test(bearerHeader)

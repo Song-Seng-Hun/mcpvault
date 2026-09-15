@@ -27,6 +27,9 @@ export function getSkillEvolutionTools(): Tool[] {
       view:{type:'string',enum:['procedure','metadata'],default:'procedure'},section:{type:'string',enum:[...SKILL_METADATA_SECTIONS]},
       axis:{type:'string',enum:[...IMPACT_AXES],description:'Optional single axis; requires view=metadata and section=impact.'},
       expectedRevision:guard.properties.revision,expectedSourceRevision:guard.properties.revision,expectedBundleRevision:guard.properties.revision,
+      resourceId: {type:'string',pattern:'^[a-z0-9][a-z0-9-]{0,99}$',description:'Registered approved resource ID; never a path.'},
+      expectedRelease:guard.properties.revision,
+      offset:{type:'integer',minimum:0,description:'Approved resource continuation offset.'},
     }, []),
     tool('record_skill_experience', 'Record an actually applied current or retained verified version of this Skill with explicit shareable success/failure/unknown outcome and exact visible evidence. Historical use does not qualify as current-basis candidate input. Do not copy private task logs. Requires host opt-in and an authenticated writer; retry the identical requestId after uncertain writes.', {
       ...write, usedVersion: guard, applied: { type: 'boolean', const: true }, shareable: { type: 'boolean', const: true },

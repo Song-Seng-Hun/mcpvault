@@ -10,6 +10,7 @@ export interface ParsedCliArgs {
     economyConfig?: string;
     roleplayConfig?: string;
     skillEvolutionConfig?: string;
+    reviewedSkillsConfig?: string;
     explanationConfig?: string;
     benchmarkConfig?: string;
     featuresConfig?: string;

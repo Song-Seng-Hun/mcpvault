@@ -1,6 +1,12 @@
 import { describe, expect, test } from "vitest";
 import { parseCliArgs } from "./cli.js";
 
+test('reviewed skill host configuration is explicit and never removes quarantine implicitly',()=>{
+  expect(parseCliArgs(['Vault','--reviewed-skills-config=private.json'])).toEqual({vaultPathArg:'Vault',readOnly:false,reviewedSkillsConfig:'private.json'});
+  expect(parseCliArgs(['--reviewed-skills-config','private.json','Vault']).vaultPathArg).toBe('Vault');
+  for(const args of [['--reviewed-skills-config'],['--reviewed-skills-config='],['--reviewed-skills-config','--read-only'],['--reviewed-skills-config=a','--reviewed-skills-config=b']])expect(()=>parseCliArgs(args)).toThrow(/reviewed-skills-config/);
+});
+
 test('feature selection config is an explicit single host file, independent of provider flags', () => {
   expect(parseCliArgs(['Vault', '--features-config=features.json'])).toEqual({ vaultPathArg: 'Vault', readOnly: false, featuresConfig: 'features.json' });
   expect(parseCliArgs(['--features-config', 'features.json', 'Vault']).vaultPathArg).toBe('Vault');

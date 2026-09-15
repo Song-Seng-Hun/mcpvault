@@ -37,4 +37,9 @@ note over Service,FS
   Metadata/body budgets do not bound inventory or cold-index I/O.
   No NAS-wide atomic snapshot is claimed.
 end note
+note over Service
+  Opt-in reviewed procedures use a distinct card packet, not evidence paths.
+  Private bounded registry -> same source/owner/release reader -> final fence.
+  Original skill quarantine stays closed; no inventory completeness claim.
+end note
 @enduml

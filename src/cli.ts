@@ -11,6 +11,7 @@ export interface ParsedCliArgs {
   economyConfig?: string;
   roleplayConfig?: string;
   skillEvolutionConfig?: string;
+  reviewedSkillsConfig?: string;
   explanationConfig?: string;
   benchmarkConfig?: string;
   featuresConfig?: string;
@@ -39,6 +40,7 @@ export function parseCliArgs(args: string[]): ParsedCliArgs {
   let economyConfig:string|undefined;
   let roleplayConfig: string | undefined;
   let skillEvolutionConfig: string | undefined;
+  let reviewedSkillsConfig: string | undefined;
   let explanationConfig: string | undefined;
   let benchmarkConfig: string | undefined;
   let featuresConfig: string | undefined;
@@ -48,6 +50,11 @@ export function parseCliArgs(args: string[]): ParsedCliArgs {
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index]!;
+    if (arg === '--reviewed-skills-config' || arg.startsWith('--reviewed-skills-config=')) {
+      const value = arg === '--reviewed-skills-config' ? args[++index] : arg.slice('--reviewed-skills-config='.length);
+      if (!value || !value.trim() || value.startsWith('--') || reviewedSkillsConfig !== undefined) throw new Error('--reviewed-skills-config requires one private host configuration file');
+      reviewedSkillsConfig = value; continue;
+    }
     if (arg === '--quarantine-skills' || arg.startsWith('--quarantine-skills=')) {
       if (arg !== '--quarantine-skills' || quarantineSkills) throw new Error('--quarantine-skills accepts one flag without a value');
       quarantineSkills = true; continue;
@@ -220,6 +227,7 @@ export function parseCliArgs(args: string[]): ParsedCliArgs {
     ...(economyConfig!==undefined && {economyConfig}),
     ...(roleplayConfig !== undefined && { roleplayConfig }),
     ...(skillEvolutionConfig !== undefined && { skillEvolutionConfig }),
+    ...(reviewedSkillsConfig !== undefined && { reviewedSkillsConfig }),
     ...(explanationConfig !== undefined && { explanationConfig }),
     ...(benchmarkConfig !== undefined && { benchmarkConfig }),
     ...(featuresConfig !== undefined && { featuresConfig }),

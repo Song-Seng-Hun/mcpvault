@@ -102,6 +102,8 @@ import type { RoleplayStore } from './roleplay-store.js';
 import { roleplayRevision } from './roleplay-model.js';
 import { validateRoleplayQuestArtifact } from './roleplay-quest.js';
 import { WorkService } from './work-service.js';
+import { ReviewedSkillService, type ReviewedSkillInspector } from './skill-release-service.js';
+import type { ReviewedSkillHost } from './skill-release-reader.js';
 import { CommunityFeaturesService } from "./community-features.js";
 import { COMMUNITY_FEATURE_MUTATING_TOOLS, getCommunityFeatureTools } from "./community-feature-tools.js";
 import { ObsidianSearchService } from "./obsidian-search.js";
@@ -283,6 +285,8 @@ export interface CreateServerOptions extends DocumentAuthorityOptions {
   };
   /** Explicit trusted host registration. Never loaded from a request or Vault note. */
   skillEvolution?: SkillEvolutionHost;
+  /** Private host admission only. Never request/Vault metadata; quarantine required. */
+  reviewedSkills?: { host: ReviewedSkillHost; source: ReviewedSkillInspector };
   /** Host-private notice registration/delegation file, reloaded before operations. */
   noticeConfigPath?: string;
   guidanceDefinitions?: readonly GuidanceDefinition[];
@@ -571,6 +575,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
     commandCenterId,
   } = options;
   if (options.quarantineSkills !== undefined && typeof options.quarantineSkills !== 'boolean') throw new Error('Invalid host skill quarantine policy');
+  if (options.reviewedSkills && options.quarantineSkills !== true) throw new Error('Reviewed skills require quarantine');
   const pathFilter = options.quarantineSkills ? new PathFilter({ quarantineSkills: true }, configuredPathFilter) : configuredPathFilter;
 
   const resolvedVaultPath = resolve(vaultPath);
@@ -819,6 +824,14 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
     },
   }) : undefined;
   if (skillEvolution) retrieval.attachSkillEvolution(skillEvolution);
+  const reviewedSkills = hasFeature('skill-evolution') && options.reviewedSkills
+    ? new ReviewedSkillService(options.reviewedSkills.host, options.reviewedSkills.source, scopeAccess, scopeAuth, ownerActivityRuntime, {
+      refreshAccess: refreshDocumentPolicy,
+      assertActor: async principal => {
+        if (await moderation.isBanned(principal.accountId, principal.userId)) throw Error('Reviewed skill unavailable');
+      },
+    }) : undefined;
+  if (reviewedSkills) retrieval.attachReviewedProcedures(reviewedSkills);
   ideation?.attachOutputAdapter({
     assertReadable:async(principal,path,container)=>{
       try {
@@ -997,6 +1010,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
             properties: {
               query: { type: "string", description: guidanceText('guid-469a14a455a30f23', "Search query text") },
               excerptMode: { type: 'string', enum: ['compact', 'context'], description: guidanceText('guid-edfcd36fb92461c0', 'Optional context returns source paragraphs/list items/table rows (up to 350 characters), heading context and a revision-guarded read action. Default compact output is unchanged.') },
+              resultKind: { type: 'string', enum: ['notes', 'procedures'], description: 'Default notes preserves document results. Opt-in procedures returns a separate bounded reviewed-skill card packet. Requires current authenticated host consent; unsupported strict/scoped filters yield no procedure recommendations. Example: query="review", resultKind="procedures".' },
               limit: { type: "number", description: guidanceText('guid-49936a38a5591a50', "Maximum number of documents (default: 5, max: 20)"), default: 5 },
               maxChars: { type: "integer", minimum: 512, maximum: 12000, description: guidanceText('guid-bc0102593fde3b0f', "Maximum compact JSON characters returned (default: 4000)"), default: 4000 },
               searchContent: { type: "boolean", description: guidanceText('guid-ac658b7444849ab8', "Search in note content (default: true)"), default: true },
@@ -3012,7 +3026,15 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
             configuration: rawArgs.configuration, mappings: rawArgs.mappings }), false);
         case 'manage_work_project':
         case 'read_work_project': return jsonResult(await requiredService(work).project({ ...trimmedArgs, principal }), false);
-        case 'resolve_skill': return jsonResult(await requiredService(skillEvolution).resolve({ ...trimmedArgs, principal }), false);
+        case 'resolve_skill': {
+          if (options.quarantineSkills) {
+            if (!reviewedSkills) throw Error('Reviewed skill unavailable');
+            return jsonResult(await reviewedSkills.resolve({ ...trimmedArgs, principal }, fence => {
+              finalOwnerRefresh = fence.revalidate; finalOwnerValidator = fence.assertFresh;
+            }), false);
+          }
+          return jsonResult(await requiredService(skillEvolution).resolve({ ...trimmedArgs, principal }), false);
+        }
         case 'record_skill_experience': return jsonResult(await requiredService(skillEvolution).experience({ ...trimmedArgs, principal }), false);
         case 'manage_skill_candidate':
         case 'read_skill_candidate': return jsonResult(await requiredService(skillEvolution).candidate({ ...trimmedArgs, principal }), false);
@@ -3279,6 +3301,12 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         }
 
             case "search_notes": {
+          if (trimmedArgs.resultKind !== undefined && !['notes', 'procedures'].includes(trimmedArgs.resultKind)) throw Error('Invalid search result kind');
+          if (trimmedArgs.resultKind === 'procedures') {
+            return jsonResult(await retrieval.searchProcedures({ ...trimmedArgs, principal }, fence => {
+              finalOwnerRefresh = fence.revalidate; finalOwnerValidator = fence.assertFresh;
+            }), false);
+          }
           const results = await retrieval.searchNotes({ ...trimmedArgs, principal });
           const indent = trimmedArgs.prettyPrint ? 2 : undefined;
           return {

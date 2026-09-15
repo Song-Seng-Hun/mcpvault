@@ -15,6 +15,8 @@ import { posix } from 'node:path';
 import { positiveSearchTerms, memoryCandidateLimit } from './search.js';
 import { isFictionDomain, type FictionDomainSelection } from './fiction-domain.js';
 import { constrainedQuery, plainQueryExpansion, semanticQueryState } from './retrieval/query-policy.js';
+import {emptyReviewedProcedureDiscovery,type ReviewedProcedureDiscovery} from './skill-release-discovery.js';
+import type {ReviewedSkillDeliveryFence} from './skill-release-reader.js';
 export { constrainedQuery, plainQueryExpansion } from './retrieval/query-policy.js';
 
 export const RETRIEVAL_NOTE_BYTES = 8 * 1024 * 1024;
@@ -36,6 +38,19 @@ export function passageAction(path: string, revision: string, startLine: number,
 /** Shared adapter-independent retrieval. Indexes discover; current Markdown
  * supplies excerpt content. No persistent question/answer cache or model. */
 export class RetrievalService {
+  private reviewedProcedures?:{discover(p:Record<string,any>,capture?:(f:ReviewedSkillDeliveryFence)=>void):Promise<ReviewedProcedureDiscovery>};
+  attachReviewedProcedures(service:NonNullable<RetrievalService['reviewedProcedures']>):void{this.reviewedProcedures=service;}
+  /** Explicit procedural profile. Never turn a reviewed card into a Markdown
+   * evidence hit, and never bypass the original quarantine in note searches. */
+  async searchProcedures(params:RetrievalParams&{accessToken?:string},capture?:(f:ReviewedSkillDeliveryFence)=>void):Promise<ReviewedProcedureDiscovery>{
+    const max=normalizeSearchMaxChars(params.maxChars);
+    // These note-specific filters cannot yet be evaluated on approved cards.
+    // Preserve them by declining recommendations, not by relaxing their meaning.
+    if(max<1024||params.pathPrefix!==undefined||params.excludePaths!==undefined||params.caseSensitive===true
+      ||params.fictionDomain!==undefined||params.canAccessPath!==undefined||params.searchContent===false
+      ||params.searchFrontmatter===true||params.expandAuthority===true||!this.reviewedProcedures)return emptyReviewedProcedureDiscovery();
+    return this.reviewedProcedures.discover({query:params.query,maxChars:max,limit:Math.min(3,normalizeSearchLimit(params.limit)),accessToken:params.accessToken,principal:params.principal},capture);
+  }
   private skillEvolution?: {
     discoveryAllowed(path: string): boolean;
     projectDiscovery(hits: RetrievalHit[], principal?: ScopePrincipal, admitted?: (path: string) => boolean): Promise<RetrievalHit[]>;

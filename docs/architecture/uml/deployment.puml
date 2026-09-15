@@ -10,12 +10,21 @@ node "Approved host" {
   component "Opt-in host-only Graphify" as Graphify
   database "Explicit source allowlist + private derived cache" as CodeCache
   database "Verified private work receipts / checkpoints" as Journal
+  component "Reviewed skill reader" as Reviewed
+  component "Optional loopback mTLS read gate" as ReviewedGate
+  database "Private hash copies + host admissions" as Releases
   Client --> MCP
+  Client --> ReviewedGate : existing account token
+  ReviewedGate --> MCP : protocol + canonical skill.resolve only
   MCP --> Registry
   Registry --> Services
   Services --> Boundary
   Services --> Cache : discovery only
   Services --> Journal : explicit separate host grant only
+  Registry --> Reviewed : current account + owner read consent + verified mTLS
+  Reviewed --> Releases : final hash + registry fence; no source fallback
+  Reviewed --> Boundary : original ACL + bounded source fingerprint checks
+  Reviewed ..> Client : limited procedure/card; no bundle execution
   Graphify --> CodeCache : pinned local AST; no model provider
   Graphify ..> Client : structural candidates, not test evidence
 }

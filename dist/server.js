@@ -14,6 +14,8 @@ import { EconomyLedger } from './src/economy-ledger.js';
 import { RoleplayStore } from './src/roleplay-store.js';
 import { loadRoleplayHostConfig } from './src/roleplay-host.js';
 import { loadSkillEvolutionHostConfig } from './src/skill-evolution-host.js';
+import { loadReviewedSkillsHost } from './src/skill-release-host.js';
+import { canonicalRoleplayPath } from './src/roleplay-storage-host.js';
 import { loadExplanationHostConfig } from './src/explanation-host.js';
 import { loadBenchmarkHostConfig } from './src/benchmark-host.js';
 import { acquireBenchmarkWriter } from './src/benchmark-runtime.js';
@@ -71,6 +73,10 @@ Options:
   --skill-evolution-config FILE
                   Opt-in experience and candidate recording with a private host key.
                   No automatic evaluation without host-registered skill profiles.
+  --reviewed-skills-config FILE
+                  Private reviewed-copy reader with a separate loopback mTLS listener.
+                  Requires --quarantine-skills and explicit skill-evolution feature.
+                  Does not admit skills, execute bundles or grant write permissions.
   --explanation-config FILE
                   Explicit source collection and host-verified reviewer profiles.
                   Pull-only Gemini explanation preference; never calls a model.
@@ -109,11 +115,14 @@ Examples:
 }
 // Remove runtime options before joining trailing args, preserving support for
 // unquoted vault paths with spaces. When omitted, use the current directory.
-const { vaultPathArg, readOnly, quarantineSkills, restPort, mcpHttpPort, mcpHttpHost, mcpHttpTlsCert, mcpHttpTlsKey, stdio, economyConfig, roleplayConfig, skillEvolutionConfig, explanationConfig, benchmarkConfig, featuresConfig, ownerActivityConfig, maintenanceConfig, compilationConfig } = parseCliArgs(cliArgs);
+const { vaultPathArg, readOnly, quarantineSkills, restPort, mcpHttpPort, mcpHttpHost, mcpHttpTlsCert, mcpHttpTlsKey, stdio, economyConfig, roleplayConfig, skillEvolutionConfig, reviewedSkillsConfig, explanationConfig, benchmarkConfig, featuresConfig, ownerActivityConfig, maintenanceConfig, compilationConfig } = parseCliArgs(cliArgs);
 const vaultPath = resolve(vaultPathArg || process.cwd());
 const featurePath = featuresConfig ?? process.env.MCPVAULT_FEATURE_CONFIG;
 const ownerConsentPath = ownerActivityConfig ?? process.env.MCPVAULT_OWNER_ACTIVITY_CONFIG;
 const features = await loadHostFeatureConfig(featurePath ? resolve(featurePath) : undefined, vaultPath);
+if (reviewedSkillsConfig && (!quarantineSkills || !features.selected.includes('skill-evolution'))) {
+    throw new Error('Reviewed skills require explicit quarantine and skill-evolution feature selection');
+}
 if (mcpHttpPort === undefined && (mcpHttpHost || mcpHttpTlsCert || mcpHttpTlsKey)) {
     throw new Error('--mcp-http-host, --mcp-http-cert, and --mcp-http-key require --mcp-http');
 }
@@ -138,7 +147,14 @@ if (hostEconomy?.policy.enabled) {
 let mcpServer;
 let roleplay;
 let benchmarkWriter;
+let reviewedHost;
 try {
+    if (reviewedSkillsConfig) {
+        reviewedHost = await loadReviewedSkillsHost(resolve(reviewedSkillsConfig), vaultPath);
+        if (ownerConsentPath && await canonicalRoleplayPath(resolve(ownerConsentPath), true, true) !== reviewedHost.ownerPolicyPath) {
+            throw new Error('Reviewed skills refuse conflicting owner consent configurations');
+        }
+    }
     if (hostBenchmark?.enabled && !readOnly)
         benchmarkWriter = await acquireBenchmarkWriter(hostBenchmark);
     const maintenance = maintenanceConfig && !readOnly ? await loadMaintenanceHostConfig(resolve(maintenanceConfig), vaultPath) : undefined;
@@ -148,13 +164,14 @@ try {
     if (features.selected.includes('roleplay') && roleplayConfig)
         roleplay = await RoleplayStore.open(await loadRoleplayHostConfig(resolve(roleplayConfig), vaultPath));
     mcpServer = createServer(vaultPath, { version: VERSION, readOnly, ...(quarantineSkills && { quarantineSkills }), features, ...(economy && { economy }), ...(roleplay && { roleplay }), ...(skillEvolution && { skillEvolution }),
+        ...(reviewedHost && { reviewedSkills: reviewedHost.reviewedSkills }),
         ...(maintenance && { maintenance }),
         // A configuration file is not execution attestation. CLI admission stays
         // waiting without a real host verifier and validated application adapter.
         ...(compilationHost && { compilation: { host: compilationHost } }),
         // A legacy bridge cannot verify the execution behind a client. A policy
         // file alone must not turn labels or localhost into runtime attestation.
-        ...(ownerConsentPath && { ownerActivity: { ...await loadOwnerActivityHostConfig(resolve(ownerConsentPath), vaultPath), execution: () => undefined } }),
+        ...(reviewedHost ? { ownerActivity: reviewedHost.ownerActivity } : ownerConsentPath ? { ownerActivity: { ...await loadOwnerActivityHostConfig(resolve(ownerConsentPath), vaultPath), execution: () => undefined } } : {}),
         ...(hostBenchmark?.enabled && { benchmarks: {
                 enabled: true, definitions: hostBenchmark.definitions,
                 accountProfiles: async () => { await benchmarkWriter?.assertHeld(); return hostBenchmark.accountProfiles(); },
@@ -165,6 +182,7 @@ try {
         ...(explanations?.enabled && { explanations: { sources: explanations.sources }, workCollaboration: { executionProfiles: explanations.executionProfiles } }) });
 }
 catch (error) {
+    reviewedHost?.close();
     try {
         await roleplay?.close();
     }
@@ -179,15 +197,22 @@ catch (error) {
     throw error;
 }
 const lifecycle = createServerLifecycle(mcpServer);
+if (reviewedHost)
+    lifecycle.add(reviewedHost);
 if (benchmarkWriter)
     lifecycle.add(benchmarkWriter);
 if (economy)
     lifecycle.add(economy.ledger);
 if (roleplay)
     lifecycle.add(roleplay);
-const ownsNetwork = mcpHttpPort !== undefined || restPort !== undefined;
+const ownsNetwork = mcpHttpPort !== undefined || restPort !== undefined || reviewedHost !== undefined;
 let isShuttingDown = false;
 try {
+    if (reviewedHost) {
+        const handle = await startMcpHttpApi(mcpServer, reviewedHost.listener);
+        lifecycle.add(handle);
+        console.error(`MCPVault reviewed-skill mTLS listener on https://${handle.host}:${handle.port}${handle.path}`);
+    }
     // Each protocol owns only its wrapper. The CLI alone owns shared services,
     // including when stdio never receives an opening handshake.
     if (stdio !== false) {
