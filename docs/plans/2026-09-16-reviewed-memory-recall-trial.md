@@ -5,7 +5,7 @@ keywords: [memory, recall, partial, citations, read-only, 기억-조회]
 use_when: Reviewing memory-recall candidate readiness; not granting live access.
 parent: 2026-09-15-reviewed-skill-release.md
 previous: 2026-09-16-reviewed-memory-provenance.md
-next: 2026-09-15-reviewed-skill-release-passport-next.md
+next: 2026-09-16-reviewed-skill-metadata-wave11.md
 ---
 # Read-only memory candidate
 
