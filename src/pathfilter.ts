@@ -1,5 +1,6 @@
 import { guidanceError } from './guidance-runtime.js';
 import type { PathFilterConfig } from "./types.js";
+import { posix } from 'node:path';
 
 export class PathFilter {
   // Restricted directory/file names denied at ANY depth, not just the vault
@@ -24,8 +25,11 @@ export class PathFilter {
 
   private readonly ignoredMatchers: RegExp[];
   private readonly allowedExtensions: string[];
+  private readonly quarantineSkills: boolean;
 
-  constructor(config?: Partial<PathFilterConfig>) {
+  constructor(config?: Partial<PathFilterConfig>, private readonly parent?: PathFilter) {
+    if (config?.quarantineSkills !== undefined && typeof config.quarantineSkills !== 'boolean') throw new Error('Invalid host skill quarantine policy');
+    this.quarantineSkills = config?.quarantineSkills === true;
     const ignoredPatterns = [
       '.obsidian',
       '.obsidian/**',
@@ -102,6 +106,7 @@ export class PathFilter {
     if (this.isIgnoredPath(normalizedPath)) {
       return false;
     }
+    if (this.parent) return this.parent.isAllowed(path);
 
     // For files, check extension if allowedExtensions is configured
     if (this.allowedExtensions.length > 0 && this.isFile(this.canonicalizeForMatch(normalizedPath))) {
@@ -130,7 +135,7 @@ export class PathFilter {
     }
 
     // Listing includes non-note files, but still blocks restricted system paths
-    return !this.isIgnoredPath(normalizedPath);
+    return !this.isIgnoredPath(normalizedPath) && (!this.parent || this.parent.isAllowedForListing(path));
   }
 
   /**
@@ -154,6 +159,12 @@ export class PathFilter {
     // (".Git/config", ".git./config", ".git /config") cannot bypass the deny-list
     // on case-insensitive / Windows filesystems.
     const canonicalPath = this.canonicalizeForMatch(normalizedPath);
+    // Resolve dot segments before Windows-name folding; folding '..' first
+    // would erase traversal and miss an equivalent skill-library path.
+    if (this.quarantineSkills) {
+      const skillPath = this.canonicalizeForMatch(posix.normalize(normalizedPath));
+      if (/^community\/skills(?:\/|$)/i.test(skillPath)) return true;
+    }
 
     // Deny hidden paths and restricted directories/files at any depth. Dotfiles
     // are outside the public vault-note surface even when their suffix looks

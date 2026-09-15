@@ -64,6 +64,9 @@ Options:
   --help, -h      Show this help message
   --read-only     Expose read tools only and reject all vault mutations
                   May be passed alone, with true/false, or as --read-only=true
+  --quarantine-skills
+                  Block Community/Skills reads, discovery and mutations in this
+                  process. Preserves files; no static audit grants an exception.
   --http[=PORT]   Also expose the optional localhost REST adapter (default 8787)
   --economy-config FILE
                   Optional host-private approved economy policy, default OFF.
@@ -113,7 +116,7 @@ Examples:
 
 // Remove runtime options before joining trailing args, preserving support for
 // unquoted vault paths with spaces. When omitted, use the current directory.
-const { vaultPathArg, readOnly, restPort, mcpHttpPort, mcpHttpHost, mcpHttpTlsCert, mcpHttpTlsKey, stdio, economyConfig, roleplayConfig, skillEvolutionConfig, explanationConfig, benchmarkConfig, featuresConfig, ownerActivityConfig, maintenanceConfig, compilationConfig } = parseCliArgs(cliArgs);
+const { vaultPathArg, readOnly, quarantineSkills, restPort, mcpHttpPort, mcpHttpHost, mcpHttpTlsCert, mcpHttpTlsKey, stdio, economyConfig, roleplayConfig, skillEvolutionConfig, explanationConfig, benchmarkConfig, featuresConfig, ownerActivityConfig, maintenanceConfig, compilationConfig } = parseCliArgs(cliArgs);
 const vaultPath = resolve(vaultPathArg || process.cwd());
 const featurePath = featuresConfig ?? process.env.MCPVAULT_FEATURE_CONFIG;
 const ownerConsentPath = ownerActivityConfig ?? process.env.MCPVAULT_OWNER_ACTIVITY_CONFIG;
@@ -149,7 +152,7 @@ try {
   const skillEvolution = features.selected.includes('skill-evolution') && skillEvolutionConfig ? await loadSkillEvolutionHostConfig(resolve(skillEvolutionConfig), vaultPath) : undefined;
   const explanations = features.selected.includes('explanation-translation') && explanationConfig ? await loadExplanationHostConfig(resolve(explanationConfig), vaultPath) : undefined;
   if (features.selected.includes('roleplay') && roleplayConfig) roleplay = await RoleplayStore.open(await loadRoleplayHostConfig(resolve(roleplayConfig), vaultPath));
-  mcpServer=createServer(vaultPath, { version: VERSION, readOnly, features, ...(economy&&{economy}), ...(roleplay && { roleplay }), ...(skillEvolution && { skillEvolution }),
+  mcpServer=createServer(vaultPath, { version: VERSION, readOnly, ...(quarantineSkills && { quarantineSkills }), features, ...(economy&&{economy}), ...(roleplay && { roleplay }), ...(skillEvolution && { skillEvolution }),
     ...(maintenance && { maintenance }),
     // A configuration file is not execution attestation. CLI admission stays
     // waiting without a real host verifier and validated application adapter.

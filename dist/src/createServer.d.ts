@@ -60,6 +60,8 @@ export interface CreateServerOptions extends DocumentAuthorityOptions {
     name?: string;
     version?: string;
     pathFilter?: PathFilter;
+    /** Host-only containment of every unreviewed NAS skill resource. */
+    quarantineSkills?: boolean;
     frontmatterHandler?: FrontmatterHandler;
     /** Expose read tools only and reject direct calls to mutating tools. */
     readOnly?: boolean;

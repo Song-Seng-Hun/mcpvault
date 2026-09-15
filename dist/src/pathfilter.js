@@ -1,5 +1,7 @@
 import { guidanceError } from './guidance-runtime.js';
+import { posix } from 'node:path';
 export class PathFilter {
+    parent;
     // Restricted directory/file names denied at ANY depth, not just the vault
     // root. The glob patterns below are anchored, so `node_modules/**` only
     // matched a root-level node_modules; nested ones (e.g.
@@ -21,7 +23,12 @@ export class PathFilter {
     ]);
     ignoredMatchers;
     allowedExtensions;
-    constructor(config) {
+    quarantineSkills;
+    constructor(config, parent) {
+        this.parent = parent;
+        if (config?.quarantineSkills !== undefined && typeof config.quarantineSkills !== 'boolean')
+            throw new Error('Invalid host skill quarantine policy');
+        this.quarantineSkills = config?.quarantineSkills === true;
         const ignoredPatterns = [
             '.obsidian',
             '.obsidian/**',
@@ -88,6 +95,8 @@ export class PathFilter {
         if (this.isIgnoredPath(normalizedPath)) {
             return false;
         }
+        if (this.parent)
+            return this.parent.isAllowed(path);
         // For files, check extension if allowedExtensions is configured
         if (this.allowedExtensions.length > 0 && this.isFile(this.canonicalizeForMatch(normalizedPath))) {
             const lowerPath = normalizedPath.toLowerCase();
@@ -108,7 +117,7 @@ export class PathFilter {
             return false;
         }
         // Listing includes non-note files, but still blocks restricted system paths
-        return !this.isIgnoredPath(normalizedPath);
+        return !this.isIgnoredPath(normalizedPath) && (!this.parent || this.parent.isAllowedForListing(path));
     }
     /**
      * Windows treats trailing dots/spaces as equivalent to their trimmed name
@@ -133,6 +142,13 @@ export class PathFilter {
         // (".Git/config", ".git./config", ".git /config") cannot bypass the deny-list
         // on case-insensitive / Windows filesystems.
         const canonicalPath = this.canonicalizeForMatch(normalizedPath);
+        // Resolve dot segments before Windows-name folding; folding '..' first
+        // would erase traversal and miss an equivalent skill-library path.
+        if (this.quarantineSkills) {
+            const skillPath = this.canonicalizeForMatch(posix.normalize(normalizedPath));
+            if (/^community\/skills(?:\/|$)/i.test(skillPath))
+                return true;
+        }
         // Deny hidden paths and restricted directories/files at any depth. Dotfiles
         // are outside the public vault-note surface even when their suffix looks
         // like an allowed note extension (for example, `.secrets.md`).

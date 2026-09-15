@@ -1,9 +1,11 @@
 import type { PathFilterConfig } from "./types.js";
 export declare class PathFilter {
+    private readonly parent?;
     private static readonly RESTRICTED_SEGMENTS;
     private readonly ignoredMatchers;
     private readonly allowedExtensions;
-    constructor(config?: Partial<PathFilterConfig>);
+    private readonly quarantineSkills;
+    constructor(config?: Partial<PathFilterConfig>, parent?: PathFilter | undefined);
     private compileGlob;
     /**
      * Canonicalize a path for restricted-directory matching. On Windows the

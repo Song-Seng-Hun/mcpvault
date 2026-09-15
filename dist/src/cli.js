@@ -7,6 +7,7 @@ import { guidanceError } from './guidance-runtime.js';
 export function parseCliArgs(args) {
     const pathArgs = [];
     let readOnly = false;
+    let quarantineSkills;
     let restPort;
     let mcpHttpPort;
     let mcpHttpHost;
@@ -24,6 +25,12 @@ export function parseCliArgs(args) {
     let compilationConfig;
     for (let index = 0; index < args.length; index += 1) {
         const arg = args[index];
+        if (arg === '--quarantine-skills' || arg.startsWith('--quarantine-skills=')) {
+            if (arg !== '--quarantine-skills' || quarantineSkills)
+                throw new Error('--quarantine-skills accepts one flag without a value');
+            quarantineSkills = true;
+            continue;
+        }
         if (arg === '--compilation-config' || arg.startsWith('--compilation-config=')) {
             const value = arg === '--compilation-config' ? args[++index] : arg.slice('--compilation-config='.length);
             if (!value || !value.trim() || value.startsWith('--') || compilationConfig !== undefined)
@@ -199,6 +206,7 @@ export function parseCliArgs(args) {
     return {
         vaultPathArg: pathArgs.join(" ").trim(),
         readOnly,
+        ...(quarantineSkills && { quarantineSkills }),
         ...(stdio === false && { stdio }),
         ...(restPort !== undefined && { restPort }),
         ...(mcpHttpPort !== undefined && { mcpHttpPort }),

@@ -1,6 +1,7 @@
 export interface ParsedCliArgs {
     vaultPathArg: string;
     readOnly: boolean;
+    quarantineSkills?: true;
     restPort?: number;
     mcpHttpPort?: number;
     mcpHttpHost?: string;

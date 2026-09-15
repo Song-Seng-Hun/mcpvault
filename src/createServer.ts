@@ -296,6 +296,8 @@ export interface CreateServerOptions extends DocumentAuthorityOptions {
   name?: string;
   version?: string;
   pathFilter?: PathFilter;
+  /** Host-only containment of every unreviewed NAS skill resource. */
+  quarantineSkills?: boolean;
   frontmatterHandler?: FrontmatterHandler;
   /** Expose read tools only and reject direct calls to mutating tools. */
   readOnly?: boolean;
@@ -562,12 +564,14 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
   const {
     name = "mcpvault",
     version = "0.0.0",
-    pathFilter = new PathFilter(),
+    pathFilter: configuredPathFilter = new PathFilter(),
     frontmatterHandler = new FrontmatterHandler(),
     readOnly = false,
     moderatorAccounts,
     commandCenterId,
   } = options;
+  if (options.quarantineSkills !== undefined && typeof options.quarantineSkills !== 'boolean') throw new Error('Invalid host skill quarantine policy');
+  const pathFilter = options.quarantineSkills ? new PathFilter({ quarantineSkills: true }, configuredPathFilter) : configuredPathFilter;
 
   const resolvedVaultPath = resolve(vaultPath);
   const enterpriseRegistry = options.enterpriseRegistryPath

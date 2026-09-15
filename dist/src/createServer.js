@@ -504,7 +504,10 @@ export function createServer(vaultPath, options = {}) {
             throw guidanceError(new Error('This operation requires an additional selected host feature'), 'guid-4cf44c89978181b6');
         return service;
     };
-    const { name = "mcpvault", version = "0.0.0", pathFilter = new PathFilter(), frontmatterHandler = new FrontmatterHandler(), readOnly = false, moderatorAccounts, commandCenterId, } = options;
+    const { name = "mcpvault", version = "0.0.0", pathFilter: configuredPathFilter = new PathFilter(), frontmatterHandler = new FrontmatterHandler(), readOnly = false, moderatorAccounts, commandCenterId, } = options;
+    if (options.quarantineSkills !== undefined && typeof options.quarantineSkills !== 'boolean')
+        throw new Error('Invalid host skill quarantine policy');
+    const pathFilter = options.quarantineSkills ? new PathFilter({ quarantineSkills: true }, configuredPathFilter) : configuredPathFilter;
     const resolvedVaultPath = resolve(vaultPath);
     const enterpriseRegistry = options.enterpriseRegistryPath
         ? new EnterpriseRegistry({ registryPath: options.enterpriseRegistryPath, vaultPath: resolvedVaultPath }) : undefined;

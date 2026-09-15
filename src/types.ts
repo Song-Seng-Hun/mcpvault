@@ -126,6 +126,8 @@ export interface FrontmatterValidationResult {
 }
 
 export interface PathFilterConfig {
+  /** Host-only containment. No scanner status grants an exception. */
+  quarantineSkills?: boolean;
   ignoredPatterns: string[];
   allowedExtensions: string[];
 }

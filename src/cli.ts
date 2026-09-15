@@ -2,6 +2,7 @@ import { guidanceError } from './guidance-runtime.js';
 export interface ParsedCliArgs {
   vaultPathArg: string;
   readOnly: boolean;
+  quarantineSkills?: true;
   restPort?: number;
   mcpHttpPort?: number;
   mcpHttpHost?: string;
@@ -28,6 +29,7 @@ export interface ParsedCliArgs {
 export function parseCliArgs(args: string[]): ParsedCliArgs {
   const pathArgs: string[] = [];
   let readOnly = false;
+  let quarantineSkills: true | undefined;
   let restPort: number | undefined;
   let mcpHttpPort: number | undefined;
   let mcpHttpHost: string | undefined;
@@ -46,6 +48,10 @@ export function parseCliArgs(args: string[]): ParsedCliArgs {
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index]!;
+    if (arg === '--quarantine-skills' || arg.startsWith('--quarantine-skills=')) {
+      if (arg !== '--quarantine-skills' || quarantineSkills) throw new Error('--quarantine-skills accepts one flag without a value');
+      quarantineSkills = true; continue;
+    }
     if (arg === '--compilation-config' || arg.startsWith('--compilation-config=')) {
       const value = arg === '--compilation-config' ? args[++index] : arg.slice('--compilation-config='.length);
       if (!value || !value.trim() || value.startsWith('--') || compilationConfig !== undefined) throw guidanceError(new Error('--compilation-config requires one private host configuration file'), 'guid-a5df95d10a0e23ce');
@@ -204,6 +210,7 @@ export function parseCliArgs(args: string[]): ParsedCliArgs {
   return {
     vaultPathArg: pathArgs.join(" ").trim(),
     readOnly,
+    ...(quarantineSkills && { quarantineSkills }),
     ...(stdio === false && { stdio }),
     ...(restPort !== undefined && { restPort }),
     ...(mcpHttpPort !== undefined && { mcpHttpPort }),
