@@ -5,7 +5,7 @@ keywords: [metadata, Docker, DNS, dotnet, license provenance, 완료율]
 use_when: Continuing source review or interpreting wave21 outcomes.
 parent: 2026-09-15-reviewed-skill-release.md
 previous: 2026-09-16-reviewed-skill-progress-contract.md
-next: 2026-09-15-reviewed-skill-release-passport-next.md
+next: 2026-09-16-reviewed-skill-metadata-wave22.md
 ---
 # Wave21: 11 additional metadata records
 
