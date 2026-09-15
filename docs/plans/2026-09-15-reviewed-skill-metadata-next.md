@@ -5,7 +5,7 @@ keywords: [skill metadata, Godot, A/B, potential impact, 메타데이터]
 use_when: Resuming the whole-library metadata queue after the first ten drafts.
 parent: 2026-09-15-reviewed-skill-release.md
 previous: 2026-09-15-reviewed-skill-release-inventory.md
-next: 2026-09-15-reviewed-skill-release-review-candidates.md
+next: 2026-09-15-reviewed-skill-metadata-wave1.md
 ---
 # Next metadata records
 
@@ -43,7 +43,7 @@ Self-authored evaluation expectations do not establish statistical correctness o
 The 3D source contradicts itself on LightmapGI renderer support; compatibility is unverified.
 abogado-del-diablo: all three text files read; metadata-next-devil-evidence.json validated.
 Its illustrative business numbers lack sources; assumed failure must not become invented fact.
-Current source-matched draft count is 14; finalized metadata and live releases remain zero.
+This batch reached 14 drafts; [wave 1](2026-09-15-reviewed-skill-metadata-wave1.md) records later coverage. No live release here.
 The Luna task is closed; requested model identity was not independently attested.
 Do not call the rest of the 1,610-skill inventory audited or usable from these records.
 Do not delete/merge low-use skills or infer permissions from metadata fields.
