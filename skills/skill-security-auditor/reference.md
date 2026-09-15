@@ -30,7 +30,7 @@ Explicit `--builtin` / `rulesMode: 'builtin'` permits reduced diagnostic inspect
 A clean builtin scan is `DIAGNOSTIC`, not `NO_FINDINGS`; its receipt is invalid.
 
 Library use: `await auditSkillDirectory(absolutePath, options)`.
-Version 6 remains asynchronous; required rules and diagnostic status are API changes.
+Version 7 remains asynchronous; required rules and diagnostic status remain enforced.
 CLI exits: 0 full-rules no findings; 1 findings; 2 incomplete/diagnostic; 3 error.
 `--auto-evolve` is unsupported and fails closed.
 

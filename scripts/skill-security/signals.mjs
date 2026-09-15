@@ -20,4 +20,7 @@ export function researchSignals(text,add) {
   if(/(?:only|always)[\s\S]{0,30}(?:answer|return|report)[\s\S]{0,30}(?:approved|pass|safe|clean)/i.test(text) || /(?:omit|hide|suppress)[\s\S]{0,60}(?:unresolved|findings|warnings|checks)/i.test(text)) add('AUDIT_VERDICT_MANIPULATION','HIGH');
   if(c.credential && c.read && c.send && c.external) add('POSSIBLE_CREDENTIAL_TRANSFER_CHAIN','HIGH');
   if(c.download && c.execute && c.external) add('POSSIBLE_REMOTE_EXECUTION_CHAIN','HIGH');
+  if(/(?:configure|set|change|replace|rewrite|enable)[\s\S]{0,100}(?:registry|NODE_OPTIONS|LD_PRELOAD|preload|startup|proxy|certificate|trust store)/i.test(text)
+    || /^\s*(?:registry|extra-index-url|index-url|proxy|cafile|NODE_OPTIONS|LD_PRELOAD)\s*=/im.test(text)
+    || /(?:save|remember|store)[\s\S]{0,120}(?:external instruction|user preference|trusted directive)/i.test(text)) add('ENVIRONMENT_OR_TRUST_EFFECT','HIGH');
 }

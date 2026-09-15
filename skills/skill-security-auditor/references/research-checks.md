@@ -5,7 +5,7 @@ keywords: [SKILL.md, routing, supply chain, memory poisoning, 완료 조건, 기
 use_when: Reviewing setup effects, persistent instructions or generated skill changes.
 parent: ../SKILL.md
 previous: limits.md
-next: ../SKILL.md
+next: composition-review.md
 ---
 # Research checks
 
@@ -39,3 +39,4 @@ These motivate inert regressions, not a claim of reproduced production exploits.
 Exact source URLs and verification evidence live in the repository plan:
 `docs/plans/2026-09-15-skill-audit-research.md`.
 No real-model defense evaluation or OS execution sandbox is supplied by this skill.
+Continue to [refusal and composition](composition-review.md) before disposition.

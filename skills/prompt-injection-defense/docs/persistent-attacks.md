@@ -5,7 +5,7 @@ keywords: [memory, routing, skill evolution, supply chain, 기억 오염, 스킬
 use_when: Selecting, installing, updating or promoting a reusable skill or memory.
 parent: ../SKILL.md
 previous: review-examples.md
-next: ../SKILL.md
+next: refusal-and-composition.md
 ---
 # Persistent and chained attacks
 
@@ -40,3 +40,4 @@ Example: the name stays unchanged but its setup command changes -> invalidate re
 
 These procedures reduce risk; they do not guarantee model compliance or replace
 service-side access, revision, execution and egress controls.
+Use [refusal and composition](refusal-and-composition.md) when reviewing staged actions.

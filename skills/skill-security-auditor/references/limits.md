@@ -38,9 +38,13 @@ Manual approval must specify what may run, where, with which inputs and effects.
 Decoded views: at most 4 layers, 24 queued views and 512 KiB decoded text.
 ROT13 views stop at 65,536 characters; skipped coverage is incomplete.
 Bundle analysis retains at most 2 MiB text and checks 128 literal references.
-It joins only linked 2,048-character boundaries and plaintext capability signals.
+It joins linked 2,048-character boundaries; capability signals include decoded views.
 External, missing, dynamic and outside references remain uninspected; no fetch.
 `referencesComplete` describes this parser scope, not every possible dependency.
-Shortcut links, computed paths, arbitrary encodings and semantic paraphrases can evade it.
+Arbitrary syntax, encodings, distant text fragments and semantic paraphrases can evade it.
 Related file IDs indicate review candidates, not proven data flow or malicious intent.
 Read [research checks](research-checks.md) for lifecycle review beyond static patterns.
+Directed capability paths stop at 3 edges / 4 files and 512 states; excess is incomplete.
+ROT13 participates in bounded pattern decoding, not literal reference resolution.
+HTML entities use a small allowlist; unknown names remain incomplete.
+Resource states describe inspection, never proof of image meaning or dependency closure.

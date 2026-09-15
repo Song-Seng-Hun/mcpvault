@@ -7,7 +7,7 @@ import { hash } from './contract.mjs';
 const repository = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const vault = '\\\\172.30.1.24\\MCPVault\\Community\\Skills';
 const ids = ['skill-security-auditor', 'prompt-injection-defense'];
-const codeFiles = ['contract.mjs','decode.mjs','signals.mjs','detect.mjs','bundle.mjs','scanner.mjs','worker.mjs','evolve_rules.mjs','audit.mjs'];
+const codeFiles = ['contract.mjs','decode.mjs','signals.mjs','detect.mjs','bundle.mjs','references.mjs','scanner.mjs','worker.mjs','evolve_rules.mjs','audit.mjs'];
 const pinnedRules = 'e3768de982df1a576274c3831ade5b4402e3003bd4a5a1a3a20f9976d64f6f47';
 function safe(root, relative = '') {
   if (relative && (path.isAbsolute(relative) || relative.split(/[\\/]/).some(x => !x || x === '..' || x === '.'))) throw Error('PATH_REJECTED');

@@ -9,21 +9,38 @@ function printable(bytes) {
     return s && !/[\x00-\x08\x0b\x0c\x0e-\x1f]/.test(s) ? s : undefined;
   } catch { return undefined; }
 }
-export function inspectionViews(text,add) {
-  const values=[], seen=new Set(), queue=[{text,depth:0}], maxViews=24, maxBytes=524288;
-  let decodedBytes=0;
-  const push=(value,depth)=>{
-    if (!value || seen.has(normalizeView(value))) return;
+export function inspectionViews(text,add,{rot13=true,render=true}={}) {
+  const values=[], seen=new Set(), scheduled=new Set([normalizeView(text)]), queue=[{text,depth:0}], maxViews=24, maxBytes=524288;
+  let decodedBytes=0, speculative=false;
+  const push=(value,depth,derivedFromRot13=speculative)=>{
+    if (!value || scheduled.has(normalizeView(value))) return;
     if(depth>4){add('DECODE_DEPTH','HIGH',true);return;}
     if(queue.length>=maxViews || (decodedBytes+=Buffer.byteLength(value))>maxBytes){add('DECODE_BUDGET','HIGH',true);return;}
-    queue.push({text:value,depth});
+    scheduled.add(normalizeView(value)); queue.push({text:value,depth,speculative:derivedFromRot13});
   };
   for(let i=0;i<queue.length;i++) {
     const {text:raw,depth}=queue[i], value=normalizeView(raw);
+    speculative=queue[i].speculative??false;
     if(seen.has(value))continue; seen.add(value);
     if (raw.match(invisible)) add('INVISIBLE_CONTROLS','HIGH');
     if (/[\u{E0000}-\u{E007F}]/u.test(raw)) add('UNICODE_TAGS','HIGH');
     values.push(raw); if(value!==raw)values.push(value);
+    // Bounded rendering views; raw text is always scanned too. Not a general renderer.
+    const named={nbsp:' ',Tab:'\t',NewLine:'\n',amp:'&',lt:'<',gt:'>',quot:'"',apos:"'",colon:':',sol:'/',bsol:'\\',period:'.',equals:'='};
+    if(/&[a-z][a-z0-9]+;/i.test(value)) push(value.replace(/&([a-z][a-z0-9]+);/gi,(m,n)=>{
+      if(Object.hasOwn(named,n)) return named[n];
+      // Speculative ROT13 can turn a valid entity name into nonsense; raw names
+      // were already checked. Never use this speculative branch to resolve references.
+      if(!speculative)add('UNSUPPORTED_ENTITY','MEDIUM',true); return m;
+    }),depth+1);
+    if(/\\u\{[^}]*\}/i.test(value)) push(value.replace(/\\u\{([^}]*)\}/gi,(m,n)=>{
+      const c=/^[0-9a-f]{1,6}$/i.test(n)?parseInt(n,16):NaN;
+      if(c<=0x10ffff && !(c>=0xd800&&c<=0xdfff))return String.fromCodePoint(c);
+      add('UNDECODABLE_SEQUENCE','MEDIUM',true); return m;
+    }),depth+1);
+    const rendered=value.replace(/(\*\*|__|\*|_|~~)([^\r\n]{1,2048}?)\1/g,'$2')
+      .replace(/<\/?(?:em|strong|b|i|span|code|mark)\b[^>]{0,2048}>/gi,'');
+    if(render && rendered!==value)push(rendered,depth+1);
     if(/\\[xu][0-9a-f]/i.test(value)) push(value.replace(/\\x([0-9a-f]{2})|\\u([0-9a-f]{4})/gi,(_,a,b)=>String.fromCharCode(parseInt(a||b,16))),depth+1);
     if(/&#(?:x[0-9a-f]+|[0-9]+);/i.test(value)) push(value.replace(/&#(x[0-9a-f]+|[0-9]+);/gi,(m,n)=>{
       const c=n[0].toLowerCase()==='x'?parseInt(n.slice(1),16):Number(n);
@@ -45,8 +62,13 @@ export function inspectionViews(text,add) {
       push(printable(Buffer.from(match[0].split(/[\s,]+/).map(bits=>parseInt(bits,2)))),depth+1);
     }
     // One ROT13 view per decoded layer. Seen-set prevents inverse-transform loops.
-    if(value.length<=65536) push(value.replace(/[a-z]/gi,c=>String.fromCharCode(c.charCodeAt(0)+(c.toLowerCase()<='m'?13:-13))),depth+1);
-    else add('DECODE_BUDGET','HIGH',true);
+    if(rot13) {
+      if(value.length<=65536) {
+        // Preserve bounded nested detection; references use non-ROT13 views only.
+        const rotated=value.replace(/[a-z]/gi,c=>String.fromCharCode(c.charCodeAt(0)+(c.toLowerCase()<='m'?13:-13)));
+        push(rotated,depth+1,true);
+      } else add('DECODE_BUDGET','HIGH',true);
+    }
   }
   return values;
 }

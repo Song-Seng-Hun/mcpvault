@@ -7,15 +7,19 @@ import { analyzeBundle } from './bundle.mjs';
 const MAGIC = ['4d5a','7f454c46','feedface','feedfacf','cefaedfe','cffaedfe','cafebabe','0061736d'];
 const ARCHIVE = ['504b0304','504b0506','504b0708','1f8b','377abcaf','425a68','fd377a58','52617221'];
 export function scan(root, budget, rules, rulesHash) {
-  const findings = [], entries = [], documents = [], seen = new Set(); let complete = true, total = 0, count = 0, textBytes=0, referenceCoverage=true;
+  const findings = [], entries = [], documents = [], resources=new Map(), seen = new Set(); let complete = true, total = 0, count = 0, textBytes=0, referenceCoverage=true, ledgerTruncated=false;
   const deadline = Date.now() + budget.timeoutMs;
   const add = (rule, severity = 'HIGH', incomplete = false, fileId = null, relatedFileIds) => {
     if (incomplete) complete = false;
+    if(incomplete && fileId && resources.has(fileId)) {
+      const resource=resources.get(fileId); resource.state='uninspected';
+      if(!resource.reasons.includes(rule))resource.reasons.push(rule);
+    }
     const key = `${rule}:${fileId}:${relatedFileIds?.join(':')??''}`;
     if (seen.has(key)) return;
     seen.add(key);
     if (findings.length >= budget.maxFindings) { complete = false; return; }
-    findings.push({ rule, severity, fileId, ...(relatedFileIds && {relatedFileIds}) });
+    findings.push({ rule, severity, fileId, context:'requires-interpretation', ...(relatedFileIds && {relatedFileIds}) });
   };
   function walk(dir, depth, verify = false, snapshot = []) {
     if (Date.now() > deadline || depth > budget.maxDepth) { add('SCAN_BUDGET', 'HIGH', true); return; }
@@ -25,6 +29,10 @@ export function scan(root, budget, rules, rulesHash) {
       for (let ent; (ent = handle.readSync());) {
         if (Date.now() > deadline || ++count > budget.maxFiles * 2) { add('SCAN_BUDGET', 'HIGH', true); break; }
         const full = path.join(dir, ent.name), relative = path.relative(root, full), id = hash(relative);
+        if(!verify && !ent.isDirectory()) {
+          if(resources.size<budget.maxFiles)resources.set(id,{fileId:id,state:'uninspected',reasons:[]});
+          else ledgerTruncated=true;
+        }
         const mark = (rule, severity, incomplete) => add(rule, severity, incomplete, id);
         const stat = fs.lstatSync(full);
         if (stat.isSymbolicLink() || stat.nlink > 1 && stat.isFile()) { mark('LINK_REQUIRES_REVIEW', 'HIGH', true); continue; }
@@ -50,6 +58,7 @@ export function scan(root, budget, rules, rulesHash) {
           const raw = bytes.subarray(0, read); total += raw.length;
           snapshot.push({ fileId: id, sha256: hash(raw), bytes: raw.length });
           if (verify) continue;
+          if(resources.has(id))resources.get(id).state='text-inspected';
           if (MAGIC.some(sig => raw.subarray(0, 4).toString('hex').startsWith(sig))) { mark('EXECUTABLE_BINARY', 'CRITICAL', true); continue; }
           if (ARCHIVE.some(sig => raw.subarray(0, 4).toString('hex').startsWith(sig)) || /\.(zip|tar|gz|tgz|whl|jar|7z|rar|bz2|xz)$/i.test(relative)) { mark('ARCHIVE_UNINSPECTED', 'HIGH', true); continue; }
           let text;
@@ -58,6 +67,8 @@ export function scan(root, budget, rules, rulesHash) {
             text = new TextDecoder(utf16le ? 'utf-16le' : utf16be ? 'utf-16be' : 'utf-8', { fatal: true }).decode(raw);
             if (text.includes('\0')) throw Error('BINARY');
           } catch { mark('UNSUPPORTED_ENCODING_OR_BINARY', 'HIGH', true); continue; }
+          if(/\.(?:svg|png|jpe?g|gif|webp|ico|avif|heic|pdf|docx?|pptx?|xlsx?|pyc|pyo|wasm)$/i.test(relative)
+            || /<svg\b|^%PDF-/i.test(text))mark('OPAQUE_RESOURCE_UNINSPECTED','HIGH',true);
           detect(relative + '\n' + text, rules, mark);
           if(relative==='SKILL.md' && !text.trim())mark('ENTRYPOINT_EMPTY','HIGH',true);
           textBytes+=Buffer.byteLength(text);
@@ -91,8 +102,11 @@ export function scan(root, budget, rules, rulesHash) {
   const status = !complete ? 'INCOMPLETE' : summary.critical ? 'FAIL' : findings.length ? 'WARN' : 'NO_FINDINGS';
   return { schemaVersion: 1, ruleEngineVersion: VERSION, status, executionAuthorized: false,
     coverage: { complete, scope: 'bounded-static-inspection', semanticSafetyProven: false,
-      referencesComplete:referenceCoverage&&bundle.referencesComplete },
-    analysis:{dataFlowProven:false,referenceEdges:bundle.edges,referenceScope:'literal-links-imports-and-2048-character-boundaries',runtimeEnforced:false},
+      referencesComplete:referenceCoverage&&bundle.referencesComplete, compositionComplete:referenceCoverage&&bundle.compositionComplete&&bundle.referencesComplete,
+      resources:[...resources.values()].sort((a,b)=>a.fileId.localeCompare(b.fileId)), resourceLedgerTruncated:ledgerTruncated||count>budget.maxFiles*2 },
+    analysis:{dataFlowProven:false,referenceEdges:bundle.edges,referenceScope:'recognized-literal-markdown-html-wiki-js-python-subset',
+      dependencyClosureProven:false,compositionMaxEdges:3,compositionStates:bundle.states,decodedCapabilityFiles:bundle.decodedCapabilityFiles,
+      semanticReview:'not-performed',readiness:status==='NO_FINDINGS'?'static-only':'review-required',runtimeEnforced:false},
     rootId: hash(root), rulesHash, filesCount: entries.length,
     inventoryHash: hash(JSON.stringify(entries.sort((a,b) => a.fileId.localeCompare(b.fileId)))),
     inventory: entries, riskScore: summary.critical * 100 + summary.high * 25 + summary.medium * 10, summary, findings };

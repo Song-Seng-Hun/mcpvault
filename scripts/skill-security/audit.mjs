@@ -4,7 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { hash, failure, limits } from './contract.mjs';
 const directory = path.dirname(fileURLToPath(import.meta.url));
-const modules = ['audit.mjs','worker.mjs','scanner.mjs','detect.mjs','decode.mjs','bundle.mjs','signals.mjs','contract.mjs'];
+const modules = ['audit.mjs','worker.mjs','scanner.mjs','detect.mjs','decode.mjs','bundle.mjs','references.mjs','signals.mjs','contract.mjs'];
 // Retained legacy patterns are data, never imported code. A changed set requires review.
 const RETAINED_RULES_HASH = 'e3768de982df1a576274c3831ade5b4402e3003bd4a5a1a3a20f9976d64f6f47';
 let inFlight = false;
