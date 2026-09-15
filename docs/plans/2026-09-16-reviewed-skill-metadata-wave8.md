@@ -5,7 +5,7 @@ keywords: [agent-bom, prompt-management, licensing, current-access, 프롬프트
 use_when: Reviewing these agent-tool references or resolving imported license provenance.
 parent: 2026-09-15-reviewed-skill-release.md
 previous: 2026-09-16-reviewed-receiving-v3-package.md
-next: 2026-09-15-reviewed-skill-release-passport-next.md
+next: 2026-09-16-reviewed-skill-metadata-wave9.md
 ---
 # Metadata wave 8
 
