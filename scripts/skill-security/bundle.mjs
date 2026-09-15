@@ -61,6 +61,19 @@ export function analyzeBundle(files,rules,add) {
     }
     if(checked>128)break;
   }
+  // Explicit step/sequence prose can connect sibling references. Keep this
+  // evidence distinct from directed paths; no inferred execution order/data flow.
+  for(const source of files) {
+    if(!/\b(?:steps|workflow|sequence)\s*:|\bthen\b|단계|순서/i.test(source.text))continue;
+    const neighbors=[...(adjacency.get(source.id)?.values()??[])];
+    if(neighbors.length>8){compositionComplete=false;add('WORKFLOW_BUDGET','HIGH',true,source.id);continue;}
+    if(neighbors.length<2)continue;
+    const caps={...summaries.get(source.id)};
+    for(const f of neighbors)for(const [key,value] of Object.entries(summaries.get(f.id)??{}))caps[key] ||= value;
+    const related=[source.id,...neighbors.map(f=>f.id)].sort();
+    if((caps.credential||caps.sensitive)&&caps.read&&(caps.send||caps.write)&&(caps.external||caps.sharedDestination))add('POSSIBLE_WORKFLOW_TRANSFER','HIGH',false,source.id,related);
+    if(caps.download&&caps.execute&&caps.external)add('POSSIBLE_WORKFLOW_EXECUTION','HIGH',false,source.id,related);
+  }
   // At most 3 edges (4 files), 512 states, directed paths without repeated vertices.
   outer: for(const source of files) {
     const queue=[{ids:[source.id],caps:summaries.get(source.id)??{}}];
@@ -74,6 +87,7 @@ export function analyzeBundle(files,rules,add) {
         for(const [key,value] of Object.entries(summaries.get(destination.id)??{}))caps[key] ||= value;
         const related=[...ids].sort();
         if(caps.credential&&caps.read&&caps.send&&caps.external)add('POSSIBLE_CREDENTIAL_TRANSFER_CHAIN','HIGH',false,source.id,related);
+        if(caps.sensitive&&caps.read&&(caps.send||caps.write)&&(caps.external||caps.sharedDestination))add('SENSITIVE_DESTINATION_REVIEW','HIGH',false,source.id,related);
         if(caps.download&&caps.execute&&caps.external)add('POSSIBLE_REMOTE_EXECUTION_CHAIN','HIGH',false,source.id,related);
         if(queue.length>=512){compositionComplete=false;add('COMPOSITION_BUDGET','HIGH',true,source.id);break outer;}
         queue.push({ids,caps});

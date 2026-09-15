@@ -6,7 +6,7 @@ import { analyzeBundle } from './bundle.mjs';
 
 const MAGIC = ['4d5a','7f454c46','feedface','feedfacf','cefaedfe','cffaedfe','cafebabe','0061736d'];
 const ARCHIVE = ['504b0304','504b0506','504b0708','1f8b','377abcaf','425a68','fd377a58','52617221'];
-export function scan(root, budget, rules, rulesHash) {
+export function scan(root, budget, rules, rulesHash, onFinding = () => {}) {
   const findings = [], entries = [], documents = [], resources=new Map(), seen = new Set(); let complete = true, total = 0, count = 0, textBytes=0, referenceCoverage=true, ledgerTruncated=false;
   const deadline = Date.now() + budget.timeoutMs;
   const add = (rule, severity = 'HIGH', incomplete = false, fileId = null, relatedFileIds) => {
@@ -20,6 +20,7 @@ export function scan(root, budget, rules, rulesHash) {
     seen.add(key);
     if (findings.length >= budget.maxFindings) { complete = false; return; }
     findings.push({ rule, severity, fileId, context:'requires-interpretation', ...(relatedFileIds && {relatedFileIds}) });
+    onFinding(findings.at(-1));
   };
   function walk(dir, depth, verify = false, snapshot = []) {
     if (Date.now() > deadline || depth > budget.maxDepth) { add('SCAN_BUDGET', 'HIGH', true); return; }
@@ -104,7 +105,8 @@ export function scan(root, budget, rules, rulesHash) {
     coverage: { complete, scope: 'bounded-static-inspection', semanticSafetyProven: false,
       referencesComplete:referenceCoverage&&bundle.referencesComplete, compositionComplete:referenceCoverage&&bundle.compositionComplete&&bundle.referencesComplete,
       resources:[...resources.values()].sort((a,b)=>a.fileId.localeCompare(b.fileId)), resourceLedgerTruncated:ledgerTruncated||count>budget.maxFiles*2 },
-    analysis:{dataFlowProven:false,referenceEdges:bundle.edges,referenceScope:'recognized-literal-markdown-html-wiki-js-python-subset',
+    analysis:{dataFlowProven:false,referenceEdges:bundle.edges,referenceScope:'recognized-literal-markdown-html-wiki-js-python-subset-with-runtime-gaps',
+      destinationOwnershipVerified:false,conditionalCodeScope:'lexical-review-only',workflowMaxSiblings:8,
       dependencyClosureProven:false,compositionMaxEdges:3,compositionStates:bundle.states,decodedCapabilityFiles:bundle.decodedCapabilityFiles,
       semanticReview:'not-performed',readiness:status==='NO_FINDINGS'?'static-only':'review-required',runtimeEnforced:false},
     rootId: hash(root), rulesHash, filesCount: entries.length,

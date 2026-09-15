@@ -30,11 +30,21 @@ export async function auditSkillDirectory(targetDir, options = {}) {
   inFlight = true;
   return new Promise(resolve => {
     let worker, timer, settled = false;
+    const observed=[];
     const finish = async report => {
       if (settled) return; settled = true; clearTimeout(timer);
       if (worker) await worker.terminate().catch(() => {});
       try { if (basis !== engineHash()) report = failure('ERROR', 'ENGINE_CHANGED'); }
       catch { report = failure('ERROR', 'ENGINE_CHANGED'); }
+      if(!report.inventoryHash && observed.length) {
+        // Interrupted evidence is not a snapshot/receipt. At most maxFindings
+        // observations plus one terminal reason; no hostile content is echoed.
+        report.findings=[...observed,...report.findings];
+        report.summary={critical:0,high:0,medium:0,total:report.findings.length};
+        for(const f of report.findings)report.summary[f.severity.toLowerCase()]++;
+        report.riskScore=report.summary.critical*100+report.summary.high*25+report.summary.medium*10;
+        report.coverage={complete:false,interrupted:true,observedFindings:observed.length};
+      }
       inFlight = false;
       resolve({ ...report, rulesMode, engineHash: basis, budget, completedAt: new Date().toISOString() });
     };
@@ -45,7 +55,12 @@ export async function auditSkillDirectory(targetDir, options = {}) {
         resourceLimits: { maxOldGenerationSizeMb: 96, maxYoungGenerationSizeMb: 16, stackSizeMb: 2 },
         env: {}, execArgv: [],
       });
-      worker.once('message', report => void finish(report));
+      worker.on('message', message => {
+        if(settled)return;
+        if(message?.type==='finding') { if(observed.length<budget.maxFindings)observed.push(message.finding); }
+        else if(message?.type==='result')void finish(message.report);
+        else void finish(failure('ERROR','WORKER_PROTOCOL_ERROR'));
+      });
       worker.once('error', () => void finish(failure('ERROR', 'WORKER_FAILED')));
       worker.once('exit', () => { if (!settled) void finish(failure('ERROR', 'WORKER_NO_RESULT')); });
     } catch { void finish(failure('ERROR', 'WORKER_FAILED')); }

@@ -23,7 +23,7 @@ try {
     if (raw.length > 1048576 || hash(raw) !== expectedRulesHash) throw Error('RULES_CHANGED');
     rules = compileRules(JSON.parse(raw.toString('utf8'))); rulesHash = hash(raw);
   }
-  const report=scan(root, budget, rules, rulesHash);
+  const report=scan(root, budget, rules, rulesHash, finding=>parentPort.postMessage({type:'finding',finding}));
   if (rulesMode === 'builtin' && report.status === 'NO_FINDINGS') report.status='DIAGNOSTIC';
-  parentPort.postMessage(report);
-} catch { parentPort.postMessage(failure('ERROR', 'RULES_OR_WORKER_ERROR')); }
+  parentPort.postMessage({type:'result',report});
+} catch { parentPort.postMessage({type:'result',report:failure('ERROR', 'RULES_OR_WORKER_ERROR')}); }

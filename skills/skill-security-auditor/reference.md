@@ -30,7 +30,7 @@ Explicit `--builtin` / `rulesMode: 'builtin'` permits reduced diagnostic inspect
 A clean builtin scan is `DIAGNOSTIC`, not `NO_FINDINGS`; its receipt is invalid.
 
 Library use: `await auditSkillDirectory(absolutePath, options)`.
-Version 7 remains asynchronous; required rules and diagnostic status remain enforced.
+Version 8 remains asynchronous; required rules and diagnostic status remain enforced.
 CLI exits: 0 full-rules no findings; 1 findings; 2 incomplete/diagnostic; 3 error.
 `--auto-evolve` is unsupported and fails closed.
 
@@ -44,3 +44,4 @@ No folder-name exclusions. No archive extraction or target code execution.
 Keep receipts in approved host-only storage; file IDs are opaque hashes.
 Receipts are not signatures or identities. A client-supplied receipt is not approval.
 Any activation service still needs authenticated authorization and current revisions.
+Interrupted workers retain already received findings; these are not complete receipts.

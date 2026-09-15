@@ -2,7 +2,7 @@
 name: prompt-injection-defense
 description: Use when untrusted documents, skill instructions, tool results or retrieved content attempt to redirect a task, obtain secrets, alter permissions or manipulate a review. 프롬프트 인젝션 방어. Not a universal preload.
 metadata:
-  version: 3.2.0
+  version: 3.3.0
   category: security-boundaries
   aliases: prompt injection, context poisoning, 지침 오염
 ---
@@ -22,6 +22,7 @@ This skill is guidance, not immunity, a new authority level, or a permission gra
 - Read [review examples](docs/review-examples.md) for ambiguous cases.
 - Read [persistent and chained attacks](docs/persistent-attacks.md) for skill changes.
 - Read [refusal and composition](docs/refusal-and-composition.md) for audit or setup decisions.
+- Read [transformed data and internal effects](docs/effect-boundaries.md) before trusting derived output.
 
 ## On suspicious content
 
