@@ -5,7 +5,7 @@ keywords: [metadata, CI flake, provenance, same SHA, diagnosis, 진단-절차]
 use_when: Preparing limited diagnosis guidance without source-specific execution authority.
 parent: 2026-09-15-reviewed-skill-release.md
 previous: 2026-09-16-reviewed-skill-metadata-wave16.md
-next: 2026-09-15-reviewed-skill-release-passport-next.md
+next: 2026-09-16-reviewed-skill-ci-diagnosis-trial.md
 ---
 # Evidence before CI diagnosis
 
