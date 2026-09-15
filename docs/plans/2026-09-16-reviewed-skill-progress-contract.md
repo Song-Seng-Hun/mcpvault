@@ -5,7 +5,7 @@ keywords: [metadata, activation, progress, percentage, 완료율, 활성화율]
 use_when: Ending a goal turn or deciding the next skill-review task.
 parent: 2026-09-15-reviewed-skill-release.md
 previous: 2026-09-16-reviewed-skill-metadata-wave20.md
-next: 2026-09-15-reviewed-skill-release-passport-next.md
+next: 2026-09-16-reviewed-skill-metadata-wave21.md
 ---
 # Progress reporting contract
 
