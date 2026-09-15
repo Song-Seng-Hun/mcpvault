@@ -5,7 +5,7 @@ keywords: [API, GraphQL, migration, debugging, TypeScript, metadata, 스킬 검�
 use_when: Resuming metadata completion or interpreting the third review wave.
 parent: 2026-09-15-reviewed-skill-release.md
 previous: 2026-09-15-reviewed-skill-metadata-wave2.md
-next: 2026-09-15-reviewed-skill-release-passport-next.md
+next: 2026-09-16-reviewed-skill-metadata-wave4.md
 ---
 # Metadata wave 3
 
