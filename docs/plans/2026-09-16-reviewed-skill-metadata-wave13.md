@@ -5,7 +5,7 @@ keywords: [metadata, hooks, GitHub, cancellation, camera, card-game, 실행-예�
 use_when: Reviewing source completeness and potential effects before preparing limited procedures.
 parent: 2026-09-15-reviewed-skill-release.md
 previous: 2026-09-16-reviewed-skill-metadata-wave12.md
-next: 2026-09-15-reviewed-skill-release-passport-next.md
+next: 2026-09-16-reviewed-skill-metadata-wave14.md
 ---
 # Examples are not execution grants
 
