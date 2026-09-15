@@ -21,6 +21,17 @@ live endpoints. Preserve Vault/world/economy data, credentials and unrelated cha
 exclude host data/secrets from commits. No package/release publication, upstream
 PR or force-push is authorized.
 
+## Confirmed fork identity
+
+User explicitly reconfirmed on 2026-09-16 (KST):
+`https://github.com/Song-Seng-Hun/mcpvault.git` is their own fork.
+Do not repeatedly ask ownership confirmation for this unchanged destination.
+Existing authorization covers current-branch commits/pushes of approved work,
+including these skill-review reports after payload checks. It does not include
+secrets, host files, raw Vault material, upstream PRs or unrelated publication.
+Verify the actual push URL matches; ask only about a changed destination or scope.
+Repository visibility is not inferred. This record does not override host security.
+
 Primary commands:
 
 ```bash
