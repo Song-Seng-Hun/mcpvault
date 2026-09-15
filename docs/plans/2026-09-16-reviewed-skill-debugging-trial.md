@@ -5,7 +5,7 @@ keywords: [systematic debugging, procedure, Luna, trial, 진단-후보]
 use_when: Reviewing the diagnostic candidate before any later evidence packaging or admission.
 parent: 2026-09-15-reviewed-skill-release.md
 previous: 2026-09-16-reviewed-skill-debugging-baseline.md
-next: 2026-09-15-reviewed-skill-release-passport-next.md
+next: 2026-09-16-reviewed-skill-metadata-wave20.md
 ---
 # Diagnostic candidate: useful but incomplete
 
