@@ -5,7 +5,7 @@ keywords: [dbt, dependencies, PostgreSQL, game design, static review, 메타데�
 use_when: Continuing metadata review or checking why an adjudicated warning does not establish usable approval.
 parent: 2026-09-15-reviewed-skill-release.md
 previous: 2026-09-16-reviewed-skill-ci-diagnosis-trial.md
-next: 2026-09-15-reviewed-skill-release-passport-next.md
+next: 2026-09-16-reviewed-skill-metadata-wave19.md
 ---
 # Wave 18: data, dependencies and design
 
