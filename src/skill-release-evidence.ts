@@ -16,6 +16,23 @@ function hashes(v:unknown):string[]{
   if(!Array.isArray(v)||v.length<1||v.length>16||!v.every(hash)||new Set(v).size!==v.length)return fail();return v;
 }
 
+/** Consistency of a reported independent text trial, not attestation that a
+ * different model ran, saw no expected answers, or enforced real tool effects. */
+async function independentTextTrial(h:unknown,expected:{basis:string;scenarioSetHash:string;caseId:string;reviewer:string},
+  json:(hash:string)=>Promise<any>,bytes:(hash:string)=>Promise<Buffer>):Promise<boolean>{
+  if(!hash(h))return false;
+  const t=row(await json(h),['version','kind','basis','scenarioSetHash','caseId','reportedExecutorId','requestedModel','modelIdentity','scope','inputHash','responseHash','judgmentHash']);
+  if(t.version!==1||t.kind!=='skill-independent-text-trial'||t.basis!==expected.basis||t.scenarioSetHash!==expected.scenarioSetHash||t.caseId!==expected.caseId
+    ||!text(t.reportedExecutorId,100)||!/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(t.reportedExecutorId)||t.reportedExecutorId===expected.reviewer
+    ||!text(t.requestedModel,160)||t.modelIdentity!=='unverified'||t.scope!=='synthetic_text_only'
+    ||![t.inputHash,t.responseHash,t.judgmentHash].every(hash)||new Set([t.inputHash,t.responseHash,t.judgmentHash]).size!==3)return false;
+  await bytes(t.inputHash);await bytes(t.responseHash);
+  const j=row(await json(t.judgmentHash),['version','kind','basis','scenarioSetHash','caseId','reviewer','inputHash','responseHash','outcome','limitations']);
+  return j.version===1&&j.kind==='skill-text-trial-judgment'&&j.basis===expected.basis&&j.scenarioSetHash===expected.scenarioSetHash&&j.caseId===expected.caseId
+    &&j.reviewer===expected.reviewer&&j.inputHash===t.inputHash&&j.responseHash===t.responseHash&&j.outcome==='passed'
+    &&Array.isArray(j.limitations)&&j.limitations.length>=1&&j.limitations.length<=8&&j.limitations.every((v:unknown)=>text(v,512));
+}
+
 /** Excludes evidence hashes to avoid a circular digest. Includes every delivered
  * resource and condition: tests of an earlier derivative cannot approve new text. */
 export function skillReleaseReviewBasis(m:SkillReleaseManifest):string{
@@ -80,10 +97,13 @@ export async function verifySkillReleaseEvidence(input:SkillReleaseManifest,anch
     const seenCases=new Set<string>();
     for(const [caseHashes,categories] of [[m.review.normalCaseHashes,normal],[m.review.adversarialCaseHashes,adversarial]] as const){
       for(const h of caseHashes){
-        const c=row(await json(h),['version','kind','basis','scenarioSetHash','caseId','reviewer','method','outcome','observed','artifactHashes']);
+        const raw=await json(h);
+        const independent=raw?.method==='independent_agent_text';
+        const c=row(raw,['version','kind','basis','scenarioSetHash','caseId','reviewer','method','outcome','observed','artifactHashes',...(independent?['trialEvidenceHash']:[])]);
         if(c.version!==1||c.kind!=='skill-case-result'||c.basis!==basis||c.scenarioSetHash!==anchor.scenarioSetHash
-          ||c.reviewer!==anchor.reviewer||c.method!=='current_agent_behavior'||c.outcome!=='passed'||!text(c.observed)
+          ||c.reviewer!==anchor.reviewer||!['current_agent_behavior','independent_agent_text'].includes(c.method)||c.outcome!=='passed'||!text(c.observed)
           ||seenCases.has(c.caseId)||!categories.includes(scenarios.get(c.caseId)??''))return false;
+        if(independent&&!await independentTextTrial(c.trialEvidenceHash,{basis,scenarioSetHash:anchor.scenarioSetHash,caseId:c.caseId,reviewer:anchor.reviewer},json,bytes))return false;
         seenCases.add(c.caseId);await artifacts(c.artifactHashes);
       }
     }

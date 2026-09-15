@@ -11,7 +11,7 @@ vi.mock('./windows-private-acl.js',()=>({checkWindowsPrivateAcl:async()=>{if(acl
 const roots:string[]=[];
 afterEach(async()=>{acl.deny=false;for(const p of roots.splice(0))await rm(p,{recursive:true,force:true});});
 const hash=(v:Buffer|string)=>createHash('sha256').update(v).digest('hex');
-async function fixture(descriptor?:unknown){
+async function fixture(descriptor?:unknown,independent=false){
   const root=await mkdtemp(join(tmpdir(),'skill-admission-'));roots.push(root);
   const hostPath=join(root,'host'),vaultPath=join(root,'vault');
   for(const p of [hostPath,vaultPath,...['entries','blobs','receipts'].map(n=>join(hostPath,n))])await mkdir(p,{mode:0o700});
@@ -26,7 +26,18 @@ async function fixture(descriptor?:unknown){
   const categories=['representative','boundary','mixed_language','secret_exfiltration','outside_write','forged_approval','reference_bypass'];
   const scenarios=categories.map((category,i)=>({id:`case-${i}`,category,task:'Synthetic task.',expected:'Synthetic outcome.'}));
   const scenarioSetHash=put({version:1,kind:'skill-test-plan',skillId:'test-skill',sourceFingerprint:source,scenarios});
-  scenarios.forEach((s,i)=>{const h=put({version:1,kind:'skill-case-result',basis,scenarioSetHash,caseId:s.id,reviewer:'main',method:'current_agent_behavior',outcome:'passed',observed:'Synthetic observation.',artifactHashes:[artifact]});(i<3?manifest.review.normalCaseHashes:manifest.review.adversarialCaseHashes).push(h);});
+  const trialArtifactHashes:string[]=[];
+  scenarios.forEach((s,i)=>{
+    let trialEvidenceHash:string|undefined;
+    if(independent){
+      const inputHash=put({testOnly:true,caseId:s.id,task:s.task}),responseHash=put({testOnly:true,caseId:s.id,response:'Synthetic response.'});
+      const judgmentHash=put({version:1,kind:'skill-text-trial-judgment',basis,scenarioSetHash,caseId:s.id,reviewer:'main',inputHash,responseHash,outcome:'passed',limitations:['Synthetic text, no live effects.']});
+      trialEvidenceHash=put({version:1,kind:'skill-independent-text-trial',basis,scenarioSetHash,caseId:s.id,reportedExecutorId:'fixture-worker',requestedModel:'fixture-model',modelIdentity:'unverified',scope:'synthetic_text_only',inputHash,responseHash,judgmentHash});
+      trialArtifactHashes.push(inputHash,responseHash,judgmentHash,trialEvidenceHash);
+    }
+    const h=put({version:1,kind:'skill-case-result',basis,scenarioSetHash,caseId:s.id,reviewer:'main',method:independent?'independent_agent_text':'current_agent_behavior',outcome:'passed',observed:'Synthetic observation.',artifactHashes:[artifact],...(trialEvidenceHash?{trialEvidenceHash}:{})});
+    (i<3?manifest.review.normalCaseHashes:manifest.review.adversarialCaseHashes).push(h);
+  });
   manifest.review.evidenceHashes=[put({version:1,kind:'skill-release-review',basis,reviewer:'main',resourceIds:manifest.resources.map(r=>r.id),openCritical:0,checks:['static','semantic','license','feature_mapping'].map(kind=>({kind,outcome:'passed',artifactHashes:[artifact]}))})];
   const releaseHash=put(manifest),request={requestId:'canary-1',skillId:'test-skill',sourceName:'test-skill',releaseHash,scenarioSetHash,policyRevision:'review-v1',reviewer:'main',expectedRevision:null as string|null};
   let allowed=true,currentSource=source,refresh:undefined|(()=>Promise<void>);
@@ -34,9 +45,22 @@ async function fixture(descriptor?:unknown){
     authorize:async()=>{if(!allowed)throw Error('denied');return {revalidate:async()=>{await refresh?.();if(!allowed)throw Error('denied');},assertFresh:()=>{if(!allowed)throw Error('denied');}};}};
   const module=await import('./skill-release-admission.js').catch(()=>({admitReviewedSkill:undefined}));
   expect(module.admitReviewedSkill,'private host admission must not be a Vault/MCP approval flag').toBeTypeOf('function');
-  return {root,hostPath,vaultPath,blobs,body,request,options,entryPath:join(hostPath,'entries',hash('test-skill')+'.json'),
+  return {root,hostPath,vaultPath,blobs,body,request,options,trialArtifactHashes,entryPath:join(hostPath,'entries',hash('test-skill')+'.json'),
     admit:(r=request)=>module.admitReviewedSkill!(options,r),deny:()=>{allowed=false;},drift:()=>{currentSource=hash('changed');},onRefresh:(f:()=>Promise<void>)=>{refresh=f;}};
 }
+test('independent trial artifacts persist and revalidate on retry without granting execution',async()=>{
+  const f=await fixture(undefined,true),first=await f.admit();expect(first.executionAuthorized).toBe(false);
+  for(const h of f.trialArtifactHashes)expect(await readFile(join(f.hostPath,'blobs',h))).toEqual(f.blobs.get(h));
+  f.blobs.clear();expect((await f.admit()).revision).toBe(first.revision);
+});
+test('independent evidence does not bypass host denial or missing-response checks',async()=>{
+  for(const change of ['authority','missing_response']){
+    const f=await fixture(undefined,true);if(change==='authority')f.deny();else f.blobs.delete(f.trialArtifactHashes[1]!);
+    await expect(f.admit()).rejects.toThrow('Reviewed skill admission unavailable');
+    expect(await readdir(join(f.hostPath,'entries'))).toEqual([]);
+    expect(await readdir(join(f.hostPath,'blobs'))).toEqual([]);
+  }
+});
 test('publishes checked hash blobs before registry, rereads, and retries idempotently across reopening',async()=>{
   const f=await fixture(),first=await f.admit();expect(first.state).toBe('complete');expect(first.executionAuthorized).toBe(false);
   const bytes=await readFile(f.entryPath);expect(first.revision).toBe(hash(bytes));

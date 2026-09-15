@@ -27,8 +27,46 @@ async function fixture(){
   const read=async(h:string)=>{const b=blobs.get(h);if(!b)throw Error('unavailable');return b;};
   const verify=()=>m.verifySkillReleaseEvidence!(manifest,{scenarioSetHash,policyRevision:'review-v1',reviewer:'reviewer'},read);
   const replace=(h:string,fn:(r:any)=>void)=>{const r=JSON.parse(blobs.get(h)!.toString());fn(r);return put(r);};
-  return {manifest,blobs,put,verify,replace,scenarioSetHash};
+  return {manifest,blobs,put,verify,replace,scenarioSetHash,basis,artifact};
 }
+
+async function independentFixture(){
+  const f=await fixture();
+  const inputHash=f.put({testOnly:true,tasks:['Synthetic task 0'],expectedAnswersIncluded:false});
+  const responseHash=f.put({testOnly:true,caseId:'case-0',answer:'Synthetic expected behavior.'});
+  const judgmentHash=f.put({version:1,kind:'skill-text-trial-judgment',basis:f.basis,scenarioSetHash:f.scenarioSetHash,
+    caseId:'case-0',reviewer:'reviewer',inputHash,responseHash,outcome:'passed',limitations:['Synthetic text only; no tool-effect or runtime-isolation proof.']});
+  const trial={version:1,kind:'skill-independent-text-trial',basis:f.basis,scenarioSetHash:f.scenarioSetHash,caseId:'case-0',
+    reportedExecutorId:'separate-test-worker',requestedModel:'test-model',modelIdentity:'unverified',scope:'synthetic_text_only',inputHash,responseHash,judgmentHash};
+  const result=JSON.parse(f.blobs.get(f.manifest.review.normalCaseHashes[0]!)!.toString());
+  const setTrial=(change:(value:any)=>void=()=>{})=>{const next=structuredClone(trial);change(next);const trialEvidenceHash=f.put(next);
+    f.manifest.review.normalCaseHashes[0]=f.put({...result,method:'independent_agent_text',trialEvidenceHash});};
+  setTrial();return {...f,trial,result,setTrial,inputHash,responseHash,judgmentHash};
+}
+
+test('accepts independently reported text trials with bound raw input, response and main judgment, without relabeling the method',async()=>{
+  const f=await independentFixture();expect(await f.verify()).toBe(true);
+  expect(JSON.parse(f.blobs.get(f.manifest.review.normalCaseHashes[0]!)!.toString()).method).toBe('independent_agent_text');
+});
+test('an independent method label alone or an author-method record carrying independent proof is rejected',async()=>{
+  const f=await fixture();f.manifest.review.normalCaseHashes[0]=f.replace(f.manifest.review.normalCaseHashes[0]!,r=>{r.method='independent_agent_text';});expect(await f.verify()).toBe(false);
+  const g=await independentFixture();g.manifest.review.normalCaseHashes[0]=g.replace(g.manifest.review.normalCaseHashes[0]!,r=>{r.method='current_agent_behavior';});expect(await g.verify()).toBe(false);
+});
+test('independent trial identity, basis, case, scope and artifact gaps fail closed',async()=>{
+  for(const change of [
+    (t:any)=>{t.basis=hash('other');},(t:any)=>{t.scenarioSetHash=hash('other');},(t:any)=>{t.caseId='case-1';},
+    (t:any)=>{t.reportedExecutorId='reviewer';},(t:any)=>{t.requestedModel='';},(t:any)=>{t.modelIdentity='verified';},
+    (t:any)=>{t.scope='live_execution';},(t:any)=>{t.inputHash=hash('missing');},(t:any)=>{t.responseHash=t.inputHash;},
+    (t:any)=>{t.judgmentHash=hash('missing');},(t:any)=>{t.approved=true;},
+  ]){const f=await independentFixture();f.setTrial(change);expect(await f.verify()).toBe(false);}
+});
+test('failed, absent or mismatched independent judgments do not become passing observations',async()=>{
+  for(const change of [
+    (j:any)=>{j.outcome='failed';},(j:any)=>{j.outcome='not_run';},(j:any)=>{j.reviewer='another';},
+    (j:any)=>{j.caseId='case-1';},(j:any)=>{j.inputHash=hash('other');},(j:any)=>{j.responseHash=hash('other');},
+    (j:any)=>{j.limitations=[];},(j:any)=>{j.basis=hash('other');},
+  ]){const f=await independentFixture();const h=f.replace(f.judgmentHash,change);f.setTrial(t=>{t.judgmentHash=h;});expect(await f.verify()).toBe(false);}
+});
 
 test('accepts source/output/policy-bound completed synthetic evidence, without making runtime permission',async()=>{
   const f=await fixture();expect(await f.verify()).toBe(true);

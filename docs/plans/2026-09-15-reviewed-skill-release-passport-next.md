@@ -38,9 +38,10 @@ No title, risk scenario, connection or hidden existence leaks through errors or 
 
 ## Behavioral records
 
-The current evidence verifier accepts current_agent_behavior only.
+Original gap: the evidence verifier accepted current_agent_behavior only.
 Independent Luna trial records must not be relabeled to fit that enum.
 Keep them as separate diagnostic artifacts until a truthful method contract is added.
+The [independent-trial change](2026-09-16-reviewed-skill-independent-trials.md) is tested/deployed; actual skill admission remains separate.
 Original seven cases stay fixed; post-failure transfer cases are not holdout evidence.
 Failing independent behavior cannot be erased by an author-visible passing answer.
 Parsing and hash consistency never prove semantic truth or runtime containment.
