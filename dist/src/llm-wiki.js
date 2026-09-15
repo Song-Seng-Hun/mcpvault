@@ -5150,8 +5150,8 @@ export class LlmWikiService {
             format: 'mcpvault-organization-manifest',
             portable: true,
             contentFreeByDefault: true,
-            sourceOfTruth: ['ordinary Markdown', 'YAML Properties', 'Git history and revisions'],
-            filing: { Inbox: 'unclear or newly captured material', Projects: 'outcome-oriented work', Areas: 'ongoing responsibilities', Resources: 'reusable references', Archives: 'inactive material' },
+            sourceOfTruth: ['Markdown', 'YAML Properties', 'Git revisions'],
+            filing: { Inbox: 'new or unclassified', Projects: 'outcome work', Areas: 'ongoing duties', Resources: 'references', Archives: 'inactive' },
             reservedPaths: ['_sources/', '_wiki/', 'Community/', '_scopes/', '_whispers/', '.mcpvault/'],
             syntax: { links: ['[[Note]]', '[[folder/Note#Heading]]', '[[Note#^claim-id]]', '[[#^claim-id]]', '[[Note|display text]]', '[Guide](Resources/Guide.md#section)'], tags: '#tag', sourceIntegrity: 'immutable source snapshot + content_sha256 + revision' },
             pipeline: ['capture', 'organize', 'distill', 'express', 'review'],
@@ -5166,11 +5166,11 @@ export class LlmWikiService {
             templates: [...NOTE_TEMPLATE_IDS],
             basesViews: [...BASES_VIEW_IDS],
             importRules: [
-                'Do not copy Community, private user/model/agent scopes, whispers, sessions, or .mcpvault caches.',
-                'Treat this manifest as organization guidance, not an access grant.',
-                'Preserve source IDs, content hashes, evidence paths, and revisions when migrating global knowledge.',
-                'Run readiness and counterpart comparison before copying notes; a preview never mutates either Vault.',
-                'Review aliases, stable IDs, scheme-local authority IDs, citation keys, Properties, and typed links for collisions in the destination Vault.',
+                'Never copy Community, private user/model/agent scopes, whispers, sessions or .mcpvault caches.',
+                'Organization guidance only; no access grant.',
+                'Global migration: preserve source IDs, content hashes, evidence paths and revisions.',
+                'Before copying, run readiness and counterpart comparison; previews never mutate either Vault.',
+                'Check destination collisions: aliases, stable IDs, scheme-local authority IDs, citation keys, Properties and typed links.',
             ],
         };
         const contractFingerprint = hash(JSON.stringify(comparableOrganizationManifest(base)));

@@ -4546,7 +4546,10 @@ test('portable migration preflight excludes non-global content and reports revis
       contracts: expect.objectContaining({ claimRoles: expect.arrayContaining(['premise', 'conclusion', 'objection']), claimRelations: expect.arrayContaining(['supports_claims', 'contradicts_claims', 'depends_on_claims']) }),
     });
     expect(defaultManifest.value.truncated).toBeUndefined();
+    expect(JSON.stringify(defaultManifest.value).length).toBeLessThanOrEqual(14000);
     expect(defaultManifest.value.contracts.properties).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: 'skill_descriptor', type: 'object' }),
+      expect.objectContaining({ name: 'skill_search_terms', type: 'list' }),
       expect.objectContaining({ name: 'task_status', type: 'text', allowed: expect.arrayContaining(['open', 'completed']) }),
       expect.objectContaining({ name: 'project_purpose', type: 'text', appliesTo: ['project'] }),
     ]));

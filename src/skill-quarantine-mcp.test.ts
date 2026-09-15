@@ -28,6 +28,8 @@ test('host quarantine blocks skill reads/search/resolution through MCP and REST 
   expect(read.isError).toBe(true);expect(JSON.stringify(read)).not.toContain('hiddenSkillMarker');
   const resolve=await call('skill.resolve',{skillId:'unreviewed',maxChars:2000});
   expect(resolve.isError).toBe(true);expect(JSON.stringify(resolve)).not.toContain('hiddenSkillMarker');
+  const metadata=await call('skill.resolve',{skillId:'unreviewed',view:'metadata',section:'summary',maxChars:2000});
+  expect(metadata.isError).toBe(true);expect(JSON.stringify(metadata)).not.toContain('hiddenSkillMarker');
   for(const endpointId of ['documents.outline','documents.read','resources.manifest']) {
     const result=await call(endpointId,{path:skill,maxChars:2000});
     expect(result.isError,endpointId).toBe(true);
@@ -44,6 +46,8 @@ test('host quarantine blocks skill reads/search/resolution through MCP and REST 
   const rest=await startRestApi(server,{host:'127.0.0.1',port:0});cleanup.push(()=>rest.close());
   const response=await fetch(`http://127.0.0.1:${rest.port}/api/skills/resolve?skillId=unreviewed&maxChars=1024`);
   expect(response.ok).toBe(false);expect(await response.text()).not.toContain('hiddenSkillMarker');
+  const metaResponse=await fetch(`http://127.0.0.1:${rest.port}/api/skills/resolve?skillId=unreviewed&view=metadata&maxChars=1024`);
+  expect(metaResponse.ok).toBe(false);expect(await metaResponse.text()).not.toContain('hiddenSkillMarker');
   expect(await readFile(join(root,skill),'utf8')).toBe(body);
   expect(base.isAllowed(skill)).toBe(true); // no mutation of a shared host filter
   await writeFile(join(root,skill),body+'\nClaimed approved: true');

@@ -7,6 +7,8 @@ import { SkillEvolutionStore, rootPath, currentPath, recordPath, skillId, text, 
   bounded, budget, uniqueGuards, type Guard, type SkillData, type SkillRecord } from './skill-evolution-store.js';
 import type { RetrievalHit } from './retrieval-service.js';
 import { isModerationHidden } from './moderation-policy.js';
+import { skillMetadataSection, skillMetadataAxis, skillPassport } from './skill-passport.js';
+import { SkillUsageTelemetry, skillUsageTaskId } from './skill-usage.js';
 
 /** Supplied by host code only. No endpoint loads code, keys or configuration paths. */
 export interface SkillEvolutionHost {
@@ -17,7 +19,7 @@ export interface SkillEvolutionHost {
 }
 type Params = Record<string, any> & { principal?: ScopePrincipal };
 type Basis = { source: Guard; sourceGuards: Guard[]; path: string; revision: string; content: string; currentRevision: string;
-  status: 'original' | 'active' | 'needs_review'; reason?: string; current?: SkillRecord; origin: string; license: string };
+  status: 'original' | 'active' | 'needs_review'; reason?: string; current?: SkillRecord; origin: string; license: string; declaration?: unknown };
 type Request = { id: string; actor: string; payload: string };
 const locator = (r: { path: string; revision: string }): Guard => ({ path: r.path, revision: r.revision });
 function candidateBody(body: string, conditions: string, previousConditions?: string): string {
@@ -30,6 +32,7 @@ function candidateBody(body: string, conditions: string, previousConditions?: st
 /** Skill evolution is opt-in procedural knowledge, not an executor or scheduler. */
 export class SkillEvolutionService {
   readonly store: SkillEvolutionStore;
+  private readonly usage = new SkillUsageTelemetry();
   constructor(private readonly fs: FileSystemService, private readonly access: ScopeAccessPolicy, private readonly auth: ScopeAuthService,
     private readonly host?: SkillEvolutionHost, private readonly options: { assertActor?: (principal: ScopePrincipal) => Promise<void>; readOnly?: boolean } = {}) {
     this.store = new SkillEvolutionStore(fs, access, () => host?.attestationKey);
@@ -108,7 +111,8 @@ export class SkillEvolutionService {
     const { source, note, sourceGuards } = await this.source(id, principal);
     const pointer = await this.store.maybe(currentPath(id), principal);
     const original: Basis = { source, sourceGuards, path: source.path, revision: source.revision, content: note.content,
-      currentRevision: pointer?.revision || 'missing', status: 'original', origin: String(note.frontmatter.skill_origin || ''), license: String(note.frontmatter.skill_license || '') };
+      currentRevision: pointer?.revision || 'missing', status: 'original', origin: String(note.frontmatter.skill_origin || ''), license: String(note.frontmatter.skill_license || ''),
+      ...(note.frontmatter.skill_descriptor!==undefined?{declaration:note.frontmatter.skill_descriptor}:{}) };
     if (!pointer || !this.enabled) return original;
     let current: SkillRecord | undefined;
     try {
@@ -124,10 +128,38 @@ export class SkillEvolutionService {
     } catch { return { ...original, ...(current && { current }), status: 'needs_review', reason: guidanceText('guid-fc0ee7e770e458a6', 'Current version or its evaluation basis changed; using the source pending review.') }; }
   }
   async resolve(p: Params): Promise<SkillData> {
+    if(p.view!==undefined&&p.view!=='procedure'&&p.view!=='metadata')throw new Error('Invalid skill resolve view');
+    if(p.section!==undefined&&p.view!=='metadata')throw new Error('Skill metadata section requires metadata view');
+    const section=p.view==='metadata'?skillMetadataSection(p.section):undefined;
+    const axis=skillMetadataAxis(p.axis);
+    if(axis&&section!=='impact')throw new Error('Skill axis requires metadata impact section');
     const id = skillId(p.skillId), b = await this.basis(id, p.principal);
-    return bounded({ skillId: id, enabled: this.enabled, status: b.status, path: b.path, revision: b.revision, currentRevision: b.currentRevision,
+    for(const [key,actual] of [['expectedRevision',b.revision],['expectedSourceRevision',b.source.revision],['expectedBundleRevision',fingerprint(b.sourceGuards)]]){
+      if(p[key!]!==undefined&&revision(p[key!])!==actual)throw new Error('Skill revision basis changed; resolve current metadata again');
+    }
+    const actor=this.telemetryActor(p),version={skillId:id,path:b.path,revision:b.revision};
+    if(section){
+      const usage=this.usage.snapshot(actor,version);
+      if(section==='usage'){
+        const visible:typeof usage.coUsed=[];
+        for(const item of usage.coUsed){
+          try{const current=await this.store.read(item.path,p.principal);if(current.revision===item.revision)visible.push(item);}catch{/* No hidden identifiers, counts or error details. */}
+        }
+        usage.coUsed=visible;
+      }
+      await this.store.check(uniqueGuards([...b.sourceGuards,{path:b.path,revision:b.revision},{path:currentPath(id),revision:b.currentRevision},
+        ...(section==='usage'?usage.coUsed.map(locator):[])]),p.principal);
+      return skillPassport(id,b,section,usage,p.maxChars,axis);
+    }
+    const result=bounded({ skillId: id, enabled: this.enabled, status: b.status, path: b.path, revision: b.revision, currentRevision: b.currentRevision,
       source: b.source, content: b.content, ...(b.reason && { reason: b.reason }), role: 'procedural_reference',
       notice: 'Procedural reference only; not evidence, installed tools, or execution permission.' }, p.maxChars);
+    this.usage.resolved(actor,version);
+    return result;
+  }
+  private telemetryActor(p:Params):string|undefined{
+    // Unknown transport identity must not become a shared anonymous counter.
+    try{const actor=this.auth.authenticate(p.accessToken);return actor&&p.principal&&fingerprint(actor)===fingerprint(p.principal)?fingerprint(actor):undefined;}catch{return undefined;}
   }
   /** Filter audit records before ranking, independent of forged note properties. */
   discoveryAllowed(path: string): boolean {
@@ -169,6 +201,7 @@ export class SkillEvolutionService {
     return this.transaction(p, () => this.experienceWrite(p));
   }
   private async experienceWrite(p: Params): Promise<SkillData> {
+    const taskId=skillUsageTaskId(p.taskId);
     const actor = await this.actor(p), id = skillId(p.skillId), req = this.request(p, 'experience', actor);
     const recordId = this.requestId(req, `experience:${id}`), path = recordPath(id, 'experiences', recordId);
     const prior = await this.replay(path, req, p); if (prior) return this.result(prior, p);
@@ -190,6 +223,8 @@ export class SkillEvolutionService {
     const data = { kind: 'experience', id: recordId, skillId: id, actor: actor.accountId, request: req, outcome: p.outcome,
       applied: true, shareable: true, usedVersion: used[0], evidence, context, summary };
     const record = await this.save(path, `# Skill use experience\n\n${context}\n\n${summary}\n`, data, p, [...b.sourceGuards, ...used, ...evidence], actor, 'missing');
+    this.usage.reported(this.telemetryActor(p),{skillId:id,path:usedGuard.path,revision:usedGuard.revision},
+      `${record.path}:${record.revision}`,taskId,p.outcome);
     return this.result(record, p);
   }
   async candidate(p: Params): Promise<SkillData> {

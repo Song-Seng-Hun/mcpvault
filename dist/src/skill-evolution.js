@@ -2,6 +2,8 @@ import { guidanceError, guidanceText } from './guidance-runtime.js';
 import { evaluateSkill, profileFingerprint } from './skill-evaluation.js';
 import { SkillEvolutionStore, rootPath, currentPath, recordPath, skillId, text, expected, revision, fingerprint, bounded, budget, uniqueGuards } from './skill-evolution-store.js';
 import { isModerationHidden } from './moderation-policy.js';
+import { skillMetadataSection, skillMetadataAxis, skillPassport } from './skill-passport.js';
+import { SkillUsageTelemetry, skillUsageTaskId } from './skill-usage.js';
 const locator = (r) => ({ path: r.path, revision: r.revision });
 function candidateBody(body, conditions, previousConditions) {
     const section = (value) => `\n\n## Skill applicability\n\n${value}`;
@@ -19,6 +21,7 @@ export class SkillEvolutionService {
     host;
     options;
     store;
+    usage = new SkillUsageTelemetry();
     constructor(fs, access, auth, host, options = {}) {
         this.fs = fs;
         this.access = access;
@@ -111,7 +114,8 @@ export class SkillEvolutionService {
         const { source, note, sourceGuards } = await this.source(id, principal);
         const pointer = await this.store.maybe(currentPath(id), principal);
         const original = { source, sourceGuards, path: source.path, revision: source.revision, content: note.content,
-            currentRevision: pointer?.revision || 'missing', status: 'original', origin: String(note.frontmatter.skill_origin || ''), license: String(note.frontmatter.skill_license || '') };
+            currentRevision: pointer?.revision || 'missing', status: 'original', origin: String(note.frontmatter.skill_origin || ''), license: String(note.frontmatter.skill_license || ''),
+            ...(note.frontmatter.skill_descriptor !== undefined ? { declaration: note.frontmatter.skill_descriptor } : {}) };
         if (!pointer || !this.enabled)
             return original;
         let current;
@@ -135,10 +139,53 @@ export class SkillEvolutionService {
         }
     }
     async resolve(p) {
+        if (p.view !== undefined && p.view !== 'procedure' && p.view !== 'metadata')
+            throw new Error('Invalid skill resolve view');
+        if (p.section !== undefined && p.view !== 'metadata')
+            throw new Error('Skill metadata section requires metadata view');
+        const section = p.view === 'metadata' ? skillMetadataSection(p.section) : undefined;
+        const axis = skillMetadataAxis(p.axis);
+        if (axis && section !== 'impact')
+            throw new Error('Skill axis requires metadata impact section');
         const id = skillId(p.skillId), b = await this.basis(id, p.principal);
-        return bounded({ skillId: id, enabled: this.enabled, status: b.status, path: b.path, revision: b.revision, currentRevision: b.currentRevision,
+        for (const [key, actual] of [['expectedRevision', b.revision], ['expectedSourceRevision', b.source.revision], ['expectedBundleRevision', fingerprint(b.sourceGuards)]]) {
+            if (p[key] !== undefined && revision(p[key]) !== actual)
+                throw new Error('Skill revision basis changed; resolve current metadata again');
+        }
+        const actor = this.telemetryActor(p), version = { skillId: id, path: b.path, revision: b.revision };
+        if (section) {
+            const usage = this.usage.snapshot(actor, version);
+            if (section === 'usage') {
+                const visible = [];
+                for (const item of usage.coUsed) {
+                    try {
+                        const current = await this.store.read(item.path, p.principal);
+                        if (current.revision === item.revision)
+                            visible.push(item);
+                    }
+                    catch { /* No hidden identifiers, counts or error details. */ }
+                }
+                usage.coUsed = visible;
+            }
+            await this.store.check(uniqueGuards([...b.sourceGuards, { path: b.path, revision: b.revision }, { path: currentPath(id), revision: b.currentRevision },
+                ...(section === 'usage' ? usage.coUsed.map(locator) : [])]), p.principal);
+            return skillPassport(id, b, section, usage, p.maxChars, axis);
+        }
+        const result = bounded({ skillId: id, enabled: this.enabled, status: b.status, path: b.path, revision: b.revision, currentRevision: b.currentRevision,
             source: b.source, content: b.content, ...(b.reason && { reason: b.reason }), role: 'procedural_reference',
             notice: 'Procedural reference only; not evidence, installed tools, or execution permission.' }, p.maxChars);
+        this.usage.resolved(actor, version);
+        return result;
+    }
+    telemetryActor(p) {
+        // Unknown transport identity must not become a shared anonymous counter.
+        try {
+            const actor = this.auth.authenticate(p.accessToken);
+            return actor && p.principal && fingerprint(actor) === fingerprint(p.principal) ? fingerprint(actor) : undefined;
+        }
+        catch {
+            return undefined;
+        }
     }
     /** Filter audit records before ranking, independent of forged note properties. */
     discoveryAllowed(path) {
@@ -200,6 +247,7 @@ export class SkillEvolutionService {
         return this.transaction(p, () => this.experienceWrite(p));
     }
     async experienceWrite(p) {
+        const taskId = skillUsageTaskId(p.taskId);
         const actor = await this.actor(p), id = skillId(p.skillId), req = this.request(p, 'experience', actor);
         const recordId = this.requestId(req, `experience:${id}`), path = recordPath(id, 'experiences', recordId);
         const prior = await this.replay(path, req, p);
@@ -231,6 +279,7 @@ export class SkillEvolutionService {
         const data = { kind: 'experience', id: recordId, skillId: id, actor: actor.accountId, request: req, outcome: p.outcome,
             applied: true, shareable: true, usedVersion: used[0], evidence, context, summary };
         const record = await this.save(path, `# Skill use experience\n\n${context}\n\n${summary}\n`, data, p, [...b.sourceGuards, ...used, ...evidence], actor, 'missing');
+        this.usage.reported(this.telemetryActor(p), { skillId: id, path: usedGuard.path, revision: usedGuard.revision }, `${record.path}:${record.revision}`, taskId, p.outcome);
         return this.result(record, p);
     }
     async candidate(p) {

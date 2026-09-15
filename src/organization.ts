@@ -175,6 +175,8 @@ export const ORGANIZATION_PROPERTY_CONTRACT: readonly OrganizationPropertyContra
   { name: 'skill_origin_sha256', type: 'text', description: 'SHA256 of the imported original text, not a review certification.', appliesTo: ['skill'] },
   { name: 'skill_projection_sha256', type: 'text', description: 'Importer projection digest for conflict detection; advisory, not host authorization.', appliesTo: ['skill'] },
   { name: 'skill_license', type: 'text', description: 'Explicitly reviewed sharing license with retained terms.', appliesTo: ['skill'] },
+  { name: 'skill_descriptor', type: 'object', description: 'Versioned untrusted discovery declaration: purpose, applicability, examples, connections and potential consequences. Never host approval or execution permission.', appliesTo: ['skill'] },
+  { name: 'skill_search_terms', type: 'list', description: 'Derived discovery terms and example queries; neither an authority label nor an invocation.', appliesTo: ['skill'] },
   { name: 'skill_record_kind', type: 'text', description: 'Skill evolution record role; separate from knowledge lifecycle.', allowed: ['experience', 'candidate', 'evaluation', 'version', 'current', 'transition', 'snapshot', 'receipt'] },
   { name: 'skill_evolution', type: 'object', description: 'Exact version, experience, evaluation and decision locators. Host-verified records only; Properties do not grant authority.' },
   { name: 'skill_attestation', type: 'text', description: 'Host decision seal checked together with current revisions and write receipts; not a permission grant.' },

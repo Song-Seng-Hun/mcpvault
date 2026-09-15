@@ -20,7 +20,9 @@ async function fixture(readOnly = false) {
   const fs = new FileSystemService(root), auth = new ScopeAuthService(root);
   const registration = await auth.register({ accountId: 'worker', modelId: 'test', password: 'synthetic-password-only' });
   const notes = projectSkill({ id: 'safe-edit', origin: 'fixture', version: '1', license: 'MIT', licenseText: 'MIT License\nPermission is hereby granted, free of charge',
-    description: 'editCurrentMarker', files: [{ path: 'SKILL.md', text: '# editCurrentMarker\nread\npatch\n' }], unavailable: [] });
+    description: 'editCurrentMarker', files: [{ path: 'SKILL.md', text: '# editCurrentMarker\nread\npatch\n' }], unavailable: [],
+    descriptor:{version:1,kind:'tool',domains:['development'],purpose:'Inspect authorized edits.',effects:['write_workspace'],
+      examples:[{query:'exampleOnlyDiscoveryMarker',action:'notes.read',expected:'Exact current source.'}]}});
   await applySkills(fs, notes, (await previewSkills(fs, notes)).fingerprint);
   await fs.writeNote({ path: 'Evidence/edit.md', content: 'A missing verification was observed.' });
   const evidence = { path: 'Evidence/edit.md', revision: (await fs.readNote('Evidence/edit.md')).revision };
@@ -77,6 +79,10 @@ test('six dynamic skill endpoints share the existing five-tool MCP control plane
 test('read-only catalog and dispatcher allow mixed reads but reject all skill writes', async () => {
   const f = await fixture(true), { c } = await f.seed();
   expect((await f.call('skill.resolve', { skillId: 'safe-edit' })).status).toBe('original');
+  const metadata=await f.call('skill.resolve',{skillId:'safe-edit',view:'metadata',section:'description',maxChars:12000});
+  expect(metadata.descriptor.examples[0].action).toBe('notes.read');
+  expect(Object.keys((await f.call('skill.resolve',{skillId:'safe-edit',view:'metadata',section:'impact',axis:'assets',maxChars:12000})).impact.axes)).toEqual(['assets']);
+  expect((await f.call('wiki.search',{query:'exampleOnlyDiscoveryMarker',maxChars:4000})).some((x:any)=>(x.physicalPath||x.p)==='Community/Skills/safe-edit/SKILL.md')).toBe(true);
   expect((await f.call('skill.candidate', { skillId: 'safe-edit', candidateId: c.candidateId, op: 'read' })).candidateId).toBe(c.candidateId);
   expect((await f.call('skill.candidate', { skillId: 'safe-edit', op: 'list' })).items).toHaveLength(1);
   for (const [endpointId, op] of [['skill.experience', undefined], ['skill.candidate', 'create'], ['skill.candidate', 'update'], ['skill.candidate', 'reject'],
@@ -123,6 +129,9 @@ test('REST skill reads use the same dispatcher and authenticated mutation denial
   const base = `http://127.0.0.1:${rest.port}`;
   const response = await fetch(`${base}/api/skills/resolve?skillId=safe-edit&maxChars=1024`);
   expect(response.status).toBe(200); const result = await response.json() as any; expect(result.status).toBe('original');
+  const metadataResponse=await fetch(`${base}/api/skills/resolve?skillId=safe-edit&view=metadata&section=impact&maxChars=12000`);
+  expect(metadataResponse.status).toBe(200);
+  expect(await metadataResponse.json()).toMatchObject({section:'impact',impact:{permissionGranted:false,axes:{assets:{level:'high'}}}});
   const denied = await fetch(`${base}/api/skills/candidate`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${f.registration.accessToken}` },
     body: JSON.stringify({ skillId: 'safe-edit', op: 'create' }) });
   expect(denied.status).toBeGreaterThanOrEqual(400);

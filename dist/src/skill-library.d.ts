@@ -12,6 +12,7 @@ export interface SkillSource {
         text: string;
     }>;
     unavailable: string[];
+    descriptor?: unknown;
 }
 export interface SkillProjection {
     path: string;

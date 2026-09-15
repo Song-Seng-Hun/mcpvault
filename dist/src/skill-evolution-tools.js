@@ -1,4 +1,6 @@
 import { operationReadAlias } from './operation-contracts.js';
+import { SKILL_METADATA_SECTIONS } from './skill-passport.js';
+import { IMPACT_AXES } from './skill-descriptor.js';
 const string = (maxLength = 2000) => ({ type: 'string', minLength: 1, maxLength });
 const guard = { type: 'object', additionalProperties: false, properties: { path: string(500), revision: { type: 'string', pattern: '^[a-f0-9]{64}$' } }, required: ['path', 'revision'] };
 const guards = { type: 'array', minItems: 1, maxItems: 8, items: guard };
@@ -18,10 +20,15 @@ function tool(name, description, properties, required) {
 }
 export function getSkillEvolutionTools() {
     return [
-        tool('resolve_skill', 'Resolve the current usable procedural skill, exact revision and review drift. Imported source remains available. This does not install tools or grant execution permission.', {}, []),
+        tool('resolve_skill', 'Resolve the current procedural skill and revision. Use view=metadata for purpose, searchable usage examples, declared connections, worst-case potential impact or actor-scoped process observations. High potential impact does not mean malice; metadata is not approval, legal clearance, installation or permission. Quarantine still applies.', {
+            view: { type: 'string', enum: ['procedure', 'metadata'], default: 'procedure' }, section: { type: 'string', enum: [...SKILL_METADATA_SECTIONS] },
+            axis: { type: 'string', enum: [...IMPACT_AXES], description: 'Optional single axis; requires view=metadata and section=impact.' },
+            expectedRevision: guard.properties.revision, expectedSourceRevision: guard.properties.revision, expectedBundleRevision: guard.properties.revision,
+        }, []),
         tool('record_skill_experience', 'Record an actually applied current or retained verified version of this Skill with explicit shareable success/failure/unknown outcome and exact visible evidence. Historical use does not qualify as current-basis candidate input. Do not copy private task logs. Requires host opt-in and an authenticated writer; retry the identical requestId after uncertain writes.', {
             ...write, usedVersion: guard, applied: { type: 'boolean', const: true }, shareable: { type: 'boolean', const: true },
             outcome: { type: 'string', enum: ['success', 'failure', 'unknown'] }, context: string(), summary: string(), evidence: guards,
+            taskId: { type: 'string', pattern: '^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$', description: 'Optional opaque task label for private process-local reported co-use. Not a path, transcript, verified execution receipt or merge permission.' },
         }, ['expectedRevision', 'requestId', 'usedVersion', 'applied', 'shareable', 'outcome', 'context', 'summary', 'evidence']),
         tool('manage_skill_candidate', 'Read/list or create/update/reject an unverified skill improvement candidate. Creation binds current source and used-version revisions plus experience locators. Updates/rejection require the exact candidate revision and original author or a host approval account. Candidates are never automatically recommended.', {
             ...write, op: { type: 'string', enum: ['read', 'list', 'create', 'update', 'reject'], default: 'read' }, candidateId: recordId,

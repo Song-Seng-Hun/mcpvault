@@ -22,6 +22,7 @@ export declare class SkillEvolutionService {
     private readonly host?;
     private readonly options;
     readonly store: SkillEvolutionStore;
+    private readonly usage;
     constructor(fs: FileSystemService, access: ScopeAccessPolicy, auth: ScopeAuthService, host?: SkillEvolutionHost | undefined, options?: {
         assertActor?: (principal: ScopePrincipal) => Promise<void>;
         readOnly?: boolean;
@@ -40,6 +41,7 @@ export declare class SkillEvolutionService {
     private source;
     private basis;
     resolve(p: Params): Promise<SkillData>;
+    private telemetryActor;
     /** Filter audit records before ranking, independent of forged note properties. */
     discoveryAllowed(path: string): boolean;
     /** Resolve only skills already found by this query, never scan the library. */
