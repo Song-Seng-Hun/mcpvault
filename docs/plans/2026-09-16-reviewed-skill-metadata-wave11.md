@@ -5,7 +5,7 @@ keywords: [metadata, assets, migration, audio, recovery, premortem, 스킬-검�
 use_when: Selecting the next limited procedure or checking metadata coverage.
 parent: 2026-09-15-reviewed-skill-release.md
 previous: 2026-09-16-reviewed-memory-recall-trial.md
-next: 2026-09-15-reviewed-skill-release-passport-next.md
+next: 2026-09-16-reviewed-skill-metadata-wave12.md
 ---
 # Compact-bundle metadata review
 
