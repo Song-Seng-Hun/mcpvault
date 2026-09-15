@@ -1,10 +1,23 @@
-import { test } from 'node:test';
+import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, writeFile, readFile, rm, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
-import { auditSkillDirectory, verifyReceipt } from './audit.mjs';
+import { auditSkillDirectory as scan, verifyReceipt as checkReceipt } from './audit.mjs';
+
+let rulesRoot, approvedRules;
+before(async()=>{
+  rulesRoot=await mkdtemp(path.join(tmpdir(),'mcpvault-approved-test-rules-'));
+  const rule={id:'HOST_FIXTURE_RULE',pattern:'host-fixture-sentinel',severity:'HIGH'};
+  const raw=JSON.stringify({version:'fixture',staticRules:[rule],codeRules:[rule],subagentRules:[rule]});
+  const rulesPath=path.join(rulesRoot,'rules.json'); await writeFile(rulesPath,raw);
+  approvedRules={rulesPath,expectedRulesHash:createHash('sha256').update(raw).digest('hex')};
+});
+after(async()=>{if(rulesRoot)await rm(rulesRoot,{recursive:true,force:true});});
+const profile=options=>options.rulesPath!==undefined?options:{...approvedRules,...options};
+const auditSkillDirectory=(root,options={})=>scan(root,profile(options));
+const verifyReceipt=(root,receipt,options={})=>checkReceipt(root,receipt,profile(options));
 
 async function fixture(t, files) {
   const root = await mkdtemp(path.join(tmpdir(), 'mcpvault-audit-test-'));

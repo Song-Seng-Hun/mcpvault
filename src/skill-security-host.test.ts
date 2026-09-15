@@ -5,7 +5,7 @@ import path from 'node:path';
 import { parse } from 'yaml';
 
 test('security auditor real filesystem and worker regressions', () => {
-  const output=execFileSync(process.execPath,['--test','scripts/skill-security/audit.test.mjs'],{
+  const output=execFileSync(process.execPath,['--test','--test-concurrency=1','scripts/skill-security/audit.test.mjs','scripts/skill-security/research.test.mjs'],{
     cwd:process.cwd(),encoding:'utf8',timeout:20000,maxBuffer:1024*1024,windowsHide:true,
   });
   expect(output).toContain('# fail 0');

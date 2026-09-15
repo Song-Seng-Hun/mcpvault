@@ -4,7 +4,7 @@ description: Interpret findings without false safety claims or destructive remed
 keywords: [false positive, incomplete, isolation, review, 한계]
 parent: ../SKILL.md
 previous: ../reference.md
-next: ../SKILL.md
+next: research-checks.md
 ---
 # Limits and disposition
 
@@ -34,3 +34,13 @@ tests and a new basis. Never tune against only a favored set of passing skills.
 Do not rewrite code, strip examples, rename Korean identifiers, delete resources,
 change permissions, or move quarantine data merely to satisfy a scanner.
 Manual approval must specify what may run, where, with which inputs and effects.
+
+Decoded views: at most 4 layers, 24 queued views and 512 KiB decoded text.
+ROT13 views stop at 65,536 characters; skipped coverage is incomplete.
+Bundle analysis retains at most 2 MiB text and checks 128 literal references.
+It joins only linked 2,048-character boundaries and plaintext capability signals.
+External, missing, dynamic and outside references remain uninspected; no fetch.
+`referencesComplete` describes this parser scope, not every possible dependency.
+Shortcut links, computed paths, arbitrary encodings and semantic paraphrases can evade it.
+Related file IDs indicate review candidates, not proven data flow or malicious intent.
+Read [research checks](research-checks.md) for lifecycle review beyond static patterns.

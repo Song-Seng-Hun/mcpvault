@@ -4,7 +4,7 @@ import { compileRules } from './detect.mjs';
 import { hash, failure } from './contract.mjs';
 import { scan } from './scanner.mjs';
 try {
-  const { root, budget, rulesPath, expectedRulesHash } = workerData;
+  const { root, budget, rulesPath, expectedRulesHash, rulesMode } = workerData;
   let rules = [], rulesHash = null;
   if (rulesPath) {
     const st = fs.lstatSync(rulesPath);
@@ -23,5 +23,7 @@ try {
     if (raw.length > 1048576 || hash(raw) !== expectedRulesHash) throw Error('RULES_CHANGED');
     rules = compileRules(JSON.parse(raw.toString('utf8'))); rulesHash = hash(raw);
   }
-  parentPort.postMessage(scan(root, budget, rules, rulesHash));
+  const report=scan(root, budget, rules, rulesHash);
+  if (rulesMode === 'builtin' && report.status === 'NO_FINDINGS') report.status='DIAGNOSTIC';
+  parentPort.postMessage(report);
 } catch { parentPort.postMessage(failure('ERROR', 'RULES_OR_WORKER_ERROR')); }

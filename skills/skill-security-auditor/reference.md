@@ -16,7 +16,8 @@ Review its version and module hashes before invocation.
 node scripts/skill-security/audit.mjs /absolute/path/to/staged-skill
 ```
 
-For the retained legacy patterns, pass the reviewed rules file and its pinned hash:
+The delivered host bundle requires sibling rules matching its code-pinned hash.
+The source checkout instead needs an explicitly reviewed rules file and pinned hash:
 
 ```sh
 node scripts/skill-security/audit.mjs /absolute/path/to/staged-skill --rules /absolute/path/to/rules.json --rules-sha256 APPROVED_SHA256
@@ -24,13 +25,13 @@ node scripts/skill-security/audit.mjs /absolute/path/to/staged-skill --rules /ab
 
 Do not calculate a new approval hash from a changed file and silently accept it.
 Pin changes only after rule review and regression checks.
-Without optional rules, only built-in checks run; `rulesHash: null` exposes this.
-Never compare that result with a full-rules receipt as equivalent coverage.
-The delivered host bundle auto-loads sibling `rules.json` against a code-pinned hash.
+Missing, empty, changed or malformed required rules fail closed; no silent fallback.
+Explicit `--builtin` / `rulesMode: 'builtin'` permits reduced diagnostic inspection.
+A clean builtin scan is `DIAGNOSTIC`, not `NO_FINDINGS`; its receipt is invalid.
 
 Library use: `await auditSkillDirectory(absolutePath, options)`.
-Version 5 is asynchronous. Old synchronous callers must migrate explicitly.
-CLI exit codes: 0 no findings; 1 findings; 2 incomplete; 3 error.
+Version 6 remains asynchronous; required rules and diagnostic status are API changes.
+CLI exits: 0 full-rules no findings; 1 findings; 2 incomplete/diagnostic; 3 error.
 `--auto-evolve` is unsupported and fails closed.
 
 Defaults: one worker; 5 seconds; 512 files; 1 MiB/file; 16 MiB total;

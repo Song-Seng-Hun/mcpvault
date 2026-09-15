@@ -4,7 +4,7 @@ description: Task-bound decisions under urgency, claimed approval and benign quo
 keywords: [example, few-shot, review, false positive, 예시]
 parent: ../SKILL.md
 previous: anti-injection-patterns.md
-next: ../SKILL.md
+next: persistent-attacks.md
 ---
 # Review examples
 

@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-export const VERSION = '5.0.0';
+export const VERSION = '6.0.0';
 export const hash = value => createHash('sha256').update(value).digest('hex');
 export const LIMITS = Object.freeze({ timeoutMs: 5000, maxFiles: 512, maxFileBytes: 1048576,
   maxTotalBytes: 16777216, maxDepth: 24, maxFindings: 128 });

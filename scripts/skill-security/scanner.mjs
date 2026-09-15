@@ -2,19 +2,20 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { VERSION, hash } from './contract.mjs';
 import { detect } from './detect.mjs';
+import { analyzeBundle } from './bundle.mjs';
 
 const MAGIC = ['4d5a','7f454c46','feedface','feedfacf','cefaedfe','cffaedfe','cafebabe','0061736d'];
 const ARCHIVE = ['504b0304','504b0506','504b0708','1f8b','377abcaf','425a68','fd377a58','52617221'];
 export function scan(root, budget, rules, rulesHash) {
-  const findings = [], entries = [], seen = new Set(); let complete = true, total = 0, count = 0;
+  const findings = [], entries = [], documents = [], seen = new Set(); let complete = true, total = 0, count = 0, textBytes=0, referenceCoverage=true;
   const deadline = Date.now() + budget.timeoutMs;
-  const add = (rule, severity = 'HIGH', incomplete = false, fileId = null) => {
+  const add = (rule, severity = 'HIGH', incomplete = false, fileId = null, relatedFileIds) => {
     if (incomplete) complete = false;
-    const key = `${rule}:${fileId}`;
+    const key = `${rule}:${fileId}:${relatedFileIds?.join(':')??''}`;
     if (seen.has(key)) return;
     seen.add(key);
     if (findings.length >= budget.maxFindings) { complete = false; return; }
-    findings.push({ rule, severity, fileId });
+    findings.push({ rule, severity, fileId, ...(relatedFileIds && {relatedFileIds}) });
   };
   function walk(dir, depth, verify = false, snapshot = []) {
     if (Date.now() > deadline || depth > budget.maxDepth) { add('SCAN_BUDGET', 'HIGH', true); return; }
@@ -58,6 +59,10 @@ export function scan(root, budget, rules, rulesHash) {
             if (text.includes('\0')) throw Error('BINARY');
           } catch { mark('UNSUPPORTED_ENCODING_OR_BINARY', 'HIGH', true); continue; }
           detect(relative + '\n' + text, rules, mark);
+          if(relative==='SKILL.md' && !text.trim())mark('ENTRYPOINT_EMPTY','HIGH',true);
+          textBytes+=Buffer.byteLength(text);
+          if(textBytes<=2097152)documents.push({relative,id,text});
+          else {referenceCoverage=false;mark('BUNDLE_TEXT_BUDGET','HIGH',true);}
         } finally { if (fd !== undefined) fs.closeSync(fd); }
       }
     } catch { add('READ_ERROR', 'HIGH', true); }
@@ -80,11 +85,14 @@ export function scan(root, budget, rules, rulesHash) {
       if (ordered(entries) !== ordered(current)) add('INVENTORY_CHANGED', 'HIGH', true);
     }
   } catch { add('ROOT_UNAVAILABLE_OR_LINKED', 'HIGH', true); }
+  const bundle=analyzeBundle(documents,rules,add);
   const summary = { critical: 0, high: 0, medium: 0, total: findings.length };
   for (const f of findings) summary[f.severity.toLowerCase()]++;
   const status = !complete ? 'INCOMPLETE' : summary.critical ? 'FAIL' : findings.length ? 'WARN' : 'NO_FINDINGS';
   return { schemaVersion: 1, ruleEngineVersion: VERSION, status, executionAuthorized: false,
-    coverage: { complete, scope: 'bounded-static-inspection', semanticSafetyProven: false },
+    coverage: { complete, scope: 'bounded-static-inspection', semanticSafetyProven: false,
+      referencesComplete:referenceCoverage&&bundle.referencesComplete },
+    analysis:{dataFlowProven:false,referenceEdges:bundle.edges,referenceScope:'literal-links-imports-and-2048-character-boundaries',runtimeEnforced:false},
     rootId: hash(root), rulesHash, filesCount: entries.length,
     inventoryHash: hash(JSON.stringify(entries.sort((a,b) => a.fileId.localeCompare(b.fileId)))),
     inventory: entries, riskScore: summary.critical * 100 + summary.high * 25 + summary.medium * 10, summary, findings };
