@@ -5,7 +5,7 @@ keywords: [metadata, floor guard, redaction, untracked diff, ADR, Slack, 감사-
 use_when: Checking declared workflow scope and conditional effects before limited use.
 parent: 2026-09-15-reviewed-skill-release.md
 previous: 2026-09-16-reviewed-skill-caveman-expression-trial.md
-next: 2026-09-15-reviewed-skill-release-passport-next.md
+next: 2026-09-16-reviewed-skill-metadata-wave16.md
 ---
 # Review the reviewer, preserve authority boundaries
 
