@@ -5,7 +5,7 @@ keywords: [metadata, BigQuery, Dataplex, Dataform, authorization, autoscaling, í
 use_when: Checking source completeness and conditional cloud effects before limited use.
 parent: 2026-09-15-reviewed-skill-release.md
 previous: 2026-09-16-reviewed-skill-metadata-wave15.md
-next: 2026-09-15-reviewed-skill-release-passport-next.md
+next: 2026-09-16-reviewed-skill-metadata-wave17.md
 ---
 # Cloud guidance is not execution authority
 
