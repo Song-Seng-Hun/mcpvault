@@ -5,7 +5,7 @@ keywords: [skill audit, retained rules, receipt, provenance, 스킬 감사]
 use_when: Preparing an auditor derivative or interpreting its recorded metadata.
 parent: 2026-09-15-reviewed-skill-release.md
 previous: 2026-09-16-reviewed-skill-metadata-wave4.md
-next: 2026-09-15-reviewed-skill-release-passport-next.md
+next: 2026-09-16-reviewed-skill-metadata-wave5.md
 ---
 # Auditor metadata review
 
