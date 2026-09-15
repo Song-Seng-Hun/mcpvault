@@ -5,7 +5,7 @@ keywords: [ADR, GDD, authentication, code review, metadata, 스킬]
 use_when: Resuming the remaining metadata queue after the first-ten supplements.
 parent: 2026-09-15-reviewed-skill-release.md
 previous: 2026-09-15-skill-metadata-completion.md
-next: 2026-09-15-reviewed-skill-release-passport-next.md
+next: 2026-09-16-reviewed-skill-metadata-wave3.md
 ---
 # Metadata wave 2
 
