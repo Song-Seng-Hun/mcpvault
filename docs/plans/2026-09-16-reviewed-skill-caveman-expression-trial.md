@@ -5,7 +5,7 @@ keywords: [Caveman, bilingual names, conditions, Luna, semantic preservation, ì•
 use_when: Deciding whether an expression profile has evidence for limited deployment.
 parent: 2026-09-15-reviewed-skill-release.md
 previous: 2026-09-16-reviewed-skill-metadata-wave14.md
-next: 2026-09-15-reviewed-skill-release-passport-next.md
+next: 2026-09-16-reviewed-skill-metadata-wave15.md
 ---
 # Expression candidate held after one repair
 
