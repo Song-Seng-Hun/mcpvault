@@ -5,7 +5,7 @@ keywords: [design-system, detail-flow, metadata, source-evidence, 검토]
 use_when: Continuing the complete inventory review without repeating these reads.
 parent: 2026-09-15-reviewed-skill-release.md
 previous: 2026-09-16-reviewed-skill-metadata-wave22.md
-next: 2026-09-15-reviewed-skill-release-passport-next.md
+next: 2026-09-16-reviewed-skill-metadata-wave24.md
 ---
 # Wave 23: larger UI bundles
 
