@@ -33,6 +33,7 @@ const CONTRACTS: Readonly<Record<string, OperationContract>> = {
   manage_work_group: { defaultOp: 'read', summary: 'public', reads: reads('read_work_group', 'public', 'read') },
   manage_community_participation: { defaultOp: 'read', summary: 'authenticated', reads: reads('read_community_participation', 'authenticated', 'read') },
   manage_roleplay_world: { defaultOp: 'read', summary: 'roleplay-world', reads: reads('read_roleplay_world', 'roleplay-world', 'read') },
+  manage_roleplay_computer: { defaultOp: 'list', summary: 'authenticated', reads: reads('read_roleplay_computer', 'authenticated', 'list', 'read', 'context') },
   manage_roleplay_character: { defaultOp: 'read', summary: 'roleplay-read', reads: reads('read_roleplay_character', 'roleplay-read', 'read') },
   manage_roleplay_scene: { defaultOp: 'read', summary: 'roleplay-read', reads: reads('read_roleplay_scene', 'roleplay-read', 'read') },
   manage_roleplay_evolution: { summary: 'roleplay-read', reads: { ...reads('read_roleplay_evolution', 'roleplay-read', 'read', 'list'),
@@ -65,7 +66,7 @@ export function operationAvailability(item: EndpointDescriptor, context: Endpoin
   const disabled = (requires: string[], reason: string): Availability => ({ available: false, state: 'disabled', requires, reason });
   const read = (policy: ReadPolicy): Availability => {
     const hostDisabled = context.skillEvolutionEnabled === false && item.endpointId.startsWith('skill.')
-      || context.roleplayConfigured === false && item.endpointId.startsWith('roleplay.');
+      || context.roleplayConfigured === false && item.endpointId.startsWith('roleplay.') && item.endpointId !== 'roleplay.computer';
     if (hostDisabled && baseWrite.state === 'disabled') return baseWrite;
     switch (policy) {
       case 'public': case 'roleplay-world': return publicRead;

@@ -49,6 +49,42 @@ test('shared known-directory changes retain deletion and aliases with only chang
   expect(result.total).toBe(1); expect(result.backlinks[0]!.path).toBe('Notes/N1.md');
   expect(reads.mock.calls.map(([p]) => p)).toEqual([join(vault, 'Notes/N0.md')]);
 });
+
+test.each(['Late', 'Missing'])('a repeated %s folder event scans a large inventory at most once per burst', async folder => {
+  await fixture();
+  const paths = Array.from({ length: 100_000 }, (_, i) => `Earlier/N${i}.md`);
+  paths.push('Late/Note.md');
+  let inspected = 0;
+  (catalog as any).allPaths = new Proxy(paths, { get(target, key, receiver) {
+    if (typeof key === 'string' && /^\d+$/.test(key)) inspected++;
+    return Reflect.get(target, key, receiver);
+  } });
+  for (let i = 0; i < 100; i++) events.callback!('change', folder);
+  expect(inspected).toBeLessThanOrEqual(paths.length);
+  const batch = vi.fn(); catalog.subscribeBatch(batch); await catalog.flushPendingEvents();
+  expect(batch).toHaveBeenCalledTimes(1);
+  expect(batch.mock.calls[0]![0]).toBeUndefined();
+  expect(batch.mock.calls[0]![1]?.kind).toBe(folder === 'Late' ? 'directory_metadata' : undefined);
+});
+
+test('an unknown event skips later folder classification without weakening full invalidation', async () => {
+  await fixture(); const paths = await catalog.allPathsSnapshot();
+  const scan = vi.spyOn(paths, 'some');
+  events.callback!('rename', 'Notes');
+  events.callback!('change', 'Notes');
+  expect(scan).not.toHaveBeenCalled();
+  const batch = vi.fn(); catalog.subscribeBatch(batch); await catalog.flushPendingEvents();
+  expect(batch.mock.calls).toEqual([[undefined]]);
+});
+
+test('a cached folder hint cannot survive publication of an inventory without that folder', async () => {
+  await fixture(); events.callback!('change', 'Notes'); await catalog.flushPendingEvents();
+  await fs.rename(join(vault, 'Notes'), join(vault, 'Renamed'));
+  events.callback!('rename', 'Notes'); await catalog.listAllPaths();
+  const batch = vi.fn(); catalog.subscribeBatch(batch);
+  events.callback!('change', 'Notes'); await catalog.flushPendingEvents();
+  expect(batch.mock.calls).toEqual([[undefined]]);
+});
 test.each([false, true])('coalesced explicit changes bypass stat collisions (folder first=%s)', async folderFirst => {
   const reads = await fixture(), path = join(vault, 'Notes/N1.md'), info = await fs.stat(path);
   pinned.set(path, { size: info.size, mtimeMs: info.mtimeMs, ctimeMs: info.ctimeMs });

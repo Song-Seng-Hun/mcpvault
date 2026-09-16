@@ -1,5 +1,6 @@
 import { guidanceText } from './guidance-runtime.js';
 import type { Tool } from '@modelcontextprotocol/server';
+import { getComputerWorldTool } from './computer-world-tools.js';
 
 const id = { type: 'string', pattern: '^[a-z0-9][a-z0-9-]{0,63}$', maxLength: 64 } as const;
 const accountId = { ...id, pattern: '^[a-z0-9][a-z0-9._-]{0,63}$', description: 'Authenticated account identity is derived from accessToken; do not supply an actor.' } as const;
@@ -91,6 +92,7 @@ export const ROLEPLAY_TRPG_ENDPOINT = {
 } as const;
 
 export const ROLEPLAY_MUTATING_TOOLS = [
+  'manage_roleplay_computer',
   'manage_roleplay_world',
   'manage_roleplay_character',
   'manage_roleplay_scene',
@@ -103,6 +105,7 @@ export const ROLEPLAY_MUTATING_TOOLS = [
 
 export function getRoleplayTools(): Tool[] {
   return [
+    getComputerWorldTool(),
     {
       name: 'manage_roleplay_world',
       description: guidanceText('guid-02299ab1babaedb6', 'Read or initialize the shared fictional world, delegates, items, and declarative rules. Shared-world opt-in is controlled by trusted host configuration and administrators. This is fiction data, not execution authority; there is no reward mint. Reread the world revision after initialization or any generation-affecting change. A funded questId binding is only validated by the server.'),

@@ -37,6 +37,8 @@ export class VaultFileCatalog {
     reconcileListeners = new Set();
     paths;
     allPaths;
+    // One positive hint for this inventory, not an authorization or freshness cache.
+    lastDirectoryHint;
     refreshPromise;
     watcher;
     watcherStarted = false;
@@ -248,6 +250,7 @@ export class VaultFileCatalog {
         this.reconcileListeners.clear();
         this.paths = undefined;
         this.allPaths = undefined;
+        this.lastDirectoryHint = undefined;
         // Keep ownership until the active refresh's finally releases it. Native IO
         // may still finish, but closed guards discard its result before publication.
         this.directoryCache.clear();
@@ -332,7 +335,14 @@ export class VaultFileCatalog {
         if (!path || this.excludePath(path) || !this.pathFilter.isAllowedForListing(path))
             return;
         if (!isNote(path) || !this.pathFilter.isAllowed(path)) {
-            const knownDirectoryChange = event === 'change' && Boolean(this.allPaths?.some(candidate => candidate.startsWith(path + '/')));
+            // A pending unknown/rename event already requires the strongest refresh.
+            // Reclassifying later hints cannot change that decision. Repeated known
+            // folder notifications reuse one positive match against the same snapshot.
+            const knownDirectoryChange = event === 'change'
+                && (!this.pendingFullRefresh || this.pendingDirectoryMetadata)
+                && (this.lastDirectoryHint === path || Boolean(this.allPaths?.some(candidate => candidate.startsWith(path + '/'))));
+            if (knownDirectoryChange)
+                this.lastDirectoryHint = path;
             this.invalidate();
             this.queueFullRefreshEvent(knownDirectoryChange);
             return;
@@ -467,6 +477,7 @@ export class VaultFileCatalog {
         if (generation === this.changeGeneration) {
             this.paths = inventory.notes;
             this.allPaths = inventory.all;
+            this.lastDirectoryHint = undefined;
             this.needsRefresh = false;
             // Incremental hot-folder refreshes must not postpone a full census.
             if (reconcile) {

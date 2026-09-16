@@ -33,6 +33,7 @@ export declare class VaultFileCatalog {
     private readonly reconcileListeners;
     private paths;
     private allPaths;
+    private lastDirectoryHint;
     private refreshPromise;
     private watcher;
     private watcherStarted;

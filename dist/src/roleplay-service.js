@@ -374,6 +374,8 @@ export class RoleplayService {
             }
         }
         else if (endpoint === 'world') {
+            envelope.worldKind = 'fiction';
+            envelope.computerWorlds = { endpointId: 'roleplay.computer', arguments: { op: 'list' }, hint: 'Real computer environments use private computer worlds, not fictional turns.' };
             envelope.enabled = true;
             envelope.title = state.title ?? null;
             envelope.ready = !!state.title && !!this.store.options.policy.administrators.length;

@@ -146,6 +146,7 @@ const toolsByFeature = {
     benchmarks: ['list_benchmarks', 'read_benchmark', 'submit_benchmark', 'review_benchmark', 'finalize_benchmark'],
     economy: ['read_economy_wallet', 'read_quest_market', 'manage_quest_contract', 'review_quest_contract'],
     roleplay: [
+        'manage_roleplay_computer',
         'manage_roleplay_world', 'manage_roleplay_character', 'manage_roleplay_scene', 'read_roleplay_context',
         'submit_roleplay_action', 'resolve_roleplay_action', 'read_roleplay_history', 'correct_roleplay_turn',
         'manage_roleplay_evolution', 'manage_roleplay_trpg',

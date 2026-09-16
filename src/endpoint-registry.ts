@@ -140,6 +140,7 @@ const EXPLICIT_IDS: Record<string, string> = {
   preview_learning_configuration: 'configuration.learning_preview',
   list_guidance_catalog: 'guidance.catalog',
   manage_roleplay_world: 'roleplay.world', manage_roleplay_character: 'roleplay.character', manage_roleplay_scene: 'roleplay.scene',
+  manage_roleplay_computer: 'roleplay.computer',
   list_notices: 'notice.list', read_notice: 'notice.read', preview_notice: 'notice.preview', revise_notice: 'notice.revise',
   read_roleplay_context: 'roleplay.context', submit_roleplay_action: 'roleplay.action', resolve_roleplay_action: 'roleplay.resolve',
   read_roleplay_history: 'roleplay.history', correct_roleplay_turn: 'roleplay.correct',
@@ -466,6 +467,8 @@ const EXPLICIT_ROUTES: Record<string, { method: 'GET' | 'POST'; url: string }> =
 };
 
 const ENDPOINT_ALIASES: Record<string, string[]> = {
+  manage_roleplay_world: ['world', 'worldview', 'register', '세계관', '세계', '등록', '허구'],
+  manage_roleplay_computer: ['world', 'worldview', 'computer', 'environment', 'hardware', 'software', 'specs', 'PC', 'NAS', 'register', 'session', '컴퓨터', '세계관', '환경', '등록', '사양', '실행', '대상'],
   search_notes: ['search', 'search notes', 'knowledge search', '지식 검색', '검색'],
   read_work_review_context: ['work review', 'task review', '작업 검토', '업무 검토'],
   get_wiki_bridge_candidates: ['research', 'bridge', 'analogy', 'cross-domain'],
@@ -771,11 +774,11 @@ export class EndpointRegistry {
       .map(item => {
         const missing = item.requires.filter(required => !context.capabilities.has(required as ScopeCapability));
         const skillDisabled = context.skillEvolutionEnabled === false && item.endpointId.startsWith('skill.') && item.endpointId !== 'skill.resolve';
-        const roleplayMissing = context.roleplayConfigured === false && item.endpointId.startsWith('roleplay.');
+        const roleplayMissing = context.roleplayConfigured === false && item.endpointId.startsWith('roleplay.') && item.endpointId !== 'roleplay.computer';
         const economyMissing = context.economyConfigured === false && /^(economy|quest)\./.test(item.endpointId);
         const hostMissing = roleplayMissing || economyMissing || context.explanationsConfigured === false && item.endpointId.startsWith('explanations.')
           || context.benchmarksConfigured === false && item.endpointId.startsWith('benchmark.');
-        const roleplaySetupMissing = context.roleplayWritesConfigured === false && item.endpointId.startsWith('roleplay.') && item.mutating;
+        const roleplaySetupMissing = context.roleplayWritesConfigured === false && item.endpointId.startsWith('roleplay.') && item.endpointId !== 'roleplay.computer' && item.mutating;
         const disabled = context.readOnly && item.mutating || skillDisabled || hostMissing || roleplaySetupMissing;
         const parentAvailable = !disabled && (item.requires.length === 0 || context.authenticated && missing.length === 0 || item.endpointId === 'auth.register' || item.endpointId === 'auth.login');
         const parentState = disabled ? 'disabled' as const : parentAvailable ? 'ready' as const : 'locked' as const;

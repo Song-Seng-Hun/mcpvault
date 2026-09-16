@@ -80,6 +80,7 @@ import { getSkillEvolutionTools, SKILL_MUTATING_TOOLS } from './skill-evolution-
 import { operationReadAlias } from './operation-contracts.js';
 import { WorkGroupService } from './work-groups.js';
 import { getRoleplayTools, ROLEPLAY_MUTATING_TOOLS } from './roleplay-tools.js';
+import { ComputerWorldService } from './computer-worlds.js';
 import { getStoryTools, STORY_MUTATING_TOOLS, storyEndpointForTool, assertStoryOperation } from './story-tools.js';
 import { getDocumentTools, DOCUMENT_TOOL_ENDPOINTS, dispatchDocumentTool } from './document-tools.js';
 import { DocumentResourceReader } from './document-resource.js';
@@ -361,6 +362,7 @@ const CAPABILITY_FOR_TOOL = {
     preview_skill_promotion: 'write', preview_skill_rollback: 'write',
     manage_work_group: 'task',
     manage_roleplay_world: 'chat', manage_roleplay_character: 'chat', manage_roleplay_scene: 'chat',
+    manage_roleplay_computer: 'write',
     revise_notice: 'write', preview_notice: 'write',
     submit_roleplay_action: 'chat', resolve_roleplay_action: 'chat', correct_roleplay_turn: 'chat',
     manage_roleplay_evolution: 'chat', preview_roleplay_evolution: 'chat',
@@ -2803,6 +2805,14 @@ export function createServer(vaultPath, options = {}) {
                                         return false;
                                     }
                                 } }) }), trimmedArgs.prettyPrint);
+                    }
+                    case 'manage_roleplay_computer':
+                    case 'read_roleplay_computer': {
+                        const service = new ComputerWorldService(fileSystem, scopeAccess, {
+                            readOnly, assertActor: async () => { await revalidateActor(); },
+                            changed: path => queueReadModelChange(path, 'upsert'),
+                        });
+                        return jsonResult(await service.execute(trimmedArgs, principal), false);
                     }
                     case 'manage_roleplay_world':
                     case 'read_roleplay_world':

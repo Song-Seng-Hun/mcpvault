@@ -1,4 +1,5 @@
 import { guidanceText } from './guidance-runtime.js';
+import { getComputerWorldTool } from './computer-world-tools.js';
 const id = { type: 'string', pattern: '^[a-z0-9][a-z0-9-]{0,63}$', maxLength: 64 };
 const accountId = { ...id, pattern: '^[a-z0-9][a-z0-9._-]{0,63}$', description: 'Authenticated account identity is derived from accessToken; do not supply an actor.' };
 const accessToken = { type: 'string', description: 'Current authenticated account token; identity is derived from this token.' };
@@ -85,6 +86,7 @@ export const ROLEPLAY_TRPG_ENDPOINT = {
     operationMap: { adopt: 'trpg_adopt', learn: 'trpg_learn', loadout: 'trpg_loadout', switch: 'trpg_switch', respec: 'trpg_respec', rest: 'trpg_rest', growth: 'trpg_growth', encounter_start: 'trpg_encounter_start', encounter_end: 'trpg_encounter_end', turn_end: 'trpg_turn_end', act: 'trpg_act' },
 };
 export const ROLEPLAY_MUTATING_TOOLS = [
+    'manage_roleplay_computer',
     'manage_roleplay_world',
     'manage_roleplay_character',
     'manage_roleplay_scene',
@@ -96,6 +98,7 @@ export const ROLEPLAY_MUTATING_TOOLS = [
 ];
 export function getRoleplayTools() {
     return [
+        getComputerWorldTool(),
         {
             name: 'manage_roleplay_world',
             description: guidanceText('guid-02299ab1babaedb6', 'Read or initialize the shared fictional world, delegates, items, and declarative rules. Shared-world opt-in is controlled by trusted host configuration and administrators. This is fiction data, not execution authority; there is no reward mint. Reread the world revision after initialization or any generation-affecting change. A funded questId binding is only validated by the server.'),
