@@ -7,7 +7,7 @@ import type {ScopePrincipal} from './scope-auth.js';
 const acl=vi.hoisted(()=>({deny:false}));
 vi.mock('./windows-private-acl.js',()=>({checkWindowsPrivateAcl:async()=>{if(acl.deny)throw Error('denied');}}));
 const roots:string[]=[];
-afterEach(async()=>{acl.deny=false;for(const p of roots.splice(0))await rm(p,{recursive:true,force:true});});
+afterEach(async()=>{vi.restoreAllMocks();acl.deny=false;for(const p of roots.splice(0))await rm(p,{recursive:true,force:true});});
 const principal={accountId:'operator'} as ScopePrincipal;
 const peer={transport:'http' as const,certFingerprint:'a'.repeat(64)};
 async function fixture(){
@@ -36,6 +36,41 @@ test('loads an explicit private read-only skill bridge, with fixed loopback mand
     expect(withEnterpriseRequestContext(peer,()=>host.ownerActivity.execution(principal))).toEqual({accountId:'operator',executionTarget:'verified-host'});
     expect(await host.reviewedSkills.host.entry('not-admitted')).toBeUndefined();
     expect(host).not.toHaveProperty('admit');
+  }finally{host.close();}
+});
+
+test('a short host deadline expires warm authority and cannot be reopened after expiry',async()=>{
+  const f=await fixture(),now=Date.now();
+  (f.config as any).expiresAt=new Date(now+60_000).toISOString();await f.save();
+  const host=await f.load();
+  try{
+    expect(withEnterpriseRequestContext(peer,()=>host.ownerActivity.execution(principal))).toBeDefined();
+    const clock=vi.spyOn(Date,'now').mockReturnValue(now+60_000);
+    expect(withEnterpriseRequestContext(peer,()=>host.ownerActivity.execution(principal))).toBeUndefined();
+    await expect(host.ownerActivity.refresh()).rejects.toThrow();
+    await expect(f.load()).rejects.toThrow();
+    clock.mockReturnValue(now);
+    expect(withEnterpriseRequestContext(peer,()=>host.ownerActivity.execution(principal))).toBeUndefined();
+  }finally{host.close();}
+});
+
+test('host deadline rejects malformed, elapsed and longer-than-fifteen-minute windows',async()=>{
+  const f=await fixture(),now=Date.now();vi.spyOn(Date,'now').mockReturnValue(now);
+  for(const expiresAt of [null,42,'tomorrow',new Date(now).toISOString(),new Date(now+900_001).toISOString()]){
+    (f.config as any).expiresAt=expiresAt;await f.save();await expect(f.load()).rejects.toThrow();
+  }
+});
+
+test('elapsed monotonic time expires the host even when the wall clock moves backward',async()=>{
+  const f=await fixture(),now=Date.now(),elapsed=performance.now();
+  (f.config as any).expiresAt=new Date(now+60_000).toISOString();await f.save();
+  vi.spyOn(performance,'now').mockReturnValue(elapsed);
+  const host=await f.load();
+  try{
+    vi.spyOn(Date,'now').mockReturnValue(now-3600_000);
+    vi.spyOn(performance,'now').mockReturnValue(elapsed+60_000);
+    expect(withEnterpriseRequestContext(peer,()=>host.ownerActivity.execution(principal))).toBeUndefined();
+    await expect(host.ownerActivity.refresh()).rejects.toThrow();
   }finally{host.close();}
 });
 

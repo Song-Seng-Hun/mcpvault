@@ -45,7 +45,17 @@ export async function loadReviewedSkillsHost(path, expectedVault) {
                 return fail();
             return { path: canonical, text, stamp: before, max };
         };
-        const config = await readPrivate(path, 8192), raw = record(JSON.parse(config.text), ['version', 'vaultPath', 'hostPath', 'ownerPolicyPath', 'bindingsPath', 'listener']);
+        const config = await readPrivate(path, 8192), raw = record(JSON.parse(config.text), ['version', 'vaultPath', 'hostPath', 'ownerPolicyPath', 'bindingsPath', 'listener'], ['expiresAt']);
+        // Optional short inspection lease, not an access grant. Its absolute expiry
+        // survives reloads; monotonic time also bounds reads after wall-clock rollback.
+        let expiresAt = Infinity, deadline = Infinity;
+        if (Object.hasOwn(raw, 'expiresAt')) {
+            expiresAt = typeof raw.expiresAt === 'string' ? Date.parse(raw.expiresAt) : NaN;
+            const remaining = expiresAt - Date.now();
+            if (!Number.isFinite(expiresAt) || new Date(expiresAt).toISOString() !== raw.expiresAt || remaining <= 0 || remaining > 900_000)
+                return fail();
+            deadline = performance.now() + remaining;
+        }
         if (raw.version !== 1 || typeof raw.vaultPath !== 'string' || await canonicalRoleplayPath(raw.vaultPath, false) !== await canonicalRoleplayPath(expectedVault, false))
             return fail();
         const { hostPath, vaultPath } = await validateRoleplayStorage({ hostPath: raw.hostPath, vaultPath: expectedVault });
@@ -60,10 +70,18 @@ export async function loadReviewedSkillsHost(path, expectedVault) {
         const ownerPolicyPath = await canonicalRoleplayPath(raw.ownerPolicyPath, true, true);
         const bindings = await loadOwnerMtlsBindings(raw.bindingsPath, vaultPath);
         let policy = new OwnerActivityPolicy({ version: 1, owners: {}, grants: [] });
-        const assertPins = () => { if (closed)
-            return fail(); for (const pin of pins)
-            if (stamp(pin.path, pin.max) !== pin.stamp)
-                return fail(); };
+        const assertPins = () => {
+            if (Date.now() >= expiresAt || performance.now() >= deadline) {
+                closed = true;
+                ready = false;
+                source?.close();
+            }
+            if (closed)
+                return fail();
+            for (const pin of pins)
+                if (stamp(pin.path, pin.max) !== pin.stamp)
+                    return fail();
+        };
         let queue = Promise.resolve();
         const refresh = () => {
             const run = async () => {
@@ -116,6 +134,7 @@ export async function loadReviewedSkillsHost(path, expectedVault) {
         const listener = { host: '127.0.0.1', port: listenerRaw.port, requireClientCertificate: true, requestProfile: 'reviewed-skill-read',
             allowProcedureDiscovery: listenerRaw.allowProcedureDiscovery === true,
             tls: { cert: cert.text, key: key.text, ca: ca.text, requestCert: true, rejectUnauthorized: true } };
+        assertPins();
         return { ownerPolicyPath, ownerActivity, reviewedSkills: { host, source: inspector }, listener,
             close() { closed = true; ready = false; inspector.close(); } };
     }
