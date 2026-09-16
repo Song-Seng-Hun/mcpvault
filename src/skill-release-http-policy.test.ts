@@ -23,3 +23,17 @@ test('checks all batch entries and refuses aliases, URL dispatch and client prof
   for(const extra of [{url:'/api/notes/test'},{method:'POST'},{requestProfile:'unrestricted'},{arguments:[]}])expect(allowed('POST',call('skill.resolve',extra))).toBe(false);
   for(const name of ['write_note','search_capabilities','list_active_capabilities','orient_wiki','get_agent_pulse'])expect(allowed('POST',{...call(),params:{...call().params,name}})).toBe(false);
 });
+
+test('procedure search needs explicit host opt-in and cannot become ordinary search',()=>{
+  const search=(args:Record<string,unknown>={})=>call('wiki.search',{arguments:{query:'검토 review',resultKind:'procedures',...args}});
+  expect(allowed('POST',search())).toBe(false);
+  expect(allowed('POST',search(),true)).toBe(true);
+  expect(allowed('POST',search({resultKind:'notes'}),true)).toBe(false);
+  expect(allowed('POST',search({resultKind:undefined}),true)).toBe(false);
+  for(const args of [{url:'/api/notes'}, {pathPrefix:'Community'}, {allowProcedureDiscovery:true}, {principal:{accountId:'operator'}}]){
+    expect(allowed('POST',search(args),true)).toBe(false);
+  }
+  expect(allowed('POST',[search(),call('notes.write')],true)).toBe(false);
+  expect(allowed('POST',call('wiki.search',{arguments:{query:'review'}}),true)).toBe(false);
+  expect(allowed('POST',call('skill.resolve',{allowProcedureDiscovery:true}))).toBe(false);
+});

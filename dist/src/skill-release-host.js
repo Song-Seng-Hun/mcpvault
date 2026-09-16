@@ -8,8 +8,8 @@ import { loadOwnerMtlsBindings } from './owner-activity-mtls.js';
 import { createSkillSourceInspector } from './skill-release-source.js';
 import { openReviewedSkillStore } from './skill-release-store.js';
 const fail = () => { throw Error('Reviewed skill host unavailable'); };
-function record(v, keys) {
-    if (!v || typeof v !== 'object' || Array.isArray(v) || Object.keys(v).length !== keys.length || keys.some(k => !Object.hasOwn(v, k)))
+function record(v, keys, optional = []) {
+    if (!v || typeof v !== 'object' || Array.isArray(v) || Object.keys(v).some(k => !keys.includes(k) && !optional.includes(k)) || keys.some(k => !Object.hasOwn(v, k)))
         return fail();
     return v;
 }
@@ -49,7 +49,9 @@ export async function loadReviewedSkillsHost(path, expectedVault) {
         if (raw.version !== 1 || typeof raw.vaultPath !== 'string' || await canonicalRoleplayPath(raw.vaultPath, false) !== await canonicalRoleplayPath(expectedVault, false))
             return fail();
         const { hostPath, vaultPath } = await validateRoleplayStorage({ hostPath: raw.hostPath, vaultPath: expectedVault });
-        const listenerRaw = record(raw.listener, ['port', 'certPath', 'keyPath', 'caPath']);
+        const listenerRaw = record(raw.listener, ['port', 'certPath', 'keyPath', 'caPath'], ['allowProcedureDiscovery']);
+        if (listenerRaw.allowProcedureDiscovery !== undefined && typeof listenerRaw.allowProcedureDiscovery !== 'boolean')
+            return fail();
         if (!Number.isSafeInteger(listenerRaw.port) || listenerRaw.port < 0 || listenerRaw.port > 65535)
             return fail();
         const cert = await readPrivate(listenerRaw.certPath, 65536), key = await readPrivate(listenerRaw.keyPath, 65536), ca = await readPrivate(listenerRaw.caPath, 262144);
@@ -112,6 +114,7 @@ export async function loadReviewedSkillsHost(path, expectedVault) {
                 return r?.visible && r.inventory.complete ? r.inventory.fingerprint : null;
             } });
         const listener = { host: '127.0.0.1', port: listenerRaw.port, requireClientCertificate: true, requestProfile: 'reviewed-skill-read',
+            allowProcedureDiscovery: listenerRaw.allowProcedureDiscovery === true,
             tls: { cert: cert.text, key: key.text, ca: ca.text, requestCert: true, rejectUnauthorized: true } };
         return { ownerPolicyPath, ownerActivity, reviewedSkills: { host, source: inspector }, listener,
             close() { closed = true; ready = false; inspector.close(); } };

@@ -166,6 +166,11 @@ export async function startMcpHttpApi(server, options = {}) {
     if (options.requestProfile !== undefined && (options.requestProfile !== 'reviewed-skill-read' || !isLoopbackHost(host) || !options.requireClientCertificate)) {
         throw new Error('Reviewed skill HTTP profile requires loopback and mandatory mTLS');
     }
+    if (options.allowProcedureDiscovery !== undefined && (typeof options.allowProcedureDiscovery !== 'boolean' || options.requestProfile !== 'reviewed-skill-read')) {
+        throw new Error('Procedure discovery requires the reviewed-skill HTTP profile');
+    }
+    // Freeze host choice at startup; a later mutation of the options object is not approval.
+    const allowProcedureDiscovery = options.allowProcedureDiscovery === true;
     const path = options.path || '/mcp';
     const maxBodyBytes = Math.min(Math.max(Math.trunc(options.maxBodyBytes ?? 1_048_576), 1_024), MAX_HTTP_BODY_BYTES);
     const allowedOrigins = options.allowedOrigins || [];
@@ -258,7 +263,7 @@ export async function startMcpHttpApi(server, options = {}) {
                     candidate = JSON.parse(rawBody);
                 }
                 catch { /* Reject without echoing the payload. */ }
-                if (!allowedReviewedSkillRequest(request.method, candidate)) {
+                if (!allowedReviewedSkillRequest(request.method, candidate, allowProcedureDiscovery)) {
                     response.statusCode = 403;
                     response.end('Request unavailable on reviewed-skill read channel');
                     return;

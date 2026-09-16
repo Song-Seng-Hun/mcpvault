@@ -39,6 +39,20 @@ test('loads an explicit private read-only skill bridge, with fixed loopback mand
   }finally{host.close();}
 });
 
+test('discovery is disabled by default and only a pinned host config can opt in',async()=>{
+  const f=await fixture(),before=await f.load();
+  expect(before.listener.allowProcedureDiscovery).toBe(false);before.close();
+  (f.config.listener as any).allowProcedureDiscovery=true;await f.save();
+  const enabled=await f.load();
+  try{
+    expect(enabled.listener.allowProcedureDiscovery).toBe(true);
+    (f.config.listener as any).allowProcedureDiscovery=false;await f.save();
+    await expect(enabled.ownerActivity.refresh()).rejects.toThrow();
+  }finally{enabled.close();}
+  (f.config.listener as any).allowProcedureDiscovery='true';await f.save();
+  await expect(f.load()).rejects.toThrow('Reviewed skill host unavailable');
+});
+
 test('rejects malformed config, private ACL failure, broad action grants and non-skill paths',async()=>{
   for(const kind of ['config','acl','action','activity','path']){
     const f=await fixture();

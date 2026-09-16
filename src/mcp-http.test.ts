@@ -40,6 +40,17 @@ test('refuses public and wildcard Stateless MCP HTTP binds', async () => {
   }
 });
 
+test('procedure discovery cannot opt out of the loopback mTLS read profile', async () => {
+  const vault=await mkdtemp(join(tmpdir(),'mcpvault-procedure-profile-'));
+  const server=createServer(vault,{version:'1.0.0'});
+  try{
+    await expect(startMcpHttpApi(server,{port:0,allowProcedureDiscovery:true})).rejects.toThrow('requires the reviewed-skill HTTP profile');
+    await expect(startMcpHttpApi(server,{port:0,requestProfile:'reviewed-skill-read',allowProcedureDiscovery:true})).rejects.toThrow('mandatory mTLS');
+    await expect(startMcpHttpApi(server,{host:'192.168.1.20',port:0,requestProfile:'reviewed-skill-read',allowProcedureDiscovery:true,
+      requireClientCertificate:true,tls:{cert:'synthetic',key:'synthetic',ca:'synthetic'}})).rejects.toThrow('loopback');
+  }finally{await server.close();await rm(vault,{recursive:true,force:true});}
+});
+
 test('serves MCP 2026 Stateless Streamable HTTP with a fresh protocol server per request', async () => {
   const vault = await mkdtemp(join(tmpdir(), 'mcpvault-http-'));
   const server = createServer(vault, { version: '1.0.0' });

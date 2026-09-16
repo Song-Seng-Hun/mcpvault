@@ -9,8 +9,8 @@ next: 2026-09-16-reviewed-skill-metadata-wave21.md
 ---
 # Progress reporting contract
 
-User instruction: report both metadata completion and actual activation after every turn.
-Do not substitute file count, model calls, test count or token use for delivered outcomes.
+Report actual skill outcomes, not a generic claim of progress.
+Infrastructure, metadata, model calls and test counts are not activated/deleted skills.
 
 ## Stable denominators
 
@@ -24,11 +24,11 @@ Do not substitute file count, model calls, test count or token use for delivered
 
 ## Required turn-end report
 
-Report metadata `count / 1,610 (percentage)` and activation `count / 1,610 (percentage)`.
-Also report each numerator's change this turn, remaining metadata, fixtures and blockers.
+Report metadata and actual activation percentages, plus this-turn percentage-point changes.
+Report backup-confirmed deletion count and final `(activated + deleted) / 1,610` percentage.
 Percentages use unrounded counts and round to two decimals only for display.
-Example: 154 ordinary reviews / 1,610 = 9.57%; 0 activations / 1,610 = 0.00%.
-That example leaves 1,454 pending entries and two fixtures; it is not 154 usable skills.
+Example: three metadata reviews add 0.19 percentage points, not three usable skills.
+State unverified, prepared, deployed and actually usable separately. Preserve fixed denominators.
 
 ## Execution decisions
 
@@ -37,7 +37,8 @@ A candidate repair failure remains visible; do not inflate counts by rebuilding 
 Use bounded, least-cost helpers for separable drafting or checks when they save main-path time.
 Main verifies source coverage and integrates findings; helpers cannot approve runtime access.
 Do not bypass a rejected host grant or weaken safety gates to improve activation statistics.
-Continue other actionable entries when one candidate is held.
+Before the first actual activation, stop bulk metadata work if the common access path is blocked.
+After that gate, one held candidate must not block other actionable entries.
 No completion-date promise without measured throughput and a feasible activation path.
 
 ## Evidence

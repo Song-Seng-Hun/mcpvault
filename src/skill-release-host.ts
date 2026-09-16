@@ -11,8 +11,8 @@ import {openReviewedSkillStore} from './skill-release-store.js';
 import type {McpHttpOptions} from './mcp-http.js';
 
 const fail=():never=>{throw Error('Reviewed skill host unavailable');};
-function record(v:unknown,keys:string[]):Record<string,any>{
-  if(!v||typeof v!=='object'||Array.isArray(v)||Object.keys(v).length!==keys.length||keys.some(k=>!Object.hasOwn(v,k)))return fail();
+function record(v:unknown,keys:string[],optional:string[]=[]):Record<string,any>{
+  if(!v||typeof v!=='object'||Array.isArray(v)||Object.keys(v).some(k=>!keys.includes(k)&&!optional.includes(k))||keys.some(k=>!Object.hasOwn(v,k)))return fail();
   return v as Record<string,any>;
 }
 function stamp(path:string,max:number):string{
@@ -44,7 +44,8 @@ export async function loadReviewedSkillsHost(path:string,expectedVault:string){
     const config=await readPrivate(path,8192),raw=record(JSON.parse(config.text),['version','vaultPath','hostPath','ownerPolicyPath','bindingsPath','listener']);
     if(raw.version!==1||typeof raw.vaultPath!=='string'||await canonicalRoleplayPath(raw.vaultPath,false)!==await canonicalRoleplayPath(expectedVault,false))return fail();
     const {hostPath,vaultPath}=await validateRoleplayStorage({hostPath:raw.hostPath,vaultPath:expectedVault});
-    const listenerRaw=record(raw.listener,['port','certPath','keyPath','caPath']);
+    const listenerRaw=record(raw.listener,['port','certPath','keyPath','caPath'],['allowProcedureDiscovery']);
+    if(listenerRaw.allowProcedureDiscovery!==undefined&&typeof listenerRaw.allowProcedureDiscovery!=='boolean')return fail();
     if(!Number.isSafeInteger(listenerRaw.port)||listenerRaw.port<0||listenerRaw.port>65535)return fail();
     const cert=await readPrivate(listenerRaw.certPath,65536),key=await readPrivate(listenerRaw.keyPath,65536),ca=await readPrivate(listenerRaw.caPath,262144);
     const pins=[config,cert,key,ca];let closed=false,ready=false,policyStamp:string|undefined;
@@ -78,6 +79,7 @@ export async function loadReviewedSkillsHost(path:string,expectedVault:string){
       const r=await inspector.inspect(name);return r?.visible&&r.inventory.complete?r.inventory.fingerprint:null;
     }});
     const listener:McpHttpOptions={host:'127.0.0.1',port:listenerRaw.port,requireClientCertificate:true,requestProfile:'reviewed-skill-read',
+      allowProcedureDiscovery:listenerRaw.allowProcedureDiscovery===true,
       tls:{cert:cert.text,key:key.text,ca:ca.text,requestCert:true,rejectUnauthorized:true}};
     return {ownerPolicyPath,ownerActivity,reviewedSkills:{host,source:inspector},listener,
       close(){closed=true;ready=false;inspector.close();}};

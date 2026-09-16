@@ -13,6 +13,8 @@ export interface McpHttpOptions {
     requireClientCertificate?: boolean;
     /** Host-only supplementary read channel; absent preserves normal MCP behavior. */
     requestProfile?: 'reviewed-skill-read';
+    /** Host config only; keeps the existing supplementary read profile closed by default. */
+    allowProcedureDiscovery?: boolean;
     tls?: {
         key: string | Buffer;
         cert: string | Buffer;
