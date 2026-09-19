@@ -28,7 +28,7 @@ Roles and reading depth are separate. Do not load every role on every request.
 - [ ] M4: no-memory comparisons and confirmed-context-only reuse.
 - [x] M1 engine: targets, build, one full regression and security/staging review.
 - [x] M1 deployment: NAS runtime and live reads verified; rollback retained.
-- [ ] M1 publication: existing-branch commit and confirmed fork push.
+- [x] M1 publication: `be9673168` pushed to the confirmed fork's existing main.
 
 ## Outcome evidence
 
