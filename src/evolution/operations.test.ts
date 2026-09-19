@@ -21,6 +21,46 @@ export function memoryStorage() {
   } } as any };
 }
 
+test('memory and continuity observations retain only bounded delivery evidence, not bodies or inferred use', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'memory-observations-'));
+  const { storage, records } = memoryStorage();
+  await writeFile(join(root, 'Episode.md'), '---\nmemory_role: episodic\n---\n# Incident\n\nA synthetic mount failed only after suspend.\n');
+  const server = createServer(root, { evolutionRuntime: { storage } });
+  const runtime = getServerRuntime(server)!;
+  const wire = (endpointId: string, args: any) => runtime.dispatchTool('call_endpoint', { endpointId, arguments: args });
+  const call = async (endpointId: string, args: any) => {
+    const r = await wire(endpointId, args); expect(r.isError, r.content[0].text).not.toBe(true); return JSON.parse(r.content[0].text);
+  };
+  try {
+    const { accessToken } = await call('auth.register', { accountId: 'memory-observer', agentId: 'memory-observer', modelId: 'model', password: 'synthetic-memory-password' });
+    const started = await call('evolution.context', { op: 'begin', requestId: 'start', sessionId: 'reported', taskKind: 'memory', accessToken });
+    const tracked = { accessToken, evolutionTask: started.task.id };
+    for (const endpointId of ['memory.brief', 'memory.recall', 'memory.consolidate']) {
+      const reply = await call(endpointId, { ...tracked, evolutionRequestId: endpointId.replace('.', '-'), scope: 'global', query: 'mount', semantic: false, maxChars: 4000 });
+      expect(reply.items[0].role).toBe('episodic');
+    }
+    await call('continuity.save', { accessToken, topic: 'Synthetic fixture', summary: 'Private checkpoint prose.', nextAction: 'Read incident.' });
+    const checkpoint = await call('continuity.resume', { ...tracked, evolutionRequestId: 'resume' });
+    const observed = await call('evolution.context', { op: 'observations', taskId: started.task.id, accessToken, maxChars: 12000 });
+    expect(observed.items).toHaveLength(4);
+    for (const event of observed.items.slice(0, 3)) {
+      expect(event).toMatchObject({ state: 'completed', measurementScope: 'memory_server', effectVerified: false,
+        evidence: { status: 'delivered', resources: [expect.objectContaining({ role: 'episodic', revision: expect.stringMatching(/^[a-f0-9]{64}$/), startLine: expect.any(Number), endLine: expect.any(Number) })] } });
+      expect(event.resourceRevisions).toHaveLength(1);
+      expect(event.evidence.resources[0].resourceId).toMatch(/^[a-f0-9]{64}$/);
+    }
+    expect(observed.items[3]).toMatchObject({ measurementScope: 'continuity_server', evidence: { status: 'delivered', resources: [expect.objectContaining({ role: 'working', revision: checkpoint.revision })] } });
+    const persisted = JSON.stringify([...records.values()]);
+    for (const secret of ['Episode.md', 'synthetic mount failed', 'Private checkpoint prose', accessToken]) expect(persisted).not.toContain(secret);
+    const repeated = await wire('memory.recall', { ...tracked, evolutionRequestId: 'memory-recall', scope: 'global', query: 'mount' });
+    expect(repeated.isError).toBe(true);
+    const denied = await wire('memory.recall', { ...tracked, evolutionRequestId: 'denied', scope: 'user' });
+    expect(denied.isError).toBe(true);
+    const after = await call('evolution.context', { op: 'observations', taskId: started.task.id, accessToken, maxChars: 12000 });
+    expect(after.items[4]).toMatchObject({ state: 'failed', evidence: { status: 'unavailable', resources: [] } });
+  } finally { await server.close(); await rm(root, { recursive: true, force: true }); }
+}, 30000);
+
 test('server-issued tasks record actual reads, do not store content, and refuse replay or foreign account', async () => {
   const root = await mkdtemp(join(tmpdir(), 'evolution-operations-'));
   const { storage, records } = memoryStorage();

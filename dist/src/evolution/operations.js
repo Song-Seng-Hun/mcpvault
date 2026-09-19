@@ -1,5 +1,6 @@
 import { hash, id, unavailable } from './policy.js';
-export const OBSERVED_ENDPOINTS = new Set(['wiki.search', 'wiki.answer_packet', 'notes.read', 'mcp.read_note_lines', 'documents.outline', 'documents.read']);
+import { MEMORY_OBSERVED_ENDPOINTS, memoryObservation } from './memory-observation.js';
+export const OBSERVED_ENDPOINTS = new Set(['wiki.search', 'wiki.answer_packet', 'notes.read', 'mcp.read_note_lines', 'documents.outline', 'documents.read', ...MEMORY_OBSERVED_ENDPOINTS]);
 /** Server observations, never client-authored success logs. Bodies and credentials are not persisted. */
 export class EvolutionOperations {
     storage;
@@ -121,7 +122,8 @@ export class EvolutionOperations {
                 throw Error('Observation already exists; read evolution.context observations before retrying with a new request ID');
             if (task.value.events.length >= 64)
                 return unavailable();
-            const event = { version: 1, taskId, requestId, fingerprint, endpointId, state: 'started', measurementScope: 'search_server', effectVerified: false };
+            const measurementScope = endpointId === 'continuity.resume' ? 'continuity_server' : endpointId.startsWith('memory.') ? 'memory_server' : 'search_server';
+            const event = { version: 1, taskId, requestId, fingerprint, endpointId, state: 'started', measurementScope, effectVerified: false };
             await this.storage.records.write(key, event, prior.revision, a.assert);
             await this.storage.records.write(this.key(a, 'task', taskId), { ...task.value, events: [...task.value.events, requestId] }, task.revision, a.assert);
             return task.value;
@@ -137,10 +139,12 @@ export class EvolutionOperations {
             }
             catch { /* no structured revision */ }
             const rows = Array.isArray(data) ? data : [data, ...Array.isArray(data?.results) ? data.results : []];
-            const resourceRevisions = [...new Set(rows.slice(0, 32).flatMap(row => [row?.rv, row?.revision])
-                    .filter(v => typeof v === 'string' && /^[a-f0-9]{64}$/.test(v)))];
+            const evidence = memoryObservation(endpointId, result);
+            const resourceRevisions = [...new Set(evidence ? evidence.resources.map(row => row.revision)
+                    : rows.slice(0, 32).flatMap(row => [row?.rv, row?.revision]).filter(v => typeof v === 'string' && /^[a-f0-9]{64}$/.test(v)))];
             await this.finish(a, key, { state: result?.isError ? 'failed' : 'completed', returnedChars: body.length,
                 returnedBytes: Buffer.byteLength(body), elapsedMs: performance.now() - start, resultHash: hash(result), resourceRevisions,
+                ...(evidence && { evidence }),
                 ...(selectedHarness && { selectedHarness }) });
             await a.assert();
             return result;

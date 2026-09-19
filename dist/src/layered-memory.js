@@ -7,6 +7,7 @@ import { projectNoteBlockLines } from './note-projections.js';
 import { positiveSearchTerms } from './search.js';
 import { assertMemoryContent, memoryDate, memoryEntries, memoryReferenceAllowed, memoryReferencePath, MEMORY_ROLES } from './memory-contract.js';
 import { isFictionDomain } from './fiction-domain.js';
+import { planMemory } from './retrieval/memory-plan.js';
 function number(value, fallback, min, max) {
     const n = value ?? fallback;
     if (!Number.isInteger(n) || n < min || n > max)
@@ -99,6 +100,14 @@ export class LayeredMemoryService {
         const prefix = params.pathPrefix ? this.retrieval.physical({ p: params.pathPrefix }, params.principal) : root;
         if (params.pathPrefix && !canAccess(prefix + '/probe.md'))
             throw guidanceError(new Error('Memory pathPrefix must remain in the selected scope'), 'guid-4e820df2ca7dade6');
+        const routing = planMemory(mode, params.taskContext, Boolean(query || params.role || params.pathPrefix || params.dateFrom || params.dateTo || params.includeHistory || params.cursor));
+        if (routing && routing.strategy !== 'selective')
+            return {
+                scope, mode, status: routing.strategy === 'none' ? 'not_needed' : 'route_only', items: [], routing, truncated: false,
+                warnings: ['Only optional memory was skipped. Mandatory rules still apply. No context retention or checkpoint validity was inferred.'],
+                nextAction: routing.strategy === 'continuity' ? { endpointId: 'continuity.resume', arguments: { maxChars: 2000, prettyPrint: false } }
+                    : { endpointId: 'memory.recall', arguments: { scope, maxChars: 4000 } },
+            };
         const visible = (note) => !isModerationHidden(note.frontmatter)
             && !isFictionDomain(note.frontmatter, note.path)
             && !(note.frontmatter.mcpvault_type === 'blog_post' && note.frontmatter.status === 'draft')
@@ -187,9 +196,14 @@ export class LayeredMemoryService {
                 }
             frontier = next;
         }
+        const now = Date.now();
+        const outsideValidity = (entry) => Number(Boolean(entry.valid_until && Date.parse(entry.valid_until) <= now
+            || entry.valid_from && Date.parse(entry.valid_from) > now));
         const selected = rows.filter(r => !query || ranks.has(r.note.path))
             .filter(r => params.includeHistory || !corrections.has(r.key))
-            .sort((a, b) => (ranks.get(a.note.path) ?? 0) - (ranks.get(b.note.path) ?? 0)
+            .sort((a, b) => (routing && !params.includeHistory ? outsideValidity(a.entry) - outsideValidity(b.entry) : 0)
+            || (routing ? routing.preferredRoles.indexOf(a.entry.role) - routing.preferredRoles.indexOf(b.entry.role) : 0)
+            || (ranks.get(a.note.path) ?? 0) - (ranks.get(b.note.path) ?? 0)
             || (mode === 'brief' ? Number(b.entry.role === 'core') - Number(a.entry.role === 'core') : 0) || a.key.localeCompare(b.key));
         let correctionVisits = 0;
         const unresolved = (node, ancestors = new Set(), depth = 0) => {
@@ -226,7 +240,7 @@ export class LayeredMemoryService {
         const basisSignature = (sources) => JSON.stringify([...basisPaths].sort().map(path => [path, sources.get(path)?.revision || 'unavailable']));
         const snapshot = createHash('sha256').update(JSON.stringify([scope, params.principal?.accountId, mode, query, params.role, params.dateFrom, params.dateTo, prefix, params.includeHistory === true,
             params.semantic !== false, outcome?.semantic.state, outcome?.complete, outcome?.results.map(hit => [hit.p, hit.rv, hit.vs === true]),
-            selected.map(r => r.key), page.notes.map(n => [n.path, n.revision]), basisSignature(basisMetadata)])).digest('hex');
+            selected.map(r => r.key), page.notes.map(n => [n.path, n.revision]), basisSignature(basisMetadata), ...(routing ? [routing] : [])])).digest('hex');
         if (params.cursor && (params.cursor.snapshot !== snapshot || !Number.isInteger(params.cursor.offset) || params.cursor.offset < 0))
             throw guidanceError(new Error('Memory snapshot changed; repeat without cursor'), 'guid-bcacb4a6969f7774');
         const start = params.cursor?.offset ?? 0;
@@ -288,6 +302,7 @@ export class LayeredMemoryService {
         let partial = page.truncated || outcome?.complete === false || correctionWarnings.length > 0;
         let stalledReason = 'response_budget_too_small';
         const envelope = () => ({ scope, mode, interpretation: 'agent_required', status: partial ? 'partial' : items.length ? 'context_found' : 'no_match',
+            ...(routing && { routing }),
             items, snapshot, truncated: partial || offset < selected.length,
             ...(offset < selected.length && offset > start ? { nextCursor: { snapshot, offset } } : {}),
             ...(outcome && { search: { usedQuery: outcome.usedQuery, expanded: outcome.expanded, semantic: outcome.semantic.state } }),

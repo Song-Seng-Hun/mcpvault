@@ -1,0 +1,602 @@
+[
+  {
+    "id": "m01-ko",
+    "sourceFamily": "arithmetic",
+    "split": "development",
+    "language": "ko",
+    "query": "계산: 17+25",
+    "intent": "self_contained",
+    "explicitRead": false,
+    "expectedStrategy": "none"
+  },
+  {
+    "id": "m01-en",
+    "sourceFamily": "arithmetic",
+    "split": "development",
+    "language": "en",
+    "query": "Calculate 17+25",
+    "intent": "self_contained",
+    "explicitRead": false,
+    "expectedStrategy": "none"
+  },
+  {
+    "id": "m01-mixed",
+    "sourceFamily": "arithmetic",
+    "split": "development",
+    "language": "mixed",
+    "query": "Calculate 17+25만",
+    "intent": "self_contained",
+    "explicitRead": false,
+    "expectedStrategy": "none"
+  },
+  {
+    "id": "m02-ko",
+    "sourceFamily": "supplied_translation",
+    "split": "development",
+    "language": "ko",
+    "query": "제공한 문장만 번역해",
+    "intent": "self_contained",
+    "explicitRead": false,
+    "expectedStrategy": "none"
+  },
+  {
+    "id": "m02-en",
+    "sourceFamily": "supplied_translation",
+    "split": "development",
+    "language": "en",
+    "query": "Translate only the supplied sentence",
+    "intent": "self_contained",
+    "explicitRead": false,
+    "expectedStrategy": "none"
+  },
+  {
+    "id": "m02-mixed",
+    "sourceFamily": "supplied_translation",
+    "split": "development",
+    "language": "mixed",
+    "query": "제공된 sentence만 translate",
+    "intent": "self_contained",
+    "explicitRead": false,
+    "expectedStrategy": "none"
+  },
+  {
+    "id": "m03-ko",
+    "sourceFamily": "resume_deploy",
+    "split": "development",
+    "language": "ko",
+    "query": "중단한 배포 이어가",
+    "intent": "resume",
+    "explicitRead": false,
+    "expectedStrategy": "continuity"
+  },
+  {
+    "id": "m03-en",
+    "sourceFamily": "resume_deploy",
+    "split": "development",
+    "language": "en",
+    "query": "Resume the interrupted deployment",
+    "intent": "resume",
+    "explicitRead": false,
+    "expectedStrategy": "continuity"
+  },
+  {
+    "id": "m03-mixed",
+    "sourceFamily": "resume_deploy",
+    "split": "development",
+    "language": "mixed",
+    "query": "deployment 이어가",
+    "intent": "resume",
+    "explicitRead": false,
+    "expectedStrategy": "continuity"
+  },
+  {
+    "id": "m04-ko",
+    "sourceFamily": "resume_research",
+    "split": "development",
+    "language": "ko",
+    "query": "어디까지 조사했지",
+    "intent": "resume",
+    "explicitRead": false,
+    "expectedStrategy": "continuity"
+  },
+  {
+    "id": "m04-en",
+    "sourceFamily": "resume_research",
+    "split": "development",
+    "language": "en",
+    "query": "Where did research stop",
+    "intent": "resume",
+    "explicitRead": false,
+    "expectedStrategy": "continuity"
+  },
+  {
+    "id": "m04-mixed",
+    "sourceFamily": "resume_research",
+    "split": "development",
+    "language": "mixed",
+    "query": "research 어디까지 했지",
+    "intent": "resume",
+    "explicitRead": false,
+    "expectedStrategy": "continuity"
+  },
+  {
+    "id": "m05-ko",
+    "sourceFamily": "deployment_steps",
+    "split": "development",
+    "language": "ko",
+    "query": "검증된 배포 절차",
+    "intent": "procedure",
+    "explicitRead": true,
+    "expectedStrategy": "selective"
+  },
+  {
+    "id": "m05-en",
+    "sourceFamily": "deployment_steps",
+    "split": "development",
+    "language": "en",
+    "query": "Verified deployment procedure",
+    "intent": "procedure",
+    "explicitRead": true,
+    "expectedStrategy": "selective"
+  },
+  {
+    "id": "m05-mixed",
+    "sourceFamily": "deployment_steps",
+    "split": "development",
+    "language": "mixed",
+    "query": "NAS deployment 절차",
+    "intent": "procedure",
+    "explicitRead": true,
+    "expectedStrategy": "selective"
+  },
+  {
+    "id": "m06-ko",
+    "sourceFamily": "past_fork",
+    "split": "development",
+    "language": "ko",
+    "query": "전에 확인한 포크",
+    "intent": "past_decision",
+    "explicitRead": true,
+    "expectedStrategy": "selective"
+  },
+  {
+    "id": "m06-en",
+    "sourceFamily": "past_fork",
+    "split": "development",
+    "language": "en",
+    "query": "Previously confirmed fork",
+    "intent": "past_decision",
+    "explicitRead": true,
+    "expectedStrategy": "selective"
+  },
+  {
+    "id": "m06-mixed",
+    "sourceFamily": "past_fork",
+    "split": "development",
+    "language": "mixed",
+    "query": "confirmed fork 어디였지",
+    "intent": "past_decision",
+    "explicitRead": true,
+    "expectedStrategy": "selective"
+  },
+  {
+    "id": "m07-ko",
+    "sourceFamily": "incident_suspend",
+    "split": "development",
+    "language": "ko",
+    "query": "절전 후 장애",
+    "intent": "incident",
+    "explicitRead": true,
+    "expectedStrategy": "selective"
+  },
+  {
+    "id": "m07-en",
+    "sourceFamily": "incident_suspend",
+    "split": "development",
+    "language": "en",
+    "query": "Failure after suspend",
+    "intent": "incident",
+    "explicitRead": true,
+    "expectedStrategy": "selective"
+  },
+  {
+    "id": "m07-mixed",
+    "sourceFamily": "incident_suspend",
+    "split": "development",
+    "language": "mixed",
+    "query": "suspend 후 NAS failure",
+    "intent": "incident",
+    "explicitRead": true,
+    "expectedStrategy": "selective"
+  },
+  {
+    "id": "m08-ko",
+    "sourceFamily": "computer_ram",
+    "split": "development",
+    "language": "ko",
+    "query": "이 컴퓨터의 메모리 조건",
+    "intent": "environment",
+    "explicitRead": true,
+    "expectedStrategy": "selective"
+  },
+  {
+    "id": "m08-en",
+    "sourceFamily": "computer_ram",
+    "split": "development",
+    "language": "en",
+    "query": "Memory constraints on this computer",
+    "intent": "environment",
+    "explicitRead": true,
+    "expectedStrategy": "selective"
+  },
+  {
+    "id": "m08-mixed",
+    "sourceFamily": "computer_ram",
+    "split": "development",
+    "language": "mixed",
+    "query": "이 PC RAM constraints",
+    "intent": "environment",
+    "explicitRead": true,
+    "expectedStrategy": "selective"
+  },
+  {
+    "id": "m09-ko",
+    "sourceFamily": "quoted_identifier",
+    "split": "development",
+    "language": "ko",
+    "query": "\"배포 오류\" 원문 검색",
+    "intent": "self_contained",
+    "explicitRead": true,
+    "expectedStrategy": "selective"
+  },
+  {
+    "id": "m09-en",
+    "sourceFamily": "quoted_identifier",
+    "split": "development",
+    "language": "en",
+    "query": "Find \"deploy error\" exactly",
+    "intent": "self_contained",
+    "explicitRead": true,
+    "expectedStrategy": "selective"
+  },
+  {
+    "id": "m09-mixed",
+    "sourceFamily": "quoted_identifier",
+    "split": "development",
+    "language": "mixed",
+    "query": "\"deploy error\" 원문",
+    "intent": "self_contained",
+    "explicitRead": true,
+    "expectedStrategy": "selective"
+  },
+  {
+    "id": "m10-ko",
+    "sourceFamily": "explicit_history",
+    "split": "development",
+    "language": "ko",
+    "query": "예전 기록도 보여줘",
+    "intent": "self_contained",
+    "explicitRead": true,
+    "expectedStrategy": "selective"
+  },
+  {
+    "id": "m10-en",
+    "sourceFamily": "explicit_history",
+    "split": "development",
+    "language": "en",
+    "query": "Include historical records",
+    "intent": "self_contained",
+    "explicitRead": true,
+    "expectedStrategy": "selective"
+  },
+  {
+    "id": "m10-mixed",
+    "sourceFamily": "explicit_history",
+    "split": "development",
+    "language": "mixed",
+    "query": "historical 기록 포함",
+    "intent": "self_contained",
+    "explicitRead": true,
+    "expectedStrategy": "selective"
+  },
+  {
+    "id": "m11-ko",
+    "sourceFamily": "supplied_format",
+    "split": "verification",
+    "language": "ko",
+    "query": "이 문자열을 대문자로",
+    "intent": "self_contained",
+    "explicitRead": false,
+    "expectedStrategy": "none"
+  },
+  {
+    "id": "m11-en",
+    "sourceFamily": "supplied_format",
+    "split": "verification",
+    "language": "en",
+    "query": "Uppercase this supplied string",
+    "intent": "self_contained",
+    "explicitRead": false,
+    "expectedStrategy": "none"
+  },
+  {
+    "id": "m11-mixed",
+    "sourceFamily": "supplied_format",
+    "split": "verification",
+    "language": "mixed",
+    "query": "이 string uppercase",
+    "intent": "self_contained",
+    "explicitRead": false,
+    "expectedStrategy": "none"
+  },
+  {
+    "id": "m12-ko",
+    "sourceFamily": "supplied_sort",
+    "split": "verification",
+    "language": "ko",
+    "query": "제공 목록을 정렬",
+    "intent": "self_contained",
+    "explicitRead": false,
+    "expectedStrategy": "none"
+  },
+  {
+    "id": "m12-en",
+    "sourceFamily": "supplied_sort",
+    "split": "verification",
+    "language": "en",
+    "query": "Sort the supplied list",
+    "intent": "self_contained",
+    "explicitRead": false,
+    "expectedStrategy": "none"
+  },
+  {
+    "id": "m12-mixed",
+    "sourceFamily": "supplied_sort",
+    "split": "verification",
+    "language": "mixed",
+    "query": "제공 list sort",
+    "intent": "self_contained",
+    "explicitRead": false,
+    "expectedStrategy": "none"
+  },
+  {
+    "id": "m13-ko",
+    "sourceFamily": "resume_checklist",
+    "split": "verification",
+    "language": "ko",
+    "query": "내 체크리스트 이어서",
+    "intent": "resume",
+    "explicitRead": false,
+    "expectedStrategy": "continuity"
+  },
+  {
+    "id": "m13-en",
+    "sourceFamily": "resume_checklist",
+    "split": "verification",
+    "language": "en",
+    "query": "Resume my checklist",
+    "intent": "resume",
+    "explicitRead": false,
+    "expectedStrategy": "continuity"
+  },
+  {
+    "id": "m13-mixed",
+    "sourceFamily": "resume_checklist",
+    "split": "verification",
+    "language": "mixed",
+    "query": "checklist 이어서",
+    "intent": "resume",
+    "explicitRead": false,
+    "expectedStrategy": "continuity"
+  },
+  {
+    "id": "m14-ko",
+    "sourceFamily": "resume_context",
+    "split": "verification",
+    "language": "ko",
+    "query": "이전 작업 다음 행동",
+    "intent": "resume",
+    "explicitRead": false,
+    "expectedStrategy": "continuity"
+  },
+  {
+    "id": "m14-en",
+    "sourceFamily": "resume_context",
+    "split": "verification",
+    "language": "en",
+    "query": "Next action of my previous task",
+    "intent": "resume",
+    "explicitRead": false,
+    "expectedStrategy": "continuity"
+  },
+  {
+    "id": "m14-mixed",
+    "sourceFamily": "resume_context",
+    "split": "verification",
+    "language": "mixed",
+    "query": "previous task 다음 행동",
+    "intent": "resume",
+    "explicitRead": false,
+    "expectedStrategy": "continuity"
+  },
+  {
+    "id": "m15-ko",
+    "sourceFamily": "rollback_steps",
+    "split": "verification",
+    "language": "ko",
+    "query": "안전한 롤백 순서",
+    "intent": "procedure",
+    "explicitRead": true,
+    "expectedStrategy": "selective"
+  },
+  {
+    "id": "m15-en",
+    "sourceFamily": "rollback_steps",
+    "split": "verification",
+    "language": "en",
+    "query": "Safe rollback sequence",
+    "intent": "procedure",
+    "explicitRead": true,
+    "expectedStrategy": "selective"
+  },
+  {
+    "id": "m15-mixed",
+    "sourceFamily": "rollback_steps",
+    "split": "verification",
+    "language": "mixed",
+    "query": "safe rollback 순서",
+    "intent": "procedure",
+    "explicitRead": true,
+    "expectedStrategy": "selective"
+  },
+  {
+    "id": "m16-ko",
+    "sourceFamily": "project_decision",
+    "split": "verification",
+    "language": "ko",
+    "query": "이 프로젝트 선택 이유",
+    "intent": "past_decision",
+    "explicitRead": true,
+    "expectedStrategy": "selective"
+  },
+  {
+    "id": "m16-en",
+    "sourceFamily": "project_decision",
+    "split": "verification",
+    "language": "en",
+    "query": "Why this project choice was made",
+    "intent": "past_decision",
+    "explicitRead": true,
+    "expectedStrategy": "selective"
+  },
+  {
+    "id": "m16-mixed",
+    "sourceFamily": "project_decision",
+    "split": "verification",
+    "language": "mixed",
+    "query": "project 선택 rationale",
+    "intent": "past_decision",
+    "explicitRead": true,
+    "expectedStrategy": "selective"
+  },
+  {
+    "id": "m17-ko",
+    "sourceFamily": "incident_account",
+    "split": "verification",
+    "language": "ko",
+    "query": "계정 존재와 비밀번호를 안다는 건 다름",
+    "intent": "incident",
+    "explicitRead": true,
+    "expectedStrategy": "selective"
+  },
+  {
+    "id": "m17-en",
+    "sourceFamily": "incident_account",
+    "split": "verification",
+    "language": "en",
+    "query": "Account existence does not prove password knowledge",
+    "intent": "incident",
+    "explicitRead": true,
+    "expectedStrategy": "selective"
+  },
+  {
+    "id": "m17-mixed",
+    "sourceFamily": "incident_account",
+    "split": "verification",
+    "language": "mixed",
+    "query": "account 존재 != password 알고 있음",
+    "intent": "incident",
+    "explicitRead": true,
+    "expectedStrategy": "selective"
+  },
+  {
+    "id": "m18-ko",
+    "sourceFamily": "computer_version",
+    "split": "verification",
+    "language": "ko",
+    "query": "다른 컴퓨터 서비스 버전",
+    "intent": "environment",
+    "explicitRead": true,
+    "expectedStrategy": "selective"
+  },
+  {
+    "id": "m18-en",
+    "sourceFamily": "computer_version",
+    "split": "verification",
+    "language": "en",
+    "query": "Service version on another computer",
+    "intent": "environment",
+    "explicitRead": true,
+    "expectedStrategy": "selective"
+  },
+  {
+    "id": "m18-mixed",
+    "sourceFamily": "computer_version",
+    "split": "verification",
+    "language": "mixed",
+    "query": "다른 PC service version",
+    "intent": "environment",
+    "explicitRead": true,
+    "expectedStrategy": "selective"
+  },
+  {
+    "id": "m19-ko",
+    "sourceFamily": "negative_filter",
+    "split": "verification",
+    "language": "ko",
+    "query": "NAS -Windows 조건 검색",
+    "intent": "self_contained",
+    "explicitRead": true,
+    "expectedStrategy": "selective"
+  },
+  {
+    "id": "m19-en",
+    "sourceFamily": "negative_filter",
+    "split": "verification",
+    "language": "en",
+    "query": "Search NAS -Windows",
+    "intent": "self_contained",
+    "explicitRead": true,
+    "expectedStrategy": "selective"
+  },
+  {
+    "id": "m19-mixed",
+    "sourceFamily": "negative_filter",
+    "split": "verification",
+    "language": "mixed",
+    "query": "NAS -Windows 검색",
+    "intent": "self_contained",
+    "explicitRead": true,
+    "expectedStrategy": "selective"
+  },
+  {
+    "id": "m20-ko",
+    "sourceFamily": "strict_path",
+    "split": "verification",
+    "language": "ko",
+    "query": "지정 경로 원문 읽기",
+    "intent": "resume",
+    "explicitRead": true,
+    "expectedStrategy": "selective"
+  },
+  {
+    "id": "m20-en",
+    "sourceFamily": "strict_path",
+    "split": "verification",
+    "language": "en",
+    "query": "Read an explicitly specified path",
+    "intent": "resume",
+    "explicitRead": true,
+    "expectedStrategy": "selective"
+  },
+  {
+    "id": "m20-mixed",
+    "sourceFamily": "strict_path",
+    "split": "verification",
+    "language": "mixed",
+    "query": "explicit path 원문 읽기",
+    "intent": "resume",
+    "explicitRead": true,
+    "expectedStrategy": "selective"
+  }
+]

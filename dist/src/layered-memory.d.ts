@@ -2,6 +2,7 @@ import type { FileSystemService } from './filesystem.js';
 import type { RetrievalService } from './retrieval-service.js';
 import type { ScopeAccessPolicy } from './scope-access.js';
 import type { ScopePrincipal } from './scope-auth.js';
+import { type MemoryTaskContext } from './retrieval/memory-plan.js';
 export interface MemoryRequest {
     principal?: ScopePrincipal;
     scope?: 'personal' | 'user' | 'community' | 'global';
@@ -18,6 +19,7 @@ export interface MemoryRequest {
     };
     limit?: number;
     maxChars?: number;
+    taskContext?: MemoryTaskContext;
 }
 /** Read-time projections over the existing metadata and search indexes. No memory DB. */
 export declare class LayeredMemoryService {
@@ -28,8 +30,36 @@ export declare class LayeredMemoryService {
     read(mode: 'recall' | 'brief' | 'consolidate', params: MemoryRequest): Promise<{
         scope: "community" | "global" | "personal" | "user";
         mode: "brief" | "consolidate" | "recall";
+        status: string;
+        items: never[];
+        routing: import("./retrieval/memory-plan.js").MemoryPlan;
+        truncated: boolean;
+        warnings: string[];
+        nextAction: {
+            endpointId: string;
+            arguments: {
+                maxChars: number;
+                prettyPrint: boolean;
+                scope?: never;
+                includeHistory?: never;
+                limit?: never;
+            };
+        } | {
+            endpointId: string;
+            arguments: {
+                prettyPrint?: never;
+                scope: "community" | "global" | "personal" | "user";
+                maxChars: number;
+                includeHistory?: never;
+                limit?: never;
+            };
+        };
+    } | {
+        scope: "community" | "global" | "personal" | "user";
+        mode: "brief" | "consolidate" | "recall";
         interpretation: string;
         status: string;
+        routing?: import("./retrieval/memory-plan.js").MemoryPlan;
         items: any[];
         snapshot: string;
         truncated: boolean;
@@ -45,6 +75,9 @@ export declare class LayeredMemoryService {
         warnings: string[];
         nextAction: any;
     } | {
+        routing?: never;
+        warnings?: never;
+        nextAction?: never;
         scope: "community" | "global" | "personal" | "user";
         mode: "brief" | "consolidate" | "recall";
         status: string;
@@ -56,6 +89,8 @@ export declare class LayeredMemoryService {
         };
         hint: "Repeat with retry.maxChars; if already at maximum, narrow the query.";
     } | {
+        routing?: never;
+        warnings?: never;
         scope: "community" | "global" | "personal" | "user";
         mode: "brief" | "consolidate" | "recall";
         status: string;
@@ -65,6 +100,7 @@ export declare class LayeredMemoryService {
         nextAction: {
             endpointId: string;
             arguments: {
+                prettyPrint?: never;
                 scope: "community" | "global" | "personal" | "user";
                 includeHistory: boolean;
                 limit: number;

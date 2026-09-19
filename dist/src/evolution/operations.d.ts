@@ -1,6 +1,7 @@
 import type { HostWorkStorage } from '../host-work-storage.js';
 import type { EvolutionConfig } from './model.js';
 import type { EvolutionRuntimeHost } from './runtime-connection.js';
+import { type MemoryDeliveryEvidence } from './memory-observation.js';
 export declare const OBSERVED_ENDPOINTS: Set<string>;
 export interface OperationActor {
     accountId: string;
@@ -19,8 +20,9 @@ interface Observation {
     returnedBytes?: number;
     elapsedMs?: number;
     resultHash?: string;
-    measurementScope: 'search_server';
+    measurementScope: 'search_server' | 'memory_server' | 'continuity_server';
     effectVerified: false;
+    evidence?: MemoryDeliveryEvidence;
     selectedHarness?: {
         cycleId: string;
         revision: string;

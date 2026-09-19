@@ -2,8 +2,9 @@ import type { HostWorkStorage } from '../host-work-storage.js';
 import type { EvolutionConfig } from './model.js';
 import type { EvolutionRuntimeHost } from './runtime-connection.js';
 import { hash, id, unavailable } from './policy.js';
+import { MEMORY_OBSERVED_ENDPOINTS, memoryObservation, type MemoryDeliveryEvidence } from './memory-observation.js';
 
-export const OBSERVED_ENDPOINTS = new Set(['wiki.search', 'wiki.answer_packet', 'notes.read', 'mcp.read_note_lines', 'documents.outline', 'documents.read']);
+export const OBSERVED_ENDPOINTS = new Set(['wiki.search', 'wiki.answer_packet', 'notes.read', 'mcp.read_note_lines', 'documents.outline', 'documents.read', ...MEMORY_OBSERVED_ENDPOINTS]);
 interface Task {
   version: 1; accountId: string; authority: string; id: string; fingerprint: string;
   context: Record<string, string>; events: string[]; contextBasis?: string;
@@ -12,7 +13,8 @@ export interface OperationActor { accountId: string; modelId: string; authority:
 interface Observation {
   version: 1; taskId: string; requestId: string; fingerprint: string; endpointId: string;
   state: 'started' | 'completed' | 'failed'; returnedChars?: number; returnedBytes?: number; elapsedMs?: number;
-  resultHash?: string; measurementScope: 'search_server'; effectVerified: false;
+  resultHash?: string; measurementScope: 'search_server' | 'memory_server' | 'continuity_server'; effectVerified: false;
+  evidence?: MemoryDeliveryEvidence;
   selectedHarness?: { cycleId: string; revision: string };
   resourceRevisions?: string[];
 }
@@ -102,7 +104,8 @@ export class EvolutionOperations {
       // Do not replay output or rerun after a lost response. Caller can inspect the receipt.
       if (prior.value !== undefined) throw Error('Observation already exists; read evolution.context observations before retrying with a new request ID');
       if (task.value.events.length >= 64) return unavailable();
-      const event: Observation = { version: 1, taskId, requestId, fingerprint, endpointId, state: 'started', measurementScope: 'search_server', effectVerified: false };
+      const measurementScope = endpointId === 'continuity.resume' ? 'continuity_server' : endpointId.startsWith('memory.') ? 'memory_server' : 'search_server';
+      const event: Observation = { version: 1, taskId, requestId, fingerprint, endpointId, state: 'started', measurementScope, effectVerified: false };
       await this.storage.records!.write(key, event, prior.revision, a.assert);
       await this.storage.records!.write(this.key(a, 'task', taskId), { ...task.value, events: [...task.value.events, requestId] }, task.revision, a.assert);
       return task.value;
@@ -115,10 +118,12 @@ export class EvolutionOperations {
       let data: any;
       try { data = JSON.parse((result as any)?.content?.[0]?.text); } catch { /* no structured revision */ }
       const rows = Array.isArray(data) ? data : [data, ...Array.isArray(data?.results) ? data.results : []];
-      const resourceRevisions = [...new Set<string>(rows.slice(0, 32).flatMap(row => [row?.rv, row?.revision])
-        .filter(v => typeof v === 'string' && /^[a-f0-9]{64}$/.test(v)))];
+      const evidence = memoryObservation(endpointId, result);
+      const resourceRevisions = [...new Set<string>(evidence ? evidence.resources.map(row => row.revision)
+        : rows.slice(0, 32).flatMap(row => [row?.rv, row?.revision]).filter(v => typeof v === 'string' && /^[a-f0-9]{64}$/.test(v)))];
       await this.finish(a, key, { state: (result as any)?.isError ? 'failed' : 'completed', returnedChars: body.length,
         returnedBytes: Buffer.byteLength(body), elapsedMs: performance.now() - start, resultHash: hash(result), resourceRevisions,
+        ...(evidence && { evidence }),
         ...(selectedHarness && { selectedHarness }) });
       await a.assert(); return result;
     } catch (error) {

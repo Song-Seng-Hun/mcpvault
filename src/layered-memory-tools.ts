@@ -1,6 +1,7 @@
 import { guidanceText } from './guidance-runtime.js';
 import type { Tool } from '@modelcontextprotocol/server';
 import { MEMORY_ROLES } from './memory-contract.js';
+import { MEMORY_INTENTS } from './retrieval/memory-plan.js';
 
 export function getLayeredMemoryTools(): Tool[] {
   return ['recall', 'brief', 'consolidate'].map(mode => ({
@@ -14,6 +15,9 @@ export function getLayeredMemoryTools(): Tool[] {
       dateTo: { type: 'string', description: guidanceText('guid-d3288fbee41c1402', 'Inclusive event date upper bound') },
       pathPrefix: { type: 'string', description: guidanceText('guid-2eb8b1e94b03521e', 'Optional authorized subtree within the selected scope') },
       includeHistory: { type: 'boolean', default: false },
+      taskContext: { type: 'object', additionalProperties: false, required: ['intent'],
+        description: 'Optional relevance hint, not authority. Example: {"intent":"incident"} prefers episodes. Self-contained brief without explicit filters skips optional memory only.',
+        properties: { intent: { type: 'string', enum: [...MEMORY_INTENTS] } } },
       semantic: { type: 'boolean', default: true },
       cursor: { type: 'object', additionalProperties: false, properties: { snapshot: { type: 'string', pattern: '^[a-f0-9]{64}$' }, offset: { type: 'integer', minimum: 0 } }, required: ['snapshot', 'offset'] },
       limit: { type: 'integer', minimum: 1, maximum: 100, default: 20 },

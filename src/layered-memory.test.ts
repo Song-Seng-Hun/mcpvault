@@ -24,6 +24,58 @@ async function call(endpointId: string, args: Record<string, unknown>) {
   const text = (result.content as any)[0].text as string;
   return { result, text, value: result.isError ? { error: text } : JSON.parse(text) };
 }
+
+test('self-contained brief skips optional inventory but never skips scope checks or explicit retrieval', async () => {
+  const inventory = vi.spyOn(FileSystemService.prototype, 'queryNotes');
+  const reply = await call('memory.brief', { scope: 'global', taskContext: { intent: 'self_contained' } });
+  expect(reply.result.isError).not.toBe(true);
+  expect(reply.value).toMatchObject({ status: 'not_needed', items: [], routing: { strategy: 'none', mandatoryRules: 'unchanged' } });
+  expect(inventory).not.toHaveBeenCalled();
+  expect((await call('memory.brief', { taskContext: { intent: 'self_contained' } })).result.isError).toBe(true);
+  const explicit = await call('memory.brief', { scope: 'global', query: 'NAS', taskContext: { intent: 'self_contained' }, maxChars: 4000 });
+  expect(explicit.value.items.length).toBeGreaterThan(0);
+});
+
+test('resume intent offers the existing continuity read without scanning or inventing a checkpoint', async () => {
+  const inventory = vi.spyOn(FileSystemService.prototype, 'queryNotes');
+  const reply = await call('memory.brief', { scope: 'global', taskContext: { intent: 'resume' } });
+  expect(reply.value).toMatchObject({ status: 'route_only', items: [], nextAction: { endpointId: 'continuity.resume' } });
+  expect(reply.value.routing.strategy).toBe('continuity');
+  expect(inventory).not.toHaveBeenCalled();
+  expect(JSON.stringify(reply.value)).not.toContain('verified_resume');
+});
+
+test('task-aware brief prefers reusable procedures without erasing incident evidence or source reads', async () => {
+  await fs.writeNote({ path: 'Memory/A-Incident.md', content: 'NAS failed once under a different mount.', frontmatter: { memory_role: 'episodic' } });
+  const reply = await call('memory.brief', { scope: 'global', query: 'NAS', semantic: false, taskContext: { intent: 'procedure' }, maxChars: 4000 });
+  expect(reply.result.isError).not.toBe(true);
+  expect(reply.value.routing).toMatchObject({ strategy: 'selective', intent: 'procedure', mandatoryRules: 'unchanged' });
+  expect(reply.value.items[0].role).toBe('procedural');
+  expect(reply.value.items[0].nextAction).toBeDefined();
+  const episode = await call('memory.recall', { scope: 'global', query: 'NAS', role: 'episodic', taskContext: { intent: 'procedure' } });
+  expect(episode.value.items.every((item: any) => item.role === 'episodic')).toBe(true);
+  const first = await call('memory.recall', { scope: 'global', query: 'NAS', limit: 1, taskContext: { intent: 'incident' } });
+  expect(first.value.nextCursor).toBeDefined();
+  const changed = await call('memory.recall', { scope: 'global', query: 'NAS', cursor: first.value.nextCursor, taskContext: { intent: 'procedure' } });
+  expect(changed.result.isError).toBe(true);
+});
+
+test('routing rejects forged context and does not let task intent evade consolidation', async () => {
+  expect((await call('memory.brief', { scope: 'global', taskContext: { intent: 'approved', safe: true } })).result.isError).toBe(true);
+  const reply = await call('memory.consolidate', { scope: 'global', query: 'NAS', taskContext: { intent: 'self_contained' } });
+  expect(reply.value.interpretation).toBe('agent_required');
+  expect(reply.value.status).not.toBe('not_needed');
+});
+
+test('task-aware current work prefers a valid lesson to an expired procedure without deleting history', async () => {
+  await fs.writeNote({ path: 'Memory/A-Expired.md', content: 'NAS obsolete procedure.', frontmatter: { memory_role: 'procedural', valid_until: '2000-01-01' } });
+  await fs.writeNote({ path: 'Memory/B-Lesson.md', content: 'NAS current scope; verify volatile RAM before use.', frontmatter: { memory_role: 'semantic', valid_from: '2000-01-01', valid_until: '2099-01-01' } });
+  const reply = await call('memory.recall', { scope: 'global', query: 'NAS', taskContext: { intent: 'procedure' }, semantic: false, maxChars: 12000 });
+  expect(reply.value.items.findIndex((item: any) => item.path === 'Memory/A-Expired.md'))
+    .toBeGreaterThan(reply.value.items.findIndex((item: any) => item.path === 'Memory/B-Lesson.md'));
+  expect(reply.value.items.find((item: any) => item.path === 'Memory/A-Expired.md').validity).toBe('expired');
+  expect((await fs.readNote('Memory/A-Expired.md')).content).toContain('obsolete procedure');
+});
 test('memory recall discovers current scoped experience without exposing shared or archived noise', async () => {
   const reply = await call('memory.recall', { scope: 'global', query: 'NAS', maxChars: 4000 });
   expect(reply.result.isError).not.toBe(true);
