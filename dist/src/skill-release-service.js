@@ -24,10 +24,10 @@ export class ReviewedSkillService {
     }
     async discover(p, captureDeliveryFence) {
         try {
-            if (Object.keys(p).some(k => !['query', 'maxChars', 'limit', 'accessToken', 'principal'].includes(k)))
+            if (Object.keys(p).some(k => !['query', 'maxChars', 'limit', 'cursor', 'scanBudget', 'accessToken', 'principal'].includes(k)))
                 return fail();
             const identity = this.identity(p);
-            return await discoverReviewedProcedures({ host: this.host, query: p.query, maxChars: p.maxChars, limit: p.limit, identity,
+            return await discoverReviewedProcedures({ host: this.host, query: p.query, maxChars: p.maxChars, limit: p.limit, cursor: p.cursor, scanBudget: p.scanBudget, cursorScope: identity.scopeKey, identity,
                 read: (skillId, capture) => this.read({ skillId, view: 'metadata', section: 'summary', maxChars: 12000,
                     accessToken: p.accessToken, principal: p.principal }, capture, true) }, captureDeliveryFence);
         }
@@ -50,7 +50,7 @@ export class ReviewedSkillService {
             await this.options.assertActor?.(principal);
             assertFresh();
         };
-        return { principal, revalidate, assertFresh };
+        return { principal, scopeKey: originalIdentity, revalidate, assertFresh };
     }
     async read(p, captureDeliveryFence, discovery) {
         try {

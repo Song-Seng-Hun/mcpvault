@@ -10,6 +10,7 @@ import type { CompilationHost } from './compilation-host.js';
 import type { CompilationConfig } from './compilation-policy.js';
 import { DocumentPolicyStore } from './document-policy-store.js';
 import { DocumentAuthority } from './document-authority.js';
+import { wikiEvolutionAdapter } from './evolution/wiki-adapter.js';
 
 let vault: string, fs: FileSystemService, access: ScopeAccessPolicy, durable: any, host: CompilationHost, config: CompilationConfig;
 const actor = { accountId: 'operator', modelId: 'test', role: 'agent' as const, agentId: 'worker', capabilities: ['write', 'publish'] as any };
@@ -391,6 +392,28 @@ function adapter(events: string[] = []) {
     },
   };
 }
+
+test('unified wiki bridge applies a real checked compilation, rereads after restart and refuses edited output', async () => {
+  const native = service({ adapter: adapter() });
+  const prepared = await native.execute(await request(), actor), content = 'Only if enabled, use version 2.0.';
+  const submitted = await native.execute({ op: 'submit', requestId: 'job-one', expectedJobRevision: prepared.jobRevision,
+    content, evidence: await preservationEvidence(content, 'preserved') }, actor);
+  const checked = await native.execute({ op: 'check', requestId: 'job-one', expectedJobRevision: submitted.jobRevision }, actor);
+  expect(checked.status).toBe('checked');
+  const bridge = wikiEvolutionAdapter(native), target: any = { kind: 'wiki', id: 'job-one', path: 'Result.md' };
+  const baseline = await bridge.read(target, actor), cycle: any = { id: 'unified-wiki', target, scope: { kind: 'project', id: 'p' },
+    baseline, candidate: { jobRevision: baseline.revision } };
+  cycle.intent = await bridge.preview(cycle, actor, async () => {});
+  const sourceBefore = await fs.readNoteRevision('Source.md');
+  const applied = await bridge.apply(cycle, actor, async () => {});
+  expect((await fs.readNote('Result.md')).content).toBe(content);
+  expect(await fs.readNoteRevision('Source.md')).toBe(sourceBefore);
+  const restarted = wikiEvolutionAdapter(service({ adapter: adapter() }));
+  expect(await restarted.reconcile(cycle, actor, async () => {})).toEqual({ state: 'applied', revision: applied.revision });
+  await seed('Result.md', 'User-edited content.');
+  await expect(restarted.reconcile(cycle, actor, async () => {})).rejects.toThrow();
+  expect((await fs.readNote('Result.md')).content).toBe('User-edited content.');
+});
 test.each(['passed', 'partial'] as const)('unchanged %s checks revalidate but do not rewrite durable history across restart', async status => {
   const impl = adapter(); impl.check = vi.fn(async () => ({ status, ruleVersion: 'checker-1' })) as typeof impl.check;
   const s = service({ adapter: impl }), draft = await generated(s);

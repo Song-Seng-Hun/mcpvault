@@ -1,4 +1,11 @@
 export { createServer } from './createServer.js';
+export { EvolutionService } from './evolution/service.js';
+export { loadEvolutionStorage } from './evolution/host.js';
+export { EvolutionOpportunity, evolutionSessionBridge } from './evolution/opportunity.js';
+export { wikiEvolutionAdapter } from './evolution/wiki-adapter.js';
+export { computerEvolutionAdapter } from './evolution/computer-adapter.js';
+export { fictionEvolutionAdapter } from './evolution/fiction-adapter.js';
+export { skillEvolutionAdapter, reviewedDeliveryReader } from './evolution/skill-adapter.js';
 export { loadSkillEvolutionHostConfig } from './skill-evolution-host.js';
 export { SkillEvolutionService } from './skill-evolution.js';
 export { proceduralLines } from './skill-evaluation.js';

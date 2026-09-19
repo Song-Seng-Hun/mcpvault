@@ -8,6 +8,8 @@ import { ScopeAuthService } from './scope-auth.js';
 import { FrontmatterHandler } from './frontmatter.js';
 import { proceduralLines } from './skill-evaluation.js';
 import { projectSkill, previewSkills, applySkills } from './skill-library.js';
+import { skillEvolutionAdapter } from './evolution/skill-adapter.js';
+import { hash as evolutionHash } from './evolution/policy.js';
 
 const vaults: string[] = [];
 vi.setConfig({ testTimeout: 30000 });
@@ -210,6 +212,26 @@ test('hidden candidates do not contribute to public listing cursor positions', a
   const first = await f.service.candidate({ skillId: 'safe-edit', op: 'list', limit: 1, maxChars: 4000 });
   expect(first.items).toHaveLength(1); expect(first.cursor).toMatch(/:1$/);
   expect(JSON.stringify(first)).not.toContain(hidden.candidateId);
+});
+
+test('unified skill bridge confirms native promotion only after the delivery boundary serves the evaluated content', async () => {
+  const f = await fixture(), original = await f.resolve();
+  let delivered = { releaseRevision: evolutionHash('baseline release'), contentHash: evolutionHash(original.content) };
+  const c = await f.candidate(), evaluated = await f.evaluate(c);
+  // Native evolution is real; reviewed admission remains an explicit synthetic host boundary.
+  const delivery = { read: async () => delivered,
+    prepare: async (_cycle: unknown, contentHash: string) => ({ releaseRevision: evolutionHash('candidate release'), contentHash, bindingHash: evolutionHash(c.revision) }),
+    apply: async (prepared: any) => { delivered = { releaseRevision: prepared.releaseRevision, contentHash: prepared.contentHash }; } };
+  const bridge = skillEvolutionAdapter(f.service, async () => ({ accessToken: f.ownerToken }), delivery);
+  const target: any = { kind: 'skill', id: 'safe-edit' }, baseline = await bridge.read(target, f.owner);
+  const cycle: any = { id: 'unified-skill', target, baseline, candidate: { candidateId: c.candidateId, candidateRevision: c.revision, evaluationId: evaluated.evaluationId } };
+  cycle.intent = await bridge.preview(cycle, f.owner, async () => {});
+  const applied = await bridge.apply(cycle, f.owner, async () => {});
+  expect((await f.resolve()).status).toBe('active');
+  expect(await bridge.reconcile(cycle, f.owner, async () => {})).toEqual({ state: 'applied', revision: applied.revision });
+  delivered = { releaseRevision: evolutionHash('stale release'), contentHash: evolutionHash(original.content) };
+  expect((await bridge.reconcile(cycle, f.owner, async () => {})).state).toBe('unknown');
+  expect((await f.fs.readNote(original.path)).revision).toBe(original.revision);
 });
 
 test('retained historical Skill use is shareable but cannot seed a current-basis candidate', async () => {

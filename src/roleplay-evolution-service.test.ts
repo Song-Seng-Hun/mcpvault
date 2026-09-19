@@ -9,6 +9,7 @@ import { ScopeAccessPolicy } from './scope-access.js';
 import { ReferenceService } from './references.js';
 import { roleplayRevision } from './roleplay-model.js';
 import type { ScopePrincipal } from './scope-auth.js';
+import { fictionEvolutionAdapter } from './evolution/fiction-adapter.js';
 
 let root: string, vaultPath: string, hostPath: string, fs: FileSystemService, store: RoleplayStore, service: RoleplayService;
 const principal = (accountId: string): ScopePrincipal => ({ accountId, modelId: 'gpt', agentId: accountId, role: 'agent', capabilities: ['chat'] });
@@ -33,6 +34,34 @@ async function source() {
   return { turnId: r.id, revision: r.revision, noteRevision: r.noteRevision };
 }
 const propose = (sources: any[], changes = [{ kind: 'belief', target: 'iris', key: 'rumor', text: 'I suspect the rumor may be true.' }]) => write('evolution', { op: 'propose', characterId: 'iris', generation: 1, roomId: 'hall', sources, changes, reason: 'After this scene.' }, 'alice');
+
+it('unified adapter preserves fictional scope and serves the applied perspective after restart', async () => {
+  const sources = [await source()], adapter = fictionEvolutionAdapter(service), target = { kind: 'fiction' as const, id: 'iris' };
+  const scope = { kind: 'scene' as const, id: 'hall' }, actor = principal('alice');
+  const baseline = await adapter.read(target, actor, { scope } as any);
+  const cycle: any = { id: 'fiction-cycle', target, scope, baseline,
+    candidate: { generation: 1, roomId: 'hall', sources, changes: [{ kind: 'belief', target: 'iris', key: 'rumor', text: 'The rumor remains uncertain.' }], reason: 'Witnessed rumor, not a real-world correction.' } };
+  const current = async () => {};
+  cycle.intent = await adapter.preview(cycle, actor, current);
+  const result = await adapter.apply(cycle, actor, current);
+  expect(await adapter.reconcile(cycle, actor, current)).toEqual({ state: 'applied', revision: result.revision });
+  await store.close(); store = await RoleplayStore.open({ vaultPath, hostPath, policy: { administrators: ['host'] } }); service = connect();
+  const context = await service.execute('context', { characterId: 'iris', roomId: 'hall', maxChars: 12000 }, actor);
+  expect(JSON.stringify(context)).toContain('The rumor remains uncertain.');
+  await expect(adapter.preview({ ...cycle, candidate: { ...cycle.candidate, changes: [{ kind: 'character_core', target: 'iris', key: 'definition', text: 'New identity' }] } }, actor, current)).rejects.toThrow();
+});
+
+it('previews a low-risk proposal without recording any event and pins the exact resulting revision', async () => {
+  const sources = [await source()], before = roleplayRevision(await store.snapshot());
+  const args = { requestId: 'preview-cycle', expectedRevision: before, characterId: 'iris', generation: 1, roomId: 'hall', sources,
+    changes: [{ kind: 'belief', target: 'iris', key: 'rumor', text: 'The rumor remains uncertain.' }], reason: 'Witnessed rumor only.' };
+  const preview = await service.previewEvolution(args, principal('alice'));
+  expect(roleplayRevision(await store.snapshot())).toBe(before);
+  expect(preview.automatic).toBe(true);
+  const applied = await service.execute('evolution', { ...args, op: 'propose' }, principal('alice'));
+  expect(applied.revision).toBe(preview.outputRevision);
+  expect(applied.id).toBe(preview.proposalId);
+});
 
 it('re-reads the exact proposal and prioritizes current subjective context after restart, without duplicate retries', async () => {
   const sources = [await source()];

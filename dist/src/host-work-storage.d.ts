@@ -1,4 +1,4 @@
-declare const HOST_WORK_NAMESPACES: readonly ['maintenance', 'compilation', 'codex-hooks', 'codex-checkpoints'];
+declare const HOST_WORK_NAMESPACES: readonly ['maintenance', 'compilation', 'codex-hooks', 'codex-checkpoints', 'evolution'];
 export type HostWorkNamespace = typeof HOST_WORK_NAMESPACES[number];
 export interface HostWorkWriter {
     assertHeld(): Promise<void>;

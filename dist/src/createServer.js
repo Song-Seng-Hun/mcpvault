@@ -36,6 +36,9 @@ import { CompilationService } from './compilation-service.js';
 import { attachCompilationReview } from './compilation-review-view.js';
 import { connectCodexHooks } from './codex-hook-connection.js';
 import { getCompilationTools } from './compilation-tools.js';
+import { getEvolutionTools } from './evolution/tools.js';
+import { EvolutionService } from './evolution/service.js';
+import { EvolutionOpportunity, evolutionSessionBridge } from './evolution/opportunity.js';
 import { FidelityService } from './fidelity-service.js';
 import { getFidelityTools } from './fidelity-tools.js';
 import { MaintenanceService } from './maintenance-service.js';
@@ -255,6 +258,7 @@ function requestFairnessKey(args) {
     return `token:${(hash >>> 0).toString(16)}`;
 }
 const MUTATING_TOOLS = new Set([
+    'manage_evolution_feedback', 'manage_evolution_cycle',
     'manage_wiki_compilation',
     ...EXPLANATION_MUTATING_TOOLS,
     ...BENCHMARK_MUTATING_TOOLS,
@@ -299,6 +303,8 @@ const MUTATING_TOOLS = new Set([
 ]);
 const CAPABILITY_FOR_TOOL = {
     manage_wiki_compilation: 'write',
+    manage_evolution_feedback: 'write',
+    manage_evolution_cycle: 'write',
     public_federation_pull: 'write', public_federation_retry: 'publish',
     update_wiki_projection: 'write',
     manage_wiki_moc_region: 'write',
@@ -629,6 +635,8 @@ export function createServer(vaultPath, options = {}) {
     const questionPacket = new QuestionPacketService(fileSystem, scopeAccess, retrieval);
     const sourceComparison = new SourceComparisonService(fileSystem, scopeAccess, retrieval);
     const fidelity = new FidelityService(fileSystem, scopeAccess);
+    const evolution = new EvolutionService({ ...options.evolution, readOnly: Boolean(readOnly || options.evolution?.readOnly) });
+    const evolutionOpportunity = new EvolutionOpportunity();
     const sourceChange = new SourceChangeService(fileSystem, scopeAccess);
     const knowledgeApplications = new KnowledgeApplicationService(fileSystem, scopeAccess);
     const references = new ReferenceService(fileSystem, scopeAccess);
@@ -966,6 +974,7 @@ export function createServer(vaultPath, options = {}) {
                     query: { type: "string", description: guidanceText('guid-469a14a455a30f23', "Search query text") },
                     excerptMode: { type: 'string', enum: ['compact', 'context'], description: guidanceText('guid-edfcd36fb92461c0', 'Optional context returns source paragraphs/list items/table rows (up to 350 characters), heading context and a revision-guarded read action. Default compact output is unchanged.') },
                     resultKind: { type: 'string', enum: ['notes', 'procedures'], description: 'Default notes preserves document results. Opt-in procedures returns a separate bounded reviewed-skill card packet. Requires current authenticated host consent; unsupported strict/scoped filters yield no procedure recommendations. Example: query="review", resultKind="procedures".' },
+                    cursor: { type: 'string', maxLength: 36, description: 'Procedure-only opaque nextCursor from a prior response. Keep the same authenticated query. Never an access grant; stale cursors require a fresh search.' },
                     limit: { type: "number", description: guidanceText('guid-49936a38a5591a50', "Maximum number of documents (default: 5, max: 20)"), default: 5 },
                     maxChars: { type: "integer", minimum: 512, maximum: 12000, description: guidanceText('guid-bc0102593fde3b0f', "Maximum compact JSON characters returned (default: 4000)"), default: 4000 },
                     searchContent: { type: "boolean", description: guidanceText('guid-ac658b7444849ab8', "Search in note content (default: true)"), default: true },
@@ -1164,6 +1173,7 @@ export function createServer(vaultPath, options = {}) {
         ...getScopeAuthTools(),
         ...getLlmWikiTools(),
         ...getCompilationTools(),
+        ...getEvolutionTools(),
         ...getFidelityTools(),
         ...getSocialTools(),
         ...(federation ? getEnterpriseFederationTools() : []),
@@ -1780,6 +1790,18 @@ export function createServer(vaultPath, options = {}) {
                     });
                 };
                 switch (toolName) {
+                    case 'manage_evolution_feedback':
+                    case 'read_evolution_feedback':
+                    case 'manage_evolution_cycle':
+                    case 'read_evolution_cycle':
+                    case 'get_evolution_context': {
+                        const { accessToken: _token, ...args } = trimmedArgs;
+                        const endpoint = toolName.endsWith('_feedback') ? 'feedback' : toolName.endsWith('_cycle') ? 'cycle' : 'context';
+                        const result = await evolution.execute(endpoint, args, principal, async () => { await revalidateActor(); });
+                        if (principal)
+                            await revalidateActor();
+                        return jsonResult(result, false);
+                    }
                     case 'check_wiki_fidelity':
                         return jsonResult(await fidelity.check({ ...trimmedArgs, principal }, async () => { await revalidateActor(); }), false);
                     case 'manage_wiki_compilation':
@@ -3166,6 +3188,8 @@ export function createServer(vaultPath, options = {}) {
                     case "search_notes": {
                         if (trimmedArgs.resultKind !== undefined && !['notes', 'procedures'].includes(trimmedArgs.resultKind))
                             throw Error('Invalid search result kind');
+                        if (trimmedArgs.cursor !== undefined && trimmedArgs.resultKind !== 'procedures')
+                            throw Error('Continuation requires procedure search');
                         if (trimmedArgs.resultKind === 'procedures') {
                             return jsonResult(await retrieval.searchProcedures({ ...trimmedArgs, principal }, fence => {
                                 finalOwnerRefresh = fence.revalidate;
@@ -3702,6 +3726,11 @@ export function createServer(vaultPath, options = {}) {
     };
     installMcpHandlers(server);
     SERVER_RUNTIMES.set(server, {
+        runEvolutionOpportunity: async (request, principal, session) => {
+            if (readOnly || !options.evolution?.storage || !options.evolution.authority)
+                return { status: 'diagnostic_only' };
+            return evolutionOpportunity.run(request, evolutionSessionBridge(evolution, principal, session));
+        },
         endpointRegistry,
         dispatchTool,
         ensureEndpointRegistry,

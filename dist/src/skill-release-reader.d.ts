@@ -4,6 +4,13 @@ export interface ReviewedSkillHost {
     /** Private bounded discovery window, not an inventory or an access decision.
      * IDs must never be returned until the same release reader authorizes them. */
     candidates?(): Promise<readonly string[]>;
+    /** Bounded, resumable registry iteration. The host cursor is private to the
+     * adapter; discovery replaces it with an authenticated opaque cursor. */
+    candidatesPage?(cursor?: string, scanBudget?: number): Promise<{
+        candidates: readonly string[];
+        nextCursor?: string;
+        registryGeneration: string;
+    }>;
     entry(skillId: string): Promise<{
         releaseHash: string;
         generation: string;

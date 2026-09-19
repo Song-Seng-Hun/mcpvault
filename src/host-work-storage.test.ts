@@ -7,6 +7,8 @@ import { tmpdir, userInfo } from 'node:os';
 import { join } from 'node:path';
 import { loadHostWorkStorage, type HostWorkWriter } from './host-work-storage.js';
 import { loadCompilationHostConfig } from './compilation-host.js';
+import { loadEvolutionStorage } from './evolution/host.js';
+import { EvolutionRepository } from './evolution/repository.js';
 
 type FixtureState = { version: 1; marker: string };
 const validate = (value: unknown): FixtureState & { enabled: boolean } => {
@@ -49,6 +51,22 @@ test('maintenance and compilation use isolated state and leases', async () => {
   expect(await readdir(hostRoot)).toEqual(expect.arrayContaining([
     `maintenance-${identity}.json`, `compilation-${identity}.json`,
   ]));
+});
+
+test('evolution records use private native storage, survive restart, and reject policy revocation', async () => {
+  await writeFile(config, JSON.stringify({ version: 1, enabled: true, vaultPath: vault }), { mode: 0o600 });
+  const store = await loadEvolutionStorage(config, vault), writer = await store.acquire(); writers.push(writer);
+  const current = async () => { if (!(await store.refresh()).enabled) throw Error('revoked'); await writer.assertHeld(); };
+  const repo = new EvolutionRepository(store.records!, 'owner:test', current, 'alice');
+  const prior = await repo.read('feedback', 'sample');
+  const saved = await repo.write('feedback', 'sample', { version: 1, marker: '한국어 synthetic' }, prior.revision);
+  await repo.add('feedback', 'sample'); await writer.close();
+  const reopened = await loadEvolutionStorage(config, vault);
+  const next = new EvolutionRepository(reopened.records!, 'owner:test', async () => { if (!(await reopened.refresh()).enabled) throw Error('revoked'); }, 'alice');
+  expect(await next.read('feedback', 'sample')).toEqual({ revision: saved.revision, value: { version: 1, marker: '한국어 synthetic' } });
+  expect((await next.index()).value.feedback).toEqual(['sample']);
+  await writeFile(config, JSON.stringify({ version: 1, enabled: false, vaultPath: vault }), { mode: 0o600 });
+  await expect(next.read('feedback', 'sample')).rejects.toThrow();
 });
 
 test('a namespace lease does not block the other namespace', async () => {

@@ -1,5 +1,5 @@
-import {createHash} from 'node:crypto';
-import {constants,openSync,closeSync,fstatSync,lstatSync,readSync,realpathSync,type BigIntStats} from 'node:fs';
+import {createHash,randomUUID} from 'node:crypto';
+import {constants,openSync,closeSync,fstatSync,lstatSync,readSync,realpathSync,type BigIntStats, type Dir} from 'node:fs';
 import {opendir} from 'node:fs/promises';
 import {join,parse} from 'node:path';
 import {canonicalRoleplayPath,validateRoleplayStorage} from './roleplay-storage-host.js';
@@ -39,6 +39,7 @@ export async function openReviewedSkillStore(options:{hostPath:string;vaultPath:
     await assertHostPrivateStorage(directories);
     const bindings=new Map(directories.map(p=>[p,identity(lstatSync(p,{bigint:true}))]));
     const leases=new WeakMap<object,{path:string;stamp:string;generation:string}>();
+    const pageSessions=new Map<string,{dir:Dir;registryGeneration:string}>();
     const assertDirectories=()=>{
       // Repeat lexical ancestor checks so realpath cannot hide a replaced junction.
       const root=parse(hostPath).root;let p=root;
@@ -76,6 +77,26 @@ export async function openReviewedSkillStore(options:{hostPath:string;vaultPath:
       const result=await checked(path,8192),data=parseReviewedSkillRegistration(result.bytes,skillId);
       return {path,...result,data};
     };
+    const registryGeneration=()=>{
+      assertDirectories();
+      return stamp(lstatSync(join(hostPath,'entries'),{bigint:true}));
+    };
+    const readCandidate=async(entryName:string)=>{
+      if(!/^[a-f0-9]{64}\.json$/.test(entryName))return undefined;
+      const result=await checked(join(hostPath,'entries',entryName),8192);
+      const raw=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(result.bytes));
+      if(!id(raw?.skillId)||`${digest(raw.skillId)}.json`!==entryName)return fail();
+      const data=parseReviewedSkillRegistration(result.bytes,raw.skillId);
+      return data.state==='admitted'?data.skillId:undefined;
+    };
+    const closePageSession=async(session:{dir:Dir;registryGeneration:string})=>{try{await session.dir.close();}catch{}};
+    const retainPageSession=async(cursor:string,session:{dir:Dir;registryGeneration:string})=>{
+      while(pageSessions.size>=64){
+        const oldest=pageSessions.entries().next().value as [string,{dir:Dir;registryGeneration:string}]|undefined;
+        if(!oldest)break;pageSessions.delete(oldest[0]);await closePageSession(oldest[1]);
+      }
+      pageSessions.set(cursor,session);
+    };
     const host:ReviewedSkillHost={
       async candidates(){
         try{
@@ -88,15 +109,37 @@ export async function openReviewedSkillStore(options:{hostPath:string;vaultPath:
             for(let n=0;n<8;n++){
               const entry=await dir.read();if(!entry)break;
               if(!/^[a-f0-9]{64}\.json$/.test(entry.name))continue;
-              const result=await checked(join(hostPath,'entries',entry.name),8192);
-              const raw=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(result.bytes));
-              if(!id(raw?.skillId)||`${digest(raw.skillId)}.json`!==entry.name)return fail();
-              const data=parseReviewedSkillRegistration(result.bytes,raw.skillId);
-              if(data.state==='admitted')ids.push(data.skillId);
+              const skillId=await readCandidate(entry.name);if(skillId)ids.push(skillId);
             }
           }finally{await dir.close();}
           assertDirectories();return ids;
         }catch{return fail();}
+      },
+      async candidatesPage(cursor,scanBudget=8){
+        let session:{dir:Dir;registryGeneration:string}|undefined,retained=false;
+        try{
+          if(cursor!==undefined&& (typeof cursor!=='string'||!/^[0-9a-f-]{36}$/.test(cursor)))return fail();
+          if(!Number.isSafeInteger(scanBudget)||scanBudget<1||scanBudget>128)return fail();
+          if(cursor===undefined){
+            const generation=registryGeneration();
+            session={dir:await opendir(join(hostPath,'entries'),{bufferSize:1}),registryGeneration:generation};
+          }else{
+            session=pageSessions.get(cursor);if(!session)return fail();
+            pageSessions.delete(cursor);
+            if(registryGeneration()!==session.registryGeneration){await closePageSession(session);return fail();}
+          }
+          const candidates:string[]=[];let complete=false;
+          for(let n=0;n<scanBudget;n++){
+            const entry=await session.dir.read();
+            if(!entry){complete=true;break;}
+            const skillId=await readCandidate(entry.name);if(skillId)candidates.push(skillId);
+          }
+          const generation=registryGeneration();
+          if(generation!==session.registryGeneration)return fail();
+          if(complete){await closePageSession(session);retained=true;return {candidates,registryGeneration:generation};}
+          const nextCursor=randomUUID();await retainPageSession(nextCursor,session);retained=true;
+          return {candidates,nextCursor,registryGeneration:generation};
+        }catch{if(session&&!retained)await closePageSession(session);return fail();}
       },
       async entry(skillId){
         try{

@@ -39,6 +39,8 @@ export declare class RoleplayService {
     private captureGuards;
     private validateEvolutionSources;
     execute(endpoint: string, params: Record<string, any>, principal?: ScopePrincipal): Promise<Record<string, any>>;
+    /** Internal dry run through the same guards. Never a caller-supplied approval. */
+    previewEvolution(params: Record<string, any>, principal: ScopePrincipal): Promise<Record<string, any>>;
     private executeCoordinated;
     private read;
 }

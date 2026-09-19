@@ -27,6 +27,6 @@ export function allowedReviewedSkillRequest(method, value, allowProcedureDiscove
             return true;
         return allowProcedureDiscovery === true && args.endpointId === 'wiki.search' && record(args.arguments)
             && args.arguments.resultKind === 'procedures'
-            && Object.keys(args.arguments).every(key => ['query', 'resultKind', 'limit', 'maxChars', 'accessToken', 'prettyPrint'].includes(key));
+            && Object.keys(args.arguments).every(key => ['query', 'resultKind', 'limit', 'maxChars', 'cursor', 'accessToken', 'prettyPrint'].includes(key));
     });
 }

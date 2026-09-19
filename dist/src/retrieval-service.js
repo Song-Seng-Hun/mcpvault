@@ -40,7 +40,7 @@ export class RetrievalService {
             || params.fictionDomain !== undefined || params.canAccessPath !== undefined || params.searchContent === false
             || params.searchFrontmatter === true || params.expandAuthority === true || !this.reviewedProcedures)
             return emptyReviewedProcedureDiscovery();
-        return this.reviewedProcedures.discover({ query: params.query, maxChars: max, limit: Math.min(3, normalizeSearchLimit(params.limit)), accessToken: params.accessToken, principal: params.principal }, capture);
+        return this.reviewedProcedures.discover({ query: params.query, maxChars: max, limit: Math.min(3, normalizeSearchLimit(params.limit)), cursor: params.cursor, accessToken: params.accessToken, principal: params.principal }, capture);
     }
     skillEvolution;
     attachSkillEvolution(service) { this.skillEvolution = service; }

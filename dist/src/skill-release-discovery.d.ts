@@ -15,6 +15,7 @@ export interface ReviewedProcedureDiscovery {
     cards: ReviewedProcedureCard[];
     partial: true;
     notice: string;
+    nextCursor?: string;
 }
 export declare function emptyReviewedProcedureDiscovery(): ReviewedProcedureDiscovery;
 /** Bounded canary discovery, not a full-library ranker. Only the host can name
@@ -25,6 +26,9 @@ export declare function discoverReviewedProcedures(options: {
     query: unknown;
     maxChars?: unknown;
     limit?: unknown;
+    cursor?: unknown;
+    scanBudget?: unknown;
+    cursorScope?: unknown;
     identity: ReviewedSkillDeliveryFence;
     read: (skillId: string, capture: (f: ReviewedSkillDeliveryFence) => void) => Promise<Record<string, any>>;
 }, captureDeliveryFence?: (f: ReviewedSkillDeliveryFence) => void): Promise<ReviewedProcedureDiscovery>;

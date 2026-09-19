@@ -42,14 +42,14 @@ export class RetrievalService {
   attachReviewedProcedures(service:NonNullable<RetrievalService['reviewedProcedures']>):void{this.reviewedProcedures=service;}
   /** Explicit procedural profile. Never turn a reviewed card into a Markdown
    * evidence hit, and never bypass the original quarantine in note searches. */
-  async searchProcedures(params:RetrievalParams&{accessToken?:string},capture?:(f:ReviewedSkillDeliveryFence)=>void):Promise<ReviewedProcedureDiscovery>{
+  async searchProcedures(params:RetrievalParams&{accessToken?:string;cursor?:string},capture?:(f:ReviewedSkillDeliveryFence)=>void):Promise<ReviewedProcedureDiscovery>{
     const max=normalizeSearchMaxChars(params.maxChars);
     // These note-specific filters cannot yet be evaluated on approved cards.
     // Preserve them by declining recommendations, not by relaxing their meaning.
     if(max<1024||params.pathPrefix!==undefined||params.excludePaths!==undefined||params.caseSensitive===true
       ||params.fictionDomain!==undefined||params.canAccessPath!==undefined||params.searchContent===false
       ||params.searchFrontmatter===true||params.expandAuthority===true||!this.reviewedProcedures)return emptyReviewedProcedureDiscovery();
-    return this.reviewedProcedures.discover({query:params.query,maxChars:max,limit:Math.min(3,normalizeSearchLimit(params.limit)),accessToken:params.accessToken,principal:params.principal},capture);
+    return this.reviewedProcedures.discover({query:params.query,maxChars:max,limit:Math.min(3,normalizeSearchLimit(params.limit)),cursor:params.cursor,accessToken:params.accessToken,principal:params.principal},capture);
   }
   private skillEvolution?: {
     discoveryAllowed(path: string): boolean;

@@ -130,7 +130,11 @@ export class RoleplayService {
     async execute(endpoint, params, principal) {
         return coordinate(() => this.executeCoordinated(endpoint, params, principal));
     }
-    async executeCoordinated(endpoint, params, principal) {
+    /** Internal dry run through the same guards. Never a caller-supplied approval. */
+    async previewEvolution(params, principal) {
+        return coordinate(() => this.executeCoordinated('evolution', { ...structuredClone(params), op: 'propose' }, principal, true));
+    }
+    async executeCoordinated(endpoint, params, principal, previewOnly = false) {
         if (endpoint === 'trpg') {
             const fieldsForOp = TRPG_FIELDS[`trpg_${params.op}`] ?? (params.op === 'project' ? ['characterId', 'generation', 'expectedArtifacts'] : params.op === 'respec_preview' ? ['characterId', 'generation', 'remove'] : ['characterId', 'roomId']);
             const allowed = ['op', 'accessToken', 'requestId', 'expectedRevision', 'limit', 'maxChars', 'cursor', ...fieldsForOp, ...(params.op === 'adopt' ? ['preset'] : [])];
@@ -317,6 +321,17 @@ export class RoleplayService {
         };
         // Normalize source references BEFORE hashing/persisting the immutable command.
         await validate(state);
+        if (previewOnly) {
+            if (op !== 'evolution_propose')
+                throw Error('Evolution preview only');
+            const simulated = applyRoleplayCommand(state, command, this.store.options.policy);
+            await validate(state);
+            if (roleplayRevision((await this.current(principal)).state) !== roleplayRevision(state))
+                throw Error('World changed during evolution preview');
+            const proposal = simulated.state.evolution?.proposals[simulated.receipt.id];
+            return { revision: roleplayRevision(state), outputRevision: simulated.receipt.revision, proposalId: simulated.receipt.id,
+                automatic: proposal?.automatic === true, fingerprint: roleplayHash(command), warning };
+        }
         const receipt = await this.store.transact(command, validate);
         if (!this.visible(receipt.path, principal))
             throw guidanceError(new Error('Roleplay receipt unavailable'), 'guid-44309c5c79ef51ab');

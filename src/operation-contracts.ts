@@ -17,6 +17,10 @@ const reads = (alias: string, policy: ReadPolicy, ...ops: string[]): Record<stri
 /** Code-owned mixed-operation contracts, not an authorization or plugin registry.
  * Schemas still own valid writes; services still own all final domain guards. */
 const CONTRACTS: Readonly<Record<string, OperationContract>> = {
+  manage_evolution_feedback: { defaultOp: 'read', summary: 'authenticated', reads: reads('read_evolution_feedback', 'authenticated', 'read') },
+  manage_evolution_cycle: { defaultOp: 'diagnose', summary: 'public', reads: {
+    ...reads('read_evolution_cycle', 'public', 'diagnose'), ...reads('read_evolution_cycle', 'authenticated', 'read', 'list', 'preview'),
+  } },
   manage_wiki_compilation: { defaultOp: 'diagnose', summary: 'public', reads: {
     ...reads('read_wiki_compilation', 'public', 'diagnose'), ...reads('read_wiki_compilation', 'authenticated', 'read'),
   } },

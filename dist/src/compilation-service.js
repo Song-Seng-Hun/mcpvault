@@ -34,6 +34,20 @@ export class CompilationService {
         return pending;
     }
     async close() { this.closed = true; await this.tail; }
+    /** Internal evolution bridge. Authorize every input before returning a pinned private job. */
+    async evolutionSnapshot(requestId, principal) {
+        if (!compilationId(requestId) || !this.options.host)
+            throw unavailable();
+        const before = await this.execute({ op: 'read', requestId, includeInspection: true, maxChars: 12000 }, principal);
+        const state = parseCompilationHistory(await this.options.host.readState());
+        const job = state.jobs.find(j => j.requestId === requestId && j.accountId === principal.accountId);
+        if (!job || before.jobRevision !== compilationJobRevision(job) || before.status !== job.status)
+            throw unavailable();
+        const after = await this.execute({ op: 'read', requestId, includeInspection: true, expectedJobRevision: before.jobRevision, maxChars: 12000 }, principal);
+        if (after.jobRevision !== before.jobRevision || after.status !== job.status)
+            throw unavailable();
+        return { job: structuredClone(job), revision: before.jobRevision };
+    }
     /** Host-only existing-session driver, never an endpoint-supplied callback. */
     runSession(request, principal, context) {
         if (this.closed)

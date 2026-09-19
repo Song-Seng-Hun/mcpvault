@@ -242,7 +242,9 @@ describe('portable setup (synthetic paths only)', () => {
     await rm(join(f.program, 'dist/server.js'));
     const report = await run([...f.flags, '--action', 'doctor']);
     expect(JSON.parse(report.stdout).checks.build.status).toBe('fail');
-  });
+  // Two CLI calls allow 15s each; Windows performs two bounded OS ACL probes
+  // per call. The parent must not time out first and remove an active fixture.
+  }, process.platform === 'win32' ? 35000 : 5000);
   test.skipIf(process.platform === 'win32')('doctor reports broad POSIX private permissions without repairing them', async () => {
     const f = await fixture(); await chmod(f.state, 0o755);
     const result = await run([...f.flags, '--action', 'doctor']);

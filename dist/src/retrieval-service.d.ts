@@ -62,6 +62,7 @@ export declare class RetrievalService {
      * evidence hit, and never bypass the original quarantine in note searches. */
     searchProcedures(params: RetrievalParams & {
         accessToken?: string;
+        cursor?: string;
     }, capture?: (f: ReviewedSkillDeliveryFence) => void): Promise<ReviewedProcedureDiscovery>;
     private skillEvolution?;
     attachSkillEvolution(service: NonNullable<RetrievalService['skillEvolution']>): void;

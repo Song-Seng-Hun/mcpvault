@@ -23,9 +23,9 @@ test('quarantined MCP reads use only the approved branch; originals and mutation
     resources:[{id:'main',blob:hash(body),bytes:body.length,title:'Procedure',kind:'procedure'}],retainedFunctions:['Review source.'],limitations:['No bundled execution.'],useWhen:['Authorized task.'],avoidWhen:['Missing source.'],
     review:{reviewer:'main',evidenceHashes:[hash('e')],normalCaseHashes:['n1','n2','n3'].map(hash),adversarialCaseHashes:['a1','a2','a3','a4'].map(hash)}};
   const bytes=Buffer.from(JSON.stringify(manifest)),blobs=new Map([[hash(body),body],[hash(bytes),bytes]]);let admitted=true;
-  let race=false,bodyRead=false,postBodyRefreshes=0;
+  let race=false,bodyRead=false,postBodyRefreshes=0,paged=false;
   // Admission evidence is synthetic here; artifact validation has a separate suite.
-  const host={async candidates(){return ['test-skill'];},async entry(){return admitted?{releaseHash:hash(bytes),generation:'1',sourceName:'test-skill'}:undefined;},assertFresh(){if(!admitted)throw Error('revoked');},
+  const host={async candidates(){return ['test-skill'];},async candidatesPage(cursor?:string){return paged&&!cursor?{candidates:[],nextCursor:'private-next',registryGeneration:'1'}:{candidates:['test-skill'],registryGeneration:'1'};},async entry(){return admitted?{releaseHash:hash(bytes),generation:'1',sourceName:'test-skill'}:undefined;},assertFresh(){if(!admitted)throw Error('revoked');},
     async readBlob(h:string){if(h===hash(body))bodyRead=true;return blobs.get(h)!;},async sourceFingerprint(){return snapshot!.inventory.fingerprint;},async verifyEvidence(){return true;}};
   const policy=new OwnerActivityPolicy({version:1,owners:{operator:'owner'},grants:[{id:'read-skills',ownerId:'owner',accountIds:['operator'],activities:['skill-evolution'],actions:['discover','read'],dataPrefixes:['Community/Skills'],executionTargets:['fixture-host'],expiresAt:'2999-01-01T00:00:00.000Z'}]});
   const server=createServer(root,{readOnly:true,quarantineSkills:true,features:{version:1,selected:['wiki-core','skill-evolution']},reviewedSkills:{host,source},
@@ -47,6 +47,13 @@ test('quarantined MCP reads use only the approved branch; originals and mutation
   expect(discovered.kind).toBe('reviewed_procedures');expect(discovered.cards).toHaveLength(1);
   expect(discovered.cards[0].nextAction.endpointId).toBe('skill.resolve');
   expect(JSON.stringify(discovery)).not.toMatch(/Unreviewed original marker|Community\/Skills/);
+  paged=true;
+  const firstPage=JSON.parse(((await call('wiki.search',{query:'Review',resultKind:'procedures',accessToken})).content[0] as {text:string}).text);
+  expect(firstPage.cards).toEqual([]);expect(firstPage.nextCursor).toBeTypeOf('string');
+  const nextPage=await call('wiki.search',{query:'Review',resultKind:'procedures',cursor:firstPage.nextCursor,accessToken});
+  expect(nextPage.isError,JSON.stringify(nextPage)).toBeFalsy();
+  expect(JSON.parse((nextPage.content[0] as {text:string}).text).cards).toHaveLength(1);
+  paged=false;
   const defaultSearch=await call('wiki.search',{query:'Review',accessToken});
   expect(Array.isArray(JSON.parse((defaultSearch.content[0] as {text:string}).text))).toBe(true);
   for(const constraint of [{query:'Review -source'},{pathPrefix:'Public'},{excludePaths:['Community']},{caseSensitive:true}]){

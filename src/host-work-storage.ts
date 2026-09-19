@@ -7,7 +7,7 @@ import { canonicalRoleplayPath, validateRoleplayStorage } from './roleplay-stora
 import { assertHostPrivateStorage } from './skill-evolution-host.js';
 import { readFederationFile, removeFederationFile, writeFederationFileAtomic } from './public-federation-storage.js';
 
-const HOST_WORK_NAMESPACES = ['maintenance', 'compilation', 'codex-hooks', 'codex-checkpoints'] as const;
+const HOST_WORK_NAMESPACES = ['maintenance', 'compilation', 'codex-hooks', 'codex-checkpoints', 'evolution'] as const;
 export type HostWorkNamespace = typeof HOST_WORK_NAMESPACES[number];
 export interface HostWorkWriter { assertHeld(): Promise<void>; close(): Promise<void> }
 export interface HostWorkRecords {
@@ -33,7 +33,8 @@ const sameSnapshot = (left: BigIntStats | undefined, right: BigIntStats | undefi
       && left.ctimeNs === right.ctimeNs && left.birthtimeNs === right.birthtimeNs
       && left.mode === right.mode && left.uid === right.uid && left.gid === right.gid && left.nlink === right.nlink;
 
-const namespaceName = (namespace: HostWorkNamespace): 'Maintenance' | 'Compilation' | 'Codex hook' | 'Codex checkpoint' => {
+const namespaceName = (namespace: HostWorkNamespace): string => {
+  if (namespace === 'evolution') return 'Evolution';
   if (namespace === 'maintenance') return 'Maintenance';
   if (namespace === 'compilation') return 'Compilation';
   if (namespace === 'codex-hooks') return 'Codex hook';

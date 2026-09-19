@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { constants, openSync, closeSync, fstatSync, lstatSync, readSync, realpathSync } from 'node:fs';
 import { opendir } from 'node:fs/promises';
 import { join, parse } from 'node:path';
@@ -33,6 +33,7 @@ export async function openReviewedSkillStore(options) {
         await assertHostPrivateStorage(directories);
         const bindings = new Map(directories.map(p => [p, identity(lstatSync(p, { bigint: true }))]));
         const leases = new WeakMap();
+        const pageSessions = new Map();
         const assertDirectories = () => {
             // Repeat lexical ancestor checks so realpath cannot hide a replaced junction.
             const root = parse(hostPath).root;
@@ -104,6 +105,34 @@ export async function openReviewedSkillStore(options) {
             const result = await checked(path, 8192), data = parseReviewedSkillRegistration(result.bytes, skillId);
             return { path, ...result, data };
         };
+        const registryGeneration = () => {
+            assertDirectories();
+            return stamp(lstatSync(join(hostPath, 'entries'), { bigint: true }));
+        };
+        const readCandidate = async (entryName) => {
+            if (!/^[a-f0-9]{64}\.json$/.test(entryName))
+                return undefined;
+            const result = await checked(join(hostPath, 'entries', entryName), 8192);
+            const raw = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(result.bytes));
+            if (!id(raw?.skillId) || `${digest(raw.skillId)}.json` !== entryName)
+                return fail();
+            const data = parseReviewedSkillRegistration(result.bytes, raw.skillId);
+            return data.state === 'admitted' ? data.skillId : undefined;
+        };
+        const closePageSession = async (session) => { try {
+            await session.dir.close();
+        }
+        catch { } };
+        const retainPageSession = async (cursor, session) => {
+            while (pageSessions.size >= 64) {
+                const oldest = pageSessions.entries().next().value;
+                if (!oldest)
+                    break;
+                pageSessions.delete(oldest[0]);
+                await closePageSession(oldest[1]);
+            }
+            pageSessions.set(cursor, session);
+        };
         const host = {
             async candidates() {
                 try {
@@ -120,13 +149,9 @@ export async function openReviewedSkillStore(options) {
                                 break;
                             if (!/^[a-f0-9]{64}\.json$/.test(entry.name))
                                 continue;
-                            const result = await checked(join(hostPath, 'entries', entry.name), 8192);
-                            const raw = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(result.bytes));
-                            if (!id(raw?.skillId) || `${digest(raw.skillId)}.json` !== entry.name)
-                                return fail();
-                            const data = parseReviewedSkillRegistration(result.bytes, raw.skillId);
-                            if (data.state === 'admitted')
-                                ids.push(data.skillId);
+                            const skillId = await readCandidate(entry.name);
+                            if (skillId)
+                                ids.push(skillId);
                         }
                     }
                     finally {
@@ -136,6 +161,58 @@ export async function openReviewedSkillStore(options) {
                     return ids;
                 }
                 catch {
+                    return fail();
+                }
+            },
+            async candidatesPage(cursor, scanBudget = 8) {
+                let session, retained = false;
+                try {
+                    if (cursor !== undefined && (typeof cursor !== 'string' || !/^[0-9a-f-]{36}$/.test(cursor)))
+                        return fail();
+                    if (!Number.isSafeInteger(scanBudget) || scanBudget < 1 || scanBudget > 128)
+                        return fail();
+                    if (cursor === undefined) {
+                        const generation = registryGeneration();
+                        session = { dir: await opendir(join(hostPath, 'entries'), { bufferSize: 1 }), registryGeneration: generation };
+                    }
+                    else {
+                        session = pageSessions.get(cursor);
+                        if (!session)
+                            return fail();
+                        pageSessions.delete(cursor);
+                        if (registryGeneration() !== session.registryGeneration) {
+                            await closePageSession(session);
+                            return fail();
+                        }
+                    }
+                    const candidates = [];
+                    let complete = false;
+                    for (let n = 0; n < scanBudget; n++) {
+                        const entry = await session.dir.read();
+                        if (!entry) {
+                            complete = true;
+                            break;
+                        }
+                        const skillId = await readCandidate(entry.name);
+                        if (skillId)
+                            candidates.push(skillId);
+                    }
+                    const generation = registryGeneration();
+                    if (generation !== session.registryGeneration)
+                        return fail();
+                    if (complete) {
+                        await closePageSession(session);
+                        retained = true;
+                        return { candidates, registryGeneration: generation };
+                    }
+                    const nextCursor = randomUUID();
+                    await retainPageSession(nextCursor, session);
+                    retained = true;
+                    return { candidates, nextCursor, registryGeneration: generation };
+                }
+                catch {
+                    if (session && !retained)
+                        await closePageSession(session);
                     return fail();
                 }
             },

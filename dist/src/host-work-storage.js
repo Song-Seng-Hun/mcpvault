@@ -6,7 +6,7 @@ import { dirname, join } from 'node:path';
 import { canonicalRoleplayPath, validateRoleplayStorage } from './roleplay-storage-host.js';
 import { assertHostPrivateStorage } from './skill-evolution-host.js';
 import { readFederationFile, removeFederationFile, writeFederationFileAtomic } from './public-federation-storage.js';
-const HOST_WORK_NAMESPACES = ['maintenance', 'compilation', 'codex-hooks', 'codex-checkpoints'];
+const HOST_WORK_NAMESPACES = ['maintenance', 'compilation', 'codex-hooks', 'codex-checkpoints', 'evolution'];
 const hash = (value) => createHash('sha256').update(value).digest('hex');
 const missing = (error) => error?.code === 'ENOENT';
 const sameIdentity = (left, right) => left.dev === right.dev && left.ino === right.ino;
@@ -15,6 +15,8 @@ const sameSnapshot = (left, right) => left === undefined || right === undefined 
         && left.ctimeNs === right.ctimeNs && left.birthtimeNs === right.birthtimeNs
         && left.mode === right.mode && left.uid === right.uid && left.gid === right.gid && left.nlink === right.nlink;
 const namespaceName = (namespace) => {
+    if (namespace === 'evolution')
+        return 'Evolution';
     if (namespace === 'maintenance')
         return 'Maintenance';
     if (namespace === 'compilation')

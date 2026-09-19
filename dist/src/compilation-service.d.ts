@@ -79,6 +79,11 @@ export declare class CompilationService {
     constructor(options: CompilationOptions);
     private serial;
     close(): Promise<void>;
+    /** Internal evolution bridge. Authorize every input before returning a pinned private job. */
+    evolutionSnapshot(requestId: string, principal: ScopePrincipal): Promise<{
+        job: CompilationJob;
+        revision: string;
+    }>;
     /** Host-only existing-session driver, never an endpoint-supplied callback. */
     runSession(request: CompilationSessionRequest, principal: ScopePrincipal, context: CompilationSession): Promise<any>;
     /** Optional host-private diagnostics for existing views. No registration,

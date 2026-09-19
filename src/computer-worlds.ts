@@ -219,4 +219,18 @@ export class ComputerWorldService {
     if (JSON.stringify(result).length > maxChars) throw Error('Response budget too small for exact next read');
     return result;
   }
+
+  /** Internal read-only receipt check for evolution. No new endpoint or execution grant. */
+  async verifyUpdate(params: Record<string, any>, principal: ScopePrincipal): Promise<string | undefined> {
+    await this.execute({ op: 'read', catalogPath: params.catalogPath, worldId: params.worldId, maxChars: 12000 }, principal);
+    const { path } = this.location(params.catalogPath, principal);
+    const loaded = await this.load<Catalog>(path, TYPE, principal);
+    const title = environmentText(params.title, 120), entries = facts(params.facts);
+    const fingerprint = roleplayHash({ op: 'update', worldId: params.worldId, title, facts: entries, expectedRevision: params.expectedRevision });
+    const request = loaded.value?.requests.find(r => r.actor === principal.accountId && r.id === params.requestId);
+    const world = loaded.value?.worlds.find(w => w.worldId === params.worldId);
+    await this.assert(path, principal);
+    if ((await this.load<Catalog>(path, TYPE, principal)).revision !== loaded.revision) throw unavailable();
+    return request?.fingerprint === fingerprint && world?.title === title && roleplayHash(world.facts) === roleplayHash(entries) ? loaded.revision : undefined;
+  }
 }

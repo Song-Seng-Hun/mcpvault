@@ -21,9 +21,9 @@ export class ReviewedSkillService {
 
   async discover(p:Record<string,any>,captureDeliveryFence?:(fence:ReviewedSkillDeliveryFence)=>void){
     try{
-      if(Object.keys(p).some(k=>!['query','maxChars','limit','accessToken','principal'].includes(k)))return fail();
+      if(Object.keys(p).some(k=>!['query','maxChars','limit','cursor','scanBudget','accessToken','principal'].includes(k)))return fail();
       const identity=this.identity(p);
-      return await discoverReviewedProcedures({host:this.host,query:p.query,maxChars:p.maxChars,limit:p.limit,identity,
+      return await discoverReviewedProcedures({host:this.host,query:p.query,maxChars:p.maxChars,limit:p.limit,cursor:p.cursor,scanBudget:p.scanBudget,cursorScope:identity.scopeKey,identity,
         read:(skillId,capture)=>this.read({skillId,view:'metadata',section:'summary',maxChars:12000,
           accessToken:p.accessToken,principal:p.principal},capture,true)},captureDeliveryFence);
     }catch{return fail();}
@@ -40,7 +40,7 @@ export class ReviewedSkillService {
       if(!current||['accountId','modelId','agentId','userId','commandCenterId','role','capabilities','enterprise'].some(k=>fingerprint((current as any)[k]??null)!==fingerprint((principal as any)[k]??null)))return fail();
       await this.options.assertActor?.(principal);assertFresh();
     };
-    return {principal,revalidate,assertFresh};
+    return {principal,scopeKey:originalIdentity,revalidate,assertFresh};
   }
 
   private async read(p:Record<string,any>,captureDeliveryFence:((fence:ReviewedSkillDeliveryFence)=>void)|undefined,discovery:boolean):Promise<Record<string,any>>{

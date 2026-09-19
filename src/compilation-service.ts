@@ -64,6 +64,17 @@ export class CompilationService {
     const pending = this.tail.then(operation, operation); this.tail = pending.catch(() => undefined); return pending;
   }
   async close(): Promise<void> { this.closed = true; await this.tail; }
+  /** Internal evolution bridge. Authorize every input before returning a pinned private job. */
+  async evolutionSnapshot(requestId: string, principal: ScopePrincipal): Promise<{ job: CompilationJob; revision: string }> {
+    if (!compilationId(requestId) || !this.options.host) throw unavailable();
+    const before = await this.execute({ op: 'read', requestId, includeInspection: true, maxChars: 12000 }, principal);
+    const state = parseCompilationHistory(await this.options.host.readState());
+    const job = state.jobs.find(j => j.requestId === requestId && j.accountId === principal.accountId);
+    if (!job || before.jobRevision !== compilationJobRevision(job) || before.status !== job.status) throw unavailable();
+    const after = await this.execute({ op: 'read', requestId, includeInspection: true, expectedJobRevision: before.jobRevision, maxChars: 12000 }, principal);
+    if (after.jobRevision !== before.jobRevision || after.status !== job.status) throw unavailable();
+    return { job: structuredClone(job), revision: before.jobRevision };
+  }
   /** Host-only existing-session driver, never an endpoint-supplied callback. */
   runSession(request: CompilationSessionRequest, principal: ScopePrincipal, context: CompilationSession): Promise<any> {
     if (this.closed) return Promise.resolve({ status: 'review_required', reason: 'session_unavailable' });

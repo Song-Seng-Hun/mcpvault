@@ -1,0 +1,34 @@
+import { test, expect, afterEach } from 'vitest';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { FileSystemService } from '../filesystem.js';
+import { ScopeAccessPolicy } from '../scope-access.js';
+import { ComputerWorldService } from '../computer-worlds.js';
+import { computerEvolutionAdapter } from './computer-adapter.js';
+const roots: string[] = [];
+afterEach(async () => { for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true }); });
+const principal: any = { accountId: 'owner', modelId: 'gpt', agentId: 'worker', role: 'agent', capabilities: ['write'] };
+const fact = { key: 'ram', category: 'hardware', value: '16 GiB', basis: 'reported', source: 'User report', observedAt: '2026-09-16T00:00:00Z' };
+test('computer adapter changes one evidenced fact through the owner service and confirms its actual request receipt', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'evolution-computer-')); roots.push(root);
+  const service = new ComputerWorldService(new FileSystemService(root), new ScopeAccessPolicy(), { assertActor: async () => {} });
+  await service.execute({ op: 'register', worldId: 'desktop', title: 'Desktop (데스크톱)', facts: [fact], requestId: 'register', expectedRevision: 'missing' }, principal);
+  const adapter = computerEvolutionAdapter(service);
+  const target: any = { kind: 'computer', id: 'desktop' };
+  const baseline = await adapter.read(target, principal);
+  const c: any = { id: 'cycle1', target, scope: { kind: 'computer', id: 'desktop' }, baseline, basis: [{ path: 'observations/ram.md', revision: 'a'.repeat(64) }],
+    candidate: { fact: { ...fact, value: '32 GiB', observedAt: '2026-09-16T01:00:00Z' } } };
+  const current = async () => {};
+  c.intent = await adapter.preview(c, principal, current);
+  const applied = await adapter.apply(c, principal, current);
+  expect(await adapter.reconcile(c, principal, current)).toEqual({ state: 'applied', revision: applied.revision });
+  const read = await service.execute({ op: 'read', worldId: 'desktop' }, principal);
+  expect(read.items[0].facts[0].value).toBe('32 GiB');
+  expect((await service.execute({ op: 'read', worldId: 'desktop', version: 1 }, principal)).items[0].facts[0].value).toBe('16 GiB');
+  await expect(adapter.preview({ ...c, candidate: { fact: { ...fact, category: 'constraint' } } }, principal, current)).rejects.toThrow();
+  await expect(adapter.preview({ ...c, scope: { kind: 'computer', id: 'other' } }, principal, current)).rejects.toThrow();
+  const edited = await service.execute({ op: 'update', worldId: 'desktop', title: 'User edit', facts: [fact], requestId: 'manual', expectedRevision: applied.revision }, principal);
+  expect(edited.status).toBe('saved');
+  expect((await adapter.reconcile(c, principal, current)).state).toBe('unknown');
+});

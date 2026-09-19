@@ -27,5 +27,7 @@ export declare class ComputerWorldService {
     private save;
     execute(params: Record<string, any>, principal?: ScopePrincipal): Promise<any>;
     private pack;
+    /** Internal read-only receipt check for evolution. No new endpoint or execution grant. */
+    verifyUpdate(params: Record<string, any>, principal: ScopePrincipal): Promise<string | undefined>;
 }
 //# sourceMappingURL=computer-worlds.d.ts.map

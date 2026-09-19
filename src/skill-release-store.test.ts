@@ -45,6 +45,22 @@ test('discovery enumerates a bounded private registration window, not blobs or q
   expect(ids.every(id=>/^skill-\d+$/.test(id))).toBe(true);
 });
 
+test('pageable discovery scans only one bounded registration window and reaches later releases',async()=>{
+  const f=await fixture();
+  for(let i=0;i<15;i++){
+    const skillId=`skill-${i}`;
+    await writeFile(join(f.hostPath,'entries',`${hash(skillId)}.json`),JSON.stringify({...f.record,skillId,sourceName:skillId}),{mode:0o600});
+  }
+  expect(f.store.candidatesPage,'host-owned pageable discovery must be available').toBeTypeOf('function');
+  const first=await f.store.candidatesPage!(undefined,8);
+  expect(first.candidates.length).toBeLessThanOrEqual(8);
+  expect(first.nextCursor).toBeTypeOf('string');
+  const second=await f.store.candidatesPage!(first.nextCursor,8);
+  expect(second.candidates.length).toBeLessThanOrEqual(8);
+  expect(new Set([...first.candidates,...second.candidates]).size).toBeGreaterThan(8);
+  expect(second.registryGeneration).toBe(first.registryGeneration);
+});
+
 test('candidate discovery rejects misnamed, corrupt or linked registry data without returning its contents',async()=>{
   for(const kind of ['misnamed','corrupt','linked']){
     const f=await fixture();expect(f.store.candidates).toBeTypeOf('function');

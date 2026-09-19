@@ -1,0 +1,21 @@
+import type { ScopePrincipal } from '../scope-auth.js';
+import type { EvolutionOptions } from './model.js';
+type Params = Record<string, any>;
+export declare class EvolutionService {
+    private readonly options;
+    private tail;
+    private evaluatorBusy;
+    constructor(options: EvolutionOptions);
+    execute(endpoint: string, input: Params, principal?: ScopePrincipal, assertActor?: () => Promise<void>): Promise<any>;
+    private evidence;
+    private visible;
+    private feedback;
+    private sources;
+    private persona;
+    private adapter;
+    private view;
+    private cycle;
+    private context;
+}
+export {};
+//# sourceMappingURL=service.d.ts.map

@@ -2,10 +2,13 @@ import { type HostFeatureConfig } from './host-features.js';
 import { Server } from "@modelcontextprotocol/server";
 import { FrontmatterHandler } from "./frontmatter.js";
 import { PathFilter } from "./pathfilter.js";
+import { type ScopePrincipal } from "./scope-auth.js";
 import type { MaintenanceHost } from './maintenance-host.js';
 import { type CompilationOptions } from './compilation-service.js';
 import { type CodexHookConnectionOptions } from './codex-hook-connection.js';
 import type { CompilationPublicationOptions } from './compilation-publication-adapter.js';
+import type { EvolutionOptions } from './evolution/model.js';
+import { EvolutionOpportunity, type EvolutionSession } from './evolution/opportunity.js';
 import { type OwnerActivityRuntimeOptions } from './owner-activity-runtime.js';
 import { type DocumentAuthorityOptions } from './document-authority.js';
 import { type PublicFederationHostConfig } from './enterprise-federation.js';
@@ -46,6 +49,8 @@ export interface CreateServerOptions extends DocumentAuthorityOptions {
     };
     /** Explicit trusted host registration. Never loaded from a request or Vault note. */
     skillEvolution?: SkillEvolutionHost;
+    /** Trusted host evidence/authority only. Feature selection and client labels grant nothing. */
+    evolution?: EvolutionOptions;
     /** Private host admission only. Never request/Vault metadata; quarantine required. */
     reviewedSkills?: {
         host: ReviewedSkillHost;
@@ -82,6 +87,8 @@ export interface ServerRuntime {
     dispatchTool: (requestedToolName: string, args?: Record<string, unknown>) => Promise<any>;
     ensureEndpointRegistry: () => void;
     createRequestServer: () => Server;
+    /** Existing approved host-session opportunity only; no MCP callable generator or new scheduler. */
+    runEvolutionOpportunity?: (request: Parameters<EvolutionOpportunity['run']>[0], principal: ScopePrincipal, session: Pick<EvolutionSession, 'authorize' | 'generate'>) => ReturnType<EvolutionOpportunity['run']>;
 }
 export declare function getServerRuntime(server: Server): ServerRuntime | undefined;
 export declare function createServer(vaultPath: string, options?: CreateServerOptions): Server;

@@ -28,6 +28,8 @@ test('procedure search needs explicit host opt-in and cannot become ordinary sea
   const search=(args:Record<string,unknown>={})=>call('wiki.search',{arguments:{query:'검토 review',resultKind:'procedures',...args}});
   expect(allowed('POST',search())).toBe(false);
   expect(allowed('POST',search(),true)).toBe(true);
+  expect(allowed('POST',search({cursor:'opaque-next-page'}),true)).toBe(true);
+  expect(allowed('POST',search({cursor:'opaque-next-page'}),false)).toBe(false);
   expect(allowed('POST',search({resultKind:'notes'}),true)).toBe(false);
   expect(allowed('POST',search({resultKind:undefined}),true)).toBe(false);
   for(const args of [{url:'/api/notes'}, {pathPrefix:'Community'}, {allowProcedureDiscovery:true}, {principal:{accountId:'operator'}}]){
