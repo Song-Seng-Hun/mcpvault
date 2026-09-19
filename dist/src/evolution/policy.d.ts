@@ -67,6 +67,8 @@ export interface Evaluation {
     /** Host evaluator provenance. Missing provenance never counts as an operational trial. */
     method?: 'static' | 'synthetic' | 'agent_behavior' | 'operational';
     receiptHash?: string;
+    measurementScope?: 'search_server' | 'returned_context' | 'whole_task';
+    adoption?: 'diagnostic';
     cases: {
         id: string;
         split: string;

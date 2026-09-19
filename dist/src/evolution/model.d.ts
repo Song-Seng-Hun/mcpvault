@@ -48,6 +48,7 @@ export interface Cycle {
         revision: string;
         success: boolean;
         method?: 'static' | 'synthetic' | 'agent_behavior' | 'operational';
+        source?: 'direct_user_review';
     };
     requests: {
         id: string;

@@ -9,10 +9,13 @@ import { type EvaluationProfile } from './evaluator.js';
 import { type OutcomeCheck } from './runtime-evidence.js';
 import { type FeedbackProof, type TargetKind } from './policy.js';
 import { EvolutionBudget } from './budget.js';
+import { EvolutionOperations } from './operations.js';
+import type { RetrievalService } from '../retrieval-service.js';
+import { EvolutionDirectReview } from './direct-review.js';
 export interface EvolutionRuntimeConfig {
     storage: HostWorkStorage<EvolutionConfig>;
     /** Reviewed code-owned checks only; no remote code or MCP-defined grading. */
-    profiles: readonly EvaluationProfile[];
+    profiles?: readonly EvaluationProfile[];
 }
 interface Services {
     auth: ScopeAuthService;
@@ -21,6 +24,7 @@ interface Services {
     moderation: ModerationService;
     refreshPolicy(): Promise<void>;
     readOnly: boolean;
+    retrieval: RetrievalService;
     adapters?: Partial<Record<TargetKind, EvolutionAdapter>>;
 }
 /** Concrete existing-account connection. No registration, certificate binding or owner inference. */
@@ -40,9 +44,15 @@ export declare function connectEvolutionRuntime(config: EvolutionRuntimeConfig, 
         }>;
         verifyUse: (token: string, receipt: string, check: OutcomeCheck) => Promise<string>;
         recordForegroundUsage: (token: string, eventId: string, tokens: number) => Promise<void>;
-        runTask: <T>(token: string, args: Record<string, unknown>, operation: () => Promise<T>) => Promise<T>;
+        runTask: <T>(token: string, args: Record<string, unknown>, operation: () => Promise<T>, observe?: (selected: {
+            cycleId: string;
+            revision: string;
+        } | undefined) => void) => Promise<T>;
     }>;
     budget: EvolutionBudget;
+    operations: EvolutionOperations;
+    review: EvolutionDirectReview;
+    close: () => Promise<void>;
 };
 export type EvolutionRuntimeHost = ReturnType<typeof connectEvolutionRuntime>['host'];
 export {};

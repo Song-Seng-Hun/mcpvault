@@ -24,8 +24,16 @@ export function parseCliArgs(args) {
     let ownerActivityConfig;
     let maintenanceConfig;
     let compilationConfig;
+    let evolutionConfig;
     for (let index = 0; index < args.length; index += 1) {
         const arg = args[index];
+        if (arg === '--evolution-config' || arg.startsWith('--evolution-config=')) {
+            const value = arg === '--evolution-config' ? args[++index] : arg.slice('--evolution-config='.length);
+            if (!value || !value.trim() || value.startsWith('--') || evolutionConfig !== undefined)
+                throw new Error('--evolution-config requires one private host configuration file');
+            evolutionConfig = value;
+            continue;
+        }
         if (arg === '--reviewed-skills-config' || arg.startsWith('--reviewed-skills-config=')) {
             const value = arg === '--reviewed-skills-config' ? args[++index] : arg.slice('--reviewed-skills-config='.length);
             if (!value || !value.trim() || value.startsWith('--') || reviewedSkillsConfig !== undefined)
@@ -231,5 +239,6 @@ export function parseCliArgs(args) {
         ...(ownerActivityConfig !== undefined && { ownerActivityConfig }),
         ...(maintenanceConfig !== undefined && { maintenanceConfig }),
         ...(compilationConfig !== undefined && { compilationConfig }),
+        ...(evolutionConfig !== undefined && { evolutionConfig }),
     };
 }

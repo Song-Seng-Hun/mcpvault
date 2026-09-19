@@ -193,7 +193,9 @@ export async function startRestApi(server: Server, options: RestApiOptions = {})
       const genericPrefix = '/api/endpoint/';
       let endpointId: string | undefined;
       let pathArguments: Record<string, string> = {};
-      if (requestUrl.pathname.startsWith(genericPrefix)) {
+      if (requestUrl.pathname === '/api/evolution/context') {
+        endpointId = 'evolution.context';
+      } else if (requestUrl.pathname.startsWith(genericPrefix)) {
         endpointId = decodeURIComponent(requestUrl.pathname.slice(genericPrefix.length));
       } else {
         const match = runtime.endpointRegistry.resolveRoute(request.method || 'GET', requestUrl.pathname);
@@ -209,9 +211,11 @@ export async function startRestApi(server: Server, options: RestApiOptions = {})
         sendJson(request, response, 404, { error: 'unknown endpoint route' });
         return;
       }
-      if ((request.method || 'GET').toUpperCase() !== endpoint.method) {
-        response.setHeader('allow', endpoint.method);
-        sendJson(request, response, 405, { error: 'method not allowed', endpointId, expectedMethod: endpoint.method });
+      const contextOp = body.op ?? requestUrl.searchParams.get('op') ?? 'read';
+      const contextMethod = endpointId === 'evolution.context' ? (contextOp === 'begin' ? 'POST' : 'GET') : undefined;
+      if ((request.method || 'GET').toUpperCase() !== (contextMethod ?? endpoint.method)) {
+        response.setHeader('allow', contextMethod ?? endpoint.method);
+        sendJson(request, response, 405, { error: 'method not allowed', endpointId, expectedMethod: contextMethod ?? endpoint.method });
         return;
       }
       if (endpointId === 'auth.register' && !registrationAllowed(request.socket.remoteAddress || 'unknown')) {
@@ -228,6 +232,9 @@ export async function startRestApi(server: Server, options: RestApiOptions = {})
       }
 
       const queryArguments = Object.fromEntries(requestUrl.searchParams.entries());
+      if (endpointId === 'evolution.context') {
+        for (const key of ['maxChars', 'offset']) if (/^\d{1,5}$/.test(queryArguments[key] ?? '')) (queryArguments as Record<string, unknown>)[key] = Number(queryArguments[key]);
+      }
       // The topic service validates numbers strictly. URL query parameters
       // arrive as strings; normalize only this new endpoint's typed inputs.
       if (endpointId === 'wiki.topic_packet') {

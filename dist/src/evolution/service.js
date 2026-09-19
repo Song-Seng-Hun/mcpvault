@@ -9,10 +9,15 @@ export class EvolutionService {
     options;
     tail = Promise.resolve();
     evaluatorBusy = false;
+    closed = false;
+    evaluationController;
     constructor(options) {
         this.options = options;
     }
+    async close() { this.closed = true; this.evaluationController?.abort(); await this.tail; }
     async execute(endpoint, input, principal, assertActor = async () => { }, execution) {
+        if (this.closed)
+            return unavailable();
         const p = structuredClone(input);
         const op = endpoint === 'context' ? 'read' : p.op ?? (endpoint === 'cycle' ? 'diagnose' : 'read');
         if (!['feedback', 'cycle', 'context'].includes(endpoint) || endpoint !== 'context' && !(endpoint === 'feedback' ? feedbackOps : cycleOps).includes(op))
@@ -35,7 +40,8 @@ export class EvolutionService {
             try {
                 await assertActor();
                 const lease = await this.options.authority(principal, { ...p, endpoint });
-                const current = async () => { await assertActor(); await lease.assertCurrent(); if (!(await this.options.storage.refresh()).enabled)
+                const current = async () => { if (this.closed)
+                    return unavailable(); await assertActor(); await lease.assertCurrent(); if (!(await this.options.storage.refresh()).enabled || this.closed)
                     return unavailable(); await writer?.assertHeld(); };
                 await current();
                 if (write)
@@ -188,6 +194,7 @@ export class EvolutionService {
         return { cycleId: cycle.id, revision: rev, status: cycle.state, target: cycle.target, scope: cycle.scope, attempts: cycle.attempts,
             ...(cycle.reason && { reason: cycle.reason }), ...(cycle.outputRevision && { outputRevision: cycle.outputRevision }),
             evaluation: e ? { method: e.method ?? 'unreported', profileRevision: e.profileRevision, receiptHash: e.receiptHash,
+                measurementScope: e.measurementScope ?? 'unreported', adoption: e.adoption ?? 'evaluated',
                 samples: e.cases.length, baselinePassed: e.cases.filter(x => x.baseline).length, candidatePassed: e.cases.filter(x => x.candidate).length,
                 baselineTokens: e.baselineTokens ?? null, candidateTokens: e.candidateTokens ?? null, baselineMs: e.baselineMs ?? null, candidateMs: e.candidateMs ?? null } : null,
             effect: cycle.effect ?? null, notice };
@@ -301,8 +308,12 @@ export class EvolutionService {
                     if (cycle.profileFingerprint !== hash(profile) || !Array.isArray(profile.holdoutCaseIds) || !profile.holdoutCaseIds.length)
                         return unavailable();
                     const controller = new AbortController();
+                    this.evaluationController = controller;
                     let timer;
-                    const timeout = new Promise(resolve => { timer = setTimeout(() => { controller.abort(); resolve(undefined); }, 300000); });
+                    const timeout = new Promise(resolve => {
+                        controller.signal.addEventListener('abort', () => resolve(undefined), { once: true });
+                        timer = setTimeout(() => controller.abort(), 300000);
+                    });
                     this.evaluatorBusy = true;
                     const evaluation = Promise.resolve().then(() => this.options.evaluate(structuredClone(cycle), c.principal, controller.signal));
                     void evaluation.then(() => { this.evaluatorBusy = false; }, () => { this.evaluatorBusy = false; });
@@ -326,6 +337,7 @@ export class EvolutionService {
                     }
                     finally {
                         clearTimeout(timer);
+                        delete this.evaluationController;
                     }
                 }
             }

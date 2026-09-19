@@ -16,8 +16,12 @@ interface Context { principal: ScopePrincipal; lease: EvolutionLease; repo: Evol
 export class EvolutionService {
   private tail: Promise<unknown> = Promise.resolve();
   private evaluatorBusy = false;
+  private closed = false;
+  private evaluationController?: AbortController;
   constructor(private readonly options: EvolutionOptions) {}
+  async close() { this.closed = true; this.evaluationController?.abort(); await this.tail; }
   async execute(endpoint: string, input: Params, principal?: ScopePrincipal, assertActor: () => Promise<void> = async () => {}, execution?: { automatic: boolean }): Promise<any> {
+    if (this.closed) return unavailable();
     const p: Params = structuredClone(input);
     const op = endpoint === 'context' ? 'read' : p.op ?? (endpoint === 'cycle' ? 'diagnose' : 'read');
     if (!['feedback', 'cycle', 'context'].includes(endpoint) || endpoint !== 'context' && !(endpoint === 'feedback' ? feedbackOps : cycleOps).includes(op)) return unavailable();
@@ -34,7 +38,7 @@ export class EvolutionService {
       try {
         await assertActor();
         const lease = await this.options.authority!(principal, { ...p, endpoint });
-        const current = async () => { await assertActor(); await lease.assertCurrent(); if (!(await this.options.storage!.refresh()).enabled) return unavailable(); await writer?.assertHeld(); };
+        const current = async () => { if (this.closed) return unavailable(); await assertActor(); await lease.assertCurrent(); if (!(await this.options.storage!.refresh()).enabled || this.closed) return unavailable(); await writer?.assertHeld(); };
         await current(); if (write) writer = await this.options.storage!.acquire();
         const repo = new EvolutionRepository(this.options.storage!.records!, lease.sharedOwner ? `owner:${lease.ownerId}` : `account:${principal.accountId}`, current, principal.accountId);
         const context = { principal, lease, repo, current, automatic: execution?.automatic === true };
@@ -149,6 +153,7 @@ export class EvolutionService {
     return { cycleId: cycle.id, revision: rev, status: cycle.state, target: cycle.target, scope: cycle.scope, attempts: cycle.attempts,
       ...(cycle.reason && { reason: cycle.reason }), ...(cycle.outputRevision && { outputRevision: cycle.outputRevision }),
       evaluation: e ? { method: e.method ?? 'unreported', profileRevision: e.profileRevision, receiptHash: e.receiptHash,
+        measurementScope: e.measurementScope ?? 'unreported', adoption: e.adoption ?? 'evaluated',
         samples: e.cases.length, baselinePassed: e.cases.filter(x => x.baseline).length, candidatePassed: e.cases.filter(x => x.candidate).length,
         baselineTokens: e.baselineTokens ?? null, candidateTokens: e.candidateTokens ?? null, baselineMs: e.baselineMs ?? null, candidateMs: e.candidateMs ?? null } : null,
       effect: cycle.effect ?? null, notice };
@@ -215,8 +220,11 @@ export class EvolutionService {
         else if (this.evaluatorBusy) { cycle.state = 'review_required'; cycle.reason = 'evaluation_interrupted'; }
         else {
           if (cycle.profileFingerprint !== hash(profile) || !Array.isArray(profile.holdoutCaseIds) || !profile.holdoutCaseIds.length) return unavailable();
-          const controller = new AbortController(); let timer!: ReturnType<typeof setTimeout>;
-          const timeout = new Promise<undefined>(resolve => { timer = setTimeout(() => { controller.abort(); resolve(undefined); }, 300000); });
+          const controller = new AbortController(); this.evaluationController = controller; let timer!: ReturnType<typeof setTimeout>;
+          const timeout = new Promise<undefined>(resolve => {
+            controller.signal.addEventListener('abort', () => resolve(undefined), { once: true });
+            timer = setTimeout(() => controller.abort(), 300000);
+          });
           this.evaluatorBusy = true;
           const evaluation = Promise.resolve().then(() => this.options.evaluate!(structuredClone(cycle!), c.principal, controller.signal));
           void evaluation.then(() => { this.evaluatorBusy = false; }, () => { this.evaluatorBusy = false; });
@@ -230,7 +238,7 @@ export class EvolutionService {
               const verdict = compareEvaluation(cycle.target.kind, e); cycle.evaluation = e; cycle.profileFingerprint = hash(profile); cycle.reason = verdict.reason;
               cycle.state = verdict.status === 'passed' ? 'evaluated' : 'review_required';
             }
-          } finally { clearTimeout(timer); }
+          } finally { clearTimeout(timer); delete this.evaluationController; }
         }
       } else if (op === 'preview' || op === 'apply') {
         if (c.automatic && (!adapter.revert || !adapter.reconcileRevert)) return { ...this.view(cycle, prior.revision), reason: 'automatic_rollback_unavailable' };

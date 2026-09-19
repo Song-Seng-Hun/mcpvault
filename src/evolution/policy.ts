@@ -73,6 +73,8 @@ export interface Evaluation {
   /** Host evaluator provenance. Missing provenance never counts as an operational trial. */
   method?: 'static' | 'synthetic' | 'agent_behavior' | 'operational';
   receiptHash?: string;
+  measurementScope?: 'search_server' | 'returned_context' | 'whole_task';
+  adoption?: 'diagnostic';
   cases: { id: string; split: string; baseline: boolean; candidate: boolean; withoutSkill?: boolean }[];
   baselineTokens?: number; candidateTokens?: number; withoutSkillTokens?: number;
   baselineMs?: number; candidateMs?: number;
@@ -82,7 +84,9 @@ export type EvaluationTrial = Pick<Evaluation, 'cases' | 'safety' | 'baselineTok
 export const median = (values: number[]): number => { const v = [...values].sort((a, b) => a - b); return v[Math.floor(v.length / 2)]!; };
 export function compareEvaluation(kind: TargetKind, e: Evaluation): { status: 'passed' | 'failed' | 'review_required'; reason: string } {
   const result = (status: 'passed' | 'failed' | 'review_required', reason: string) => ({ status, reason });
-  object(e, ['profileRevision', 'safety', 'targetCaseIds', 'cases', 'baselineTokens', 'candidateTokens', 'withoutSkillTokens', 'baselineMs', 'candidateMs', 'method', 'receiptHash', 'trials']);
+  object(e, ['profileRevision', 'safety', 'targetCaseIds', 'cases', 'baselineTokens', 'candidateTokens', 'withoutSkillTokens', 'baselineMs', 'candidateMs', 'method', 'receiptHash', 'trials', 'measurementScope', 'adoption']);
+  if (e.measurementScope !== undefined && !['search_server', 'returned_context', 'whole_task'].includes(e.measurementScope)
+    || e.adoption !== undefined && e.adoption !== 'diagnostic') return result('review_required', 'invalid_evaluation_provenance');
   if (e.method !== undefined && !['static', 'synthetic', 'agent_behavior', 'operational'].includes(e.method)
     || e.receiptHash !== undefined && !/^[a-f0-9]{64}$/.test(e.receiptHash)) return result('review_required', 'invalid_evaluation_provenance');
   for (const c of e.cases ?? []) { object(c, ['id', 'split', 'baseline', 'candidate', 'withoutSkill']); id(c.id); }
@@ -91,6 +95,7 @@ export function compareEvaluation(kind: TargetKind, e: Evaluation): { status: 'p
     || e.cases.some(c => typeof c.baseline !== 'boolean' || typeof c.candidate !== 'boolean' || !['development', 'holdout'].includes(c.split))
     || e.targetCaseIds.some(id => !e.cases.some(c => c.id === id)) || !e.cases.some(c => c.split === 'holdout')) return result('review_required', 'incomplete_evaluation');
   if (e.safety !== true || e.cases.some(c => c.baseline && !c.candidate)) return result('failed', 'safety_or_regression');
+  if (e.adoption === 'diagnostic') return result('review_required', 'diagnostic_evaluation_only');
   if (e.cases.some(c => e.targetCaseIds.includes(c.id) && !c.candidate)) return result('review_required', 'target_not_resolved');
   const cost = (a?: number, b?: number) => Number.isFinite(a) && Number.isFinite(b) && a! > 0 && b! >= 0 && b! <= a! * 0.9;
   if (e.method === 'agent_behavior' || e.method === 'operational') {
@@ -123,7 +128,8 @@ export function compareEvaluation(kind: TargetKind, e: Evaluation): { status: 'p
     if (e.cases.every(c => c.withoutSkill || !c.candidate) && !cost(e.withoutSkillTokens, e.candidateTokens)) return result('review_required', 'skill_unnecessary');
   }
   const improved = e.cases.some(c => e.targetCaseIds.includes(c.id) && !c.baseline && c.candidate);
-  if (!improved && !cost(e.baselineTokens, e.candidateTokens) && !cost(e.baselineMs, e.candidateMs)) return result('review_required', 'no_measured_improvement');
+  const wholeTask = e.measurementScope === undefined || e.measurementScope === 'whole_task';
+  if (!improved && (!wholeTask || !cost(e.baselineTokens, e.candidateTokens) && !cost(e.baselineMs, e.candidateMs))) return result('review_required', 'no_measured_improvement');
   return result('passed', 'target_or_cost_improved');
 }
 export function selectPreferences(items: readonly Preference[], context: Record<string, string>) {

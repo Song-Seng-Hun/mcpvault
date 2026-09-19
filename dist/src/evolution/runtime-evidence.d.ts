@@ -14,6 +14,7 @@ export interface DeliveryObservation {
 export interface OutcomeCheck {
     method: 'static' | 'synthetic' | 'agent_behavior' | 'operational';
     checkId: string;
+    source?: 'direct_user_review';
     /** Code-owned observer. Never deserialize a checker or a success flag from MCP/Vault data. */
     evaluate(observation: Readonly<DeliveryObservation>): Promise<{
         used: boolean;
@@ -49,6 +50,7 @@ export declare class EvolutionRuntimeEvidence {
     attest(token: string, p: ScopePrincipal, raw: unknown): Promise<FeedbackProof | undefined>;
     captureDelivery(p: ScopePrincipal, input: DeliveryObservation): Promise<string>;
     verifyUse(deliveryToken: string, p: ScopePrincipal, check: OutcomeCheck): Promise<string>;
+    inspectDelivery(token: string, p: ScopePrincipal): Promise<DeliveryObservation>;
     proveUse(token: string, cycle: Readonly<Cycle>, p: ScopePrincipal): Promise<Cycle['effect']>;
 }
 //# sourceMappingURL=runtime-evidence.d.ts.map

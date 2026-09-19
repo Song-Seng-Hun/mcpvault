@@ -5,6 +5,7 @@ import { loadHostFeatureConfig } from './src/host-feature-config.js';
 import { loadOwnerActivityHostConfig } from './src/owner-activity-host.js';
 import { loadMaintenanceHostConfig } from './src/maintenance-host.js';
 import { loadCompilationHostConfig } from './src/compilation-host.js';
+import { loadEvolutionStorage } from './src/evolution/host.js';
 import { createServerLifecycle } from "./src/server-lifecycle.js";
 import { parseCliArgs } from "./src/cli.js";
 import { startRestApi } from "./src/rest-api.js";
@@ -73,6 +74,9 @@ Options:
   --skill-evolution-config FILE
                   Opt-in experience and candidate recording with a private host key.
                   No automatic evaluation without host-registered skill profiles.
+  --evolution-config FILE
+                  Existing-account task observations and code-owned diagnostic evaluations.
+                  Private storage only; no models, account bindings or access grants.
   --reviewed-skills-config FILE
                   Private reviewed-copy reader with a separate loopback mTLS listener.
                   Requires --quarantine-skills and explicit skill-evolution feature.
@@ -115,7 +119,7 @@ Examples:
 }
 // Remove runtime options before joining trailing args, preserving support for
 // unquoted vault paths with spaces. When omitted, use the current directory.
-const { vaultPathArg, readOnly, quarantineSkills, restPort, mcpHttpPort, mcpHttpHost, mcpHttpTlsCert, mcpHttpTlsKey, stdio, economyConfig, roleplayConfig, skillEvolutionConfig, reviewedSkillsConfig, explanationConfig, benchmarkConfig, featuresConfig, ownerActivityConfig, maintenanceConfig, compilationConfig } = parseCliArgs(cliArgs);
+const { vaultPathArg, readOnly, quarantineSkills, restPort, mcpHttpPort, mcpHttpHost, mcpHttpTlsCert, mcpHttpTlsKey, stdio, economyConfig, roleplayConfig, skillEvolutionConfig, reviewedSkillsConfig, explanationConfig, benchmarkConfig, featuresConfig, ownerActivityConfig, maintenanceConfig, compilationConfig, evolutionConfig } = parseCliArgs(cliArgs);
 const vaultPath = resolve(vaultPathArg || process.cwd());
 const featurePath = featuresConfig ?? process.env.MCPVAULT_FEATURE_CONFIG;
 const ownerConsentPath = ownerActivityConfig ?? process.env.MCPVAULT_OWNER_ACTIVITY_CONFIG;
@@ -159,11 +163,13 @@ try {
         benchmarkWriter = await acquireBenchmarkWriter(hostBenchmark);
     const maintenance = maintenanceConfig && !readOnly ? await loadMaintenanceHostConfig(resolve(maintenanceConfig), vaultPath) : undefined;
     const compilationHost = compilationConfig ? await loadCompilationHostConfig(resolve(compilationConfig), vaultPath) : undefined;
+    const evolutionStorage = evolutionConfig ? await loadEvolutionStorage(resolve(evolutionConfig), vaultPath) : undefined;
     const skillEvolution = features.selected.includes('skill-evolution') && skillEvolutionConfig ? await loadSkillEvolutionHostConfig(resolve(skillEvolutionConfig), vaultPath) : undefined;
     const explanations = features.selected.includes('explanation-translation') && explanationConfig ? await loadExplanationHostConfig(resolve(explanationConfig), vaultPath) : undefined;
     if (features.selected.includes('roleplay') && roleplayConfig)
         roleplay = await RoleplayStore.open(await loadRoleplayHostConfig(resolve(roleplayConfig), vaultPath));
     mcpServer = createServer(vaultPath, { version: VERSION, readOnly, ...(quarantineSkills && { quarantineSkills }), features, ...(economy && { economy }), ...(roleplay && { roleplay }), ...(skillEvolution && { skillEvolution }),
+        ...(evolutionStorage && { evolutionRuntime: { storage: evolutionStorage } }),
         ...(reviewedHost && { reviewedSkills: reviewedHost.reviewedSkills }),
         ...(maintenance && { maintenance }),
         // A configuration file is not execution attestation. CLI admission stays

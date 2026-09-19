@@ -123,7 +123,7 @@ export class EvolutionRuntimeEvidence {
     }
     verifyUse(deliveryToken, p, check) {
         // Capture the code-owned checker before awaiting. No client-provided module path.
-        const { evaluate, method, checkId } = check;
+        const { evaluate, method, checkId, source } = check;
         return this.serial(async () => {
             id(checkId);
             if (!['static', 'synthetic', 'agent_behavior', 'operational'].includes(method) || typeof evaluate !== 'function')
@@ -145,8 +145,15 @@ export class EvolutionRuntimeEvidence {
             const d = delivery.delivery;
             return this.save(token, { version: 1, kind: 'effect', accountId: p.accountId, authority: delivery.authority,
                 fingerprint: hash([deliveryToken, checkId, result]), delivery: d, checkId, resultHash: result.resultHash,
-                effect: { taskId: d.taskId, sessionId: d.sessionId, revision: d.revision, success: result.success, method } }, p);
+                effect: { taskId: d.taskId, sessionId: d.sessionId, revision: d.revision, success: result.success, method,
+                    ...(source && { source }) } }, p);
         });
+    }
+    async inspectDelivery(token, p) {
+        const r = await this.read(token, p);
+        if (r?.kind !== 'delivery' || !r.delivery)
+            return unavailable();
+        return structuredClone(r.delivery);
     }
     async proveUse(token, cycle, p) {
         const r = await this.read(token, p);

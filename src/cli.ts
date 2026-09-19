@@ -18,6 +18,7 @@ export interface ParsedCliArgs {
   ownerActivityConfig?: string;
   maintenanceConfig?: string;
   compilationConfig?: string;
+  evolutionConfig?: string;
   /** Dedicated HTTP process; omitted preserves legacy stdio behavior. */
   stdio?: false;
 }
@@ -47,9 +48,15 @@ export function parseCliArgs(args: string[]): ParsedCliArgs {
   let ownerActivityConfig: string | undefined;
   let maintenanceConfig: string | undefined;
   let compilationConfig: string | undefined;
+  let evolutionConfig: string | undefined;
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index]!;
+    if (arg === '--evolution-config' || arg.startsWith('--evolution-config=')) {
+      const value = arg === '--evolution-config' ? args[++index] : arg.slice('--evolution-config='.length);
+      if (!value || !value.trim() || value.startsWith('--') || evolutionConfig !== undefined) throw new Error('--evolution-config requires one private host configuration file');
+      evolutionConfig = value; continue;
+    }
     if (arg === '--reviewed-skills-config' || arg.startsWith('--reviewed-skills-config=')) {
       const value = arg === '--reviewed-skills-config' ? args[++index] : arg.slice('--reviewed-skills-config='.length);
       if (!value || !value.trim() || value.startsWith('--') || reviewedSkillsConfig !== undefined) throw new Error('--reviewed-skills-config requires one private host configuration file');
@@ -234,5 +241,6 @@ export function parseCliArgs(args: string[]): ParsedCliArgs {
     ...(ownerActivityConfig !== undefined && { ownerActivityConfig }),
     ...(maintenanceConfig !== undefined && { maintenanceConfig }),
     ...(compilationConfig !== undefined && { compilationConfig }),
+    ...(evolutionConfig !== undefined && { evolutionConfig }),
   };
 }

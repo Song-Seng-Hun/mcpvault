@@ -19,6 +19,8 @@ Applied does not mean effective. A test fixture is not a live-user result.
 | [Validation](validation.md) | Frozen scenarios and separate evidence classes |
 | [Runtime use](runtime-usage.md) | Concrete existing-account host connection and limits |
 | [Runtime contract](runtime-contract.md) | Receipts, trials, budgets and protected rules |
+| [Operational CLI](operations-usage.md) | Actual request receipts and direct user confirmation |
+| [Operational execution](operations-execution.md) | Delivery evidence and remaining real-use gates |
 | [Execution](execution-2026-09-19.md) | Current implementation and remaining delivery gates |
 
 Source: `src/evolution/`; existing owner services retain mutation authority.

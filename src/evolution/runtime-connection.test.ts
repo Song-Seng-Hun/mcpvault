@@ -53,6 +53,11 @@ test('real MCP authentication connects host evidence, native persona apply and n
     const delivered = await host.deliverContext(accessToken, { taskId: 'next-task', sessionId: 'next-session' });
     expect(delivered.packet.preferences[0].value).toBe('brief');
     expect(delivered.receipts).toHaveLength(1);
+    const effectReview = await call('evolution.cycle', { op: 'request_effect_review', accessToken, cycleId: c.cycleId,
+      requestId: 'review-next', expectedRevision: c.revision, deliveryToken: delivered.receipts[0].token,
+      responseExcerpt: 'Done. Exact condition retained.', responseSource: 'agent_report' });
+    expect(effectReview.status).toBe('awaiting_direct_review');
+    expect((await call('evolution.cycle', { op: 'read', accessToken, cycleId: c.cycleId })).status).toBe('applied');
     const useToken = await host.verifyUse(accessToken, delivered.receipts[0].token, {
       method: 'synthetic', checkId: 'actual-render-v1', evaluate: async () => {
         const output = delivered.packet.preferences[0].value === 'brief' ? 'Done.' : 'Long explanation.';

@@ -1,14 +1,18 @@
 import { hash, id, median, revision, unavailable, type Evaluation, type EvaluationTrial, type Target, type TargetKind } from './policy.js';
 import type { Cycle } from './model.js';
+import type { ScopePrincipal } from '../scope-auth.js';
 
 export interface CaseOutcome { passed: boolean; safety: boolean; resultHash: string; tokens?: number; elapsedMs?: number }
 export interface EvaluationCase {
   id: string; split: 'development' | 'holdout'; target?: boolean;
   /** Code-owned implementation; private inputs/answers live in this closure, never in profile metadata. */
-  run(input: { variant: 'baseline' | 'candidate' | 'withoutSkill'; cycle: Readonly<Cycle>; signal: AbortSignal; trial: number }): Promise<CaseOutcome>;
+  run(input: { variant: 'baseline' | 'candidate' | 'withoutSkill'; cycle: Readonly<Cycle>; signal: AbortSignal; trial: number; principal?: ScopePrincipal }): Promise<CaseOutcome>;
 }
 export interface EvaluationProfile {
   kind: TargetKind; revision: string; method: NonNullable<Evaluation['method']>; cases: readonly EvaluationCase[];
+  repetitions?: 3;
+  measurementScope?: Evaluation['measurementScope'];
+  adoption?: 'diagnostic';
 }
 
 /** Runs checks, not model self-reports. Sequential trials avoid parallel memory spikes.
@@ -31,20 +35,21 @@ export class EvolutionEvaluator {
     return { revision: p.revision, caseIds: p.cases.map(c => c.id), targetCaseIds: p.cases.filter(c => c.target).map(c => c.id),
       holdoutCaseIds: p.cases.filter(c => c.split === 'holdout').map(c => c.id) };
   }
-  async evaluate(input: Readonly<Cycle>, signal: AbortSignal): Promise<Evaluation> {
+  async evaluate(input: Readonly<Cycle>, signal: AbortSignal, principal?: ScopePrincipal): Promise<Evaluation> {
     const cycle = structuredClone(input), profile = this.profiles.get(cycle.target.kind);
     if (!profile) return unavailable();
     const trials: EvaluationTrial[] = [], receiptHashes: string[] = [];
-    const count = ['agent_behavior', 'operational'].includes(profile.method) ? 3 : 1;
+    const count = profile.repetitions ?? (['agent_behavior', 'operational'].includes(profile.method) ? 3 : 1);
     for (let trial = 0; trial < count; trial++) {
       const cases: Evaluation['cases'] = [], totals: Record<string, number | undefined> = {};
       let safety = true;
       for (const c of profile.cases) {
         const outcomes: Partial<Record<'baseline' | 'candidate' | 'withoutSkill', CaseOutcome>> = {};
-        const variants = cycle.target.kind === 'skill' ? ['baseline', 'candidate', 'withoutSkill'] as const : ['baseline', 'candidate'] as const;
+        const variants = cycle.target.kind === 'skill' ? ['baseline', 'candidate', 'withoutSkill'] as const
+          : trial % 2 ? ['candidate', 'baseline'] as const : ['baseline', 'candidate'] as const;
         for (const variant of variants) {
           signal.throwIfAborted();
-          const output = await c.run({ variant, cycle: structuredClone(cycle), signal, trial }); signal.throwIfAborted();
+          const output = await c.run({ variant, cycle: structuredClone(cycle), signal, trial, ...(principal && { principal }) }); signal.throwIfAborted();
           if (typeof output.passed !== 'boolean' || typeof output.safety !== 'boolean' || revision(output.resultHash) === 'missing') return unavailable();
           for (const field of ['tokens', 'elapsedMs'] as const) {
             const value = output[field];
@@ -68,6 +73,7 @@ export class EvolutionEvaluator {
       baseline: trials.some(t => t.cases[i]!.baseline), candidate: trials.every(t => t.cases[i]!.candidate),
       ...(cycle.target.kind === 'skill' && { withoutSkill: trials.every(t => t.cases[i]!.withoutSkill) }) })),
       profileRevision: profile.revision, safety: trials.every(t => t.safety), method: profile.method,
+      ...(profile.measurementScope && { measurementScope: profile.measurementScope }), ...(profile.adoption && { adoption: profile.adoption }),
       targetCaseIds: profile.cases.filter(c => c.target).map(c => c.id), receiptHash: hash(receiptHashes),
       ...aggregate, ...(count === 3 && { trials }) } as Evaluation;
   }

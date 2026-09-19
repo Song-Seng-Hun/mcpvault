@@ -264,6 +264,10 @@ export async function startMcpHttpApi(server: Server, options: McpHttpOptions = 
   const requestHandler = async (request: IncomingMessage, response: ServerResponse) => {
     try {
       const requestUrl = new URL(request.url || '/', `http://${request.headers.host || host}`);
+      if (requestUrl.pathname === '/evolution/review' && runtime.evolutionReview && isLoopbackHost(host)
+        && !options.requireClientCertificate && !options.requestProfile) {
+        await runtime.evolutionReview.handle(request, response); return;
+      }
       addCorsHeaders(response, request, allowedOrigins);
 
       if (requestUrl.pathname !== path) {

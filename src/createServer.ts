@@ -13,6 +13,7 @@ import { FrontmatterHandler, parseFrontmatter } from "./frontmatter.js";
 import { PathFilter } from "./pathfilter.js";
 import { SearchService } from "./search.js";
 import { RetrievalService } from './retrieval-service.js';
+import { OBSERVED_ENDPOINTS } from './evolution/operations.js';
 import { LayeredMemoryService } from './layered-memory.js';
 import { getLayeredMemoryTools } from './layered-memory-tools.js';
 import { CommunityParticipationService, aggregateParticipationOwnerUsage } from './community-participation.js';
@@ -323,7 +324,7 @@ export interface CreateServerOptions extends DocumentAuthorityOptions {
 }
 
 const MUTATING_TOOLS = new Set([
-  'manage_evolution_feedback', 'manage_evolution_cycle',
+  'manage_evolution_feedback', 'manage_evolution_cycle', 'get_evolution_context',
   'manage_wiki_compilation',
   ...EXPLANATION_MUTATING_TOOLS,
   ...BENCHMARK_MUTATING_TOOLS,
@@ -371,6 +372,7 @@ const CAPABILITY_FOR_TOOL: Partial<Record<string, ScopeCapability>> = {
   manage_wiki_compilation: 'write',
   manage_evolution_feedback: 'write',
   manage_evolution_cycle: 'write',
+  get_evolution_context: 'write',
   public_federation_pull: 'write', public_federation_retry: 'publish',
   update_wiki_projection: 'write',
   manage_wiki_moc_region: 'write',
@@ -506,6 +508,7 @@ const FIXED_MCP_TOOLS: Tool[] = [
 const ALLOW_HIDDEN_DIRECT_TOOLS_IN_TESTS = process.env.VITEST === 'true';
 
 export interface ServerRuntime {
+  evolutionReview?: import('./evolution/direct-review.js').EvolutionDirectReview;
   /** Trusted in-process host surface. Never registered as an MCP/REST endpoint. */
   evolutionHost?: EvolutionRuntimeHost;
   endpointRegistry: EndpointRegistry;
@@ -728,7 +731,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
   if (options.evolution && options.evolutionRuntime) throw new Error('Choose one evolution runtime connection');
   const evolutionConnection = options.evolutionRuntime ? connectEvolutionRuntime(options.evolutionRuntime, {
     auth: scopeAuth, access: scopeAccess, fs: fileSystem, moderation, refreshPolicy: refreshDocumentPolicy,
-    readOnly: Boolean(readOnly), adapters: { wiki: wikiEvolutionAdapter(compilation) },
+    readOnly: Boolean(readOnly), retrieval, adapters: { wiki: wikiEvolutionAdapter(compilation) },
   }) : undefined;
   const evolutionOptions = evolutionConnection?.options ?? options.evolution;
   const evolution = evolutionConnection?.service ?? new EvolutionService({ ...evolutionOptions, readOnly: Boolean(readOnly || evolutionOptions?.readOnly) });
@@ -1618,6 +1621,10 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
       // Normalize once without mutating shared tool-module schema constants.
       return { ...tool, inputSchema: { ...tool.inputSchema, properties: {
         ...schema.properties,
+        ...(OBSERVED_ENDPOINTS.has(endpointIdForTool(tool.name)) && {
+          evolutionTask: { type: 'string', maxLength: 100, description: 'Optional server-issued task ID from evolution.context begin. Not a host-session assertion.' },
+          evolutionRequestId: { type: 'string', maxLength: 100, description: 'Unique observation request ID. On lost response inspect observations; never replay blindly.' },
+        }),
         accessToken: schema.properties?.accessToken || {
           type: 'string',
           description: guidanceText('guid-0ce641cd294b779f', 'Optional token from login_scope. Without it, public Global and the current command-center Community are visible; User/family, model, and agent scopes remain hidden.'),
@@ -1636,7 +1643,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
   // MCP host relies on a cached tools/list response and skips re-listing.
   ensureEndpointRegistry();
 
-  const dispatchTool = async (requestedToolName: string, requestArgs: Record<string, unknown> = {}): Promise<any> => guidance.run(async () => {
+  const dispatchCore = async (requestedToolName: string, requestArgs: Record<string, unknown> = {}): Promise<any> => guidance.run(async () => {
     const request = { params: { name: requestedToolName, arguments: requestArgs } };
     let toolName = requestedToolName;
     let args = request.params.arguments;
@@ -1847,10 +1854,29 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
       };
       switch (toolName) {
         case 'manage_evolution_feedback': case 'read_evolution_feedback':
-        case 'manage_evolution_cycle': case 'read_evolution_cycle': case 'get_evolution_context': {
+        case 'manage_evolution_cycle': case 'read_evolution_cycle': case 'get_evolution_context': case 'read_evolution_context': {
           const { accessToken: _token, ...args } = trimmedArgs;
           const endpoint = toolName.endsWith('_feedback') ? 'feedback' : toolName.endsWith('_cycle') ? 'cycle' : 'context';
+          if (endpoint === 'feedback' && args.op === 'request_review') {
+            if (!evolutionConnection) throw Error('Evolution operational connection unavailable');
+            return jsonResult(await evolutionConnection.review.prepare(String(_token), args), false);
+          }
+          if (endpoint === 'cycle' && args.op === 'request_effect_review') {
+            if (!evolutionConnection) throw Error('Evolution operational connection unavailable');
+            return jsonResult(await evolutionConnection.review.prepareEffect(String(_token), args), false);
+          }
+          if (endpoint === 'context' && args.op === 'begin') {
+            if (!evolutionConnection) throw Error('Evolution operational connection unavailable');
+            return jsonResult(await evolutionConnection.operations.begin(String(_token), args), false);
+          }
+          if (endpoint === 'context' && args.op === 'observations') {
+            if (!evolutionConnection) throw Error('Evolution operational connection unavailable');
+            return jsonResult(await evolutionConnection.operations.observations(String(_token), args), false);
+          }
           const result = await evolution.execute(endpoint, args, principal, async () => { await revalidateActor(); });
+          if (endpoint === 'cycle' && (args.op === 'diagnose' || args.op === undefined) && evolutionConnection) {
+            result.operational = { taskObservations: !options.readOnly, modelMetering: false, automaticModels: false, sessionProvenance: 'agent_report' };
+          }
           if (principal) await revalidateActor(); return jsonResult(result, false);
         }
         case 'check_wiki_fidelity':
@@ -3894,6 +3920,20 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
     }
   });
 
+  // Both transports call this wrapper. Raw envelopes never grant a harness or a host session.
+  const dispatchTool = async (name: string, input: Record<string, any> = {}): Promise<any> => {
+    const args = name === 'call_endpoint' ? { ...input.arguments, ...(input.accessToken !== undefined && { accessToken: input.accessToken }) } : input;
+    if (args.evolutionTask === undefined && args.evolutionRequestId === undefined) return dispatchCore(name, input);
+    try {
+      if (!evolutionConnection) throw Error('Evolution operational connection unavailable');
+      const endpoint = name === 'call_endpoint' ? endpointRegistry.resolve(input.endpointId) : endpointRegistry.resolve(endpointIdForTool(name));
+      if (!endpoint) throw Error('Unknown endpoint');
+      const { evolutionTask: _task, evolutionRequestId: _request, ...clean } = args;
+      return await evolutionConnection.operations.run(String(args.accessToken), endpoint.endpointId, args,
+        () => dispatchCore(name, name === 'call_endpoint' ? { ...input, arguments: clean } : clean));
+    } catch { return { isError: true, content: [{ type: 'text', text: 'Evolution observation unavailable; inspect the task receipt or use an untracked read.' }] }; }
+  };
+
   const installMcpHandlers = (target: Server): void => {
     // Definitions are runtime-local and static; availability/auth remain per call.
     target.setRequestHandler("tools/list", async () => guidance.run(() => ({ tools: projectGuidance(FIXED_MCP_TOOLS) })));
@@ -3909,6 +3949,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
 
   SERVER_RUNTIMES.set(server, {
     ...(evolutionConnection && { evolutionHost: evolutionConnection.host }),
+    ...(evolutionConnection && !readOnly && { evolutionReview: evolutionConnection.review }),
     runEvolutionOpportunity: async (request, principal, session) => {
       if (readOnly || !evolutionOptions?.storage || !evolutionOptions.authority) return { status: 'diagnostic_only' };
       return evolutionOpportunity.run(request, evolutionSessionBridge(evolution, principal, session), principal.accountId);
@@ -3933,7 +3974,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
     const failures: unknown[] = [];
     // Preserve order, but never let a refused foreign-lock cleanup strand the
     // remaining workers/watchers or the underlying protocol server.
-    for (const close of [disconnectCodexHooks, readModelCatalogUnsubscribe, maintenanceReconcileUnsubscribe,
+    for (const close of [() => evolutionConnection?.close(), disconnectCodexHooks, readModelCatalogUnsubscribe, maintenanceReconcileUnsubscribe,
       () => maintenance.close(), () => compilation.close(), () => llmWiki.invalidate(), () => documentSearch?.close(),
       () => documentIndex?.close(), () => mocRegions.close(), () => metadataIndex.close(),
       () => searchService.close(), () => semanticSearch.close(), () => graphIndex.close(),

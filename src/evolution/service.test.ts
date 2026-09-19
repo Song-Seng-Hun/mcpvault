@@ -27,6 +27,22 @@ export function fixture() {
   return { service, options, principal, raw, call, revoke: () => { allowed = false; } };
 }
 
+test('shutdown cancels evaluation and rejects new work without persisting a late verdict', async () => {
+  const f = fixture(); let signal!: AbortSignal, ready!: () => void;
+  const started = new Promise<void>(resolve => { ready = resolve; });
+  f.options.evaluate = async (_cycle: unknown, _principal: unknown, s: AbortSignal) => {
+    signal = s; ready(); return new Promise(() => {});
+  };
+  await f.call('feedback', { op: 'record', feedback: f.raw, eventToken: 'host-event', requestId: 'r', expectedRevision: 'missing' });
+  let c = await f.call('cycle', { op: 'prepare', cycleId: 'closing', feedbackIds: [f.raw.id], requestId: 'p', expectedRevision: 'missing' });
+  c = await f.call('cycle', { op: 'advance', cycleId: c.cycleId, candidate: { key: 'verbosity', value: 'brief' }, requestId: 'a', expectedRevision: c.revision });
+  const checking = f.call('cycle', { op: 'check', cycleId: c.cycleId, requestId: 'check', expectedRevision: c.revision });
+  const rejected = expect(checking).rejects.toThrow();
+  await started; await f.service.close(); await rejected;
+  expect(signal.aborted).toBe(true);
+  await expect(f.call('context', {})).rejects.toThrow();
+});
+
 async function applyPreference(f: ReturnType<typeof fixture>, key: string, value: string, suffix: string) {
   await f.call('feedback', { op: 'record', feedback: { ...f.raw, id: `f${suffix}`, key, value }, eventToken: 'host-event', requestId: `r${suffix}`, expectedRevision: 'missing' });
   let c = await f.call('cycle', { op: 'prepare', cycleId: `c${suffix}`, feedbackIds: [`f${suffix}`], requestId: `p${suffix}`, expectedRevision: 'missing' });

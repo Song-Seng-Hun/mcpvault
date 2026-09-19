@@ -71,7 +71,10 @@ export function repetitionReady(feedback, now) {
 export const median = (values) => { const v = [...values].sort((a, b) => a - b); return v[Math.floor(v.length / 2)]; };
 export function compareEvaluation(kind, e) {
     const result = (status, reason) => ({ status, reason });
-    object(e, ['profileRevision', 'safety', 'targetCaseIds', 'cases', 'baselineTokens', 'candidateTokens', 'withoutSkillTokens', 'baselineMs', 'candidateMs', 'method', 'receiptHash', 'trials']);
+    object(e, ['profileRevision', 'safety', 'targetCaseIds', 'cases', 'baselineTokens', 'candidateTokens', 'withoutSkillTokens', 'baselineMs', 'candidateMs', 'method', 'receiptHash', 'trials', 'measurementScope', 'adoption']);
+    if (e.measurementScope !== undefined && !['search_server', 'returned_context', 'whole_task'].includes(e.measurementScope)
+        || e.adoption !== undefined && e.adoption !== 'diagnostic')
+        return result('review_required', 'invalid_evaluation_provenance');
     if (e.method !== undefined && !['static', 'synthetic', 'agent_behavior', 'operational'].includes(e.method)
         || e.receiptHash !== undefined && !/^[a-f0-9]{64}$/.test(e.receiptHash))
         return result('review_required', 'invalid_evaluation_provenance');
@@ -86,6 +89,8 @@ export function compareEvaluation(kind, e) {
         return result('review_required', 'incomplete_evaluation');
     if (e.safety !== true || e.cases.some(c => c.baseline && !c.candidate))
         return result('failed', 'safety_or_regression');
+    if (e.adoption === 'diagnostic')
+        return result('review_required', 'diagnostic_evaluation_only');
     if (e.cases.some(c => e.targetCaseIds.includes(c.id) && !c.candidate))
         return result('review_required', 'target_not_resolved');
     const cost = (a, b) => Number.isFinite(a) && Number.isFinite(b) && a > 0 && b >= 0 && b <= a * 0.9;
@@ -129,7 +134,8 @@ export function compareEvaluation(kind, e) {
             return result('review_required', 'skill_unnecessary');
     }
     const improved = e.cases.some(c => e.targetCaseIds.includes(c.id) && !c.baseline && c.candidate);
-    if (!improved && !cost(e.baselineTokens, e.candidateTokens) && !cost(e.baselineMs, e.candidateMs))
+    const wholeTask = e.measurementScope === undefined || e.measurementScope === 'whole_task';
+    if (!improved && (!wholeTask || !cost(e.baselineTokens, e.candidateTokens) && !cost(e.baselineMs, e.candidateMs)))
         return result('review_required', 'no_measured_improvement');
     return result('passed', 'target_or_cost_improved');
 }

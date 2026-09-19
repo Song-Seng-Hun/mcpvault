@@ -26,21 +26,22 @@ export class EvolutionEvaluator {
         return { revision: p.revision, caseIds: p.cases.map(c => c.id), targetCaseIds: p.cases.filter(c => c.target).map(c => c.id),
             holdoutCaseIds: p.cases.filter(c => c.split === 'holdout').map(c => c.id) };
     }
-    async evaluate(input, signal) {
+    async evaluate(input, signal, principal) {
         const cycle = structuredClone(input), profile = this.profiles.get(cycle.target.kind);
         if (!profile)
             return unavailable();
         const trials = [], receiptHashes = [];
-        const count = ['agent_behavior', 'operational'].includes(profile.method) ? 3 : 1;
+        const count = profile.repetitions ?? (['agent_behavior', 'operational'].includes(profile.method) ? 3 : 1);
         for (let trial = 0; trial < count; trial++) {
             const cases = [], totals = {};
             let safety = true;
             for (const c of profile.cases) {
                 const outcomes = {};
-                const variants = cycle.target.kind === 'skill' ? ['baseline', 'candidate', 'withoutSkill'] : ['baseline', 'candidate'];
+                const variants = cycle.target.kind === 'skill' ? ['baseline', 'candidate', 'withoutSkill']
+                    : trial % 2 ? ['candidate', 'baseline'] : ['baseline', 'candidate'];
                 for (const variant of variants) {
                     signal.throwIfAborted();
-                    const output = await c.run({ variant, cycle: structuredClone(cycle), signal, trial });
+                    const output = await c.run({ variant, cycle: structuredClone(cycle), signal, trial, ...(principal && { principal }) });
                     signal.throwIfAborted();
                     if (typeof output.passed !== 'boolean' || typeof output.safety !== 'boolean' || revision(output.resultHash) === 'missing')
                         return unavailable();
@@ -69,6 +70,7 @@ export class EvolutionEvaluator {
                 baseline: trials.some(t => t.cases[i].baseline), candidate: trials.every(t => t.cases[i].candidate),
                 ...(cycle.target.kind === 'skill' && { withoutSkill: trials.every(t => t.cases[i].withoutSkill) }) })),
             profileRevision: profile.revision, safety: trials.every(t => t.safety), method: profile.method,
+            ...(profile.measurementScope && { measurementScope: profile.measurementScope }), ...(profile.adoption && { adoption: profile.adoption }),
             targetCaseIds: profile.cases.filter(c => c.target).map(c => c.id), receiptHash: hash(receiptHashes),
             ...aggregate, ...(count === 3 && { trials }) };
     }

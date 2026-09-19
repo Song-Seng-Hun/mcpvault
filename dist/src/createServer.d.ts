@@ -86,6 +86,7 @@ export interface CreateServerOptions extends DocumentAuthorityOptions {
     commandCenterId?: string;
 }
 export interface ServerRuntime {
+    evolutionReview?: import('./evolution/direct-review.js').EvolutionDirectReview;
     /** Trusted in-process host surface. Never registered as an MCP/REST endpoint. */
     evolutionHost?: EvolutionRuntimeHost;
     endpointRegistry: EndpointRegistry;

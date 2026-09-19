@@ -1,5 +1,6 @@
 import { type Evaluation, type Target, type TargetKind } from './policy.js';
 import type { Cycle } from './model.js';
+import type { ScopePrincipal } from '../scope-auth.js';
 export interface CaseOutcome {
     passed: boolean;
     safety: boolean;
@@ -17,6 +18,7 @@ export interface EvaluationCase {
         cycle: Readonly<Cycle>;
         signal: AbortSignal;
         trial: number;
+        principal?: ScopePrincipal;
     }): Promise<CaseOutcome>;
 }
 export interface EvaluationProfile {
@@ -24,6 +26,9 @@ export interface EvaluationProfile {
     revision: string;
     method: NonNullable<Evaluation['method']>;
     cases: readonly EvaluationCase[];
+    repetitions?: 3;
+    measurementScope?: Evaluation['measurementScope'];
+    adoption?: 'diagnostic';
 }
 /** Runs checks, not model self-reports. Sequential trials avoid parallel memory spikes.
  * The host must install actual, reviewed checks; absent checks remain unavailable.
@@ -37,6 +42,6 @@ export declare class EvolutionEvaluator {
         targetCaseIds: string[];
         holdoutCaseIds: string[];
     } | undefined;
-    evaluate(input: Readonly<Cycle>, signal: AbortSignal): Promise<Evaluation>;
+    evaluate(input: Readonly<Cycle>, signal: AbortSignal, principal?: ScopePrincipal): Promise<Evaluation>;
 }
 //# sourceMappingURL=evaluator.d.ts.map

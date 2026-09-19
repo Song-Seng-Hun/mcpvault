@@ -4,6 +4,7 @@ const reads = (alias, policy, ...ops) => Object.fromEntries(ops.map(op => [op, {
 /** Code-owned mixed-operation contracts, not an authorization or plugin registry.
  * Schemas still own valid writes; services still own all final domain guards. */
 const CONTRACTS = {
+    get_evolution_context: { defaultOp: 'read', summary: 'authenticated', reads: reads('read_evolution_context', 'authenticated', 'read', 'observations') },
     manage_evolution_feedback: { defaultOp: 'read', summary: 'authenticated', reads: reads('read_evolution_feedback', 'authenticated', 'read') },
     manage_evolution_cycle: { defaultOp: 'diagnose', summary: 'public', reads: {
             ...reads('read_evolution_cycle', 'public', 'diagnose'), ...reads('read_evolution_cycle', 'authenticated', 'read', 'list', 'preview'),

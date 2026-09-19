@@ -9,6 +9,7 @@ export interface DeliveryObservation {
 }
 export interface OutcomeCheck {
   method: 'static' | 'synthetic' | 'agent_behavior' | 'operational'; checkId: string;
+  source?: 'direct_user_review';
   /** Code-owned observer. Never deserialize a checker or a success flag from MCP/Vault data. */
   evaluate(observation: Readonly<DeliveryObservation>): Promise<{ used: boolean; success: boolean; resultHash: string }>;
 }
@@ -114,7 +115,7 @@ export class EvolutionRuntimeEvidence {
   }
   verifyUse(deliveryToken: string, p: ScopePrincipal, check: OutcomeCheck): Promise<string> {
     // Capture the code-owned checker before awaiting. No client-provided module path.
-    const { evaluate, method, checkId } = check;
+    const { evaluate, method, checkId, source } = check;
     return this.serial(async () => {
       id(checkId);
       if (!['static', 'synthetic', 'agent_behavior', 'operational'].includes(method) || typeof evaluate !== 'function') return unavailable();
@@ -132,8 +133,14 @@ export class EvolutionRuntimeEvidence {
       const d = delivery.delivery;
       return this.save(token, { version: 1, kind: 'effect', accountId: p.accountId, authority: delivery.authority,
         fingerprint: hash([deliveryToken, checkId, result]), delivery: d, checkId, resultHash: result.resultHash,
-        effect: { taskId: d.taskId, sessionId: d.sessionId, revision: d.revision, success: result.success, method } }, p);
+        effect: { taskId: d.taskId, sessionId: d.sessionId, revision: d.revision, success: result.success, method,
+          ...(source && { source }) } }, p);
     });
+  }
+  async inspectDelivery(token: string, p: ScopePrincipal): Promise<DeliveryObservation> {
+    const r = await this.read(token, p);
+    if (r?.kind !== 'delivery' || !r.delivery) return unavailable();
+    return structuredClone(r.delivery);
   }
   async proveUse(token: string, cycle: Readonly<Cycle>, p: ScopePrincipal): Promise<Cycle['effect']> {
     const r = await this.read(token, p);

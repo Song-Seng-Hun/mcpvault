@@ -1,6 +1,14 @@
 import { describe, expect, test } from "vitest";
 import { parseCliArgs } from "./cli.js";
 
+test('evolution runtime uses one explicit configuration and never consumes the Vault path', () => {
+  expect(parseCliArgs(['Vault', '--evolution-config=private.json'])).toEqual({ vaultPathArg: 'Vault', readOnly: false, evolutionConfig: 'private.json' });
+  expect(parseCliArgs(['--evolution-config', 'private.json', 'Vault']).vaultPathArg).toBe('Vault');
+  for (const args of [['--evolution-config'], ['--evolution-config='], ['--evolution-config', '--read-only'], ['--evolution-config=a', '--evolution-config=b']]) {
+    expect(() => parseCliArgs(args)).toThrow(/evolution-config/);
+  }
+});
+
 test('reviewed skill host configuration is explicit and never removes quarantine implicitly',()=>{
   expect(parseCliArgs(['Vault','--reviewed-skills-config=private.json'])).toEqual({vaultPathArg:'Vault',readOnly:false,reviewedSkillsConfig:'private.json'});
   expect(parseCliArgs(['--reviewed-skills-config','private.json','Vault']).vaultPathArg).toBe('Vault');

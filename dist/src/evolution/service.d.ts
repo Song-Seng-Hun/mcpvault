@@ -5,7 +5,10 @@ export declare class EvolutionService {
     private readonly options;
     private tail;
     private evaluatorBusy;
+    private closed;
+    private evaluationController?;
     constructor(options: EvolutionOptions);
+    close(): Promise<void>;
     execute(endpoint: string, input: Params, principal?: ScopePrincipal, assertActor?: () => Promise<void>, execution?: {
         automatic: boolean;
     }): Promise<any>;
