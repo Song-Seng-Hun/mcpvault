@@ -36,6 +36,25 @@ async function applyPreference(f: ReturnType<typeof fixture>, key: string, value
   return f.call('cycle', { op: 'apply', cycleId: c.cycleId, fingerprint: preview.fingerprint, requestId: `apply${suffix}`, expectedRevision: c.revision });
 }
 
+test('harness changes use native cycle CAS, model/task scope and reversible host records', async () => {
+  const f = fixture();
+  f.raw = { ...f.raw, target: { kind: 'harness', id: 'research' }, key: 'route', value: 'keyword' } as any;
+  await f.call('feedback', { op: 'record', feedback: f.raw, eventToken: 'host-event', requestId: 'record', expectedRevision: 'missing' });
+  let c = await f.call('cycle', { op: 'prepare', cycleId: 'harness', feedbackIds: [f.raw.id], requestId: 'prepare', expectedRevision: 'missing' });
+  const profile = { modelId: 'codex', taskKind: 'research', route: 'keyword', optionalSkillBundles: 0,
+    maxChars: 4000, expansionLimit: 0, repairLimit: 0, optionalReview: false };
+  c = await f.call('cycle', { op: 'advance', cycleId: c.cycleId, candidate: profile, requestId: 'advance', expectedRevision: c.revision });
+  c = await f.call('cycle', { op: 'check', cycleId: c.cycleId, requestId: 'check', expectedRevision: c.revision });
+  const preview = await f.call('cycle', { op: 'preview', cycleId: c.cycleId });
+  c = await f.call('cycle', { op: 'apply', cycleId: c.cycleId, fingerprint: preview.fingerprint, requestId: 'apply', expectedRevision: c.revision });
+  expect(c.status).toBe('applied');
+  expect((await f.call('context', { project: 'wiki', taskKind: 'research' })).harness.profile).toEqual(profile);
+  expect((await f.call('context', { project: 'wiki', taskKind: 'coding' })).harness).toBeUndefined();
+  expect((await f.service.execute('context', { project: 'wiki', taskKind: 'research' }, { ...f.principal, modelId: 'another' })).harness).toBeUndefined();
+  expect((await f.call('cycle', { op: 'revert', cycleId: c.cycleId, requestId: 'undo', expectedRevision: c.revision })).status).toBe('withdrawn');
+  expect((await f.call('context', { project: 'wiki', taskKind: 'research' })).harness).toBeUndefined();
+});
+
 test('independent expression keys coexist; explicit withdrawal permits a new preference', async () => {
   const f = fixture(); const first = await applyPreference(f, 'verbosity', 'brief', 'one');
   await applyPreference(f, 'tone', 'direct', 'two');

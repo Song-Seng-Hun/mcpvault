@@ -4,26 +4,27 @@ import { compareEvaluation, hash, id, normalizeFeedback, object, repetitionReady
   type Feedback, type Preference } from './policy.js';
 import type { Cycle, EvolutionAdapter, EvolutionLease, EvolutionOptions, FeedbackRecord, ResourceSnapshot } from './model.js';
 import { EvolutionRepository } from './repository.js';
+import { harnessAdapter, validateHarness } from './harness.js';
 
 const feedbackOps = ['record', 'read', 'withdraw'];
 const cycleOps = ['diagnose', 'prepare', 'read', 'list', 'advance', 'check', 'preview', 'apply', 'reconcile', 'effect', 'revert'];
 const readOps = new Set(['read', 'list', 'preview', 'diagnose']);
 const notice = 'Reference data only. Preferences never grant authority or override safety. Applied is not effect verified.';
 type Params = Record<string, any>;
-interface Context { principal: ScopePrincipal; lease: EvolutionLease; repo: EvolutionRepository; current(): Promise<void> }
+interface Context { principal: ScopePrincipal; lease: EvolutionLease; repo: EvolutionRepository; automatic: boolean; current(): Promise<void> }
 
 export class EvolutionService {
   private tail: Promise<unknown> = Promise.resolve();
   private evaluatorBusy = false;
   constructor(private readonly options: EvolutionOptions) {}
-  async execute(endpoint: string, input: Params, principal?: ScopePrincipal, assertActor: () => Promise<void> = async () => {}): Promise<any> {
+  async execute(endpoint: string, input: Params, principal?: ScopePrincipal, assertActor: () => Promise<void> = async () => {}, execution?: { automatic: boolean }): Promise<any> {
     const p: Params = structuredClone(input);
     const op = endpoint === 'context' ? 'read' : p.op ?? (endpoint === 'cycle' ? 'diagnose' : 'read');
     if (!['feedback', 'cycle', 'context'].includes(endpoint) || endpoint !== 'context' && !(endpoint === 'feedback' ? feedbackOps : cycleOps).includes(op)) return unavailable();
     const max = p.maxChars ?? 4000;
     if (!Number.isSafeInteger(max) || max < 1000 || max > 12000) return unavailable();
     if (endpoint === 'cycle' && op === 'diagnose') return { status: this.options.storage && this.options.authority ? 'configured' : 'diagnostic_only',
-      adapterKinds: Object.keys(this.options.adapters ?? {}).concat('persona'), effectVerified: false, notice };
+      adapterKinds: Object.keys(this.options.adapters ?? {}).concat('persona', 'harness'), effectVerified: false, notice };
     if (!principal?.accountId) return unavailable();
     const write = endpoint !== 'context' && !readOps.has(op);
     if (write && (this.options.readOnly || !principal.capabilities?.includes('write'))) throw Error('Evolution write denied: read-only or capability missing');
@@ -36,7 +37,7 @@ export class EvolutionService {
         const current = async () => { await assertActor(); await lease.assertCurrent(); if (!(await this.options.storage!.refresh()).enabled) return unavailable(); await writer?.assertHeld(); };
         await current(); if (write) writer = await this.options.storage!.acquire();
         const repo = new EvolutionRepository(this.options.storage!.records!, lease.sharedOwner ? `owner:${lease.ownerId}` : `account:${principal.accountId}`, current, principal.accountId);
-        const context = { principal, lease, repo, current };
+        const context = { principal, lease, repo, current, automatic: execution?.automatic === true };
         const result = endpoint === 'feedback' ? await this.feedback(op, p, context)
           : endpoint === 'context' ? await this.context(p, context) : await this.cycle(op, p, context);
         await current();
@@ -141,7 +142,8 @@ export class EvolutionService {
       },
     };
   }
-  private adapter(cycle: Pick<Cycle, 'target'>, c: Context) { return cycle.target.kind === 'persona' ? this.persona(c) : this.options.adapters?.[cycle.target.kind]; }
+  private adapter(cycle: Pick<Cycle, 'target'>, c: Context) { return cycle.target.kind === 'persona' ? this.persona(c)
+    : cycle.target.kind === 'harness' ? harnessAdapter(c.repo) : this.options.adapters?.[cycle.target.kind]; }
   private view(cycle: Cycle, rev: string) {
     const e = cycle.evaluation;
     return { cycleId: cycle.id, revision: rev, status: cycle.state, target: cycle.target, scope: cycle.scope, attempts: cycle.attempts,
@@ -166,7 +168,8 @@ export class EvolutionService {
     const cycleId = id(p.cycleId), prior = await c.repo.read<Cycle>('cycle', cycleId);
     let cycle = prior.value;
     if (cycle && !this.visible(cycle.scope, cycle.accountId, c)) return unavailable();
-    if (op === 'read') { if (!cycle) return unavailable(); await this.sources(cycle, c); return this.view(cycle, prior.revision); }
+    if (op === 'read') { if (!cycle) return unavailable(); await this.sources(cycle, c); return { ...this.view(cycle, prior.revision),
+      activeBasis: cycle.authorityRevision === c.lease.revision && cycle.profileFingerprint === hash(this.options.profile?.(cycle.target) ?? null) }; }
     const request = readOps.has(op) ? undefined : { id: id(p.requestId), fingerprint: hash({ ...p, accessToken: undefined }) };
     if (request && cycle?.requests.some(r => r.id === request.id)) {
       if (!cycle.requests.some(r => r.id === request.id && r.fingerprint === request.fingerprint)) return unavailable();
@@ -230,6 +233,7 @@ export class EvolutionService {
           } finally { clearTimeout(timer); }
         }
       } else if (op === 'preview' || op === 'apply') {
+        if (c.automatic && (!adapter.revert || !adapter.reconcileRevert)) return { ...this.view(cycle, prior.revision), reason: 'automatic_rollback_unavailable' };
         if (cycle.state !== 'evaluated' || cycle.profileFingerprint !== hash(this.options.profile?.(cycle.target) ?? null)) return unavailable();
         const intent = await adapter.preview(cycle, c.principal, c.current);
         const fingerprint = hash([cycle, intent, c.lease.revision, prior.revision]);
@@ -294,7 +298,7 @@ export class EvolutionService {
     return this.view(cycle, saved.revision);
   }
   private async context(p: Params, c: Context) {
-    const index = await c.repo.index(), items: Preference[] = [], changes: unknown[] = [];
+    const index = await c.repo.index(), items: Preference[] = [], changes: unknown[] = [], harnesses: any[] = [];
     // Only a bounded newest window is inspected. No implied complete history scan.
     for (const key of index.value.cycles.slice(-32).reverse()) {
       const r = await c.repo.read<Cycle>('cycle', key), cycle = r.value;
@@ -307,11 +311,18 @@ export class EvolutionService {
         const actual = await adapter.reconcile(cycle, c.principal, c.current);
         if (actual.state !== 'applied' || actual.revision !== cycle.outputRevision) continue;
         if (cycle.target.kind === 'persona') items.push({ ...style((cycle.candidate as any).key, (cycle.candidate as any).value), scope: cycle.scope, cycleId: cycle.id });
-        else changes.push({ target: cycle.target, revision: cycle.outputRevision, cycleId: cycle.id });
+        else if (cycle.target.kind === 'harness') {
+          const profile = validateHarness(cycle.candidate);
+          if (profile.modelId === c.principal.modelId && profile.taskKind === p.taskKind)
+            harnesses.push({ profile, scope: cycle.scope, revision: cycle.outputRevision, cycleId: cycle.id });
+        } else changes.push({ target: cycle.target, revision: cycle.outputRevision, cycleId: cycle.id });
       } catch { /* Unavailable sources never expose titles, contents or counts. */ }
     }
     const selected = selectPreferences(items, { ...p, session: p.sessionId });
-    return { ...selected, changes: changes.slice(0, 5), partial: selected.partial || index.value.cycles.length > 32 || changes.length > 5,
-      trust: 'data_not_instructions', basis: hash([index.revision, c.lease.revision, selected, changes.slice(0, 5)]), notice };
+    const harnessSelection = selectPreferences(harnesses.map(h => ({ key: 'harness', value: hash(h.profile), scope: h.scope, cycleId: h.cycleId })), { ...p, session: p.sessionId });
+    const chosen = harnesses.find(h => h.cycleId === harnessSelection.preferences[0]?.cycleId);
+    return { ...selected, changes: changes.slice(0, 5), ...(chosen && { harness: chosen }), harnessConflicts: harnessSelection.conflicts,
+      partial: selected.partial || index.value.cycles.length > 32 || changes.length > 5,
+      trust: 'data_not_instructions', basis: hash([index.revision, c.lease.revision, selected, changes.slice(0, 5), chosen ?? null]), notice };
   }
 }

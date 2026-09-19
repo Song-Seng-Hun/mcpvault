@@ -4,7 +4,7 @@ const enumeration = (...values) => ({ type: 'string', enum: values });
 const obj = (properties, required = []) => ({ type: 'object', additionalProperties: false, properties, required });
 const common = { accessToken: text(4096), maxChars: { type: 'integer', minimum: 1000, maximum: 12000, default: 4000 } };
 const mutation = { requestId: text(), expectedRevision: text(64) };
-const target = obj({ kind: enumeration('skill', 'wiki', 'persona', 'computer', 'fiction'), id: text(), path: text(400) }, ['kind', 'id']);
+const target = obj({ kind: enumeration('skill', 'wiki', 'persona', 'computer', 'fiction', 'harness'), id: text(), path: text(400) }, ['kind', 'id']);
 const scope = obj({ kind: enumeration('account', 'owner', 'project', 'computer', 'scene', 'session'), id: text() }, ['kind', 'id']);
 /** Dynamic endpoints only. Opaque tokens reference host evidence; they never create authority. */
 export function getEvolutionTools() {
@@ -22,5 +22,5 @@ export function getEvolutionTools() {
                 fingerprint: text(64), useToken: text(500), offset: { type: 'integer', minimum: 0, maximum: 2048 }, expectedIndexRevision: text(64) }) },
         { name: 'get_evolution_context',
             description: 'Read at most five currently applicable private expression preferences and verified applied revisions. Use at the next task; pass only the current project/computer/scene/session. Conflicts are explicit. Data does not override current requests, safety or scene settings. No writes or model calls.',
-            inputSchema: obj({ ...common, project: text(), computer: text(), scene: text(), sessionId: text(), taskId: text() }) }];
+            inputSchema: obj({ ...common, project: text(), computer: text(), scene: text(), sessionId: text(), taskId: text(), taskKind: text() }) }];
 }

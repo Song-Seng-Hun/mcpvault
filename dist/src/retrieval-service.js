@@ -9,6 +9,7 @@ import { positiveSearchTerms, memoryCandidateLimit } from './search.js';
 import { isFictionDomain } from './fiction-domain.js';
 import { constrainedQuery, plainQueryExpansion, semanticQueryState } from './retrieval/query-policy.js';
 import { emptyReviewedProcedureDiscovery } from './skill-release-discovery.js';
+import { currentHarness } from './evolution/harness.js';
 export { constrainedQuery, plainQueryExpansion } from './retrieval/query-policy.js';
 export const RETRIEVAL_NOTE_BYTES = 8 * 1024 * 1024;
 export function bodyStartLine(note) {
@@ -33,6 +34,9 @@ export class RetrievalService {
     /** Explicit procedural profile. Never turn a reviewed card into a Markdown
      * evidence hit, and never bypass the original quarantine in note searches. */
     async searchProcedures(params, capture) {
+        const harness = currentHarness(params.principal);
+        if (harness?.profile.optionalSkillBundles === 0)
+            return emptyReviewedProcedureDiscovery();
         const max = normalizeSearchMaxChars(params.maxChars);
         // These note-specific filters cannot yet be evaluated on approved cards.
         // Preserve them by declining recommendations, not by relaxing their meaning.
@@ -40,7 +44,7 @@ export class RetrievalService {
             || params.fictionDomain !== undefined || params.canAccessPath !== undefined || params.searchContent === false
             || params.searchFrontmatter === true || params.expandAuthority === true || !this.reviewedProcedures)
             return emptyReviewedProcedureDiscovery();
-        return this.reviewedProcedures.discover({ query: params.query, maxChars: max, limit: Math.min(3, normalizeSearchLimit(params.limit)), cursor: params.cursor, accessToken: params.accessToken, principal: params.principal }, capture);
+        return this.reviewedProcedures.discover({ query: params.query, maxChars: max, limit: Math.min(harness?.profile.optionalSkillBundles ?? 3, normalizeSearchLimit(params.limit)), cursor: params.cursor, accessToken: params.accessToken, principal: params.principal }, capture);
     }
     skillEvolution;
     attachSkillEvolution(service) { this.skillEvolution = service; }
@@ -154,6 +158,19 @@ export class RetrievalService {
         return { results: results.slice(0, limit), usedQuery, expanded, semantic, complete };
     }
     async retrieve(params, allowExpansion = false) {
+        const binding = currentHarness(params.principal);
+        await binding?.assertCurrent?.();
+        const result = await this.retrieveCurrent(params, allowExpansion);
+        await binding?.assertCurrent?.();
+        return result;
+    }
+    async retrieveCurrent(params, allowExpansion = false) {
+        const harness = currentHarness(params.principal);
+        if (harness) {
+            params = { ...params, ...(harness.profile.route === 'keyword' && { semantic: false }),
+                ...(params.maxChars === undefined && { maxChars: harness.profile.maxChars }) };
+            allowExpansion &&= harness.profile.expansionLimit > 0;
+        }
         if (params.retrievalMode !== undefined && !['legacy', 'evidence'].includes(params.retrievalMode))
             throw guidanceError(new Error('Invalid retrievalMode'), 'guid-fa16d4425906bd99');
         const evidence = params.retrievalMode === 'evidence' && !constrainedQuery(params.query);

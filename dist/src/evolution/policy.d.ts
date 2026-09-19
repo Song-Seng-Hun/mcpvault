@@ -1,4 +1,4 @@
-export type TargetKind = 'skill' | 'wiki' | 'persona' | 'computer' | 'fiction';
+export type TargetKind = 'skill' | 'wiki' | 'persona' | 'computer' | 'fiction' | 'harness';
 export interface Target {
     kind: TargetKind;
     id: string;
@@ -79,7 +79,10 @@ export interface Evaluation {
     withoutSkillTokens?: number;
     baselineMs?: number;
     candidateMs?: number;
+    trials?: EvaluationTrial[];
 }
+export type EvaluationTrial = Pick<Evaluation, 'cases' | 'safety' | 'baselineTokens' | 'candidateTokens' | 'withoutSkillTokens' | 'baselineMs' | 'candidateMs'>;
+export declare const median: (values: number[]) => number;
 export declare function compareEvaluation(kind: TargetKind, e: Evaluation): {
     status: 'passed' | 'failed' | 'review_required';
     reason: string;

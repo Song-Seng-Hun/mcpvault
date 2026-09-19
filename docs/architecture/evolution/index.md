@@ -17,6 +17,9 @@ Applied does not mean effective. A test fixture is not a live-user result.
 | [Host contract](host.md) | Authority, storage, native adapters, session opportunity |
 | [Endpoints](endpoints.md) | Record, evaluate, read context, reconcile, withdraw |
 | [Validation](validation.md) | Frozen scenarios and separate evidence classes |
+| [Runtime use](runtime-usage.md) | Concrete existing-account host connection and limits |
+| [Runtime contract](runtime-contract.md) | Receipts, trials, budgets and protected rules |
+| [Execution](execution-2026-09-19.md) | Current implementation and remaining delivery gates |
 
 Source: `src/evolution/`; existing owner services retain mutation authority.
 Fixed MCP tools remain five; three dynamic endpoints add scoped operations.

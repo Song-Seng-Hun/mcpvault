@@ -42,6 +42,8 @@ import { getEvolutionTools } from './evolution/tools.js';
 import { EvolutionService } from './evolution/service.js';
 import type { EvolutionOptions } from './evolution/model.js';
 import { EvolutionOpportunity, evolutionSessionBridge, type EvolutionSession } from './evolution/opportunity.js';
+import { connectEvolutionRuntime, type EvolutionRuntimeConfig, type EvolutionRuntimeHost } from './evolution/runtime-connection.js';
+import { wikiEvolutionAdapter } from './evolution/wiki-adapter.js';
 import { FidelityService } from './fidelity-service.js';
 import { getFidelityTools } from './fidelity-tools.js';
 import { MaintenanceService } from './maintenance-service.js';
@@ -292,6 +294,8 @@ export interface CreateServerOptions extends DocumentAuthorityOptions {
   skillEvolution?: SkillEvolutionHost;
   /** Trusted host evidence/authority only. Feature selection and client labels grant nothing. */
   evolution?: EvolutionOptions;
+  /** Concrete existing-account runtime; mutually exclusive with custom legacy callbacks. */
+  evolutionRuntime?: EvolutionRuntimeConfig;
   /** Private host admission only. Never request/Vault metadata; quarantine required. */
   reviewedSkills?: { host: ReviewedSkillHost; source: ReviewedSkillInspector };
   /** Host-private notice registration/delegation file, reloaded before operations. */
@@ -502,13 +506,15 @@ const FIXED_MCP_TOOLS: Tool[] = [
 const ALLOW_HIDDEN_DIRECT_TOOLS_IN_TESTS = process.env.VITEST === 'true';
 
 export interface ServerRuntime {
+  /** Trusted in-process host surface. Never registered as an MCP/REST endpoint. */
+  evolutionHost?: EvolutionRuntimeHost;
   endpointRegistry: EndpointRegistry;
   dispatchTool: (requestedToolName: string, args?: Record<string, unknown>) => Promise<any>;
   ensureEndpointRegistry: () => void;
   createRequestServer: () => Server;
   /** Existing approved host-session opportunity only; no MCP callable generator or new scheduler. */
   runEvolutionOpportunity?: (request: Parameters<EvolutionOpportunity['run']>[0], principal: ScopePrincipal,
-    session: Pick<EvolutionSession, 'authorize' | 'generate'>) => ReturnType<EvolutionOpportunity['run']>;
+    session: Pick<EvolutionSession, 'authorize' | 'generate' | 'metering'>) => ReturnType<EvolutionOpportunity['run']>;
 }
 
 const SERVER_RUNTIMES = new WeakMap<Server, ServerRuntime>();
@@ -707,8 +713,6 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
   const questionPacket = new QuestionPacketService(fileSystem, scopeAccess, retrieval);
   const sourceComparison = new SourceComparisonService(fileSystem, scopeAccess, retrieval);
   const fidelity = new FidelityService(fileSystem, scopeAccess);
-  const evolution = new EvolutionService({ ...options.evolution, readOnly: Boolean(readOnly || options.evolution?.readOnly) });
-  const evolutionOpportunity = new EvolutionOpportunity();
   const sourceChange = new SourceChangeService(fileSystem, scopeAccess);
   const knowledgeApplications = new KnowledgeApplicationService(fileSystem, scopeAccess);
   const references = new ReferenceService(fileSystem, scopeAccess);
@@ -721,6 +725,14 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
     ? options.compilation.adapterFactory?.({ fs: fileSystem, access: scopeAccess, wiki: llmWiki, comparison: sourceComparison, authorize: compilationAuthorize }) : undefined);
   const compilation = new CompilationService({ fs: fileSystem, access: scopeAccess, readOnly,
     ...options.compilation, ...(compilationAdapter && { adapter: compilationAdapter }), authorize: compilationAuthorize });
+  if (options.evolution && options.evolutionRuntime) throw new Error('Choose one evolution runtime connection');
+  const evolutionConnection = options.evolutionRuntime ? connectEvolutionRuntime(options.evolutionRuntime, {
+    auth: scopeAuth, access: scopeAccess, fs: fileSystem, moderation, refreshPolicy: refreshDocumentPolicy,
+    readOnly: Boolean(readOnly), adapters: { wiki: wikiEvolutionAdapter(compilation) },
+  }) : undefined;
+  const evolutionOptions = evolutionConnection?.options ?? options.evolution;
+  const evolution = evolutionConnection?.service ?? new EvolutionService({ ...evolutionOptions, readOnly: Boolean(readOnly || evolutionOptions?.readOnly) });
+  const evolutionOpportunity = new EvolutionOpportunity(evolutionConnection?.budget);
   const maintenance = new MaintenanceService({ fs: fileSystem, access: scopeAccess,
     ...(!readOnly && options.maintenance && { host: options.maintenance }),
     ...maintenanceExecution(scopeAuth, scopeAccess, moderation, refreshDocumentPolicy),
@@ -3896,9 +3908,10 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
   installMcpHandlers(server);
 
   SERVER_RUNTIMES.set(server, {
+    ...(evolutionConnection && { evolutionHost: evolutionConnection.host }),
     runEvolutionOpportunity: async (request, principal, session) => {
-      if (readOnly || !options.evolution?.storage || !options.evolution.authority) return { status: 'diagnostic_only' };
-      return evolutionOpportunity.run(request, evolutionSessionBridge(evolution, principal, session));
+      if (readOnly || !evolutionOptions?.storage || !evolutionOptions.authority) return { status: 'diagnostic_only' };
+      return evolutionOpportunity.run(request, evolutionSessionBridge(evolution, principal, session), principal.accountId);
     },
     endpointRegistry,
     dispatchTool,

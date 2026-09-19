@@ -6,7 +6,9 @@ export declare class EvolutionService {
     private tail;
     private evaluatorBusy;
     constructor(options: EvolutionOptions);
-    execute(endpoint: string, input: Params, principal?: ScopePrincipal, assertActor?: () => Promise<void>): Promise<any>;
+    execute(endpoint: string, input: Params, principal?: ScopePrincipal, assertActor?: () => Promise<void>, execution?: {
+        automatic: boolean;
+    }): Promise<any>;
     private evidence;
     private visible;
     private feedback;

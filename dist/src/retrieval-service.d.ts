@@ -76,6 +76,7 @@ export declare class RetrievalService {
      * complete=false forbids treating this result window as a lossless inventory. */
     memoryCandidates(params: MemoryCandidateParams): Promise<MemoryCandidateOutcome>;
     retrieve(params: RetrievalParams, allowExpansion?: boolean): Promise<RetrievalOutcome>;
+    private retrieveCurrent;
     searchNotes(params: RetrievalParams): Promise<RetrievalHit[]>;
 }
 //# sourceMappingURL=retrieval-service.d.ts.map

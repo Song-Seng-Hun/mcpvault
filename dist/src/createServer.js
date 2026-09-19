@@ -39,6 +39,8 @@ import { getCompilationTools } from './compilation-tools.js';
 import { getEvolutionTools } from './evolution/tools.js';
 import { EvolutionService } from './evolution/service.js';
 import { EvolutionOpportunity, evolutionSessionBridge } from './evolution/opportunity.js';
+import { connectEvolutionRuntime } from './evolution/runtime-connection.js';
+import { wikiEvolutionAdapter } from './evolution/wiki-adapter.js';
 import { FidelityService } from './fidelity-service.js';
 import { getFidelityTools } from './fidelity-tools.js';
 import { MaintenanceService } from './maintenance-service.js';
@@ -635,8 +637,6 @@ export function createServer(vaultPath, options = {}) {
     const questionPacket = new QuestionPacketService(fileSystem, scopeAccess, retrieval);
     const sourceComparison = new SourceComparisonService(fileSystem, scopeAccess, retrieval);
     const fidelity = new FidelityService(fileSystem, scopeAccess);
-    const evolution = new EvolutionService({ ...options.evolution, readOnly: Boolean(readOnly || options.evolution?.readOnly) });
-    const evolutionOpportunity = new EvolutionOpportunity();
     const sourceChange = new SourceChangeService(fileSystem, scopeAccess);
     const knowledgeApplications = new KnowledgeApplicationService(fileSystem, scopeAccess);
     const references = new ReferenceService(fileSystem, scopeAccess);
@@ -649,6 +649,15 @@ export function createServer(vaultPath, options = {}) {
         ? options.compilation.adapterFactory?.({ fs: fileSystem, access: scopeAccess, wiki: llmWiki, comparison: sourceComparison, authorize: compilationAuthorize }) : undefined);
     const compilation = new CompilationService({ fs: fileSystem, access: scopeAccess, readOnly,
         ...options.compilation, ...(compilationAdapter && { adapter: compilationAdapter }), authorize: compilationAuthorize });
+    if (options.evolution && options.evolutionRuntime)
+        throw new Error('Choose one evolution runtime connection');
+    const evolutionConnection = options.evolutionRuntime ? connectEvolutionRuntime(options.evolutionRuntime, {
+        auth: scopeAuth, access: scopeAccess, fs: fileSystem, moderation, refreshPolicy: refreshDocumentPolicy,
+        readOnly: Boolean(readOnly), adapters: { wiki: wikiEvolutionAdapter(compilation) },
+    }) : undefined;
+    const evolutionOptions = evolutionConnection?.options ?? options.evolution;
+    const evolution = evolutionConnection?.service ?? new EvolutionService({ ...evolutionOptions, readOnly: Boolean(readOnly || evolutionOptions?.readOnly) });
+    const evolutionOpportunity = new EvolutionOpportunity(evolutionConnection?.budget);
     const maintenance = new MaintenanceService({ fs: fileSystem, access: scopeAccess,
         ...(!readOnly && options.maintenance && { host: options.maintenance }),
         ...maintenanceExecution(scopeAuth, scopeAccess, moderation, refreshDocumentPolicy),
@@ -3726,10 +3735,11 @@ export function createServer(vaultPath, options = {}) {
     };
     installMcpHandlers(server);
     SERVER_RUNTIMES.set(server, {
+        ...(evolutionConnection && { evolutionHost: evolutionConnection.host }),
         runEvolutionOpportunity: async (request, principal, session) => {
-            if (readOnly || !options.evolution?.storage || !options.evolution.authority)
+            if (readOnly || !evolutionOptions?.storage || !evolutionOptions.authority)
                 return { status: 'diagnostic_only' };
-            return evolutionOpportunity.run(request, evolutionSessionBridge(evolution, principal, session));
+            return evolutionOpportunity.run(request, evolutionSessionBridge(evolution, principal, session), principal.accountId);
         },
         endpointRegistry,
         dispatchTool,

@@ -1,6 +1,10 @@
-export { createServer } from './createServer.js';
+export { createServer, getServerRuntime } from './createServer.js';
 export type { CreateServerOptions, ServerRuntime } from './createServer.js';
 export { EvolutionService } from './evolution/service.js';
+export { EvolutionRuntimeEvidence } from './evolution/runtime-evidence.js';
+export { EvolutionEvaluator } from './evolution/evaluator.js';
+export type { EvaluationProfile } from './evolution/evaluator.js';
+export type { EvolutionRuntimeConfig, EvolutionRuntimeHost } from './evolution/runtime-connection.js';
 export { loadEvolutionStorage } from './evolution/host.js';
 export { EvolutionOpportunity, evolutionSessionBridge } from './evolution/opportunity.js';
 export type { EvolutionOptions, EvolutionAdapter, Cycle } from './evolution/model.js';

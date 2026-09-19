@@ -47,6 +47,7 @@ export interface Cycle {
         sessionId: string;
         revision: string;
         success: boolean;
+        method?: 'static' | 'synthetic' | 'agent_behavior' | 'operational';
     };
     requests: {
         id: string;

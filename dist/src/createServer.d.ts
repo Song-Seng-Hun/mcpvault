@@ -9,6 +9,7 @@ import { type CodexHookConnectionOptions } from './codex-hook-connection.js';
 import type { CompilationPublicationOptions } from './compilation-publication-adapter.js';
 import type { EvolutionOptions } from './evolution/model.js';
 import { EvolutionOpportunity, type EvolutionSession } from './evolution/opportunity.js';
+import { type EvolutionRuntimeConfig, type EvolutionRuntimeHost } from './evolution/runtime-connection.js';
 import { type OwnerActivityRuntimeOptions } from './owner-activity-runtime.js';
 import { type DocumentAuthorityOptions } from './document-authority.js';
 import { type PublicFederationHostConfig } from './enterprise-federation.js';
@@ -51,6 +52,8 @@ export interface CreateServerOptions extends DocumentAuthorityOptions {
     skillEvolution?: SkillEvolutionHost;
     /** Trusted host evidence/authority only. Feature selection and client labels grant nothing. */
     evolution?: EvolutionOptions;
+    /** Concrete existing-account runtime; mutually exclusive with custom legacy callbacks. */
+    evolutionRuntime?: EvolutionRuntimeConfig;
     /** Private host admission only. Never request/Vault metadata; quarantine required. */
     reviewedSkills?: {
         host: ReviewedSkillHost;
@@ -83,12 +86,14 @@ export interface CreateServerOptions extends DocumentAuthorityOptions {
     commandCenterId?: string;
 }
 export interface ServerRuntime {
+    /** Trusted in-process host surface. Never registered as an MCP/REST endpoint. */
+    evolutionHost?: EvolutionRuntimeHost;
     endpointRegistry: EndpointRegistry;
     dispatchTool: (requestedToolName: string, args?: Record<string, unknown>) => Promise<any>;
     ensureEndpointRegistry: () => void;
     createRequestServer: () => Server;
     /** Existing approved host-session opportunity only; no MCP callable generator or new scheduler. */
-    runEvolutionOpportunity?: (request: Parameters<EvolutionOpportunity['run']>[0], principal: ScopePrincipal, session: Pick<EvolutionSession, 'authorize' | 'generate'>) => ReturnType<EvolutionOpportunity['run']>;
+    runEvolutionOpportunity?: (request: Parameters<EvolutionOpportunity['run']>[0], principal: ScopePrincipal, session: Pick<EvolutionSession, 'authorize' | 'generate' | 'metering'>) => ReturnType<EvolutionOpportunity['run']>;
 }
 export declare function getServerRuntime(server: Server): ServerRuntime | undefined;
 export declare function createServer(vaultPath: string, options?: CreateServerOptions): Server;

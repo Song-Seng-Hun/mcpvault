@@ -9,6 +9,7 @@ import { loadHostWorkStorage, type HostWorkWriter } from './host-work-storage.js
 import { loadCompilationHostConfig } from './compilation-host.js';
 import { loadEvolutionStorage } from './evolution/host.js';
 import { EvolutionRepository } from './evolution/repository.js';
+import { EvolutionRuntimeEvidence } from './evolution/runtime-evidence.js';
 
 type FixtureState = { version: 1; marker: string };
 const validate = (value: unknown): FixtureState & { enabled: boolean } => {
@@ -67,6 +68,22 @@ test('evolution records use private native storage, survive restart, and reject 
   expect((await next.index()).value.feedback).toEqual(['sample']);
   await writeFile(config, JSON.stringify({ version: 1, enabled: false, vaultPath: vault }), { mode: 0o600 });
   await expect(next.read('feedback', 'sample')).rejects.toThrow();
+});
+
+test('host evidence receipts survive native disk reopening without storing raw feedback or credentials', async () => {
+  await writeFile(config, JSON.stringify({ version: 1, enabled: true, vaultPath: vault }), { mode: 0o600 });
+  const principal: any = { accountId: 'alice', modelId: 'model', role: 'agent' };
+  const raw = { id: 'f', taskId: 't', sessionId: 's', target: { kind: 'persona', id: 'assistant' }, scope: { kind: 'account', id: 'alice' },
+    kind: 'preference', signal: 'explicit', key: 'verbosity', value: 'brief', summary: 'Private synthetic feedback marker', basis: [] };
+  const store = new EvolutionRuntimeEvidence({ storage: await loadEvolutionStorage(config, vault), authorize: async () => 'authority' });
+  const token = await store.captureFeedback(principal, raw, 'human', 'host-event');
+  const reopened = new EvolutionRuntimeEvidence({ storage: await loadEvolutionStorage(config, vault), authorize: async () => 'authority' });
+  expect(await reopened.attest(token, principal, raw)).toMatchObject({ origin: 'human', eventId: 'host-event' });
+  for (const name of (await readdir(hostRoot)).filter(name => name.includes('.record-'))) {
+    expect(await readFile(join(hostRoot, name), 'utf8')).not.toContain(raw.summary);
+  }
+  await writeFile(config, JSON.stringify({ version: 1, enabled: false, vaultPath: vault }), { mode: 0o600 });
+  await expect(reopened.attest(token, principal, raw)).rejects.toThrow();
 });
 
 test('a namespace lease does not block the other namespace', async () => {

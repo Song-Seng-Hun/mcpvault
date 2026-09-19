@@ -15,7 +15,8 @@ export interface Cycle {
   feedback: { id: string; revision: string }[]; basis: Evidence[]; authorityRevision: string;
   state: 'observed' | 'candidate' | 'evaluated' | 'applying' | 'reverting' | 'applied' | 'effect_verified' | 'review_required' | 'invalid' | 'withdrawn';
   baseline: ResourceSnapshot; candidate?: unknown; attempts: number; evaluation?: Evaluation; profileFingerprint?: string;
-  reason?: string; intent?: ApplyIntent; outputRevision?: string; effect?: { taskId: string; sessionId: string; revision: string; success: boolean };
+  reason?: string; intent?: ApplyIntent; outputRevision?: string; effect?: { taskId: string; sessionId: string; revision: string; success: boolean;
+    method?: 'static' | 'synthetic' | 'agent_behavior' | 'operational' };
   requests: { id: string; fingerprint: string }[];
 }
 export interface EvolutionAdapter {

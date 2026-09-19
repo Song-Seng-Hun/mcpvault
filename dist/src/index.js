@@ -1,5 +1,7 @@
-export { createServer } from './createServer.js';
+export { createServer, getServerRuntime } from './createServer.js';
 export { EvolutionService } from './evolution/service.js';
+export { EvolutionRuntimeEvidence } from './evolution/runtime-evidence.js';
+export { EvolutionEvaluator } from './evolution/evaluator.js';
 export { loadEvolutionStorage } from './evolution/host.js';
 export { EvolutionOpportunity, evolutionSessionBridge } from './evolution/opportunity.js';
 export { wikiEvolutionAdapter } from './evolution/wiki-adapter.js';

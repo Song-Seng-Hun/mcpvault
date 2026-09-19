@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 
-export type TargetKind = 'skill' | 'wiki' | 'persona' | 'computer' | 'fiction';
+export type TargetKind = 'skill' | 'wiki' | 'persona' | 'computer' | 'fiction' | 'harness';
 export interface Target { kind: TargetKind; id: string; path?: string }
 export interface Scope { kind: 'account' | 'owner' | 'project' | 'computer' | 'scene' | 'session'; id: string }
 export interface Evidence { path: string; revision: string }
@@ -28,7 +28,7 @@ export function text(v: unknown, max = 1000): string {
 }
 export function target(v: unknown): Target {
   const r = object(v, ['kind', 'id', 'path']);
-  if (!['skill', 'wiki', 'persona', 'computer', 'fiction'].includes(r.kind)) return unavailable();
+  if (!['skill', 'wiki', 'persona', 'computer', 'fiction', 'harness'].includes(r.kind)) return unavailable();
   return { kind: r.kind, id: id(r.id), ...(r.path === undefined ? {} : { path: text(r.path, 400) }) };
 }
 export function scope(v: unknown): Scope {
@@ -76,10 +76,13 @@ export interface Evaluation {
   cases: { id: string; split: string; baseline: boolean; candidate: boolean; withoutSkill?: boolean }[];
   baselineTokens?: number; candidateTokens?: number; withoutSkillTokens?: number;
   baselineMs?: number; candidateMs?: number;
+  trials?: EvaluationTrial[];
 }
+export type EvaluationTrial = Pick<Evaluation, 'cases' | 'safety' | 'baselineTokens' | 'candidateTokens' | 'withoutSkillTokens' | 'baselineMs' | 'candidateMs'>;
+export const median = (values: number[]): number => { const v = [...values].sort((a, b) => a - b); return v[Math.floor(v.length / 2)]!; };
 export function compareEvaluation(kind: TargetKind, e: Evaluation): { status: 'passed' | 'failed' | 'review_required'; reason: string } {
   const result = (status: 'passed' | 'failed' | 'review_required', reason: string) => ({ status, reason });
-  object(e, ['profileRevision', 'safety', 'targetCaseIds', 'cases', 'baselineTokens', 'candidateTokens', 'withoutSkillTokens', 'baselineMs', 'candidateMs', 'method', 'receiptHash']);
+  object(e, ['profileRevision', 'safety', 'targetCaseIds', 'cases', 'baselineTokens', 'candidateTokens', 'withoutSkillTokens', 'baselineMs', 'candidateMs', 'method', 'receiptHash', 'trials']);
   if (e.method !== undefined && !['static', 'synthetic', 'agent_behavior', 'operational'].includes(e.method)
     || e.receiptHash !== undefined && !/^[a-f0-9]{64}$/.test(e.receiptHash)) return result('review_required', 'invalid_evaluation_provenance');
   for (const c of e.cases ?? []) { object(c, ['id', 'split', 'baseline', 'candidate', 'withoutSkill']); id(c.id); }
@@ -89,7 +92,32 @@ export function compareEvaluation(kind: TargetKind, e: Evaluation): { status: 'p
     || e.targetCaseIds.some(id => !e.cases.some(c => c.id === id)) || !e.cases.some(c => c.split === 'holdout')) return result('review_required', 'incomplete_evaluation');
   if (e.safety !== true || e.cases.some(c => c.baseline && !c.candidate)) return result('failed', 'safety_or_regression');
   if (e.cases.some(c => e.targetCaseIds.includes(c.id) && !c.candidate)) return result('review_required', 'target_not_resolved');
-  const cost = (a?: number, b?: number) => Number.isFinite(a) && Number.isFinite(b) && a! >= 0 && b! >= 0 && b! < a!;
+  const cost = (a?: number, b?: number) => Number.isFinite(a) && Number.isFinite(b) && a! > 0 && b! >= 0 && b! <= a! * 0.9;
+  if (e.method === 'agent_behavior' || e.method === 'operational') {
+    if (!Array.isArray(e.trials) || e.trials.length !== 3) return result('review_required', 'paired_trials_required');
+    for (const trial of e.trials) {
+      object(trial, ['cases', 'safety', 'baselineTokens', 'candidateTokens', 'withoutSkillTokens', 'baselineMs', 'candidateMs']);
+      if (!Array.isArray(trial.cases) || hash(trial.cases.map(c => [c.id, c.split])) !== hash(e.cases.map(c => [c.id, c.split]))) return result('review_required', 'paired_trials_required');
+      const verdict = compareEvaluation(kind, { ...trial, profileRevision: e.profileRevision, targetCaseIds: e.targetCaseIds, method: 'synthetic' });
+      if (verdict.status === 'failed') return verdict;
+      if (verdict.reason === 'missing_skill_free_baseline' || verdict.reason === 'incomplete_evaluation') return verdict;
+      if (trial.cases.some(c => e.targetCaseIds.includes(c.id) && !c.candidate)) return result('review_required', 'target_not_resolved');
+    }
+    const measured = (key: keyof EvaluationTrial): number | undefined => {
+      const values = e.trials!.map(t => t[key]);
+      return values.every(v => typeof v === 'number' && Number.isFinite(v) && v >= 0) ? median(values as number[]) : undefined;
+    };
+    // Never trust self-reported aggregate metrics in place of paired observations.
+    const measuredEvaluation: Evaluation = { ...e, cases: e.cases.map(c => ({ ...c,
+      baseline: e.trials!.some(t => t.cases.find(x => x.id === c.id)!.baseline),
+      candidate: e.trials!.every(t => t.cases.find(x => x.id === c.id)!.candidate),
+      ...(kind === 'skill' && { withoutSkill: e.trials!.every(t => t.cases.find(x => x.id === c.id)!.withoutSkill === true) }),
+    })) };
+    for (const key of ['baselineTokens', 'candidateTokens', 'withoutSkillTokens', 'baselineMs', 'candidateMs'] as const) {
+      delete measuredEvaluation[key]; const value = measured(key); if (value !== undefined) measuredEvaluation[key] = value;
+    }
+    e = measuredEvaluation;
+  }
   if (kind === 'skill') {
     if (e.cases.some(c => typeof c.withoutSkill !== 'boolean')) return result('review_required', 'missing_skill_free_baseline');
     if (e.cases.every(c => c.withoutSkill || !c.candidate) && !cost(e.withoutSkillTokens, e.candidateTokens)) return result('review_required', 'skill_unnecessary');

@@ -18,7 +18,7 @@ export function text(v, max = 1000) {
 }
 export function target(v) {
     const r = object(v, ['kind', 'id', 'path']);
-    if (!['skill', 'wiki', 'persona', 'computer', 'fiction'].includes(r.kind))
+    if (!['skill', 'wiki', 'persona', 'computer', 'fiction', 'harness'].includes(r.kind))
         return unavailable();
     return { kind: r.kind, id: id(r.id), ...(r.path === undefined ? {} : { path: text(r.path, 400) }) };
 }
@@ -68,9 +68,10 @@ export function repetitionReady(feedback, now) {
         && Date.parse(f.observedAt) <= now && Date.parse(f.observedAt) >= now - 30 * 86400000);
     return new Set(valid.map(f => f.eventId)).size >= 3 && new Set(valid.map(f => f.taskId)).size >= 3 && new Set(valid.map(f => f.sessionId)).size >= 2;
 }
+export const median = (values) => { const v = [...values].sort((a, b) => a - b); return v[Math.floor(v.length / 2)]; };
 export function compareEvaluation(kind, e) {
     const result = (status, reason) => ({ status, reason });
-    object(e, ['profileRevision', 'safety', 'targetCaseIds', 'cases', 'baselineTokens', 'candidateTokens', 'withoutSkillTokens', 'baselineMs', 'candidateMs', 'method', 'receiptHash']);
+    object(e, ['profileRevision', 'safety', 'targetCaseIds', 'cases', 'baselineTokens', 'candidateTokens', 'withoutSkillTokens', 'baselineMs', 'candidateMs', 'method', 'receiptHash', 'trials']);
     if (e.method !== undefined && !['static', 'synthetic', 'agent_behavior', 'operational'].includes(e.method)
         || e.receiptHash !== undefined && !/^[a-f0-9]{64}$/.test(e.receiptHash))
         return result('review_required', 'invalid_evaluation_provenance');
@@ -87,7 +88,40 @@ export function compareEvaluation(kind, e) {
         return result('failed', 'safety_or_regression');
     if (e.cases.some(c => e.targetCaseIds.includes(c.id) && !c.candidate))
         return result('review_required', 'target_not_resolved');
-    const cost = (a, b) => Number.isFinite(a) && Number.isFinite(b) && a >= 0 && b >= 0 && b < a;
+    const cost = (a, b) => Number.isFinite(a) && Number.isFinite(b) && a > 0 && b >= 0 && b <= a * 0.9;
+    if (e.method === 'agent_behavior' || e.method === 'operational') {
+        if (!Array.isArray(e.trials) || e.trials.length !== 3)
+            return result('review_required', 'paired_trials_required');
+        for (const trial of e.trials) {
+            object(trial, ['cases', 'safety', 'baselineTokens', 'candidateTokens', 'withoutSkillTokens', 'baselineMs', 'candidateMs']);
+            if (!Array.isArray(trial.cases) || hash(trial.cases.map(c => [c.id, c.split])) !== hash(e.cases.map(c => [c.id, c.split])))
+                return result('review_required', 'paired_trials_required');
+            const verdict = compareEvaluation(kind, { ...trial, profileRevision: e.profileRevision, targetCaseIds: e.targetCaseIds, method: 'synthetic' });
+            if (verdict.status === 'failed')
+                return verdict;
+            if (verdict.reason === 'missing_skill_free_baseline' || verdict.reason === 'incomplete_evaluation')
+                return verdict;
+            if (trial.cases.some(c => e.targetCaseIds.includes(c.id) && !c.candidate))
+                return result('review_required', 'target_not_resolved');
+        }
+        const measured = (key) => {
+            const values = e.trials.map(t => t[key]);
+            return values.every(v => typeof v === 'number' && Number.isFinite(v) && v >= 0) ? median(values) : undefined;
+        };
+        // Never trust self-reported aggregate metrics in place of paired observations.
+        const measuredEvaluation = { ...e, cases: e.cases.map(c => ({ ...c,
+                baseline: e.trials.some(t => t.cases.find(x => x.id === c.id).baseline),
+                candidate: e.trials.every(t => t.cases.find(x => x.id === c.id).candidate),
+                ...(kind === 'skill' && { withoutSkill: e.trials.every(t => t.cases.find(x => x.id === c.id).withoutSkill === true) }),
+            })) };
+        for (const key of ['baselineTokens', 'candidateTokens', 'withoutSkillTokens', 'baselineMs', 'candidateMs']) {
+            delete measuredEvaluation[key];
+            const value = measured(key);
+            if (value !== undefined)
+                measuredEvaluation[key] = value;
+        }
+        e = measuredEvaluation;
+    }
     if (kind === 'skill') {
         if (e.cases.some(c => typeof c.withoutSkill !== 'boolean'))
             return result('review_required', 'missing_skill_free_baseline');

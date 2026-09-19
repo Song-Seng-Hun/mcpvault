@@ -22,7 +22,7 @@ test('one opportunity is one cycle, at most two candidates and one refinement', 
     generate: async () => ({ candidate: { index: ++generated } }),
     evaluate: async () => ({ status: generated === 1 ? 'review_required' : 'evaluated', revision: `r${generated}` }),
     apply: async () => { applied++; return { status: 'applied' }; } };
-  expect((await runner.run({ cycleId: 'one', newEvidence: true }, session)).status).toBe('applied');
+  expect((await runner.run({ cycleId: 'one', newEvidence: true, explicit: true }, session)).status).toBe('applied');
   expect([generated, applied]).toEqual([2, 1]);
 });
 test('late generator after cancellation cannot evaluate or apply, and does not overlap another opportunity', async () => {
@@ -30,11 +30,20 @@ test('late generator after cancellation cannot evaluate or apply, and does not o
   const session: any = { authorize: async () => {}, current: async () => ({ status: 'observed', attempts: 0, revision: 'r' }),
     generate: async () => new Promise(resolve => { release = resolve; }),
     evaluate: async () => { writes++; return {}; }, apply: async () => { writes++; return {}; } };
-  const pending = runner.run({ cycleId: 'one', newEvidence: true, signal: cancel.signal }, session);
+  const pending = runner.run({ cycleId: 'one', newEvidence: true, explicit: true, signal: cancel.signal }, session);
   while (!release) await new Promise(resolve => setTimeout(resolve, 0));
   expect((await runner.run({ cycleId: 'two', newEvidence: true }, session)).status).toBe('deferred');
   cancel.abort(); expect((await pending).status).toBe('interrupted');
   expect((await runner.run({ cycleId: 'two', newEvidence: true }, session)).status).toBe('deferred');
   release({ candidate: {} }); await new Promise(resolve => setTimeout(resolve, 0));
   expect(writes).toBe(0);
+});
+
+test('automatic opportunities without verified metering never call the model', async () => {
+  let generated = 0;
+  const session: any = { authorize: async () => {}, current: async () => ({ status: 'observed', attempts: 0 }),
+    generate: async () => { generated++; throw Error('must not run'); } };
+  expect(await new EvolutionOpportunity().run({ cycleId: 'automatic', newEvidence: true }, session))
+    .toMatchObject({ status: 'diagnostic_only', reason: 'automatic_usage_unavailable' });
+  expect(generated).toBe(0);
 });
