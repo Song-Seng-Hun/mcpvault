@@ -46,5 +46,5 @@ The exact dead-writer marker was backed up and removed; host history stayed unch
 Live existing-task resume, body read and revision-linked observation completed.
 Owned marker absent afterward; recovery backup matches. No new access settings.
 Fresh authenticated reread found one completed observation; no read replay or effect claim.
-Real NAS curation and next-use effects remain separate and unproven.
+Later both candidate lists were ready with zero returned; real curation/next-use effects remain zero.
 Skills last counted: metadata 186/1610 (11.55%); active 0/1610 (0.00%); not recounted.

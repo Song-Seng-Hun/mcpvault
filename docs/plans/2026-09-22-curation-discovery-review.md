@@ -46,5 +46,5 @@ Whole-plan completion still requires eligible managed targets, application and n
 Targets/build passed; full: 566 files, 7,437 passed, 4 platform skips, zero failed; basis 23e96a7a.
 Earlier interrupted coverage was not reused. Release 20260922-curation-discovery-r2 was deployed.
 Canonical bytes/checkpoints and rollback release are preserved; authenticated basic reads pass.
-Live candidates remain diagnostic-only; actual curation application and next-use effects remain zero.
+After background preparation both live candidate lists completed: zero returned; application/next-use effects remain zero.
 [Cleanup follow-up](2026-09-22-host-lease-cleanup.md) repaired task resume/read observations; source bodies are not logged.
