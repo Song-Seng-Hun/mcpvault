@@ -87,6 +87,59 @@ test('cold/incomplete captures never fall back to a foreground scan', async () =
   await expect(fs.previewDeleteNote({ path: 'Target.md' }, () => true, budget)).rejects.toThrow();
 }, 30000);
 
+test('periodic reconciliation nudges join the ongoing full census instead of restarting it', async () => {
+  const { fs } = await setup();
+  await writeFile(join(fs.getVaultPath(), 'Target.md'), 'Target');
+  const catalog = new VaultFileCatalog(fs.getVaultPath(), new PathFilter());
+  const subscribe = vi.spyOn(catalog, 'subscribeReconcile');
+  const index = new ReferenceImpactIndex(fs, join(roots.at(-1)!, 'private'), catalog); indexes.push(index);
+  const enumerate = fs.referenceFiles.bind(fs); let scans = 0;
+  // Inject the actual catalog subscriber during a real filesystem/SQLite census.
+  // Limit the old implementation to four scans so a regression cannot hang CI.
+  vi.spyOn(fs, 'referenceFiles').mockImplementation(async function* () {
+    scans++;
+    for await (const path of enumerate()) {
+      if (scans < 4) subscribe.mock.calls[0]![0]();
+      await expect(index.capture('Target.md', () => true)).rejects.toThrow('Reference integrity unavailable');
+      yield path;
+    }
+  });
+  try {
+    await index.start();
+    expect(index.status()).toBe('ready');
+    expect((await index.capture('Target.md', () => true)).candidates).toEqual([]);
+    expect(scans).toBe(1);
+  } finally { catalog.close(); }
+}, 30000);
+
+test('explicit invalidation during a census is not coalesced as a periodic nudge', async () => {
+  const { fs, index } = await setup(); await writeFile(join(fs.getVaultPath(), 'Target.md'), 'Target');
+  const enumerate = fs.referenceFiles.bind(fs); let scans = 0;
+  vi.spyOn(fs, 'referenceFiles').mockImplementation(async function* () {
+    scans++;
+    for await (const path of enumerate()) {
+      if (scans === 1) void index.invalidate();
+      yield path;
+    }
+  });
+  await index.start(); expect(scans).toBe(2); expect(index.status()).toBe('ready');
+  expect((await index.capture('Target.md', () => true)).candidates).toEqual([]);
+}, 30000);
+
+test('confirmed deletion removes only its reference postings without forcing a new full census', async () => {
+  const { fs, index } = await setup();
+  await writeFile(join(fs.getVaultPath(), 'Target.md'), 'Target');
+  await writeFile(join(fs.getVaultPath(), 'Source.md'), '[[Target]]');
+  await index.start(); const enumerate = vi.spyOn(fs, 'referenceFiles');
+  await index.invalidate([{ path: 'Source.md', kind: 'delete' }]);
+  expect((await index.capture('Target.md', () => true)).candidates.map(p => p.path)).toEqual(['Source.md']);
+  await rm(join(fs.getVaultPath(), 'Source.md'));
+  await index.invalidate([{ path: 'Source.md', kind: 'delete' }]);
+  expect(index.status()).toBe('ready');
+  expect((await index.capture('Target.md', () => true)).candidates).toEqual([]);
+  expect(enumerate).not.toHaveBeenCalled();
+}, 30000);
+
 test('hidden/fiction/draft candidates cannot turn into an empty integrity result or leak their identity', async () => {
   const { fs, index } = await setup(); await writeFile(join(fs.getVaultPath(), 'Target.md'), 'Target');
   await writeFile(join(fs.getVaultPath(), 'Secret.markdown'), '---\ncontent_domain: fiction\nstatus: draft\n---\n[[Target]]');
@@ -106,6 +159,10 @@ test('new references, access withdrawal, target edits and NAS loss invalidate ca
   const edited = await index.capture('Target.md', () => true); await writeFile(join(fs.getVaultPath(), 'Target.md'), 'Manual edit');
   await expect(edited.assertCurrent()).rejects.toThrow();
   const vault = fs.getVaultPath(); await rename(vault, vault + '-offline');
-  try { await expect(index.capture('Target.md', () => true)).rejects.toThrow(); }
+  try {
+    await index.invalidate([{ path: 'New.md', kind: 'delete' }]);
+    expect(index.status()).toBe('unavailable');
+    await expect(index.capture('Target.md', () => true)).rejects.toThrow();
+  }
   finally { await rename(vault + '-offline', vault); }
 }, 30000);

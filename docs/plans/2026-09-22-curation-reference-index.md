@@ -7,7 +7,7 @@ use_when: Enabling or reviewing indexed managed archive and merge checks.
 position: Integrity chapter; complements scoped graph discovery, not C1-C3 completion.
 parent: 2026-09-20-curation.md
 previous: 2026-09-21-curation-owner-route.md
-next: 2026-09-20-curation-contract.md
+next: 2026-09-22-curation-refresh.md
 ---
 # Reference integrity (참조 무결성)
 Baseline main 89bdae3a2. No account, certificate, ACL or original changes.

@@ -38,7 +38,7 @@ Target suite: 8 files / 131 tests passed; build passed; UML contract valid.
 Tests use real SQLite and isolated filesystem services. Attack/race fixtures
 include a new reference after async authorization, which prevents the write.
 Actual NAS curation and next-use effects remain unverified; do not infer them.
-Deployed runtime passes normal-account read diagnostics; initial index is preparing.
+Deployed runtime passes normal-account reads; later status-only probes observed ready.
 Full same-source run: 563 files; 7,408 passed, 4 skipped, zero failed.
 Unknown filesystem events force background reconciliation, not a full request scan.
 Conservative collisions/overflow may require review; they do not authorize deletion.

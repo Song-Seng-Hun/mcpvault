@@ -36,10 +36,16 @@ export class ReferenceImpactIndex {
     private readonly canIndex: (path: string) => boolean = () => true) {
     this.storage = new HostDerivedStorage(fs.getVaultPath(), cacheDir);
     if (catalog) this.unsubscribes = [catalog.subscribeIntegrity(path => { void this.invalidate(path ? [{ path, kind: 'upsert' }] : undefined); }),
-      catalog.subscribeReconcile(() => { void this.invalidate(); })];
+      catalog.subscribeReconcile(() => { void this.reconcile(); })];
   }
   start() { if (this.state === 'cold') this.state = 'preparing'; return this.invalidate(); }
   status() { return this.state; }
+  private reconcile() {
+    // A periodic census is a request to inspect, not evidence of a change.
+    // Join the already-running whole census. Actual watcher/policy invalidations
+    // still advance revision and queue their work through invalidate().
+    return this.reconciling ? this.tail : this.invalidate();
+  }
   invalidate(changes?: readonly VaultCatalogChange[]) {
     if (this.state === 'closed' || changes?.length === 0) return this.tail;
     this.revision++;
@@ -88,8 +94,12 @@ export class ReferenceImpactIndex {
       await this.store!.putReferenceDocuments([{ path, revision: note.revision, frontmatter: note.frontmatter, text: note.content }]);
     } catch (error) {
       // A watcher deletion is only a hint. Never sweep on a disconnected NAS.
-      if (!allowMissing || (error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-      await stat(this.fs.getVaultPath()); await this.store!.removeReferenceDocuments([path]);
+      const code = (error as NodeJS.ErrnoException).code
+        ?? (error instanceof Error ? (error.cause as NodeJS.ErrnoException | undefined)?.code : undefined);
+      if (!allowMissing || code !== 'ENOENT') throw error;
+      await stat(this.fs.getVaultPath());
+      if (!this.canIndex(path)) throw unavailable();
+      await this.store!.removeReferenceDocuments([path]);
     }
   }
   private async rebuild() {

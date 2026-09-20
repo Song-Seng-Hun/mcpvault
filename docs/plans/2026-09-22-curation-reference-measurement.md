@@ -42,7 +42,7 @@ No reference-only row appears in memory retrieval after ingestion.
 
 Full same-source regression: 563 files, 7,408 passed, 4 skipped, zero failed.
 Target tests/build pass; isolated indexed merge reread/exact rollback pass.
-NAS runtime deployed; existing non-admin MCP diagnostics pass; initial index preparing.
+NAS runtime deployed; existing non-admin reads pass; status-only probes observed ready.
 Original/world/economy bytes preserved. Real curation/next use: 0/0; no new grants.
 Search Recall/MRR, semantic preservation and actual task cost are not measured here.
 This is not million-document automatic-curation or NAS consistency certification.

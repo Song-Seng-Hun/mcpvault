@@ -31,6 +31,7 @@ export declare class ReferenceImpactIndex {
     constructor(fs: FileSystemService, cacheDir: string, catalog?: VaultFileCatalog | undefined, canIndex?: (path: string) => boolean);
     start(): Promise<void>;
     status(): "closed" | "cold" | "preparing" | "ready" | "unavailable";
+    private reconcile;
     invalidate(changes?: readonly VaultCatalogChange[]): Promise<void>;
     private closed;
     private refresh;
