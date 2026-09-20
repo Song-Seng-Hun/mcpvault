@@ -162,17 +162,16 @@ export declare class CommunityFeaturesService {
         deleteEntry?: boolean;
         expectedRevision?: string;
     }): Promise<{
-        truncated?: never;
-        path?: never;
         success: boolean;
         deleted: boolean;
         entryId: string | undefined;
+        path?: never;
         owner?: never;
         entries?: never;
         total?: never;
+        truncated?: never;
         nextCursor?: never;
     } | {
-        truncated?: never;
         deleted?: never;
         success: boolean;
         entryId: string;
@@ -180,12 +179,13 @@ export declare class CommunityFeaturesService {
         path: string;
         entries?: never;
         total?: never;
+        truncated?: never;
         nextCursor?: never;
     } | {
-        path?: never;
         deleted?: never;
         success?: never;
         entryId?: never;
+        path?: never;
         owner: string;
         entries: {
             path: string;

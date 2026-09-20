@@ -35,6 +35,8 @@ export interface CompilationOptions {
   fs: FileSystemService; access: ScopeAccessPolicy; host?: CompilationHost; readOnly?: boolean;
   authorize(accountId: string): Promise<ScopePrincipal | undefined>;
   runtime?(principal: ScopePrincipal, operation: CompilationOperation, paths: readonly string[]): Promise<CompilationRuntime | undefined>;
+  /** Verifies only server-owned structural processing; never used for generated drafts. */
+  structuralRuntime?: CompilationOptions['runtime'];
   adapter?: CompilationAdapter;
   /** Trusted restriction-only store; persists inherited policy before accepting draft bytes. */
   protectSources?(job: Readonly<CompilationJob>, assertCurrent: () => Promise<void>): Promise<void>;

@@ -20,6 +20,7 @@ import { canonicalRoleplayPath } from './src/roleplay-storage-host.js';
 import { loadExplanationHostConfig } from './src/explanation-host.js';
 import { loadBenchmarkHostConfig } from './src/benchmark-host.js';
 import { acquireBenchmarkWriter } from './src/benchmark-runtime.js';
+import { builtinVerbatimRuntime } from './src/compilation-local-runtime.js';
 import { existsSync, readFileSync } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, join, resolve } from "path";
@@ -172,9 +173,9 @@ try {
         ...(evolutionStorage && { evolutionRuntime: { storage: evolutionStorage } }),
         ...(reviewedHost && { reviewedSkills: reviewedHost.reviewedSkills }),
         ...(maintenance && { maintenance }),
-        // A configuration file is not execution attestation. CLI admission stays
-        // waiting without a real host verifier and validated application adapter.
-        ...(compilationHost && { compilation: { host: compilationHost } }),
+        // Only code-owned verbatim processing is attested here. Generated content
+        // still requires a separate real execution verifier; no inference fallback.
+        ...(compilationHost && { compilation: { host: compilationHost, structuralRuntime: builtinVerbatimRuntime } }),
         // A legacy bridge cannot verify the execution behind a client. A policy
         // file alone must not turn labels or localhost into runtime attestation.
         ...(reviewedHost ? { ownerActivity: reviewedHost.ownerActivity } : ownerConsentPath ? { ownerActivity: { ...await loadOwnerActivityHostConfig(resolve(ownerConsentPath), vaultPath), execution: () => undefined } } : {}),

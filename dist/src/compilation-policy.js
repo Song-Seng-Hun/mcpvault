@@ -63,14 +63,16 @@ export function validateCompilationConfig(value) {
             return v;
         }), v => v);
         const chapterBundles = p.chapterBundles === undefined ? undefined : unique(array(p.chapterBundles, 64, value => {
-            const b = record(value, ['documentPath', 'documentId', 'chapterRoot', 'publication']);
+            const b = record(value, ['documentPath', 'documentId', 'chapterRoot', 'publication', 'processing']);
             const documentPath = compilationPath(b.documentPath);
             if (!isDocumentBundleId(b.documentId) || !ordinaryCompilationDocument(documentPath)
                 || !sources.some(source => source.path === documentPath) || typeof b.chapterRoot !== 'string'
                 || /[#\[\]^]/.test(b.chapterRoot) || !ordinaryCompilationDocument(compilationPath(`${b.chapterRoot}/chapter.md`))
-                || b.publication !== undefined && b.publication !== 'verbatim')
+                || b.publication !== undefined && b.publication !== 'verbatim'
+                || b.processing !== undefined && b.processing !== 'verbatim')
                 throw invalid();
-            return { documentPath, documentId: b.documentId, chapterRoot: b.chapterRoot, ...(b.publication && { publication: b.publication }) };
+            return { documentPath, documentId: b.documentId, chapterRoot: b.chapterRoot,
+                ...(b.publication && { publication: b.publication }), ...(b.processing && { processing: b.processing }) };
         }), grant => grant.documentPath.toLowerCase());
         return { id: p.id, ruleVersion: p.ruleVersion, sources, outputPaths, runtimeIds, operations,
             ...(chapterBundles && { chapterBundles }) };

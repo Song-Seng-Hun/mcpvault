@@ -9,7 +9,7 @@ import { isDocumentBundleId } from './document-bundle-identities.js';
 export const COMPILATION_OPERATIONS = ['index', 'synthesize', 'embed', 'vision', 'convert'] as const;
 export type CompilationOperation = typeof COMPILATION_OPERATIONS[number];
 export interface CompilationSourcePolicy { path: string; classification: 'resolved' | 'unresolved'; mode: 'source_only' | 'synthesis_allowed' }
-export interface CompilationBundleGrant { documentPath: string; documentId: string; chapterRoot: string; publication?: 'verbatim' }
+export interface CompilationBundleGrant { documentPath: string; documentId: string; chapterRoot: string; publication?: 'verbatim'; processing?: 'verbatim' }
 export interface CompilationProject {
   id: string; ruleVersion: string; sources: CompilationSourcePolicy[]; outputPaths: string[];
   runtimeIds: string[]; operations: CompilationOperation[];
@@ -72,13 +72,15 @@ export function validateCompilationConfig(value: unknown): CompilationConfig {
       if (!(COMPILATION_OPERATIONS as readonly unknown[]).includes(v)) throw invalid(); return v as CompilationOperation;
     }), v => v);
     const chapterBundles = p.chapterBundles === undefined ? undefined : unique(array(p.chapterBundles, 64, value => {
-      const b = record(value, ['documentPath', 'documentId', 'chapterRoot', 'publication']);
+      const b = record(value, ['documentPath', 'documentId', 'chapterRoot', 'publication', 'processing']);
       const documentPath = compilationPath(b.documentPath);
       if (!isDocumentBundleId(b.documentId) || !ordinaryCompilationDocument(documentPath)
         || !sources.some(source => source.path === documentPath) || typeof b.chapterRoot !== 'string'
         || /[#\[\]^]/.test(b.chapterRoot) || !ordinaryCompilationDocument(compilationPath(`${b.chapterRoot}/chapter.md`))
-        || b.publication !== undefined && b.publication !== 'verbatim') throw invalid();
-      return { documentPath, documentId: b.documentId, chapterRoot: b.chapterRoot, ...(b.publication && { publication: b.publication as 'verbatim' }) };
+        || b.publication !== undefined && b.publication !== 'verbatim'
+        || b.processing !== undefined && b.processing !== 'verbatim') throw invalid();
+      return { documentPath, documentId: b.documentId, chapterRoot: b.chapterRoot,
+        ...(b.publication && { publication: b.publication as 'verbatim' }), ...(b.processing && { processing: b.processing as 'verbatim' }) };
     }), grant => grant.documentPath.toLowerCase());
     return { id: p.id as string, ruleVersion: p.ruleVersion as string, sources, outputPaths, runtimeIds, operations,
       ...(chapterBundles && { chapterBundles }) };

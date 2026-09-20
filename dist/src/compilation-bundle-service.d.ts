@@ -1,7 +1,7 @@
 import type { CompilationOptions } from './compilation-service.js';
 import type { ScopePrincipal } from './scope-auth.js';
 import { type PublicationBoundary } from './compilation-publication.js';
-/** Private preservation only. No generation, publication, or Vault writes.
+/** Private preservation and projections; physical writes delegate to publication.
  * A journal receipt is not a grant. Every return rechecks current admission. */
 export declare class CompilationBundleService {
     private readonly options;

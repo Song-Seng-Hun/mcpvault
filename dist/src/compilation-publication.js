@@ -7,6 +7,7 @@ import { bundleRecordId, parseCompilationBundle, parseBundleOriginal } from './c
 import { planVerbatimSplit } from './compilation-split-plan.js';
 import { isDocumentBundleId } from './document-bundle-identities.js';
 import { isMissingVaultPath } from './vault-read-errors.js';
+import { bundleExecution } from './compilation-local-runtime.js';
 function fail() { throw guidanceError(Error('Document publication unavailable; preserve journal and revalidate'), 'guid-65dd9939e4509847'); }
 // Host principal enumeration has no transport session receipt. Match current
 // authority fields; the request boundary separately verifies session validity.
@@ -46,6 +47,7 @@ export class CompilationPublication {
         const grant = project?.chapterBundles?.find(x => x.documentPath === bundle.documentPath && x.documentId === bundle.documentId && x.chapterRoot === bundle.chapterRoot);
         if (!config.enabled || !project || grant?.publication !== 'verbatim')
             return { status: 'diagnostic_only', reason: 'explicit_publication_grant_required' };
+        const execution = bundleExecution(this.options, grant, bundle.mode);
         const plan = planVerbatimSplit(bundle.documentPath, original.text, { documentId: bundle.documentId, bundleId: bundle.bundleId,
             chapterRoot: bundle.chapterRoot, ruleVersion: project.ruleVersion });
         if (plan.status !== 'ready')
@@ -63,10 +65,10 @@ export class CompilationPublication {
             const fresh = validateCompilationConfig(await host.refresh());
             if (compilationHash(fresh) !== compilationHash(config))
                 fail();
-            const runtime = await this.options.runtime?.(actor, 'synthesize', [bundle.documentPath]);
+            const runtime = await execution.runtime?.(actor, execution.operation, [bundle.documentPath]);
             const admitted = inspectCompilationPolicy({ config: { ...fresh, projects: [{ ...project, outputPaths: [bundle.documentPath] }] },
                 projectId: project.id, principal: actor, access, paths: [bundle.documentPath], outputPath: bundle.documentPath,
-                operation: 'synthesize', ...(runtime && { runtime }) });
+                operation: execution.operation, ...(runtime && { runtime }) });
             if (admitted.status !== 'ready')
                 fail();
             return compilationHash({ source: admitted.sourceFingerprint, config: fresh, actor: actorKey(actor) });
@@ -104,10 +106,10 @@ export class CompilationPublication {
                 fail();
             // Only the original grant basis can start publication. A current ACL is
             // not enough to adopt a preservation made under unrelated conditions.
-            const runtime = await this.options.runtime?.(principal, 'synthesize', [bundle.documentPath]);
+            const runtime = await execution.runtime?.(principal, execution.operation, [bundle.documentPath]);
             const base = inspectCompilationPolicy({ config: { ...config, projects: [{ ...project, outputPaths: [bundle.documentPath] }] },
                 projectId: project.id, principal, access, paths: [bundle.documentPath], outputPath: bundle.documentPath,
-                operation: 'synthesize', ...(runtime && { runtime }) });
+                operation: execution.operation, ...(runtime && { runtime }) });
             if (base.status !== 'ready' || compilationHash({ policy: base.fingerprint, grant,
                 outputRestrictions: access.documentDependencyFingerprint([`${bundle.chapterRoot}/chapter.md`]) }) !== bundle.authority)
                 fail();
@@ -146,6 +148,13 @@ export class CompilationPublication {
                 || (await records.read(bundleRecordId('original', bundle.bundleId))).revision !== originalRecord.revision
                 || (await records.read(recordId)).revision !== record.revision)
                 fail();
+            if (!originalRead && ['applied', 'withdrawn'].includes(status)) {
+                const actual = await inspect(), applied = status === 'applied';
+                if (actual.source !== (applied ? compilationContentHash(plan.toc) : bundle.sourceRevision)
+                    || applied && actual.children.some((r, i) => r !== plan.chapters[i].revision)
+                    || canonical(rule()) !== canonical(applied ? released() : held()))
+                    fail();
+            }
             const result = view(status);
             if (JSON.stringify(result).length > maxChars) {
                 result.partial = true;
@@ -223,6 +232,27 @@ export class CompilationPublication {
                 fail();
             await guard();
             const save = async () => { record = { ...(await records.write(recordId, job, record.revision, async () => { await guard(); await writer.assertHeld(); })), value: job }; };
+            // Reconcile durable completion before the retry budget. This writes only
+            // the receipt, never replays a completed cutover after a lost response.
+            if (job && (op === 'split_apply' && canonical(rule()) === canonical(released())
+                || op === 'split_revert' && job.state === 'reverting' && canonical(rule()) === canonical(held()))) {
+                const actual = await inspect();
+                if (actual.source === (op === 'split_apply' ? compilationContentHash(plan.toc) : bundle.sourceRevision)
+                    && (op === 'split_revert' || actual.children.every((r, i) => r === plan.chapters[i].revision))) {
+                    if (!duplicate) {
+                        if (job.requests.length >= 8)
+                            fail();
+                        job.requests.push({ id: p.requestId, operation: op });
+                    }
+                    job.state = op === 'split_apply' ? 'applied' : 'withdrawn';
+                    await save();
+                    return output(job.state);
+                }
+            }
+            // Publication exhaustion must not disable recovery. Withdrawal has its
+            // own three attempts, and state transitions cannot reset that budget.
+            if (job && op === 'split_revert' && job.state !== 'reverting')
+                job.attempts = 0;
             if (job && job.attempts >= 3)
                 return output('review_required');
             job ??= { version: 1, bundleId: bundle.bundleId, fingerprint: owner, authority, sources, state: 'applying', attempts: 0, requests: [] };

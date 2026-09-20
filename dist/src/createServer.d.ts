@@ -43,7 +43,7 @@ export interface CreateServerOptions extends DocumentAuthorityOptions {
      * model runtime, or implicit grant from feature/maintenance selection. */
     codexHooks?: CodexHookConnectionOptions;
     /** Separate host approval and actual execution verifier; never client/feature authority. */
-    compilation?: Pick<CompilationOptions, 'host' | 'runtime' | 'adapter'> & {
+    compilation?: Pick<CompilationOptions, 'host' | 'runtime' | 'structuralRuntime' | 'adapter'> & {
         /** Trusted host code only; factory selection is not an execution grant.
          * Current host config, runtime, account and source gates still apply. */
         adapterFactory?: (services: CompilationPublicationOptions) => NonNullable<CompilationOptions['adapter']>;

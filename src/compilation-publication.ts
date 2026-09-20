@@ -9,6 +9,7 @@ import { bundleRecordId, parseCompilationBundle, parseBundleOriginal } from './c
 import { planVerbatimSplit } from './compilation-split-plan.js';
 import { isDocumentBundleId } from './document-bundle-identities.js';
 import { isMissingVaultPath } from './vault-read-errors.js';
+import { bundleExecution } from './compilation-local-runtime.js';
 
 /** Request-local, code-owned policy transition. Never accepted from MCP JSON. */
 export interface PublicationBoundary { sources: readonly string[]; update(operation: () => Promise<void>): Promise<void> }
@@ -49,6 +50,7 @@ export class CompilationPublication {
     const project = config.projects.find(x => x.id === bundle.projectId);
     const grant = project?.chapterBundles?.find(x => x.documentPath === bundle.documentPath && x.documentId === bundle.documentId && x.chapterRoot === bundle.chapterRoot);
     if (!config.enabled || !project || grant?.publication !== 'verbatim') return { status: 'diagnostic_only', reason: 'explicit_publication_grant_required' };
+    const execution = bundleExecution(this.options, grant, bundle.mode);
     const plan = planVerbatimSplit(bundle.documentPath, original.text, { documentId: bundle.documentId, bundleId: bundle.bundleId,
       chapterRoot: bundle.chapterRoot, ruleVersion: project.ruleVersion });
     if (plan.status !== 'ready') return plan;
@@ -63,10 +65,10 @@ export class CompilationPublication {
       if (!actor || actorKey(actor) !== actorKey(principal) || !actor.capabilities?.includes('write')) fail();
       const fresh = validateCompilationConfig(await host.refresh());
       if (compilationHash(fresh) !== compilationHash(config)) fail();
-      const runtime = await this.options.runtime?.(actor, 'synthesize', [bundle.documentPath]);
+      const runtime = await execution.runtime?.(actor, execution.operation, [bundle.documentPath]);
       const admitted = inspectCompilationPolicy({ config: { ...fresh, projects: [{ ...project, outputPaths: [bundle.documentPath] }] },
         projectId: project.id, principal: actor, access, paths: [bundle.documentPath], outputPath: bundle.documentPath,
-        operation: 'synthesize', ...(runtime && { runtime }) });
+        operation: execution.operation, ...(runtime && { runtime }) });
       if (admitted.status !== 'ready') fail();
       return compilationHash({ source: admitted.sourceFingerprint, config: fresh, actor: actorKey(actor) });
     };
@@ -97,10 +99,10 @@ export class CompilationPublication {
       if (rule()) fail();
       // Only the original grant basis can start publication. A current ACL is
       // not enough to adopt a preservation made under unrelated conditions.
-      const runtime = await this.options.runtime?.(principal, 'synthesize', [bundle.documentPath]);
+      const runtime = await execution.runtime?.(principal, execution.operation, [bundle.documentPath]);
       const base = inspectCompilationPolicy({ config: { ...config, projects: [{ ...project, outputPaths: [bundle.documentPath] }] },
         projectId: project.id, principal, access, paths: [bundle.documentPath], outputPath: bundle.documentPath,
-        operation: 'synthesize', ...(runtime && { runtime }) });
+        operation: execution.operation, ...(runtime && { runtime }) });
       if (base.status !== 'ready' || compilationHash({ policy: base.fingerprint, grant,
         outputRestrictions: access.documentDependencyFingerprint([`${bundle.chapterRoot}/chapter.md`]) }) !== bundle.authority) fail();
       if (await fs.assertManagedDirectory(bundle.chapterRoot, filenames, true)) fail();
@@ -127,6 +129,12 @@ export class CompilationPublication {
       if ((await records.read(bundleRecordId('manifest', bundle.bundleId))).revision !== manifest.revision
         || (await records.read(bundleRecordId('original', bundle.bundleId))).revision !== originalRecord.revision
         || (await records.read(recordId)).revision !== record.revision) fail();
+      if (!originalRead && ['applied', 'withdrawn'].includes(status)) {
+        const actual = await inspect(), applied = status === 'applied';
+        if (actual.source !== (applied ? compilationContentHash(plan.toc) : bundle.sourceRevision)
+          || applied && actual.children.some((r, i) => r !== plan.chapters[i]!.revision)
+          || canonical(rule()) !== canonical(applied ? released() : held())) fail();
+      }
       const result: ReturnType<typeof view> & { partial?: boolean; nextAction?: unknown } = view(status);
       if (JSON.stringify(result).length > maxChars) {
         result.partial = true;
@@ -179,6 +187,21 @@ export class CompilationPublication {
       if ((await records.read(recordId)).revision !== record.revision) fail();
       await guard();
       const save = async () => { record = { ...(await records.write(recordId, job, record.revision, async () => { await guard(); await writer.assertHeld(); })), value: job }; };
+      // Reconcile durable completion before the retry budget. This writes only
+      // the receipt, never replays a completed cutover after a lost response.
+      if (job && (op === 'split_apply' && canonical(rule()) === canonical(released())
+        || op === 'split_revert' && job.state === 'reverting' && canonical(rule()) === canonical(held()))) {
+        const actual = await inspect();
+        if (actual.source === (op === 'split_apply' ? compilationContentHash(plan.toc) : bundle.sourceRevision)
+          && (op === 'split_revert' || actual.children.every((r, i) => r === plan.chapters[i]!.revision))) {
+          if (!duplicate) { if (job.requests.length >= 8) fail(); job.requests.push({ id: p.requestId, operation: op }); }
+          job.state = op === 'split_apply' ? 'applied' : 'withdrawn'; await save();
+          return output(job.state);
+        }
+      }
+      // Publication exhaustion must not disable recovery. Withdrawal has its
+      // own three attempts, and state transitions cannot reset that budget.
+      if (job && op === 'split_revert' && job.state !== 'reverting') job.attempts = 0;
       if (job && job.attempts >= 3) return output('review_required');
       job ??= { version: 1, bundleId: bundle.bundleId, fingerprint: owner, authority, sources, state: 'applying', attempts: 0, requests: [] };
       if (!duplicate) { if (job.requests.length >= 8) fail(); job.requests.push({ id: p.requestId, operation: op }); }

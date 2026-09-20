@@ -47,6 +47,47 @@ async function publisher() {
   return { policy, access, create, bundle, previewArgs, preview, args };
 }
 
+test('verbatim processing preserves without granting synthesis or accepting generated candidates', async () => {
+  config.projects[0].chapterBundles[0].processing = 'verbatim';
+  config.projects[0].operations = ['index'];
+  config.projects[0].runtimeIds = ['builtin-verbatim-v1'];
+  await writeFile(configPath, JSON.stringify(config));
+  const { builtinVerbatimRuntime } = await import('./compilation-local-runtime.js');
+  const svc = () => new CompilationBundleService({ fs, access: new ScopeAccessPolicy(), host, authorize: async () => current,
+    structuralRuntime: builtinVerbatimRuntime });
+  const bundle = await svc().execute(await prepare(), actor);
+  expect(bundle).toMatchObject({ status: 'source_preserved', generationAllowed: false });
+  const args = { bundleId: bundle.bundleId, expectedJobRevision: bundle.jobRevision };
+  expect((await svc().execute({ ...args, op: 'read', projection: 'original' }, actor)).part.text).toBe(raw);
+  const plan = await svc().execute({ ...args, op: 'read', projection: 'plan' }, actor);
+  await expect(svc().execute({ ...args, op: 'submit', expectedPlanRevision: plan.planRevision,
+    chapterId: plan.items[0].chapterId, requestId: 'denied', content: 'Generated replacement.' }, actor)).rejects.toThrow();
+  await expect(svc().execute({ ...args, op: 'read', projection: 'candidate' }, actor)).rejects.toThrow();
+  config.projects[0].chapterBundles[0].processing = undefined; await writeFile(configPath, JSON.stringify(config));
+  await expect(svc().execute({ ...args, op: 'read', projection: 'original' }, actor)).rejects.toThrow();
+}, 30000);
+
+test.each(['source_only', 'unresolved', 'wrong_runtime', 'missing_runtime', 'missing_grant'])('verbatim processing keeps independent policy gates: %s', async variant => {
+  const { builtinVerbatimRuntime } = await import('./compilation-local-runtime.js');
+  config.projects[0].chapterBundles[0].processing = 'verbatim';
+  config.projects[0].chapterBundles[0].publication = 'verbatim';
+  config.projects[0].operations = ['index']; config.projects[0].runtimeIds = ['builtin-verbatim-v1'];
+  if (variant === 'source_only') config.projects[0].sources[0].mode = 'source_only';
+  if (variant === 'unresolved') config.projects[0].sources[0].classification = 'unresolved';
+  if (variant === 'wrong_runtime') config.projects[0].runtimeIds = ['different'];
+  if (variant === 'missing_grant') delete config.projects[0].chapterBundles;
+  await writeFile(configPath, JSON.stringify(config));
+  const policy = new DocumentPolicyStore(vault); await policy.refresh();
+  const svc = new CompilationBundleService({ fs, host, documentPolicy: policy, access: new ScopeAccessPolicy(), authorize: async () => current,
+    ...(variant !== 'missing_runtime' && { structuralRuntime: builtinVerbatimRuntime }) });
+  const result = await svc.execute(await prepare(), actor);
+  if (variant === 'source_only') {
+    expect(result).toMatchObject({ status: 'source_preserved', generationAllowed: false });
+    await expect(svc.execute({ op: 'split_preview', bundleId: result.bundleId, expectedJobRevision: result.jobRevision }, actor)).rejects.toThrow();
+  } else expect(result.status).toBe(variant === 'unresolved' ? 'review_required' : variant === 'missing_grant' ? 'diagnostic_only' : 'waiting_runtime');
+  expect(await readFile(join(vault, 'Manual.md'), 'utf8')).toBe(raw);
+}, 30000);
+
 test('interrupted chapter creation stays hidden and resumes without overwriting; later user edits block rollback', async () => {
   const { create, access, preview, previewArgs, args } = await publisher();
   const originalWrite = fs.writeNoteWithRevisionGuardsAndReceipt.bind(fs);
@@ -120,6 +161,45 @@ test('a lost release acknowledgement reconciles the actual bytes rather than rew
   const recovered = await create().execute({ ...args, expectedPublicationRevision: pending.publicationRevision }, actor);
   expect(recovered.status).toBe('applied');
   expect(await Promise.all(['Manual.md', ...preview.outputs.map((x: any) => x.path)].map(path => readFile(join(vault, path), 'utf8')))).toEqual(before);
+}, 30000);
+
+test('last-attempt release loss can reconcile and rollback has its own bounded recovery budget', async () => {
+  const { create, policy, args, previewArgs } = await publisher();
+  const finish = policy.finishPublication.bind(policy);
+  const fault = vi.spyOn(policy, 'finishPublication')
+    .mockImplementationOnce(async () => { throw Error('Before release, first attempt'); })
+    .mockImplementationOnce(async () => { throw Error('Before release, second attempt'); })
+    .mockImplementationOnce(async (...input) => { await finish(...input); throw Error('Lost final release acknowledgement'); });
+  let revision = 'missing';
+  try {
+    for (let i = 0; i < 3; i++) {
+      await expect(create().execute({ ...args, expectedPublicationRevision: revision }, actor)).rejects.toThrow();
+      revision = (await create().execute(previewArgs, actor)).publicationRevision;
+    }
+  } finally { fault.mockRestore(); }
+  const recovered = await create().execute({ ...args, expectedPublicationRevision: revision }, actor);
+  expect(recovered.status).toBe('applied');
+  const restored = await create().execute({ ...args, op: 'split_revert', requestId: 'restore', expectedPublicationRevision: recovered.publicationRevision }, actor);
+  expect(restored.status).toBe('withdrawn');
+  expect(await readFile(join(vault, 'Manual.md'), 'utf8')).toBe(raw);
+}, 30000);
+
+test('reconciliation never reports applied if the source changes during completion receipt storage', async () => {
+  const { create, policy, access, args, previewArgs } = await publisher();
+  const finish = policy.finishPublication.bind(policy);
+  const lost = vi.spyOn(policy, 'finishPublication').mockImplementationOnce(async (...input) => { await finish(...input); throw Error('Lost acknowledgement'); });
+  try { await expect(create().execute(args, actor)).rejects.toThrow(); } finally { lost.mockRestore(); }
+  const pending = await create().execute(previewArgs, actor);
+  const write = host.records!.write.bind(host.records);
+  const interrupted = new CompilationBundleService({ fs, access, documentPolicy: policy, authorize: async () => current,
+    runtime: async () => ({ id: 'local', revision: 'verified-1', local: true, operations: ['index', 'synthesize'] }),
+    host: { ...host, records: { ...host.records!, write: async (...input) => {
+      const result = await write(...input);
+      if ((input[1] as any)?.state === 'applied') await writeFile(join(vault, 'Manual.md'), raw);
+      return result;
+    } } } });
+  await expect(interrupted.execute({ ...args, expectedPublicationRevision: pending.publicationRevision }, actor)).rejects.toThrow();
+  expect(await readFile(join(vault, 'Manual.md'), 'utf8')).toBe(raw);
 }, 30000);
 
 test('small publication responses retain the receipt and a complete additional-read action', async () => {

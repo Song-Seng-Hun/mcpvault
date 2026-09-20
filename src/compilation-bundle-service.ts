@@ -13,12 +13,13 @@ import { parseDocumentStructure } from './document-structure.js';
 import { createBundlePlan } from './document-bundle-plan.js';
 import { chapterCandidate, chapterPlanPage } from './compilation-bundle-candidates.js';
 import { CompilationPublication, type PublicationBoundary } from './compilation-publication.js';
+import { bundleExecution } from './compilation-local-runtime.js';
 
 const unavailable = () => guidanceError(new Error('Document bundle unavailable'), 'guid-72ba6eede0a50b17');
 const actorBasis = (p: ScopePrincipal) => compilationHash({ account: p.accountId, model: p.modelId, agent: p.agentId,
   user: p.userId, center: p.commandCenterId, role: p.role, capabilities: p.capabilities, enterprise: p.enterprise });
 
-/** Private preservation only. No generation, publication, or Vault writes.
+/** Private preservation and projections; physical writes delegate to publication.
  * A journal receipt is not a grant. Every return rechecks current admission. */
 export class CompilationBundleService {
   private tail: Promise<unknown> = Promise.resolve();
@@ -50,14 +51,14 @@ export class CompilationBundleService {
     const grant = project?.chapterBundles?.find(g => g.documentPath === path);
     if (!project || !grant) return { status: 'diagnostic_only' as const };
     const mode = project.sources.find(s => s.path === path)!.mode;
-    const operation = mode === 'source_only' ? 'index' : 'synthesize';
+    const execution = bundleExecution(this.options, grant, mode), operation = execution.operation;
     // Only this explicit host grant admits preservation. Do not extend the
     // general output policy or infer permission from legacy outputPaths.
     const scoped = { ...config, projects: [{ ...project, outputPaths: [path] }] };
     const base = { config: scoped, projectId, principal, access: this.options.access, paths: [path], outputPath: path, operation } as const;
     let result = inspectCompilationPolicy({ ...base, paths: [path] });
     if (result.status === 'waiting_runtime') {
-      const runtime = await this.options.runtime?.(principal, operation, [path]);
+      const runtime = await execution.runtime?.(principal, operation, [path]);
       result = inspectCompilationPolicy({ ...base, paths: [path], ...(runtime && { runtime }) });
     }
     if (result.status !== 'ready') return result;
@@ -65,10 +66,10 @@ export class CompilationBundleService {
     return { status: 'ready' as const, grant, mode, authority: compilationHash({ policy: result.fingerprint, grant,
       outputRestrictions: this.options.access.documentDependencyFingerprint([`${grant.chapterRoot}/chapter.md`]) }) };
   }
-  private summary(bundle: CompilationBundle, jobRevision: string) {
+  private summary(bundle: CompilationBundle, jobRevision: string, verbatim: boolean) {
     return { status: bundle.status, bundleId: bundle.bundleId, documentId: bundle.documentId, jobRevision,
       sourceRevision: bundle.sourceRevision, mode: bundle.mode, originalPreserved: bundle.status === 'source_preserved',
-      generationAllowed: bundle.mode === 'synthesis_allowed', automaticApplication: false };
+      generationAllowed: !verbatim && bundle.mode === 'synthesis_allowed', automaticApplication: false };
   }
   private async run(params: Record<string, any>, principal?: ScopePrincipal): Promise<any> {
     const op = params.op ?? 'diagnose', maxChars = params.maxChars ?? 4000;
@@ -115,6 +116,8 @@ export class CompilationBundleService {
       bundle = parseCompilationBundle(manifest.value);
       if (bundle.bundleId !== params.bundleId || bundle.accountId !== current.accountId) throw unavailable();
     }
+    const verbatim = config.projects.find(p => p.id === bundle.projectId)?.chapterBundles?.find(g => g.documentPath === bundle.documentPath)?.processing === 'verbatim';
+    if (verbatim && (op === 'submit' || params.projection === 'candidate')) throw unavailable();
     const assertCurrent = async () => {
       await this.actor(current);
       const fresh = validateCompilationConfig(await host.refresh());
@@ -188,7 +191,7 @@ export class CompilationBundleService {
     const saved = await records.read(originalId);
     const original = bundle.status === 'source_preserved' ? parseBundleOriginal(saved.value, bundle) : undefined;
     reserveDocumentWork((original?.text.length ?? 0) * 4 + 65536);
-    let response: any = this.summary(bundle, manifest.revision);
+    let response: any = this.summary(bundle, manifest.revision, verbatim);
     if (op === 'submit' || ['plan', 'candidate'].includes(params.projection)) {
       if (!original || params.expectedJobRevision !== manifest.revision) throw unavailable();
       reserveDocumentWork(documentParseEstimate(original.text));

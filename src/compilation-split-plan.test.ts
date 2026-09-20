@@ -25,8 +25,20 @@ test('split refuses ambiguous anchors, memory owners and links needing relocatio
     expect(planVerbatimSplit('Manual.md', raw, basis).status).toBe('review_required');
   }
 });
+test('physical chapters keep the existing source family and work identity', () => {
+  const plan = planVerbatimSplit('Manual.md', '---\nsource_family: family-original\nsource_work_id: work-original\n---\n# A\nFirst.\n# B\nSecond.\n', basis);
+  expect(plan.status).toBe('ready'); if (plan.status !== 'ready') return;
+  for (const chapter of plan.chapters) expect(new FrontmatterHandler().parse(chapter.content).frontmatter)
+    .toMatchObject({ source_family: 'family-original', source_work_id: 'work-original' });
+});
+
 test('split keeps code examples intact and rejects oversized indivisible chapters', () => {
   const raw = '# A\n~~~sh\necho "[[example]]"\n~~~\n# B\nDo not execute examples.\n';
   expect(planVerbatimSplit('Manual.md', raw, basis).status).toBe('ready');
   expect(planVerbatimSplit('Manual.md', '# A\n```\n' + 'data\n'.repeat(60) + '```\n# B\nB', basis).status).toBe('review_required');
+});
+
+test('invalid family metadata requires review rather than silently inventing a new identity', () => {
+  for (const metadata of ['source_family: []', 'source_work_id: {unknown: true}', 'source_family: ""'])
+    expect(planVerbatimSplit('Manual.md', `---\n${metadata}\n---\n# A\nFirst.\n# B\nSecond.\n`, basis).status).toBe('review_required');
 });

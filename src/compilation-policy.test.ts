@@ -50,6 +50,16 @@ test.each(['../A.md', 'Knowledge/*', 'Knowledge/./A.md', 'C:/A.md', 'Knowledge/A
   expect(() => validateCompilationConfig(value)).toThrow();
 });
 
+test('verbatim processing is a separate exact grant, not a provider or synthesis claim', () => {
+  const grant = { documentPath: 'Knowledge/A.md', documentId: '9cac42de-e32d-41e2-8370-df5f19d3b19c', chapterRoot: 'Knowledge/Chapters', processing: 'verbatim' };
+  const value = config(); Object.assign(value.projects[0]!, { chapterBundles: [grant] });
+  expect(validateCompilationConfig(value).projects[0]!.chapterBundles).toEqual([grant]);
+  for (const processing of ['synthesize', 'local', 'safe', true]) {
+    Object.assign(value.projects[0]!, { chapterBundles: [{ ...grant, processing }] });
+    expect(() => validateCompilationConfig(value)).toThrow();
+  }
+});
+
 test('unknown fields, duplicate paths, runtime names and project ids fail closed', () => {
   for (const update of [
     { sources: [...config().projects[0]!.sources, { path: 'knowledge/a.md', classification: 'resolved', mode: 'source_only' }] },

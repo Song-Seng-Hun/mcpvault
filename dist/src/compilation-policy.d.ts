@@ -12,6 +12,7 @@ export interface CompilationBundleGrant {
     documentId: string;
     chapterRoot: string;
     publication?: 'verbatim';
+    processing?: 'verbatim';
 }
 export interface CompilationProject {
     id: string;

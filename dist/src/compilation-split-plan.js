@@ -13,6 +13,9 @@ export function planVerbatimSplit(path, raw, basis) {
     if (!ordinaryCompilationDocument(path) || raw.length > 24000)
         return review('source_kind_or_budget');
     const parsed = new FrontmatterHandler().parse(raw), fm = parsed.frontmatter;
+    if (['source_family', 'source_work_id'].some(key => fm[key] !== undefined
+        && (typeof fm[key] !== 'string' || !fm[key].trim() || /[\r\n]/.test(fm[key]))))
+        return review('source_family_invalid');
     if (Object.keys(fm).some(k => /^(?:memory_|context_|mcpvault_|source_id$|immutable$|legal_hold$)/.test(k))
         || fm.processing_mode === 'source_only' || fm.source_only || fm.retention_policy === 'preserve' || fm.preserve_until
         || fm.llm_wiki_type !== undefined && !['knowledge', 'manual', 'tool'].includes(String(fm.llm_wiki_type)))
@@ -40,7 +43,8 @@ export function planVerbatimSplit(path, raw, basis) {
             context_parent: path, context_previous: item.previous ?? null, context_next: item.next ?? null,
             context_position: item.position, context_total: plan.items.length, context_kind: 'source_projection',
             title: item.title, description: item.description, use_when: 'Read this source section.', avoid_when: 'An unrelated task or version.',
-            source_family: basis.documentId, source_path: path, source_revision: sourceRevision,
+            source_family: fm.source_family ?? fm.source_work_id ?? basis.documentId,
+            ...(fm.source_work_id !== undefined && { source_work_id: fm.source_work_id }), source_path: path, source_revision: sourceRevision,
             source_start: item.startOffset + shift, source_end: item.endOffset + shift, generation_rule: basis.ruleVersion, language: 'source' };
         const header = Object.entries(fields).map(([k, v]) => `${k}: ${stringify(v, { collectionStyle: 'flow', lineWidth: 0 }).trimEnd()}`).join('\n');
         const content = `---\n${header}\n---\n${body.slice(item.startOffset, item.endOffset)}`;
