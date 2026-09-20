@@ -1,4 +1,5 @@
 import { guidanceError } from './guidance-runtime.js';
+import { AsyncResource } from 'node:async_hooks';
 import { createHash, randomUUID } from 'node:crypto';
 import { lstatSync } from 'node:fs';
 import { lstat, open } from 'node:fs/promises';
@@ -30,6 +31,10 @@ const namespaceName = (namespace) => {
 export async function loadHostWorkStorage(path, expectedVault, options) {
     const { namespace, maxStateBytes, maxRecordBytes, validate } = options;
     const label = namespaceName(namespace);
+    // Only release this storage owner's exact nonce/inode-bound lease in its
+    // construction context. Request cancellation must still deny record writes,
+    // but must not poison cleanup. An inherited owner boundary remains intact.
+    const closeInOwnerContext = AsyncResource.bind((operation) => operation(), 'host-work-lease-cleanup');
     if (!Number.isSafeInteger(maxStateBytes) || maxStateBytes < 1)
         throw guidanceError(new Error('Host work storage state size limit is invalid'), 'guid-1130e7a06f2ced9e');
     if (maxRecordBytes !== undefined && (!Number.isSafeInteger(maxRecordBytes) || maxRecordBytes < 1 || maxRecordBytes > 4 * 1024 * 1024))
@@ -234,7 +239,7 @@ export async function loadHostWorkStorage(path, expectedVault, options) {
                         throw guidanceError(new Error(`${label} writer closed or approval revoked`), 'guid-7d7a9060053a6625');
                     await ownership();
                 },
-                close: () => closing ??= (async () => {
+                close: () => closing ??= closeInOwnerContext(async () => {
                     try {
                         await ownership();
                         await handle.close();
@@ -249,7 +254,7 @@ export async function loadHostWorkStorage(path, expectedVault, options) {
                         if (active === writer)
                             active = undefined;
                     }
-                })(),
+                }),
             };
             active = writer;
             return writer;

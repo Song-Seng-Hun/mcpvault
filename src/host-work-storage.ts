@@ -1,4 +1,5 @@
 import { guidanceError } from './guidance-runtime.js';
+import { AsyncResource } from 'node:async_hooks';
 import { createHash, randomUUID } from 'node:crypto';
 import { lstatSync, type BigIntStats } from 'node:fs';
 import { lstat, open, type FileHandle } from 'node:fs/promises';
@@ -49,6 +50,10 @@ export async function loadHostWorkStorage<T extends { enabled: boolean }>(
 ): Promise<HostWorkStorage<T>> {
   const { namespace, maxStateBytes, maxRecordBytes, validate } = options;
   const label = namespaceName(namespace);
+  // Only release this storage owner's exact nonce/inode-bound lease in its
+  // construction context. Request cancellation must still deny record writes,
+  // but must not poison cleanup. An inherited owner boundary remains intact.
+  const closeInOwnerContext = AsyncResource.bind((operation: () => Promise<void>) => operation(), 'host-work-lease-cleanup');
   if (!Number.isSafeInteger(maxStateBytes) || maxStateBytes < 1) throw guidanceError(new Error('Host work storage state size limit is invalid'), 'guid-1130e7a06f2ced9e');
   if (maxRecordBytes !== undefined && (!Number.isSafeInteger(maxRecordBytes) || maxRecordBytes < 1 || maxRecordBytes > 4 * 1024 * 1024)) throw guidanceError(new Error('Host record size limit is invalid'), 'guid-4f266ef7757529ad');
   if (typeof validate !== 'function') throw guidanceError(new Error('Host work storage validator is invalid'), 'guid-2c2345389dd2b683');
@@ -198,7 +203,7 @@ export async function loadHostWorkStorage<T extends { enabled: boolean }>(
           if (closed || closing || !(await refresh()).enabled) throw guidanceError(new Error(`${label} writer closed or approval revoked`), 'guid-7d7a9060053a6625');
           await ownership();
         },
-        close: () => closing ??= (async () => {
+        close: () => closing ??= closeInOwnerContext(async () => {
           try {
             await ownership(); await handle.close(); closed = true;
             await removeFederationFile(hostPath, lockPath, ownership);
@@ -206,7 +211,7 @@ export async function loadHostWorkStorage<T extends { enabled: boolean }>(
             if (!closed) { await handle.close(); closed = true; }
             if (active === writer) active = undefined;
           }
-        })(),
+        }),
       };
       active = writer;
       return writer;

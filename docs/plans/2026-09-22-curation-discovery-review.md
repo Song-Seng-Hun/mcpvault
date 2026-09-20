@@ -44,7 +44,7 @@ Observed notes/memory/continuity body results are not comprehensive usage or nex
 The fixed 60 acceptance specifications are not executed quality or independent model evaluations.
 Whole-plan completion still requires eligible managed targets, application and next-use evidence.
 Targets/build passed; full: 566 files, 7,437 passed, 4 platform skips, zero failed; basis 23e96a7a.
-Earlier interrupted coverage was not reused. Release 20260922-curation-discovery-r2 is deployed.
+Earlier interrupted coverage was not reused. Release 20260922-curation-discovery-r2 was deployed.
 Canonical bytes/checkpoints and rollback release are preserved; authenticated basic reads pass.
-Live candidates remain diagnostic-only; a retained writer marker blocks task preparation; actual effects remain zero.
-An isolated cancelled-request test reproduces failed lease release; live causality needs follow-up.
+Live candidates remain diagnostic-only; actual curation application and next-use effects remain zero.
+[Cleanup follow-up](2026-09-22-host-lease-cleanup.md) repaired task resume/read observations; source bodies are not logged.

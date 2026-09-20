@@ -10,6 +10,7 @@ import { loadCompilationHostConfig } from './compilation-host.js';
 import { loadEvolutionStorage } from './evolution/host.js';
 import { EvolutionRepository } from './evolution/repository.js';
 import { EvolutionRuntimeEvidence } from './evolution/runtime-evidence.js';
+import { withEnterpriseStorageContext } from './enterprise-storage-context.js';
 
 type FixtureState = { version: 1; marker: string };
 const validate = (value: unknown): FixtureState & { enabled: boolean } => {
@@ -152,6 +153,43 @@ test('rejects an invalid namespace at runtime', async () => {
 const recordId = (text: string) => createHash('sha256').update(text).digest('hex');
 const recordPath = (id: string) => join(hostRoot, `compilation-${identity}.record-${id}.json`);
 const paged = () => loadHostWorkStorage(config, vault, { namespace: 'compilation', maxStateBytes: 4096, maxRecordBytes: 1024, validate });
+
+test('cancelled request releases only its owned host lease without permitting another record write', async () => {
+  const store = await paged(), id = recordId('cancelled'); let current = true;
+  const access = { hasDocumentPolicy: () => true, getEnterpriseProfile: () => undefined } as any;
+  await withEnterpriseStorageContext({ access, assertFresh: () => { if (!current) throw Error('request cancelled'); } }, async () => {
+    const writer = await store.acquire(); writers.push(writer);
+    await store.records!.read(id); const saved = await store.records!.write(id, { kept: true }, 'missing');
+    current = false;
+    await expect(store.records!.write(id, { forbidden: true }, saved.revision)).rejects.toThrow(/cancelled/);
+    await expect(writer.close()).resolves.toBeUndefined();
+  });
+  expect((await readdir(hostRoot)).filter(name => name.endsWith('.writer.lock'))).toEqual([]);
+  expect((await store.records!.read(id)).value).toEqual({ kept: true });
+  writers.push(await store.acquire());
+});
+
+test('cleanup cannot shed a document boundary inherited by storage construction', async () => {
+  let current = true;
+  const access = { hasDocumentPolicy: () => true, getEnterpriseProfile: () => undefined } as any;
+  await withEnterpriseStorageContext({ access, assertFresh: () => { if (!current) throw Error('owner revoked'); } }, async () => {
+    const store = await paged(), writer = await store.acquire(); writers.push(writer); current = false;
+    await expect(writer.close()).rejects.toThrow(/owner revoked/);
+  });
+  expect((await readdir(hostRoot)).filter(name => name.endsWith('.writer.lock'))).toHaveLength(1);
+});
+
+test('cancelled cleanup preserves a replaced marker even when its bytes match', async () => {
+  const store = await paged(), marker = join(hostRoot, `compilation-${identity}.writer.lock`); let current = true;
+  const access = { hasDocumentPolicy: () => true, getEnterpriseProfile: () => undefined } as any;
+  let replacement = '';
+  await withEnterpriseStorageContext({ access, assertFresh: () => { if (!current) throw Error('request cancelled'); } }, async () => {
+    const writer = await store.acquire(); writers.push(writer); replacement = await readFile(marker, 'utf8');
+    await rename(marker, marker + '.previous'); await writeFile(marker, replacement, { mode: 0o600 }); current = false;
+    await expect(writer.close()).rejects.toThrow();
+  });
+  expect(await readFile(marker, 'utf8')).toBe(replacement);
+});
 
 test('bounded host records survive restart without replacing legacy state', async () => {
   const store = await paged();
