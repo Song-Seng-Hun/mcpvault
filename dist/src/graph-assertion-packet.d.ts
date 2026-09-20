@@ -2,6 +2,7 @@ import type { FileSystemService } from './filesystem.js';
 import type { ScopeAccessPolicy } from './scope-access.js';
 import type { ScopePrincipal } from './scope-auth.js';
 import { type GraphAssertion } from './graph-assertion.js';
+import type { GraphReadIndex } from './memory/graph-references.js';
 export interface GraphAssertionPacketOptions {
     path: string;
     limit?: number;
@@ -30,7 +31,7 @@ export interface PublicAssertion {
 }
 /** One-note outgoing occurrence view. No raw candidates/labels, aggregate hidden
  * counts, model calls, writes, inference or global-integrity claim. */
-export declare function buildGraphAssertionPacket(fs: FileSystemService, access: ScopeAccessPolicy, principal: ScopePrincipal | undefined, options: GraphAssertionPacketOptions): Promise<{
+export declare function buildGraphAssertionPacket(fs: FileSystemService, access: ScopeAccessPolicy, principal: ScopePrincipal | undefined, options: GraphAssertionPacketOptions, index?: GraphReadIndex): Promise<{
     view: string;
     assertions: PublicAssertion[];
     coverage: {

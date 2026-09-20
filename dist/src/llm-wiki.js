@@ -1048,6 +1048,7 @@ export class LlmWikiService {
     access;
     references;
     semanticSearch;
+    graphReadIndex;
     workDateProjection(note, dates = workDateState(note.frontmatter)) {
         return {
             ...(dates.dueAt && { dueAt: dates.dueAt }),
@@ -1077,11 +1078,12 @@ export class LlmWikiService {
     // Scope-private guards must never become enumerable diagnostic payload.
     lintSnapshots = new WeakMap();
     lintCollections = new WeakMap();
-    constructor(fileSystem, access, references, semanticSearch) {
+    constructor(fileSystem, access, references, semanticSearch, graphReadIndex) {
         this.fileSystem = fileSystem;
         this.access = access;
         this.references = references;
         this.semanticSearch = semanticSearch;
+        this.graphReadIndex = graphReadIndex;
     }
     dropProjection(kind, cache, key) {
         cache.delete(key);
@@ -3122,7 +3124,7 @@ export class LlmWikiService {
     }
     /** Bounded, explainable neighbors; Markdown identity remains authoritative. */
     async graphAssertions(principal, options) {
-        return buildGraphAssertionPacket(this.fileSystem, this.access, principal, options);
+        return buildGraphAssertionPacket(this.fileSystem, this.access, principal, options, this.graphReadIndex);
     }
     /** Legacy neighborhood remains unchanged unless the adapter selects assertions. */
     async neighborhood(principal, path, limit = 12, maxChars = 6000, includeSemantic = false) {

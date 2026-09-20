@@ -160,3 +160,36 @@ test('relative Markdown graph links are discoverable by destination while preser
   expect(local.occurrences[0]?.targetReference).toBe('[Guide](./Target.md#Condition)');
   expect((await s.graph({ direction: 'incoming', keys: ['Other.md'], limit: 20 })).occurrences).toHaveLength(1);
 });
+
+test('reference candidates use indexed identity keys and preserve ambiguity in a bounded window', async () => {
+  const s = await setup();
+  await s.put([row('Project/A.md', '', { aliases: ['배포 안내'], stable_id: 'guide-1' }),
+    row('Other/A.md', '', { title: '배포 안내' }), row('Unrelated.md')]);
+  expect(typeof s.referenceCandidates).toBe('function');
+  const candidates = await s.referenceCandidates(['배포 안내'], 20);
+  expect(candidates.notes.map(n => n.path)).toEqual(['Other/A.md', 'Project/A.md']);
+  expect((await s.referenceCandidates(['project/a', 'guide-1'], 20)).notes.map(n => n.path)).toEqual(['Project/A.md']);
+  expect((await s.referenceCandidates(['a.md'], 1)).truncated).toBe(true);
+  expect((await s.referenceExplain(['배포 안내'], 20)).join('\n')).toContain('graph_names');
+  await s.put([row('Project/A.md', '', { aliases: ['Changed'] })]);
+  expect((await s.referenceCandidates(['guide-1'], 20)).notes).toEqual([]);
+  await s.remove(['Other/A.md']);
+  expect((await s.referenceCandidates(['배포 안내'], 20)).notes).toEqual([]);
+});
+
+test('root-qualified Markdown links use the same destination semantics as live resolution', async () => {
+  const s = await setup();
+  await s.put([row('Project/A.md', '[Root](Docs/Target.md) [Root2](/Else.md)')]);
+  expect((await s.graph({ direction: 'incoming', keys: ['Docs/Target.md'], limit: 20 })).occurrences).toHaveLength(1);
+  expect((await s.graph({ direction: 'incoming', keys: ['Else.md'], limit: 20 })).occurrences).toHaveLength(1);
+});
+
+test('an absent identity extension is explicitly backfilled rather than treated as no matches', async () => {
+  const s = await setup(), path = join(roots.at(-1)!, 'memory.sqlite');
+  const record = row('A.md', '[[Target]]', { aliases: ['Alias'] }); await s.put([record]); await s.close();
+  const legacy = new DatabaseSync(path); legacy.exec('DROP TABLE graph_names'); legacy.close();
+  const reopened = new MemorySqliteStore(path); stores.push(reopened); await reopened.ready();
+  expect(await reopened.unindexedGraph(['A.md'])).toEqual(['A.md']);
+  await reopened.put([record]);
+  expect((await reopened.referenceCandidates(['Alias'], 20)).notes.map(n => n.path)).toEqual(['A.md']);
+});

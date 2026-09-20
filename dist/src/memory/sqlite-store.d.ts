@@ -53,6 +53,10 @@ export declare class MemorySqliteStore {
      * An empty page never certifies absence of links in the Vault. */
     graph(q: GraphIndexQuery): Promise<GraphIndexPage>;
     graphExplain(q: GraphIndexQuery): Promise<string[]>;
+    private referenceQuery;
+    /** Private discovery only. Recheck live identities, ACL and generation before resolving. */
+    referenceCandidates(keys: string[], limit: number): Promise<MemoryIndexPage>;
+    referenceExplain(keys: string[], limit: number): Promise<string[]>;
     unindexedGraph(paths: string[]): Promise<string[]>;
     beginScan(): Promise<void>;
     seen(paths: string[]): Promise<void>;

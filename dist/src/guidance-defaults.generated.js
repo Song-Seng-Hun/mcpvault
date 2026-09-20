@@ -67166,9 +67166,9 @@ export const GUIDANCE_DEFINITIONS = [
     {
         "id": "guid-d1e2a838e6178cc8",
         "kind": "prose",
-        "template": "Path relative to vault root (default: '/')",
+        "template": "Vault-relative path; omit or use an empty string for the root. Host-absolute paths are denied.",
         "parts": [
-            "Path relative to vault root (default: '/')"
+            "Vault-relative path; omit or use an empty string for the root. Host-absolute paths are denied."
         ],
         "binding": "call",
         "sources": [

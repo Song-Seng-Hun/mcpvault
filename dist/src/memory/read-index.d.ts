@@ -1,6 +1,7 @@
 import type { FileSystemService } from '../filesystem.js';
 import type { VaultFileCatalog, VaultCatalogChange } from '../vault-catalog.js';
 import type { QueryNote } from '../types.js';
+import { type GraphReadIndex, type GraphReferenceCapture } from './graph-references.js';
 export interface MemoryCapture {
     notes: QueryNote[];
     truncated: boolean;
@@ -23,7 +24,7 @@ interface MemoryCaptureRequest {
     canAccess(path: string): boolean;
 }
 /** Private derivative index; startup/reconciliation is background, never a request scan. */
-export declare class DiskMemoryIndex implements MemoryReadIndex {
+export declare class DiskMemoryIndex implements MemoryReadIndex, GraphReadIndex {
     private fs;
     private allowed;
     private readonly owner;
@@ -44,6 +45,7 @@ export declare class DiskMemoryIndex implements MemoryReadIndex {
     private refresh;
     private rebuild;
     capture(p: MemoryCaptureRequest): Promise<MemoryCapture>;
+    graphReferences(canAccess: (path: string) => boolean, read: (path: string) => Promise<QueryNote | undefined>): Promise<GraphReferenceCapture>;
     close(): Promise<void>;
 }
 export {};

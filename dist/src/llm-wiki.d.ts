@@ -1,4 +1,5 @@
 import { type GraphAssertionPacketOptions } from './graph-assertion-packet.js';
+import type { GraphReadIndex } from './memory/graph-references.js';
 import { type TopicPacketOptions } from './topic-packet.js';
 import { type AuthoringContext } from './authoring-assist.js';
 import { type FileSystemService, type DerivedViewWritePolicy } from './filesystem.js';
@@ -95,6 +96,7 @@ export declare class LlmWikiService {
     private readonly access;
     private readonly references;
     private readonly semanticSearch?;
+    private readonly graphReadIndex?;
     private workDateProjection;
     private dateRepairProjection;
     private generation;
@@ -105,7 +107,7 @@ export declare class LlmWikiService {
     private readonly lintInFlight;
     private readonly lintSnapshots;
     private readonly lintCollections;
-    constructor(fileSystem: FileSystemService, access: ScopeAccessPolicy, references: ReferenceService, semanticSearch?: SemanticSearchService | undefined);
+    constructor(fileSystem: FileSystemService, access: ScopeAccessPolicy, references: ReferenceService, semanticSearch?: SemanticSearchService | undefined, graphReadIndex?: GraphReadIndex | undefined);
     private dropProjection;
     private retainProjection;
     private hasDependency;

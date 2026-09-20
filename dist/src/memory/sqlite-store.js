@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { memoryEntries, memoryReferencePath } from '../memory-contract.js';
 import { extractGraphAssertions } from '../graph-assertion.js';
 import { extractObsidianLinkOccurrences } from '../backlinks.js';
-import { posix } from 'node:path';
+import { buildNoteReferenceIndex, markdownNotePath } from '../note-reference.js';
 // Discovery key only, never a resolved path or permission. Preserve raw reference in payload.
 function referenceKey(raw) {
     return raw.replace(/^!?\[\[/, '').replace(/\]\]$/, '').split(/[|#]/, 1)[0].trim().replace(/\.md$/i, '').toLowerCase();
@@ -15,7 +15,7 @@ function occurrenceKey(assertion) {
     const link = extractObsidianLinkOccurrences(assertion.targetReference, 1)[0];
     // Preserve the original occurrence as evidence. Only its advisory index key
     // resolves explicit Markdown relativity; aliases still require live resolution.
-    return link ? referenceKey(posix.normalize(posix.join(posix.dirname(assertion.source.path), link.target)))
+    return link ? referenceKey(markdownNotePath(link.target, assertion.source.path) ?? '')
         : referenceKey(assertion.targetReference);
 }
 /** One bounded RPC queue. SQLite and its native allocations stay off the request thread. */
@@ -62,7 +62,12 @@ export class MemorySqliteStore {
             if (!entries.length && row.frontmatter.mcpvault_type === 'journal_entry')
                 entries.push({ role: 'episodic', observed_at: row.frontmatter.date });
             const graph = extractGraphAssertions({ repositoryId: 'private-read-index', path: row.path, revision: row.revision, frontmatter: row.frontmatter, content: row.text });
-            return { ...row, entries, graph: { version: 1, partial: graph.partial, occurrences: graph.assertions.map(a => ({ key: occurrenceKey(a), assertion: a })) },
+            const identities = buildNoteReferenceIndex([{ path: row.path, title: row.frontmatter.title,
+                    aliases: row.frontmatter.aliases, preferredTerm: row.frontmatter.preferred_term, stableId: row.frontmatter.stable_id }]);
+            const names = [...new Set([identities.qualified, identities.exact, identities.filenames, identities.terms].flatMap(m => [...m.keys()]))];
+            if (names.length > 512)
+                throw Error('Graph identity budget exceeded');
+            return { ...row, entries, names, graph: { version: 2, partial: graph.partial, occurrences: graph.assertions.map(a => ({ key: occurrenceKey(a), assertion: a })) },
                 edges: entries.flatMap(e => ['basis', 'corrects'].flatMap(kind => (e[kind] || []).map(r => ({ kind, target: memoryReferencePath(r.path).toLowerCase() })))) };
         });
         await this.call('put', data);
@@ -98,6 +103,15 @@ export class MemorySqliteStore {
      * An empty page never certifies absence of links in the Vault. */
     async graph(q) { return this.call('graph', this.graphQuery(q)); }
     async graphExplain(q) { return this.call('graphExplain', this.graphQuery(q)); }
+    referenceQuery(keys, limit) {
+        if (!Array.isArray(keys) || !keys.length || keys.length > 8 || keys.some(k => typeof k !== 'string' || !k.trim() || k.length > 1024)
+            || !Number.isInteger(limit) || limit < 1 || limit > 64)
+            throw Error('Invalid reference window');
+        return { keys: [...new Set(keys.map(k => k.trim().toLocaleLowerCase()))], limit };
+    }
+    /** Private discovery only. Recheck live identities, ACL and generation before resolving. */
+    referenceCandidates(keys, limit) { return this.call('references', this.referenceQuery(keys, limit)); }
+    referenceExplain(keys, limit) { return this.call('referencesExplain', this.referenceQuery(keys, limit)); }
     unindexedGraph(paths) {
         paths.forEach(memoryReferencePath);
         if (paths.length > 128)

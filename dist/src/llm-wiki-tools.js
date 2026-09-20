@@ -602,6 +602,7 @@ export function getLlmWikiTools() {
             name: 'get_wiki_graph_health',
             description: guidanceText('guid-e896ea55def1169a', 'Report broken links, orphan notes, empty MOCs, GTD focus problems, Zettelkasten connectivity gaps, typed relation meaning, high-degree graph hubs, knowledge usage, and same-title/alias duplicate candidates with bounded samples. MOC coverage counts visible non-map knowledge reached through authored map links; maps remain in full graph/usage views, not uncovered knowledge. Coverage is navigation, not truth or primary_moc presence. Use it to repair navigation without creating a parallel index; never auto-merge or archive from this report.'),
             inputSchema: { type: 'object', properties: {
+                    path: { type: 'string', minLength: 1, maxLength: 400, description: 'Inspect only this note\'s current outgoing relation occurrences. Uses the configured disk reference index; incomplete index returns partial, never a global integrity or no-inbound-reference proof. Example: path=Project/Guide.md. Omit for the legacy whole-Vault report.' },
                     limit: { type: 'integer', minimum: 1, maximum: 50, default: 20 }, maxChars: { type: 'integer', minimum: 512, maximum: 16000, default: 6000 }, accessToken, prettyPrint,
                 } },
         },

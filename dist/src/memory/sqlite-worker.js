@@ -37,7 +37,10 @@ db.exec(`PRAGMA locking_mode=EXCLUSIVE; PRAGMA journal_mode=WAL; PRAGMA synchron
  CREATE TABLE IF NOT EXISTS graph_documents (doc INTEGER PRIMARY KEY REFERENCES docs(id) ON DELETE CASCADE, version INTEGER NOT NULL, partial INTEGER NOT NULL);
  CREATE TABLE IF NOT EXISTS graph_occurrences (owner INTEGER REFERENCES docs(id) ON DELETE CASCADE, occurrence TEXT NOT NULL, target_key TEXT NOT NULL,
    relation TEXT NOT NULL, payload TEXT NOT NULL, PRIMARY KEY(owner,occurrence)) WITHOUT ROWID;
- CREATE INDEX IF NOT EXISTS graph_reverse ON graph_occurrences(target_key,occurrence,owner);`);
+ CREATE INDEX IF NOT EXISTS graph_reverse ON graph_occurrences(target_key,occurrence,owner);
+ CREATE TABLE IF NOT EXISTS graph_names (name TEXT NOT NULL, doc INTEGER REFERENCES docs(id) ON DELETE CASCADE,
+   PRIMARY KEY(name,doc)) WITHOUT ROWID;
+ CREATE INDEX IF NOT EXISTS graph_names_doc ON graph_names(doc);`);
 if (db.prepare('SELECT version FROM state').get()?.version !== 1)
     throw Error('Unsupported memory index schema');
 // Add a covering discriminator without turning graph-only rows into a linear
@@ -102,7 +105,9 @@ const insGram = db.prepare('INSERT OR IGNORE INTO grams VALUES(?,?)');
 const insEdge = db.prepare('INSERT OR IGNORE INTO edges VALUES(?,?,?)');
 const insGraphDoc = db.prepare('INSERT INTO graph_documents VALUES(?,?,?)');
 const insGraph = db.prepare('INSERT INTO graph_occurrences VALUES(?,?,?,?,?)');
-const del = db.prepare('DELETE FROM docs WHERE path=?'), prior = db.prepare(`SELECT d.fingerprint,x.version FROM docs d
+const insName = db.prepare('INSERT INTO graph_names VALUES(?,?)');
+const del = db.prepare('DELETE FROM docs WHERE path=?'), prior = db.prepare(`SELECT d.fingerprint,x.version,
+  EXISTS (SELECT 1 FROM graph_names n WHERE n.doc=d.id) AS names_ready FROM docs d
   LEFT JOIN graph_documents x ON x.doc=d.id WHERE d.path=?`);
 function graphSql(q) {
     // IN + ORDER BY previously sorted every incoming edge of every selected hub
@@ -157,7 +162,7 @@ parentPort.on('message', ({ id, op, data }) => {
                         continue;
                     }
                     const fingerprint = hash(JSON.stringify(r)), previous = prior.get(r.path);
-                    if (previous?.fingerprint === fingerprint && previous.version === r.graph.version)
+                    if (previous?.fingerprint === fingerprint && previous.version === r.graph.version && previous.names_ready)
                         continue;
                     del.run(r.path);
                     const doc = insDoc.run(r.path, r.revision, JSON.stringify(r.frontmatter), fingerprint).lastInsertRowid;
@@ -175,6 +180,8 @@ parentPort.on('message', ({ id, op, data }) => {
                     }
                     for (const edge of r.edges)
                         insEdge.run(doc, edge.target, edge.kind);
+                    for (const name of r.names)
+                        insName.run(name, doc);
                     insGraphDoc.run(doc, r.graph.version, Number(r.graph.partial));
                     for (const occurrence of r.graph.occurrences)
                         insGraph.run(doc, occurrence.assertion.id, occurrence.key, occurrence.assertion.relation, JSON.stringify(occurrence.assertion));
@@ -198,7 +205,7 @@ parentPort.on('message', ({ id, op, data }) => {
             else {
                 const rows = db.prepare(q.sql).all(...q.values), selected = rows.slice(0, data.limit);
                 const missing = data.direction === 'outgoing' ? db.prepare(`SELECT d.path FROM docs d LEFT JOIN graph_documents x ON x.doc=d.id
-          WHERE d.path IN (${placeholders(data.keys.length)}) AND (x.doc IS NULL OR x.partial=1 OR x.version<>1)`).all(...data.keys).map(r => r.path) : [];
+          WHERE d.path IN (${placeholders(data.keys.length)}) AND (x.doc IS NULL OR x.partial=1 OR x.version<>2)`).all(...data.keys).map(r => r.path) : [];
                 value = { occurrences: selected.map(r => JSON.parse(r.payload)), truncated: rows.length > data.limit,
                     ...(rows.length > data.limit && { next: selected.at(-1).occurrence }), generation: generation(),
                     incompleteOwners: [...new Set([...missing, ...selected.filter(r => r.partial).map(r => r.path)])], coverage: 'candidates_only' };
@@ -206,7 +213,21 @@ parentPort.on('message', ({ id, op, data }) => {
         }
         else if (op === 'unindexedGraph') {
             value = data.length ? db.prepare(`SELECT d.path FROM docs d LEFT JOIN graph_documents x ON x.doc=d.id
-        WHERE d.path IN (${placeholders(data.length)}) AND (x.doc IS NULL OR x.version<>1) ORDER BY d.path`).all(...data).map(r => r.path) : [];
+        WHERE d.path IN (${placeholders(data.length)}) AND (x.doc IS NULL OR x.version<>2
+          OR NOT EXISTS (SELECT 1 FROM graph_names n WHERE n.doc=d.id)) ORDER BY d.path`).all(...data).map(r => r.path) : [];
+        }
+        else if (op === 'references' || op === 'referencesExplain') {
+            // Bound each indexed identity walk before deduplication; a popular alias
+            // must not sort its entire posting list just to return a small window.
+            const values = [], branches = data.keys.map((key) => {
+                values.push(key, data.limit + 1);
+                return 'SELECT * FROM (SELECT doc FROM graph_names WHERE name=? ORDER BY doc LIMIT ?)';
+            });
+            const sql = `WITH candidates AS (${branches.join(' UNION ALL ')})
+        SELECT DISTINCT d.path,d.revision,d.meta FROM candidates c JOIN docs d ON d.id=c.doc ORDER BY d.path LIMIT ?`;
+            values.push(data.limit + 1);
+            value = op === 'referencesExplain' ? db.prepare('EXPLAIN QUERY PLAN ' + sql).all(...values).map((r) => r.detail)
+                : decode(db.prepare(sql).all(...values), data.limit);
         }
         else if (op === 'page' || op === 'explain') {
             const q = pageSql(data);

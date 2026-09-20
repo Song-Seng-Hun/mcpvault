@@ -11,6 +11,7 @@ import { typedRelationTargetKindReason } from './graph-contract.js';
 import { extractObsidianLinkOccurrences } from './backlinks.js';
 import { resolveEvidenceLocator } from './evidence-locator.js';
 import { isModerationHidden } from './moderation-policy.js';
+import type { GraphReadIndex } from './memory/graph-references.js';
 
 export interface GraphAssertionPacketOptions { path: string; limit?: number; maxChars?: number; prettyPrint?: boolean }
 const MAX_BYTES = 1024 * 1024;
@@ -24,13 +25,13 @@ export interface PublicAssertion {
 /** One-note outgoing occurrence view. No raw candidates/labels, aggregate hidden
  * counts, model calls, writes, inference or global-integrity claim. */
 export async function buildGraphAssertionPacket(fs: FileSystemService, access: ScopeAccessPolicy,
-  principal: ScopePrincipal | undefined, options: GraphAssertionPacketOptions) {
+  principal: ScopePrincipal | undefined, options: GraphAssertionPacketOptions, index?: GraphReadIndex) {
   const { limit = 12, maxChars = 6000, prettyPrint = false } = options;
   if (!Number.isInteger(limit) || limit < 1 || limit > 40 || !Number.isInteger(maxChars) || maxChars < 512 || maxChars > 16000) throw guidanceError(Error('Invalid assertion limit or maxChars.'), 'guid-a747b255aa4fe0d5');
   try {
     const path = access.resolveExternalPath(options.path, principal).replace(/\\/g, '/');
     if (!path || /^(?:\/|~)|:|[\x00-\x1f]/.test(path) || path.split('/').includes('..') || posix.normalize(path) !== path) throw changed();
-    const allowed = (p: string) => access.canAccessPhysicalPath(p, principal);
+    const allowed = (p: string) => access.canAccessPhysicalPath(p, principal) && access.canReadProtectedDocument(p, principal);
     const observed = new Map<string, QueryNote | undefined>(), revisions = new Map<string, string>();
     const bodies = new Map<string, string | undefined>();
     let partial = false, exhausted = false;
@@ -58,7 +59,9 @@ export async function buildGraphAssertionPacket(fs: FileSystemService, access: S
     const repositoryId = createHash('sha256').update(fs.getVaultPath()).digest('hex');
     const candidates = extractGraphAssertions({ repositoryId, path, revision: root.revision!, frontmatter: root.frontmatter, content });
     partial ||= candidates.partial;
-    let resolver = fs.createNoteReferenceResolver(allowed, read, { fresh: true });
+    const capture = await index?.graphReferences(allowed, read);
+    partial ||= !!capture?.reason;
+    let resolver = capture?.resolve ?? fs.createNoteReferenceResolver(allowed, read, { fresh: true });
     const lookups = new Map<string, { raw: string; syntax?: 'markdown'; selected: string }>();
     const resolve = async (raw: string, syntax?: 'markdown') => {
       const matches = raw ? await resolver(raw, { sourcePath: path, ...(syntax && { syntax }) }) : [path];
@@ -112,9 +115,11 @@ export async function buildGraphAssertionPacket(fs: FileSystemService, access: S
         locator: a.locator, kind: a.kind, extraction: a.extraction, evidenceState: 'not_verified',
         validation: { state: !checked ? 'not_checked' : reasons.length ? 'review_required' : 'current_locators', reasons } });
     }
-    resolver = fs.createNoteReferenceResolver(allowed, read, { fresh: true });
+    if (!capture) resolver = fs.createNoteReferenceResolver(allowed, read, { fresh: true });
     for (const lookup of lookups.values()) if ((await resolve(lookup.raw, lookup.syntax))?.path !== lookup.selected) throw changed();
     for (const [p, revision] of revisions) if (!allowed(p) || await fs.readNoteRevision(p, MAX_BYTES) !== revision) throw changed();
+    if ([...revisions.keys()].some(p => !allowed(p)) || [...lookups.values()].some(l => !access.canReferenceFrom(path, l.selected))) throw changed();
+    await capture?.assertCurrent();
     if ([...revisions.keys()].some(p => !allowed(p)) || [...lookups.values()].some(l => !access.canReferenceFrom(path, l.selected))) throw changed();
     const nextAction = { endpointId: 'notes.read', arguments: { path: access.toPublicPath(path), expectedRevision: root.revision!, maxChars: 4000 } };
     const result = { view: 'assertions', root: { path: access.toPublicPath(path), revision: root.revision! }, assertions,

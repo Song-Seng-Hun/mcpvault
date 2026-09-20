@@ -11,7 +11,7 @@ const MAX_BYTES = 1024 * 1024;
 const changed = () => guidanceError(Error('Graph context unavailable or changed; re-read the note and retry.'), 'guid-49670269a06d455f');
 /** One-note outgoing occurrence view. No raw candidates/labels, aggregate hidden
  * counts, model calls, writes, inference or global-integrity claim. */
-export async function buildGraphAssertionPacket(fs, access, principal, options) {
+export async function buildGraphAssertionPacket(fs, access, principal, options, index) {
     const { limit = 12, maxChars = 6000, prettyPrint = false } = options;
     if (!Number.isInteger(limit) || limit < 1 || limit > 40 || !Number.isInteger(maxChars) || maxChars < 512 || maxChars > 16000)
         throw guidanceError(Error('Invalid assertion limit or maxChars.'), 'guid-a747b255aa4fe0d5');
@@ -19,7 +19,7 @@ export async function buildGraphAssertionPacket(fs, access, principal, options) 
         const path = access.resolveExternalPath(options.path, principal).replace(/\\/g, '/');
         if (!path || /^(?:\/|~)|:|[\x00-\x1f]/.test(path) || path.split('/').includes('..') || posix.normalize(path) !== path)
             throw changed();
-        const allowed = (p) => access.canAccessPhysicalPath(p, principal);
+        const allowed = (p) => access.canAccessPhysicalPath(p, principal) && access.canReadProtectedDocument(p, principal);
         const observed = new Map(), revisions = new Map();
         const bodies = new Map();
         let partial = false, exhausted = false;
@@ -66,7 +66,9 @@ export async function buildGraphAssertionPacket(fs, access, principal, options) 
         const repositoryId = createHash('sha256').update(fs.getVaultPath()).digest('hex');
         const candidates = extractGraphAssertions({ repositoryId, path, revision: root.revision, frontmatter: root.frontmatter, content });
         partial ||= candidates.partial;
-        let resolver = fs.createNoteReferenceResolver(allowed, read, { fresh: true });
+        const capture = await index?.graphReferences(allowed, read);
+        partial ||= !!capture?.reason;
+        let resolver = capture?.resolve ?? fs.createNoteReferenceResolver(allowed, read, { fresh: true });
         const lookups = new Map();
         const resolve = async (raw, syntax) => {
             const matches = raw ? await resolver(raw, { sourcePath: path, ...(syntax && { syntax }) }) : [path];
@@ -156,13 +158,17 @@ export async function buildGraphAssertionPacket(fs, access, principal, options) 
                 locator: a.locator, kind: a.kind, extraction: a.extraction, evidenceState: 'not_verified',
                 validation: { state: !checked ? 'not_checked' : reasons.length ? 'review_required' : 'current_locators', reasons } });
         }
-        resolver = fs.createNoteReferenceResolver(allowed, read, { fresh: true });
+        if (!capture)
+            resolver = fs.createNoteReferenceResolver(allowed, read, { fresh: true });
         for (const lookup of lookups.values())
             if ((await resolve(lookup.raw, lookup.syntax))?.path !== lookup.selected)
                 throw changed();
         for (const [p, revision] of revisions)
             if (!allowed(p) || await fs.readNoteRevision(p, MAX_BYTES) !== revision)
                 throw changed();
+        if ([...revisions.keys()].some(p => !allowed(p)) || [...lookups.values()].some(l => !access.canReferenceFrom(path, l.selected)))
+            throw changed();
+        await capture?.assertCurrent();
         if ([...revisions.keys()].some(p => !allowed(p)) || [...lookups.values()].some(l => !access.canReferenceFrom(path, l.selected)))
             throw changed();
         const nextAction = { endpointId: 'notes.read', arguments: { path: access.toPublicPath(path), expectedRevision: root.revision, maxChars: 4000 } };

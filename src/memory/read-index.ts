@@ -5,11 +5,11 @@ import { HostDerivedStorage } from '../host-derived-storage.js';
 import type { FileSystemService } from '../filesystem.js';
 import type { VaultFileCatalog, VaultCatalogChange } from '../vault-catalog.js';
 import type { QueryNote } from '../types.js';
-import { memoryEntries } from '../memory-contract.js';
 import { isModerationHidden } from '../moderation-policy.js';
 import { isFictionDomain } from '../fiction-domain.js';
 import { memoryQueryNeedsSource, positiveSearchTerms } from '../search.js';
 import { MemorySqliteStore } from './sqlite-store.js';
+import { indexedGraphReferences, type GraphReadIndex, type GraphReferenceCapture } from './graph-references.js';
 
 export interface MemoryCapture {
   notes: QueryNote[]; truncated: boolean; generation: number; reason?: string;
@@ -21,7 +21,7 @@ export interface MemoryReadIndex {
 interface MemoryCaptureRequest { root: string; prefix: string; query: string; role?: string; semantic?: boolean; dateFrom?: string; dateTo?: string; canAccess(path: string): boolean }
 
 /** Private derivative index; startup/reconciliation is background, never a request scan. */
-export class DiskMemoryIndex implements MemoryReadIndex {
+export class DiskMemoryIndex implements MemoryReadIndex, GraphReadIndex {
   // Preserve the service owner's construction context, not the triggering
   // request's expiring session. This never removes an owner's storage boundary.
   private readonly owner = new AsyncResource('memory-index-owner');
@@ -82,8 +82,7 @@ export class DiskMemoryIndex implements MemoryReadIndex {
     try {
       const metadata = (await this.fs.readNoteMetadata([path], this.allowed, { fresh: true, strict: true, maxBytes: 2 * 1024 * 1024 }))[0];
       if (!metadata) { if (!allowMissing) throw Error('Metadata unavailable'); await stat(this.fs.getVaultPath()); await this.store.remove([path]); return; }
-      const entries = memoryEntries(metadata.frontmatter);
-      if ((!entries.length && metadata.frontmatter.mcpvault_type !== 'journal_entry' && metadata.frontmatter.llm_wiki_type !== 'knowledge') || isModerationHidden(metadata.frontmatter)
+      if (isModerationHidden(metadata.frontmatter)
         || isFictionDomain(metadata.frontmatter, path) || metadata.frontmatter.mcpvault_type === 'blog_post' && metadata.frontmatter.status === 'draft') { await this.store.remove([path]); return; }
       const prior = (await this.store.get([path])).notes[0];
       if (prior?.revision !== metadata.revision || (await this.store.unindexedGraph([path])).length) {
@@ -169,6 +168,25 @@ export class DiskMemoryIndex implements MemoryReadIndex {
       await assertCurrent();
       return { notes: [...notes.values()], truncated, generation, candidatePaths: candidates, assertCurrent };
     } catch { return unavailable('memory_index_unavailable'); }
+  }
+  async graphReferences(canAccess: (path: string) => boolean, read: (path: string) => Promise<QueryNote | undefined>): Promise<GraphReferenceCapture> {
+    const revision = this.revision;
+    const unavailable = (): GraphReferenceCapture => ({ reason: 'graph_index_unavailable',
+      resolve: async () => [], assertCurrent: async () => {} });
+    if (!this.store || this.state !== 'ready') return unavailable();
+    try {
+      await this.storage.verifiedTree('memory-read-v1'); await stat(this.fs.getVaultPath());
+      const store = this.store, generation = await store.generation();
+      const current = async () => {
+        if (this.state !== 'ready' || this.revision !== revision || await store.generation() !== generation) throw Error('Graph index changed');
+      };
+      await current();
+      const capture = indexedGraphReferences(store, p => this.allowed(p) && canAccess(p), read, current);
+      return { resolve: capture.resolve, assertCurrent: async () => {
+        await this.storage.verifiedTree('memory-read-v1'); await stat(this.fs.getVaultPath());
+        await capture.assertCurrent();
+      } };
+    } catch { return unavailable(); }
   }
   async close() { this.state = 'closed'; this.revision++; this.unsubscribe?.(); this.reconcileUnsubscribe?.(); await this.tail; try { await this.store?.close(); } finally { this.owner.emitDestroy(); } }
 }

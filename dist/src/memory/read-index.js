@@ -2,11 +2,11 @@ import { opendir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { AsyncResource } from 'node:async_hooks';
 import { HostDerivedStorage } from '../host-derived-storage.js';
-import { memoryEntries } from '../memory-contract.js';
 import { isModerationHidden } from '../moderation-policy.js';
 import { isFictionDomain } from '../fiction-domain.js';
 import { memoryQueryNeedsSource, positiveSearchTerms } from '../search.js';
 import { MemorySqliteStore } from './sqlite-store.js';
+import { indexedGraphReferences } from './graph-references.js';
 /** Private derivative index; startup/reconciliation is background, never a request scan. */
 export class DiskMemoryIndex {
     fs;
@@ -105,8 +105,7 @@ export class DiskMemoryIndex {
                 await this.store.remove([path]);
                 return;
             }
-            const entries = memoryEntries(metadata.frontmatter);
-            if ((!entries.length && metadata.frontmatter.mcpvault_type !== 'journal_entry' && metadata.frontmatter.llm_wiki_type !== 'knowledge') || isModerationHidden(metadata.frontmatter)
+            if (isModerationHidden(metadata.frontmatter)
                 || isFictionDomain(metadata.frontmatter, path) || metadata.frontmatter.mcpvault_type === 'blog_post' && metadata.frontmatter.status === 'draft') {
                 await this.store.remove([path]);
                 return;
@@ -233,6 +232,32 @@ export class DiskMemoryIndex {
         }
         catch {
             return unavailable('memory_index_unavailable');
+        }
+    }
+    async graphReferences(canAccess, read) {
+        const revision = this.revision;
+        const unavailable = () => ({ reason: 'graph_index_unavailable',
+            resolve: async () => [], assertCurrent: async () => { } });
+        if (!this.store || this.state !== 'ready')
+            return unavailable();
+        try {
+            await this.storage.verifiedTree('memory-read-v1');
+            await stat(this.fs.getVaultPath());
+            const store = this.store, generation = await store.generation();
+            const current = async () => {
+                if (this.state !== 'ready' || this.revision !== revision || await store.generation() !== generation)
+                    throw Error('Graph index changed');
+            };
+            await current();
+            const capture = indexedGraphReferences(store, p => this.allowed(p) && canAccess(p), read, current);
+            return { resolve: capture.resolve, assertCurrent: async () => {
+                    await this.storage.verifiedTree('memory-read-v1');
+                    await stat(this.fs.getVaultPath());
+                    await capture.assertCurrent();
+                } };
+        }
+        catch {
+            return unavailable();
         }
     }
     async close() { this.state = 'closed'; this.revision++; this.unsubscribe?.(); this.reconcileUnsubscribe?.(); await this.tail; try {

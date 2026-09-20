@@ -719,7 +719,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
   const documents = documentIndex ? new DocumentService(documentIndex) : undefined;
   const documentSearch = documentIndex ? new DocumentSearch(documentIndex, retrieval) : undefined;
   const memoryCacheDir = process.env.MCPVAULT_MEMORY_CACHE_DIR;
-  if (hasFeature('personal-memory') && memoryCacheDir) memoryIndex = new DiskMemoryIndex(fileSystem, memoryCacheDir, path => publicIndexFilter.isAllowed(path), fileCatalog);
+  if ((hasFeature('personal-memory') || hasFeature('wiki-core')) && memoryCacheDir) memoryIndex = new DiskMemoryIndex(fileSystem, memoryCacheDir, path => publicIndexFilter.isAllowed(path), fileCatalog);
   const layeredMemory = hasFeature('personal-memory') ? new LayeredMemoryService(fileSystem, retrieval, scopeAccess, memoryIndex) : undefined;
   const researchBridge = hasFeature('ideation-research') ? new ResearchBridgeService(fileSystem, scopeAccess, retrieval) : undefined;
   const questionPacket = new QuestionPacketService(fileSystem, scopeAccess, retrieval);
@@ -729,7 +729,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
   const knowledgeApplications = new KnowledgeApplicationService(fileSystem, scopeAccess);
   const references = new ReferenceService(fileSystem, scopeAccess);
   const notices = new NoticeService(noticeRegistry, fileSystem, scopeAccess, references);
-  const llmWiki = new LlmWikiService(fileSystem, scopeAccess, references, semanticSearch);
+  const llmWiki = new LlmWikiService(fileSystem, scopeAccess, references, semanticSearch, memoryIndex);
   llmWikiCache = llmWiki;
   const moderation = new ModerationService(resolvedVaultPath, fileSystem, scopeAuth);
   const compilationAuthorize = maintenanceExecution(scopeAuth, scopeAccess, moderation, refreshDocumentPolicy).authorize;
@@ -1019,7 +1019,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
           inputSchema: {
             type: "object",
             properties: {
-              path: { type: "string", description: guidanceText('guid-d1e2a838e6178cc8', "Path relative to vault root (default: '/')"), default: "/" },
+              path: { type: "string", description: guidanceText('guid-d1e2a838e6178cc8', "Vault-relative path; omit or use an empty string for the root. Host-absolute paths are denied."), default: "" },
               offset: { type: "integer", minimum: 0, maximum: 100000, description: guidanceText('guid-b028d1ace809845d', "Zero-based page offset (default: 0)"), default: 0 },
               limit: { type: "integer", minimum: 1, maximum: 500, description: guidanceText('guid-a61bdc0ee33dad48', "Maximum directory entries before the character budget (default: 100)"), default: 100 },
               maxChars: { type: "integer", minimum: 1024, maximum: 12000, description: guidanceText('guid-c746b655a7c4be1a', "Hard total response budget (default: 6000)"), default: 6000 },
@@ -2597,6 +2597,8 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         }
 
         case "get_wiki_graph_health": {
+          if (trimmedArgs.path !== undefined) return jsonResult(await llmWiki.graphAssertions(principal,
+            { ...trimmedArgs, limit: Math.min(trimmedArgs.limit ?? 20, 40) }), trimmedArgs.prettyPrint);
           return jsonResult(await llmWiki.graphHealth(principal, trimmedArgs.limit, trimmedArgs.maxChars), trimmedArgs.prettyPrint);
         }
 
@@ -4299,7 +4301,7 @@ function boundedDirectoryResult(path: string, directories: string[], files: stri
     };
     if (truncated) value.nextAction = {
       endpointId: endpointIdForTool('list_directory'),
-      arguments: { path: path || '/', offset: nextOffset, limit: page.limit, maxChars: page.maxChars },
+      arguments: { ...(path && { path }), offset: nextOffset, limit: page.limit, maxChars: page.maxChars },
     };
     return JSON.stringify(value, null, args.prettyPrint ? 2 : undefined);
   };

@@ -27,14 +27,25 @@ try {
     guard(); const rows = [];
     for (let i = start; i < Math.min(start + 128, count); i++) {
       const path = `project-${i % 100}/note-${String(i).padStart(7, '0')}.md`, text = `# ${i}\n[[Hub]]\n[[Other]]`;
-      rows.push({ path, revision: createHash('sha256').update(text).digest('hex'), text, frontmatter: { llm_wiki_type: 'knowledge' } });
+      rows.push({ path, revision: createHash('sha256').update(text).digest('hex'), text,
+        frontmatter: { llm_wiki_type: 'knowledge', aliases: ['Shared alias', `고유-${i}`] } });
     }
     await store.put(rows); indexed += rows.length;
     if (performance.now() - lastReport > 15000) {
       console.log(JSON.stringify({ indexed, elapsedMs: Math.round(performance.now() - began), rssBytes: peakRss })); lastReport = performance.now();
     }
   }
-  const buildMs = performance.now() - began, scenarios = [];
+  const buildMs = performance.now() - began, referenceScenarios = [];
+  for (const keys of [['Shared alias'], ['고유-12345'], ['project-0/note-0000000.md']]) {
+    const times = []; let page;
+    for (let i = 0; i < 100; i++) { guard(); const t = performance.now(); page = await store.referenceCandidates(keys, 20); times.push(performance.now() - t); }
+    times.sort((a, b) => a - b);
+    if (keys[0] === 'Shared alias' ? !page.truncated || page.notes.length !== 20 : page.notes.length !== 1) throw Error('Identity candidate mismatch');
+    referenceScenarios.push({ keyKind: keys[0] === 'Shared alias' ? 'high_degree_alias' : keys[0].startsWith('고유') ? 'unique_alias' : 'exact_path',
+      p50Ms: times[49], p95Ms: times[94], returned: page.notes.length, truncated: page.truncated,
+      indexedBranchRowUpperBound: keys.length * 21, queryPlan: await store.referenceExplain(keys, 20) });
+  }
+  const scenarios = [];
   for (const query of [
     { direction: 'incoming', keys: ['hub', 'other'], limit: 20 },
     { direction: 'outgoing', keys: Array.from({ length: 20 }, (_, i) => `project-${i}/note-${String(i).padStart(7, '0')}.md`), limit: 20 },
@@ -55,7 +66,7 @@ try {
   const memoryStart = performance.now(), memory = await store.page({ terms: [], limit: 20 });
   if (memory.notes.length) throw Error('Graph-only rows leaked into memory candidates');
   result = { status: 'measured', engine, synthetic: true, logicalDocuments: count, graphOccurrencesBeforeUpdate: count * 2, vectorChunks: 0,
-    buildMs, scenarios, updateAndLookupMs, emptyMemoryLookupMs: performance.now() - memoryStart,
+    buildMs, scenarios, referenceScenarios, updateAndLookupMs, emptyMemoryLookupMs: performance.now() - memoryStart,
     peakProcessRssBytes: peakRss, mainJsHeapBytes: process.memoryUsage().heapUsed,
     diskBytes: (await stat(join(root, 'graph.sqlite'))).size,
     walBytes: await stat(join(root, 'graph.sqlite-wal')).then(s => s.size, e => { if (e.code === 'ENOENT') return 0; throw e; }),

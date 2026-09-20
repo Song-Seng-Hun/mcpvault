@@ -1,6 +1,7 @@
 import { guidanceError, guidanceText } from './guidance-runtime.js';
 import { claimId, parseClaimReference, blockAnchorLineIndex, type ParsedClaimReference } from './graph-validation.js';
 import { buildGraphAssertionPacket, type GraphAssertionPacketOptions } from './graph-assertion-packet.js';
+import type { GraphReadIndex } from './memory/graph-references.js';
 import { CLAIM_RELATION_FIELDS, typedRelationTargetKindReason } from './graph-contract.js';
 import { prepareDocumentWrite } from './enterprise-storage-context.js';
 import { preparePublicationWrite } from './prepared-publication.js';
@@ -1250,6 +1251,7 @@ export class LlmWikiService {
     private readonly access: ScopeAccessPolicy,
     private readonly references: ReferenceService,
     private readonly semanticSearch?: SemanticSearchService,
+    private readonly graphReadIndex?: GraphReadIndex,
   ) {}
 
   private dropProjection<T>(kind: 'catalog' | 'lint', cache: Map<string, T>, key: string): void {
@@ -3298,7 +3300,7 @@ export class LlmWikiService {
 
   /** Bounded, explainable neighbors; Markdown identity remains authoritative. */
   async graphAssertions(principal: ScopePrincipal | undefined, options: GraphAssertionPacketOptions) {
-    return buildGraphAssertionPacket(this.fileSystem, this.access, principal, options);
+    return buildGraphAssertionPacket(this.fileSystem, this.access, principal, options, this.graphReadIndex);
   }
 
   /** Legacy neighborhood remains unchanged unless the adapter selects assertions. */

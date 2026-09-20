@@ -31,6 +31,17 @@ async function call(endpointId: string, args: Record<string, unknown>, accessTok
   return { result, text, page: result.isError || endpointId === 'notes.write' ? undefined : JSON.parse(text) };
 }
 
+test('root directory continuations remain Vault-relative and callable', async () => {
+  const first = await call('mcp.list_directory', { limit: 1, maxChars: 1024 });
+  expect(first.result.isError).not.toBe(true);
+  expect(first.page.nextAction).toBeDefined();
+  const next = await call(first.page.nextAction.endpointId, first.page.nextAction.arguments);
+  expect(next.result.isError, next.text).not.toBe(true);
+  expect(next.page.offset).toBe(1);
+  const hostAbsolute = await call('mcp.list_directory', { path: 'C:/Windows' });
+  expect(hostAbsolute.result.isError).toBe(true);
+});
+
 test('public graph pages retain exact long paths, link text, heading locators and parsed revisions', async () => {
   const { page } = await call('mcp.get_backlinks', { path: 'Target.md', maxChars: 12000 });
   expect(page.backlinks[0]).toMatchObject({ path: deepPath, link: exactLink, targetHeading: heading });

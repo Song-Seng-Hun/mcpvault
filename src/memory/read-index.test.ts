@@ -10,6 +10,8 @@ import { LayeredMemoryService } from '../layered-memory.js';
 import { RetrievalService } from '../retrieval-service.js';
 import { DiskMemoryIndex } from './read-index.js';
 import { withEnterpriseStorageContext } from '../enterprise-storage-context.js';
+import { buildGraphAssertionPacket } from '../graph-assertion-packet.js';
+import { HostDerivedStorage } from '../host-derived-storage.js';
 const roots: string[] = [], indexes: DiskMemoryIndex[] = [];
 afterEach(async () => { vi.restoreAllMocks(); for (const i of indexes.splice(0)) await i.close(); for (const p of roots.splice(0)) await rm(p, { recursive: true, force: true }); });
 async function setup() {
@@ -163,4 +165,85 @@ test('background graph indexing covers ordinary knowledge without injecting it i
   await index.invalidate([{ path: 'Knowledge.md', kind: 'upsert' }]);
   expect((await store.graph({ direction: 'incoming', keys: ['target'], limit: 20 })).occurrences).toHaveLength(0);
   expect((await store.graph({ direction: 'incoming', keys: ['changed'], limit: 20 })).occurrences).toHaveLength(1);
+}, 30000);
+
+test('indexed assertion reads resolve ordinary-note aliases without inventory scans or hidden targets', async () => {
+  const { fs, index } = await setup(), access = new ScopeAccessPolicy();
+  await fs.writeNote({ path: 'Project/A.md', content: '[[배포 안내]] [Root](Docs/B.md) [[Secret|secret label]]' });
+  await fs.writeNote({ path: 'Docs/B.md', content: '# Condition', frontmatter: { aliases: ['배포 안내'] } });
+  await fs.writeNote({ path: 'Secret.md', content: 'private' });
+  await index.start();
+  vi.spyOn(access, 'canAccessPhysicalPath').mockImplementation(p => p !== 'Secret.md');
+  const scans = vi.spyOn(fs, 'createNoteReferenceResolver');
+  const result = await buildGraphAssertionPacket(fs, access, undefined, { path: 'Project/A.md', maxChars: 12000 }, index);
+  expect(result.assertions.map(a => a.target.path)).toEqual(['Docs/B.md', 'Docs/B.md']);
+  expect(scans).not.toHaveBeenCalled();
+  expect(JSON.stringify(result)).not.toMatch(/Secret|secret label|private/);
+}, 30000);
+
+test('configured cold index returns partial, never foreground whole-Vault alias lookup', async () => {
+  const { fs, index } = await setup();
+  await fs.writeNote({ path: 'A.md', content: '[[B]]' });
+  await fs.writeNote({ path: 'B.md', content: 'B' });
+  const scans = vi.spyOn(fs, 'createNoteReferenceResolver');
+  const result = await buildGraphAssertionPacket(fs, new ScopeAccessPolicy(), undefined, { path: 'A.md' }, index);
+  expect(result.partial).toBe(true); expect(result.assertions).toEqual([]);
+  expect(scans).not.toHaveBeenCalled();
+}, 30000);
+
+test('indexed reference capture rejects stale identities and invalidates on events or revocation', async () => {
+  const { fs, index } = await setup();
+  await fs.writeNote({ path: 'B.md', content: 'B', frontmatter: { aliases: ['Alias'] } });
+  await index.start();
+  expect(typeof index.graphReferences).toBe('function');
+  let visible = true;
+  const read = async (p: string) => ({ ...await fs.readNote(p), path: p });
+  const capture = await index.graphReferences(() => visible, read);
+  expect(await capture.resolve('Alias', { sourcePath: 'A.md' })).toEqual(['B.md']);
+  visible = false; await expect(capture.assertCurrent()).rejects.toThrow(); visible = true;
+  await fs.writeNote({ path: 'B.md', content: 'B', frontmatter: { aliases: ['New alias'] } });
+  const stale = await index.graphReferences(() => true, read);
+  await expect(stale.resolve('Alias', { sourcePath: 'A.md' })).rejects.toThrow();
+  await index.invalidate([{ path: 'B.md', kind: 'upsert' }]);
+  await expect(capture.assertCurrent()).rejects.toThrow();
+}, 30000);
+
+test('indexed and legacy assertions agree for explicit, suffix, relative and multilingual identities', async () => {
+  const { fs, index } = await setup(), access = new ScopeAccessPolicy();
+  await fs.writeNote({ path: 'Project/A.md', content: '[[Docs/B]] [[B.md]] [[./Local.md]] [[배포 안내]] [[Docs/Two  Spaces.md]]',
+    frontmatter: { contrasts_with: ['[[guide-1]]'] } });
+  await fs.writeNote({ path: 'Deep/Docs/B.md', content: 'B', frontmatter: { aliases: ['배포 안내'], stable_id: 'guide-1' } });
+  await fs.writeNote({ path: 'Project/Local.md', content: 'Local' });
+  await fs.writeNote({ path: 'Docs/Two  Spaces.md', content: 'Exact name' });
+  await index.start();
+  const options = { path: 'Project/A.md', maxChars: 16000 };
+  const legacy = await buildGraphAssertionPacket(fs, access, undefined, options);
+  const inspections = vi.spyOn(HostDerivedStorage.prototype, 'verifiedTree');
+  const indexed = await buildGraphAssertionPacket(fs, access, undefined, options, index);
+  expect(indexed.assertions).toEqual(legacy.assertions);
+  expect(inspections.mock.calls.length).toBeLessThanOrEqual(2);
+}, 30000);
+
+test('indexed assertions reject a new alias collision during final source revalidation', async () => {
+  const { fs, index } = await setup();
+  await fs.writeNote({ path: 'A.md', content: '[[Alias]]' });
+  await fs.writeNote({ path: 'B.md', content: 'B', frontmatter: { aliases: ['Alias'] } }); await index.start();
+  const read = fs.readNoteRevision.bind(fs); let changed = false;
+  vi.spyOn(fs, 'readNoteRevision').mockImplementation(async (...args) => {
+    if (!changed) { changed = true;
+      await fs.writeNote({ path: 'C.md', content: 'C', frontmatter: { aliases: ['Alias'] } });
+      await index.invalidate([{ path: 'C.md', kind: 'upsert' }]);
+    }
+    return read(...args);
+  });
+  await expect(buildGraphAssertionPacket(fs, new ScopeAccessPolicy(), undefined, { path: 'A.md' }, index)).rejects.toThrow('Graph context unavailable');
+}, 30000);
+
+test('identity read-budget exhaustion is partial rather than a false stale-context error', async () => {
+  const { fs, index } = await setup();
+  await fs.writeNote({ path: 'A.md', content: '[[Shared]]' });
+  for (let i = 0; i < 64; i++) await fs.writeNote({ path: `Target${i}.md`, content: 'Target', frontmatter: { aliases: ['Shared'] } });
+  await index.start();
+  await expect(buildGraphAssertionPacket(fs, new ScopeAccessPolicy(), undefined, { path: 'A.md' }, index))
+    .resolves.toMatchObject({ partial: true, assertions: [] });
 }, 30000);
