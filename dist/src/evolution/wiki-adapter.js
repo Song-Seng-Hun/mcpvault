@@ -21,7 +21,9 @@ export function wikiEvolutionAdapter(service) {
                 || r.job.operation !== 'synthesize' || r.job.protection !== 'ready' || !r.job.draft || !r.job.evidence
                 || !['new_knowledge', 'extend_existing'].includes(r.job.evidence.decision) || r.job.validation?.status !== 'passed')
                 return unavailable();
-            return { expectedRevision: r.revision, fingerprint: contentBasis(r.job) };
+            const rollback = await service.captureRollback?.(cycle.target.id, principal);
+            await current();
+            return { expectedRevision: r.revision, fingerprint: contentBasis(r.job), ...(rollback && { data: { rollback } }) };
         },
         apply: async (cycle, principal, current) => {
             const r = await service.evolutionSnapshot(cycle.target.id, principal);
@@ -40,6 +42,20 @@ export function wikiEvolutionAdapter(service) {
             if (r.job.status !== 'completed' || !r.job.receipt || cycle.intent?.fingerprint !== contentBasis(r.job))
                 return { state: 'unknown' };
             return { state: 'applied', revision: r.job.receipt.outputRevision };
+        },
+        revert: async (cycle, principal, current) => {
+            const rollback = cycle.intent?.data?.rollback;
+            if (!rollback || !cycle.outputRevision)
+                return unavailable();
+            return service.restoreManaged(cycle.target.id, cycle.outputRevision, rollback, principal, current);
+        },
+        reconcileRevert: async (cycle, principal, current) => {
+            const rollback = cycle.intent?.data?.rollback;
+            if (!rollback)
+                return { state: 'unknown' };
+            const result = await service.confirmRestored(cycle.target.id, rollback, principal);
+            await current();
+            return result;
         },
     };
 }

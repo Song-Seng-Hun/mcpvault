@@ -2,7 +2,7 @@ import { guidanceError } from './guidance-runtime.js';
 import type { SearchService } from './search.js';
 import type { CollaborationService } from './scopes.js';
 import type { SemanticSearchService, SemanticSearchOutcome, MemorySemanticSearchOutcome } from './semantic-search.js';
-import type { SearchParams, SearchResult, ParsedNote, MemorySearchParams } from './types.js';
+import type { SearchParams, SearchResult, ParsedNote, MemorySearchParams, MemorySearchOutcome } from './types.js';
 import type { ScopePrincipal } from './scope-auth.js';
 import type { ScopeAccessPolicy } from './scope-access.js';
 import type { FileSystemService } from './filesystem.js';
@@ -18,6 +18,7 @@ import { constrainedQuery, plainQueryExpansion, semanticQueryState } from './ret
 import {emptyReviewedProcedureDiscovery,type ReviewedProcedureDiscovery} from './skill-release-discovery.js';
 import type {ReviewedSkillDeliveryFence} from './skill-release-reader.js';
 import { currentHarness } from './evolution/harness.js';
+import { reciprocalRanks } from './retrieval/rank-fusion.js';
 export { constrainedQuery, plainQueryExpansion } from './retrieval/query-policy.js';
 
 export const RETRIEVAL_NOTE_BYTES = 8 * 1024 * 1024;
@@ -81,7 +82,7 @@ export class RetrievalService {
    * rv, no source hydration and no display/JSON cap. The caller owns bounded
    * current-revision body reads, exact matching and final response serialization.
    * complete=false forbids treating this result window as a lossless inventory. */
-  async memoryCandidates(params: MemoryCandidateParams): Promise<MemoryCandidateOutcome> {
+  async memoryCandidates(params: MemoryCandidateParams, lexicalSnapshot?: MemorySearchOutcome): Promise<MemoryCandidateOutcome> {
     if (typeof params.canAccessPath !== 'function') throw guidanceError(new Error('Memory candidates require a visibility predicate'), 'guid-829812a0c3932d67');
     const limit = memoryCandidateLimit(params.limit);
     const admitted = (path: string) => this.access.canAccessPhysicalPath(path, params.principal) && params.canAccessPath(path) && (this.skillEvolution?.discoveryAllowed(path) ?? true);
@@ -98,8 +99,8 @@ export class RetrievalService {
     let usedQuery = params.query; let expanded = false;
     let lexical: Awaited<ReturnType<SearchService['memoryCandidates']>>;
     try {
-      lexical = await this.search.memoryCandidates(safe);
-      if (lexical.complete && !lexical.results.length) {
+      lexical = lexicalSnapshot ?? await this.search.memoryCandidates(safe);
+      if (!lexicalSnapshot && lexical.complete && !lexical.results.length) {
         const expansion = plainQueryExpansion(usedQuery);
         if (expansion) {
           usedQuery = expansion; expanded = true;
@@ -108,6 +109,7 @@ export class RetrievalService {
       }
     } catch { lexical = { results: [], complete: false }; }
     let complete = lexical.complete;
+    const semanticOrder: string[] = [];
     let semantic: RetrievalOutcome['semantic'] = { state: 'disabled' };
     const byPath = new Map<string, RetrievalHit>(lexical.results.map(hit => [hit.p, hit]));
     const semanticPolicy = semanticQueryState(params.query, params.semantic, params.caseSensitive);
@@ -133,13 +135,20 @@ export class RetrievalService {
           if (!admitted(hit.p)) continue;
           const prior = byPath.get(hit.p);
           if (prior && prior.rv !== hit.rv) { complete = false; continue; }
+          semanticOrder.push(hit.p);
           byPath.set(hit.p, prior ? { ...prior, vs: true,
             ...(hit.semanticDistance !== undefined && { semanticDistance: hit.semanticDistance }),
             why: [...(prior.why || []), 'semantic_candidate'] } : hit);
         }
       }
     }
-    const results = [...byPath.values()];
+    let results = [...byPath.values()];
+    if (lexicalSnapshot) {
+      const ranks = reciprocalRanks([lexical.results.map(h => h.p), semanticOrder]);
+      if (results.some(hit => !ranks.has(hit.p))) complete = false;
+      results = results.filter(hit => ranks.has(hit.p));
+      results.sort((a, b) => (ranks.get(b.p) || 0) - (ranks.get(a.p) || 0) || a.p.localeCompare(b.p));
+    }
     if (results.some(hit => !admitted(hit.p))) return { results: [], usedQuery, expanded, semantic, complete: false };
     if (results.length > limit) complete = false;
     return { results: results.slice(0, limit), usedQuery, expanded, semantic, complete };
@@ -203,24 +212,16 @@ export class RetrievalService {
         finally { if (timer) clearTimeout(timer); }
         semantic = { state: outcome?.available ? 'available' : 'unavailable' };
         const byPath = new Map(results.map(hit => [this.physical(hit, params.principal), hit]));
-        const ranks = new Map<string, number>();
-        if (evidence) {
-          const seen = new Set<string>();
-          for (const hit of results.slice(0, 20)) {
-            const path = this.physical(hit, params.principal);
-            if (!admitted(path) || seen.has(path)) continue;
-            seen.add(path); ranks.set(path, 1 / (60 + seen.size));
-          }
-        }
+        const lexicalOrder = results.slice(0, 20).map(hit => this.physical(hit, params.principal)).filter(admitted);
         const semanticSeen = new Set<string>();
         for (const hit of (outcome?.results || []).slice(0, evidence ? 20 : undefined)) {
           if (!admitted(hit.p)) continue;
           const physical = this.physical(hit, params.principal); const prior = byPath.get(physical);
           if (semanticSeen.has(physical)) continue;
           semanticSeen.add(physical);
-          if (evidence) ranks.set(physical, (ranks.get(physical) || 0) + 1 / (60 + semanticSeen.size));
           byPath.set(physical, prior ? { ...prior, vs: true, why: [...new Set([...(prior.why || []), 'semantic_match'])] } : hit);
         }
+        const ranks = reciprocalRanks([lexicalOrder, [...semanticSeen]]);
         results = [...byPath.values()].sort((a, b) => evidence
           ? (ranks.get(this.physical(b, params.principal)) || 0) - (ranks.get(this.physical(a, params.principal)) || 0)
           : Number(Boolean(b.wk)) - Number(Boolean(a.wk))).slice(0, normalizeSearchLimit(params.limit));

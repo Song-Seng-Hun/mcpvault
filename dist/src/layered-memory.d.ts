@@ -3,6 +3,8 @@ import type { RetrievalService } from './retrieval-service.js';
 import type { ScopeAccessPolicy } from './scope-access.js';
 import type { ScopePrincipal } from './scope-auth.js';
 import { type MemoryTaskContext } from './retrieval/memory-plan.js';
+import type { MemoryReadIndex } from './memory/read-index.js';
+import { MemoryExposure, type MemoryReuse } from './memory/exposure.js';
 export interface MemoryRequest {
     principal?: ScopePrincipal;
     scope?: 'personal' | 'user' | 'community' | 'global';
@@ -20,94 +22,16 @@ export interface MemoryRequest {
     limit?: number;
     maxChars?: number;
     taskContext?: MemoryTaskContext;
+    reuse?: MemoryReuse;
 }
-/** Read-time projections over the existing metadata and search indexes. No memory DB. */
+/** Read-time projections; optional disk index stores disposable discovery metadata. */
 export declare class LayeredMemoryService {
     private readonly fs;
     private readonly retrieval;
     private readonly access;
-    constructor(fs: FileSystemService, retrieval: RetrievalService, access: ScopeAccessPolicy);
-    read(mode: 'recall' | 'brief' | 'consolidate', params: MemoryRequest): Promise<{
-        scope: "community" | "global" | "personal" | "user";
-        mode: "brief" | "consolidate" | "recall";
-        status: string;
-        items: never[];
-        routing: import("./retrieval/memory-plan.js").MemoryPlan;
-        truncated: boolean;
-        warnings: string[];
-        nextAction: {
-            endpointId: string;
-            arguments: {
-                maxChars: number;
-                prettyPrint: boolean;
-                scope?: never;
-                includeHistory?: never;
-                limit?: never;
-            };
-        } | {
-            endpointId: string;
-            arguments: {
-                prettyPrint?: never;
-                scope: "community" | "global" | "personal" | "user";
-                maxChars: number;
-                includeHistory?: never;
-                limit?: never;
-            };
-        };
-    } | {
-        scope: "community" | "global" | "personal" | "user";
-        mode: "brief" | "consolidate" | "recall";
-        interpretation: string;
-        status: string;
-        routing?: import("./retrieval/memory-plan.js").MemoryPlan;
-        items: any[];
-        snapshot: string;
-        truncated: boolean;
-        nextCursor?: {
-            snapshot: string;
-            offset: number;
-        };
-        search?: {
-            usedQuery: string;
-            expanded: boolean;
-            semantic: "available" | "disabled" | "filtered" | "unavailable";
-        };
-        warnings: string[];
-        nextAction: any;
-    } | {
-        routing?: never;
-        warnings?: never;
-        nextAction?: never;
-        scope: "community" | "global" | "personal" | "user";
-        mode: "brief" | "consolidate" | "recall";
-        status: string;
-        items: never[];
-        truncated: boolean;
-        reason: string;
-        retry: {
-            maxChars: number;
-        };
-        hint: "Repeat with retry.maxChars; if already at maximum, narrow the query.";
-    } | {
-        routing?: never;
-        warnings?: never;
-        scope: "community" | "global" | "personal" | "user";
-        mode: "brief" | "consolidate" | "recall";
-        status: string;
-        items: never[];
-        truncated: boolean;
-        reason: string;
-        nextAction: {
-            endpointId: string;
-            arguments: {
-                prettyPrint?: never;
-                scope: "community" | "global" | "personal" | "user";
-                includeHistory: boolean;
-                limit: number;
-                maxChars: number;
-            };
-        };
-        hint: "Inspect original alternatives with a more precise query; a larger output budget cannot increase source reads.";
-    }>;
+    private readonly disk?;
+    readonly exposure: MemoryExposure;
+    constructor(fs: FileSystemService, retrieval: RetrievalService, access: ScopeAccessPolicy, disk?: MemoryReadIndex | undefined);
+    read(mode: 'recall' | 'brief' | 'consolidate', params: MemoryRequest): Promise<any>;
 }
 //# sourceMappingURL=layered-memory.d.ts.map

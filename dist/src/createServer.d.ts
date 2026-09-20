@@ -86,6 +86,9 @@ export interface CreateServerOptions extends DocumentAuthorityOptions {
     commandCenterId?: string;
 }
 export interface ServerRuntime {
+    /** Host-only acknowledgement of actually retained context; never an MCP argument. */
+    confirmMemoryRetention?: (accessToken: string, receipt: string, contextGeneration: string) => Promise<void>;
+    invalidateMemoryRetention?: (accessToken: string) => Promise<void>;
     evolutionReview?: import('./evolution/direct-review.js').EvolutionDirectReview;
     /** Trusted in-process host surface. Never registered as an MCP/REST endpoint. */
     evolutionHost?: EvolutionRuntimeHost;

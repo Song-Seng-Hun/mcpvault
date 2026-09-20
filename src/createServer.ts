@@ -44,6 +44,7 @@ import { EvolutionService } from './evolution/service.js';
 import type { EvolutionOptions } from './evolution/model.js';
 import { EvolutionOpportunity, evolutionSessionBridge, type EvolutionSession } from './evolution/opportunity.js';
 import { connectEvolutionRuntime, type EvolutionRuntimeConfig, type EvolutionRuntimeHost } from './evolution/runtime-connection.js';
+import { DiskMemoryIndex } from './memory/read-index.js';
 import { wikiEvolutionAdapter } from './evolution/wiki-adapter.js';
 import { FidelityService } from './fidelity-service.js';
 import { getFidelityTools } from './fidelity-tools.js';
@@ -508,6 +509,9 @@ const FIXED_MCP_TOOLS: Tool[] = [
 const ALLOW_HIDDEN_DIRECT_TOOLS_IN_TESTS = process.env.VITEST === 'true';
 
 export interface ServerRuntime {
+  /** Host-only acknowledgement of actually retained context; never an MCP argument. */
+  confirmMemoryRetention?: (accessToken: string, receipt: string, contextGeneration: string) => Promise<void>;
+  invalidateMemoryRetention?: (accessToken: string) => Promise<void>;
   evolutionReview?: import('./evolution/direct-review.js').EvolutionDirectReview;
   /** Trusted in-process host surface. Never registered as an MCP/REST endpoint. */
   evolutionHost?: EvolutionRuntimeHost;
@@ -653,6 +657,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
   const searchService = new SearchService(resolvedVaultPath, publicIndexFilter, fileCatalog, vaultIo);
   const metadataIndex = new VaultMetadataIndex(resolvedVaultPath, publicIndexFilter, frontmatterHandler, fileCatalog, vaultIo);
   const graphIndex = new VaultGraphIndex(resolvedVaultPath, publicIndexFilter, frontmatterHandler, fileCatalog, vaultIo);
+  let memoryIndex: DiskMemoryIndex | undefined;
   const refreshDocumentPolicy = async () => {
     try { await documentPolicy.refresh(); }
     catch (error) { documentPolicyReady = false; throw error; }
@@ -661,6 +666,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
       documentPolicyReady = true; indexedDocumentPolicy = fingerprint;
       metadataIndex.invalidateAll(); searchService.invalidate(); graphIndex.invalidate();
       semanticSearch.notifyChanges([]);
+      void memoryIndex?.invalidate();
     }
   };
   const pendingReadModelChanges = new Map<string, VaultCatalogChange>();
@@ -679,6 +685,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
     communityFeaturesCache?.invalidateMany(changes);
     llmWikiCache?.invalidate(changes);
     graphIndex.invalidateMany(changes);
+    void memoryIndex?.invalidate(changes);
   };
   const queueReadModelChange = (path: string, kind: VaultCatalogChange['kind']) => {
     if (excludedGuidance(path)) return;
@@ -711,7 +718,9 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
     { ...(documentCacheDir && { cacheDir: documentCacheDir }), ...(pdfHostConfig && { pdf: configuredPdfProvider(pdfHostConfig) }) }) : undefined;
   const documents = documentIndex ? new DocumentService(documentIndex) : undefined;
   const documentSearch = documentIndex ? new DocumentSearch(documentIndex, retrieval) : undefined;
-  const layeredMemory = hasFeature('personal-memory') ? new LayeredMemoryService(fileSystem, retrieval, scopeAccess) : undefined;
+  const memoryCacheDir = process.env.MCPVAULT_MEMORY_CACHE_DIR;
+  if (hasFeature('personal-memory') && memoryCacheDir) memoryIndex = new DiskMemoryIndex(fileSystem, memoryCacheDir, path => publicIndexFilter.isAllowed(path), fileCatalog);
+  const layeredMemory = hasFeature('personal-memory') ? new LayeredMemoryService(fileSystem, retrieval, scopeAccess, memoryIndex) : undefined;
   const researchBridge = hasFeature('ideation-research') ? new ResearchBridgeService(fileSystem, scopeAccess, retrieval) : undefined;
   const questionPacket = new QuestionPacketService(fileSystem, scopeAccess, retrieval);
   const sourceComparison = new SourceComparisonService(fileSystem, scopeAccess, retrieval);
@@ -3948,6 +3957,13 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
   installMcpHandlers(server);
 
   SERVER_RUNTIMES.set(server, {
+    ...(layeredMemory && { confirmMemoryRetention: async (accessToken: string, receipt: string, contextGeneration: string) => {
+      const principal = await scopeAuth.authenticate(accessToken); if (!principal) throw Error('Memory session unavailable');
+      layeredMemory.exposure.confirm(principal, receipt, contextGeneration);
+    }, invalidateMemoryRetention: async (accessToken: string) => {
+      const principal = await scopeAuth.authenticate(accessToken); if (!principal) throw Error('Memory session unavailable');
+      layeredMemory.exposure.invalidate(principal);
+    } }),
     ...(evolutionConnection && { evolutionHost: evolutionConnection.host }),
     ...(evolutionConnection && !readOnly && { evolutionReview: evolutionConnection.review }),
     runEvolutionOpportunity: async (request, principal, session) => {
@@ -3976,7 +3992,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
     // remaining workers/watchers or the underlying protocol server.
     for (const close of [() => evolutionConnection?.close(), disconnectCodexHooks, readModelCatalogUnsubscribe, maintenanceReconcileUnsubscribe,
       () => maintenance.close(), () => compilation.close(), () => llmWiki.invalidate(), () => documentSearch?.close(),
-      () => documentIndex?.close(), () => mocRegions.close(), () => metadataIndex.close(),
+      () => documentIndex?.close(), () => memoryIndex?.close(), () => mocRegions.close(), () => metadataIndex.close(),
       () => searchService.close(), () => semanticSearch.close(), () => graphIndex.close(),
       () => notifications?.close(), () => communityFeatures?.close(), () => fileCatalog.close(), closeServer]) {
       try { await close(); } catch (error) { failures.push(error); }

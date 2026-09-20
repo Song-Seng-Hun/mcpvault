@@ -34,6 +34,76 @@ export class CompilationService {
         return pending;
     }
     async close() { this.closed = true; await this.tail; }
+    async rollbackJob(id, principal) {
+        if (this.closed || !compilationId(id) || !this.options.host)
+            throw unavailable();
+        await this.actor(principal);
+        const state = parseCompilationHistory(await this.options.host.readState());
+        const job = state.jobs.find(j => j.requestId === id && j.accountId === principal.accountId);
+        if (!job)
+            throw unavailable();
+        const admission = await this.gate(validateCompilationConfig(await this.options.host.refresh()), job, principal);
+        if (admission.status !== 'ready' || admission.fingerprint !== job.authorityFingerprint)
+            throw unavailable();
+        for (const input of job.inputs)
+            if (await this.revision(input.path, principal) !== input.revision)
+                throw unavailable();
+        await this.actor(principal);
+        return { state, job };
+    }
+    async captureRollback(id, principal) {
+        const { state, job } = await this.rollbackJob(id, principal);
+        if (job.outputRevision === 'missing')
+            return undefined; // No automatic derivative deletion.
+        if (!state.jobs.some(j => j.accountId === principal.accountId && j.outputPath === job.outputPath && j.receipt?.outputRevision === job.outputRevision))
+            throw unavailable();
+        const note = await this.options.fs.readNote(job.outputPath, 24000);
+        if (note.revision !== job.outputRevision || note.frontmatter.immutable === true || note.frontmatter.llm_wiki_type === 'source' || isModerationHidden(note.frontmatter))
+            throw unavailable();
+        await this.rollbackJob(id, principal);
+        if (await this.revision(job.outputPath, principal) !== note.revision)
+            throw unavailable();
+        return { path: job.outputPath, revision: note.revision, content: note.originalContent };
+    }
+    async confirmRestored(id, snapshot, principal) {
+        const { state, job } = await this.rollbackJob(id, principal);
+        if (!snapshot || snapshot.path !== job.outputPath || snapshot.revision !== job.outputRevision || typeof snapshot.content !== 'string'
+            || snapshot.content.length > 24000 || compilationContentHash(snapshot.content) !== snapshot.revision
+            || !state.jobs.some(j => j.accountId === principal.accountId && j.outputPath === job.outputPath && j.receipt?.outputRevision === snapshot.revision))
+            throw unavailable();
+        return await this.revision(job.outputPath, principal) === snapshot.revision ? { state: 'withdrawn', revision: snapshot.revision } : { state: 'unknown' };
+    }
+    async restoreManaged(id, outputRevision, snapshot, principal, current) {
+        return this.serial(async () => {
+            if (this.options.readOnly || !this.options.host)
+                throw unavailable();
+            const writer = await this.options.host.acquire();
+            try {
+                await current();
+                await writer.assertHeld();
+                if ((await this.confirmRestored(id, snapshot, principal)).state === 'withdrawn')
+                    return { revision: snapshot.revision };
+                const { job } = await this.rollbackJob(id, principal);
+                if (!job.receipt || job.receipt.outputRevision !== outputRevision || await this.revision(job.outputPath, principal) !== outputRevision)
+                    throw unavailable();
+                const note = await this.options.fs.readNote(job.outputPath, 24000);
+                const policy = { guards: job.inputs.map(i => ({ path: i.path, expectedRevision: i.revision })), assertAccess: async () => {
+                        await current();
+                        await writer.assertHeld();
+                        await this.rollbackJob(id, principal);
+                    } };
+                const changes = [{ path: job.outputPath, expectedRevision: outputRevision, patches: [{ oldString: note.originalContent, newString: snapshot.content }] }];
+                const preview = await this.options.fs.patchMultipleNotes({ changes, dryRun: true }, undefined, policy);
+                await this.options.fs.patchMultipleNotes({ changes, dryRun: false, confirmPlanFingerprint: preview.planFingerprint }, undefined, policy);
+                if ((await this.confirmRestored(id, snapshot, principal)).state !== 'withdrawn')
+                    throw unavailable();
+                return { revision: snapshot.revision };
+            }
+            finally {
+                await writer.close();
+            }
+        });
+    }
     /** Internal evolution bridge. Authorize every input before returning a pinned private job. */
     async evolutionSnapshot(requestId, principal) {
         if (!compilationId(requestId) || !this.options.host)

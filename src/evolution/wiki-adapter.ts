@@ -2,6 +2,7 @@ import type { CompilationService } from '../compilation-service.js';
 import type { CompilationJob } from '../compilation-model.js';
 import type { EvolutionAdapter } from './model.js';
 import { hash, object, unavailable } from './policy.js';
+import type { ManagedRollback } from '../memory/rollback.js';
 
 /** Applies an already prepared, generated and owner-checked job, never arbitrary Markdown. */
 export function wikiEvolutionAdapter(service: CompilationService): EvolutionAdapter {
@@ -21,7 +22,8 @@ export function wikiEvolutionAdapter(service: CompilationService): EvolutionAdap
         || cycle.scope.kind !== 'project' || cycle.scope.id !== r.job.projectId || r.job.status !== 'checked'
         || r.job.operation !== 'synthesize' || r.job.protection !== 'ready' || !r.job.draft || !r.job.evidence
         || !['new_knowledge', 'extend_existing'].includes(r.job.evidence.decision) || r.job.validation?.status !== 'passed') return unavailable();
-      return { expectedRevision: r.revision, fingerprint: contentBasis(r.job) };
+      const rollback = await service.captureRollback?.(cycle.target.id, principal); await current();
+      return { expectedRevision: r.revision, fingerprint: contentBasis(r.job), ...(rollback && { data: { rollback } }) };
     },
     apply: async (cycle, principal, current) => {
       const r = await service.evolutionSnapshot(cycle.target.id, principal); await current();
@@ -34,6 +36,16 @@ export function wikiEvolutionAdapter(service: CompilationService): EvolutionAdap
       const r = await service.evolutionSnapshot(cycle.target.id, principal); await current();
       if (r.job.status !== 'completed' || !r.job.receipt || cycle.intent?.fingerprint !== contentBasis(r.job)) return { state: 'unknown' };
       return { state: 'applied', revision: r.job.receipt.outputRevision };
+    },
+    revert: async (cycle, principal, current) => {
+      const rollback = (cycle.intent?.data as { rollback?: ManagedRollback } | undefined)?.rollback;
+      if (!rollback || !cycle.outputRevision) return unavailable();
+      return service.restoreManaged(cycle.target.id, cycle.outputRevision, rollback, principal, current);
+    },
+    reconcileRevert: async (cycle, principal, current) => {
+      const rollback = (cycle.intent?.data as { rollback?: ManagedRollback } | undefined)?.rollback;
+      if (!rollback) return { state: 'unknown' };
+      const result = await service.confirmRestored(cycle.target.id, rollback, principal); await current(); return result;
     },
   };
 }

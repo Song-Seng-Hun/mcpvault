@@ -1,7 +1,7 @@
 import type { SearchService } from './search.js';
 import type { CollaborationService } from './scopes.js';
 import type { SemanticSearchService } from './semantic-search.js';
-import type { SearchParams, SearchResult, ParsedNote, MemorySearchParams } from './types.js';
+import type { SearchParams, SearchResult, ParsedNote, MemorySearchParams, MemorySearchOutcome } from './types.js';
 import type { ScopePrincipal } from './scope-auth.js';
 import type { ScopeAccessPolicy } from './scope-access.js';
 import type { FileSystemService } from './filesystem.js';
@@ -74,7 +74,7 @@ export declare class RetrievalService {
      * rv, no source hydration and no display/JSON cap. The caller owns bounded
      * current-revision body reads, exact matching and final response serialization.
      * complete=false forbids treating this result window as a lossless inventory. */
-    memoryCandidates(params: MemoryCandidateParams): Promise<MemoryCandidateOutcome>;
+    memoryCandidates(params: MemoryCandidateParams, lexicalSnapshot?: MemorySearchOutcome): Promise<MemoryCandidateOutcome>;
     retrieve(params: RetrievalParams, allowExpansion?: boolean): Promise<RetrievalOutcome>;
     private retrieveCurrent;
     searchNotes(params: RetrievalParams): Promise<RetrievalHit[]>;

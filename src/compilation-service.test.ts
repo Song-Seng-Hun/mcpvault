@@ -157,6 +157,40 @@ test('no host configuration means diagnosis only and no durable state or source 
   expect(durable).toBeUndefined(); expect(await fs.noteExists('Result.md')).toBe(false);
 });
 
+test('managed derivative rollback restores exact prior bytes, refuses manual edits, and survives receipt retry', async () => {
+  const s = service({ adapter: adapter() });
+  const publish = async (requestId: string, expectedOutputRevision: string, content: string) => {
+    const prepared = await s.execute({ ...await request(), requestId, expectedOutputRevision }, actor);
+    const submitted = await s.execute({ op: 'submit', requestId, expectedJobRevision: prepared.jobRevision, content, evidence: await preservationEvidence(content, 'preserved') }, actor);
+    return s.execute({ op: 'retry', requestId, expectedJobRevision: submitted.jobRevision }, actor);
+  };
+  const first = await publish('original', 'missing', 'Prior condition remains.');
+  const original = await fs.readNote('Result.md');
+  const prepared = await s.execute({ ...await request(), requestId: 'update', expectedOutputRevision: first.outputRevision }, actor);
+  const snapshot = await s.captureRollback('update', actor);
+  expect(snapshot?.content).toBe(original.originalContent);
+  const submitted = await s.execute({ op: 'submit', requestId: 'update', expectedJobRevision: prepared.jobRevision,
+    content: 'New condition applies.', evidence: await preservationEvidence('New condition applies.', 'preserved') }, actor);
+  await s.execute({ op: 'check', requestId: 'update', expectedJobRevision: submitted.jobRevision }, actor);
+  const bridge = wikiEvolutionAdapter(s), target: any = { kind: 'wiki', id: 'update', path: 'Result.md' };
+  const baseline = await bridge.read(target, actor), cycle: any = { id: 'managed-update', target,
+    scope: { kind: 'project', id: 'p' }, baseline, candidate: { jobRevision: baseline.revision } };
+  cycle.intent = await bridge.preview(cycle, actor, async () => {});
+  expect(cycle.intent.data.rollback).toEqual(snapshot);
+  const applied = await bridge.apply(cycle, actor, async () => {}), done = { outputRevision: applied.revision };
+  cycle.outputRevision = applied.revision;
+  const after = await fs.readNote('Result.md');
+  await fs.writeNote({ path: 'Result.md', content: 'Human change.' });
+  await expect(s.restoreManaged('update', done.outputRevision, snapshot!, actor, async () => {})).rejects.toThrow();
+  await seed('Result.md', after.originalContent);
+  const restarted = wikiEvolutionAdapter(service({ adapter: adapter() }));
+  expect(await restarted.revert!(cycle, actor, async () => {})).toEqual({ revision: original.revision });
+  expect((await fs.readNote('Result.md')).originalContent).toBe(original.originalContent);
+  expect(await s.confirmRestored('update', snapshot!, actor)).toEqual({ state: 'withdrawn', revision: original.revision });
+  expect(await restarted.reconcileRevert!(cycle, actor, async () => {})).toEqual({ state: 'withdrawn', revision: original.revision });
+  expect(await s.captureRollback('original', actor)).toBeUndefined();
+});
+
 test('review projections expose attributed omissions and current revisions without draft bodies or writes', async () => {
   const s = service(), ready = await s.execute(await request(), actor), content = 'Private generated draft.';
   const submitted = await s.execute({ op: 'submit', requestId: 'job-one', expectedJobRevision: ready.jobRevision,

@@ -41,6 +41,7 @@ import { getEvolutionTools } from './evolution/tools.js';
 import { EvolutionService } from './evolution/service.js';
 import { EvolutionOpportunity, evolutionSessionBridge } from './evolution/opportunity.js';
 import { connectEvolutionRuntime } from './evolution/runtime-connection.js';
+import { DiskMemoryIndex } from './memory/read-index.js';
 import { wikiEvolutionAdapter } from './evolution/wiki-adapter.js';
 import { FidelityService } from './fidelity-service.js';
 import { getFidelityTools } from './fidelity-tools.js';
@@ -576,6 +577,7 @@ export function createServer(vaultPath, options = {}) {
     const searchService = new SearchService(resolvedVaultPath, publicIndexFilter, fileCatalog, vaultIo);
     const metadataIndex = new VaultMetadataIndex(resolvedVaultPath, publicIndexFilter, frontmatterHandler, fileCatalog, vaultIo);
     const graphIndex = new VaultGraphIndex(resolvedVaultPath, publicIndexFilter, frontmatterHandler, fileCatalog, vaultIo);
+    let memoryIndex;
     const refreshDocumentPolicy = async () => {
         try {
             await documentPolicy.refresh();
@@ -592,6 +594,7 @@ export function createServer(vaultPath, options = {}) {
             searchService.invalidate();
             graphIndex.invalidate();
             semanticSearch.notifyChanges([]);
+            void memoryIndex?.invalidate();
         }
     };
     const pendingReadModelChanges = new Map();
@@ -611,6 +614,7 @@ export function createServer(vaultPath, options = {}) {
         communityFeaturesCache?.invalidateMany(changes);
         llmWikiCache?.invalidate(changes);
         graphIndex.invalidateMany(changes);
+        void memoryIndex?.invalidate(changes);
     };
     const queueReadModelChange = (path, kind) => {
         if (excludedGuidance(path))
@@ -634,7 +638,10 @@ export function createServer(vaultPath, options = {}) {
     const documentIndex = hasFeature('document-search') ? new DocumentIndex(new DocumentResourceReader(fileSystem, pathFilter, scopeAccess, path => retrieval.skillDiscoveryAllowed(path)), fileCatalog, { ...(documentCacheDir && { cacheDir: documentCacheDir }), ...(pdfHostConfig && { pdf: configuredPdfProvider(pdfHostConfig) }) }) : undefined;
     const documents = documentIndex ? new DocumentService(documentIndex) : undefined;
     const documentSearch = documentIndex ? new DocumentSearch(documentIndex, retrieval) : undefined;
-    const layeredMemory = hasFeature('personal-memory') ? new LayeredMemoryService(fileSystem, retrieval, scopeAccess) : undefined;
+    const memoryCacheDir = process.env.MCPVAULT_MEMORY_CACHE_DIR;
+    if (hasFeature('personal-memory') && memoryCacheDir)
+        memoryIndex = new DiskMemoryIndex(fileSystem, memoryCacheDir, path => publicIndexFilter.isAllowed(path), fileCatalog);
+    const layeredMemory = hasFeature('personal-memory') ? new LayeredMemoryService(fileSystem, retrieval, scopeAccess, memoryIndex) : undefined;
     const researchBridge = hasFeature('ideation-research') ? new ResearchBridgeService(fileSystem, scopeAccess, retrieval) : undefined;
     const questionPacket = new QuestionPacketService(fileSystem, scopeAccess, retrieval);
     const sourceComparison = new SourceComparisonService(fileSystem, scopeAccess, retrieval);
@@ -3783,6 +3790,17 @@ export function createServer(vaultPath, options = {}) {
     };
     installMcpHandlers(server);
     SERVER_RUNTIMES.set(server, {
+        ...(layeredMemory && { confirmMemoryRetention: async (accessToken, receipt, contextGeneration) => {
+                const principal = await scopeAuth.authenticate(accessToken);
+                if (!principal)
+                    throw Error('Memory session unavailable');
+                layeredMemory.exposure.confirm(principal, receipt, contextGeneration);
+            }, invalidateMemoryRetention: async (accessToken) => {
+                const principal = await scopeAuth.authenticate(accessToken);
+                if (!principal)
+                    throw Error('Memory session unavailable');
+                layeredMemory.exposure.invalidate(principal);
+            } }),
         ...(evolutionConnection && { evolutionHost: evolutionConnection.host }),
         ...(evolutionConnection && !readOnly && { evolutionReview: evolutionConnection.review }),
         runEvolutionOpportunity: async (request, principal, session) => {
@@ -3811,7 +3829,7 @@ export function createServer(vaultPath, options = {}) {
         // remaining workers/watchers or the underlying protocol server.
         for (const close of [() => evolutionConnection?.close(), disconnectCodexHooks, readModelCatalogUnsubscribe, maintenanceReconcileUnsubscribe,
             () => maintenance.close(), () => compilation.close(), () => llmWiki.invalidate(), () => documentSearch?.close(),
-            () => documentIndex?.close(), () => mocRegions.close(), () => metadataIndex.close(),
+            () => documentIndex?.close(), () => memoryIndex?.close(), () => mocRegions.close(), () => metadataIndex.close(),
             () => searchService.close(), () => semanticSearch.close(), () => graphIndex.close(),
             () => notifications?.close(), () => communityFeatures?.close(), () => fileCatalog.close(), closeServer]) {
             try {

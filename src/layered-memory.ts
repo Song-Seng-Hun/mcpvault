@@ -13,12 +13,16 @@ import { positiveSearchTerms } from './search.js';
 import { assertMemoryContent, memoryDate, memoryEntries, memoryReferenceAllowed, memoryReferencePath, MEMORY_ROLES, type MemoryEntry } from './memory-contract.js';
 import { isFictionDomain } from './fiction-domain.js';
 import { planMemory, type MemoryTaskContext } from './retrieval/memory-plan.js';
+import type { MemoryReadIndex } from './memory/read-index.js';
+import { MemoryExposure, type MemoryReuse } from './memory/exposure.js';
+import { memoryGrounding } from './memory/grounding.js';
 
 export interface MemoryRequest {
   principal?: ScopePrincipal; scope?: 'personal' | 'user' | 'community' | 'global'; query?: string;
   role?: string; dateFrom?: string; dateTo?: string; pathPrefix?: string; includeHistory?: boolean;
   semantic?: boolean; cursor?: { snapshot: string; offset: number }; limit?: number; maxChars?: number;
   taskContext?: MemoryTaskContext;
+  reuse?: MemoryReuse;
 }
 type RecordRow = { note: QueryNote; entry: MemoryEntry; key: string };
 function number(value: number | undefined, fallback: number, min: number, max: number): number {
@@ -63,9 +67,10 @@ function memoryPassage(note: ParsedNote, entry: MemoryEntry, query: string, redi
     ...(!query || redirected ? { preferredLine: unit.startLine } : {}) }).passages[0];
 }
 
-/** Read-time projections over the existing metadata and search indexes. No memory DB. */
+/** Read-time projections; optional disk index stores disposable discovery metadata. */
 export class LayeredMemoryService {
-  constructor(private readonly fs: FileSystemService, private readonly retrieval: RetrievalService, private readonly access: ScopeAccessPolicy) {}
+  readonly exposure = new MemoryExposure();
+  constructor(private readonly fs: FileSystemService, private readonly retrieval: RetrievalService, private readonly access: ScopeAccessPolicy, private readonly disk?: MemoryReadIndex) {}
 
   async read(mode: 'recall' | 'brief' | 'consolidate', params: MemoryRequest) {
     const scope = params.scope ?? 'personal';
@@ -114,7 +119,12 @@ export class LayeredMemoryService {
       } while (after);
       return { notes, truncated: false };
     };
-    const page = await capture();
+    const indexed = await this.disk?.capture({ root, prefix, query, semantic: params.semantic !== false, ...(params.role && { role: params.role }),
+      ...(params.dateFrom && { dateFrom: params.dateFrom }), ...(params.dateTo && { dateTo: params.dateTo }), canAccess });
+    if (indexed?.reason) return { scope, mode, status: 'partial', items: [], truncated: true, reason: indexed.reason,
+      nextAction: { endpointId: 'memory.recall', reuseOriginalArguments: true },
+      warnings: ['Memory index is not verified for this request. Use an exact authorized source read or retry after background preparation.'] };
+    const page = indexed ?? await capture();
     const corrections = new Map<string, string[]>();
     const incomingCorrections = new Map<string, string[]>();
     const revisions = new Map(page.notes.map(note => [note.path.toLowerCase(), note.revision]));
@@ -140,7 +150,10 @@ export class LayeredMemoryService {
     const admittedPaths = new Set(rows.map(r => r.note.path));
     const outcome = query ? await this.retrieval.memoryCandidates({ query, ...(params.principal && { principal: params.principal }), pathPrefix: prefix || '.',
       candidateRevisions: new Map(rows.filter(row => typeof row.note.revision === 'string').map(row => [row.note.path, row.note.revision!])),
-      canAccessPath: p => canAccess(p) && admittedPaths.has(p), searchFrontmatter: true, limit: 10000, semantic: params.semantic !== false }) : undefined;
+      canAccessPath: p => canAccess(p) && admittedPaths.has(p), searchFrontmatter: true, limit: indexed ? 64 : 10000, semantic: params.semantic !== false },
+      indexed ? { complete: !indexed.truncated, results: rows.filter(r => indexed.candidatePaths.has(r.note.path))
+        .filter((r, i, a) => a.findIndex(other => other.note.path === r.note.path) === i)
+        .map(r => ({ p: r.note.path, t: String(r.note.frontmatter.title || r.note.path), ex: '', mc: 0, rv: r.note.revision! })) } : undefined) : undefined;
     const ranks = new Map((outcome?.results || []).map((hit, i) => [this.retrieval.physical(hit, params.principal), i]));
     const originalCandidatePaths = new Set(ranks.keys());
     const semanticPaths = new Set((outcome?.results || []).filter(hit => hit.vs).map(hit => this.retrieval.physical(hit, params.principal)));
@@ -198,7 +211,7 @@ export class LayeredMemoryService {
     const basisSignature = (sources: Map<string, QueryNote>) => JSON.stringify([...basisPaths].sort().map(path => [path, sources.get(path)?.revision || 'unavailable']));
     const snapshot = createHash('sha256').update(JSON.stringify([scope, params.principal?.accountId, mode, query, params.role, params.dateFrom, params.dateTo, prefix, params.includeHistory === true,
       params.semantic !== false, outcome?.semantic.state, outcome?.complete, outcome?.results.map(hit => [hit.p, hit.rv, hit.vs === true]),
-      selected.map(r => r.key), page.notes.map(n => [n.path, n.revision]), basisSignature(basisMetadata), ...(routing ? [routing] : [])])).digest('hex');
+      selected.map(r => r.key), page.notes.map(n => [n.path, n.revision]), basisSignature(basisMetadata), ...(indexed ? [indexed.generation] : []), ...(routing ? [routing] : [])])).digest('hex');
     if (params.cursor && (params.cursor.snapshot !== snapshot || !Number.isInteger(params.cursor.offset) || params.cursor.offset < 0)) throw guidanceError(new Error('Memory snapshot changed; repeat without cursor'), 'guid-bcacb4a6969f7774');
     const start = params.cursor?.offset ?? 0;
     if (start > selected.length) throw guidanceError(new Error('Memory cursor is outside the result window'), 'guid-fe5374719162f510');
@@ -307,14 +320,18 @@ export class LayeredMemoryService {
         excerpt: passage || null, nextAction: passage ? passageAction(path, note.revision, passage.startLine, passage.endLine)
           : { endpointId: 'mcp.get_note_outline', arguments: { path, expectedRevision: note.revision, maxChars: 4000 } },
       };
+      if (mode === 'consolidate') Object.assign(item, { grounding: memoryGrounding(item) });
       items.push(item); offset++;
       if (JSON.stringify(envelope()).length > maxChars) {
         items.pop(); offset--; partial = true; break;
       }
     }
     for (const [path, note] of read) if (!this.access.canAccessPhysicalPath(path, params.principal) || await this.fs.readNoteRevision(path, RETRIEVAL_NOTE_BYTES) !== note.revision) throw guidanceError(new Error('Memory source changed; repeat without cursor'), 'guid-a2911e8d1965cc72');
-    const current = await capture();
-    if (JSON.stringify(current.notes.map(n => [n.path, n.revision])) !== JSON.stringify(page.notes.map(n => [n.path, n.revision]))) throw guidanceError(new Error('Memory collection changed; repeat without cursor'), 'guid-015dc38c18cd1b53');
+    if (indexed) await indexed.assertCurrent();
+    else {
+      const current = await capture();
+      if (JSON.stringify(current.notes.map(n => [n.path, n.revision])) !== JSON.stringify(page.notes.map(n => [n.path, n.revision]))) throw guidanceError(new Error('Memory collection changed; repeat without cursor'), 'guid-015dc38c18cd1b53');
+    }
     if (basisSignature(await captureBasis()) !== basisSignature(basisMetadata)) throw guidanceError(new Error('Memory basis changed; repeat without cursor'), 'guid-f3a3ba7b381a430a');
     const result = envelope();
     if (!items.length && selected.length > start && offset === start) return { scope, mode, status: 'partial', items: [], truncated: true,
@@ -322,6 +339,6 @@ export class LayeredMemoryService {
         hint: guidanceText('guid-f287779e72427b2d', 'Repeat with retry.maxChars; if already at maximum, narrow the query.') }
         : { nextAction: { endpointId: 'memory.recall', arguments: { scope, includeHistory: true, limit: 1, maxChars: 4000 } }, hint: guidanceText('guid-070c44c5f098bf99', 'Inspect original alternatives with a more precise query; a larger output budget cannot increase source reads.') }) };
     if (JSON.stringify(result).length > maxChars) throw guidanceError(new Error('Memory identity and warnings exceed maxChars; retry with the maximum budget'), 'guid-b5d2e6a678c6e54b');
-    return result;
+    return this.exposure.deliver(result, params.principal, this.access.documentPolicyFingerprint(), params.reuse || {}, maxChars);
   }
 }

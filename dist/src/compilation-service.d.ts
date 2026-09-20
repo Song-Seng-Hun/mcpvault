@@ -1,3 +1,4 @@
+import type { ManagedRollback } from './memory/rollback.js';
 import type { FileSystemService } from './filesystem.js';
 import type { ScopeAccessPolicy } from './scope-access.js';
 import type { ScopePrincipal } from './scope-auth.js';
@@ -79,6 +80,15 @@ export declare class CompilationService {
     constructor(options: CompilationOptions);
     private serial;
     close(): Promise<void>;
+    private rollbackJob;
+    captureRollback(id: string, principal: ScopePrincipal): Promise<ManagedRollback | undefined>;
+    confirmRestored(id: string, snapshot: ManagedRollback, principal: ScopePrincipal): Promise<{
+        state: 'withdrawn' | 'unknown';
+        revision?: string;
+    }>;
+    restoreManaged(id: string, outputRevision: string, snapshot: ManagedRollback, principal: ScopePrincipal, current: () => Promise<void>): Promise<{
+        revision: string;
+    }>;
     /** Internal evolution bridge. Authorize every input before returning a pinned private job. */
     evolutionSnapshot(requestId: string, principal: ScopePrincipal): Promise<{
         job: CompilationJob;

@@ -347,6 +347,8 @@ export class EvolutionService {
                 if (cycle.state !== 'evaluated' || cycle.profileFingerprint !== hash(this.options.profile?.(cycle.target) ?? null))
                     return unavailable();
                 const intent = await adapter.preview(cycle, c.principal, c.current);
+                if (c.automatic && cycle.target.kind === 'wiki' && !intent.data?.rollback)
+                    return { ...this.view(cycle, prior.revision), reason: 'automatic_rollback_unavailable' };
                 const fingerprint = hash([cycle, intent, c.lease.revision, prior.revision]);
                 if (op === 'preview')
                     return { ...this.view(cycle, prior.revision), fingerprint };
