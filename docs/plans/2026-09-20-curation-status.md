@@ -26,7 +26,7 @@ The existing NAS is already the target; do not ask the user for its location aga
 - Earlier runs failed on manifest/policy response budgets; receipts retained.
 - Fixed contract-first packing and concise policy text without weakening checks.
 - Full run 20260920-curation-final: 554 files; 7,287 passed, 4 skipped, 0 failed.
-- Deployed the matching release; live API verified. Publication follows this record.
+- Matching release deployed and live API verified; a8a243e8a pushed to fork main.
 
 ## Live read-only checks
 
