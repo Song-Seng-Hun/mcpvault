@@ -19,7 +19,8 @@ export class CurationService {
     }
     diagnose() {
         return { status: 'diagnostic_only', supportedOperations: [...CURATION_OPERATIONS],
-            automaticApplication: false, admission: 'exact_host_grant_and_managed_receipt_per_job', effectVerified: false };
+            automaticApplication: false, admission: 'exact_host_grant_and_managed_receipt_per_job', effectVerified: false,
+            referenceImpact: this.options.fs.referenceIntegrityStatus() };
     }
     async grant(path, operation, c) {
         await c.current();
@@ -74,13 +75,14 @@ export class CurationService {
         if (!impact || !impact.exists || impact.hiddenReferencesPresent || impact.truncated || impact.ambiguousTotal)
             return false;
         if (!impact.total)
-            return true;
+            return this.options.fs.referencePreviewFence(impact);
         // The exact owned reverse lineage introduced by this bundle is not a new
         // external dependency. This also permits the writer's guarded recovery.
         const r = job?.replacement;
-        return !!r?.output && (await this.note(r.path, c)).revision === r.output.after
+        const owned = !!r?.output && (await this.note(r.path, c)).revision === r.output.after
             && !impact.affectedLinks.length && impact.affectedProperties.length === impact.total
             && impact.affectedProperties.every(p => p.sourcePath === r.path && /^supersedes(?:\[\d+\])?$/.test(p.propertyPath));
+        return owned ? this.options.fs.referencePreviewFence(impact) : false;
     }
     validate(job, account) {
         if (job.version !== 1 || job.accountId !== account || !['prepared', 'resumable', 'applying', 'applied', 'reverting', 'withdrawn', 'review_required'].includes(job.state)
@@ -329,11 +331,16 @@ export class CurationService {
         const changes = reverting ? await Promise.all(targets.map(async (t) => ({ path: t.path, expectedRevision: t.after,
             patches: [{ oldString: (await this.options.fs.readNote(t.path, 24000)).originalContent, newString: t.original }] })))
             : job.changes.filter((_, i) => !resuming || currentRevisions[i] === targets[i].before);
+        let impactFence;
         const policy = { guards: [...this.guards(job), ...(resuming ? targets.filter((_, i) => currentRevisions[i] === targets[i].after)
-                    .map(t => ({ path: t.path, expectedRevision: t.after })) : [])], assertAccess: async () => {
+                    .map(t => ({ path: t.path, expectedRevision: t.after })) : [])], assertCurrent: () => impactFence?.(), assertAccess: async () => {
                 await this.assert(job, c);
-                if (job.replacement && !reverting && !await this.noInbound(job.path, c, job))
-                    return unavailable();
+                if (job.replacement && !reverting) {
+                    const fence = await this.noInbound(job.path, c, job);
+                    if (!fence)
+                        return unavailable();
+                    impactFence = fence;
+                }
             } };
         const preview = await this.options.fs.patchMultipleNotes({ changes, dryRun: true }, undefined, policy);
         const side = reverting ? 'before' : 'after';

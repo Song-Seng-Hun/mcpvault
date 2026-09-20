@@ -13,6 +13,8 @@ if (!created) {
     || (db.prepare('SELECT version FROM state WHERE id=1').get() as any)?.version !== 1) throw Error('Memory index requires explicit rebuild');
   const extension = ['graph_documents', 'graph_occurrences'].filter(name => tables.has(name));
   if (extension.length === 1) throw Error('Incomplete graph index extension');
+  const references = ['reference_documents', 'reference_targets'].filter(name => tables.has(name));
+  if (references.length === 1) throw Error('Incomplete reference index extension');
 }
 // OS-released lock: a second process must not sweep another worker's scan.
 db.exec(`PRAGMA locking_mode=EXCLUSIVE; PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA foreign_keys=ON; PRAGMA cache_size=-8192;
@@ -32,7 +34,14 @@ db.exec(`PRAGMA locking_mode=EXCLUSIVE; PRAGMA journal_mode=WAL; PRAGMA synchron
  CREATE INDEX IF NOT EXISTS graph_reverse ON graph_occurrences(target_key,occurrence,owner);
  CREATE TABLE IF NOT EXISTS graph_names (name TEXT NOT NULL, doc INTEGER REFERENCES docs(id) ON DELETE CASCADE,
    PRIMARY KEY(name,doc)) WITHOUT ROWID;
- CREATE INDEX IF NOT EXISTS graph_names_doc ON graph_names(doc);`);
+ CREATE INDEX IF NOT EXISTS graph_names_doc ON graph_names(doc);
+ CREATE TABLE IF NOT EXISTS reference_documents (path TEXT PRIMARY KEY, revision TEXT NOT NULL, fingerprint TEXT NOT NULL,
+   version INTEGER NOT NULL, partial INTEGER NOT NULL) WITHOUT ROWID;
+ CREATE INDEX IF NOT EXISTS reference_incomplete ON reference_documents(partial,version,path);
+ CREATE INDEX IF NOT EXISTS reference_version ON reference_documents(version,path);
+ CREATE TABLE IF NOT EXISTS reference_targets (key TEXT NOT NULL, path TEXT REFERENCES reference_documents(path) ON DELETE CASCADE,
+   PRIMARY KEY(key,path)) WITHOUT ROWID;
+ CREATE INDEX IF NOT EXISTS reference_targets_owner ON reference_targets(path);`);
 if ((db.prepare('SELECT version FROM state').get() as any)?.version !== 1) throw Error('Unsupported memory index schema');
 // Add a covering discriminator without turning graph-only rows into a linear
 // memory scan. This one-time v1 extension happens in the background worker.
@@ -101,10 +110,68 @@ function graphSql(q: any) {
     ORDER BY g.occurrence LIMIT ?`, values: [...values, q.limit + 1] };
 }
 db.exec('CREATE TEMP TABLE seen (path TEXT PRIMARY KEY) WITHOUT ROWID');
+db.exec('CREATE TEMP TABLE reference_seen (path TEXT PRIMARY KEY) WITHOUT ROWID');
+// A restarted worker never inherits a complete-coverage assertion. The owner
+// must finish a fresh, readable enumeration before absence can be considered.
+let referenceScanOpen = false, referenceScanComplete = false;
+function referenceImpactSql(q: any) {
+  const values: any[] = [], branches = q.keys.map((key: string) => {
+    values.push(key, q.limit + 1);
+    return 'SELECT * FROM (SELECT path FROM reference_targets WHERE key=? ORDER BY path LIMIT ?)';
+  });
+  return { sql: `WITH candidates AS (${branches.join(' UNION ALL ')})
+    SELECT DISTINCT d.path,d.revision FROM candidates c JOIN reference_documents d ON d.path=c.path ORDER BY d.path LIMIT ?`,
+    values: [...values, q.limit + 1] };
+}
 parentPort!.on('message', ({ id, op, data }) => {
   try {
     let value: unknown;
     if (op === 'ready') value = undefined;
+    else if (op === 'beginReferenceScan') {
+      referenceScanComplete = false; referenceScanOpen = true; db.exec('DELETE FROM reference_seen');
+    } else if (op === 'seenReferences') {
+      if (!referenceScanOpen) throw Error('Reference scan not open');
+      const insert = db.prepare('INSERT OR IGNORE INTO reference_seen VALUES(?)'); for (const path of data) insert.run(path);
+    } else if (op === 'finishReferenceScan') {
+      if (!referenceScanOpen) throw Error('Reference scan not open');
+      db.exec('BEGIN IMMEDIATE');
+      try {
+        if (db.prepare('SELECT s.path FROM reference_seen s LEFT JOIN reference_documents d ON d.path=s.path WHERE d.path IS NULL LIMIT 1').get()) throw Error('Reference scan missing rows');
+        db.prepare('DELETE FROM reference_documents WHERE path NOT IN (SELECT path FROM reference_seen)').run();
+        // A new scan fence invalidates captures even if source bytes match.
+        db.exec('UPDATE state SET generation=generation+1; COMMIT');
+        referenceScanComplete = true; referenceScanOpen = false;
+      } catch (e) { db.exec('ROLLBACK'); throw e; }
+    } else if (op === 'putReferences' || op === 'removeReferences') {
+      db.exec('BEGIN IMMEDIATE'); let changed = false;
+      try {
+        const remove = db.prepare('DELETE FROM reference_documents WHERE path=?');
+        const previous = db.prepare('SELECT fingerprint FROM reference_documents WHERE path=?');
+        const insert = db.prepare('INSERT INTO reference_documents VALUES(?,?,?,?,?)');
+        const target = db.prepare('INSERT INTO reference_targets VALUES(?,?)');
+        for (const row of data) {
+          if (op === 'removeReferences') { changed = Boolean(remove.run(row).changes) || changed; continue; }
+          const fingerprint = hash(JSON.stringify(row));
+          if ((previous.get(row.path) as any)?.fingerprint === fingerprint) continue;
+          remove.run(row.path); insert.run(row.path, row.revision, fingerprint, row.version, Number(row.partial));
+          for (const key of row.keys) target.run(key, row.path);
+          changed = true;
+        }
+        if (changed) db.exec('UPDATE state SET generation=generation+1'); db.exec('COMMIT');
+      } catch (e) { db.exec('ROLLBACK'); throw e; }
+    } else if (op === 'referenceImpact' || op === 'referenceImpactExplain') {
+      if (data.expectedGeneration !== undefined && data.expectedGeneration !== generation()) throw Error('Reference generation changed');
+      const q = referenceImpactSql(data);
+      if (op === 'referenceImpactExplain') value = db.prepare('EXPLAIN QUERY PLAN ' + q.sql).all(...q.values).map((r: any) => r.detail);
+      else {
+        const rows = db.prepare(q.sql).all(...q.values);
+        const incomplete = db.prepare('SELECT path FROM reference_documents WHERE partial=1 LIMIT 1').get()
+          || db.prepare('SELECT path FROM reference_documents WHERE version<1 LIMIT 1').get()
+          || db.prepare('SELECT path FROM reference_documents WHERE version>1 LIMIT 1').get();
+        value = { candidates: rows.slice(0, data.limit), truncated: rows.length > data.limit,
+          complete: referenceScanComplete && !incomplete, generation: generation() };
+      }
+    }
     else if (op === 'generation') value = generation();
     else if (op === 'beginScan') db.exec('DELETE FROM seen');
     else if (op === 'seen') { const insert = db.prepare('INSERT OR IGNORE INTO seen VALUES(?)'); for (const path of data) insert.run(path); }

@@ -42,6 +42,7 @@ import { EvolutionService } from './evolution/service.js';
 import { EvolutionOpportunity, evolutionSessionBridge } from './evolution/opportunity.js';
 import { connectEvolutionRuntime } from './evolution/runtime-connection.js';
 import { DiskMemoryIndex } from './memory/read-index.js';
+import { ReferenceImpactIndex } from './curation/reference-index.js';
 import { wikiEvolutionAdapter } from './evolution/wiki-adapter.js';
 import { FidelityService } from './fidelity-service.js';
 import { getFidelityTools } from './fidelity-tools.js';
@@ -578,6 +579,8 @@ export function createServer(vaultPath, options = {}) {
     const metadataIndex = new VaultMetadataIndex(resolvedVaultPath, publicIndexFilter, frontmatterHandler, fileCatalog, vaultIo);
     const graphIndex = new VaultGraphIndex(resolvedVaultPath, publicIndexFilter, frontmatterHandler, fileCatalog, vaultIo);
     let memoryIndex;
+    let referenceImpactIndex;
+    const referenceCacheDir = process.env.MCPVAULT_REFERENCE_CACHE_DIR;
     const refreshDocumentPolicy = async () => {
         try {
             await documentPolicy.refresh();
@@ -595,6 +598,7 @@ export function createServer(vaultPath, options = {}) {
             graphIndex.invalidate();
             semanticSearch.notifyChanges([]);
             void memoryIndex?.invalidate();
+            void referenceImpactIndex?.invalidate();
         }
     };
     const pendingReadModelChanges = new Map();
@@ -617,6 +621,9 @@ export function createServer(vaultPath, options = {}) {
         void memoryIndex?.invalidate(changes);
     };
     const queueReadModelChange = (path, kind) => {
+        // Integrity includes guidance/checkpoints excluded from discovery indexes.
+        // Fence immediately, before the normal read-model microtask is queued.
+        void referenceImpactIndex?.invalidate([{ path, kind }]);
         if (excludedGuidance(path))
             return;
         pendingReadModelChanges.set(path.replace(/\\/g, '/'), { path, kind });
@@ -629,7 +636,7 @@ export function createServer(vaultPath, options = {}) {
     let notificationsCache;
     let communityFeaturesCache;
     let llmWikiCache;
-    const fileSystem = new FileSystemService(resolvedVaultPath, pathFilter, frontmatterHandler, queueReadModelChange, metadataIndex, graphIndex, vaultIo, scopeAccess, path => noticeRegistry.assertMutation(path));
+    const fileSystem = new FileSystemService(resolvedVaultPath, pathFilter, frontmatterHandler, queueReadModelChange, metadataIndex, graphIndex, vaultIo, scopeAccess, path => noticeRegistry.assertMutation(path), referenceCacheDir ? () => referenceImpactIndex : undefined);
     const gitHistory = new GitHistoryService(resolvedVaultPath, pathFilter);
     const collaboration = new CollaborationService(fileSystem, searchService);
     const retrieval = new RetrievalService(searchService, collaboration, semanticSearch, scopeAccess, fileSystem);
@@ -641,6 +648,8 @@ export function createServer(vaultPath, options = {}) {
     const memoryCacheDir = process.env.MCPVAULT_MEMORY_CACHE_DIR;
     if ((hasFeature('personal-memory') || hasFeature('wiki-core')) && memoryCacheDir)
         memoryIndex = new DiskMemoryIndex(fileSystem, memoryCacheDir, path => publicIndexFilter.isAllowed(path), fileCatalog);
+    if (referenceCacheDir)
+        referenceImpactIndex = new ReferenceImpactIndex(fileSystem, referenceCacheDir, fileCatalog, path => documentPolicyReady && pathFilter.isAllowed(path) && scopeAccess.canReadProtectedDocument(path));
     const layeredMemory = hasFeature('personal-memory') ? new LayeredMemoryService(fileSystem, retrieval, scopeAccess, memoryIndex) : undefined;
     const researchBridge = hasFeature('ideation-research') ? new ResearchBridgeService(fileSystem, scopeAccess, retrieval) : undefined;
     const questionPacket = new QuestionPacketService(fileSystem, scopeAccess, retrieval);
@@ -696,6 +705,8 @@ export function createServer(vaultPath, options = {}) {
         return owner && scopeAuth.hasCapability(owner, 'write') && !await moderation.isBanned(owner.accountId, owner.userId) ? owner : undefined;
     }, readOnly);
     void refreshDocumentPolicy().then(() => mocRegions.start()).then(() => mocRegions.flush()).catch(() => { });
+    if (referenceImpactIndex)
+        void refreshDocumentPolicy().then(() => referenceImpactIndex?.start()).catch(() => { });
     const reputation = hasFeature('collaboration') ? new ReputationService(fileSystem, scopeAuth, moderation) : undefined;
     reputationCache = reputation;
     const notifications = reputation ? new NotificationService(fileSystem, reputation, resolvedVaultPath, fileCatalog) : undefined;
@@ -3839,7 +3850,7 @@ export function createServer(vaultPath, options = {}) {
         // remaining workers/watchers or the underlying protocol server.
         for (const close of [() => evolutionConnection?.close(), disconnectCodexHooks, readModelCatalogUnsubscribe, maintenanceReconcileUnsubscribe,
             () => maintenance.close(), () => compilation.close(), () => llmWiki.invalidate(), () => documentSearch?.close(),
-            () => documentIndex?.close(), () => memoryIndex?.close(), () => mocRegions.close(), () => metadataIndex.close(),
+            () => documentIndex?.close(), () => memoryIndex?.close(), () => referenceImpactIndex?.close(), () => mocRegions.close(), () => metadataIndex.close(),
             () => searchService.close(), () => semanticSearch.close(), () => graphIndex.close(),
             () => notifications?.close(), () => communityFeatures?.close(), () => fileCatalog.close(), closeServer]) {
             try {

@@ -22,6 +22,20 @@ async function writeNote(path: string, content: string): Promise<void> {
 }
 
 describe('VaultFileCatalog', () => {
+  test('integrity fences observe excluded guidance before debounce without publishing it to discovery listeners', async () => {
+    vaultPath = await mkdtemp(join(tmpdir(), 'mcpvault-catalog-'));
+    await writeNote('Guidance.md', '[[Target]]');
+    catalog = new VaultFileCatalog(vaultPath, new PathFilter(), p => p === 'Guidance.md');
+    const privateHints: Array<string | undefined> = [], publicHints: unknown[] = [];
+    catalog.subscribeIntegrity(p => privateHints.push(p)); catalog.subscribeBatch(p => publicHints.push(p));
+    const before = catalog.integrityObservation().revision;
+    (catalog as any).onFilesystemEvent('Guidance.md', 'change');
+    expect(catalog.integrityObservation().revision).toBeGreaterThan(before);
+    expect(privateHints).toEqual(['Guidance.md']);
+    await catalog.flushPendingEvents(); expect(publicHints).toEqual([]);
+    expect(await catalog.listNotePaths()).toEqual([]);
+    catalog.close(); expect(catalog.integrityObservation().watching).toBe(false);
+  });
   test('completed reconciliation notifies host maintenance once without changing ordinary batch semantics', async () => {
     vaultPath = await mkdtemp(join(tmpdir(), 'mcpvault-catalog-'));
     await writeNote('A.md', 'Current source'); catalog = new VaultFileCatalog(vaultPath, new PathFilter());

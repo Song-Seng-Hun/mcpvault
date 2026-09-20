@@ -32,6 +32,20 @@ export interface GraphIndexPage {
     incompleteOwners: string[];
     coverage: 'candidates_only';
 }
+export interface ReferenceImpactQuery {
+    keys: string[];
+    limit: number;
+    expectedGeneration?: number;
+}
+export interface ReferenceImpactPage {
+    candidates: Array<{
+        path: string;
+        revision: string;
+    }>;
+    truncated: boolean;
+    complete: boolean;
+    generation: number;
+}
 /** One bounded RPC queue. SQLite and its native allocations stay off the request thread. */
 export declare class MemorySqliteStore {
     private worker;
@@ -57,6 +71,16 @@ export declare class MemorySqliteStore {
     /** Private discovery only. Recheck live identities, ACL and generation before resolving. */
     referenceCandidates(keys: string[], limit: number): Promise<MemoryIndexPage>;
     referenceExplain(keys: string[], limit: number): Promise<string[]>;
+    /** Private integrity postings, including non-navigational checkpoint paths.
+     * No memory/search visibility is granted by adding a row here. */
+    putReferenceDocuments(rows: MemoryIndexRow[]): Promise<void>;
+    removeReferenceDocuments(paths: string[]): Promise<void>;
+    private impactQuery;
+    referenceImpact(q: ReferenceImpactQuery): Promise<ReferenceImpactPage>;
+    referenceImpactExplain(q: ReferenceImpactQuery): Promise<string[]>;
+    beginReferenceScan(): Promise<void>;
+    seenReferences(paths: string[]): Promise<void>;
+    finishReferenceScan(): Promise<void>;
     unindexedGraph(paths: string[]): Promise<string[]>;
     beginScan(): Promise<void>;
     seen(paths: string[]): Promise<void>;

@@ -5,6 +5,7 @@ import { memoryEntries, memoryReferencePath } from '../memory-contract.js';
 import { extractGraphAssertions } from '../graph-assertion.js';
 import { extractObsidianLinkOccurrences } from '../backlinks.js';
 import { buildNoteReferenceIndex, markdownNotePath } from '../note-reference.js';
+import { referenceDocumentPath, referenceFootprint } from '../curation/reference-footprint.js';
 // Discovery key only, never a resolved path or permission. Preserve raw reference in payload.
 function referenceKey(raw) {
     return raw.replace(/^!?\[\[/, '').replace(/\]\]$/, '').split(/[|#]/, 1)[0].trim().replace(/\.md$/i, '').toLowerCase();
@@ -112,6 +113,43 @@ export class MemorySqliteStore {
     /** Private discovery only. Recheck live identities, ACL and generation before resolving. */
     referenceCandidates(keys, limit) { return this.call('references', this.referenceQuery(keys, limit)); }
     referenceExplain(keys, limit) { return this.call('referencesExplain', this.referenceQuery(keys, limit)); }
+    /** Private integrity postings, including non-navigational checkpoint paths.
+     * No memory/search visibility is granted by adding a row here. */
+    async putReferenceDocuments(rows) {
+        if (rows.length > 128)
+            throw Error('Reference batch exceeds limit');
+        const data = rows.map(row => {
+            referenceDocumentPath(row.path);
+            if (!/^[a-f0-9]{64}$/.test(row.revision || '') || typeof row.text !== 'string' || row.text.length > 2_000_000
+                || JSON.stringify(row.frontmatter).length > 128000)
+                throw Error('Invalid reference row');
+            return { path: row.path, revision: row.revision, ...referenceFootprint(row), version: 1 };
+        });
+        return this.call('putReferences', data);
+    }
+    removeReferenceDocuments(paths) {
+        paths.forEach(referenceDocumentPath);
+        if (paths.length > 128)
+            throw Error('Reference batch exceeds limit');
+        return this.call('removeReferences', paths);
+    }
+    impactQuery(q) {
+        if (!Array.isArray(q.keys) || !q.keys.length || q.keys.length > 128 || q.keys.some(k => typeof k !== 'string' || !k || k.length > 1024)
+            || !Number.isInteger(q.limit) || q.limit < 1 || q.limit > 200
+            || q.expectedGeneration !== undefined && (!Number.isSafeInteger(q.expectedGeneration) || q.expectedGeneration < 0))
+            throw Error('Invalid reference impact window');
+        return { ...q, keys: [...new Set(q.keys)] };
+    }
+    referenceImpact(q) { return this.call('referenceImpact', this.impactQuery(q)); }
+    referenceImpactExplain(q) { return this.call('referenceImpactExplain', this.impactQuery(q)); }
+    beginReferenceScan() { return this.call('beginReferenceScan'); }
+    seenReferences(paths) {
+        paths.forEach(referenceDocumentPath);
+        if (paths.length > 128)
+            throw Error('Invalid reference scan page');
+        return this.call('seenReferences', paths);
+    }
+    finishReferenceScan() { return this.call('finishReferenceScan'); }
     unindexedGraph(paths) {
         paths.forEach(memoryReferencePath);
         if (paths.length > 128)

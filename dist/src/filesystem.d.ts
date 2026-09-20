@@ -8,6 +8,7 @@ import { VaultIoCoordinator } from './vault-io.js';
 import { type ResolveNoteReferenceOptions } from './note-reference.js';
 import { ScopeAccessPolicy } from './scope-access.js';
 import { type PackedQueryPage } from './query-page.js';
+import type { ReferenceImpactIndex } from './curation/reference-index.js';
 /** Hard per-note write limit so stdio callers cannot exhaust the vault disk. */
 export declare const MAX_NOTE_CONTENT_BYTES: number;
 /** Health scans never load arbitrarily large derived views into memory. */
@@ -87,6 +88,8 @@ export declare class FileSystemService {
     private readonly vaultIo;
     private readonly scopeAccess;
     private readonly assertNoticeMutation;
+    private readonly referenceImpact?;
+    private readonly referenceImpactFences;
     private frontmatterHandler;
     private pathFilter;
     private readonly mutationTails;
@@ -112,7 +115,7 @@ export declare class FileSystemService {
     private assertSkillLockDirectory;
     private createOrVerifySkillLockDirectory;
     private withSkillLockFile;
-    constructor(vaultPath: string, pathFilter?: PathFilter, frontmatterHandler?: FrontmatterHandler, onNoteChanged?: ((path: string, kind: 'upsert' | 'delete') => void | Promise<void>) | undefined, metadataIndex?: VaultMetadataIndex | undefined, graphIndex?: VaultGraphIndex | undefined, vaultIo?: VaultIoCoordinator, scopeAccess?: ScopeAccessPolicy, assertNoticeMutation?: (path: string) => void);
+    constructor(vaultPath: string, pathFilter?: PathFilter, frontmatterHandler?: FrontmatterHandler, onNoteChanged?: ((path: string, kind: 'upsert' | 'delete') => void | Promise<void>) | undefined, metadataIndex?: VaultMetadataIndex | undefined, graphIndex?: VaultGraphIndex | undefined, vaultIo?: VaultIoCoordinator, scopeAccess?: ScopeAccessPolicy, assertNoticeMutation?: (path: string) => void, referenceImpact?: (() => ReferenceImpactIndex | undefined) | undefined);
     /**
      * Normalize an incoming path to be vault-relative. Strips leading slashes
      * and the vault path prefix when a caller accidentally passes an absolute path
@@ -248,6 +251,9 @@ export declare class FileSystemService {
         maxTotalBytes: number;
         maxFiles: number;
     }): Promise<DeleteNotePreviewResult>;
+    /** Only a preview object actually issued by this service can carry its live
+     * observation fence into a writer. JSON/client claims never acquire one. */
+    referencePreviewFence(preview: DeleteNotePreviewResult): () => void;
     private moveNoteToVaultTrash;
     deleteNote(params: DeleteNoteParams, canAccessPath?: (path: string) => boolean): Promise<DeleteResult>;
     private deleteNoteUnlocked;
@@ -338,12 +344,22 @@ export declare class FileSystemService {
         frontmatter?: Record<string, any>;
     }): Promise<DailyNoteResult>;
     private collectVaultFiles;
+    referenceIntegrityStatus(): {
+        mode: 'indexed';
+        state: "closed" | "cold" | "preparing" | "ready" | "unavailable";
+    } | {
+        mode: 'bounded_scan';
+        state: 'compatibility';
+    };
     /** Bounded owner check, unlike user listings: never hides unknown entries or
      * treats an unreadable directory as empty. No symlinks/subdirectories allowed. */
     assertManagedDirectory(path: string, filenames: readonly string[], allowMissing?: boolean): Promise<boolean>;
     /** Small-vault compatibility only. Stop discovery before materializing an
      * entire directory/tree; a partial or inaccessible scope is not absence. */
     private collectBoundedReferenceFiles;
+    /** Host-only background enumeration for integrity, not a search endpoint.
+     * No inaccessible subtree, symlink or read error is interpreted as absence. */
+    referenceFiles(): AsyncGenerator<string>;
     getNoteOutline(path: string): Promise<NoteHeading[]>;
     readNoteLineWindow(params: ReadNoteLinesParams): Promise<{
         content: string;

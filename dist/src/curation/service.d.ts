@@ -28,6 +28,13 @@ export declare class CurationService {
         automaticApplication: boolean;
         admission: string;
         effectVerified: boolean;
+        referenceImpact: {
+            mode: 'indexed';
+            state: "closed" | "cold" | "preparing" | "ready" | "unavailable";
+        } | {
+            mode: 'bounded_scan';
+            state: 'compatibility';
+        };
     };
     private grant;
     private note;

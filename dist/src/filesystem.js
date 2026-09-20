@@ -488,6 +488,8 @@ export class FileSystemService {
     vaultIo;
     scopeAccess;
     assertNoticeMutation;
+    referenceImpact;
+    referenceImpactFences = new WeakMap();
     frontmatterHandler;
     pathFilter;
     mutationTails = vaultMutationTails;
@@ -671,7 +673,7 @@ export class FileSystemService {
             }
         }
     }
-    constructor(vaultPath, pathFilter, frontmatterHandler, onNoteChanged, metadataIndex, graphIndex, vaultIo = new VaultIoCoordinator(), scopeAccess = new ScopeAccessPolicy(), assertNoticeMutation = () => { }) {
+    constructor(vaultPath, pathFilter, frontmatterHandler, onNoteChanged, metadataIndex, graphIndex, vaultIo = new VaultIoCoordinator(), scopeAccess = new ScopeAccessPolicy(), assertNoticeMutation = () => { }, referenceImpact) {
         this.vaultPath = vaultPath;
         this.onNoteChanged = onNoteChanged;
         this.metadataIndex = metadataIndex;
@@ -679,6 +681,7 @@ export class FileSystemService {
         this.vaultIo = vaultIo;
         this.scopeAccess = scopeAccess;
         this.assertNoticeMutation = assertNoticeMutation;
+        this.referenceImpact = referenceImpact;
         const resolved = resolve(vaultPath);
         try {
             this.vaultPath = realpathSync(resolved);
@@ -1871,7 +1874,15 @@ export class FileSystemService {
      * Details from inaccessible scopes are collapsed to one boolean barrier.
      */
     async collectMoveReferencePlans(oldPath, newPath, canAccessPath, includeMovedSource = true, budget) {
-        const physicalPaths = (budget ? await this.collectBoundedReferenceFiles(budget.maxFiles) : await this.collectVaultFiles())
+        // Only bounded retirement checks opt in. Move/rename retains its existing
+        // full resolver. Missing configured coverage must not trigger a full scan.
+        const provider = budget && !includeMovedSource && this.referenceImpact;
+        const index = provider ? provider() : undefined;
+        if (provider && !index)
+            throw Error('Reference integrity unavailable');
+        const capture = index ? await index.capture(oldPath, canAccessPath) : undefined;
+        const physicalPaths = (capture ? [oldPath, ...capture.candidates.map(c => c.path)]
+            : budget ? await this.collectBoundedReferenceFiles(budget.maxFiles) : await this.collectVaultFiles())
             .filter(path => this.pathFilter.isAllowed(path) && /\.(?:md|markdown|txt)$/i.test(path))
             .sort((a, b) => a.localeCompare(b));
         if (budget && physicalPaths.length > budget.maxFiles)
@@ -1918,7 +1929,17 @@ export class FileSystemService {
                 if (document)
                     documents.push(document);
         }
-        const referenceIndex = buildNoteReferenceIndex(documents.map(document => document.descriptor));
+        if (capture) {
+            for (const expected of [{ path: oldPath, revision: capture.targetRevision }, ...capture.candidates]) {
+                const observed = documents.find(d => d.sourcePath === expected.path);
+                if (!observed || this.revision(observed.sourceContent) !== expected.revision)
+                    throw Error('Reference integrity changed');
+            }
+        }
+        // Candidate-only resolution deliberately overestimates collisions. Using
+        // other candidate identities could shadow the target and create false
+        // negatives. A nonempty footprint is never itself a resolved graph edge.
+        const referenceIndex = buildNoteReferenceIndex(documents.filter(d => !capture || d.sourcePath === oldPath).map(document => document.descriptor));
         const plans = [];
         let hiddenReferencesPresent = false;
         for (const { sourcePath, sourceContent } of documents) {
@@ -1941,7 +1962,8 @@ export class FileSystemService {
             }
             plans.push({ sourcePath, sourceContent, plan: { ...plan, ambiguous: visibleAmbiguous } });
         }
-        return { plans, hiddenReferencesPresent };
+        await capture?.assertCurrent();
+        return { plans, hiddenReferencesPresent, ...(capture && { assertObserved: capture.assertObserved }) };
     }
     async previewDeleteNote(params, canAccessPath = () => true, budget) {
         const path = this.normalizeReferenceMutationPath(params.path);
@@ -1970,7 +1992,8 @@ export class FileSystemService {
         const returnedProperties = affectedProperties.slice(0, propertyBudget);
         const returnedCount = returnedAmbiguous.length + returnedLinks.length + returnedProperties.length;
         const exists = await this.noteExists(path);
-        return {
+        scan.assertObserved?.();
+        const result = {
             path,
             exists,
             affectedLinks: returnedLinks,
@@ -1986,6 +2009,17 @@ export class FileSystemService {
                     ? 'Deletion would leave visible or potentially ambiguous references dangling. Prefer archive/supersede/tombstone with a replacement; otherwise review this impact before an explicit revision-checked override.'
                     : 'No visible or hidden inbound reference was found. Normal revision, retention, and Git review still apply.',
         };
+        if (scan.assertObserved)
+            this.referenceImpactFences.set(result, scan.assertObserved);
+        return result;
+    }
+    /** Only a preview object actually issued by this service can carry its live
+     * observation fence into a writer. JSON/client claims never acquire one. */
+    referencePreviewFence(preview) {
+        const fence = this.referenceImpactFences.get(preview);
+        if (this.referenceImpact && !fence)
+            throw Error('Reference preview is not current');
+        return fence ?? (() => { });
     }
     async moveNoteToVaultTrash(path, fullPath) {
         const trashDir = join(this.vaultPath, '.trash');
@@ -3047,6 +3081,10 @@ export class FileSystemService {
         await scanDirectory(this.vaultPath);
         return files;
     }
+    referenceIntegrityStatus() {
+        return this.referenceImpact ? { mode: 'indexed', state: this.referenceImpact()?.status() ?? 'unavailable' }
+            : { mode: 'bounded_scan', state: 'compatibility' };
+    }
     /** Bounded owner check, unlike user listings: never hides unknown entries or
      * treats an unreadable directory as empty. No symlinks/subdirectories allowed. */
     async assertManagedDirectory(path, filenames, allowMissing = false) {
@@ -3103,6 +3141,31 @@ export class FileSystemService {
         };
         await walk(this.vaultPath);
         return files;
+    }
+    /** Host-only background enumeration for integrity, not a search endpoint.
+     * No inaccessible subtree, symlink or read error is interpreted as absence. */
+    async *referenceFiles() {
+        const self = this;
+        async function* walk(directory, prefix = '', depth = 0) {
+            assertEnterpriseStorageFresh();
+            if (depth > 64 || prefix && !self.canTraverseEnterpriseReadPath(prefix))
+                throw Error('Reference enumeration incomplete');
+            for await (const entry of await opendir(directory)) {
+                const path = prefix ? `${prefix}/${entry.name}` : entry.name;
+                if (!self.pathFilter.isAllowedForListing(path))
+                    continue;
+                if (entry.isSymbolicLink())
+                    throw Error('Reference enumeration incomplete');
+                if (entry.isDirectory())
+                    yield* walk(join(directory, entry.name), path, depth + 1);
+                else if (entry.isFile() && /\.(?:md|markdown|txt)$/i.test(path)) {
+                    if (!canReadEnterpriseStoragePath(path))
+                        throw Error('Reference enumeration incomplete');
+                    yield path;
+                }
+            }
+        }
+        yield* walk(this.vaultPath);
     }
     async getNoteOutline(path) {
         path = this.normalizePath(path);

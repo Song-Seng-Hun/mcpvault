@@ -1,6 +1,8 @@
 import { afterEach, expect, test, vi } from 'vitest';
-import { mkdtemp, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { mkdtemp, rm, mkdir, writeFile } from 'node:fs/promises';
+import { tmpdir, userInfo } from 'node:os';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { join } from 'node:path';
 import { FileSystemService } from '../filesystem.js';
 import { ScopeAccessPolicy } from '../scope-access.js';
@@ -10,12 +12,23 @@ import { CurationService } from './service.js';
 import { LlmWikiService } from '../llm-wiki.js';
 import { ReferenceService } from '../references.js';
 import { LayeredMemoryService } from '../layered-memory.js';
+import { ReferenceImpactIndex } from './reference-index.js';
 
 const roots: string[] = [];
-afterEach(async () => { vi.restoreAllMocks(); for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true }); });
-async function fixture(frontmatter: Record<string, unknown> = {}, archive: boolean | 'merge_duplicates' | 'merge_passages' = false, canonicalContent?: string, owner = false) {
+const impactIndexes: ReferenceImpactIndex[] = [];
+afterEach(async () => { vi.restoreAllMocks(); for (const index of impactIndexes.splice(0)) await index.close(); for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true }); });
+async function fixture(frontmatter: Record<string, unknown> = {}, archive: boolean | 'merge_duplicates' | 'merge_passages' = false, canonicalContent?: string, owner = false, indexed = false) {
   const root = await mkdtemp(join(tmpdir(), 'curation-run-')); roots.push(root);
-  const fs = new FileSystemService(root), access = new ScopeAccessPolicy();
+  let index: ReferenceImpactIndex | undefined;
+  const vault = indexed ? join(root, 'vault') : root;
+  if (indexed) await mkdir(vault);
+  const fs = new FileSystemService(vault, undefined, undefined, indexed ? (path, kind) => { void index?.invalidate([{ path, kind }]); } : undefined,
+    undefined, undefined, undefined, undefined, undefined, indexed ? () => index : undefined), access = new ScopeAccessPolicy();
+  if (indexed) {
+    const host = join(root, 'host'); await mkdir(host, { mode: 0o700 });
+    if (process.platform === 'win32') await promisify(execFile)('icacls.exe', [host, '/inheritance:r', '/grant:r', `${userInfo().username}:(OI)(CI)F`], { windowsHide: true });
+    index = new ReferenceImpactIndex(fs, host); impactIndexes.push(index);
+  }
   const sourcePath = owner ? 'Community/Knowledge/A.md' : 'A.md';
   await fs.writeNote({ path: sourcePath, content: '# A\nOnly if enabled. Never delete originals. ^condition',
     frontmatter: { llm_wiki_type: 'knowledge', contrasts_with: ['[[B]]', '[[B]]'], related: ['[[B|Choice]]', '[[B]]'], ...frontmatter } });
@@ -46,9 +59,40 @@ async function fixture(frontmatter: Record<string, unknown> = {}, archive: boole
   const prepare = () => call({ op: 'prepare', cycleId: 'cleanup', requestId: 'prepare', expectedRevision: 'missing',
     operation: archive ? archive === true ? 'archive_duplicate' : archive : 'deduplicate_relations', path: sourcePath, sourceRevision: initial.revision,
     ...(archive && { replacementPath: 'B.md', replacementRevision: replacement.revision }) });
-  return { fs, initial, config, call, prepare, values, options, principal,
+  return { fs, initial, config, call, prepare, values, options, principal, index,
     restart: () => { service = new EvolutionService(options); }, revoke: () => { allowed = false; }, unmanage: () => { managed = false; }, interrupt: () => { failSave = true; } };
 }
+
+test('indexed merge applies and restores with more than 200 unrelated notes, without a request-time inventory', async () => {
+  const f = await fixture({}, 'merge_duplicates', undefined, false, true);
+  for (let i = 0; i < 210; i++) await writeFile(join(f.fs.getVaultPath(), `unrelated-${i}.md`), 'Unrelated');
+  await f.index!.start(); const enumerate = vi.spyOn(f.fs, 'referenceFiles');
+  const plan = await f.prepare(); expect(plan.status).toBe('prepared');
+  const done = await f.call({ op: 'apply', cycleId: 'cleanup', requestId: 'apply-indexed', expectedRevision: plan.revision, fingerprint: plan.fingerprint });
+  expect(done.status).toBe('applied');
+  expect((await f.fs.readNote('A.md')).frontmatter.lifecycle).toBe('superseded');
+  const undone = await f.call({ op: 'revert', cycleId: 'cleanup', requestId: 'undo-indexed', expectedRevision: done.revision });
+  expect(undone.status).toBe('withdrawn'); expect((await f.fs.readNote('A.md')).originalContent).toBe(f.initial.originalContent);
+  expect(enumerate).not.toHaveBeenCalled();
+}, 30000);
+
+test('a reference arriving after async authorization fences the final physical mutation', async () => {
+  const f = await fixture({}, true, undefined, false, true); await f.index!.start();
+  const plan = await f.prepare(); expect(plan.status).toBe('prepared');
+  const patch = f.fs.patchMultipleNotes.bind(f.fs); let inserted = false;
+  vi.spyOn(f.fs, 'patchMultipleNotes').mockImplementation((params, scope, policy) => patch(params, scope, {
+    ...policy!, assertAccess: async () => {
+      await policy!.assertAccess?.();
+      if (!params.dryRun && !inserted) {
+        inserted = true;
+        await writeFile(join(f.fs.getVaultPath(), 'Concurrent.md'), '[[A]]');
+        void f.index!.invalidate([{ path: 'Concurrent.md', kind: 'upsert' }]);
+      }
+    },
+  }));
+  await expect(f.call({ op: 'apply', cycleId: 'cleanup', requestId: 'raced', expectedRevision: plan.revision, fingerprint: plan.fingerprint })).rejects.toThrow();
+  expect(inserted).toBe(true); expect((await f.fs.readNote('A.md')).originalContent).toBe(f.initial.originalContent);
+}, 30000);
 
 test('managed cleanup previews, applies, rereads and restores exact original bytes through evolution', async () => {
   const f = await fixture(), plan = await f.prepare();

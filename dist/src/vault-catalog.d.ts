@@ -31,6 +31,8 @@ export declare class VaultFileCatalog {
     private readonly listeners;
     private readonly batchListeners;
     private readonly reconcileListeners;
+    private readonly integrityListeners;
+    private integrityRevision;
     private paths;
     private allPaths;
     private lastDirectoryHint;
@@ -60,6 +62,14 @@ export declare class VaultFileCatalog {
     /** Observe an existing completed reconciliation without invalidating indexes
      * that are currently consuming that inventory. No extra watcher or timer. */
     subscribeReconcile(listener: () => void): () => void;
+    /** Host integrity consumers observe raw eligible events before discovery
+     * exclusions/debounce. They must never turn these private hints into output. */
+    subscribeIntegrity(listener: (path?: string) => void): () => void;
+    integrityObservation(): {
+        revision: number;
+        watching: boolean;
+    };
+    private invalidateIntegrity;
     /** Mark a mutation already handled by the write path without broadcasting it twice. */
     invalidate(path?: string): void;
     /** Invalidate several direct mutations with one generation/cache update. */

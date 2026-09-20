@@ -85,6 +85,8 @@ export class VaultFileCatalog {
   private readonly listeners = new Set<VaultCatalogListener>();
   private readonly batchListeners = new Set<VaultCatalogBatchListener>();
   private readonly reconcileListeners = new Set<() => void>();
+  private readonly integrityListeners = new Set<(path?: string) => void>();
+  private integrityRevision = 0;
   private paths: string[] | undefined;
   private allPaths: string[] | undefined;
   // One positive hint for this inventory, not an authorization or freshness cache.
@@ -137,6 +139,19 @@ export class VaultFileCatalog {
     if (this.closed) return () => undefined;
     this.reconcileListeners.add(listener);
     return () => this.reconcileListeners.delete(listener);
+  }
+
+  /** Host integrity consumers observe raw eligible events before discovery
+   * exclusions/debounce. They must never turn these private hints into output. */
+  subscribeIntegrity(listener: (path?: string) => void): () => void {
+    if (this.closed) return () => undefined;
+    this.integrityListeners.add(listener); this.startWatcher();
+    return () => this.integrityListeners.delete(listener);
+  }
+  integrityObservation() { return { revision: this.integrityRevision, watching: !this.closed && !!this.watcher }; }
+  private invalidateIntegrity(path?: string) {
+    this.integrityRevision++;
+    for (const listener of this.integrityListeners) { try { listener(path); } catch { /* One consumer cannot break the watcher. */ } }
   }
 
   /** Mark a mutation already handled by the write path without broadcasting it twice. */
@@ -293,6 +308,8 @@ export class VaultFileCatalog {
     this.listeners.clear();
     this.batchListeners.clear();
     this.reconcileListeners.clear();
+    this.integrityListeners.clear();
+    this.integrityRevision++;
     this.paths = undefined;
     this.allPaths = undefined;
     this.lastDirectoryHint = undefined;
@@ -351,6 +368,7 @@ export class VaultFileCatalog {
       this.watcher.on('error', () => {
         this.watcher?.close();
         this.watcher = undefined;
+        this.invalidateIntegrity();
         this.invalidate();
         this.emitBatch();
       });
@@ -359,17 +377,20 @@ export class VaultFileCatalog {
       // Network mounts and some Windows filesystems do not support recursive
       // watchers. The shorter reconciliation interval remains authoritative.
       this.watcher = undefined;
+      this.invalidateIntegrity();
     }
   }
 
   private onFilesystemEvent(filename: string | undefined, event?: string): void {
     if (this.closed) return;
     if (!filename) {
+      this.invalidateIntegrity();
       this.invalidate();
       this.queueFullRefreshEvent();
       return;
     }
     const path = normalizePath(filename);
+    if (path && this.pathFilter.isAllowedForListing(path)) this.invalidateIntegrity(path);
     // Ignore the catalog's own hidden state and other restricted files. Their
     // writes must not trigger a full public-vault refresh.
     if (!path || this.excludePath(path) || !this.pathFilter.isAllowedForListing(path)) return;

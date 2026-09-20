@@ -45,6 +45,7 @@ import type { EvolutionOptions } from './evolution/model.js';
 import { EvolutionOpportunity, evolutionSessionBridge, type EvolutionSession } from './evolution/opportunity.js';
 import { connectEvolutionRuntime, type EvolutionRuntimeConfig, type EvolutionRuntimeHost } from './evolution/runtime-connection.js';
 import { DiskMemoryIndex } from './memory/read-index.js';
+import { ReferenceImpactIndex } from './curation/reference-index.js';
 import { wikiEvolutionAdapter } from './evolution/wiki-adapter.js';
 import { FidelityService } from './fidelity-service.js';
 import { getFidelityTools } from './fidelity-tools.js';
@@ -658,6 +659,8 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
   const metadataIndex = new VaultMetadataIndex(resolvedVaultPath, publicIndexFilter, frontmatterHandler, fileCatalog, vaultIo);
   const graphIndex = new VaultGraphIndex(resolvedVaultPath, publicIndexFilter, frontmatterHandler, fileCatalog, vaultIo);
   let memoryIndex: DiskMemoryIndex | undefined;
+  let referenceImpactIndex: ReferenceImpactIndex | undefined;
+  const referenceCacheDir = process.env.MCPVAULT_REFERENCE_CACHE_DIR;
   const refreshDocumentPolicy = async () => {
     try { await documentPolicy.refresh(); }
     catch (error) { documentPolicyReady = false; throw error; }
@@ -667,6 +670,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
       metadataIndex.invalidateAll(); searchService.invalidate(); graphIndex.invalidate();
       semanticSearch.notifyChanges([]);
       void memoryIndex?.invalidate();
+      void referenceImpactIndex?.invalidate();
     }
   };
   const pendingReadModelChanges = new Map<string, VaultCatalogChange>();
@@ -688,6 +692,9 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
     void memoryIndex?.invalidate(changes);
   };
   const queueReadModelChange = (path: string, kind: VaultCatalogChange['kind']) => {
+    // Integrity includes guidance/checkpoints excluded from discovery indexes.
+    // Fence immediately, before the normal read-model microtask is queued.
+    void referenceImpactIndex?.invalidate([{ path, kind }]);
     if (excludedGuidance(path)) return;
     pendingReadModelChanges.set(path.replace(/\\/g, '/'), { path, kind });
     if (readModelFlushQueued) return;
@@ -708,6 +715,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
     vaultIo,
     scopeAccess,
     path => noticeRegistry.assertMutation(path),
+    referenceCacheDir ? () => referenceImpactIndex : undefined,
   );
   const gitHistory = new GitHistoryService(resolvedVaultPath, pathFilter);
   const collaboration = new CollaborationService(fileSystem, searchService);
@@ -720,6 +728,8 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
   const documentSearch = documentIndex ? new DocumentSearch(documentIndex, retrieval) : undefined;
   const memoryCacheDir = process.env.MCPVAULT_MEMORY_CACHE_DIR;
   if ((hasFeature('personal-memory') || hasFeature('wiki-core')) && memoryCacheDir) memoryIndex = new DiskMemoryIndex(fileSystem, memoryCacheDir, path => publicIndexFilter.isAllowed(path), fileCatalog);
+  if (referenceCacheDir) referenceImpactIndex = new ReferenceImpactIndex(fileSystem, referenceCacheDir, fileCatalog,
+    path => documentPolicyReady && pathFilter.isAllowed(path) && scopeAccess.canReadProtectedDocument(path));
   const layeredMemory = hasFeature('personal-memory') ? new LayeredMemoryService(fileSystem, retrieval, scopeAccess, memoryIndex) : undefined;
   const researchBridge = hasFeature('ideation-research') ? new ResearchBridgeService(fileSystem, scopeAccess, retrieval) : undefined;
   const questionPacket = new QuestionPacketService(fileSystem, scopeAccess, retrieval);
@@ -770,6 +780,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
     return owner && scopeAuth.hasCapability(owner, 'write') && !await moderation.isBanned(owner.accountId, owner.userId) ? owner : undefined;
   }, readOnly);
   void refreshDocumentPolicy().then(() => mocRegions.start()).then(() => mocRegions.flush()).catch(() => { /* Invalid protected policy or registration disables automation; explicit reads report the error. */ });
+  if (referenceImpactIndex) void refreshDocumentPolicy().then(() => referenceImpactIndex?.start()).catch(() => { /* Incomplete integrity stays unavailable, never an empty scan. */ });
   const reputation = hasFeature('collaboration') ? new ReputationService(fileSystem, scopeAuth, moderation) : undefined;
   reputationCache = reputation;
   const notifications = reputation ? new NotificationService(fileSystem, reputation, resolvedVaultPath, fileCatalog) : undefined;
@@ -4001,7 +4012,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
     // remaining workers/watchers or the underlying protocol server.
     for (const close of [() => evolutionConnection?.close(), disconnectCodexHooks, readModelCatalogUnsubscribe, maintenanceReconcileUnsubscribe,
       () => maintenance.close(), () => compilation.close(), () => llmWiki.invalidate(), () => documentSearch?.close(),
-      () => documentIndex?.close(), () => memoryIndex?.close(), () => mocRegions.close(), () => metadataIndex.close(),
+      () => documentIndex?.close(), () => memoryIndex?.close(), () => referenceImpactIndex?.close(), () => mocRegions.close(), () => metadataIndex.close(),
       () => searchService.close(), () => semanticSearch.close(), () => graphIndex.close(),
       () => notifications?.close(), () => communityFeatures?.close(), () => fileCatalog.close(), closeServer]) {
       try { await close(); } catch (error) { failures.push(error); }

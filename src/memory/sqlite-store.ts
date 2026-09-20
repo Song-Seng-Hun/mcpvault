@@ -6,6 +6,7 @@ import { memoryEntries, memoryReferencePath } from '../memory-contract.js';
 import { extractGraphAssertions, type GraphAssertion } from '../graph-assertion.js';
 import { extractObsidianLinkOccurrences } from '../backlinks.js';
 import { buildNoteReferenceIndex, markdownNotePath } from '../note-reference.js';
+import { referenceDocumentPath, referenceFootprint } from '../curation/reference-footprint.js';
 
 export interface MemoryIndexRow extends QueryNote { text: string }
 export interface MemoryIndexPage { notes: QueryNote[]; truncated: boolean; generation: number }
@@ -13,6 +14,9 @@ export interface MemoryIndexQuery { prefix?: string; terms: string[]; role?: str
 export interface GraphIndexQuery { direction: 'incoming' | 'outgoing'; keys: string[]; limit: number; after?: string; expectedGeneration?: number }
 export interface GraphIndexPage { occurrences: GraphAssertion[]; truncated: boolean; next?: string;
   generation: number; incompleteOwners: string[]; coverage: 'candidates_only' }
+export interface ReferenceImpactQuery { keys: string[]; limit: number; expectedGeneration?: number }
+export interface ReferenceImpactPage { candidates: Array<{ path: string; revision: string }>; truncated: boolean;
+  complete: boolean; generation: number }
 
 // Discovery key only, never a resolved path or permission. Preserve raw reference in payload.
 function referenceKey(raw: string): string {
@@ -101,6 +105,36 @@ export class MemorySqliteStore {
   /** Private discovery only. Recheck live identities, ACL and generation before resolving. */
   referenceCandidates(keys: string[], limit: number) { return this.call<MemoryIndexPage>('references', this.referenceQuery(keys, limit)); }
   referenceExplain(keys: string[], limit: number) { return this.call<string[]>('referencesExplain', this.referenceQuery(keys, limit)); }
+  /** Private integrity postings, including non-navigational checkpoint paths.
+   * No memory/search visibility is granted by adding a row here. */
+  async putReferenceDocuments(rows: MemoryIndexRow[]) {
+    if (rows.length > 128) throw Error('Reference batch exceeds limit');
+    const data = rows.map(row => {
+      referenceDocumentPath(row.path);
+      if (!/^[a-f0-9]{64}$/.test(row.revision || '') || typeof row.text !== 'string' || row.text.length > 2_000_000
+        || JSON.stringify(row.frontmatter).length > 128000) throw Error('Invalid reference row');
+      return { path: row.path, revision: row.revision, ...referenceFootprint(row), version: 1 };
+    });
+    return this.call<void>('putReferences', data);
+  }
+  removeReferenceDocuments(paths: string[]) {
+    paths.forEach(referenceDocumentPath); if (paths.length > 128) throw Error('Reference batch exceeds limit');
+    return this.call<void>('removeReferences', paths);
+  }
+  private impactQuery(q: ReferenceImpactQuery) {
+    if (!Array.isArray(q.keys) || !q.keys.length || q.keys.length > 128 || q.keys.some(k => typeof k !== 'string' || !k || k.length > 1024)
+      || !Number.isInteger(q.limit) || q.limit < 1 || q.limit > 200
+      || q.expectedGeneration !== undefined && (!Number.isSafeInteger(q.expectedGeneration) || q.expectedGeneration < 0)) throw Error('Invalid reference impact window');
+    return { ...q, keys: [...new Set(q.keys)] };
+  }
+  referenceImpact(q: ReferenceImpactQuery) { return this.call<ReferenceImpactPage>('referenceImpact', this.impactQuery(q)); }
+  referenceImpactExplain(q: ReferenceImpactQuery) { return this.call<string[]>('referenceImpactExplain', this.impactQuery(q)); }
+  beginReferenceScan() { return this.call<void>('beginReferenceScan'); }
+  seenReferences(paths: string[]) {
+    paths.forEach(referenceDocumentPath); if (paths.length > 128) throw Error('Invalid reference scan page');
+    return this.call<void>('seenReferences', paths);
+  }
+  finishReferenceScan() { return this.call<void>('finishReferenceScan'); }
   unindexedGraph(paths: string[]) {
     paths.forEach(memoryReferencePath); if (paths.length > 128) throw Error('Invalid graph backfill window');
     return this.call<string[]>('unindexedGraph', paths);
