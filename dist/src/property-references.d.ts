@@ -1,8 +1,3 @@
-/**
- * Managed frontmatter fields whose string values are note identities rather
- * than ordinary prose. Keeping this contract in one module prevents graph,
- * move, and delete operations from disagreeing about structural references.
- */
 export declare const PLAIN_REFERENCE_PROPERTIES: Set<string>;
 export interface FrontmatterReferenceValue {
     propertyPath: string;

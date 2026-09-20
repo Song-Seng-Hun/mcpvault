@@ -12,6 +12,7 @@ import { EvolutionBudget } from './budget.js';
 import { EvolutionOperations } from './operations.js';
 import type { RetrievalService } from '../retrieval-service.js';
 import { EvolutionDirectReview } from './direct-review.js';
+import type { CompilationService } from '../compilation-service.js';
 export interface EvolutionRuntimeConfig {
     storage: HostWorkStorage<EvolutionConfig>;
     /** Reviewed code-owned checks only; no remote code or MCP-defined grading. */
@@ -25,6 +26,7 @@ interface Services {
     refreshPolicy(): Promise<void>;
     readOnly: boolean;
     retrieval: RetrievalService;
+    compilation?: CompilationService;
     adapters?: Partial<Record<TargetKind, EvolutionAdapter>>;
 }
 /** Concrete existing-account connection. No registration, certificate binding or owner inference. */

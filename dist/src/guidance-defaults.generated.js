@@ -24472,9 +24472,9 @@ export const GUIDANCE_DEFINITIONS = [
     {
         "id": "guid-4b2f6f433ca3aebe",
         "kind": "prose",
-        "template": "Directional typed relation or focus_supports; use the reciprocal planner for related/same_as/close_match",
+        "template": "Directional typed relation or focus_supports; use the reciprocal planner for related/same_as/close_match/contrasts_with",
         "parts": [
-            "Directional typed relation or focus_supports; use the reciprocal planner for related/same_as/close_match"
+            "Directional typed relation or focus_supports; use the reciprocal planner for related/same_as/close_match/contrasts_with"
         ],
         "binding": "call",
         "sources": [
@@ -43071,9 +43071,9 @@ export const GUIDANCE_DEFINITIONS = [
     {
         "id": "guid-845316321112575b",
         "kind": "prose",
-        "template": "Preview replacing one directional typed-relation or focus_supports Property with a complete exact target set. It resolves and canonicalizes every visible target, rejects self/scope/kind/horizon errors, and returns one revision-stamped notes.change_set edit. Use wiki.reciprocal_link for related, same_as, or close_match.",
+        "template": "Preview replacing one directional typed-relation or focus_supports Property with a complete exact target set. It resolves and canonicalizes every visible target, rejects self/scope/kind/horizon errors, and returns one revision-stamped notes.change_set edit. Use wiki.reciprocal_link for related, same_as, close_match, or contrasts_with.",
         "parts": [
-            "Preview replacing one directional typed-relation or focus_supports Property with a complete exact target set. It resolves and canonicalizes every visible target, rejects self/scope/kind/horizon errors, and returns one revision-stamped notes.change_set edit. Use wiki.reciprocal_link for related, same_as, or close_match."
+            "Preview replacing one directional typed-relation or focus_supports Property with a complete exact target set. It resolves and canonicalizes every visible target, rejects self/scope/kind/horizon errors, and returns one revision-stamped notes.change_set edit. Use wiki.reciprocal_link for related, same_as, close_match, or contrasts_with."
         ],
         "binding": "call",
         "sources": [
@@ -67136,9 +67136,9 @@ export const GUIDANCE_DEFINITIONS = [
     {
         "id": "guid-d1c98f3814318aed",
         "kind": "prose",
-        "template": "Preview a coherent two-note related, same_as, or close_match relation. It resolves every existing link, rejects malformed/ambiguous values and scope leaks, and returns one revision-stamped notes.change_set so a mutual relation cannot be left half-written.",
+        "template": "Preview a coherent two-note related, same_as, close_match, or contrasts_with relation. Contrast compares alternatives on one axis, not contradictory facts. It resolves every existing link, rejects malformed/ambiguous values and scope leaks, and returns one revision-stamped notes.change_set.",
         "parts": [
-            "Preview a coherent two-note related, same_as, or close_match relation. It resolves every existing link, rejects malformed/ambiguous values and scope leaks, and returns one revision-stamped notes.change_set so a mutual relation cannot be left half-written."
+            "Preview a coherent two-note related, same_as, close_match, or contrasts_with relation. Contrast compares alternatives on one axis, not contradictory facts. It resolves every existing link, rejects malformed/ambiguous values and scope leaks, and returns one revision-stamped notes.change_set."
         ],
         "binding": "call",
         "sources": [
@@ -74878,9 +74878,9 @@ export const GUIDANCE_DEFINITIONS = [
     {
         "id": "guid-ea81aae2682a4c36",
         "kind": "error",
-        "template": "Guarded change sets require 1..9 related revision guards",
+        "template": "Guarded change sets require up to 9 related revision guards and an access assertion when no related guards exist",
         "parts": [
-            "Guarded change sets require 1..9 related revision guards"
+            "Guarded change sets require up to 9 related revision guards and an access assertion when no related guards exist"
         ],
         "binding": "call",
         "sources": [

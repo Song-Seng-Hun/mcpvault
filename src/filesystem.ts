@@ -1609,7 +1609,7 @@ export class FileSystemService {
     if (totalHunks > 50) throw guidanceError(new Error('A note change set may contain at most 50 total patch hunks'), 'guid-843cf02526f0ff4c');
     if (totalPatchBytes > 2 * 1024 * 1024) throw guidanceError(new Error('A note change set may contain at most 2 MiB of patch text'), 'guid-243148697f06f3dd');
 
-    if (policy && (!Array.isArray(policy.guards) || policy.guards.length < 1 || policy.guards.length > 9)) throw guidanceError(new Error('Guarded change sets require 1..9 related revision guards'), 'guid-ea81aae2682a4c36');
+    if (policy && (!Array.isArray(policy.guards) || policy.guards.length > 9 || policy.guards.length === 0 && typeof policy.assertAccess !== 'function')) throw guidanceError(new Error('Guarded change sets require up to 9 related revision guards and an access assertion when no related guards exist'), 'guid-ea81aae2682a4c36');
     const guardIdentities = new Set<string>();
     const guards = (policy?.guards || []).map(guard => {
       const path = this.normalizeReferenceMutationPath(guard?.path);

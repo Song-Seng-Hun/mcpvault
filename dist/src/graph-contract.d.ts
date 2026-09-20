@@ -1,8 +1,8 @@
 /** Shared descriptive vocabulary, never an access grant or inference engine.
  * Version is separate from the existing organization API's serialized entries. */
 export declare const GRAPH_CONTRACT_VERSION = 1;
-export declare const RELATION_FIELDS: readonly ['supports', 'contradicts', 'supersedes', 'derived_from', 'depends_on', 'implements', 'blocked_by', 'answers_questions', 'tests', 'related', 'same_as', 'close_match', 'version_of', 'refines'];
-export declare const RECIPROCAL_RELATIONS: readonly ['related', 'same_as', 'close_match'];
+export declare const RELATION_FIELDS: readonly ['supports', 'contradicts', 'supersedes', 'derived_from', 'depends_on', 'implements', 'blocked_by', 'answers_questions', 'tests', 'related', 'same_as', 'close_match', 'version_of', 'refines', 'contrasts_with'];
+export declare const RECIPROCAL_RELATIONS: readonly ['related', 'same_as', 'close_match', 'contrasts_with'];
 export declare const RELATION_SEMANTICS: readonly [{
     readonly field: 'supports';
     readonly direction: 'directional';
@@ -73,6 +73,11 @@ export declare const RELATION_SEMANTICS: readonly [{
     readonly direction: 'directional';
     readonly target: 'A note made more precise or useful by this note.';
     readonly reciprocal: false;
+}, {
+    readonly field: 'contrasts_with';
+    readonly direction: 'mutual';
+    readonly target: 'A contrasting concept or alternative on a shared comparison axis; not a factual contradiction or identity.';
+    readonly reciprocal: true;
 }];
 export declare const CLAIM_RELATION_FIELDS: readonly [{
     readonly input: 'supportsClaims';

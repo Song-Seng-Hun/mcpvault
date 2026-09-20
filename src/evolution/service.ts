@@ -27,6 +27,9 @@ export class EvolutionService {
     if (!['feedback', 'cycle', 'context'].includes(endpoint) || endpoint !== 'context' && !(endpoint === 'feedback' ? feedbackOps : cycleOps).includes(op)) return unavailable();
     const max = p.maxChars ?? 4000;
     if (!Number.isSafeInteger(max) || max < 1000 || max > 12000) return unavailable();
+    if (p.kind !== undefined && (endpoint !== 'cycle' || p.kind !== 'curation')) return unavailable();
+    if (endpoint === 'cycle' && p.kind === 'curation' && op === 'diagnose') return this.options.curation?.diagnose()
+      ?? { status: 'diagnostic_only', reason: 'curation_connection_unavailable', automaticApplication: false };
     if (endpoint === 'cycle' && op === 'diagnose') return { status: this.options.storage && this.options.authority ? 'configured' : 'diagnostic_only',
       adapterKinds: Object.keys(this.options.adapters ?? {}).concat('persona', 'harness'), effectVerified: false, notice };
     if (!principal?.accountId) return unavailable();
@@ -43,11 +46,12 @@ export class EvolutionService {
         const repo = new EvolutionRepository(this.options.storage!.records!, lease.sharedOwner ? `owner:${lease.ownerId}` : `account:${principal.accountId}`, current, principal.accountId);
         const context = { principal, lease, repo, current, automatic: execution?.automatic === true };
         const result = endpoint === 'feedback' ? await this.feedback(op, p, context)
-          : endpoint === 'context' ? await this.context(p, context) : await this.cycle(op, p, context);
+          : endpoint === 'context' ? await this.context(p, context)
+          : p.kind === 'curation' ? await this.options.curation?.execute(op, p, context) ?? unavailable() : await this.cycle(op, p, context);
         await current();
         if (JSON.stringify(result).length <= max) return result;
         return { status: result.status, partial: true, notice, nextAction: { endpointId: `evolution.${endpoint}`,
-          arguments: { ...(result.cycleId ? { op: 'read', cycleId: result.cycleId } : result.feedback?.id ? { op: 'read', feedbackId: result.feedback.id } :
+          arguments: { ...(p.kind === 'curation' && { kind: 'curation' }), ...(result.cycleId ? { op: 'read', cycleId: result.cycleId } : result.feedback?.id ? { op: 'read', feedbackId: result.feedback.id } :
             Object.fromEntries(['project', 'computer', 'scene', 'sessionId', 'taskId', 'offset', 'expectedIndexRevision'].filter(k => p[k] !== undefined).map(k => [k, p[k]]))), maxChars: 12000 } } };
       } finally { await writer?.close(); }
     };

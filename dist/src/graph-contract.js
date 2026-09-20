@@ -1,8 +1,8 @@
 /** Shared descriptive vocabulary, never an access grant or inference engine.
  * Version is separate from the existing organization API's serialized entries. */
 export const GRAPH_CONTRACT_VERSION = 1;
-export const RELATION_FIELDS = ['supports', 'contradicts', 'supersedes', 'derived_from', 'depends_on', 'implements', 'blocked_by', 'answers_questions', 'tests', 'related', 'same_as', 'close_match', 'version_of', 'refines'];
-export const RECIPROCAL_RELATIONS = ['related', 'same_as', 'close_match'];
+export const RELATION_FIELDS = ['supports', 'contradicts', 'supersedes', 'derived_from', 'depends_on', 'implements', 'blocked_by', 'answers_questions', 'tests', 'related', 'same_as', 'close_match', 'version_of', 'refines', 'contrasts_with'];
+export const RECIPROCAL_RELATIONS = ['related', 'same_as', 'close_match', 'contrasts_with'];
 export const RELATION_SEMANTICS = [
     { field: 'supports', direction: 'directional', target: 'A claim, decision, or note supported by this note.', reciprocal: false },
     { field: 'contradicts', direction: 'directional', target: 'A claim or conclusion challenged by this note.', reciprocal: false },
@@ -18,6 +18,7 @@ export const RELATION_SEMANTICS = [
     { field: 'close_match', direction: 'mutual', target: 'A near-equivalent concept useful for discovery but not safe to merge or treat as exact identity.', reciprocal: true },
     { field: 'version_of', direction: 'directional', target: 'The conceptual note this version belongs to.', reciprocal: false },
     { field: 'refines', direction: 'directional', target: 'A note made more precise or useful by this note.', reciprocal: false },
+    { field: 'contrasts_with', direction: 'mutual', target: 'A contrasting concept or alternative on a shared comparison axis; not a factual contradiction or identity.', reciprocal: true },
 ];
 export const CLAIM_RELATION_FIELDS = [
     { input: 'supportsClaims', property: 'supports_claims', relation: 'supports' },

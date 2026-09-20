@@ -2,7 +2,7 @@ import { describe, expect, test } from 'vitest';
 import { RELATION_FIELDS, RECIPROCAL_RELATIONS, RELATION_SEMANTICS, getOrganizationRelationContract } from './organization.js';
 
 // Characterization of the pre-extraction public contract, not generated from it.
-const fields = ['supports', 'contradicts', 'supersedes', 'derived_from', 'depends_on', 'implements', 'blocked_by', 'answers_questions', 'tests', 'related', 'same_as', 'close_match', 'version_of', 'refines'];
+const fields = ['supports', 'contradicts', 'supersedes', 'derived_from', 'depends_on', 'implements', 'blocked_by', 'answers_questions', 'tests', 'related', 'same_as', 'close_match', 'version_of', 'refines', 'contrasts_with'];
 const targets = [
   'A claim, decision, or note supported by this note.',
   'A claim or conclusion challenged by this note.',
@@ -18,17 +18,18 @@ const targets = [
   'A near-equivalent concept useful for discovery but not safe to merge or treat as exact identity.',
   'The conceptual note this version belongs to.',
   'A note made more precise or useful by this note.',
+  'A contrasting concept or alternative on a shared comparison axis; not a factual contradiction or identity.',
 ];
 
 describe('graph contract characterization', () => {
-  test('keeps all fourteen names, order, exact public semantics and reciprocal flags', () => {
+  test('keeps the original fourteen entries and appends the mutual contrast relation', () => {
     expect(RELATION_FIELDS).toEqual(fields);
-    expect(new Set(RELATION_FIELDS).size).toBe(14);
-    expect(RECIPROCAL_RELATIONS).toEqual(['related', 'same_as', 'close_match']);
+    expect(new Set(RELATION_FIELDS).size).toBe(15);
+    expect(RECIPROCAL_RELATIONS).toEqual(['related', 'same_as', 'close_match', 'contrasts_with']);
     expect(getOrganizationRelationContract()).toEqual(fields.map((field, index) => ({
       field, target: targets[index],
-      direction: [9, 10, 11].includes(index) ? 'mutual' : 'directional',
-      reciprocal: [9, 10, 11].includes(index),
+      direction: [9, 10, 11, 14].includes(index) ? 'mutual' : 'directional',
+      reciprocal: [9, 10, 11, 14].includes(index),
     })));
   });
 

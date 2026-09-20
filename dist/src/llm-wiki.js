@@ -5484,6 +5484,14 @@ export class LlmWikiService {
         }
         if (JSON.stringify(result).length <= boundedChars)
             return result;
+        // Syntax examples and filing advice are not compatibility fields. Drop
+        // these before truncating any fingerprinted contract or readiness evidence.
+        const contractFirst = { ...result };
+        for (const key of ['syntax', 'pipeline', 'filing']) {
+            delete contractFirst[key];
+            if (JSON.stringify(contractFirst).length <= boundedChars)
+                return contractFirst;
+        }
         const compact = {
             manifestVersion: base.manifestVersion,
             format: base.format,

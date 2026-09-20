@@ -708,17 +708,17 @@ export function getLlmWikiTools(): Tool[] {
     },
     {
       name: 'get_wiki_relation_set_preview',
-      description: guidanceText('guid-845316321112575b', 'Preview replacing one directional typed-relation or focus_supports Property with a complete exact target set. It resolves and canonicalizes every visible target, rejects self/scope/kind/horizon errors, and returns one revision-stamped notes.change_set edit. Use wiki.reciprocal_link for related, same_as, or close_match.'),
+      description: guidanceText('guid-845316321112575b', 'Preview replacing one directional typed-relation or focus_supports Property with a complete exact target set. It resolves and canonicalizes every visible target, rejects self/scope/kind/horizon errors, and returns one revision-stamped notes.change_set edit. Use wiki.reciprocal_link for related, same_as, close_match, or contrasts_with.'),
       inputSchema: { type: 'object', properties: {
         sourcePath: { type: 'string', description: guidanceText('guid-c27d14f8939547c4', 'Exact visible ordinary note whose relation list is being replaced') },
-        relation: { type: 'string', enum: [...RELATION_FIELDS.filter(field => !(RECIPROCAL_RELATIONS as readonly string[]).includes(field)), 'focus_supports'], description: guidanceText('guid-4b2f6f433ca3aebe', 'Directional typed relation or focus_supports; use the reciprocal planner for related/same_as/close_match') },
+        relation: { type: 'string', enum: [...RELATION_FIELDS.filter(field => !(RECIPROCAL_RELATIONS as readonly string[]).includes(field)), 'focus_supports'], description: guidanceText('guid-4b2f6f433ca3aebe', 'Directional typed relation or focus_supports; use the reciprocal planner for related/same_as/close_match/contrasts_with') },
         targetPaths: { type: 'array', maxItems: 30, items: { type: 'string', minLength: 1 }, description: guidanceText('guid-96297c0fce7725c9', 'Complete ordered exact target-note set; pass [] to clear the Property') },
         maxChars: { type: 'integer', minimum: 4096, maximum: 20000, default: 9000 }, accessToken, prettyPrint,
       }, required: ['sourcePath', 'relation', 'targetPaths'] },
     },
     {
       name: 'get_wiki_reciprocal_link_preview',
-      description: guidanceText('guid-d1c98f3814318aed', 'Preview a coherent two-note related, same_as, or close_match relation. It resolves every existing link, rejects malformed/ambiguous values and scope leaks, and returns one revision-stamped notes.change_set so a mutual relation cannot be left half-written.'),
+      description: guidanceText('guid-d1c98f3814318aed', 'Preview a coherent two-note related, same_as, close_match, or contrasts_with relation. Contrast compares alternatives on one axis, not contradictory facts. It resolves every existing link, rejects malformed/ambiguous values and scope leaks, and returns one revision-stamped notes.change_set.'),
       inputSchema: { type: 'object', properties: {
         leftPath: { type: 'string', description: guidanceText('guid-a9556283e8754afa', 'Exact first visible note path') },
         rightPath: { type: 'string', description: guidanceText('guid-726a8d06ee7494b9', 'Exact second visible note path') },

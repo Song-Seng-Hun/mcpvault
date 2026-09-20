@@ -147,9 +147,9 @@ const POLICY_TOPICS = {
         purpose: 'Turn observations into durable, connected, revisable knowledge without duplicating truth.',
         rules: [
             'Keep one canonical Markdown note and use MOCs, primary_moc, additional mocs, typed relations, aliases, and see_also as navigation.',
-            'Before moving that canonical note, use notes.move_preview; apply notes.move with updateLinks only at the returned current revision so body links, link-bearing Properties, self-links, and relative Markdown outlinks stay coherent. Disambiguate same-name targets instead of guessing.',
-            'Use wiki.relation_set to replace one complete directional relation list with exact canonical targets; use wiki.reciprocal_link for related, close_match, or same_as so both directions remain coherent.',
-            'Use same_as only for exact identity, close_match for reciprocal near-equivalence that must not be merged automatically, and related for general association.',
+            'Before moving, use notes.move_preview, then notes.move with updateLinks only at its current revision. Preserve body/Property/self-links and relative Markdown outlinks. Disambiguate same-name targets; never guess.',
+            'wiki.relation_set replaces a complete directional list with exact canonical targets. wiki.reciprocal_link keeps both directions coherent for related, close_match, same_as and contrasts_with.',
+            'same_as: exact identity. close_match: reciprocal near-equivalence, never automatic merging. related: general association. contrasts_with: alternatives on one comparison axis, not contradicts or falsehood, identity or merge permission.',
             'Use note_kind and lifecycle for knowledge state; keep actionable-note task_status separate from epistemic or knowledge lifecycle.',
             'Use question, hypothesis, assumption, experiment, decision, and negative knowledge for different epistemic jobs instead of flattening them into generic notes.',
             'Summaries, key points, highlights, and generated syntheses are projections or interpretations; preserve the full body and their source revision/fingerprint.',

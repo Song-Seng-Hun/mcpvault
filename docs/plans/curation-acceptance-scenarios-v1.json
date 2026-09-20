@@ -1,0 +1,546 @@
+{
+  "version": 1,
+  "scope": "C2-C3 acceptance specifications, frozen before those planners; not an executed benchmark or evidence-locator ground-truth dataset",
+  "cases": [
+    {
+      "id": "same-scope-duplicate-en",
+      "sourceFamily": "same-scope-duplicate",
+      "split": "development",
+      "operation": "merge",
+      "expected": "preserve_all_unique_evidence",
+      "language": "en",
+      "request": "Identical managed notes; same conditions and source family."
+    },
+    {
+      "id": "same-scope-duplicate-ko",
+      "sourceFamily": "same-scope-duplicate",
+      "split": "development",
+      "operation": "merge",
+      "expected": "preserve_all_unique_evidence",
+      "language": "ko",
+      "request": "같은 조건과 원본 계열인 관리형 중복 문서."
+    },
+    {
+      "id": "same-scope-duplicate-mixed",
+      "sourceFamily": "same-scope-duplicate",
+      "split": "development",
+      "operation": "merge",
+      "expected": "preserve_all_unique_evidence",
+      "language": "mixed",
+      "request": "Managed 중복 문서; 동일 조건과 source family."
+    },
+    {
+      "id": "different-versions-en",
+      "sourceFamily": "different-versions",
+      "split": "development",
+      "operation": "merge",
+      "expected": "review_required",
+      "language": "en",
+      "request": "Similar procedures target different software versions."
+    },
+    {
+      "id": "different-versions-ko",
+      "sourceFamily": "different-versions",
+      "split": "development",
+      "operation": "merge",
+      "expected": "review_required",
+      "language": "ko",
+      "request": "비슷한 절차지만 대상 소프트웨어 버전이 다름."
+    },
+    {
+      "id": "different-versions-mixed",
+      "sourceFamily": "different-versions",
+      "split": "development",
+      "operation": "merge",
+      "expected": "review_required",
+      "language": "mixed",
+      "request": "Similar 절차, 다른 software version."
+    },
+    {
+      "id": "two-topics-en",
+      "sourceFamily": "two-topics",
+      "split": "development",
+      "operation": "split",
+      "expected": "preserve_paths_and_anchors",
+      "language": "en",
+      "request": "Two independent topics; retain heading and block links."
+    },
+    {
+      "id": "two-topics-ko",
+      "sourceFamily": "two-topics",
+      "split": "development",
+      "operation": "split",
+      "expected": "preserve_paths_and_anchors",
+      "language": "ko",
+      "request": "독립 주제 두 개; 제목과 블록 링크 보존."
+    },
+    {
+      "id": "two-topics-mixed",
+      "sourceFamily": "two-topics",
+      "split": "development",
+      "operation": "split",
+      "expected": "preserve_paths_and_anchors",
+      "language": "mixed",
+      "request": "Two topics; heading과 block 링크 보존."
+    },
+    {
+      "id": "four-topics-crlf-en",
+      "sourceFamily": "four-topics-crlf",
+      "split": "development",
+      "operation": "split",
+      "expected": "preserve_exact_ranges",
+      "language": "en",
+      "request": "Four topics include CRLF, emoji, code and exact quotes."
+    },
+    {
+      "id": "four-topics-crlf-ko",
+      "sourceFamily": "four-topics-crlf",
+      "split": "development",
+      "operation": "split",
+      "expected": "preserve_exact_ranges",
+      "language": "ko",
+      "request": "네 주제에 CRLF, 이모지, 코드, 정확한 인용 포함."
+    },
+    {
+      "id": "four-topics-crlf-mixed",
+      "sourceFamily": "four-topics-crlf",
+      "split": "development",
+      "operation": "split",
+      "expected": "preserve_exact_ranges",
+      "language": "mixed",
+      "request": "Four topics: CRLF, emoji와 원문 인용."
+    },
+    {
+      "id": "verified-replacement-en",
+      "sourceFamily": "verified-replacement",
+      "split": "development",
+      "operation": "archive",
+      "expected": "require_managed_and_replacement_proof",
+      "language": "en",
+      "request": "Managed duplicate has a verified replacement and no unique dependency."
+    },
+    {
+      "id": "verified-replacement-ko",
+      "sourceFamily": "verified-replacement",
+      "split": "development",
+      "operation": "archive",
+      "expected": "require_managed_and_replacement_proof",
+      "language": "ko",
+      "request": "관리형 중복에 검증된 대체본이 있고 유일한 의존 연결이 아님."
+    },
+    {
+      "id": "verified-replacement-mixed",
+      "sourceFamily": "verified-replacement",
+      "split": "development",
+      "operation": "archive",
+      "expected": "require_managed_and_replacement_proof",
+      "language": "mixed",
+      "request": "Managed duplicate; 검증된 replacement, 고유 의존 없음."
+    },
+    {
+      "id": "age-without-usage-en",
+      "sourceFamily": "age-without-usage",
+      "split": "development",
+      "operation": "archive",
+      "expected": "review_only",
+      "language": "en",
+      "request": "Old modified date but no observed usage coverage."
+    },
+    {
+      "id": "age-without-usage-ko",
+      "sourceFamily": "age-without-usage",
+      "split": "development",
+      "operation": "archive",
+      "expected": "review_only",
+      "language": "ko",
+      "request": "오래된 수정일만 있고 사용 관측 범위 없음."
+    },
+    {
+      "id": "age-without-usage-mixed",
+      "sourceFamily": "age-without-usage",
+      "split": "development",
+      "operation": "archive",
+      "expected": "review_only",
+      "language": "mixed",
+      "request": "Old modified date; usage coverage 미확인."
+    },
+    {
+      "id": "frequent-but-expired-en",
+      "sourceFamily": "frequent-but-expired",
+      "split": "development",
+      "operation": "archive",
+      "expected": "review_only",
+      "language": "en",
+      "request": "Frequently read material has expired environment conditions."
+    },
+    {
+      "id": "frequent-but-expired-ko",
+      "sourceFamily": "frequent-but-expired",
+      "split": "development",
+      "operation": "archive",
+      "expected": "review_only",
+      "language": "ko",
+      "request": "자주 읽지만 환경 적용 조건이 만료된 자료."
+    },
+    {
+      "id": "frequent-but-expired-mixed",
+      "sourceFamily": "frequent-but-expired",
+      "split": "development",
+      "operation": "archive",
+      "expected": "review_only",
+      "language": "mixed",
+      "request": "Frequently read, 환경 조건 expired."
+    },
+    {
+      "id": "duplicate-occurrence-en",
+      "sourceFamily": "duplicate-occurrence",
+      "split": "development",
+      "operation": "path_cleanup",
+      "expected": "preserve_unique_edges",
+      "language": "en",
+      "request": "An exact repeated managed relation has identical target and evidence."
+    },
+    {
+      "id": "duplicate-occurrence-ko",
+      "sourceFamily": "duplicate-occurrence",
+      "split": "development",
+      "operation": "path_cleanup",
+      "expected": "preserve_unique_edges",
+      "language": "ko",
+      "request": "관리형 관계가 대상과 근거까지 동일하게 반복됨."
+    },
+    {
+      "id": "duplicate-occurrence-mixed",
+      "sourceFamily": "duplicate-occurrence",
+      "split": "development",
+      "operation": "path_cleanup",
+      "expected": "preserve_unique_edges",
+      "language": "mixed",
+      "request": "Exact duplicate relation; 대상과 evidence 동일."
+    },
+    {
+      "id": "alternate-path-en",
+      "sourceFamily": "alternate-path",
+      "split": "development",
+      "operation": "path_cleanup",
+      "expected": "keep_authored_direct_edge",
+      "language": "en",
+      "request": "A to B to C exists; A to C is an authored dependency."
+    },
+    {
+      "id": "alternate-path-ko",
+      "sourceFamily": "alternate-path",
+      "split": "development",
+      "operation": "path_cleanup",
+      "expected": "keep_authored_direct_edge",
+      "language": "ko",
+      "request": "A에서 B를 거쳐 C로 가지만 A에서 C도 작성된 의존 관계임."
+    },
+    {
+      "id": "alternate-path-mixed",
+      "sourceFamily": "alternate-path",
+      "split": "development",
+      "operation": "path_cleanup",
+      "expected": "keep_authored_direct_edge",
+      "language": "mixed",
+      "request": "A→B→C exists; A→C는 authored dependency."
+    },
+    {
+      "id": "contrast-axis-en",
+      "sourceFamily": "contrast-axis",
+      "split": "development",
+      "operation": "relate",
+      "expected": "keep_contrast_distinct",
+      "language": "en",
+      "request": "Two choices differ on a shared axis without contradictory facts."
+    },
+    {
+      "id": "contrast-axis-ko",
+      "sourceFamily": "contrast-axis",
+      "split": "development",
+      "operation": "relate",
+      "expected": "keep_contrast_distinct",
+      "language": "ko",
+      "request": "두 선택지가 같은 비교 축에서 다르지만 사실 모순은 아님."
+    },
+    {
+      "id": "contrast-axis-mixed",
+      "sourceFamily": "contrast-axis",
+      "split": "development",
+      "operation": "relate",
+      "expected": "keep_contrast_distinct",
+      "language": "mixed",
+      "request": "Same comparison axis; 대조이지 contradiction 아님."
+    },
+    {
+      "id": "opposite-condition-en",
+      "sourceFamily": "opposite-condition",
+      "split": "validation",
+      "operation": "merge",
+      "expected": "review_required",
+      "language": "en",
+      "request": "Near-identical instructions differ by a single negation."
+    },
+    {
+      "id": "opposite-condition-ko",
+      "sourceFamily": "opposite-condition",
+      "split": "validation",
+      "operation": "merge",
+      "expected": "review_required",
+      "language": "ko",
+      "request": "거의 같은 지시에서 부정 하나가 다름."
+    },
+    {
+      "id": "opposite-condition-mixed",
+      "sourceFamily": "opposite-condition",
+      "split": "validation",
+      "operation": "merge",
+      "expected": "review_required",
+      "language": "mixed",
+      "request": "Near-identical procedure; 부정 조건 다름."
+    },
+    {
+      "id": "unique-counterexample-en",
+      "sourceFamily": "unique-counterexample",
+      "split": "validation",
+      "operation": "archive",
+      "expected": "reject",
+      "language": "en",
+      "request": "Rarely read duplicate contains the only counterexample."
+    },
+    {
+      "id": "unique-counterexample-ko",
+      "sourceFamily": "unique-counterexample",
+      "split": "validation",
+      "operation": "archive",
+      "expected": "reject",
+      "language": "ko",
+      "request": "드물게 읽는 중복 후보에 유일한 반례가 있음."
+    },
+    {
+      "id": "unique-counterexample-mixed",
+      "sourceFamily": "unique-counterexample",
+      "split": "validation",
+      "operation": "archive",
+      "expected": "reject",
+      "language": "mixed",
+      "request": "Rarely read candidate; 유일한 counterexample."
+    },
+    {
+      "id": "active-work-bridge-en",
+      "sourceFamily": "active-work-bridge",
+      "split": "validation",
+      "operation": "archive",
+      "expected": "reject",
+      "language": "en",
+      "request": "Candidate is the sole evidence bridge for active work."
+    },
+    {
+      "id": "active-work-bridge-ko",
+      "sourceFamily": "active-work-bridge",
+      "split": "validation",
+      "operation": "archive",
+      "expected": "reject",
+      "language": "ko",
+      "request": "활성 작업의 유일한 근거 연결점인 후보."
+    },
+    {
+      "id": "active-work-bridge-mixed",
+      "sourceFamily": "active-work-bridge",
+      "split": "validation",
+      "operation": "archive",
+      "expected": "reject",
+      "language": "mixed",
+      "request": "Active task의 sole evidence bridge."
+    },
+    {
+      "id": "legal-hold-en",
+      "sourceFamily": "legal-hold",
+      "split": "validation",
+      "operation": "archive",
+      "expected": "reject",
+      "language": "en",
+      "request": "Managed duplicate is under legal hold or preservation deadline."
+    },
+    {
+      "id": "legal-hold-ko",
+      "sourceFamily": "legal-hold",
+      "split": "validation",
+      "operation": "archive",
+      "expected": "reject",
+      "language": "ko",
+      "request": "관리형 중복이지만 보존 잠금 또는 보존 기한이 있음."
+    },
+    {
+      "id": "legal-hold-mixed",
+      "sourceFamily": "legal-hold",
+      "split": "validation",
+      "operation": "archive",
+      "expected": "reject",
+      "language": "mixed",
+      "request": "Managed duplicate; legal hold 또는 preserve_until."
+    },
+    {
+      "id": "inaccessible-impact-en",
+      "sourceFamily": "inaccessible-impact",
+      "split": "validation",
+      "operation": "merge",
+      "expected": "partial_review_required",
+      "language": "en",
+      "request": "Impact inspection cannot establish an authorized complete closure."
+    },
+    {
+      "id": "inaccessible-impact-ko",
+      "sourceFamily": "inaccessible-impact",
+      "split": "validation",
+      "operation": "merge",
+      "expected": "partial_review_required",
+      "language": "ko",
+      "request": "현재 권한으로 완전한 영향 범위를 확인할 수 없음."
+    },
+    {
+      "id": "inaccessible-impact-mixed",
+      "sourceFamily": "inaccessible-impact",
+      "split": "validation",
+      "operation": "merge",
+      "expected": "partial_review_required",
+      "language": "mixed",
+      "request": "Authorized impact closure 확인 불가."
+    },
+    {
+      "id": "high-degree-hub-en",
+      "sourceFamily": "high-degree-hub",
+      "split": "validation",
+      "operation": "path_cleanup",
+      "expected": "partial_review_required",
+      "language": "en",
+      "request": "More than 200 relations remain to be checked."
+    },
+    {
+      "id": "high-degree-hub-ko",
+      "sourceFamily": "high-degree-hub",
+      "split": "validation",
+      "operation": "path_cleanup",
+      "expected": "partial_review_required",
+      "language": "ko",
+      "request": "검사해야 할 관계가 200개를 초과함."
+    },
+    {
+      "id": "high-degree-hub-mixed",
+      "sourceFamily": "high-degree-hub",
+      "split": "validation",
+      "operation": "path_cleanup",
+      "expected": "partial_review_required",
+      "language": "mixed",
+      "request": "Relation count exceeds 200개 검사 예산."
+    },
+    {
+      "id": "lost-response-en",
+      "sourceFamily": "lost-response",
+      "split": "validation",
+      "operation": "recover",
+      "expected": "reconcile_without_replay",
+      "language": "en",
+      "request": "Output was written; acknowledgement or final receipt was lost."
+    },
+    {
+      "id": "lost-response-ko",
+      "sourceFamily": "lost-response",
+      "split": "validation",
+      "operation": "recover",
+      "expected": "reconcile_without_replay",
+      "language": "ko",
+      "request": "출력은 기록됐지만 응답 또는 최종 영수증이 유실됨."
+    },
+    {
+      "id": "lost-response-mixed",
+      "sourceFamily": "lost-response",
+      "split": "validation",
+      "operation": "recover",
+      "expected": "reconcile_without_replay",
+      "language": "mixed",
+      "request": "Output written; 응답 또는 final receipt 유실."
+    },
+    {
+      "id": "revision-race-en",
+      "sourceFamily": "revision-race",
+      "split": "validation",
+      "operation": "apply",
+      "expected": "reject",
+      "language": "en",
+      "request": "An input changes after preview and before application."
+    },
+    {
+      "id": "revision-race-ko",
+      "sourceFamily": "revision-race",
+      "split": "validation",
+      "operation": "apply",
+      "expected": "reject",
+      "language": "ko",
+      "request": "미리보기 후 적용 전에 입력 리비전이 바뀜."
+    },
+    {
+      "id": "revision-race-mixed",
+      "sourceFamily": "revision-race",
+      "split": "validation",
+      "operation": "apply",
+      "expected": "reject",
+      "language": "mixed",
+      "request": "Input revision changed after preview, 적용 전."
+    },
+    {
+      "id": "rollback-conflict-en",
+      "sourceFamily": "rollback-conflict",
+      "split": "validation",
+      "operation": "recover",
+      "expected": "reject",
+      "language": "en",
+      "request": "User edited an applied output before rollback."
+    },
+    {
+      "id": "rollback-conflict-ko",
+      "sourceFamily": "rollback-conflict",
+      "split": "validation",
+      "operation": "recover",
+      "expected": "reject",
+      "language": "ko",
+      "request": "적용 결과를 사용자가 수정한 뒤 복구 요청함."
+    },
+    {
+      "id": "rollback-conflict-mixed",
+      "sourceFamily": "rollback-conflict",
+      "split": "validation",
+      "operation": "recover",
+      "expected": "reject",
+      "language": "mixed",
+      "request": "Applied output에 user edit; rollback 요청."
+    },
+    {
+      "id": "nas-unavailable-en",
+      "sourceFamily": "nas-unavailable",
+      "split": "validation",
+      "operation": "reconcile",
+      "expected": "partial_no_deletion",
+      "language": "en",
+      "request": "NAS read fails; missing data is not proven deletion."
+    },
+    {
+      "id": "nas-unavailable-ko",
+      "sourceFamily": "nas-unavailable",
+      "split": "validation",
+      "operation": "reconcile",
+      "expected": "partial_no_deletion",
+      "language": "ko",
+      "request": "NAS 읽기 실패는 삭제 증거가 아님."
+    },
+    {
+      "id": "nas-unavailable-mixed",
+      "sourceFamily": "nas-unavailable",
+      "split": "validation",
+      "operation": "reconcile",
+      "expected": "partial_no_deletion",
+      "language": "mixed",
+      "request": "NAS unavailable; 삭제 또는 빈 Vault로 해석 금지."
+    }
+  ]
+}

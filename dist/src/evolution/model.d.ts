@@ -4,6 +4,7 @@ import type { Evidence, Evaluation, Feedback, FeedbackProof, Scope, Target } fro
 export interface EvolutionConfig {
     version: 1;
     enabled: boolean;
+    curation?: import('../curation/policy.js').CurationGrant[];
 }
 export interface EvolutionLease {
     ownerId: string;
@@ -75,6 +76,7 @@ export interface EvolutionAdapter {
     }>;
 }
 export interface EvolutionOptions {
+    curation?: import('../curation/service.js').CurationService;
     storage?: HostWorkStorage<EvolutionConfig>;
     readOnly?: boolean;
     now?: () => number;

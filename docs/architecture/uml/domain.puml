@@ -66,6 +66,7 @@ enum RelationKind {
   close_match
   version_of
   refines
+  contrasts_with
 }
 RelationOccurrence --> RelationKind : typed relation or extracted link
 Note "1" -- "1..*" Revision : observed versions

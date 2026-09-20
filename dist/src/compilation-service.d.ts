@@ -80,6 +80,9 @@ export declare class CompilationService {
     constructor(options: CompilationOptions);
     private serial;
     close(): Promise<void>;
+    /** Historical ownership only. Does not attest current content, grant curation,
+     * or execute a model. A separate operation grant and fresh revision are required. */
+    managedOutputProof(path: string, revision: string, principal: ScopePrincipal): Promise<string | undefined>;
     private rollbackJob;
     captureRollback(id: string, principal: ScopePrincipal): Promise<ManagedRollback | undefined>;
     confirmRestored(id: string, snapshot: ManagedRollback, principal: ScopePrincipal): Promise<{

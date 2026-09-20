@@ -2,7 +2,7 @@ import type { ScopePrincipal } from '../scope-auth.js';
 import type { HostWorkStorage } from '../host-work-storage.js';
 import type { Evidence, Evaluation, Feedback, FeedbackProof, Scope, Target } from './policy.js';
 
-export interface EvolutionConfig { version: 1; enabled: boolean }
+export interface EvolutionConfig { version: 1; enabled: boolean; curation?: import('../curation/policy.js').CurationGrant[] }
 export interface EvolutionLease {
   ownerId: string; revision: string; sharedOwner: boolean;
   /** Recheck actual actor, runtime, allowed scopes and current policy. Never trust model labels. */
@@ -29,6 +29,7 @@ export interface EvolutionAdapter {
   reconcileRevert?(cycle: Readonly<Cycle>, principal: ScopePrincipal, assertCurrent: () => Promise<void>): Promise<{ state: 'withdrawn' | 'unknown'; revision?: string }>;
 }
 export interface EvolutionOptions {
+  curation?: import('../curation/service.js').CurationService;
   storage?: HostWorkStorage<EvolutionConfig>; readOnly?: boolean; now?: () => number;
   /** Host-injected callback, never loaded from a skill, MCP argument, or arbitrary module path. */
   authority?(principal: ScopePrincipal, request: Readonly<Record<string, unknown>>): Promise<EvolutionLease>;

@@ -146,8 +146,13 @@ export declare function getOrganizationRelationContract(): ({
     direction: 'directional';
     target: 'A note made more precise or useful by this note.';
     reciprocal: false;
+} | {
+    field: 'contrasts_with';
+    direction: 'mutual';
+    target: 'A contrasting concept or alternative on a shared comparison axis; not a factual contradiction or identity.';
+    reciprocal: true;
 })[];
-export declare const ORGANIZATION_LIST_FIELDS: readonly ["aliases", "tags", "mocs", "key_points", "open_questions", "next_actions", "project_support", "subject_terms", "methods", "audience", "see_also", "knowledge_notes", "negative_knowledge_notes", "knowledge_dispositions", "supports", "contradicts", "supersedes", "derived_from", "depends_on", "implements", "blocked_by", "answers_questions", "tests", "related", "same_as", "close_match", "version_of", "refines"];
+export declare const ORGANIZATION_LIST_FIELDS: readonly ["aliases", "tags", "mocs", "key_points", "open_questions", "next_actions", "project_support", "subject_terms", "methods", "audience", "see_also", "knowledge_notes", "negative_knowledge_notes", "knowledge_dispositions", "supports", "contradicts", "supersedes", "derived_from", "depends_on", "implements", "blocked_by", "answers_questions", "tests", "related", "same_as", "close_match", "version_of", "refines", "contrasts_with"];
 /** Fields that make an ordinary knowledge note participate in the work
  * system without changing its epistemic/content role. Project and task kinds
  * participate even before one of these fields is filled in. */

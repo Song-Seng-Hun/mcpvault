@@ -65,6 +65,25 @@ export class CompilationService {
     const pending = this.tail.then(operation, operation); this.tail = pending.catch(() => undefined); return pending;
   }
   async close(): Promise<void> { this.closed = true; await this.tail; }
+  /** Historical ownership only. Does not attest current content, grant curation,
+   * or execute a model. A separate operation grant and fresh revision are required. */
+  async managedOutputProof(path: string, revision: string, principal: ScopePrincipal): Promise<string | undefined> {
+    if (this.closed || !this.options.host) return undefined;
+    compilationPath(path); if (!isCompilationRevision(revision)) throw unavailable();
+    await this.actor(principal);
+    if (!this.options.access.canAccessPhysicalPath(path, principal, false)
+      || !this.options.access.canReadProtectedDocument(path, principal)) throw unavailable();
+    const config = validateCompilationConfig(await this.options.host.refresh());
+    if (!config.enabled || config.accountId !== principal.accountId) return undefined;
+    const state = parseCompilationHistory(await this.options.host.readState());
+    const job = state.jobs.find(j => j.accountId === principal.accountId && j.outputPath === path && j.status === 'completed'
+      && j.receipt?.outputRevision === revision && config.projects.some(p => p.id === j.projectId && p.outputPaths.includes(path)));
+    await this.actor(principal);
+    if (compilationHash(validateCompilationConfig(await this.options.host.refresh())) !== compilationHash(config)
+      || !this.options.access.canAccessPhysicalPath(path, principal, false)) throw unavailable();
+    return job ? compilationHash({ id: job.requestId, path, revision, receipt: job.receipt,
+      policy: config.projects.find(p => p.id === job.projectId) }) : undefined;
+  }
   private async rollbackJob(id: string, principal: ScopePrincipal) {
     if (this.closed || !compilationId(id) || !this.options.host) throw unavailable();
     await this.actor(principal);

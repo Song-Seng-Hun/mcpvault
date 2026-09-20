@@ -1,12 +1,13 @@
 # Shared graph contract, version1
 
-Phase1 extracts the existing vocabulary into
-[graph-contract.ts](../../src/graph-contract.ts); it introduces no new authored
-relation, validation restriction, endpoint, inference engine or graph database.
+Phase1 extracted the existing vocabulary into
+[graph-contract.ts](../../src/graph-contract.ts). The curation extension appends
+`contrasts_with`; no new endpoint, inference engine or graph database is added.
 Markdown, source revisions and the existing access policy remain authoritative.
 
 The compatibility exports in [organization.ts](../../src/organization.ts) retain
-the same fourteen names, order, direction/target descriptions and reciprocal flags.
+the original fourteen entries unchanged, followed by mutual `contrasts_with`.
+Contrast means alternatives on one comparison axis, not factual contradiction.
 `getOrganizationRelationContract()` still returns fresh entries with exactly
 `field`, `direction`, `target`, `reciprocal`; the version is a separate export.
 Reciprocal relations still require the existing reciprocal-link change procedure.
@@ -24,7 +25,7 @@ existing caller validation continues to decide them. Descriptive relation target
 are not additional type restrictions. `same_as` is not OWL equality.
 
 Question retrieval allows virtual `evidence`, `supports`, `contradicts`,
-`depends_on`, `derived_from`. Evidence is not a fifteenth authored property.
+`depends_on`, `derived_from`. Evidence remains virtual, not an authored property.
 Counterpoints/prerequisites precede evidence pins and then supporting context;
 inverse discovery remains limited to contradiction and claim contradiction.
 Existing40 metadata/eight body/80 relation budgets and the81 declaration sentinel
@@ -34,7 +35,7 @@ Characterization and projection checks live in
 [graph-contract.test.ts](../../src/graph-contract.test.ts), alongside the existing
 organization, claim authoring, VaultGraph and question-packet integration tests.
 They pin exact public descriptions/error strings and all three claim backlinks;
-the question fixture prevents widening retrieval to all fourteen relation types.
+the question fixture prevents widening retrieval to all authored relation types.
 Links to tests identify verification targets, not evidence of a passing execution.
 Phase1 did not implement the later assertion, validation or UML phases.
 

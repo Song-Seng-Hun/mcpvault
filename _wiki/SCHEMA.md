@@ -581,11 +581,11 @@ and these per-source checks do not promise a whole-Vault transaction. Use
 `knowledge_polarity: negative` with `negative_type` to preserve failures,
 rejected approaches, counterexamples, and non-reproducible results. Typed relationship properties explain why a link exists:
 `supports`, `contradicts`, `supersedes`, `derived_from`, `depends_on`,
-`implements`, `blocked_by`, `related`, `same_as`, `close_match`, `version_of`, and `refines`.
+`implements`, `blocked_by`, `related`, `same_as`, `close_match`, `version_of`, `refines`, and `contrasts_with`.
 Each value should be an Obsidian
 wikilink, relative Markdown link, or a scope-safe note path; the target must remain accessible and
 resolvable. The property contract also explains each relation's direction and
-target meaning: `related`, `close_match`, and `same_as` are mutual and normally need reverse
+target meaning: `related`, `close_match`, `same_as`, and `contrasts_with` are mutual and normally need reverse
 edges; the other relations are directional and do not require invented inverse
 Properties. Any ordinary knowledge note may become actionable with
 `next_action`/`next_actions`, `waiting_for`, and `task_status` (`open`,
@@ -2084,7 +2084,7 @@ Its `typedRelations` projection additionally reports unresolved, ambiguous,
 self-referential, and `answers_questions` targets that are not question notes.
 Repair them with ordinary revision-checked edits; graph health never rewrites
 relations automatically.
-For `related`, `close_match`, and `same_as`, a reverse edge is normally expected because the
+For `related`, `close_match`, `same_as`, and `contrasts_with`, a reverse edge is normally expected because the
 relationship is mutual; graph health reports a missing reverse edge as an
 advisory `reciprocityMissing` item. Directional relations such as `supports`,
 `contradicts`, `depends_on`, and `supersedes` do not need a reverse field.

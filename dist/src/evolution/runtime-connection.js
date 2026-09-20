@@ -7,6 +7,7 @@ import { EvolutionBudget } from './budget.js';
 import { EvolutionOperations } from './operations.js';
 import { builtinEvolutionProfiles } from './builtin-profiles.js';
 import { EvolutionDirectReview } from './direct-review.js';
+import { CurationService } from '../curation/service.js';
 /** Concrete existing-account connection. No registration, certificate binding or owner inference. */
 export function connectEvolutionRuntime(config, services) {
     let closed = false;
@@ -35,6 +36,8 @@ export function connectEvolutionRuntime(config, services) {
         await authorize(principal);
     });
     const options = { storage: config.storage, readOnly: services.readOnly,
+        curation: new CurationService({ fs, access, config: () => config.storage.refresh(),
+            managedProof: (path, revision, principal) => services.compilation?.managedOutputProof(path, revision, principal) ?? Promise.resolve(undefined) }),
         authority: async (p) => {
             const revision = await authorize(p);
             return { ownerId: p.accountId, sharedOwner: false, revision, assertCurrent: async () => { if (await authorize(p) !== revision)

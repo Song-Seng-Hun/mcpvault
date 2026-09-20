@@ -54,6 +54,12 @@ test('diagnosis distinguishes connected components from verified automatic permi
   expect(JSON.stringify(connected).length).toBeLessThanOrEqual(512);
 });
 
+test('managed ownership is a host receipt, never a managed flag or a configured output path', async () => {
+  const s = service();
+  await seed('Result.md', '---\nllm_wiki_type: knowledge\nmanaged: true\n---\nClaimed ownership.');
+  expect(await s.managedOutputProof('Result.md', await fs.readNoteRevision('Result.md'), actor)).toBeUndefined();
+});
+
 async function observation(kind: 'source_only' | 'already_covered' = 'source_only') {
   const source = await fs.readNote('Source.md');
   const locator = { revision: source.revision, startLine: 1, endLine: 1, quoteHash: digest(source.content) };
@@ -476,6 +482,13 @@ test('host adapter applies after protection and complete means output reread plu
   const done = await s.execute({ op: 'retry', requestId: 'job-one', expectedJobRevision: checked.jobRevision }, actor);
   expect(done.status).toBe('completed'); expect(events).toEqual(['policy', 'body']);
   expect(durable.jobs[0].receipt.outputRevision).toBe(await fs.readNoteRevision('Result.md'));
+  expect(await s.managedOutputProof('Result.md', done.outputRevision, actor)).toMatch(/^[a-f0-9]{64}$/);
+  expect(await s.managedOutputProof('Result.md', digest('unrecorded revision'), actor)).toBeUndefined();
+  const proof = await s.managedOutputProof('Result.md', done.outputRevision, actor);
+  await seed('Result.md', 'Manual change.');
+  // Historical proof is not a claim about the current bytes; the curation writer checks those separately.
+  expect(await s.managedOutputProof('Result.md', done.outputRevision, actor)).toBe(proof);
+  await seed('Result.md', durable.jobs[0].draft.content);
   const count = saves; expect((await readJob(service({ adapter: adapter(events) }))).status).toBe('completed'); expect(saves).toBe(count);
 });
 

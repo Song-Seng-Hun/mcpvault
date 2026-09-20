@@ -3,6 +3,7 @@
  * than ordinary prose. Keeping this contract in one module prevents graph,
  * move, and delete operations from disagreeing about structural references.
  */
+import { RELATION_FIELDS } from './graph-contract.js';
 export const PLAIN_REFERENCE_PROPERTIES = new Set([
     'related_task', 'primary_moc', 'mocs', 'moc', 'project', 'term_replaced_by',
     'canonical_path', 'broader_terms', 'related_terms', 'see_also', 'project_support',
@@ -10,8 +11,7 @@ export const PLAIN_REFERENCE_PROPERTIES = new Set([
     'superseded_by', 'negative_replacement_path', 'moc_parent', 'focus_parent',
     'focus_supports', 'references', 'evidence_paths', 'knowledge_notes', 'focus_notes',
     'supersedes_source',
-    'supports', 'contradicts', 'supersedes', 'derived_from', 'depends_on', 'implements',
-    'blocked_by', 'answers_questions', 'tests', 'related', 'same_as', 'version_of', 'refines',
+    ...RELATION_FIELDS,
 ]);
 const NESTED_REFERENCE_PROPERTIES = new Set([
     'path', 'target', 'evidence_paths', 'supports_claims', 'contradicts_claims', 'depends_on_claims',

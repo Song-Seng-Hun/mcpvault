@@ -19,6 +19,7 @@ export function getEvolutionTools(): Tool[] {
   { name: 'manage_evolution_cycle',
     description: 'Revision-pinned observe/candidate/evaluate/apply/next-use loop. Start with diagnose. Preview before apply; reconcile uncertain writes instead of retrying. Candidate text never grants execution. Applied is not effect verified. Missing host connection remains diagnostic only; no model starts here.',
     inputSchema: obj({ ...common, ...mutation, op: { ...enumeration('diagnose', 'prepare', 'read', 'list', 'advance', 'check', 'preview', 'apply', 'reconcile', 'effect', 'revert', 'request_effect_review'), default: 'diagnose' },
+      kind: enumeration('curation'), operation: enumeration('deduplicate_relations'), path: text(400), sourceRevision: text(64),
       deliveryToken: text(500), responseExcerpt: text(4000), responseSource: enumeration('agent_report'),
       cycleId: text(), feedbackIds: { type: 'array', minItems: 1, maxItems: 16, uniqueItems: true, items: text() },
       candidate: { type: 'object', description: 'Target-specific data, independently validated by its owner adapter; never code or authority.' },

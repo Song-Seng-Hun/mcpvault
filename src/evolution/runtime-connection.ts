@@ -14,6 +14,8 @@ import { EvolutionOperations } from './operations.js';
 import { builtinEvolutionProfiles } from './builtin-profiles.js';
 import type { RetrievalService } from '../retrieval-service.js';
 import { EvolutionDirectReview } from './direct-review.js';
+import { CurationService } from '../curation/service.js';
+import type { CompilationService } from '../compilation-service.js';
 
 export interface EvolutionRuntimeConfig {
   storage: HostWorkStorage<EvolutionConfig>;
@@ -24,6 +26,7 @@ interface Services {
   auth: ScopeAuthService; access: ScopeAccessPolicy; fs: FileSystemService; moderation: ModerationService;
   refreshPolicy(): Promise<void>; readOnly: boolean;
   retrieval: RetrievalService;
+  compilation?: CompilationService;
   adapters?: Partial<Record<TargetKind, EvolutionAdapter>>;
 }
 
@@ -50,6 +53,8 @@ export function connectEvolutionRuntime(config: EvolutionRuntimeConfig, services
     if (!principal || !auth.hasCapability(principal, 'write')) return unavailable(); await authorize(principal);
   });
   const options: EvolutionOptions = { storage: config.storage, readOnly: services.readOnly,
+    curation: new CurationService({ fs, access, config: () => config.storage.refresh(),
+      managedProof: (path, revision, principal) => services.compilation?.managedOutputProof(path, revision, principal) ?? Promise.resolve(undefined) }),
     authority: async p => {
       const revision = await authorize(p);
       return { ownerId: p.accountId, sharedOwner: false, revision, assertCurrent: async () => { if (await authorize(p) !== revision) return unavailable(); } };
