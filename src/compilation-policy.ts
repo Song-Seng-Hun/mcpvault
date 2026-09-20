@@ -12,6 +12,8 @@ export interface CompilationSourcePolicy { path: string; classification: 'resolv
 export interface CompilationBundleGrant { documentPath: string; documentId: string; chapterRoot: string; publication?: 'verbatim'; processing?: 'verbatim' }
 export interface CompilationProject {
   id: string; ruleVersion: string; sources: CompilationSourcePolicy[]; outputPaths: string[];
+  /** Exact owner-service route, not a generic Community write grant. */
+  outputOwner?: 'wiki_knowledge';
   runtimeIds: string[]; operations: CompilationOperation[];
   /** Separate explicit grant; existing output/maintenance rights do not imply it. */
   chapterBundles?: CompilationBundleGrant[];
@@ -51,12 +53,17 @@ export const ordinaryCompilationDocument = (path: string): boolean => !isOrigina
   && !/(?:^|\/)(?:Community|PublicCommunity|_continuity|_collaboration|_wiki|_roleplay)(?:\/|$)/i.test(path)
   && !/^Templates\/MCPVault(?:\/|$)/i.test(path) && path.toLowerCase() !== '환영합니다!.md' && path.toLowerCase() !== 'welcome.md';
 
+/** Deliberately case-exact service namespace; no aliases or nested service roots. */
+export const wikiKnowledgeOutput = (path: string): boolean => path.startsWith('Community/Knowledge/')
+  && ordinaryCompilationDocument(path.slice('Community/Knowledge/'.length));
+
 export function validateCompilationConfig(value: unknown): CompilationConfig {
   const raw = record(value, ['version', 'enabled', 'accountId', 'projects']);
   if (raw.version !== 1 || typeof raw.enabled !== 'boolean' || !id(raw.accountId)) throw invalid();
   const projects = unique(array(raw.projects, 32, value => {
-    const p = record(value, ['id', 'ruleVersion', 'sources', 'outputPaths', 'runtimeIds', 'operations', 'chapterBundles']);
+    const p = record(value, ['id', 'ruleVersion', 'sources', 'outputPaths', 'runtimeIds', 'operations', 'chapterBundles', 'outputOwner']);
     if (!id(p.id) || !id(p.ruleVersion)) throw invalid();
+    if (p.outputOwner !== undefined && (p.outputOwner !== 'wiki_knowledge' || p.chapterBundles !== undefined)) throw invalid();
     const sources = unique(array(p.sources, 64, value => {
       const s = record(value, ['path', 'classification', 'mode']);
       if (!['resolved', 'unresolved'].includes(s.classification) || !['source_only', 'synthesis_allowed'].includes(s.mode)) throw invalid();
@@ -64,7 +71,8 @@ export function validateCompilationConfig(value: unknown): CompilationConfig {
     }), s => s.path.toLowerCase());
     const outputPaths = unique(array(p.outputPaths, 32, value => {
       const path = compilationPath(value);
-      if (isOriginalPath(path) || /(?:^|\/)(?:Community|PublicCommunity|_continuity|_collaboration|_wiki|_roleplay)(?:\/|$)/i.test(path)) throw invalid();
+      if (p.outputOwner === 'wiki_knowledge' ? !wikiKnowledgeOutput(path)
+        : isOriginalPath(path) || /(?:^|\/)(?:Community|PublicCommunity|_continuity|_collaboration|_wiki|_roleplay)(?:\/|$)/i.test(path)) throw invalid();
       return path;
     }), path => path.toLowerCase());
     const runtimeIds = unique(array(p.runtimeIds, 16, v => { if (!id(v)) throw invalid(); return v; }), v => v);
@@ -83,6 +91,7 @@ export function validateCompilationConfig(value: unknown): CompilationConfig {
         ...(b.publication && { publication: b.publication as 'verbatim' }), ...(b.processing && { processing: b.processing as 'verbatim' }) };
     }), grant => grant.documentPath.toLowerCase());
     return { id: p.id as string, ruleVersion: p.ruleVersion as string, sources, outputPaths, runtimeIds, operations,
+      ...(p.outputOwner && { outputOwner: p.outputOwner as 'wiki_knowledge' }),
       ...(chapterBundles && { chapterBundles }) };
   }), p => p.id);
   const identities = new Map<string, string>(), documents = new Map<string, string>();
@@ -97,12 +106,15 @@ export function validateCompilationConfig(value: unknown): CompilationConfig {
 
 /** Admission is metadata-only and emits no rejected path, title, count or department. */
 export function inspectCompilationPolicy(params: { config?: CompilationConfig; projectId: string; principal?: ScopePrincipal;
-  access: ScopeAccessPolicy; paths: string[]; outputPath: string; operation: CompilationOperation; runtime?: CompilationRuntime }): CompilationAdmission {
+  access: ScopeAccessPolicy; paths: string[]; outputPath: string; operation: CompilationOperation; runtime?: CompilationRuntime;
+  outputOwner?: 'wiki_knowledge' }): CompilationAdmission {
   const { config, principal, access, runtime, operation } = params;
   if (!config?.enabled) return { status: 'diagnostic_only' };
   if (!principal || principal.accountId !== config.accountId || !principal.capabilities?.includes('write')) return { status: 'unavailable' };
   const project = config.projects.find(p => p.id === params.projectId);
   if (!project || !project.operations.includes(operation) || !params.paths.length || params.paths.length > 8) return { status: 'unavailable' };
+  if (project.outputOwner && (params.outputOwner !== project.outputOwner || !principal.capabilities.includes('publish')))
+    return { status: 'unavailable' };
   let paths: string[], output: string;
   try { paths = params.paths.map(compilationPath); output = compilationPath(params.outputPath); } catch { return { status: 'unavailable' }; }
   const policies = paths.map(path => project.sources.find(s => s.path === path));
@@ -114,7 +126,8 @@ export function inspectCompilationPolicy(params: { config?: CompilationConfig; p
     || paths.some(path => access.isConfidentialDocument(path)) && runtime.local !== true) return { status: 'waiting_runtime' };
   const basis = { account: principal.accountId, model: principal.modelId,
     agent: principal.agentId, user: principal.userId, center: principal.commandCenterId, capabilities: principal.capabilities,
-    enterprise: principal.enterprise, project: { id: project.id, ruleVersion: project.ruleVersion },
+    enterprise: principal.enterprise, project: { id: project.id, ruleVersion: project.ruleVersion,
+      ...(project.outputOwner && { outputOwner: project.outputOwner }) },
     sources: policies, output, operation, runtime, restrictions: access.documentDependencyFingerprint(paths) };
   return { status: 'ready', sourceFingerprint: compilationHash(basis),
     fingerprint: compilationHash({ basis, outputRestrictions: access.documentDependencyFingerprint([output]) }) };

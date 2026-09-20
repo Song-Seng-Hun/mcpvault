@@ -17,6 +17,7 @@ export interface CompilationPublicationOptions {
  * lexical-only and no provider, source capture, merge or claim promotion runs. */
 export declare class CompilationPublicationAdapter implements CompilationAdapter {
     private readonly options;
+    readonly outputOwner: 'wiki_knowledge';
     constructor(options: CompilationPublicationOptions);
     private principal;
     protect(job: Readonly<CompilationJob>, current: () => Promise<void>): Promise<void>;

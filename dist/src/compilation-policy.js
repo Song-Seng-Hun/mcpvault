@@ -35,13 +35,18 @@ export function compilationPath(value) {
 export const ordinaryCompilationDocument = (path) => !isOriginalPath(path)
     && !/(?:^|\/)(?:Community|PublicCommunity|_continuity|_collaboration|_wiki|_roleplay)(?:\/|$)/i.test(path)
     && !/^Templates\/MCPVault(?:\/|$)/i.test(path) && path.toLowerCase() !== '환영합니다!.md' && path.toLowerCase() !== 'welcome.md';
+/** Deliberately case-exact service namespace; no aliases or nested service roots. */
+export const wikiKnowledgeOutput = (path) => path.startsWith('Community/Knowledge/')
+    && ordinaryCompilationDocument(path.slice('Community/Knowledge/'.length));
 export function validateCompilationConfig(value) {
     const raw = record(value, ['version', 'enabled', 'accountId', 'projects']);
     if (raw.version !== 1 || typeof raw.enabled !== 'boolean' || !id(raw.accountId))
         throw invalid();
     const projects = unique(array(raw.projects, 32, value => {
-        const p = record(value, ['id', 'ruleVersion', 'sources', 'outputPaths', 'runtimeIds', 'operations', 'chapterBundles']);
+        const p = record(value, ['id', 'ruleVersion', 'sources', 'outputPaths', 'runtimeIds', 'operations', 'chapterBundles', 'outputOwner']);
         if (!id(p.id) || !id(p.ruleVersion))
+            throw invalid();
+        if (p.outputOwner !== undefined && (p.outputOwner !== 'wiki_knowledge' || p.chapterBundles !== undefined))
             throw invalid();
         const sources = unique(array(p.sources, 64, value => {
             const s = record(value, ['path', 'classification', 'mode']);
@@ -51,7 +56,8 @@ export function validateCompilationConfig(value) {
         }), s => s.path.toLowerCase());
         const outputPaths = unique(array(p.outputPaths, 32, value => {
             const path = compilationPath(value);
-            if (isOriginalPath(path) || /(?:^|\/)(?:Community|PublicCommunity|_continuity|_collaboration|_wiki|_roleplay)(?:\/|$)/i.test(path))
+            if (p.outputOwner === 'wiki_knowledge' ? !wikiKnowledgeOutput(path)
+                : isOriginalPath(path) || /(?:^|\/)(?:Community|PublicCommunity|_continuity|_collaboration|_wiki|_roleplay)(?:\/|$)/i.test(path))
                 throw invalid();
             return path;
         }), path => path.toLowerCase());
@@ -75,6 +81,7 @@ export function validateCompilationConfig(value) {
                 ...(b.publication && { publication: b.publication }), ...(b.processing && { processing: b.processing }) };
         }), grant => grant.documentPath.toLowerCase());
         return { id: p.id, ruleVersion: p.ruleVersion, sources, outputPaths, runtimeIds, operations,
+            ...(p.outputOwner && { outputOwner: p.outputOwner }),
             ...(chapterBundles && { chapterBundles }) };
     }), p => p.id);
     const identities = new Map(), documents = new Map();
@@ -99,6 +106,8 @@ export function inspectCompilationPolicy(params) {
     const project = config.projects.find(p => p.id === params.projectId);
     if (!project || !project.operations.includes(operation) || !params.paths.length || params.paths.length > 8)
         return { status: 'unavailable' };
+    if (project.outputOwner && (params.outputOwner !== project.outputOwner || !principal.capabilities.includes('publish')))
+        return { status: 'unavailable' };
     let paths, output;
     try {
         paths = params.paths.map(compilationPath);
@@ -119,7 +128,8 @@ export function inspectCompilationPolicy(params) {
         return { status: 'waiting_runtime' };
     const basis = { account: principal.accountId, model: principal.modelId,
         agent: principal.agentId, user: principal.userId, center: principal.commandCenterId, capabilities: principal.capabilities,
-        enterprise: principal.enterprise, project: { id: project.id, ruleVersion: project.ruleVersion },
+        enterprise: principal.enterprise, project: { id: project.id, ruleVersion: project.ruleVersion,
+            ...(project.outputOwner && { outputOwner: project.outputOwner }) },
         sources: policies, output, operation, runtime, restrictions: access.documentDependencyFingerprint(paths) };
     return { status: 'ready', sourceFingerprint: compilationHash(basis),
         fingerprint: compilationHash({ basis, outputRestrictions: access.documentDependencyFingerprint([output]) }) };

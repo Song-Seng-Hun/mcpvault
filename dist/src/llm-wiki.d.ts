@@ -1742,6 +1742,26 @@ export declare class LlmWikiService {
         } | undefined;
         generatedAt: string;
     }>;
+    /** Owner-only local intent; not an endpoint, grant or raw publication path. */
+    managedRelationCleanupPreview(principal: ScopePrincipal | undefined, path: string, expectedRevision: string): Promise<{
+        status: 'review_required';
+        partial: boolean;
+        reason: string;
+        removed?: never;
+        changes?: never;
+    } | {
+        partial?: never;
+        reason?: never;
+        status: 'ready';
+        removed: number;
+        changes: {
+            path: string;
+            expectedRevision: string;
+            frontmatter: {
+                set: Record<string, string[]>;
+            };
+        }[];
+    }>;
     /** Replace one directional typed-relation or focus_supports list as a
      * complete, canonical set. Requiring the complete target set makes removal
      * of broken raw links explicit and avoids read-modify-write races hidden in
@@ -2606,12 +2626,12 @@ export declare class LlmWikiService {
             useWhen: string;
             endpointId: string;
             arguments: {
+                path?: never;
                 expectedRevision?: never;
                 query: string;
                 maxChars: number;
                 intent?: never;
                 maxDepth?: never;
-                path?: never;
                 mode?: never;
                 context?: never;
                 includeReadiness?: never;
@@ -2625,13 +2645,13 @@ export declare class LlmWikiService {
             useWhen: string;
             endpointId: string;
             arguments: {
+                path?: never;
                 expectedRevision?: never;
                 query: string;
                 limit: number;
                 maxChars: number;
                 intent?: never;
                 maxDepth?: never;
-                path?: never;
                 mode?: never;
                 context?: never;
                 includeReadiness?: never;
@@ -2644,11 +2664,11 @@ export declare class LlmWikiService {
             useWhen: string;
             endpointId: string;
             arguments: {
+                path?: never;
                 query?: never;
                 expectedRevision: string;
                 intent?: never;
                 maxDepth?: never;
-                path?: never;
                 mode?: never;
                 context?: never;
                 includeReadiness?: never;
@@ -2664,13 +2684,13 @@ export declare class LlmWikiService {
             useWhen: string;
             endpointId: string;
             arguments: {
+                path?: never;
                 expectedRevision?: never;
                 query?: never;
                 limit: number;
                 maxChars: number;
                 intent?: never;
                 maxDepth?: never;
-                path?: never;
                 mode?: never;
                 context?: never;
                 includeReadiness?: never;
@@ -2703,13 +2723,13 @@ export declare class LlmWikiService {
             useWhen: string;
             endpointId: string;
             arguments: {
+                path?: never;
                 expectedRevision?: never;
                 query?: never;
                 intent?: never;
                 limit: number;
                 maxChars: number;
                 maxDepth?: never;
-                path?: never;
                 mode?: never;
                 context?: never;
                 includeReadiness?: never;
@@ -2760,11 +2780,11 @@ export declare class LlmWikiService {
             useWhen: string;
             endpointId: string;
             arguments: {
+                path?: never;
                 expectedRevision?: never;
                 query?: never;
                 intent?: never;
                 maxDepth?: never;
-                path?: never;
                 mode?: never;
                 context: string;
                 limit: number;
@@ -2780,11 +2800,11 @@ export declare class LlmWikiService {
             useWhen: string;
             endpointId: string;
             arguments: {
+                path?: never;
                 expectedRevision?: never;
                 query?: never;
                 intent?: never;
                 maxDepth?: never;
-                path?: never;
                 mode?: never;
                 context?: never;
                 includeReadiness: boolean;

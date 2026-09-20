@@ -13,18 +13,20 @@ import { LayeredMemoryService } from '../layered-memory.js';
 
 const roots: string[] = [];
 afterEach(async () => { vi.restoreAllMocks(); for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true }); });
-async function fixture(frontmatter: Record<string, unknown> = {}, archive: boolean | 'merge_duplicates' | 'merge_passages' = false, canonicalContent?: string) {
+async function fixture(frontmatter: Record<string, unknown> = {}, archive: boolean | 'merge_duplicates' | 'merge_passages' = false, canonicalContent?: string, owner = false) {
   const root = await mkdtemp(join(tmpdir(), 'curation-run-')); roots.push(root);
   const fs = new FileSystemService(root), access = new ScopeAccessPolicy();
-  await fs.writeNote({ path: 'A.md', content: '# A\nOnly if enabled. Never delete originals. ^condition',
+  const sourcePath = owner ? 'Community/Knowledge/A.md' : 'A.md';
+  await fs.writeNote({ path: sourcePath, content: '# A\nOnly if enabled. Never delete originals. ^condition',
     frontmatter: { llm_wiki_type: 'knowledge', contrasts_with: ['[[B]]', '[[B]]'], related: ['[[B|Choice]]', '[[B]]'], ...frontmatter } });
   await fs.writeNote({ path: 'B.md', content: '# B\nAlternative.' });
-  const initial = await fs.readNote('A.md');
+  const initial = await fs.readNote(sourcePath);
   if (archive) await fs.writeNote({ path: 'B.md', content: canonicalContent ?? initial.content, frontmatter: initial.frontmatter });
   const replacement = await fs.readNote('B.md');
   const values = new Map<string, any>(); let held = false, allowed = true, managed = true, failSave = false;
-  const principal: any = { accountId: 'operator', modelId: 'test', capabilities: ['write'] };
-  const config: any = { version: 1, enabled: true, curation: [{ accountId: 'operator', paths: ['A.md'], operations: ['deduplicate_relations'] }] };
+  const principal: any = { accountId: 'operator', modelId: 'test', capabilities: owner ? ['write', 'publish'] : ['write'] };
+  const config: any = { version: 1, enabled: true, curation: [{ accountId: 'operator', paths: [sourcePath],
+    ...(owner && { owner: 'wiki_knowledge' }), operations: ['deduplicate_relations'] }] };
   if (archive) config.curation = [{ accountId: 'operator', paths: ['A.md', 'B.md'], operations: [archive === true ? 'archive_duplicate' : archive] }];
   const storage: any = { refresh: async () => structuredClone(config), acquire: async () => {
     if (held) throw Error('busy'); held = true; return { assertHeld: async () => { if (!held) throw Error('lost'); }, close: async () => { held = false; } };
@@ -36,13 +38,13 @@ async function fixture(frontmatter: Record<string, unknown> = {}, archive: boole
     } } };
   const curation = new CurationService({ fs, access, config: () => storage.refresh(),
     wiki: new LlmWikiService(fs, access, new ReferenceService(fs)),
-    managedProof: async (path: string, revision: string) => managed && (path === 'A.md' && revision === initial.revision
+    managedProof: async (path: string, revision: string) => managed && (path === sourcePath && revision === initial.revision
       || archive && path === 'B.md' && revision === replacement.revision) ? hash(['managed', path, revision]) : undefined });
   const options: any = { storage, curation, authority: async () => ({ ownerId: 'operator', sharedOwner: false, revision: 'authority', assertCurrent: async () => { if (!allowed) throw Error('revoked'); } }) };
   let service = new EvolutionService(options);
   const call = (args: any) => service.execute('cycle', { kind: 'curation', ...args }, principal);
   const prepare = () => call({ op: 'prepare', cycleId: 'cleanup', requestId: 'prepare', expectedRevision: 'missing',
-    operation: archive ? archive === true ? 'archive_duplicate' : archive : 'deduplicate_relations', path: 'A.md', sourceRevision: initial.revision,
+    operation: archive ? archive === true ? 'archive_duplicate' : archive : 'deduplicate_relations', path: sourcePath, sourceRevision: initial.revision,
     ...(archive && { replacementPath: 'B.md', replacementRevision: replacement.revision }) });
   return { fs, initial, config, call, prepare, values, options, principal,
     restart: () => { service = new EvolutionService(options); }, revoke: () => { allowed = false; }, unmanage: () => { managed = false; }, interrupt: () => { failSave = true; } };
@@ -59,6 +61,71 @@ test('managed cleanup previews, applies, rereads and restores exact original byt
   expect(repeat).toEqual(done);
   const undo = await f.call({ op: 'revert', cycleId: 'cleanup', requestId: 'undo', expectedRevision: done.revision });
   expect(undo.status).toBe('withdrawn'); expect((await f.fs.readNote('A.md')).originalContent).toBe(f.initial.originalContent);
+});
+
+test('wiki-owned exact relation cleanup applies and restores through owner preview without broad Community access', async () => {
+  const f = await fixture({}, false, undefined, true), path = 'Community/Knowledge/A.md';
+  const p = await f.prepare(); expect(p.status).toBe('prepared');
+  const done = await f.call({ op: 'apply', cycleId: 'cleanup', requestId: 'apply', expectedRevision: p.revision, fingerprint: p.fingerprint });
+  expect((await f.fs.readNote(path)).frontmatter.contrasts_with).toEqual(['[[B]]']);
+  expect((await f.fs.readNote(path)).content).toBe(f.initial.content);
+  f.restart();
+  await f.call({ op: 'revert', cycleId: 'cleanup', requestId: 'undo', expectedRevision: done.revision });
+  expect((await f.fs.readNote(path)).originalContent).toBe(f.initial.originalContent);
+});
+
+test.each(['receipt', 'publish', 'owner', 'manual', 'source_only'])('wiki cleanup refuses invalid %s before writes', async mode => {
+  const f = await fixture({}, false, undefined, true), path = 'Community/Knowledge/A.md';
+  if (mode === 'receipt') f.unmanage();
+  if (mode === 'publish') f.principal.capabilities = ['write'];
+  if (mode === 'owner') delete f.config.curation[0].owner;
+  if (mode === 'manual') await f.fs.writeNote({ path, content: 'User content' });
+  if (mode === 'source_only') await f.fs.writeNote({ path, content: f.initial.content,
+    frontmatter: { ...f.initial.frontmatter, source_only: true } });
+  const before = await f.fs.readNoteRevision(path);
+  const result = await f.prepare().catch(() => ({ status: 'unavailable' }));
+  expect(['review_required', 'unavailable']).toContain(result.status);
+  expect(await f.fs.readNoteRevision(path)).toBe(before);
+});
+
+test.each(['owner', 'publish', 'receipt', 'manual'])('wiki cleanup rechecks %s after preview and restart', async mode => {
+  const f = await fixture({}, false, undefined, true), path = 'Community/Knowledge/A.md', p = await f.prepare();
+  if (mode === 'receipt') f.unmanage();
+  if (mode === 'publish') f.principal.capabilities = ['write'];
+  if (mode === 'owner') f.config.curation = [];
+  if (mode === 'manual') await f.fs.writeNote({ path, content: 'Preserve user edit.' });
+  const before = await f.fs.readNoteRevision(path); f.restart();
+  await expect(f.call({ op: 'apply', cycleId: 'cleanup', requestId: 'apply', expectedRevision: p.revision, fingerprint: p.fingerprint })).rejects.toThrow();
+  expect(await f.fs.readNoteRevision(path)).toBe(before);
+});
+
+test('wiki cleanup reconciles an interrupted receipt and rejects unregistered service operations', async () => {
+  const f = await fixture({}, false, undefined, true), path = 'Community/Knowledge/A.md', p = await f.prepare();
+  f.interrupt();
+  await expect(f.call({ op: 'apply', cycleId: 'cleanup', requestId: 'apply', expectedRevision: p.revision, fingerprint: p.fingerprint })).rejects.toThrow();
+  const output = await f.fs.readNoteRevision(path); f.restart();
+  const read = await f.call({ op: 'read', cycleId: 'cleanup' });
+  const done = await f.call({ op: 'reconcile', cycleId: 'cleanup', requestId: 'reconcile', expectedRevision: read.revision });
+  expect(done.status).toBe('applied'); expect(await f.fs.readNoteRevision(path)).toBe(output);
+  for (const operation of ['archive_duplicate', 'merge_duplicates', 'merge_passages']) {
+    await expect(f.call({ op: 'prepare', cycleId: `deny-${operation}`, requestId: 'deny', expectedRevision: 'missing',
+      operation, path, sourceRevision: output, replacementPath: 'B.md', replacementRevision: f.initial.revision })).rejects.toThrow();
+  }
+});
+
+test('stored cleanup intent cannot silently become a metadata or body rewrite', async () => {
+  for (const corruption of ['set', 'patch', 'removed']) {
+    const f = await fixture({}, false, undefined, true); await f.prepare();
+    for (const [key, value] of f.values) if (value.id === 'cleanup') {
+      if (corruption === 'set') value.changes[0].frontmatter.set.legal_hold = false;
+      if (corruption === 'patch') value.changes[0].patches = [{ oldString: 'Never', newString: 'Always' }];
+      if (corruption === 'removed') value.removed++;
+      f.values.set(key, value);
+    }
+    f.restart();
+    await expect(f.call({ op: 'read', cycleId: 'cleanup' })).rejects.toThrow();
+    expect(await f.fs.readNoteRevision('Community/Knowledge/A.md')).toBe(f.initial.revision);
+  }
 });
 
 test('verified duplicate archives through the lifecycle owner and restores exact source bytes', async () => {

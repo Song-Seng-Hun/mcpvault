@@ -19,6 +19,8 @@ export interface CompilationProject {
     ruleVersion: string;
     sources: CompilationSourcePolicy[];
     outputPaths: string[];
+    /** Exact owner-service route, not a generic Community write grant. */
+    outputOwner?: 'wiki_knowledge';
     runtimeIds: string[];
     operations: CompilationOperation[];
     /** Separate explicit grant; existing output/maintenance rights do not imply it. */
@@ -50,6 +52,8 @@ export declare const compilationHash: (value: unknown) => string;
 export declare function compilationPath(value: unknown): string;
 /** Generic migration must not take ownership of service records or templates. */
 export declare const ordinaryCompilationDocument: (path: string) => boolean;
+/** Deliberately case-exact service namespace; no aliases or nested service roots. */
+export declare const wikiKnowledgeOutput: (path: string) => boolean;
 export declare function validateCompilationConfig(value: unknown): CompilationConfig;
 /** Admission is metadata-only and emits no rejected path, title, count or department. */
 export declare function inspectCompilationPolicy(params: {
@@ -61,5 +65,6 @@ export declare function inspectCompilationPolicy(params: {
     outputPath: string;
     operation: CompilationOperation;
     runtime?: CompilationRuntime;
+    outputOwner?: 'wiki_knowledge';
 }): CompilationAdmission;
 //# sourceMappingURL=compilation-policy.d.ts.map

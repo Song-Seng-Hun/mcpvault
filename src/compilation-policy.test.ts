@@ -25,6 +25,25 @@ test('compilation requires its own exact host grant; maintenance and client appr
   expect(check()).toMatchObject({ status: 'ready' });
 });
 
+test('wiki output ownership needs an exact host grant AND the registered publication adapter', () => {
+  const value = config();
+  Object.assign(value.projects[0]!, { outputOwner: 'wiki_knowledge', outputPaths: ['Community/Knowledge/A.md'] });
+  const validated = validateCompilationConfig(value);
+  const args = { config: validated, outputPath: 'Community/Knowledge/A.md' };
+  expect(check(args).status).toBe('unavailable');
+  expect(check({ ...args, outputOwner: 'wiki_knowledge' }).status).toBe('ready');
+  expect(check({ ...args, outputOwner: 'wiki_knowledge', principal: { ...actor, capabilities: ['write'] } }).status).toBe('unavailable');
+  for (const path of ['Result.md', 'community/Knowledge/A.md', 'Community/Skills/A.md', 'Community/Knowledge/_sources/A.md',
+    'Community/Knowledge/Community/A.md', 'Community/Knowledge/../A.md', 'Community/Knowledge/*.md']) {
+    value.projects[0]!.outputPaths = [path];
+    expect(() => validateCompilationConfig(value)).toThrow();
+  }
+  value.projects[0]!.outputPaths = ['Community/Knowledge/A.md'];
+  Object.assign(value.projects[0]!, { chapterBundles: [{ documentPath: 'Knowledge/A.md',
+    documentId: '9cac42de-e32d-41e2-8370-df5f19d3b19c', chapterRoot: 'Knowledge/Chapters' }] });
+  expect(() => validateCompilationConfig(value)).toThrow();
+});
+
 test('chapter bundles need an additional exact host grant and preserve legacy grants unchanged', () => {
   const grant = { documentPath: 'Knowledge/A.md', documentId: '9cac42de-e32d-41e2-8370-df5f19d3b19c', chapterRoot: 'Knowledge/Chapters' };
   const candidate = config(); Object.assign(candidate.projects[0]!, { chapterBundles: [grant] });

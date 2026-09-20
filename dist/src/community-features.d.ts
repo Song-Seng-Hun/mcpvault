@@ -162,8 +162,8 @@ export declare class CommunityFeaturesService {
         deleteEntry?: boolean;
         expectedRevision?: string;
     }): Promise<{
-        truncated?: never;
         path?: never;
+        truncated?: never;
         success: boolean;
         deleted: boolean;
         entryId: string | undefined;

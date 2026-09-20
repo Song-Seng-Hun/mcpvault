@@ -10,6 +10,8 @@ import { type CompilationFinding } from './compilation-review.js';
 import { type CompilationRuntime, type CompilationOperation } from './compilation-policy.js';
 import { type CompilationJob, type CompilationIntent } from './compilation-model.js';
 export interface CompilationAdapter {
+    /** Code registration only; never read from a job, note or client request. */
+    readonly outputOwner?: 'wiki_knowledge';
     /** Code-owned deterministic checks, not an incoming client's success assertion. */
     check(job: Readonly<CompilationJob>, assertCurrent: () => Promise<void>): Promise<{
         status: 'passed' | 'partial';

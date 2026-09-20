@@ -4,11 +4,12 @@ import type { ScopePrincipal } from '../scope-auth.js';
 import type { EvolutionConfig } from '../evolution/model.js';
 import type { EvolutionRepository } from '../evolution/repository.js';
 import type { NoteChangeSetItem } from '../types.js';
-import { RELATION_FIELDS } from '../graph-contract.js';
+import { wikiKnowledgeOutput } from '../compilation-policy.js';
+import { relationCleanup } from './relation-cleanup.js';
 import { compilationContentHash } from '../compilation-model.js';
 import { isModerationHidden } from '../moderation-policy.js';
 import { hash, id, revision, unavailable } from '../evolution/policy.js';
-import { CURATION_OPERATIONS, curationGrants, curationPath, type CurationOperation } from './policy.js';
+import { CURATION_OPERATIONS, curationGrants, curationRecordPath, type CurationOperation } from './policy.js';
 import type { LlmWikiService } from '../llm-wiki.js';
 import { archiveCoverage } from './archive.js';
 import { mergePassages, type PassageMapping } from './merge-passages.js';
@@ -52,7 +53,8 @@ export class CurationService {
     return grant ? hash([grant, this.options.access.documentDependencyFingerprint([path])]) : undefined;
   }
   private async note(path: string, c: Context, ownedPreserveRevision?: string) {
-    curationPath(path); await c.current();
+    curationRecordPath(path); await c.current();
+    if (wikiKnowledgeOutput(path) && (!this.options.wiki || !c.principal.capabilities?.includes('publish'))) return unavailable();
     const visible = () => this.options.access.canAccessPhysicalPath(path, c.principal)
       && this.options.access.canReadProtectedDocument(path, c.principal);
     if (!visible()) return unavailable();
@@ -100,10 +102,11 @@ export class CurationService {
       || job.changes[0]?.path !== job.path || job.changes[0]?.expectedRevision !== job.before
       || !Number.isInteger(job.attempts) || job.attempts < 0 || job.attempts > 3
       || !Array.isArray(job.requests) || job.requests.length > 16) return unavailable();
-    curationPath(job.path); id(job.id);
+    curationRecordPath(job.path); id(job.id);
+    if (wikiKnowledgeOutput(job.path) && job.operation !== 'deduplicate_relations') return unavailable();
     if (job.operation === 'archive_duplicate' || isMerge(job.operation)) {
       const r = job.replacement;
-      if (!r || curationPath(r.path).toLowerCase() === job.path.toLowerCase()) return unavailable();
+      if (!r || curationRecordPath(r.path).toLowerCase() === job.path.toLowerCase() || wikiKnowledgeOutput(r.path)) return unavailable();
       for (const v of [r.revision, r.proof, r.authority]) if (revision(v) === 'missing') return unavailable();
       if (isMerge(job.operation)) {
         if (!r.output || typeof r.output.original !== 'string' || r.output.original.length > 24000
@@ -111,6 +114,14 @@ export class CurationService {
           || job.changes[1]?.path !== r.path || job.changes[1]?.expectedRevision !== r.revision) return unavailable();
       } else if (r.output) return unavailable();
     } else if (job.replacement) return unavailable();
+    if (job.operation === 'deduplicate_relations') {
+      const parser = new FrontmatterHandler(), original = parser.parse(job.original);
+      const expected = relationCleanup({ ...original, revision: job.before }, job.path);
+      if (expected.status !== 'ready' || !expected.removed || expected.removed !== job.removed
+        || hash(expected.changes) !== hash(job.changes)) return unavailable();
+      const output = parser.preserveStringify(original.matter ?? '', expected.changes[0]!.frontmatter.set, original.content);
+      if (compilationContentHash(output) !== job.after) return unavailable();
+    }
     if (job.operation === 'merge_passages') {
       const r = job.replacement!, parser = new FrontmatterHandler();
       const source = parser.parse(job.original), target = parser.parse(r.output!.original);
@@ -145,12 +156,14 @@ export class CurationService {
     let job = r.value, recordRevision = r.revision;
     if (job) { this.validate(job, c.principal.accountId); if (job.id !== cycleId) return unavailable(); await this.assert(job, c); }
     if (op === 'prepare') {
-      const request = id(p.requestId), path = curationPath(this.options.access.resolveExternalPath(p.path, c.principal));
+      const request = id(p.requestId), path = curationRecordPath(this.options.access.resolveExternalPath(p.path, c.principal));
       if (!this.options.access.canAccessPhysicalPath(path, c.principal)
         || !this.options.access.canReadProtectedDocument(path, c.principal)) return unavailable();
       if (!CURATION_OPERATIONS.includes(p.operation) || revision(p.sourceRevision) === 'missing') return unavailable();
+      if (wikiKnowledgeOutput(path) && p.operation !== 'deduplicate_relations') return unavailable();
       const replacementPath = p.operation === 'archive_duplicate' || isMerge(p.operation)
-        ? curationPath(this.options.access.resolveExternalPath(p.replacementPath, c.principal)) : undefined;
+        ? curationRecordPath(this.options.access.resolveExternalPath(p.replacementPath, c.principal)) : undefined;
+      if (replacementPath && wikiKnowledgeOutput(replacementPath)) return unavailable();
       const basis = hash(replacementPath ? [path, p.operation, p.sourceRevision, replacementPath, p.replacementRevision]
         : [path, p.operation, p.sourceRevision]);
       if (job) { if (job.prepareRequest !== request || job.prepareBasis !== basis) return unavailable(); return this.view(job, recordRevision); }
@@ -165,7 +178,7 @@ export class CurationService {
       let passageCoverage: PassageMapping[] | undefined;
       let projectedMergeRevision: string | undefined;
       let changes: NoteChangeSetItem[];
-      const set: Record<string, string[]> = {}; let removed = 0, inspected = 0;
+      let removed = 0;
       if (replacementPath) {
         if (replacementPath.toLowerCase() === path.toLowerCase() || !this.options.wiki) return unavailable();
         const target = await this.note(replacementPath, c);
@@ -210,17 +223,13 @@ export class CurationService {
           passageCoverage = merge.coverage;
         }
       } else {
-        for (const relation of RELATION_FIELDS) {
-          const values = note.frontmatter[relation]; if (values === undefined) continue;
-          // Only exact repeated string occurrences; aliases, anchors and evidence objects differ.
-          if (!Array.isArray(values) || values.some(v => typeof v !== 'string')) continue;
-          inspected += values.length;
-          if (inspected > 200) return { status: 'review_required', partial: true, reason: 'relation_budget_exceeded' };
-          const unique = [...new Set<string>(values)];
-          if (unique.length !== values.length) { set[relation] = unique; removed += values.length - unique.length; }
-        }
+        const cleanup = wikiKnowledgeOutput(path)
+          ? await this.options.wiki!.managedRelationCleanupPreview(c.principal, path, note.revision)
+          : relationCleanup(note, path);
+        if (cleanup.status !== 'ready') return cleanup;
+        removed = cleanup.removed;
         if (!removed) return { status: 'unchanged', wroteOutput: false, effectVerified: false };
-        changes = [{ path, expectedRevision: note.revision, frontmatter: { set } }];
+        changes = cleanup.changes;
       }
       const policy = { guards: this.guards({ ...(replacement && { replacement }) }), assertAccess: async () => {
         await this.note(path, c);

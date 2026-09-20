@@ -51,7 +51,8 @@ export class CompilationService {
             return undefined;
         const state = parseCompilationHistory(await this.options.host.readState());
         const job = state.jobs.find(j => j.accountId === principal.accountId && j.outputPath === path && j.status === 'completed'
-            && j.receipt?.outputRevision === revision && config.projects.some(p => p.id === j.projectId && p.outputPaths.includes(path)));
+            && j.receipt?.outputRevision === revision && config.projects.some(p => p.id === j.projectId && p.outputPaths.includes(path)
+            && (!p.outputOwner || p.outputOwner === this.options.adapter?.outputOwner && principal.capabilities?.includes('publish'))));
         await this.actor(principal);
         if (compilationHash(validateCompilationConfig(await this.options.host.refresh())) !== compilationHash(config)
             || !this.options.access.canAccessPhysicalPath(path, principal, false))
@@ -257,7 +258,8 @@ export class CompilationService {
     }
     async gate(config, job, principal) {
         const paths = job.inputs.map(input => input.path);
-        const base = { config, projectId: job.projectId, principal, access: this.options.access, paths, outputPath: job.outputPath, operation: job.operation };
+        const base = { config, projectId: job.projectId, principal, access: this.options.access, paths, outputPath: job.outputPath,
+            operation: job.operation, ...(this.options.adapter?.outputOwner && { outputOwner: this.options.adapter.outputOwner }) };
         const admission = inspectCompilationPolicy(base);
         // Even the host verifier receives only already-admitted source identities.
         if (admission.status !== 'waiting_runtime')

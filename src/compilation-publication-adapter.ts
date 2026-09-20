@@ -23,6 +23,7 @@ const unavailable = () => guidanceError(Error('Compilation publication unavailab
  * inference comes from the current agent's submitted draft; comparison is local
  * lexical-only and no provider, source capture, merge or claim promotion runs. */
 export class CompilationPublicationAdapter implements CompilationAdapter {
+  readonly outputOwner = 'wiki_knowledge' as const;
   constructor(private readonly options: CompilationPublicationOptions) {}
   private async principal(job: Readonly<CompilationJob>, current: () => Promise<void>, publish = true) {
     await current(); const p = await this.options.authorize(job.accountId);

@@ -118,12 +118,14 @@ test('apply rechecks authority and fingerprint after preview', async () => {
   await expect(adapter.apply(job, intent, current)).rejects.toThrow(); expect(await fs.noteExists('Result.md')).toBe(false);
 });
 
-test.each(['normal', 'lost_ack', 'manual_edit'] as const)('real publication and durable compilation recovery: %s', async interruption => {
+test.each(['normal', 'lost_ack', 'manual_edit', 'wiki_normal', 'wiki_lost_ack', 'wiki_manual_edit'] as const)('real publication and durable compilation recovery: %s', async mode => {
+  const owned = mode.startsWith('wiki_'), interruption = mode.replace('wiki_', '');
+  const outputPath = owned ? 'Community/Knowledge/Result.md' : 'Result.md';
   let durable: unknown, writes = 0;
   const host: CompilationHost = {
     refresh: async () => ({ version: 1, enabled: true, accountId: actor.accountId, projects: [{ id: 'project', ruleVersion: 'v1',
       sources: [{ path: 'Source.md', classification: 'resolved', mode: 'synthesis_allowed' }],
-      outputPaths: ['Result.md'], runtimeIds: ['local'], operations: ['synthesize'] }] }),
+      outputPaths: [outputPath], ...(owned && { outputOwner: 'wiki_knowledge' }), runtimeIds: ['local'], operations: ['synthesize'] }] }),
     readState: async () => structuredClone(durable), writeState: async state => { durable = structuredClone(state); },
     acquire: async () => ({ assertHeld: async () => {}, close: async () => {} }),
   };
@@ -138,18 +140,26 @@ test.each(['normal', 'lost_ack', 'manual_edit'] as const)('real publication and 
   const service = makeService();
   let result = await service.execute({ op: 'prepare', requestId: 'job', projectId: 'project', operation: 'synthesize',
     inputs: job.inputs.map(i => ({ path: i.path, expectedRevision: i.revision, role: i.role })),
-    outputPath: 'Result.md', expectedOutputRevision: 'missing' }, actor);
+    outputPath, expectedOutputRevision: 'missing' }, actor);
   result = await service.execute({ op: 'submit', requestId: 'job', expectedJobRevision: result.jobRevision,
     content: body, evidence: job.evidence }, actor);
   result = await service.execute({ op: 'retry', requestId: 'job', expectedJobRevision: result.jobRevision }, actor);
   expect(result.status).toBe(interruption === 'normal' ? 'completed' : 'failed');
   await service.close();
-  if (interruption === 'manual_edit') await writeFile(join(vault, 'Result.md'), 'Human correction must survive.');
+  if (interruption === 'manual_edit') await writeFile(join(vault, outputPath), 'Human correction must survive.');
   const restarted = makeService();
   const resumed = await restarted.execute({ op: 'retry', requestId: 'job', expectedJobRevision: result.jobRevision }, actor);
   expect(writes).toBe(1);
   expect(resumed.status).toBe(interruption === 'manual_edit' ? 'review_required' : 'completed');
-  if (interruption === 'manual_edit') expect((await fs.readNote('Result.md')).content).toBe('Human correction must survive.');
-  else expect(resumed.outputRevision).toBe(await fs.readNoteRevision('Result.md'));
+  if (interruption === 'manual_edit') expect((await fs.readNote(outputPath)).content).toBe('Human correction must survive.');
+  else {
+    expect(resumed.outputRevision).toBe(await fs.readNoteRevision(outputPath));
+    expect(await restarted.managedOutputProof(outputPath, resumed.outputRevision, actor)).toMatch(/^[a-f0-9]{64}$/);
+    if (owned) {
+      const disconnected = new CompilationService({ fs, access, host, authorize: async () => actor });
+      expect(await disconnected.managedOutputProof(outputPath, resumed.outputRevision, actor)).toBeUndefined();
+      await disconnected.close();
+    }
+  }
   await restarted.close();
 });

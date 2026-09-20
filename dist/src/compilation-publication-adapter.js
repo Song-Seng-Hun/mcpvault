@@ -11,6 +11,7 @@ const unavailable = () => guidanceError(Error('Compilation publication unavailab
  * lexical-only and no provider, source capture, merge or claim promotion runs. */
 export class CompilationPublicationAdapter {
     options;
+    outputOwner = 'wiki_knowledge';
     constructor(options) {
         this.options = options;
     }

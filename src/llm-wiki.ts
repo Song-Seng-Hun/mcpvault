@@ -3,6 +3,7 @@ import { claimId, parseClaimReference, blockAnchorLineIndex, type ParsedClaimRef
 import { buildGraphAssertionPacket, type GraphAssertionPacketOptions } from './graph-assertion-packet.js';
 import type { GraphReadIndex } from './memory/graph-references.js';
 import { CLAIM_RELATION_FIELDS, typedRelationTargetKindReason } from './graph-contract.js';
+import { wikiRelationCleanup } from './curation/relation-cleanup.js';
 import { prepareDocumentWrite } from './enterprise-storage-context.js';
 import { preparePublicationWrite } from './prepared-publication.js';
 import { createHash, randomUUID } from 'node:crypto';
@@ -6859,6 +6860,11 @@ export class LlmWikiService {
     };
     if (JSON.stringify(result).length > boundedChars) throw guidanceError(new Error('maxChars is too small to preserve the MOC-membership plan; increase maxChars'), 'guid-ec9a98670d18756e');
     return result;
+  }
+
+  /** Owner-only local intent; not an endpoint, grant or raw publication path. */
+  managedRelationCleanupPreview(principal: ScopePrincipal | undefined, path: string, expectedRevision: string) {
+    return wikiRelationCleanup(this.fileSystem, this.access, principal, path, expectedRevision);
   }
 
   /** Replace one directional typed-relation or focus_supports list as a
