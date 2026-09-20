@@ -657,7 +657,7 @@ export function createServer(vaultPath, options = {}) {
     const compilationAdapter = options.compilation?.adapter ?? (!readOnly && options.compilation?.host && options.compilation.runtime
         ? options.compilation.adapterFactory?.({ fs: fileSystem, access: scopeAccess, wiki: llmWiki, comparison: sourceComparison, authorize: compilationAuthorize }) : undefined);
     const compilation = new CompilationService({ fs: fileSystem, access: scopeAccess, readOnly,
-        ...options.compilation, ...(compilationAdapter && { adapter: compilationAdapter }), authorize: compilationAuthorize });
+        ...options.compilation, ...(compilationAdapter && { adapter: compilationAdapter }), documentPolicy, authorize: compilationAuthorize });
     if (options.evolution && options.evolutionRuntime)
         throw new Error('Choose one evolution runtime connection');
     const evolutionConnection = options.evolutionRuntime ? connectEvolutionRuntime(options.evolutionRuntime, {
@@ -1881,7 +1881,15 @@ export function createServer(vaultPath, options = {}) {
                             // Reuse the request-local inheritance path so its active storage
                             // boundary advances to exactly the policy revision just written.
                             await inheritDocument(job.outputPath, job.inputs.map(input => input.path));
-                        }), false);
+                        }, { get sources() { return [...(documentSessionKey ? documentSessionSources.get(documentSessionKey) ?? [] : [])]; },
+                            update: async (change) => {
+                                assertStorageFresh();
+                                if (options.documentRules?.().length)
+                                    throw guidanceError(new Error('Persist source classifications before publication'), 'guid-3f69d20a47980c00');
+                                await change();
+                                assertDocumentFresh = scopeAccess.captureDocumentBoundary(principal);
+                                assertStorageFresh();
+                            } }), false);
                     }
                     case "get_scope_context": {
                         if (principal?.enterprise)

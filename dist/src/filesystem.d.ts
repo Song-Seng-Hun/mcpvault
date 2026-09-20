@@ -338,6 +338,9 @@ export declare class FileSystemService {
         frontmatter?: Record<string, any>;
     }): Promise<DailyNoteResult>;
     private collectVaultFiles;
+    /** Bounded owner check, unlike user listings: never hides unknown entries or
+     * treats an unreadable directory as empty. No symlinks/subdirectories allowed. */
+    assertManagedDirectory(path: string, filenames: readonly string[], allowMissing?: boolean): Promise<boolean>;
     /** Small-vault compatibility only. Stop discovery before materializing an
      * entire directory/tree; a partial or inaccessible scope is not absence. */
     private collectBoundedReferenceFiles;

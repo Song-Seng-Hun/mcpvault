@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, test } from 'vitest';
+import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { mkdtemp, mkdir, realpath, writeFile, readFile, readdir, rename, rm } from 'node:fs/promises';
 import { tmpdir, userInfo } from 'node:os';
 import { join } from 'node:path';
@@ -8,6 +8,7 @@ import { FileSystemService } from './filesystem.js';
 import { ScopeAccessPolicy } from './scope-access.js';
 import { loadCompilationHostConfig, type CompilationHost } from './compilation-host.js';
 import { CompilationBundleService } from './compilation-bundle-service.js';
+import { DocumentPolicyStore } from './document-policy-store.js';
 let root: string, vault: string, privateRoot: string, configPath: string, fs: FileSystemService, host: CompilationHost, config: any;
 const actor = { accountId: 'owner', modelId: 'test', role: 'agent' as const, agentId: 'worker', capabilities: ['write', 'publish'] as any };
 const docId = '9cac42de-e32d-41e2-8370-df5f19d3b19c';
@@ -31,6 +32,134 @@ afterEach(async () => { await rm(root, { recursive: true, force: true }); });
 const service = () => new CompilationBundleService({ fs, access: new ScopeAccessPolicy(), host, authorize: async () => current,
   runtime: async () => ({ id: 'local', revision: 'verified-1', local: true, operations: ['index', 'synthesize'] }) });
 const prepare = async () => ({ op: 'prepare', projectId: 'p', requestId: 'bundle-one', documentPath: 'Manual.md', expectedDocumentRevision: await fs.readNoteRevision('Manual.md') });
+async function publisher() {
+  config.projects[0].chapterBundles[0].publication = 'verbatim'; await writeFile(configPath, JSON.stringify(config));
+  await mkdir(join(vault, '_wiki', '_policies'), { recursive: true });
+  await writeFile(join(vault, '_wiki', '_policies', 'documents.md'), '---\ntype: protected-document-policy\nversion: 1\nrules: [{path: Manual.md, accountIds: [owner]}]\n---\n');
+  const policy = new DocumentPolicyStore(vault); await policy.refresh();
+  const access = new ScopeAccessPolicy({ documentRules: () => policy.rules() });
+  const create = (readOnly = false) => new CompilationBundleService({ fs, access, host, documentPolicy: policy, readOnly, authorize: async () => current,
+    runtime: async () => ({ id: 'local', revision: 'verified-1', local: true, operations: ['index', 'synthesize'] }) });
+  const bundle = await create().execute(await prepare(), actor);
+  const previewArgs = { op: 'split_preview', bundleId: bundle.bundleId, expectedJobRevision: bundle.jobRevision };
+  const preview = await create().execute(previewArgs, actor);
+  const args = { ...previewArgs, op: 'split_apply', expectedPublicationRevision: 'missing', fingerprint: preview.fingerprint, requestId: 'publish-one' };
+  return { policy, access, create, bundle, previewArgs, preview, args };
+}
+
+test('interrupted chapter creation stays hidden and resumes without overwriting; later user edits block rollback', async () => {
+  const { create, access, preview, previewArgs, args } = await publisher();
+  const originalWrite = fs.writeNoteWithRevisionGuardsAndReceipt.bind(fs);
+  const fault = vi.spyOn(fs, 'writeNoteWithRevisionGuardsAndReceipt').mockImplementationOnce(async (...input) => {
+    await originalWrite(...input); throw Error('Synthetic interruption after real write');
+  });
+  try { await expect(create().execute(args, actor)).rejects.toThrow(); } finally { fault.mockRestore(); }
+  expect(await readFile(join(vault, 'Manual.md'), 'utf8')).toBe(raw);
+  for (const item of preview.outputs) expect(access.canReadProtectedDocument(item.path, actor)).toBe(false);
+  const pending = await create().execute(previewArgs, actor);
+  expect(pending.status).toBe('applying');
+  const applied = await create().execute({ ...args, expectedPublicationRevision: pending.publicationRevision }, actor);
+  expect(applied.status).toBe('applied');
+  await writeFile(join(vault, preview.outputs[0].path), 'Human edit: preserve me.');
+  const toc = await readFile(join(vault, 'Manual.md'), 'utf8');
+  await expect(create().execute({ ...args, op: 'split_revert', requestId: 'rollback', expectedPublicationRevision: applied.publicationRevision }, actor)).rejects.toThrow();
+  expect(await readFile(join(vault, 'Manual.md'), 'utf8')).toBe(toc);
+  expect(await readFile(join(vault, preview.outputs[0].path), 'utf8')).toBe('Human edit: preserve me.');
+}, 30000);
+
+test('rollback of an interrupted split restores readability without requiring missing chapters to be created', async () => {
+  const { create, access, previewArgs, preview, args } = await publisher();
+  const originalWrite = fs.writeNoteWithRevisionGuardsAndReceipt.bind(fs);
+  const fault = vi.spyOn(fs, 'writeNoteWithRevisionGuardsAndReceipt').mockImplementationOnce(async (...input) => {
+    await originalWrite(...input); throw Error('Synthetic interruption');
+  });
+  try { await expect(create().execute(args, actor)).rejects.toThrow(); } finally { fault.mockRestore(); }
+  const pending = await create().execute(previewArgs, actor);
+  const result = await create().execute({ ...args, op: 'split_revert', requestId: 'abort', expectedPublicationRevision: pending.publicationRevision }, actor);
+  expect(result.status).toBe('withdrawn'); expect(await readFile(join(vault, 'Manual.md'), 'utf8')).toBe(raw);
+  for (const item of preview.outputs) expect(access.canReadProtectedDocument(item.path, actor)).toBe(false);
+}, 30000);
+
+test('publication rejects readonly, forged fingerprints, changed source and unowned root entries without cutover', async () => {
+  const { create, args } = await publisher();
+  await expect(create(true).execute(args, actor)).rejects.toThrow();
+  await expect(create().execute({ ...args, fingerprint: '0'.repeat(64) }, actor)).rejects.toThrow();
+  await mkdir(join(vault, 'Chapters')); await writeFile(join(vault, 'Chapters', 'User.txt'), 'Unowned.');
+  await expect(create().execute(args, actor)).rejects.toThrow();
+  expect(await readFile(join(vault, 'Manual.md'), 'utf8')).toBe(raw);
+  expect(await readFile(join(vault, 'Chapters', 'User.txt'), 'utf8')).toBe('Unowned.');
+}, 30000);
+
+test('published state is not reported as applied after source restoration outside its journal', async () => {
+  const { create, args, previewArgs } = await publisher();
+  await create().execute(args, actor);
+  await writeFile(join(vault, 'Manual.md'), raw);
+  await expect(create().execute(previewArgs, actor)).rejects.toThrow();
+}, 30000);
+
+test('changed chapter at the release boundary is re-hidden, never recorded as completed', async () => {
+  const { create, policy, args, preview, access } = await publisher();
+  const finish = policy.finishPublication.bind(policy);
+  const fault = vi.spyOn(policy, 'finishPublication').mockImplementationOnce(async (...input) => {
+    await finish(...input); await writeFile(join(vault, preview.outputs[0].path), 'Concurrent user content.');
+  });
+  try { await expect(create().execute(args, actor)).rejects.toThrow(); } finally { fault.mockRestore(); }
+  for (const item of preview.outputs) expect(access.canReadProtectedDocument(item.path, actor)).toBe(false);
+  expect(await readFile(join(vault, preview.outputs[0].path), 'utf8')).toBe('Concurrent user content.');
+}, 30000);
+
+test('a lost release acknowledgement reconciles the actual bytes rather than rewriting them', async () => {
+  const { create, policy, args, previewArgs, preview } = await publisher();
+  const finish = policy.finishPublication.bind(policy);
+  const fault = vi.spyOn(policy, 'finishPublication').mockImplementationOnce(async (...input) => {
+    await finish(...input); throw Error('Synthetic response loss after durable release');
+  });
+  try { await expect(create().execute(args, actor)).rejects.toThrow(); } finally { fault.mockRestore(); }
+  const before = await Promise.all(['Manual.md', ...preview.outputs.map((x: any) => x.path)].map(path => readFile(join(vault, path), 'utf8')));
+  const pending = await create().execute(previewArgs, actor);
+  const recovered = await create().execute({ ...args, expectedPublicationRevision: pending.publicationRevision }, actor);
+  expect(recovered.status).toBe('applied');
+  expect(await Promise.all(['Manual.md', ...preview.outputs.map((x: any) => x.path)].map(path => readFile(join(vault, path), 'utf8')))).toEqual(before);
+}, 30000);
+
+test('small publication responses retain the receipt and a complete additional-read action', async () => {
+  config.projects[0].chapterBundles[0].chapterRoot = 'Sections/' + 'a'.repeat(60);
+  await writeFile(join(vault, 'Manual.md'), '# A\nOne.\n# B\nTwo.\n# C\nThree.\n# D\nFour.\n');
+  const { create, args, previewArgs } = await publisher();
+  const preview = await create().execute({ ...previewArgs, maxChars: 1024 }, actor);
+  expect(JSON.stringify(preview).length).toBeLessThanOrEqual(1024);
+  expect(preview.partial).toBe(true); expect(preview.nextAction.endpointId).toBe('wiki.compilation');
+  const applied = await create().execute({ ...args, maxChars: 1024 }, actor);
+  expect(applied.status).toBe('applied'); expect(applied.publicationRevision).toMatch(/^[a-f0-9]{64}$/);
+  expect(JSON.stringify(applied).length).toBeLessThanOrEqual(1024);
+}, 30000);
+
+test('explicit verbatim publication creates hidden chapters before TOC, rereads, survives restart and restores exact original', async () => {
+  config.projects[0].chapterBundles[0].publication = 'verbatim'; await writeFile(configPath, JSON.stringify(config));
+  await mkdir(join(vault, '_wiki', '_policies'), { recursive: true });
+  await writeFile(join(vault, '_wiki', '_policies', 'documents.md'), '---\ntype: protected-document-policy\nversion: 1\nrules: [{path: Manual.md, accountIds: [owner]}]\n---\n');
+  const policy = new DocumentPolicyStore(vault); await policy.refresh();
+  const access = new ScopeAccessPolicy({ documentRules: () => policy.rules() });
+  const create = () => new CompilationBundleService({ fs, access, host, documentPolicy: policy, authorize: async () => current,
+    runtime: async () => ({ id: 'local', revision: 'verified-1', local: true, operations: ['index', 'synthesize'] }) } as any);
+  const bundle = await create().execute(await prepare(), actor);
+  const preview = await create().execute({ op: 'split_preview', bundleId: bundle.bundleId, expectedJobRevision: bundle.jobRevision }, actor);
+  expect(preview.status).toBe('ready'); expect(preview.outputs).toHaveLength(2);
+  const args = { op: 'split_apply', bundleId: bundle.bundleId, expectedJobRevision: bundle.jobRevision,
+    expectedPublicationRevision: 'missing', fingerprint: preview.fingerprint, requestId: 'publish-one' };
+  const applied = await create().execute(args, actor);
+  expect(applied.status).toBe('applied'); expect(applied.effectVerified).toBe(false);
+  expect(await readFile(join(vault, 'Manual.md'), 'utf8')).toContain('Read this section');
+  for (const item of preview.outputs) {
+    expect(access.canReadProtectedDocument(item.path, actor)).toBe(true);
+    expect(access.canReadProtectedDocument(item.path, { ...actor, accountId: 'other' })).toBe(false);
+  }
+  expect(await create().execute(args, actor)).toEqual(applied);
+  const reverted = await create().execute({ ...args, op: 'split_revert', requestId: 'restore-one', expectedPublicationRevision: applied.publicationRevision }, actor);
+  expect(reverted.status).toBe('withdrawn');
+  expect(await readFile(join(vault, 'Manual.md'), 'utf8')).toBe(raw);
+  for (const item of preview.outputs) expect(access.canReadProtectedDocument(item.path, actor)).toBe(false);
+}, 30000);
 
 const candidateFields = () => ({ title: 'Safe deployment', description: 'Approval before deployment.', kind: 'manual',
   domain: 'software', useWhen: 'Deploying.', avoidWhen: 'Reading only.', stage: 'execute', aliases: ['배포'],

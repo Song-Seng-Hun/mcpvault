@@ -10,7 +10,7 @@ const CONTRACTS = {
             ...reads('read_evolution_cycle', 'public', 'diagnose'), ...reads('read_evolution_cycle', 'authenticated', 'read', 'list', 'preview'),
         } },
     manage_wiki_compilation: { defaultOp: 'diagnose', summary: 'public', reads: {
-            ...reads('read_wiki_compilation', 'public', 'diagnose'), ...reads('read_wiki_compilation', 'authenticated', 'read'),
+            ...reads('read_wiki_compilation', 'public', 'diagnose'), ...reads('read_wiki_compilation', 'authenticated', 'read', 'split_preview'),
         } },
     ...Object.fromEntries(Object.entries(STORY_OPERATIONS).map(([name, spec]) => [spec.tool, {
             defaultOp: spec.defaultOp, story: true, summary: spec.reads.length ? 'public' : 'write',

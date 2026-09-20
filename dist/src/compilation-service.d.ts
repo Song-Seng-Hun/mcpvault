@@ -3,6 +3,8 @@ import type { FileSystemService } from './filesystem.js';
 import type { ScopeAccessPolicy } from './scope-access.js';
 import type { ScopePrincipal } from './scope-auth.js';
 import type { CompilationHost } from './compilation-host.js';
+import type { DocumentPolicyStore } from './document-policy-store.js';
+import type { PublicationBoundary } from './compilation-publication.js';
 import { type CompilationSession, type CompilationSessionRequest } from './compilation-session.js';
 import { type CompilationFinding } from './compilation-review.js';
 import { type CompilationRuntime, type CompilationOperation } from './compilation-policy.js';
@@ -33,6 +35,7 @@ export interface CompilationOptions {
     adapter?: CompilationAdapter;
     /** Trusted restriction-only store; persists inherited policy before accepting draft bytes. */
     protectSources?(job: Readonly<CompilationJob>, assertCurrent: () => Promise<void>): Promise<void>;
+    documentPolicy?: DocumentPolicyStore;
 }
 export interface CompilationParams {
     kind?: 'single_output' | 'document_bundle';
@@ -47,6 +50,8 @@ export interface CompilationParams {
     chapterId?: string;
     expectedCandidateRevision?: string;
     metadata?: unknown;
+    expectedPublicationRevision?: string;
+    fingerprint?: string;
     op?: string;
     requestId?: string;
     projectId?: string;
@@ -106,7 +111,7 @@ export declare class CompilationService {
     private revision;
     private gate;
     private projection;
-    execute(params: CompilationParams, principal?: ScopePrincipal, protectSources?: ((job: Readonly<CompilationJob>, assertCurrent: () => Promise<void>) => Promise<void>) | undefined): Promise<any>;
+    execute(params: CompilationParams, principal?: ScopePrincipal, protectSources?: ((job: Readonly<CompilationJob>, assertCurrent: () => Promise<void>) => Promise<void>) | undefined, publicationBoundary?: PublicationBoundary): Promise<any>;
     private run;
     private drift;
     private assertCurrent;

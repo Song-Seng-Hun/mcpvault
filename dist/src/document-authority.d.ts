@@ -9,6 +9,8 @@ export interface DocumentAccessRule {
     departmentIds?: readonly string[];
     accountIds?: readonly string[];
     derivedFrom?: readonly string[];
+    /** Owner-only publication barrier; never accepted from note metadata. */
+    publicationHold?: string;
 }
 export interface DocumentAuthorityOptions {
     documentRules?: () => readonly DocumentAccessRule[];

@@ -4,6 +4,8 @@ import type { FileSystemService } from './filesystem.js';
 import type { ScopeAccessPolicy } from './scope-access.js';
 import type { ScopePrincipal } from './scope-auth.js';
 import type { CompilationHost } from './compilation-host.js';
+import type { DocumentPolicyStore } from './document-policy-store.js';
+import type { PublicationBoundary } from './compilation-publication.js';
 import { CompilationBundleService } from './compilation-bundle-service.js';
 import { GRAPH_CONTRACT_VERSION } from './graph-contract.js';
 import { isModerationHidden } from './moderation-policy.js';
@@ -36,11 +38,13 @@ export interface CompilationOptions {
   adapter?: CompilationAdapter;
   /** Trusted restriction-only store; persists inherited policy before accepting draft bytes. */
   protectSources?(job: Readonly<CompilationJob>, assertCurrent: () => Promise<void>): Promise<void>;
+  documentPolicy?: DocumentPolicyStore;
 }
 export interface CompilationParams {
   kind?: 'single_output' | 'document_bundle'; documentPath?: string; expectedDocumentRevision?: string;
   bundleId?: string; projection?: 'summary' | 'original' | 'plan' | 'candidate'; startOffset?: number; endOffset?: number;
   chapterCursor?: number; expectedPlanRevision?: string; chapterId?: string; expectedCandidateRevision?: string; metadata?: unknown;
+  expectedPublicationRevision?: string; fingerprint?: string;
   op?: string; requestId?: string; projectId?: string; operation?: CompilationOperation;
   inputs?: Array<{ path: string; expectedRevision: string; role: 'source' | 'member' | 'concept' | 'topic' }>;
   outputPath?: string; expectedOutputRevision?: string; expectedJobRevision?: string; content?: string; evidence?: unknown; observation?: unknown; maxChars?: number;
@@ -246,10 +250,10 @@ export class CompilationService {
     if (JSON.stringify(result).length <= maxChars) return result;
     return { requestId: job.requestId, status: result.status, jobRevision: result.jobRevision, partial: true };
   }
-  execute(params: CompilationParams, principal?: ScopePrincipal, protectSources = this.options.protectSources): Promise<any> {
+  execute(params: CompilationParams, principal?: ScopePrincipal, protectSources = this.options.protectSources, publicationBoundary?: PublicationBoundary): Promise<any> {
     if (this.closed) return Promise.reject(guidanceError(Error('Compilation service closed'), 'guid-c26533bd8b3de58a'));
     return this.serial(async () => {
-      try { return await this.run(params, principal, protectSources); }
+      try { return params.kind === 'document_bundle' ? await this.bundles.execute(params, principal, publicationBoundary) : await this.run(params, principal, protectSources); }
       catch (error) {
         // JSON/filesystem/provider exceptions can quote private bytes or host
         // paths. Never let them reach endpoint output or the shared audit log.

@@ -21,5 +21,15 @@ export declare class DocumentPolicyStore {
      * source classifications. Persist before writing a derivative's body. A failed
      * later write may leave conservative metadata, never a public partial body. */
     inherit(targetInput: string, sourceInputs: readonly string[], expectedRevision: string): Promise<void>;
+    /** Persist restrictions and a directory-wide hold before any chapter bytes.
+     * A published/reused root is not silently adopted as a new bundle. */
+    beginPublication(root: string, sourceInputs: readonly string[], owner: string, expectedRevision: string): Promise<void>;
+    /** The publication owner supplies a reread-verified manifest before calling.
+     * This removes only its hold; current source/audience constraints survive. */
+    finishPublication(root: string, owner: string, expectedRevision: string): Promise<void>;
+    /** Re-hide only the exact released rule pinned by the publication journal.
+     * The caller still verifies ownership, outputs and current authorization. */
+    holdPublished(root: string, owner: string, released: DocumentAccessRule, expectedRevision: string): Promise<void>;
+    private updateRules;
 }
 //# sourceMappingURL=document-policy-store.d.ts.map

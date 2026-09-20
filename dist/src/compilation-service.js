@@ -278,12 +278,12 @@ export class CompilationService {
             return result;
         return { requestId: job.requestId, status: result.status, jobRevision: result.jobRevision, partial: true };
     }
-    execute(params, principal, protectSources = this.options.protectSources) {
+    execute(params, principal, protectSources = this.options.protectSources, publicationBoundary) {
         if (this.closed)
             return Promise.reject(guidanceError(Error('Compilation service closed'), 'guid-c26533bd8b3de58a'));
         return this.serial(async () => {
             try {
-                return await this.run(params, principal, protectSources);
+                return params.kind === 'document_bundle' ? await this.bundles.execute(params, principal, publicationBoundary) : await this.run(params, principal, protectSources);
             }
             catch (error) {
                 // JSON/filesystem/provider exceptions can quote private bytes or host

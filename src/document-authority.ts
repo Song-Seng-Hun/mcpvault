@@ -2,6 +2,7 @@ import { guidanceError } from './guidance-runtime.js';
 import { posix } from 'node:path';
 import { createHash } from 'node:crypto';
 import type { ScopePrincipal } from './scope-auth.js';
+import { allowsStagedPublication } from './enterprise-storage-context.js';
 
 /** Protected source metadata, never supplied as a read caller's claimed rights.
  * Folder placement alone grants nothing: recursive rules are explicit policy. */
@@ -13,6 +14,8 @@ export interface DocumentAccessRule {
   departmentIds?: readonly string[];
   accountIds?: readonly string[];
   derivedFrom?: readonly string[];
+  /** Owner-only publication barrier; never accepted from note metadata. */
+  publicationHold?: string;
 }
 export interface DocumentAuthorityOptions {
   documentRules?: () => readonly DocumentAccessRule[];
@@ -56,8 +59,9 @@ export class DocumentAuthority {
   constructor(input: readonly DocumentAccessRule[]) {
     if (!Array.isArray(input) || input.length > 4096) throw invalid();
     for (const raw of input) {
-      if (!raw || typeof raw !== 'object' || Array.isArray(raw) || Object.keys(raw).some(k => !['path', 'recursive', 'confidential', 'realmId', 'departmentIds', 'accountIds', 'derivedFrom'].includes(k))
+      if (!raw || typeof raw !== 'object' || Array.isArray(raw) || Object.keys(raw).some(k => !['path', 'recursive', 'confidential', 'realmId', 'departmentIds', 'accountIds', 'derivedFrom', 'publicationHold'].includes(k))
         || raw.recursive !== undefined && typeof raw.recursive !== 'boolean'
+        || raw.publicationHold !== undefined && (typeof raw.publicationHold !== 'string' || !/^[a-f0-9]{64}$/.test(raw.publicationHold))
         || raw.confidential !== undefined && typeof raw.confidential !== 'boolean'
         || raw.realmId !== undefined && !id(raw.realmId)) throw invalid();
       const path = documentPolicyPath(raw.path), departments = identifiers(raw.departmentIds), accounts = identifiers(raw.accountIds);
@@ -72,7 +76,8 @@ export class DocumentAuthority {
       }
       const rule = Object.freeze({ path, ...(raw.recursive !== undefined && { recursive: raw.recursive }),
         ...(raw.confidential !== undefined && { confidential: raw.confidential }), ...(raw.realmId && { realmId: raw.realmId }),
-        ...(departments && { departmentIds: departments }), ...(accounts && { accountIds: accounts }), ...(derivedFrom && { derivedFrom }) });
+        ...(departments && { departmentIds: departments }), ...(accounts && { accountIds: accounts }), ...(derivedFrom && { derivedFrom }),
+        ...(raw.publicationHold && { publicationHold: raw.publicationHold }) });
       this.exact.set(path, rule); if (rule.recursive) this.prefixes.set(path, rule);
       const family = capturedSourceFamily(path);
       if (family) this.sourceFamilies.set(family, [...(this.sourceFamilies.get(family) ?? []), path]);
@@ -131,6 +136,7 @@ export class DocumentAuthority {
     if (!path || path === '.') return true;
     const constraints = this.effectiveConstraints(path);
     return constraints.every(rule => {
+      if (rule.publicationHold && !allowsStagedPublication(rule.publicationHold, path)) return false;
       if (rule.confidential && (!principal || localInferenceAllowed?.(principal) !== true)) return false;
       if (rule.realmId && (principal?.enterprise?.mode !== 'company' || principal.enterprise.realmId !== rule.realmId)) return false;
       if (rule.departmentIds && !rule.departmentIds.some(department => principal?.enterprise?.departmentIds?.includes(department))) return false;
@@ -142,7 +148,8 @@ export class DocumentAuthority {
     const target = this.effectiveConstraints(container), origin = this.effectiveConstraints(source);
     const accountSets = target.flatMap(rule => rule.accountIds ? [rule.accountIds] : []);
     const accounts = accountSets.length ? accountSets.reduce((a, b) => a.filter(id => b.includes(id))) : undefined;
-    return origin.every(rule => (!rule.confidential || target.some(t => t.confidential))
+    return origin.every(rule => (!rule.publicationHold || target.some(t => t.publicationHold === rule.publicationHold))
+      && (!rule.confidential || target.some(t => t.confidential))
       && (!rule.realmId || target.some(t => t.realmId === rule.realmId))
       && (!rule.accountIds || accounts !== undefined && accounts.every(id => rule.accountIds!.includes(id)))
       && (!rule.departmentIds || target.some(t => t.realmId === rule.realmId && t.departmentIds?.every(id => rule.departmentIds!.includes(id)))));

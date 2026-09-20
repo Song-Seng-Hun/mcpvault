@@ -78,6 +78,62 @@ export class DocumentPolicyStore {
     if (!Array.isArray(sourceInputs) || !sourceInputs.length || sourceInputs.length > 32) throw guidanceError(new Error('Derived sources must be a bounded nonempty list'), 'guid-36a4912b05458b6a');
     const sources = [...new Set(sourceInputs.map(documentPolicyPath))];
     if (sources.includes(target)) throw guidanceError(new Error('Cyclic derived document policy'), 'guid-f3bd9bf8b5ffb8c9');
+    return this.updateRules(expectedRevision, () => {
+      const existing = this.definition.find(rule => rule.path === target);
+      const inherited = new DocumentAuthority(this.definition).effectiveConstraints(target);
+      const needed = sources.filter(source => !inherited.some(rule => rule.derivedFrom?.includes(source)));
+      if (!needed.length) return;
+      const derivedFrom = [...new Set([...(existing?.derivedFrom ?? []), ...needed])];
+      return [...this.definition.filter(rule => rule.path !== target), { ...existing, path: target, derivedFrom }];
+    });
+  }
+
+  /** Persist restrictions and a directory-wide hold before any chapter bytes.
+   * A published/reused root is not silently adopted as a new bundle. */
+  async beginPublication(root: string, sourceInputs: readonly string[], owner: string, expectedRevision: string): Promise<void> {
+    const path = documentPolicyPath(root);
+    if (isOriginalPath(path) || !/^[a-f0-9]{64}$/.test(owner) || !Array.isArray(sourceInputs)
+      || !sourceInputs.length || sourceInputs.length > 32) throw unavailable();
+    const sources = [...new Set(sourceInputs.map(documentPolicyPath))];
+    if (sources.some(source => source === path || source.startsWith(path + '/'))) throw unavailable();
+    return this.updateRules(expectedRevision, () => {
+      const existing = this.definition.find(rule => rule.path === path);
+      if (existing) {
+        if (existing.publicationHold !== owner || !existing.recursive
+          || JSON.stringify(existing.derivedFrom) !== JSON.stringify(sources)) throw unavailable();
+        return;
+      }
+      return [...this.definition, { path, recursive: true, derivedFrom: sources, publicationHold: owner }];
+    });
+  }
+
+  /** The publication owner supplies a reread-verified manifest before calling.
+   * This removes only its hold; current source/audience constraints survive. */
+  async finishPublication(root: string, owner: string, expectedRevision: string): Promise<void> {
+    const path = documentPolicyPath(root);
+    if (!/^[a-f0-9]{64}$/.test(owner)) throw unavailable();
+    return this.updateRules(expectedRevision, () => {
+      const existing = this.definition.find(rule => rule.path === path);
+      if (!existing || existing.publicationHold !== owner || !existing.recursive) throw unavailable();
+      const { publicationHold: _held, ...retained } = existing;
+      return this.definition.map(rule => rule === existing ? retained : rule);
+    });
+  }
+
+  /** Re-hide only the exact released rule pinned by the publication journal.
+   * The caller still verifies ownership, outputs and current authorization. */
+  async holdPublished(root: string, owner: string, released: DocumentAccessRule, expectedRevision: string): Promise<void> {
+    const path = documentPolicyPath(root);
+    if (!/^[a-f0-9]{64}$/.test(owner) || !released || released.path !== path || !released.recursive || released.publicationHold) throw unavailable();
+    const canonical = (rule: DocumentAccessRule) => JSON.stringify(new DocumentAuthority([rule]).rules);
+    return this.updateRules(expectedRevision, () => {
+      const existing = this.definition.find(rule => rule.path === path);
+      if (!existing || canonical(existing) !== canonical(released)) throw unavailable();
+      return this.definition.map(rule => rule === existing ? { ...rule, publicationHold: owner } : rule);
+    });
+  }
+
+  private updateRules(expectedRevision: string, transform: () => readonly DocumentAccessRule[] | undefined): Promise<void> {
     const update = async () => {
       await this.read();
       if (this.revision() !== expectedRevision) throw guidanceError(new Error('Protected document policy revision changed'), 'guid-1bc997e4b0c7d462');
@@ -89,13 +145,7 @@ export class DocumentPolicyStore {
       try {
         await this.read();
         if (this.revision() !== expectedRevision) throw guidanceError(new Error('Protected document policy revision changed'), 'guid-1bc997e4b0c7d462');
-        const existing = this.definition.find(rule => rule.path === target);
-        // Equal audiences today are not proof they will stay equal tomorrow.
-        // Keep ancestry even when current constraints happen to coincide.
-        const needed = sources.filter(source => !existing?.derivedFrom?.includes(source));
-        if (!needed.length) return;
-        const derivedFrom = [...new Set([...(existing?.derivedFrom ?? []), ...needed])];
-        const rules = [...this.definition.filter(rule => rule.path !== target), { ...existing, path: target, derivedFrom }];
+        const rules = transform(); if (!rules) return;
         const next = new DocumentAuthority(rules);
         const body = new FrontmatterHandler().updateFrontmatter(this.content, { rules: next.rules });
         // Check the authoritative revision again after preparation. The lock is

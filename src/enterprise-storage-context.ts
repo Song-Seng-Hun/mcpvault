@@ -2,6 +2,7 @@ import { guidanceError } from './guidance-runtime.js';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import type { ScopePrincipal } from './scope-auth.js';
 import type { ScopeAccessPolicy } from './scope-access.js';
+import { documentPolicyPath } from './document-authority.js';
 
 interface DocumentContext { access: ScopeAccessPolicy; principal?: ScopePrincipal; assertFresh: () => void;
   observe?: (policyRoot: string) => void;
@@ -11,6 +12,22 @@ interface DocumentContext { access: ScopeAccessPolicy; principal?: ScopePrincipa
   beforeWrite?: (path: string) => Promise<void> }
 interface StorageContext extends DocumentContext { publicCommunityWriter?: boolean; documentContext?: DocumentContext }
 const context = new AsyncLocalStorage<StorageContext>();
+interface PublicationStage { owner: string; paths: ReadonlySet<string>; active: boolean; parent: PublicationStage | undefined }
+const publicationStage = new AsyncLocalStorage<PublicationStage>();
+
+/** Code-owned publication adapter only. This is not a principal or an ACL
+ * grant: it permits its exact pending outputs while all normal rules remain.
+ * Revocation on return also closes leaked/delayed async continuations. */
+export async function withPublicationStaging<T>(owner: string, paths: readonly string[], operation: () => Promise<T>): Promise<T> {
+  if (!/^[a-f0-9]{64}$/.test(owner) || !paths.length || paths.length > 8) throw guidanceError(Error('Invalid publication stage'), 'guid-7700f2c94fdd8c31');
+  const value: PublicationStage = { owner, paths: new Set(paths.map(documentPolicyPath)), active: true, parent: publicationStage.getStore() };
+  try { return await publicationStage.run(value, operation); } finally { value.active = false; }
+}
+export function allowsStagedPublication(owner: string, path: string): boolean {
+  let stage = publicationStage.getStore(); if (!stage) return false;
+  for (; stage; stage = stage.parent) if (!stage.active || stage.owner !== owner || !stage.paths.has(documentPolicyPath(path))) return false;
+  return true;
+}
 
 export function withEnterpriseStorageContext<T>(value: StorageContext, operation: () => T): T {
   // Privileged service-internal counter reads may change enterprise context,
@@ -65,6 +82,10 @@ export function canTraverseEnterpriseStoragePath(path: string, recordSource = tr
   const current = context.getStore();
   if (current?.documentContext?.canAccessPath?.(path) === false
     && current.documentContext.canTraversePath?.(path) !== true) return false;
+  if (current?.documentContext) {
+    current.documentContext.assertFresh();
+    if (!current.documentContext.access.canReadProtectedDocument(path, current.documentContext.principal, recordSource)) return false;
+  }
   if (!current?.access.getEnterpriseProfile()) return true;
   current.assertFresh();
   return current.access.canAccessPhysicalPath(path === '.' ? '' : path, current.principal, recordSource);

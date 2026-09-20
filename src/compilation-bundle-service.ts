@@ -12,6 +12,7 @@ import { bundleIdentity, bundleRecordId, parseCompilationBundle, parseBundleOrig
 import { parseDocumentStructure } from './document-structure.js';
 import { createBundlePlan } from './document-bundle-plan.js';
 import { chapterCandidate, chapterPlanPage } from './compilation-bundle-candidates.js';
+import { CompilationPublication, type PublicationBoundary } from './compilation-publication.js';
 
 const unavailable = () => guidanceError(new Error('Document bundle unavailable'), 'guid-72ba6eede0a50b17');
 const actorBasis = (p: ScopePrincipal) => compilationHash({ account: p.accountId, model: p.modelId, agent: p.agentId,
@@ -22,11 +23,19 @@ const actorBasis = (p: ScopePrincipal) => compilationHash({ account: p.accountId
 export class CompilationBundleService {
   private tail: Promise<unknown> = Promise.resolve();
   constructor(private readonly options: CompilationOptions) {}
-  execute(params: Record<string, any>, principal?: ScopePrincipal): Promise<any> {
+  execute(params: Record<string, any>, principal?: ScopePrincipal, publicationBoundary?: PublicationBoundary): Promise<any> {
     // Capture incoming values before queuing; clients cannot change a queued plan.
     let input: Record<string, any>;
     try { input = JSON.parse(JSON.stringify(params)); } catch { return Promise.reject(unavailable()); }
-    const operation = this.tail.then(() => withDocumentWork(() => this.run(input, principal)));
+    const operation = this.tail.then(() => withDocumentWork(async () => {
+      if (String(input.op).startsWith('split_')) return new CompilationPublication(this.options).execute(input, principal, publicationBoundary);
+      if (input.op === 'read' && input.projection === 'original' && isDocumentBundleId(input.bundleId)
+        && (await this.options.host?.records?.read(compilationHash({ kind: 'bundle-publication-v1', bundleId: input.bundleId })))?.value !== undefined) {
+        const { projection: _projection, ...rest } = input;
+        return new CompilationPublication(this.options).execute({ ...rest, op: 'split_original' }, principal, publicationBoundary);
+      }
+      return this.run(input, principal);
+    }));
     this.tail = operation.catch(() => undefined);
     return operation.catch(() => { throw unavailable(); });
   }

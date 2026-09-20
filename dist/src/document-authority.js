@@ -1,6 +1,7 @@
 import { guidanceError } from './guidance-runtime.js';
 import { posix } from 'node:path';
 import { createHash } from 'node:crypto';
+import { allowsStagedPublication } from './enterprise-storage-context.js';
 const invalid = () => guidanceError(new Error('Invalid or cyclic protected document policy'), 'guid-9e190590d1e92418');
 const id = (value) => typeof value === 'string' && /^[a-z0-9][a-z0-9._-]{0,63}$/.test(value);
 export function documentPolicyPath(value) {
@@ -40,8 +41,9 @@ export class DocumentAuthority {
         if (!Array.isArray(input) || input.length > 4096)
             throw invalid();
         for (const raw of input) {
-            if (!raw || typeof raw !== 'object' || Array.isArray(raw) || Object.keys(raw).some(k => !['path', 'recursive', 'confidential', 'realmId', 'departmentIds', 'accountIds', 'derivedFrom'].includes(k))
+            if (!raw || typeof raw !== 'object' || Array.isArray(raw) || Object.keys(raw).some(k => !['path', 'recursive', 'confidential', 'realmId', 'departmentIds', 'accountIds', 'derivedFrom', 'publicationHold'].includes(k))
                 || raw.recursive !== undefined && typeof raw.recursive !== 'boolean'
+                || raw.publicationHold !== undefined && (typeof raw.publicationHold !== 'string' || !/^[a-f0-9]{64}$/.test(raw.publicationHold))
                 || raw.confidential !== undefined && typeof raw.confidential !== 'boolean'
                 || raw.realmId !== undefined && !id(raw.realmId))
                 throw invalid();
@@ -61,7 +63,8 @@ export class DocumentAuthority {
             }
             const rule = Object.freeze({ path, ...(raw.recursive !== undefined && { recursive: raw.recursive }),
                 ...(raw.confidential !== undefined && { confidential: raw.confidential }), ...(raw.realmId && { realmId: raw.realmId }),
-                ...(departments && { departmentIds: departments }), ...(accounts && { accountIds: accounts }), ...(derivedFrom && { derivedFrom }) });
+                ...(departments && { departmentIds: departments }), ...(accounts && { accountIds: accounts }), ...(derivedFrom && { derivedFrom }),
+                ...(raw.publicationHold && { publicationHold: raw.publicationHold }) });
             this.exact.set(path, rule);
             if (rule.recursive)
                 this.prefixes.set(path, rule);
@@ -141,6 +144,8 @@ export class DocumentAuthority {
             return true;
         const constraints = this.effectiveConstraints(path);
         return constraints.every(rule => {
+            if (rule.publicationHold && !allowsStagedPublication(rule.publicationHold, path))
+                return false;
             if (rule.confidential && (!principal || localInferenceAllowed?.(principal) !== true))
                 return false;
             if (rule.realmId && (principal?.enterprise?.mode !== 'company' || principal.enterprise.realmId !== rule.realmId))
@@ -154,7 +159,8 @@ export class DocumentAuthority {
         const target = this.effectiveConstraints(container), origin = this.effectiveConstraints(source);
         const accountSets = target.flatMap(rule => rule.accountIds ? [rule.accountIds] : []);
         const accounts = accountSets.length ? accountSets.reduce((a, b) => a.filter(id => b.includes(id))) : undefined;
-        return origin.every(rule => (!rule.confidential || target.some(t => t.confidential))
+        return origin.every(rule => (!rule.publicationHold || target.some(t => t.publicationHold === rule.publicationHold))
+            && (!rule.confidential || target.some(t => t.confidential))
             && (!rule.realmId || target.some(t => t.realmId === rule.realmId))
             && (!rule.accountIds || accounts !== undefined && accounts.every(id => rule.accountIds.includes(id)))
             && (!rule.departmentIds || target.some(t => t.realmId === rule.realmId && t.departmentIds?.every(id => rule.departmentIds.includes(id)))));

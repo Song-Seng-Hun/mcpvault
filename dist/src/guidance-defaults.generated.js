@@ -74516,9 +74516,9 @@ export const GUIDANCE_DEFINITIONS = [
     {
         "id": "guid-e91de68bcd3eb6d2",
         "kind": "prose",
-        "template": "document_bundle supports diagnose/prepare/read/submit: explicit host grant, private original preservation and one chapter candidate. No model, semantic pass or Vault cutover. Read projection=plan first; submit requires its revisions, chapterId, requestId, metadata and content.",
+        "template": "document_bundle preserves originals and private chapter candidates. split_preview plans a lossless 2-4 chapter split. split_apply/revert require a separate host publication grant, preview fingerprint, request ID and publication revision. No model, translation or semantic approval is inferred. Incomplete chapters stay hidden; rollback preserves them for recovery.",
         "parts": [
-            "document_bundle supports diagnose/prepare/read/submit: explicit host grant, private original preservation and one chapter candidate. No model, semantic pass or Vault cutover. Read projection=plan first; submit requires its revisions, chapterId, requestId, metadata and content."
+            "document_bundle preserves originals and private chapter candidates. split_preview plans a lossless 2-4 chapter split. split_apply/revert require a separate host publication grant, preview fingerprint, request ID and publication revision. No model, translation or semantic approval is inferred. Incomplete chapters stay hidden; rollback preserves them for recovery."
         ],
         "binding": "call",
         "sources": [

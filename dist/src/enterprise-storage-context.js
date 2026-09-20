@@ -1,6 +1,31 @@
 import { guidanceError } from './guidance-runtime.js';
 import { AsyncLocalStorage } from 'node:async_hooks';
+import { documentPolicyPath } from './document-authority.js';
 const context = new AsyncLocalStorage();
+const publicationStage = new AsyncLocalStorage();
+/** Code-owned publication adapter only. This is not a principal or an ACL
+ * grant: it permits its exact pending outputs while all normal rules remain.
+ * Revocation on return also closes leaked/delayed async continuations. */
+export async function withPublicationStaging(owner, paths, operation) {
+    if (!/^[a-f0-9]{64}$/.test(owner) || !paths.length || paths.length > 8)
+        throw guidanceError(Error('Invalid publication stage'), 'guid-7700f2c94fdd8c31');
+    const value = { owner, paths: new Set(paths.map(documentPolicyPath)), active: true, parent: publicationStage.getStore() };
+    try {
+        return await publicationStage.run(value, operation);
+    }
+    finally {
+        value.active = false;
+    }
+}
+export function allowsStagedPublication(owner, path) {
+    let stage = publicationStage.getStore();
+    if (!stage)
+        return false;
+    for (; stage; stage = stage.parent)
+        if (!stage.active || stage.owner !== owner || !stage.paths.has(documentPolicyPath(path)))
+            return false;
+    return true;
+}
 export function withEnterpriseStorageContext(value, operation) {
     // Privileged service-internal counter reads may change enterprise context,
     // but may never shed the caller's confidential document boundary.
@@ -54,6 +79,11 @@ export function canTraverseEnterpriseStoragePath(path, recordSource = true) {
     if (current?.documentContext?.canAccessPath?.(path) === false
         && current.documentContext.canTraversePath?.(path) !== true)
         return false;
+    if (current?.documentContext) {
+        current.documentContext.assertFresh();
+        if (!current.documentContext.access.canReadProtectedDocument(path, current.documentContext.principal, recordSource))
+            return false;
+    }
     if (!current?.access.getEnterpriseProfile())
         return true;
     current.assertFresh();

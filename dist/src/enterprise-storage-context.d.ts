@@ -14,6 +14,11 @@ interface StorageContext extends DocumentContext {
     publicCommunityWriter?: boolean;
     documentContext?: DocumentContext;
 }
+/** Code-owned publication adapter only. This is not a principal or an ACL
+ * grant: it permits its exact pending outputs while all normal rules remain.
+ * Revocation on return also closes leaked/delayed async continuations. */
+export declare function withPublicationStaging<T>(owner: string, paths: readonly string[], operation: () => Promise<T>): Promise<T>;
+export declare function allowsStagedPublication(owner: string, path: string): boolean;
 export declare function withEnterpriseStorageContext<T>(value: StorageContext, operation: () => T): T;
 export declare function activeDocumentStorageContext(): DocumentContext | undefined;
 /** Every serialized body write passes this before the final physical guard. */

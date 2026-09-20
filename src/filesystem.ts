@@ -3120,6 +3120,23 @@ export class FileSystemService {
     return files;
   }
 
+  /** Bounded owner check, unlike user listings: never hides unknown entries or
+   * treats an unreadable directory as empty. No symlinks/subdirectories allowed. */
+  async assertManagedDirectory(path: string, filenames: readonly string[], allowMissing = false): Promise<boolean> {
+    path = this.normalizePath(path);
+    if (!filenames.length || filenames.length > 4 || filenames.some(name => !/^[a-f0-9-]{36}\.md$/.test(name))) throw guidanceError(Error('Invalid managed directory manifest'), 'guid-fecd60e2f501db47');
+    const full = this.resolveWritablePath(path);
+    assertEnterpriseStorageAccess(path);
+    let directory;
+    try { directory = await opendir(full); }
+    catch (error) { if (allowMissing && (error as NodeJS.ErrnoException).code === 'ENOENT') return false; throw error; }
+    for await (const entry of directory) {
+      assertEnterpriseStorageAccess(path);
+      if (!entry.isFile() || !filenames.includes(entry.name)) throw guidanceError(Error('Managed directory contains an unowned entry'), 'guid-2e34ff140c0e259b');
+    }
+    assertEnterpriseStorageAccess(path); return true;
+  }
+
   /** Small-vault compatibility only. Stop discovery before materializing an
    * entire directory/tree; a partial or inaccessible scope is not absence. */
   private async collectBoundedReferenceFiles(maxFiles: number): Promise<string[]> {

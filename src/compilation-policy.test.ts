@@ -29,6 +29,8 @@ test('chapter bundles need an additional exact host grant and preserve legacy gr
   const grant = { documentPath: 'Knowledge/A.md', documentId: '9cac42de-e32d-41e2-8370-df5f19d3b19c', chapterRoot: 'Knowledge/Chapters' };
   const candidate = config(); Object.assign(candidate.projects[0]!, { chapterBundles: [grant] });
   expect(validateCompilationConfig(candidate).projects[0]!.chapterBundles).toEqual([grant]);
+  Object.assign(candidate.projects[0]!, { chapterBundles: [{ ...grant, publication: 'verbatim' }] });
+  expect(validateCompilationConfig(candidate).projects[0]!.chapterBundles![0]).toHaveProperty('publication', 'verbatim');
   expect(validateCompilationConfig(config()).projects[0]).not.toHaveProperty('chapterBundles');
   for (const bad of [
     { ...grant, documentPath: 'Knowledge/Unregistered.md' }, { ...grant, chapterRoot: '../Chapters' },
