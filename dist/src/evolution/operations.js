@@ -1,17 +1,20 @@
 import { hash, id, unavailable } from './policy.js';
 import { MEMORY_OBSERVED_ENDPOINTS, memoryObservation } from './memory-observation.js';
+import { curationActor, deliveredDocuments } from '../curation/delivery.js';
 export const OBSERVED_ENDPOINTS = new Set(['wiki.search', 'wiki.answer_packet', 'notes.read', 'mcp.read_note_lines', 'documents.outline', 'documents.read', ...MEMORY_OBSERVED_ENDPOINTS]);
 /** Server observations, never client-authored success logs. Bodies and credentials are not persisted. */
 export class EvolutionOperations {
     storage;
     host;
     actor;
+    deliverySink;
     tail = Promise.resolve();
     closed = false;
-    constructor(storage, host, actor) {
+    constructor(storage, host, actor, deliverySink) {
         this.storage = storage;
         this.host = host;
         this.actor = actor;
+        this.deliverySink = deliverySink;
     }
     key(a, kind, value) { return hash(['operations-v1', a.accountId, kind, value]); }
     async serial(a, work) {
@@ -142,10 +145,20 @@ export class EvolutionOperations {
             const evidence = memoryObservation(endpointId, result);
             const resourceRevisions = [...new Set(evidence ? evidence.resources.map(row => row.revision)
                     : rows.slice(0, 32).flatMap(row => [row?.rv, row?.revision]).filter(v => typeof v === 'string' && /^[a-f0-9]{64}$/.test(v)))];
+            const documents = deliveredDocuments(endpointId, result);
+            const documentDelivery = documents.length ? {
+                actor: curationActor(a.accountId), eventId: hash([a.accountId, taskId, requestId]), observedAt: Date.now(), documents
+            } : undefined;
             await this.finish(a, key, { state: result?.isError ? 'failed' : 'completed', returnedChars: body.length,
                 returnedBytes: Buffer.byteLength(body), elapsedMs: performance.now() - start, resultHash: hash(result), resourceRevisions,
                 ...(evidence && { evidence }),
+                ...(documentDelivery && { documentDelivery }),
                 ...(selectedHarness && { selectedHarness }) });
+            // Canonical completion is durable first. Loss of the advisory index cannot
+            // rerun the operation, invent disuse or claim the agent retained/used it.
+            await a.assert();
+            if (documentDelivery)
+                await this.deliverySink?.recordCurationDelivery?.(documentDelivery).catch(() => { });
             await a.assert();
             return result;
         }

@@ -3,6 +3,7 @@ import type { EvolutionConfig } from './model.js';
 import type { EvolutionRuntimeHost } from './runtime-connection.js';
 import { hash, id, unavailable } from './policy.js';
 import { MEMORY_OBSERVED_ENDPOINTS, memoryObservation, type MemoryDeliveryEvidence } from './memory-observation.js';
+import { curationActor, deliveredDocuments, type CurationDelivery, type CurationDeliverySink } from '../curation/delivery.js';
 
 export const OBSERVED_ENDPOINTS = new Set(['wiki.search', 'wiki.answer_packet', 'notes.read', 'mcp.read_note_lines', 'documents.outline', 'documents.read', ...MEMORY_OBSERVED_ENDPOINTS]);
 interface Task {
@@ -17,6 +18,7 @@ interface Observation {
   evidence?: MemoryDeliveryEvidence;
   selectedHarness?: { cycleId: string; revision: string };
   resourceRevisions?: string[];
+  documentDelivery?: CurationDelivery;
 }
 
 /** Server observations, never client-authored success logs. Bodies and credentials are not persisted. */
@@ -24,7 +26,7 @@ export class EvolutionOperations {
   private tail: Promise<unknown> = Promise.resolve();
   private closed = false;
   constructor(private readonly storage: HostWorkStorage<EvolutionConfig>, private readonly host: EvolutionRuntimeHost,
-    private readonly actor: (token: string, write: boolean) => Promise<OperationActor>) {}
+    private readonly actor: (token: string, write: boolean) => Promise<OperationActor>, private readonly deliverySink?: Partial<CurationDeliverySink>) {}
   private key(a: OperationActor, kind: string, value: string) { return hash(['operations-v1', a.accountId, kind, value]); }
   private async serial<T>(a: OperationActor, work: () => Promise<T>): Promise<T> {
     const run = this.tail.then(async () => {
@@ -121,10 +123,18 @@ export class EvolutionOperations {
       const evidence = memoryObservation(endpointId, result);
       const resourceRevisions = [...new Set<string>(evidence ? evidence.resources.map(row => row.revision)
         : rows.slice(0, 32).flatMap(row => [row?.rv, row?.revision]).filter(v => typeof v === 'string' && /^[a-f0-9]{64}$/.test(v)))];
+      const documents = deliveredDocuments(endpointId, result);
+      const documentDelivery: CurationDelivery | undefined = documents.length ? {
+        actor: curationActor(a.accountId), eventId: hash([a.accountId, taskId, requestId]), observedAt: Date.now(), documents } : undefined;
       await this.finish(a, key, { state: (result as any)?.isError ? 'failed' : 'completed', returnedChars: body.length,
         returnedBytes: Buffer.byteLength(body), elapsedMs: performance.now() - start, resultHash: hash(result), resourceRevisions,
         ...(evidence && { evidence }),
+        ...(documentDelivery && { documentDelivery }),
         ...(selectedHarness && { selectedHarness }) });
+      // Canonical completion is durable first. Loss of the advisory index cannot
+      // rerun the operation, invent disuse or claim the agent retained/used it.
+      await a.assert();
+      if (documentDelivery) await this.deliverySink?.recordCurationDelivery?.(documentDelivery).catch(() => {});
       await a.assert(); return result;
     } catch (error) {
       await this.finish(a, key, { state: 'failed', elapsedMs: performance.now() - start }).catch(() => {});

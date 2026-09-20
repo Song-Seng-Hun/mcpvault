@@ -15,6 +15,8 @@ if (!created) {
   if (extension.length === 1) throw Error('Incomplete graph index extension');
   const references = ['reference_documents', 'reference_targets'].filter(name => tables.has(name));
   if (references.length === 1) throw Error('Incomplete reference index extension');
+  const curation = ['curation_documents', 'curation_groups'].filter(name => tables.has(name));
+  if (curation.length === 1) throw Error('Incomplete curation index extension');
 }
 // OS-released lock: a second process must not sweep another worker's scan.
 db.exec(`PRAGMA locking_mode=EXCLUSIVE; PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA foreign_keys=ON; PRAGMA cache_size=-8192;
@@ -41,7 +43,23 @@ db.exec(`PRAGMA locking_mode=EXCLUSIVE; PRAGMA journal_mode=WAL; PRAGMA synchron
  CREATE INDEX IF NOT EXISTS reference_version ON reference_documents(version,path);
  CREATE TABLE IF NOT EXISTS reference_targets (key TEXT NOT NULL, path TEXT REFERENCES reference_documents(path) ON DELETE CASCADE,
    PRIMARY KEY(key,path)) WITHOUT ROWID;
- CREATE INDEX IF NOT EXISTS reference_targets_owner ON reference_targets(path);`);
+ CREATE INDEX IF NOT EXISTS reference_targets_owner ON reference_targets(path);
+ CREATE TABLE IF NOT EXISTS curation_documents (doc INTEGER PRIMARY KEY REFERENCES docs(id) ON DELETE CASCADE,
+   path TEXT NOT NULL UNIQUE, version INTEGER NOT NULL, relations INTEGER NOT NULL, body TEXT);
+ CREATE INDEX IF NOT EXISTS curation_relations_path ON curation_documents(relations,path);
+ CREATE INDEX IF NOT EXISTS curation_body_path ON curation_documents(body,path);
+ CREATE TABLE IF NOT EXISTS curation_groups (hash TEXT PRIMARY KEY, members INTEGER NOT NULL CHECK(members>0),
+   duplicate INTEGER GENERATED ALWAYS AS (members>1) STORED) WITHOUT ROWID;
+ CREATE INDEX IF NOT EXISTS curation_groups_active ON curation_groups(duplicate,hash);
+ CREATE TABLE IF NOT EXISTS curation_deliveries (actor TEXT NOT NULL, document TEXT NOT NULL, revision TEXT NOT NULL,
+   observed_at INTEGER NOT NULL, event_id TEXT NOT NULL, PRIMARY KEY(actor,document)) WITHOUT ROWID;
+ CREATE TRIGGER IF NOT EXISTS curation_add AFTER INSERT ON curation_documents WHEN NEW.body IS NOT NULL BEGIN
+   INSERT INTO curation_groups(hash,members) VALUES(NEW.body,1) ON CONFLICT(hash) DO UPDATE SET members=members+1;
+ END;
+ CREATE TRIGGER IF NOT EXISTS curation_remove AFTER DELETE ON curation_documents WHEN OLD.body IS NOT NULL BEGIN
+   DELETE FROM curation_groups WHERE hash=OLD.body AND members=1;
+   UPDATE curation_groups SET members=members-1 WHERE hash=OLD.body;
+ END;`);
 if ((db.prepare('SELECT version FROM state').get() as any)?.version !== 1) throw Error('Unsupported memory index schema');
 // Add a covering discriminator without turning graph-only rows into a linear
 // memory scan. This one-time v1 extension happens in the background worker.
@@ -89,6 +107,7 @@ const insEdge = db.prepare('INSERT OR IGNORE INTO edges VALUES(?,?,?)');
 const insGraphDoc = db.prepare('INSERT INTO graph_documents VALUES(?,?,?)');
 const insGraph = db.prepare('INSERT INTO graph_occurrences VALUES(?,?,?,?,?)');
 const insName = db.prepare('INSERT INTO graph_names VALUES(?,?)');
+const insCuration = db.prepare('INSERT INTO curation_documents VALUES(?,?,?,?,?)');
 const del = db.prepare('DELETE FROM docs WHERE path=?'), prior = db.prepare(`SELECT d.fingerprint,x.version,
   EXISTS (SELECT 1 FROM graph_names n WHERE n.doc=d.id) AS names_ready FROM docs d
   LEFT JOIN graph_documents x ON x.doc=d.id WHERE d.path=?`);
@@ -122,6 +141,29 @@ function referenceImpactSql(q: any) {
   return { sql: `WITH candidates AS (${branches.join(' UNION ALL ')})
     SELECT DISTINCT d.path,d.revision FROM candidates c JOIN reference_documents d ON d.path=c.path ORDER BY d.path LIMIT ?`,
     values: [...values, q.limit + 1] };
+}
+function curationWindow(q: any) {
+  const explain: string[] = [];
+  const plan = (sql: string, values: any[]) => { explain.push(...db.prepare('EXPLAIN QUERY PLAN ' + sql).all(...values).map((r: any) => r.detail)); };
+  let group = '', moreGroups = false, after = q.after?.path ?? '';
+  if (q.kind === 'duplicate_content') {
+    const groupSql = 'SELECT hash FROM curation_groups WHERE duplicate=1 AND hash>=? ORDER BY hash LIMIT 1';
+    plan(groupSql, [q.after?.group ?? '']);
+    group = (db.prepare(groupSql).get(q.after?.group ?? '') as any)?.hash;
+    if (group && group === q.after?.group && !db.prepare('SELECT path FROM curation_documents WHERE body=? AND path>? ORDER BY path LIMIT 1').get(group, after)) {
+      group = (db.prepare('SELECT hash FROM curation_groups WHERE duplicate=1 AND hash>? ORDER BY hash LIMIT 1').get(group) as any)?.hash;
+    }
+    if (group !== q.after?.group) after = '';
+    if (!group) return { notes: [], group: '', truncated: false, generation: generation(), coverage: 'candidates_only', explain };
+    moreGroups = !!db.prepare('SELECT hash FROM curation_groups WHERE duplicate=1 AND hash>? ORDER BY hash LIMIT 1').get(group);
+  }
+  const sql = `SELECT d.path,d.revision,d.meta FROM curation_documents c JOIN docs d ON d.id=c.doc
+    WHERE ${q.kind === 'relations' ? 'c.relations=1' : 'c.body=?'} AND c.path>? ORDER BY c.path LIMIT ?`;
+  const values = [...(q.kind === 'relations' ? [] : [group]), after, q.limit + 1];
+  plan(sql, values);
+  const page = decode(db.prepare(sql).all(...values), q.limit), truncated = page.truncated || moreGroups;
+  return { ...page, group, truncated, coverage: 'candidates_only',
+    ...(truncated && page.notes.length && { next: { group, path: page.notes.at(-1)!.path } }), explain };
 }
 parentPort!.on('message', ({ id, op, data }) => {
   try {
@@ -172,6 +214,18 @@ parentPort!.on('message', ({ id, op, data }) => {
           complete: referenceScanComplete && !incomplete, generation: generation() };
       }
     }
+    else if (op === 'curationDeliveryRecord') {
+      db.exec('BEGIN IMMEDIATE');
+      try {
+        const insert = db.prepare(`INSERT INTO curation_deliveries VALUES(?,?,?,?,?) ON CONFLICT(actor,document) DO UPDATE SET
+          revision=excluded.revision, observed_at=excluded.observed_at, event_id=excluded.event_id
+          WHERE excluded.observed_at>observed_at OR (excluded.observed_at=observed_at AND excluded.event_id>event_id)`);
+        for (const d of data.documents) insert.run(data.actor, d.document, d.revision, data.observedAt, data.eventId);
+        db.exec('COMMIT');
+      } catch (e) { db.exec('ROLLBACK'); throw e; }
+    } else if (op === 'curationDelivery') {
+      value = db.prepare('SELECT observed_at AS observedAt,revision FROM curation_deliveries WHERE actor=? AND document=?').get(data.actor, data.document);
+    }
     else if (op === 'generation') value = generation();
     else if (op === 'beginScan') db.exec('DELETE FROM seen');
     else if (op === 'seen') { const insert = db.prepare('INSERT OR IGNORE INTO seen VALUES(?)'); for (const path of data) insert.run(path); }
@@ -198,6 +252,7 @@ parentPort!.on('message', ({ id, op, data }) => {
           }
           for (const edge of r.edges) insEdge.run(doc, edge.target, edge.kind);
           for (const name of r.names) insName.run(name, doc);
+          insCuration.run(doc, r.path, r.curation.version, Number(r.curation.relations), r.curation.body);
           insGraphDoc.run(doc, r.graph.version, Number(r.graph.partial));
           for (const occurrence of r.graph.occurrences) insGraph.run(doc, occurrence.assertion.id, occurrence.key,
             occurrence.assertion.relation, JSON.stringify(occurrence.assertion));
@@ -205,6 +260,9 @@ parentPort!.on('message', ({ id, op, data }) => {
         }
         if (changed) db.exec('UPDATE state SET generation=generation+1'); db.exec('COMMIT');
       } catch (e) { db.exec('ROLLBACK'); throw e; }
+    } else if (op === 'curationPage' || op === 'curationExplain') {
+      if (data.expectedGeneration !== undefined && data.expectedGeneration !== generation()) throw Error('Curation generation changed');
+      const { explain, ...page } = curationWindow(data); value = op === 'curationExplain' ? explain : page;
     } else if (op === 'graph' || op === 'graphExplain') {
       if (data.expectedGeneration !== undefined && data.expectedGeneration !== generation()) throw Error('Graph generation changed');
       const q = graphSql(data);
@@ -218,8 +276,8 @@ parentPort!.on('message', ({ id, op, data }) => {
           incompleteOwners: [...new Set([...missing, ...selected.filter(r => r.partial).map(r => r.path)])], coverage: 'candidates_only' };
       }
     } else if (op === 'unindexedGraph') {
-      value = data.length ? db.prepare(`SELECT d.path FROM docs d LEFT JOIN graph_documents x ON x.doc=d.id
-        WHERE d.path IN (${placeholders(data.length)}) AND (x.doc IS NULL OR x.version<>2
+      value = data.length ? db.prepare(`SELECT d.path FROM docs d LEFT JOIN graph_documents x ON x.doc=d.id LEFT JOIN curation_documents c ON c.doc=d.id
+        WHERE d.path IN (${placeholders(data.length)}) AND (x.doc IS NULL OR x.version<>2 OR c.doc IS NULL OR c.version<>1
           OR NOT EXISTS (SELECT 1 FROM graph_names n WHERE n.doc=d.id)) ORDER BY d.path`).all(...data).map(r => r.path) : [];
     } else if (op === 'references' || op === 'referencesExplain') {
       // Bound each indexed identity walk before deduplication; a popular alias

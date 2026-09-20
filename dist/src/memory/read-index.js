@@ -22,6 +22,7 @@ export class DiskMemoryIndex {
     unsubscribe;
     reconcileUnsubscribe;
     draining = false;
+    reconciling = false;
     pendingFull = false;
     pending = new Map();
     isClosed() { return this.state === 'closed'; }
@@ -30,7 +31,12 @@ export class DiskMemoryIndex {
         this.allowed = allowed;
         this.storage = new HostDerivedStorage(fs.getVaultPath(), cacheDir);
         this.unsubscribe = catalog?.subscribeBatch(changes => { void this.invalidate(changes); });
-        this.reconcileUnsubscribe = catalog?.subscribeReconcile(() => { void this.invalidate(); });
+        this.reconcileUnsubscribe = catalog?.subscribeReconcile(() => {
+            // A periodic request is not a change event. Join the active whole census;
+            // explicit policy/watcher changes still fence it through invalidate().
+            if (!this.reconciling)
+                void this.invalidate();
+        });
     }
     start() { return this.invalidate(); }
     invalidate(changes) {
@@ -38,9 +44,10 @@ export class DiskMemoryIndex {
             return this.tail;
         if (changes?.length === 0)
             return this.tail;
+        const recovering = this.state === 'unavailable';
         this.revision++;
         this.state = 'preparing';
-        if (!changes || !this.store)
+        if (!changes || !this.store || recovering)
             this.pendingFull = true;
         else if (!this.pendingFull)
             for (const change of changes) {
@@ -62,8 +69,15 @@ export class DiskMemoryIndex {
                     this.pendingFull = false;
                     this.pending.clear();
                     try {
-                        if (full)
-                            await this.rebuild();
+                        if (full) {
+                            this.reconciling = true;
+                            try {
+                                await this.rebuild();
+                            }
+                            finally {
+                                this.reconciling = false;
+                            }
+                        }
                         else {
                             await this.storage.verifiedTree('memory-read-v1');
                             // Delete events are hints, never proof that the NAS lost a file.
@@ -78,8 +92,15 @@ export class DiskMemoryIndex {
                             this.state = 'ready';
                     }
                     catch {
-                        if (revision === this.revision)
+                        if (!this.isClosed()) {
                             this.state = 'unavailable';
+                            // Later queued success cannot certify a failed earlier refresh.
+                            // Rebuild once before serving; persistent failure remains unavailable.
+                            if (revision !== this.revision) {
+                                this.pendingFull = true;
+                                this.pending.clear();
+                            }
+                        }
                     }
                 }
             }
@@ -259,6 +280,45 @@ export class DiskMemoryIndex {
         catch {
             return unavailable();
         }
+    }
+    async captureCuration() {
+        if (!this.store || this.state !== 'ready')
+            return undefined;
+        const store = this.store, revision = this.revision;
+        try {
+            const generation = await store.generation();
+            const assertCurrent = async () => {
+                if (this.state !== 'ready' || revision !== this.revision || generation !== await store.generation())
+                    throw Error('Curation index changed');
+                await this.storage.verifiedTree('memory-read-v1');
+                await stat(this.fs.getVaultPath());
+                if (this.state !== 'ready' || revision !== this.revision)
+                    throw Error('Curation index changed');
+            };
+            await assertCurrent();
+            return { generation, assertCurrent, delivery: async (actor, document) => {
+                    await assertCurrent();
+                    const fact = await store.curationDelivery(actor, document);
+                    await assertCurrent();
+                    return fact;
+                }, page: async (query) => {
+                    await assertCurrent();
+                    const page = await store.curationPage({ ...query, expectedGeneration: generation });
+                    await assertCurrent();
+                    return page;
+                } };
+        }
+        catch {
+            return undefined;
+        }
+    }
+    async recordCurationDelivery(event) {
+        if (!this.store || this.state !== 'ready')
+            return;
+        await this.storage.verifiedTree('memory-read-v1');
+        if (this.state !== 'ready')
+            return;
+        await this.store.recordCurationDelivery(event);
     }
     async close() { this.state = 'closed'; this.revision++; this.unsubscribe?.(); this.reconcileUnsubscribe?.(); await this.tail; try {
         await this.store?.close();

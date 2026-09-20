@@ -15,6 +15,8 @@ import { archiveCoverage } from './archive.js';
 import { mergePassages, type PassageMapping } from './merge-passages.js';
 import { FrontmatterHandler } from '../frontmatter.js';
 import { chapterFileMetrics } from '../document-chapter-format.js';
+import type { CurationReadIndex } from './read-index.js';
+import { CurationDiscovery } from './discovery.js';
 
 const REFERENCE_BUDGET = { maxFileBytes: 256 * 1024, maxTotalBytes: 4 * 1024 * 1024, maxFiles: 200 };
 const isMerge = (operation: string) => operation === 'merge_duplicates' || operation === 'merge_passages';
@@ -22,6 +24,8 @@ const isMerge = (operation: string) => operation === 'merge_duplicates' || opera
 interface Options {
   fs: FileSystemService; access: ScopeAccessPolicy; config(): Promise<EvolutionConfig>;
   wiki?: LlmWikiService;
+  readIndex?: CurationReadIndex | undefined;
+  readOnly?: boolean;
   /** Historical host receipt, never a model- or Markdown-supplied ownership claim. */
   managedProof(path: string, revision: string, principal: ScopePrincipal): Promise<string | undefined>;
 }
@@ -40,11 +44,26 @@ interface Job {
 /** Uses the existing evolution lease/journal and change-set writer. No scheduler,
  * model calls, new permission system or automatic content deletion. */
 export class CurationService {
-  constructor(private readonly options: Options) {}
+  private readonly discovery: CurationDiscovery;
+  constructor(private readonly options: Options) {
+    this.discovery = new CurationDiscovery({ ...options, advanceAction: (path, revision, c) => this.discoveryAction(path, revision, c) });
+  }
+  private async discoveryAction(path: string, sourceRevision: string, c: Pick<Context, 'principal' | 'current'>) {
+    if (this.options.readOnly || !c.principal.capabilities?.includes('write')) return undefined;
+    const authority = await this.grant(path, 'deduplicate_relations', c);
+    if (!authority) return undefined;
+    try {
+      if ((await this.note(path, c)).revision !== sourceRevision) return undefined;
+    } catch { return undefined; }
+    const basis = hash([c.principal.accountId, path, sourceRevision, authority]);
+    return { endpointId: 'evolution.cycle', arguments: { kind: 'curation', op: 'advance', operation: 'deduplicate_relations',
+      path: this.options.access.toPublicPath(path), sourceRevision, expectedRevision: 'missing',
+      cycleId: `curation-${basis.slice(0, 40)}`, requestId: `curation-${basis.slice(0, 40)}` } };
+  }
   diagnose() { return { status: 'diagnostic_only', supportedOperations: [...CURATION_OPERATIONS],
     automaticApplication: false, admission: 'exact_host_grant_and_managed_receipt_per_job', effectVerified: false,
     referenceImpact: this.options.fs.referenceIntegrityStatus() }; }
-  private async grant(path: string, operation: string, c: Context) {
+  private async grant(path: string, operation: string, c: Pick<Context, 'principal' | 'current'>) {
     await c.current();
     const config = await this.options.config();
     if (!config.enabled) return undefined;
@@ -53,7 +72,7 @@ export class CurationService {
     await c.current();
     return grant ? hash([grant, this.options.access.documentDependencyFingerprint([path])]) : undefined;
   }
-  private async note(path: string, c: Context, ownedPreserveRevision?: string) {
+  private async note(path: string, c: Pick<Context, 'principal' | 'current'>, ownedPreserveRevision?: string) {
     curationRecordPath(path); await c.current();
     if (wikiKnowledgeOutput(path) && (!this.options.wiki || !c.principal.capabilities?.includes('publish'))) return unavailable();
     const visible = () => this.options.access.canAccessPhysicalPath(path, c.principal)
@@ -152,7 +171,27 @@ export class CurationService {
   private guards(job: Pick<Job, 'replacement'>) {
     return job.replacement && !job.replacement.output ? [{ path: job.replacement.path, expectedRevision: job.replacement.revision }] : [];
   }
+  private async advance(p: Record<string, any>, c: Context) {
+    // Explicit session/approved opportunity entry. Existing exact operation grants
+    // and ownership checks remain mandatory; this cannot select new permissions.
+    const requestId = id(p.requestId), cycleId = id(p.cycleId), deadline = Date.now() + 300000;
+    const bounded = { ...c, current: async () => { await c.current(); if (Date.now() > deadline) return unavailable(); } };
+    const prepared = await this.execute('prepare', { ...p, requestId: `advance-${hash(requestId).slice(0, 40)}` }, bounded);
+    if (!prepared.cycleId) return prepared;
+    // Inspect actual bytes even on idempotent replay. An old completion receipt
+    // must not hide a manual edit, partial bundle or lost output after restart.
+    const current = await this.execute('read', { cycleId }, bounded);
+    if (current.status === 'applying' || current.status === 'reverting') return { ...current, partial: true,
+      nextAction: { endpointId: 'evolution.cycle', arguments: { kind: 'curation', op: 'reconcile', cycleId,
+        expectedRevision: current.revision, requestId: `reconcile-${hash([requestId, current.revision]).slice(0, 40)}` } } };
+    if (current.status !== 'prepared') return current;
+    await bounded.current();
+    return this.execute('apply', { cycleId, requestId: `advance-apply-${hash(requestId).slice(0, 40)}`,
+      expectedRevision: current.revision, fingerprint: current.fingerprint }, bounded);
+  }
   async execute(op: string, p: Record<string, any>, c: Context): Promise<any> {
+    if (op === 'list') return this.discovery.list(p, c);
+    if (op === 'advance') return this.advance(p, c);
     if (!['prepare', 'read', 'preview', 'apply', 'reconcile', 'revert'].includes(op)) return unavailable();
     const cycleId = id(p.cycleId), r = await c.repo.read<Job>('curation', cycleId);
     let job = r.value, recordRevision = r.revision;

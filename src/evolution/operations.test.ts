@@ -6,6 +6,7 @@ import { createServer, getServerRuntime } from '../../tests/server-fixture.js';
 import { hash } from './policy.js';
 import { startMcpHttpApi } from '../mcp-http.js';
 import { startRestApi } from '../rest-api.js';
+import { EvolutionOperations } from './operations.js';
 
 export function memoryStorage() {
   const records = new Map<string, any>(); let held = false;
@@ -20,6 +21,32 @@ export function memoryStorage() {
     },
   } } as any };
 }
+
+test('completed server reads publish only hashed positive delivery facts; cache faults never replay the read', async () => {
+  const { storage, records } = memoryStorage();
+  const delivered: any[] = [];
+  const actor: any = { accountId: 'alice', modelId: 'model', authority: 'current', assert: async () => {} };
+  const host: any = { runTask: async (_token: string, _context: any, run: () => unknown) => run(),
+    deliverContext: async () => ({ packet: { basis: 'unchanged' } }) };
+  const sink: any = { recordCurationDelivery: async (event: any) => { delivered.push(event); throw Error('cache unavailable'); } };
+  const ops = new EvolutionOperations(storage, host, async () => actor, sink);
+  const task = await ops.begin('private-token', { requestId: 'begin', sessionId: 'reported', taskKind: 'read' });
+  const result = { content: [{ type: 'text', text: JSON.stringify({ path: 'Secret.md', revision: 'a'.repeat(64), content: 'Private source.' }) }] };
+  let calls = 0;
+  const args = { evolutionTask: task.task.id, evolutionRequestId: 'read' };
+  expect(await ops.run('private-token', 'notes.read', args, async () => { calls++; return result; })).toBe(result);
+  expect(delivered).toHaveLength(1);
+  expect(delivered[0]).toMatchObject({ actor: hash(['curation-account-v1', 'alice']), documents: [
+    { document: hash(['curation-document-v1', 'Secret.md']), revision: 'a'.repeat(64) }] });
+  expect(delivered[0].observedAt).toBeGreaterThan(0);
+  const persisted = JSON.stringify([...records.values()]);
+  for (const secret of ['Secret.md', 'Private source.', 'private-token']) expect(persisted).not.toContain(secret);
+  await expect(ops.run('private-token', 'notes.read', args, async () => { calls++; return result; })).rejects.toThrow();
+  expect(calls).toBe(1);
+  await ops.run('private-token', 'notes.read', { ...args, evolutionRequestId: 'failed' }, async () => ({ ...result, isError: true }));
+  expect(delivered).toHaveLength(1);
+  await ops.close();
+});
 
 test('memory and continuity observations retain only bounded delivery evidence, not bodies or inferred use', async () => {
   const root = await mkdtemp(join(tmpdir(), 'memory-observations-'));

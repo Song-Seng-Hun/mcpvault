@@ -8,14 +8,35 @@ import { archiveCoverage } from './archive.js';
 import { mergePassages } from './merge-passages.js';
 import { FrontmatterHandler } from '../frontmatter.js';
 import { chapterFileMetrics } from '../document-chapter-format.js';
+import { CurationDiscovery } from './discovery.js';
 const REFERENCE_BUDGET = { maxFileBytes: 256 * 1024, maxTotalBytes: 4 * 1024 * 1024, maxFiles: 200 };
 const isMerge = (operation) => operation === 'merge_duplicates' || operation === 'merge_passages';
 /** Uses the existing evolution lease/journal and change-set writer. No scheduler,
  * model calls, new permission system or automatic content deletion. */
 export class CurationService {
     options;
+    discovery;
     constructor(options) {
         this.options = options;
+        this.discovery = new CurationDiscovery({ ...options, advanceAction: (path, revision, c) => this.discoveryAction(path, revision, c) });
+    }
+    async discoveryAction(path, sourceRevision, c) {
+        if (this.options.readOnly || !c.principal.capabilities?.includes('write'))
+            return undefined;
+        const authority = await this.grant(path, 'deduplicate_relations', c);
+        if (!authority)
+            return undefined;
+        try {
+            if ((await this.note(path, c)).revision !== sourceRevision)
+                return undefined;
+        }
+        catch {
+            return undefined;
+        }
+        const basis = hash([c.principal.accountId, path, sourceRevision, authority]);
+        return { endpointId: 'evolution.cycle', arguments: { kind: 'curation', op: 'advance', operation: 'deduplicate_relations',
+                path: this.options.access.toPublicPath(path), sourceRevision, expectedRevision: 'missing',
+                cycleId: `curation-${basis.slice(0, 40)}`, requestId: `curation-${basis.slice(0, 40)}` } };
     }
     diagnose() {
         return { status: 'diagnostic_only', supportedOperations: [...CURATION_OPERATIONS],
@@ -157,7 +178,33 @@ export class CurationService {
     guards(job) {
         return job.replacement && !job.replacement.output ? [{ path: job.replacement.path, expectedRevision: job.replacement.revision }] : [];
     }
+    async advance(p, c) {
+        // Explicit session/approved opportunity entry. Existing exact operation grants
+        // and ownership checks remain mandatory; this cannot select new permissions.
+        const requestId = id(p.requestId), cycleId = id(p.cycleId), deadline = Date.now() + 300000;
+        const bounded = { ...c, current: async () => { await c.current(); if (Date.now() > deadline)
+                return unavailable(); } };
+        const prepared = await this.execute('prepare', { ...p, requestId: `advance-${hash(requestId).slice(0, 40)}` }, bounded);
+        if (!prepared.cycleId)
+            return prepared;
+        // Inspect actual bytes even on idempotent replay. An old completion receipt
+        // must not hide a manual edit, partial bundle or lost output after restart.
+        const current = await this.execute('read', { cycleId }, bounded);
+        if (current.status === 'applying' || current.status === 'reverting')
+            return { ...current, partial: true,
+                nextAction: { endpointId: 'evolution.cycle', arguments: { kind: 'curation', op: 'reconcile', cycleId,
+                        expectedRevision: current.revision, requestId: `reconcile-${hash([requestId, current.revision]).slice(0, 40)}` } } };
+        if (current.status !== 'prepared')
+            return current;
+        await bounded.current();
+        return this.execute('apply', { cycleId, requestId: `advance-apply-${hash(requestId).slice(0, 40)}`,
+            expectedRevision: current.revision, fingerprint: current.fingerprint }, bounded);
+    }
     async execute(op, p, c) {
+        if (op === 'list')
+            return this.discovery.list(p, c);
+        if (op === 'advance')
+            return this.advance(p, c);
         if (!['prepare', 'read', 'preview', 'apply', 'reconcile', 'revert'].includes(op))
             return unavailable();
         const cycleId = id(p.cycleId), r = await c.repo.read('curation', cycleId);

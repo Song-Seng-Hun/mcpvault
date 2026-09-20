@@ -10,6 +10,8 @@ import { isFictionDomain } from '../fiction-domain.js';
 import { memoryQueryNeedsSource, positiveSearchTerms } from '../search.js';
 import { MemorySqliteStore } from './sqlite-store.js';
 import { indexedGraphReferences, type GraphReadIndex, type GraphReferenceCapture } from './graph-references.js';
+import type { CurationReadCapture, CurationReadIndex } from '../curation/read-index.js';
+import type { CurationDelivery } from '../curation/delivery.js';
 
 export interface MemoryCapture {
   notes: QueryNote[]; truncated: boolean; generation: number; reason?: string;
@@ -21,7 +23,7 @@ export interface MemoryReadIndex {
 interface MemoryCaptureRequest { root: string; prefix: string; query: string; role?: string; semantic?: boolean; dateFrom?: string; dateTo?: string; canAccess(path: string): boolean }
 
 /** Private derivative index; startup/reconciliation is background, never a request scan. */
-export class DiskMemoryIndex implements MemoryReadIndex, GraphReadIndex {
+export class DiskMemoryIndex implements MemoryReadIndex, GraphReadIndex, CurationReadIndex {
   // Preserve the service owner's construction context, not the triggering
   // request's expiring session. This never removes an owner's storage boundary.
   private readonly owner = new AsyncResource('memory-index-owner');
@@ -33,20 +35,26 @@ export class DiskMemoryIndex implements MemoryReadIndex, GraphReadIndex {
   private unsubscribe: (() => void) | undefined;
   private reconcileUnsubscribe: (() => void) | undefined;
   private draining = false;
+  private reconciling = false;
   private pendingFull = false;
   private pending = new Map<string, VaultCatalogChange>();
   private isClosed() { return this.state === 'closed'; }
   constructor(private fs: FileSystemService, cacheDir: string, private allowed: (path: string) => boolean, catalog?: VaultFileCatalog) {
     this.storage = new HostDerivedStorage(fs.getVaultPath(), cacheDir);
     this.unsubscribe = catalog?.subscribeBatch(changes => { void this.invalidate(changes); });
-    this.reconcileUnsubscribe = catalog?.subscribeReconcile(() => { void this.invalidate(); });
+    this.reconcileUnsubscribe = catalog?.subscribeReconcile(() => {
+      // A periodic request is not a change event. Join the active whole census;
+      // explicit policy/watcher changes still fence it through invalidate().
+      if (!this.reconciling) void this.invalidate();
+    });
   }
   start() { return this.invalidate(); }
   invalidate(changes?: readonly VaultCatalogChange[]) {
     if (this.state === 'closed') return this.tail;
     if (changes?.length === 0) return this.tail;
+    const recovering = this.state === 'unavailable';
     this.revision++; this.state = 'preparing';
-    if (!changes || !this.store) this.pendingFull = true;
+    if (!changes || !this.store || recovering) this.pendingFull = true;
     else if (!this.pendingFull) for (const change of changes) {
       this.pending.set(change.path, change);
       if (this.pending.size > 128) { this.pendingFull = true; break; }
@@ -60,7 +68,7 @@ export class DiskMemoryIndex implements MemoryReadIndex, GraphReadIndex {
           const full = this.pendingFull, work = [...this.pending.values()], revision = this.revision;
           this.pendingFull = false; this.pending.clear();
           try {
-            if (full) await this.rebuild();
+            if (full) { this.reconciling = true; try { await this.rebuild(); } finally { this.reconciling = false; } }
             else {
               await this.storage.verifiedTree('memory-read-v1');
               // Delete events are hints, never proof that the NAS lost a file.
@@ -70,7 +78,14 @@ export class DiskMemoryIndex implements MemoryReadIndex, GraphReadIndex {
               }
             }
             if (revision === this.revision) this.state = 'ready';
-          } catch { if (revision === this.revision) this.state = 'unavailable'; }
+          } catch {
+            if (!this.isClosed()) {
+              this.state = 'unavailable';
+              // Later queued success cannot certify a failed earlier refresh.
+              // Rebuild once before serving; persistent failure remains unavailable.
+              if (revision !== this.revision) { this.pendingFull = true; this.pending.clear(); }
+            }
+          }
         }
       } finally { this.draining = false; }
     }));
@@ -187,6 +202,31 @@ export class DiskMemoryIndex implements MemoryReadIndex, GraphReadIndex {
         await capture.assertCurrent();
       } };
     } catch { return unavailable(); }
+  }
+  async captureCuration(): Promise<CurationReadCapture | undefined> {
+    if (!this.store || this.state !== 'ready') return undefined;
+    const store = this.store, revision = this.revision;
+    try {
+      const generation = await store.generation();
+      const assertCurrent = async () => {
+        if (this.state !== 'ready' || revision !== this.revision || generation !== await store.generation()) throw Error('Curation index changed');
+        await this.storage.verifiedTree('memory-read-v1'); await stat(this.fs.getVaultPath());
+        if (this.state !== 'ready' || revision !== this.revision) throw Error('Curation index changed');
+      };
+      await assertCurrent();
+      return { generation, assertCurrent, delivery: async (actor, document) => {
+        await assertCurrent(); const fact = await store.curationDelivery(actor, document); await assertCurrent(); return fact;
+      }, page: async query => {
+        await assertCurrent(); const page = await store.curationPage({ ...query, expectedGeneration: generation });
+        await assertCurrent(); return page;
+      } };
+    } catch { return undefined; }
+  }
+  async recordCurationDelivery(event: CurationDelivery) {
+    if (!this.store || this.state !== 'ready') return;
+    await this.storage.verifiedTree('memory-read-v1');
+    if (this.state !== 'ready') return;
+    await this.store.recordCurationDelivery(event);
   }
   async close() { this.state = 'closed'; this.revision++; this.unsubscribe?.(); this.reconcileUnsubscribe?.(); await this.tail; try { await this.store?.close(); } finally { this.owner.emitDestroy(); } }
 }

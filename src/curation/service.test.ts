@@ -76,6 +76,30 @@ test('indexed merge applies and restores with more than 200 unrelated notes, wit
   expect(enumerate).not.toHaveBeenCalled();
 }, 30000);
 
+test('one bounded advance uses existing exact grants, preview and journal; repeated requests do not rewrite', async () => {
+  const f = await fixture();
+  const request = { op: 'advance', cycleId: 'automatic-cleanup', requestId: 'one-opportunity', expectedRevision: 'missing',
+    operation: 'deduplicate_relations', path: 'A.md', sourceRevision: f.initial.revision };
+  const done = await f.call(request); expect(done.status).toBe('applied'); expect(done.effectVerified).toBe(false);
+  const result = await f.fs.readNote('A.md'); expect(result.frontmatter.contrasts_with).toEqual(['[[B]]']);
+  f.restart(); expect(await f.call(request)).toEqual(done); expect(await f.fs.readNoteRevision('A.md')).toBe(result.revision);
+  await f.fs.writeNote({ path: 'A.md', content: '# Human edit', frontmatter: result.frontmatter });
+  expect(await f.call(request)).toMatchObject({ status: 'review_required', reason: 'manual_edit_or_partial_bundle' });
+});
+
+test('automatic advance cannot invent ownership or grants and never retries an uncertain applied write', async () => {
+  const f = await fixture();
+  const request = { op: 'advance', cycleId: 'bounded-cleanup', requestId: 'opportunity', expectedRevision: 'missing',
+    operation: 'deduplicate_relations', path: 'A.md', sourceRevision: f.initial.revision };
+  f.config.curation = []; expect(await f.call(request)).toMatchObject({ reason: 'curation_grant_required' });
+  expect(await f.fs.readNoteRevision('A.md')).toBe(f.initial.revision);
+  f.config.curation = [{ accountId: 'operator', paths: ['A.md'], operations: ['deduplicate_relations'] }];
+  f.interrupt(); await expect(f.call(request)).rejects.toThrow();
+  const output = await f.fs.readNoteRevision('A.md'); expect(output).not.toBe(f.initial.revision);
+  f.restart(); const pending = await f.call(request); expect(pending.status).toBe('applying');
+  expect(pending.nextAction.arguments.op).toBe('reconcile'); expect(await f.fs.readNoteRevision('A.md')).toBe(output);
+});
+
 test('a reference arriving after async authorization fences the final physical mutation', async () => {
   const f = await fixture({}, true, undefined, false, true); await f.index!.start();
   const plan = await f.prepare(); expect(plan.status).toBe('prepared');

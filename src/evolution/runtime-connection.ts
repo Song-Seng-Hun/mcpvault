@@ -17,6 +17,7 @@ import { EvolutionDirectReview } from './direct-review.js';
 import { CurationService } from '../curation/service.js';
 import type { CompilationService } from '../compilation-service.js';
 import type { LlmWikiService } from '../llm-wiki.js';
+import type { CurationReadIndex } from '../curation/read-index.js';
 
 export interface EvolutionRuntimeConfig {
   storage: HostWorkStorage<EvolutionConfig>;
@@ -28,6 +29,7 @@ interface Services {
   refreshPolicy(): Promise<void>; readOnly: boolean;
   retrieval: RetrievalService;
   compilation?: CompilationService;
+  curationIndex?: CurationReadIndex | undefined;
   wiki?: LlmWikiService;
   adapters?: Partial<Record<TargetKind, EvolutionAdapter>>;
 }
@@ -55,7 +57,8 @@ export function connectEvolutionRuntime(config: EvolutionRuntimeConfig, services
     if (!principal || !auth.hasCapability(principal, 'write')) return unavailable(); await authorize(principal);
   });
   const options: EvolutionOptions = { storage: config.storage, readOnly: services.readOnly,
-    curation: new CurationService({ fs, access, ...(services.wiki && { wiki: services.wiki }), config: () => config.storage.refresh(),
+    curation: new CurationService({ fs, access, readIndex: services.curationIndex, readOnly: services.readOnly,
+      ...(services.wiki && { wiki: services.wiki }), config: () => config.storage.refresh(),
       managedProof: (path, revision, principal) => services.compilation?.managedOutputProof(path, revision, principal) ?? Promise.resolve(undefined) }),
     authority: async p => {
       const revision = await authorize(p);
@@ -142,7 +145,7 @@ export function connectEvolutionRuntime(config: EvolutionRuntimeConfig, services
       await a.assert(); if (await authorize(a.principal) !== authority) return unavailable();
     } };
   };
-  const operations = new EvolutionOperations(config.storage, host, operationActor);
+  const operations = new EvolutionOperations(config.storage, host, operationActor, services.curationIndex);
   const review = new EvolutionDirectReview(config.storage, {
     actor: operationActor,
     login: async (accountId, password) => { if (services.readOnly) return unavailable(); const result = await auth.login({ accountId, password });

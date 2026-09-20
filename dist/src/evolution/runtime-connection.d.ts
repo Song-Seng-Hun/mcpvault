@@ -14,6 +14,7 @@ import type { RetrievalService } from '../retrieval-service.js';
 import { EvolutionDirectReview } from './direct-review.js';
 import type { CompilationService } from '../compilation-service.js';
 import type { LlmWikiService } from '../llm-wiki.js';
+import type { CurationReadIndex } from '../curation/read-index.js';
 export interface EvolutionRuntimeConfig {
     storage: HostWorkStorage<EvolutionConfig>;
     /** Reviewed code-owned checks only; no remote code or MCP-defined grading. */
@@ -28,6 +29,7 @@ interface Services {
     readOnly: boolean;
     retrieval: RetrievalService;
     compilation?: CompilationService;
+    curationIndex?: CurationReadIndex | undefined;
     wiki?: LlmWikiService;
     adapters?: Partial<Record<TargetKind, EvolutionAdapter>>;
 }

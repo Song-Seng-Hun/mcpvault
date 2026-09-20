@@ -1,5 +1,6 @@
 import type { QueryNote } from '../types.js';
 import { type GraphAssertion } from '../graph-assertion.js';
+import type { CurationDelivery, CurationDeliveryFact } from '../curation/delivery.js';
 export interface MemoryIndexRow extends QueryNote {
     text: string;
 }
@@ -46,6 +47,21 @@ export interface ReferenceImpactPage {
     complete: boolean;
     generation: number;
 }
+export interface CurationIndexCursor {
+    group: string;
+    path: string;
+}
+export interface CurationIndexQuery {
+    kind: 'relations' | 'duplicate_content';
+    limit: number;
+    after?: CurationIndexCursor;
+    expectedGeneration?: number;
+}
+export interface CurationIndexPage extends MemoryIndexPage {
+    next?: CurationIndexCursor;
+    group: string;
+    coverage: 'candidates_only';
+}
 /** One bounded RPC queue. SQLite and its native allocations stay off the request thread. */
 export declare class MemorySqliteStore {
     private worker;
@@ -78,6 +94,13 @@ export declare class MemorySqliteStore {
     private impactQuery;
     referenceImpact(q: ReferenceImpactQuery): Promise<ReferenceImpactPage>;
     referenceImpactExplain(q: ReferenceImpactQuery): Promise<string[]>;
+    private curationQuery;
+    /** Private candidates. The caller must recheck current ACL, revision and actual
+     * content before exposing a group or suggesting a change. */
+    curationPage(q: CurationIndexQuery): Promise<CurationIndexPage>;
+    curationExplain(q: CurationIndexQuery): Promise<string[]>;
+    recordCurationDelivery(event: CurationDelivery): Promise<void>;
+    curationDelivery(actor: string, document: string): Promise<CurationDeliveryFact | undefined>;
     beginReferenceScan(): Promise<void>;
     seenReferences(paths: string[]): Promise<void>;
     finishReferenceScan(): Promise<void>;

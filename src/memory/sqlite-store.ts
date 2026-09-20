@@ -7,6 +7,8 @@ import { extractGraphAssertions, type GraphAssertion } from '../graph-assertion.
 import { extractObsidianLinkOccurrences } from '../backlinks.js';
 import { buildNoteReferenceIndex, markdownNotePath } from '../note-reference.js';
 import { referenceDocumentPath, referenceFootprint } from '../curation/reference-footprint.js';
+import { curationFeatures } from '../curation/discovery-features.js';
+import type { CurationDelivery, CurationDeliveryFact } from '../curation/delivery.js';
 
 export interface MemoryIndexRow extends QueryNote { text: string }
 export interface MemoryIndexPage { notes: QueryNote[]; truncated: boolean; generation: number }
@@ -17,6 +19,9 @@ export interface GraphIndexPage { occurrences: GraphAssertion[]; truncated: bool
 export interface ReferenceImpactQuery { keys: string[]; limit: number; expectedGeneration?: number }
 export interface ReferenceImpactPage { candidates: Array<{ path: string; revision: string }>; truncated: boolean;
   complete: boolean; generation: number }
+export interface CurationIndexCursor { group: string; path: string }
+export interface CurationIndexQuery { kind: 'relations' | 'duplicate_content'; limit: number; after?: CurationIndexCursor; expectedGeneration?: number }
+export interface CurationIndexPage extends MemoryIndexPage { next?: CurationIndexCursor; group: string; coverage: 'candidates_only' }
 
 // Discovery key only, never a resolved path or permission. Preserve raw reference in payload.
 function referenceKey(raw: string): string {
@@ -68,7 +73,7 @@ export class MemorySqliteStore {
         aliases: row.frontmatter.aliases, preferredTerm: row.frontmatter.preferred_term, stableId: row.frontmatter.stable_id }]);
       const names = [...new Set([identities.qualified, identities.exact, identities.filenames, identities.terms].flatMap(m => [...m.keys()]))];
       if (names.length > 512) throw Error('Graph identity budget exceeded');
-      return { ...row, entries, names, graph: { version: 2, partial: graph.partial, occurrences: graph.assertions.map(a => ({ key: occurrenceKey(a), assertion: a })) },
+      return { ...row, entries, names, curation: curationFeatures(row), graph: { version: 2, partial: graph.partial, occurrences: graph.assertions.map(a => ({ key: occurrenceKey(a), assertion: a })) },
         edges: entries.flatMap(e => (['basis', 'corrects'] as const).flatMap(kind => (e[kind] || []).map(r => ({ kind, target: memoryReferencePath(r.path).toLowerCase() })))) };
     });
     await this.call('put', data);
@@ -129,6 +134,29 @@ export class MemorySqliteStore {
   }
   referenceImpact(q: ReferenceImpactQuery) { return this.call<ReferenceImpactPage>('referenceImpact', this.impactQuery(q)); }
   referenceImpactExplain(q: ReferenceImpactQuery) { return this.call<string[]>('referenceImpactExplain', this.impactQuery(q)); }
+  private curationQuery(q: CurationIndexQuery) {
+    if (!['relations', 'duplicate_content'].includes(q.kind) || !Number.isSafeInteger(q.limit) || q.limit < 1 || q.limit > 64
+      || q.expectedGeneration !== undefined && (!Number.isSafeInteger(q.expectedGeneration) || q.expectedGeneration < 0)
+      || q.after !== undefined && (q.expectedGeneration === undefined || !q.after || typeof q.after !== 'object'
+        || (q.kind === 'relations' ? q.after.group !== '' : !/^[a-f0-9]{64}$/.test(q.after.group)))) throw Error('Invalid curation window');
+    if (q.after) memoryReferencePath(q.after.path);
+    return q;
+  }
+  /** Private candidates. The caller must recheck current ACL, revision and actual
+   * content before exposing a group or suggesting a change. */
+  curationPage(q: CurationIndexQuery) { return this.call<CurationIndexPage>('curationPage', this.curationQuery(q)); }
+  curationExplain(q: CurationIndexQuery) { return this.call<string[]>('curationExplain', this.curationQuery(q)); }
+  async recordCurationDelivery(event: CurationDelivery) {
+    const digest = (v: unknown) => typeof v === 'string' && /^[a-f0-9]{64}$/.test(v);
+    if (!digest(event.actor) || !digest(event.eventId) || !Number.isSafeInteger(event.observedAt) || event.observedAt < 0
+      || !Array.isArray(event.documents) || event.documents.length > 32
+      || event.documents.some(d => !digest(d.document) || !digest(d.revision))) throw Error('Invalid delivery observation');
+    return this.call<void>('curationDeliveryRecord', event);
+  }
+  async curationDelivery(actor: string, document: string) {
+    if (![actor, document].every(v => typeof v === 'string' && /^[a-f0-9]{64}$/.test(v))) throw Error('Invalid delivery lookup');
+    return this.call<CurationDeliveryFact | undefined>('curationDelivery', { actor, document });
+  }
   beginReferenceScan() { return this.call<void>('beginReferenceScan'); }
   seenReferences(paths: string[]) {
     paths.forEach(referenceDocumentPath); if (paths.length > 128) throw Error('Invalid reference scan page');

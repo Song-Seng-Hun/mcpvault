@@ -6,6 +6,7 @@ import { extractGraphAssertions } from '../graph-assertion.js';
 import { extractObsidianLinkOccurrences } from '../backlinks.js';
 import { buildNoteReferenceIndex, markdownNotePath } from '../note-reference.js';
 import { referenceDocumentPath, referenceFootprint } from '../curation/reference-footprint.js';
+import { curationFeatures } from '../curation/discovery-features.js';
 // Discovery key only, never a resolved path or permission. Preserve raw reference in payload.
 function referenceKey(raw) {
     return raw.replace(/^!?\[\[/, '').replace(/\]\]$/, '').split(/[|#]/, 1)[0].trim().replace(/\.md$/i, '').toLowerCase();
@@ -68,7 +69,7 @@ export class MemorySqliteStore {
             const names = [...new Set([identities.qualified, identities.exact, identities.filenames, identities.terms].flatMap(m => [...m.keys()]))];
             if (names.length > 512)
                 throw Error('Graph identity budget exceeded');
-            return { ...row, entries, names, graph: { version: 2, partial: graph.partial, occurrences: graph.assertions.map(a => ({ key: occurrenceKey(a), assertion: a })) },
+            return { ...row, entries, names, curation: curationFeatures(row), graph: { version: 2, partial: graph.partial, occurrences: graph.assertions.map(a => ({ key: occurrenceKey(a), assertion: a })) },
                 edges: entries.flatMap(e => ['basis', 'corrects'].flatMap(kind => (e[kind] || []).map(r => ({ kind, target: memoryReferencePath(r.path).toLowerCase() })))) };
         });
         await this.call('put', data);
@@ -142,6 +143,33 @@ export class MemorySqliteStore {
     }
     referenceImpact(q) { return this.call('referenceImpact', this.impactQuery(q)); }
     referenceImpactExplain(q) { return this.call('referenceImpactExplain', this.impactQuery(q)); }
+    curationQuery(q) {
+        if (!['relations', 'duplicate_content'].includes(q.kind) || !Number.isSafeInteger(q.limit) || q.limit < 1 || q.limit > 64
+            || q.expectedGeneration !== undefined && (!Number.isSafeInteger(q.expectedGeneration) || q.expectedGeneration < 0)
+            || q.after !== undefined && (q.expectedGeneration === undefined || !q.after || typeof q.after !== 'object'
+                || (q.kind === 'relations' ? q.after.group !== '' : !/^[a-f0-9]{64}$/.test(q.after.group))))
+            throw Error('Invalid curation window');
+        if (q.after)
+            memoryReferencePath(q.after.path);
+        return q;
+    }
+    /** Private candidates. The caller must recheck current ACL, revision and actual
+     * content before exposing a group or suggesting a change. */
+    curationPage(q) { return this.call('curationPage', this.curationQuery(q)); }
+    curationExplain(q) { return this.call('curationExplain', this.curationQuery(q)); }
+    async recordCurationDelivery(event) {
+        const digest = (v) => typeof v === 'string' && /^[a-f0-9]{64}$/.test(v);
+        if (!digest(event.actor) || !digest(event.eventId) || !Number.isSafeInteger(event.observedAt) || event.observedAt < 0
+            || !Array.isArray(event.documents) || event.documents.length > 32
+            || event.documents.some(d => !digest(d.document) || !digest(d.revision)))
+            throw Error('Invalid delivery observation');
+        return this.call('curationDeliveryRecord', event);
+    }
+    async curationDelivery(actor, document) {
+        if (![actor, document].every(v => typeof v === 'string' && /^[a-f0-9]{64}$/.test(v)))
+            throw Error('Invalid delivery lookup');
+        return this.call('curationDelivery', { actor, document });
+    }
     beginReferenceScan() { return this.call('beginReferenceScan'); }
     seenReferences(paths) {
         paths.forEach(referenceDocumentPath);

@@ -750,7 +750,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
   if (options.evolution && options.evolutionRuntime) throw new Error('Choose one evolution runtime connection');
   const evolutionConnection = options.evolutionRuntime ? connectEvolutionRuntime(options.evolutionRuntime, {
     auth: scopeAuth, access: scopeAccess, fs: fileSystem, moderation, refreshPolicy: refreshDocumentPolicy,
-    readOnly: Boolean(readOnly), retrieval, compilation, wiki: llmWiki, adapters: { wiki: wikiEvolutionAdapter(compilation) },
+    readOnly: Boolean(readOnly), retrieval, compilation, curationIndex: memoryIndex, wiki: llmWiki, adapters: { wiki: wikiEvolutionAdapter(compilation) },
   }) : undefined;
   const evolutionOptions = evolutionConnection?.options ?? options.evolution;
   const evolution = evolutionConnection?.service ?? new EvolutionService({ ...evolutionOptions, readOnly: Boolean(readOnly || evolutionOptions?.readOnly) });

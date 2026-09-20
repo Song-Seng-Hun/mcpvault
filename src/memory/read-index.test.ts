@@ -12,6 +12,8 @@ import { DiskMemoryIndex } from './read-index.js';
 import { withEnterpriseStorageContext } from '../enterprise-storage-context.js';
 import { buildGraphAssertionPacket } from '../graph-assertion-packet.js';
 import { HostDerivedStorage } from '../host-derived-storage.js';
+import { VaultFileCatalog } from '../vault-catalog.js';
+import { PathFilter } from '../pathfilter.js';
 const roots: string[] = [], indexes: DiskMemoryIndex[] = [];
 afterEach(async () => { vi.restoreAllMocks(); for (const i of indexes.splice(0)) await i.close(); for (const p of roots.splice(0)) await rm(p, { recursive: true, force: true }); });
 async function setup() {
@@ -23,8 +25,57 @@ async function setup() {
   // Real disk lexical candidates must bypass the legacy whole-vault search index.
   const retrieval = new RetrievalService({ memoryCandidates() { throw Error('Legacy search must not run'); } } as any, {} as any, {} as any, access, fs);
   const memory = new LayeredMemoryService(fs, retrieval, access, index);
-  return { fs, index, memory };
+  return { fs, index, memory, host };
 }
+
+test('periodic catalog nudges join a running memory census; idle reconciliation still refreshes', async () => {
+  const { fs, host } = await setup();
+  await fs.writeNote({ path: 'A.md', content: 'Keep conditions.', frontmatter: { llm_wiki_type: 'knowledge', related: ['[[B]]', '[[B]]'] } });
+  const catalog = new VaultFileCatalog(fs.getVaultPath(), new PathFilter());
+  const subscribe = vi.spyOn(catalog, 'subscribeReconcile');
+  const index = new DiskMemoryIndex(fs, host, () => true, catalog); indexes.push(index);
+  const original = fs.readNoteMetadata.bind(fs); let reads = 0;
+  vi.spyOn(fs, 'readNoteMetadata').mockImplementation(async (...args) => {
+    reads++; if (reads < 4) subscribe.mock.calls[0]![0]();
+    expect(await index.captureCuration()).toBeUndefined();
+    return original(...args);
+  });
+  try {
+    await index.start(); expect(reads).toBe(1);
+    expect(await index.captureCuration()).toBeDefined();
+    subscribe.mock.calls[0]![0](); await index.invalidate([]);
+    expect(reads).toBe(2); expect(await index.captureCuration()).toBeDefined();
+  } finally { catalog.close(); }
+});
+
+test('a real policy invalidation during a memory census still queues another complete scan', async () => {
+  const { fs, index } = await setup(); await fs.writeNote({ path: 'A.md', content: 'Keep.' });
+  const original = fs.readNoteMetadata.bind(fs); let reads = 0;
+  vi.spyOn(fs, 'readNoteMetadata').mockImplementation(async (...args) => {
+    if (++reads === 1) void index.invalidate();
+    return original(...args);
+  });
+  await index.start(); expect(reads).toBe(2); expect(await index.captureCuration()).toBeDefined();
+});
+
+test('a queued successful update cannot hide another failed memory refresh', async () => {
+  const { fs, index } = await setup();
+  await fs.writeNote({ path: 'A.md', content: 'Old.' }); await fs.writeNote({ path: 'B.md', content: 'B.' }); await index.start();
+  await fs.writeNote({ path: 'A.md', content: 'New condition.' });
+  const original = fs.readNoteMetadata.bind(fs); let queued = false, fail = true;
+  vi.spyOn(fs, 'readNoteMetadata').mockImplementation(async (...args) => {
+    if (args[0].includes('A.md') && fail) {
+      if (!queued) { queued = true; void index.invalidate([{ path: 'B.md', kind: 'upsert' }]); }
+      throw Error('source unavailable');
+    }
+    return original(...args);
+  });
+  await index.invalidate([{ path: 'A.md', kind: 'upsert' }]);
+  expect(await index.captureCuration()).toBeUndefined();
+  fail = false; await index.invalidate([{ path: 'B.md', kind: 'upsert' }]);
+  const capture = await index.captureCuration(); expect(capture).toBeDefined();
+  expect((await (index as any).store.get(['A.md'])).notes[0].revision).toBe(await fs.readNoteRevision('A.md'));
+});
 test('disk memory serves current excerpts without queryNotes inventory; out-of-prefix correction hides the old interpretation', async () => {
   const { fs, index, memory } = await setup();
   await fs.writeNote({ path: 'A/old.md', content: 'NAS old claim', frontmatter: { memory_role: 'episodic' } });

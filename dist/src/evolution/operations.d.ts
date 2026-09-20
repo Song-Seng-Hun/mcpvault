@@ -2,6 +2,7 @@ import type { HostWorkStorage } from '../host-work-storage.js';
 import type { EvolutionConfig } from './model.js';
 import type { EvolutionRuntimeHost } from './runtime-connection.js';
 import { type MemoryDeliveryEvidence } from './memory-observation.js';
+import { type CurationDelivery, type CurationDeliverySink } from '../curation/delivery.js';
 export declare const OBSERVED_ENDPOINTS: Set<string>;
 export interface OperationActor {
     accountId: string;
@@ -28,15 +29,17 @@ interface Observation {
         revision: string;
     };
     resourceRevisions?: string[];
+    documentDelivery?: CurationDelivery;
 }
 /** Server observations, never client-authored success logs. Bodies and credentials are not persisted. */
 export declare class EvolutionOperations {
     private readonly storage;
     private readonly host;
     private readonly actor;
+    private readonly deliverySink?;
     private tail;
     private closed;
-    constructor(storage: HostWorkStorage<EvolutionConfig>, host: EvolutionRuntimeHost, actor: (token: string, write: boolean) => Promise<OperationActor>);
+    constructor(storage: HostWorkStorage<EvolutionConfig>, host: EvolutionRuntimeHost, actor: (token: string, write: boolean) => Promise<OperationActor>, deliverySink?: Partial<CurationDeliverySink> | undefined);
     private key;
     private serial;
     private task;
