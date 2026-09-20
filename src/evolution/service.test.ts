@@ -1,14 +1,11 @@
 import { expect, test, vi } from 'vitest';
 import { EvolutionService } from './service.js';
 import { hash } from './policy.js';
+import { memoryStorage } from '../../tests/evolution-test-fixture.js';
 
 export function fixture() {
-  const values = new Map<string, any>(); let held = false, allowed = true;
+  const { storage, records: values } = memoryStorage(); let allowed = true;
   const principal: any = { accountId: 'alice', modelId: 'codex', agentId: 'worker', capabilities: ['write'] };
-  const storage: any = { refresh: async () => ({ version: 1, enabled: true }),
-    acquire: async () => { if (held) throw Error('busy'); held = true; return { assertHeld: async () => { if (!held) throw Error('lost'); }, close: async () => { held = false; } }; },
-    records: { read: async (key: string) => ({ revision: values.has(key) ? hash(values.get(key)) : 'missing', value: structuredClone(values.get(key)) }),
-      write: async (key: string, value: any, expected: string) => { if (!held || expected !== (values.has(key) ? hash(values.get(key)) : 'missing')) throw Error('conflict'); values.set(key, structuredClone(value)); return { revision: hash(value) }; } } };
   const options: any = { storage, now: () => Date.parse('2026-09-17T00:00:00Z'),
     authority: async (p: any) => { if (!allowed || p.accountId !== 'alice') throw Error('denied'); return { ownerId: 'owner', revision: 'policy1', sharedOwner: false, assertCurrent: async () => { if (!allowed) throw Error('revoked'); } }; },
     attest: async (token: string, _p: any, raw: any) => token === 'host-event' ? { origin: 'human', eventId: raw.id, taskId: raw.taskId, sessionId: raw.sessionId, observedAt: '2026-09-16T00:00:00Z' } : undefined,

@@ -12,6 +12,34 @@ import { sourceBasis, ensureRunDirectory, writeRecord, readRecord, acquireWorker
 import { runNode } from '../scripts/testing/process.mjs';
 // @ts-expect-error Host tooling, not a server runtime module.
 import { readCoverage, runSafeTests } from '../scripts/testing/runner.mjs';
+// @ts-expect-error Host tooling, not a server runtime module.
+import { changedTestSelection, changedPaths, resolveBase, changedRecords } from '../scripts/testing/changed.mjs';
+
+test('changed selection preserves changed tests and uses Vitest dependency selection without claiming full coverage', () => {
+  expect(changedTestSelection({ changed: ['src/one.test.ts'], vitest: ['src/two.test.ts'], all: ['src/one.test.ts', 'src/two.test.ts'] }))
+    .toEqual({ files: ['src/one.test.ts', 'src/two.test.ts'], fullRequired: false, reason: 'vitest-changed' });
+  expect(changedTestSelection({ changed: [{ status: 'M', path: 'src/one.ts' }], vitest: [], all: ['src/one.test.ts'] }))
+    .toEqual({ files: ['src/one.test.ts'], fullRequired: true, reason: 'vitest-changed-uncertain' });
+  expect(changedTestSelection({ changed: [{ status: 'M', path: 'src/one.ts' }], vitest: ['src/one.test.ts', 'src/two.test.ts'], all: ['src/one.test.ts', 'src/two.test.ts'] }).fullRequired).toBe(true);
+  expect(changedTestSelection({ changed: [{ status: 'D', path: 'src/deleted.test.ts' }], vitest: [], all: ['src/one.test.ts'] }).fullRequired).toBe(true);
+  expect(changedTestSelection({ changed: [{ status: '??', path: 'src/new.ts' }], vitest: ['src/other.test.ts'], all: ['src/other.test.ts'] }).fullRequired).toBe(true);
+  expect(changedTestSelection({ changed: [{ status: 'M', path: 'config/unknown.json' }], vitest: ['src/other.test.ts'], all: ['src/other.test.ts'] }).fullRequired).toBe(true);
+  for (const path of ['package.json', 'AGENTS.md', 'src/memory/sqlite-store.ts', 'scripts/guidance-source.mjs'])
+    expect(changedTestSelection({ changed: [{ status: 'M', path }], vitest: ['src/one.test.ts'], all: ['src/one.test.ts', 'src/two.test.ts'] }).fullRequired, path).toBe(true);
+});
+test('changed path inventory includes staged, unstaged, untracked and deletions', () => {
+  expect(changedPaths([
+    ['M', 'src/one.ts'], ['A', 'src/two.test.ts'], ['D', 'src/gone.ts'], ['??', 'src/new.ts'], ['R', 'src/old.ts', 'src/newer.ts'],
+  ])).toEqual(['src/gone.ts', 'src/new.ts', 'src/newer.ts', 'src/old.ts', 'src/one.ts', 'src/two.test.ts']);
+  expect(changedRecords([['D', 'src/gone.ts'], ['R100', 'src/old.ts', 'src/new.ts']])).toEqual([
+    { status: 'D', path: 'src/gone.ts' }, { status: 'R100', path: 'src/new.ts', previousPath: 'src/old.ts' },
+  ]);
+});
+test('changed bases are resolved to a commit SHA and reject option-like refs', () => {
+  expect(resolveBase(root, 'HEAD')).toMatch(/^[0-9a-f]{40,64}$/);
+  expect(() => resolveBase(root, '--help')).toThrow();
+  expect(() => parseOptions(['--base=--help'])).toThrow();
+});
 
 test('safe runner defaults preserve isolation and bound coordinator/worker memory', () => {
   expect(parseOptions([])).toMatchObject({ chunkSize: 20, maxBatches: Infinity, resume: false });
@@ -138,9 +166,12 @@ test('real Vitest batches resume once and complete without replay; changed input
     expect(await readFile(join(dir, '.mcpvault/seen'), 'utf8')).toBe('A');
     expect(await runSafeTests(dir, parseOptions(['--resume=e2e', '--chunk-size=1']), undefined, log)).toBe(0);
     expect(messages.at(-1)).toMatchObject({ complete: true, testFiles: 2, tests: 2, passed: 2, skipped: 0 });
+    expect(messages.every(message => !('runningBatch' in message))).toBe(true);
     expect(await runSafeTests(dir, parseOptions(['--resume=e2e']), undefined, log)).toBe(0);
     expect(await readFile(join(dir, '.mcpvault/seen'), 'utf8')).toBe('AB');
     await writeFile(join(dir, 'src/Extra.ts'), 'changed');
     await expect(runSafeTests(dir, parseOptions(['--resume=e2e']), undefined, log)).rejects.toThrow(/basis changed/);
+    await writeFile(join(dir, 'vitest.config.ts'), 'export default {test:{include:["missing/*.test.ts"]}}');
+    await expect(runSafeTests(dir, parseOptions(['--run-id=empty']), undefined, log)).rejects.toThrow(/No test files/);
   } finally { if (linked) await unlink(join(dir, 'node_modules')); await rm(dir, { recursive: true, force: true }); }
 }, 30000);

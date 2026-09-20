@@ -3,12 +3,14 @@ import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
 export function parseOptions(args) {
-  const result = { chunkSize: 20, maxBatches: Infinity, resume: false, runId: randomUUID() }, seen = new Set();
+  const result = { chunkSize: 20, maxBatches: Infinity, resume: false, changed: false, base: 'HEAD', runId: randomUUID() }, seen = new Set();
   for (let i = 0; i < args.length; i++) {
     const parts = args[i].split('='); assert(parts.length <= 2, 'Malformed option');
     const [key, inline] = parts;
-    assert(['--chunk-size', '--max-batches', '--run-id', '--resume'].includes(key) && !seen.has(key), 'Unknown or duplicate safe-test option');
+    assert(['--chunk-size', '--max-batches', '--run-id', '--resume', '--changed', '--base'].includes(key) && !seen.has(key), 'Unknown or duplicate safe-test option');
     seen.add(key); const value = inline ?? args[++i]; assert(typeof value === 'string' && !value.includes('='), 'Option needs a value');
+    if (key === '--changed') { assert(value === 'true', 'Changed mode is enabled by --changed'); result.changed = true; continue; }
+    if (key === '--base') { assert(/^[A-Za-z0-9._/-]+$/.test(value) && !value.startsWith('-') && !value.includes('..'), 'Invalid git base'); result.base = value; continue; }
     if (key === '--run-id' || key === '--resume') {
       assert(/^[a-z0-9][a-z0-9-]{0,63}$/.test(value) && !(seen.has('--run-id') && seen.has('--resume')), 'Invalid run identity');
       result.runId = value; result.resume = key === '--resume';

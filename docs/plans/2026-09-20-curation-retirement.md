@@ -36,10 +36,10 @@ The existing owner service creates the lifecycle plan; the existing writer appli
 Bodies/history remain; source memory records become archived, not deleted. Rollback restores them.
 Lost completion stays applying. Reconcile re-reads every planned output.
 All outputs present: applied. All inputs restored: prepared, with the attempt count kept.
-Only canonical-after/source-before can reconcile to resumable; apply writes just the source.
-Other mixed orders or external edits require review; no blind patch replay.
+Canonical-after/source-before reconciles by journal direction: resumable or revert_resumable.
+apply resumes only the source; revert resumes only the canonical, guarding the restored source.
 revert restores recorded bytes only after current authority and output ownership checks.
-Any manually edited input/output is preserved, never forcibly overwritten.
+Manual edits or unknown write order require review. Apply and rollback each allow three attempts.
 
 ## Limits
 

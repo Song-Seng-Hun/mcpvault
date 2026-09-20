@@ -4,20 +4,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createServer, getServerRuntime } from '../../tests/server-fixture.js';
 import { hash } from './policy.js';
+import { memoryStorage } from '../../tests/evolution-test-fixture.js';
 
 test('real MCP authentication connects host evidence, native persona apply and next-session observation', async () => {
   const root = await mkdtemp(join(tmpdir(), 'evolution-runtime-'));
-  const records = new Map<string, any>(); let held = false;
-  const storage: any = { refresh: async () => ({ version: 1, enabled: true }), acquire: async () => {
-    if (held) throw Error('busy'); held = true;
-    return { assertHeld: async () => { if (!held) throw Error('lost'); }, close: async () => { held = false; } };
-  }, records: {
-    read: async (key: string) => ({ revision: records.has(key) ? hash(records.get(key)) : 'missing', value: structuredClone(records.get(key)) }),
-    write: async (key: string, value: any, expected: string) => {
-      if (!held || expected !== (records.has(key) ? hash(records.get(key)) : 'missing')) throw Error('conflict');
-      records.set(key, structuredClone(value)); return { revision: hash(value) };
-    },
-  } };
+  const { storage, records } = memoryStorage();
   const server = createServer(root, { evolutionRuntime: { storage, profiles: [{
     kind: 'persona', revision: 'expression-v1', method: 'synthetic', cases: [
       { id: 'short', split: 'development', target: true, run: async ({ variant, cycle }: any) => {

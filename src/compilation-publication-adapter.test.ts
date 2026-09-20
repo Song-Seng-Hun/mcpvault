@@ -53,7 +53,10 @@ test.each([
   job.evidence!.facts[0]!.outputLocator = { ...locator, revision: hash(output), quoteHash: hash(output) };
   expect((await adapter.check(job, current)).status).toBe(status);
   if (status === 'passed') {
-    const intent = await adapter.preview(job, current); await adapter.apply(job, intent, current);
+    const intent = await adapter.preview(job, current); expect(await fs.noteExists('Result.md')).toBe(false);
+    await adapter.apply(job, intent, current);
+    expect(await fs.readNoteRevision('Result.md')).toBe(intent.revision);
+    expect((await fs.readNote('Result.md')).frontmatter.knowledge_status).toBe('draft');
     expect((await fs.readNote('Result.md')).content).toContain(output);
   } else await expect(adapter.preview(job, current)).rejects.toThrow();
 });
@@ -89,13 +92,6 @@ test.each(['unverified', 'missing_chunk', 'stale_target', 'uncertain', 'revoke']
   expect(adapter.checkObservation).toBeTypeOf('function');
   expect((await adapter.checkObservation(job, current)).status).toBe('partial');
   expect(await fs.noteExists('Result.md')).toBe(false);
-});
-test('checks intact acquired source, previews publication and applies exactly the guarded revision', async () => {
-  expect((await adapter.check(job, current)).status).toBe('passed');
-  const intent = await adapter.preview(job, current); expect(await fs.noteExists('Result.md')).toBe(false);
-  await adapter.apply(job, intent, current);
-  expect(await fs.readNoteRevision('Result.md')).toBe(intent.revision);
-  expect((await fs.readNote('Result.md')).frontmatter.knowledge_status).toBe('draft');
 });
 test.each(['omission', 'divergence', 'missing_chunk', 'conflict', 'unverified', 'source_only'] as const)('does not authorize publication for %s', async mode => {
   if (mode === 'omission') job.evidence!.facts[0]!.semanticJudgment = 'missing';

@@ -1,17 +1,9 @@
 import { expect, test } from 'vitest';
 import * as budget from './budget.js';
-import { hash } from './policy.js';
+import { memoryStorage } from '../../tests/evolution-test-fixture.js';
 
 function fixture() {
-  const values = new Map<string, any>(); let held = false, now = 1000000000;
-  const storage: any = { refresh: async () => ({ enabled: true }), acquire: async () => {
-    if (held) throw Error('busy'); held = true;
-    return { assertHeld: async () => { if (!held) throw Error('lost'); }, close: async () => { held = false; } };
-  }, records: { read: async (key: string) => ({ value: structuredClone(values.get(key)), revision: values.has(key) ? hash(values.get(key)) : 'missing' }),
-    write: async (key: string, value: any, expected: string) => {
-      if (!held || expected !== (values.has(key) ? hash(values.get(key)) : 'missing')) throw Error('conflict');
-      values.set(key, structuredClone(value)); return { revision: hash(value) };
-    } } };
+  const { storage } = memoryStorage(); let now = 1000000000;
   const create = () => new budget.EvolutionBudget(storage, async () => {}, () => now);
   return { create, advance: () => { now += 86400001; } };
 }

@@ -106,11 +106,13 @@ export class CurationService {
         return owned ? this.options.fs.referencePreviewFence(impact) : false;
     }
     validate(job, account) {
-        if (job.version !== 1 || job.accountId !== account || !['prepared', 'resumable', 'applying', 'applied', 'reverting', 'withdrawn', 'review_required'].includes(job.state)
+        if (job.version !== 1 || job.accountId !== account || !['prepared', 'resumable', 'applying', 'applied', 'reverting', 'revert_resumable', 'withdrawn', 'review_required'].includes(job.state)
             || !CURATION_OPERATIONS.includes(job.operation) || typeof job.original !== 'string' || job.original.length > 24000
             || compilationContentHash(job.original) !== job.before || !Array.isArray(job.changes) || job.changes.length !== (job.replacement?.output ? 2 : 1)
             || job.changes[0]?.path !== job.path || job.changes[0]?.expectedRevision !== job.before
             || !Number.isInteger(job.attempts) || job.attempts < 0 || job.attempts > 3
+            || job.rollbackAttempts !== undefined && (!Number.isInteger(job.rollbackAttempts) || job.rollbackAttempts < 0 || job.rollbackAttempts > 3)
+            || job.state === 'revert_resumable' && (!isMerge(job.operation) || !job.rollbackAttempts)
             || !Array.isArray(job.requests) || job.requests.length > 16)
             return unavailable();
         curationRecordPath(job.path);
@@ -164,6 +166,8 @@ export class CurationService {
     view(job, rev) {
         return { cycleId: job.id, kind: 'curation', status: job.state, revision: rev, operation: job.operation,
             fingerprint: job.fingerprint, removedOccurrences: job.removed,
+            rollbackAttemptsRemaining: job.rollbackAttempts === undefined ? null : 3 - job.rollbackAttempts,
+            ...(job.rollbackAttempts === undefined && { recoveryReview: 'legacy_rollback_history_unverified' }),
             ...(job.operation === 'merge_passages' && { semanticJudgment: 'not_inferred', coverageKind: 'verbatim_union' }),
             ...(job.passageCoverage && { passageCoverage: job.passageCoverage.map(m => ({ ...m, path: this.options.access.toPublicPath(m.path),
                     outputPath: this.options.access.toPublicPath(job.replacement.path), expectedOutputRevision: job.replacement.output.after })) }),
@@ -329,7 +333,7 @@ export class CurationService {
             }
             job = { version: 1, id: cycleId, accountId: c.principal.accountId, operation: p.operation, path, state: 'prepared',
                 original: note.originalContent, before: note.revision, after: preview.changes[0].revision, changes, proof, authority,
-                fingerprint: preview.planFingerprint, removed, attempts: 0, prepareRequest: request, prepareBasis: basis, requests: [], ...(replacement && { replacement }),
+                fingerprint: preview.planFingerprint, removed, attempts: 0, rollbackAttempts: 0, prepareRequest: request, prepareBasis: basis, requests: [], ...(replacement && { replacement }),
                 ...(passageCoverage && { passageCoverage }) };
             await this.assert(job, c);
             const saved = await c.repo.write('curation', cycleId, job, 'missing');
@@ -340,19 +344,23 @@ export class CurationService {
         const targets = this.targets(job);
         const currentRevisions = await Promise.all(targets.map(t => this.note(t.path, c, isMerge(job.operation) && t.path === job.path ? job.after : undefined).then(n => n.revision)));
         const matches = (side) => targets.every((t, i) => t[side] === currentRevisions[i]);
-        // Only the known forward prefix may resume. A reversed order or any third
-        // revision needs review; it is never interpreted as a completed stage.
-        const canResume = () => ['applying', 'resumable'].includes(job.state) && isMerge(job.operation)
+        // Forward publishes canonical first; rollback restores source first. Their
+        // byte pattern is identical, so only the durable state selects direction.
+        const knownPrefix = () => isMerge(job.operation)
             && targets.length === 2 && currentRevisions[0] === targets[0].before && currentRevisions[1] === targets[1].after;
+        const canResume = () => ['applying', 'resumable'].includes(job.state) && knownPrefix();
+        const canResumeRevert = () => ['reverting', 'revert_resumable'].includes(job.state)
+            && job.rollbackAttempts !== undefined && job.rollbackAttempts > 0 && knownPrefix();
         if (op === 'read' || op === 'preview') {
             const result = this.view(job, recordRevision);
-            return matches('before') || matches('after') || job.state === 'resumable' && canResume()
+            return matches('before') || matches('after') || canResume() || canResumeRevert()
                 ? result : { ...result, status: 'review_required', reason: 'manual_edit_or_partial_bundle' };
         }
         const requestId = id(p.requestId), requestBasis = hash([op, p.expectedRevision, p.fingerprint ?? null]);
         const prior = job.requests.find(req => req.id === requestId);
         if (prior) {
-            if (prior.basis !== requestBasis || !(job.state === 'resumable' ? canResume() : matches(['withdrawn', 'prepared'].includes(job.state) ? 'before' : 'after')))
+            if (prior.basis !== requestBasis || !(job.state === 'resumable' ? canResume()
+                : job.state === 'revert_resumable' ? canResumeRevert() : matches(['withdrawn', 'prepared'].includes(job.state) ? 'before' : 'after')))
                 return unavailable();
             return this.view(job, recordRevision);
         }
@@ -365,22 +373,26 @@ export class CurationService {
             const applying = job.state === 'applying';
             job.state = matches(applying ? 'after' : 'before') ? applying ? 'applied' : 'withdrawn'
                 : matches(applying ? 'before' : 'after') ? applying ? 'prepared' : 'applied'
-                    : applying && canResume() ? 'resumable' : 'review_required';
+                    : applying && canResume() ? 'resumable' : !applying && canResumeRevert() ? 'revert_resumable' : 'review_required';
             job.requests.push({ id: requestId, basis: requestBasis });
             await save();
             return this.view(job, recordRevision);
         }
         const reverting = op === 'revert';
         const resuming = !reverting && job.state === 'resumable' && canResume();
-        if (reverting ? job.state !== 'applied' || !matches('after')
+        const resumingRevert = reverting && job.state === 'revert_resumable' && canResumeRevert();
+        if (reverting ? !(job.state === 'applied' && matches('after') || resumingRevert)
+            || job.rollbackAttempts === undefined || job.rollbackAttempts >= 3
             : !(job.state === 'prepared' && matches('before') || resuming) || p.fingerprint !== job.fingerprint || job.attempts >= 3)
             return unavailable();
-        const changes = reverting ? await Promise.all(targets.map(async (t) => ({ path: t.path, expectedRevision: t.after,
+        const changes = reverting ? await Promise.all(targets.filter((_, i) => !resumingRevert || currentRevisions[i] === targets[i].after)
+            .map(async (t) => ({ path: t.path, expectedRevision: t.after,
             patches: [{ oldString: (await this.options.fs.readNote(t.path, 24000)).originalContent, newString: t.original }] })))
             : job.changes.filter((_, i) => !resuming || currentRevisions[i] === targets[i].before);
         let impactFence;
-        const policy = { guards: [...this.guards(job), ...(resuming ? targets.filter((_, i) => currentRevisions[i] === targets[i].after)
-                    .map(t => ({ path: t.path, expectedRevision: t.after })) : [])], assertCurrent: () => impactFence?.(), assertAccess: async () => {
+        const completedSide = reverting ? 'before' : 'after';
+        const policy = { guards: [...this.guards(job), ...(resuming || resumingRevert ? targets.filter((_, i) => currentRevisions[i] === targets[i][completedSide])
+                    .map(t => ({ path: t.path, expectedRevision: t[completedSide] })) : [])], assertCurrent: () => impactFence?.(), assertAccess: async () => {
                 await this.assert(job, c);
                 if (job.replacement && !reverting) {
                     const fence = await this.noInbound(job.path, c, job);
@@ -394,8 +406,13 @@ export class CurationService {
         if (preview.changes.some(change => targets.find(t => t.path === change.path)?.[side] !== change.revision)
             || !reverting && !resuming && preview.planFingerprint !== job.fingerprint)
             return unavailable();
+        // Only a never-started legacy job can establish a known zero count.
+        if (job.rollbackAttempts === undefined && job.state === 'prepared' && job.attempts === 0)
+            job.rollbackAttempts = 0;
         job.state = reverting ? 'reverting' : 'applying';
-        if (!reverting)
+        if (reverting)
+            job.rollbackAttempts++;
+        else
             job.attempts++;
         await save();
         // Publish the canonical first. The old source still contains every byte if

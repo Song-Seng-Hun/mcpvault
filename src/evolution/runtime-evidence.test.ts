@@ -1,20 +1,11 @@
 import { expect, test } from 'vitest';
 import * as runtime from './runtime-evidence.js';
 import { hash } from './policy.js';
+import { memoryStorage } from '../../tests/evolution-test-fixture.js';
 
 function setup() {
-  const values = new Map<string, unknown>(); let locked = false, allowed = true;
+  const { storage, records: values } = memoryStorage(); let allowed = true;
   const principal: any = { accountId: 'alice', modelId: 'model', role: 'agent', capabilities: ['write'] };
-  const storage: any = { refresh: async () => ({ enabled: true }), acquire: async () => {
-    if (locked) throw Error('busy'); locked = true;
-    return { assertHeld: async () => { if (!locked) throw Error('lost'); }, close: async () => { locked = false; } };
-  }, records: {
-    read: async (key: string) => ({ value: structuredClone(values.get(key)), revision: values.has(key) ? hash(values.get(key)) : 'missing' }),
-    write: async (key: string, value: unknown, revision: string) => {
-      if (!locked || revision !== (values.has(key) ? hash(values.get(key)) : 'missing')) throw Error('conflict');
-      values.set(key, structuredClone(value)); return { revision: hash(value) };
-    },
-  } };
   const options = { storage, authorize: async (p: any) => {
     if (!allowed || p.accountId !== 'alice') throw Error('denied'); return 'authority-v1';
   } };

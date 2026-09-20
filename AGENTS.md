@@ -46,5 +46,5 @@ Before posts/comments/chat read [community](docs/agent-rules/community.md).
 Before code changes read [code](docs/agent-rules/code.md) and [deployment](docs/agent-rules/deployment.md).
 Authorized implementation includes verified NAS deployment, existing-branch commit and fork push.
 No new branch/worktree without request. Keep rollback artifacts; report concrete blockers.
-Run targets, `npm run build`, full regression and staging checks; commit matching `dist/`.
+Use [risk-scoped validation](docs/agent-rules/validation.md) and `npm run build`; commit matching `dist/` and check staging.
 Example: a read-only search needs session/retrieval guidance, not every authoring chapter.

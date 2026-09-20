@@ -36,7 +36,7 @@ async function fixture(frontmatter: Record<string, unknown> = {}, archive: boole
   const initial = await fs.readNote(sourcePath);
   if (archive) await fs.writeNote({ path: 'B.md', content: canonicalContent ?? initial.content, frontmatter: initial.frontmatter });
   const replacement = await fs.readNote('B.md');
-  const values = new Map<string, any>(); let held = false, allowed = true, managed = true, failSave = false;
+  const values = new Map<string, any>(); let held = false, allowed = true, managed = true, failSave: string | undefined;
   const principal: any = { accountId: 'operator', modelId: 'test', capabilities: owner ? ['write', 'publish'] : ['write'] };
   const config: any = { version: 1, enabled: true, curation: [{ accountId: 'operator', paths: [sourcePath],
     ...(owner && { owner: 'wiki_knowledge' }), operations: ['deduplicate_relations'] }] };
@@ -46,7 +46,7 @@ async function fixture(frontmatter: Record<string, unknown> = {}, archive: boole
   }, records: { read: async (key: string) => ({ revision: values.has(key) ? hash(values.get(key)) : 'missing', value: structuredClone(values.get(key)) }),
     write: async (key: string, value: any, expected: string, current?: () => Promise<void>) => {
       await current?.(); if (!held || expected !== (values.has(key) ? hash(values.get(key)) : 'missing')) throw Error('conflict');
-      if (failSave && value.state === 'applied') { failSave = false; throw Error('receipt interrupted'); }
+      if (failSave === value.state) { failSave = undefined; throw Error('receipt interrupted'); }
       values.set(key, structuredClone(value)); return { revision: hash(value) };
     } } };
   const curation = new CurationService({ fs, access, config: () => storage.refresh(),
@@ -60,8 +60,135 @@ async function fixture(frontmatter: Record<string, unknown> = {}, archive: boole
     operation: archive ? archive === true ? 'archive_duplicate' : archive : 'deduplicate_relations', path: sourcePath, sourceRevision: initial.revision,
     ...(archive && { replacementPath: 'B.md', replacementRevision: replacement.revision }) });
   return { fs, initial, config, call, prepare, values, options, principal, index,
-    restart: () => { service = new EvolutionService(options); }, revoke: () => { allowed = false; }, unmanage: () => { managed = false; }, interrupt: () => { failSave = true; } };
+    restart: () => { service = new EvolutionService(options); }, revoke: () => { allowed = false; }, unmanage: () => { managed = false; }, interrupt: (state = 'applied') => { failSave = state; } };
 }
+
+async function partialRollback() {
+  const f = await fixture({ related: [], contrasts_with: [], lifecycle: 'active' }, 'merge_passages', '# B\nOther preserved condition.');
+  const canonical = await f.fs.readNote('B.md'), p = await f.prepare();
+  const applied = await f.call({ op: 'apply', cycleId: 'cleanup', requestId: 'merge', expectedRevision: p.revision, fingerprint: p.fingerprint });
+  const merged = await f.fs.readNote('B.md'); f.interrupt('withdrawn');
+  await expect(f.call({ op: 'revert', cycleId: 'cleanup', requestId: 'undo', expectedRevision: applied.revision })).rejects.toThrow();
+  expect((await f.fs.readNote('A.md')).originalContent).toBe(f.initial.originalContent);
+  expect((await f.fs.readNote('B.md')).originalContent).toBe(canonical.originalContent);
+  // Synthetic crash prefix: source restored, canonical restoration not durable.
+  // The durable journal must retain direction; identical bytes also occur in a forward prefix.
+  await f.fs.writeNote({ path: 'B.md', content: merged.originalContent });
+  f.restart();
+  const pending = await f.call({ op: 'read', cycleId: 'cleanup' });
+  const request = { op: 'reconcile', cycleId: 'cleanup', requestId: 'inspect-undo', expectedRevision: pending.revision };
+  const recovery = await f.call(request);
+  return { ...f, canonical, merged, recovery, request };
+}
+
+test('interrupted rollback resumes only the canonical, persists direction and replays without writes', async () => {
+  const f = await partialRollback();
+  expect(f.recovery.status).toBe('revert_resumable');
+  f.restart(); expect(await f.call(f.request)).toEqual(f.recovery);
+  await expect(f.call({ op: 'apply', cycleId: 'cleanup', requestId: 'wrong-direction', expectedRevision: f.recovery.revision,
+    fingerprint: f.recovery.fingerprint })).rejects.toThrow();
+  const writes: string[] = [], original = (f.fs as any).writeProtectedFile.bind(f.fs);
+  vi.spyOn(f.fs as any, 'writeProtectedFile').mockImplementation(async (...args: any[]) => { writes.push(String(args[0])); return original(...args); });
+  const request = { op: 'revert', cycleId: 'cleanup', requestId: 'resume-undo', expectedRevision: f.recovery.revision };
+  const done = await f.call(request); expect(done.status).toBe('withdrawn');
+  expect(writes).toHaveLength(1); expect(writes[0]).toMatch(/B\.md$/);
+  expect((await f.fs.readNote('A.md')).originalContent).toBe(f.initial.originalContent);
+  expect((await f.fs.readNote('B.md')).originalContent).toBe(f.canonical.originalContent);
+  f.restart(); expect(await f.call(request)).toEqual(done); expect(writes).toHaveLength(1);
+});
+
+test.each(['source', 'canonical', 'grant', 'authority'])('rollback continuation refuses changed %s', async change => {
+  const f = await partialRollback(); expect(f.recovery.status).toBe('revert_resumable');
+  if (change === 'source' || change === 'canonical') await f.fs.writeNote({ path: change === 'source' ? 'A.md' : 'B.md', content: '# User edit' });
+  if (change === 'grant') f.config.curation = [];
+  if (change === 'authority') f.revoke();
+  const before = await Promise.all(['A.md', 'B.md'].map(path => f.fs.readNoteRevision(path)));
+  await expect(f.call({ op: 'revert', cycleId: 'cleanup', requestId: 'resume', expectedRevision: f.recovery.revision })).rejects.toThrow();
+  expect(await Promise.all(['A.md', 'B.md'].map(path => f.fs.readNoteRevision(path)))).toEqual(before);
+});
+
+test('rollback attempts stop at three across restarts without resetting the forward budget', async () => {
+  const f = await fixture(), p = await f.prepare();
+  let current = await f.call({ op: 'apply', cycleId: 'cleanup', requestId: 'apply', expectedRevision: p.revision, fingerprint: p.fingerprint });
+  const appliedRevision = await f.fs.readNoteRevision('A.md');
+  const writer = vi.spyOn(f.fs as any, 'writeProtectedFile').mockRejectedValue(Error('owned write failure'));
+  for (let i = 0; i < 3; i++) {
+    await expect(f.call({ op: 'revert', cycleId: 'cleanup', requestId: `undo-${i}`, expectedRevision: current.revision })).rejects.toThrow();
+    f.restart(); const pending = await f.call({ op: 'read', cycleId: 'cleanup' });
+    current = await f.call({ op: 'reconcile', cycleId: 'cleanup', requestId: `inspect-${i}`, expectedRevision: pending.revision });
+    expect(current.status).toBe('applied');
+  }
+  writer.mockRestore();
+  await expect(f.call({ op: 'revert', cycleId: 'cleanup', requestId: 'fourth', expectedRevision: current.revision })).rejects.toThrow();
+  expect(await f.fs.readNoteRevision('A.md')).toBe(appliedRevision);
+  const job = [...f.values.values()].find(v => v.id === 'cleanup');
+  expect(job.attempts).toBe(1); expect(job.rollbackAttempts).toBe(3);
+});
+
+test.each([undefined, -1, 4, 1.5, '0'])('unknown or corrupt rollback count %s cannot acquire a fresh retry budget', async count => {
+  const f = await fixture(), p = await f.prepare();
+  await f.call({ op: 'apply', cycleId: 'cleanup', requestId: 'apply', expectedRevision: p.revision, fingerprint: p.fingerprint });
+  for (const value of f.values.values()) if (value.id === 'cleanup') {
+    if (count === undefined) delete value.rollbackAttempts; else value.rollbackAttempts = count;
+  }
+  const before = await f.fs.readNoteRevision('A.md');
+  const job = [...f.values.values()].find(v => v.id === 'cleanup');
+  await expect(f.call({ op: 'revert', cycleId: 'cleanup', requestId: 'undo', expectedRevision: hash(job) })).rejects.toThrow();
+  expect(await f.fs.readNoteRevision('A.md')).toBe(before);
+});
+
+test('a restored source is revision-guarded during the remaining canonical write', async () => {
+  const f = await partialRollback(); expect(f.recovery.status).toBe('revert_resumable');
+  const patch = f.fs.patchMultipleNotes.bind(f.fs); let changed = false;
+  vi.spyOn(f.fs, 'patchMultipleNotes').mockImplementation(async (params, scope, policy) => {
+    if (!params.dryRun && !changed) {
+      changed = true; await f.fs.writeNote({ path: 'A.md', content: '# Concurrent user edit' });
+    }
+    return patch(params, scope, policy);
+  });
+  await expect(f.call({ op: 'revert', cycleId: 'cleanup', requestId: 'resume-raced', expectedRevision: f.recovery.revision })).rejects.toThrow();
+  expect((await f.fs.readNote('A.md')).content).toBe('# Concurrent user edit');
+  expect((await f.fs.readNote('B.md')).originalContent).toBe(f.merged.originalContent);
+});
+
+test('lost rollback completion reconciles exact restored bytes without another write', async () => {
+  const f = await fixture(), p = await f.prepare();
+  const done = await f.call({ op: 'apply', cycleId: 'cleanup', requestId: 'apply', expectedRevision: p.revision, fingerprint: p.fingerprint });
+  f.interrupt('withdrawn');
+  await expect(f.call({ op: 'revert', cycleId: 'cleanup', requestId: 'undo', expectedRevision: done.revision })).rejects.toThrow();
+  f.restart(); const writes = vi.spyOn(f.fs as any, 'writeProtectedFile');
+  const pending = await f.call({ op: 'read', cycleId: 'cleanup' }); expect(pending.status).toBe('reverting');
+  const request = { op: 'reconcile', cycleId: 'cleanup', requestId: 'inspect', expectedRevision: pending.revision };
+  const restored = await f.call(request); expect(restored.status).toBe('withdrawn');
+  expect(await f.call(request)).toEqual(restored); expect(writes).not.toHaveBeenCalled();
+  expect((await f.fs.readNote('A.md')).originalContent).toBe(f.initial.originalContent);
+});
+
+test('legacy never-started jobs gain a known rollback budget, legacy applied jobs remain readable', async () => {
+  const f = await fixture(); await f.prepare();
+  for (const value of f.values.values()) if (value.id === 'cleanup') delete value.rollbackAttempts;
+  const legacy = await f.call({ op: 'read', cycleId: 'cleanup' });
+  expect(legacy.rollbackAttemptsRemaining).toBeNull();
+  const done = await f.call({ op: 'apply', cycleId: 'cleanup', requestId: 'apply', expectedRevision: legacy.revision, fingerprint: legacy.fingerprint });
+  expect(done.rollbackAttemptsRemaining).toBe(3);
+  for (const value of f.values.values()) if (value.id === 'cleanup') delete value.rollbackAttempts;
+  const read = await f.call({ op: 'read', cycleId: 'cleanup' });
+  expect(read.status).toBe('applied'); expect(read.recoveryReview).toBe('legacy_rollback_history_unverified');
+});
+
+test('unrecognized reverse rollback order stays review-only', async () => {
+  const f = await fixture({ related: [], contrasts_with: [], lifecycle: 'active' }, 'merge_duplicates'), p = await f.prepare();
+  const done = await f.call({ op: 'apply', cycleId: 'cleanup', requestId: 'apply', expectedRevision: p.revision, fingerprint: p.fingerprint });
+  const source = await f.fs.readNote('A.md'); f.interrupt('withdrawn');
+  await expect(f.call({ op: 'revert', cycleId: 'cleanup', requestId: 'undo', expectedRevision: done.revision })).rejects.toThrow();
+  await f.fs.writeNote({ path: 'A.md', content: source.originalContent });
+  f.restart(); const pending = await f.call({ op: 'read', cycleId: 'cleanup' });
+  const read = await f.call({ op: 'reconcile', cycleId: 'cleanup', requestId: 'inspect', expectedRevision: pending.revision });
+  expect(read.status).toBe('review_required');
+  const writes = vi.spyOn(f.fs as any, 'writeProtectedFile');
+  await expect(f.call({ op: 'revert', cycleId: 'cleanup', requestId: 'retry', expectedRevision: read.revision })).rejects.toThrow();
+  expect(writes).not.toHaveBeenCalled();
+});
 
 test('indexed merge applies and restores with more than 200 unrelated notes, without a request-time inventory', async () => {
   const f = await fixture({}, 'merge_duplicates', undefined, false, true);

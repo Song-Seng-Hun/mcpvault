@@ -5,7 +5,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { join } from 'node:path';
 import { createServer, getServerRuntime } from '../../tests/server-fixture.js';
-import { hash } from '../evolution/policy.js';
+import { memoryStorage } from '../../tests/evolution-test-fixture.js';
 import { FileSystemService } from '../filesystem.js';
 import { startRestApi } from '../rest-api.js';
 
@@ -15,15 +15,7 @@ test('real runtime connects indexed curation cards to completed read observation
   if (process.platform === 'win32') await promisify(execFile)('icacls.exe', [host, '/inheritance:r', '/grant:r', `${userInfo().username}:(OI)(CI)F`], { windowsHide: true });
   const fs = new FileSystemService(vault);
   await fs.writeNote({ path: 'A.md', content: 'Only a synthetic test. 원본 보존.', frontmatter: { llm_wiki_type: 'knowledge', related: ['[[B]]', '[[B]]'] } });
-  const records = new Map<string, any>(); let held = false;
-  const storage: any = { refresh: async () => ({ version: 1, enabled: true }), acquire: async () => {
-    if (held) throw Error('busy'); held = true;
-    return { assertHeld: async () => { if (!held) throw Error('lost'); }, close: async () => { held = false; } };
-  }, records: { read: async (key: string) => ({ value: structuredClone(records.get(key)), revision: records.has(key) ? hash(records.get(key)) : 'missing' }),
-    write: async (key: string, value: any, revision: string) => {
-      if (!held || revision !== (records.has(key) ? hash(records.get(key)) : 'missing')) throw Error('conflict');
-      records.set(key, structuredClone(value)); return { revision: hash(value) };
-    } } };
+  const { storage, records } = memoryStorage();
   vi.stubEnv('MCPVAULT_MEMORY_CACHE_DIR', host);
   const server = createServer(vault, { evolutionRuntime: { storage } });
   try {
@@ -57,15 +49,7 @@ test('real runtime connects indexed curation cards to completed read observation
 
 test('the existing MCP cycle endpoint exposes curation without new tools or implicit grants', async () => {
   const root = await mkdtemp(join(tmpdir(), 'curation-endpoint-'));
-  const records = new Map<string, unknown>(); let held = false;
-  const storage: any = { refresh: async () => ({ version: 1, enabled: true }), acquire: async () => {
-    if (held) throw Error('busy'); held = true;
-    return { assertHeld: async () => { if (!held) throw Error('lost'); }, close: async () => { held = false; } };
-  }, records: { read: async (key: string) => ({ revision: records.has(key) ? hash(records.get(key)) : 'missing', value: structuredClone(records.get(key)) }),
-    write: async (key: string, value: unknown, expected: string) => {
-      if (!held || expected !== (records.has(key) ? hash(records.get(key)) : 'missing')) throw Error('conflict');
-      records.set(key, structuredClone(value)); return { revision: hash(value) };
-    } } };
+  const { storage, records } = memoryStorage();
   const server = createServer(root, { evolutionRuntime: { storage } });
   try {
     const runtime = getServerRuntime(server)!;

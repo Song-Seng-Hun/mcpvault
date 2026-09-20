@@ -8,6 +8,12 @@ const originals = JSON.parse(await readFile('tests/fixtures/manual-context-origi
 const group = (path: string) => path === 'AGENTS.md' || path.startsWith('docs/agent-rules/') ? 'repository'
   : path === 'README.md' || path.startsWith('docs/getting-started/') ? 'getting-started' : 'client';
 const normalize = (text: string) => text.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1').replaceAll('`', '').replace(/\s+/g, ' ').trim();
+// User-approved 2026-09-21 workflow amendment. The immutable source bytes/hash
+// stay unchanged; only this exact superseded requirement has a new expectation.
+const currentProse = (path: string, text: string) => path !== 'AGENTS.md' ? text : text.replace(
+  '5. Run targeted tests, `npm run build`, the full `npm test`, and\n   `git diff --check`.',
+  '5. Use [risk-scoped validation](validation.md): targets during work, full regression at integration.\n   Run `npm run build` for code changes and `git diff --check` before staging.',
+);
 
 // Admission test precedes chapter promotion. Count blank lines and metadata, too.
 test.each(['AGENTS.md', 'README.md', 'plugins/mcpvault-local/skills/mcpvault-agent/SKILL.md'])(
@@ -23,7 +29,7 @@ test('manual inventory retains exact source evidence and every original prose bl
   const catalog = JSON.parse(await readFile('docs/context-manuals.json', 'utf8'));
   expect(catalog.version).toBe(1);
   expect(catalog.authority).toBe('discovery-only');
-  expect(catalog.chapters).toHaveLength(35);
+  // Exact tree coverage and unique IDs below replace a stale fixed chapter count.
   const texts = new Map<string, string>();
   for (const card of catalog.chapters) texts.set(card.path, matter(await readFile(card.path, 'utf8')).content);
   for (const source of originals.files) {
@@ -34,7 +40,7 @@ test('manual inventory retains exact source evidence and every original prose bl
     const combined = [...texts].filter(([path]) => group(path) === group(source.path)).map(([, text]) => text).join('\n');
     for (const block of original.split(/\n\s*\n/)) {
       if (!block.trim() || /^#+ /.test(block)) continue;
-      expect(normalize(combined), `${source.path}: ${block.slice(0, 80)}`).toContain(normalize(block));
+      expect(normalize(combined), `${source.path}: ${block.slice(0, 80)}`).toContain(normalize(currentProse(source.path, block)));
     }
     for (const heading of original.match(/^#{1,6} .+$/gm) ?? []) expect(combined).toContain(heading);
     for (const code of original.matchAll(/^(`{3,})[^\n]*\n[\s\S]*?^\1\s*$/gm)) expect(combined).toContain(code[0].trimEnd());
@@ -64,7 +70,7 @@ test('each chapter has bounded content, scoped discovery metadata and resolvable
       expect(range.startOffset).toBeGreaterThanOrEqual(0);
       expect(range.endOffset).toBeGreaterThan(range.startOffset);
       expect(range.endOffset).toBeLessThanOrEqual(sourceText.length);
-      expect(normalize(raw)).toContain(normalize(sourceText.slice(range.startOffset, range.endOffset)));
+      expect(normalize(raw)).toContain(normalize(currentProse(source.path, sourceText.slice(range.startOffset, range.endOffset))));
     }
     for (const link of [card.parent, card.previous, card.next, ...[...raw.matchAll(/\]\(([^)]+)\)/g)].map(m => m[1])]) {
       if (!link || /^[a-z]+:|^#/.test(link)) continue;

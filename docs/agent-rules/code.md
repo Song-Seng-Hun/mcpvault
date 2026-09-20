@@ -34,7 +34,8 @@ For every code change:
    backtick or tilde fences.
 4. Add every mutating operation to the read-only rejection set and endpoint
    capability model.
-5. Run targeted tests, `npm run build`, the full `npm test`, and `git diff --check`.
+5. Use [risk-scoped validation](validation.md): targets during work, full regression at integration.
+   Run `npm run build` for code changes and `git diff --check` before staging.
 6. `dist/` is committed: include generated output in the same commit as its source.
    Do not commit `.agents/`, `.mcpvault/`, credentials, or caches.
    After staging, run `npm run check:staged` (paths only); review staged content
