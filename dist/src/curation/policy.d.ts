@@ -1,4 +1,4 @@
-export declare const CURATION_OPERATIONS: readonly ['deduplicate_relations'];
+export declare const CURATION_OPERATIONS: readonly ['deduplicate_relations', 'archive_duplicate', 'merge_duplicates', 'merge_passages'];
 export type CurationOperation = typeof CURATION_OPERATIONS[number];
 export interface CurationGrant {
     accountId: string;

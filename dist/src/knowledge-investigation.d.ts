@@ -21,8 +21,10 @@ export declare function writeInvestigationReview(fs: FileSystemService, access: 
     principal?: ScopePrincipal;
     investigationEvidence?: unknown;
 }, note: ParsedNoteContent, changes: Record<string, any>, claimId?: string): Promise<{
+    frontmatter: {
+        [x: string]: any;
+    };
     revision: string;
-    frontmatter: Record<string, any>;
 }>;
 /** Bounded projection. Read progress and matching revisions are not truth. */
 export declare function inspectInvestigation(value: unknown, container: string, read: (path: string) => Promise<QueryNote | undefined>, access: ScopeAccessPolicy, principal?: ScopePrincipal, review?: {

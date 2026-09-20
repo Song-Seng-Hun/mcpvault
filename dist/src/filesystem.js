@@ -1,7 +1,7 @@
 import { guidanceError, guidanceText } from './guidance-runtime.js';
 import { join, resolve, relative, dirname, posix } from 'path';
 import { homedir } from 'os';
-import { readdir, stat, readFile, writeFile, unlink, mkdir, access, rename, copyFile, open } from 'node:fs/promises';
+import { readdir, opendir, stat, readFile, writeFile, unlink, mkdir, access, rename, copyFile, open } from 'node:fs/promises';
 import { constants, lstatSync, realpathSync } from 'node:fs';
 import { createHash, randomUUID } from 'node:crypto';
 import trash from 'trash';
@@ -1871,7 +1871,7 @@ export class FileSystemService {
      * Details from inaccessible scopes are collapsed to one boolean barrier.
      */
     async collectMoveReferencePlans(oldPath, newPath, canAccessPath, includeMovedSource = true, budget) {
-        const physicalPaths = (await this.collectVaultFiles())
+        const physicalPaths = (budget ? await this.collectBoundedReferenceFiles(budget.maxFiles) : await this.collectVaultFiles())
             .filter(path => this.pathFilter.isAllowed(path) && /\.(?:md|markdown|txt)$/i.test(path))
             .sort((a, b) => a.localeCompare(b));
         if (budget && physicalPaths.length > budget.maxFiles)
@@ -1909,7 +1909,7 @@ export class FileSystemService {
                 catch (error) {
                     // A removed note has no remaining references. Any other failure
                     // leaves integrity unknown: never report an incomplete scan as safe.
-                    if (error instanceof Error && 'code' in error && error.code === 'ENOENT')
+                    if (!budget && error instanceof Error && 'code' in error && error.code === 'ENOENT')
                         return undefined;
                     throw guidanceError(new Error('Reference integrity scan incomplete; restore readable notes and retry. No changes were made.'), 'guid-38983d8f6c48fa62');
                 }
@@ -1943,7 +1943,7 @@ export class FileSystemService {
         }
         return { plans, hiddenReferencesPresent };
     }
-    async previewDeleteNote(params, canAccessPath = () => true) {
+    async previewDeleteNote(params, canAccessPath = () => true, budget) {
         const path = this.normalizeReferenceMutationPath(params.path);
         if (!this.pathFilter.isAllowed(path) || !canAccessPath(path))
             throw guidanceError(new Error(`Access denied: ${path}`), 'guid-26a1bd21fd48991f');
@@ -1951,7 +1951,7 @@ export class FileSystemService {
         if (!Number.isInteger(requestedLimit) || requestedLimit < 1)
             throw guidanceError(new Error('limit must be a positive integer'), 'guid-14abe8b02cfc3624');
         const limit = Math.min(requestedLimit, 200);
-        const scan = await this.collectMoveReferencePlans(path, `${path}.__mcpvault_deleted__`, canAccessPath, false);
+        const scan = await this.collectMoveReferencePlans(path, `${path}.__mcpvault_deleted__`, canAccessPath, false, budget);
         const affectedLinks = [];
         const affectedProperties = [];
         const ambiguousReferences = [];
@@ -3045,6 +3045,38 @@ export class FileSystemService {
             }
         };
         await scanDirectory(this.vaultPath);
+        return files;
+    }
+    /** Small-vault compatibility only. Stop discovery before materializing an
+     * entire directory/tree; a partial or inaccessible scope is not absence. */
+    async collectBoundedReferenceFiles(maxFiles) {
+        if (!Number.isInteger(maxFiles) || maxFiles < 1 || maxFiles > 10000)
+            throw Error('Invalid reference capture budget');
+        const files = [];
+        let inspected = 0;
+        const incomplete = () => { throw Error('Reference capture incomplete'); };
+        const walk = async (directory, prefix = '', depth = 0) => {
+            assertEnterpriseStorageFresh();
+            if (depth > 64 || prefix && !this.canTraverseEnterpriseReadPath(prefix))
+                return incomplete();
+            for await (const entry of await opendir(directory)) {
+                if (++inspected > maxFiles * 8)
+                    return incomplete();
+                const path = prefix ? `${prefix}/${entry.name}` : entry.name;
+                if (!this.pathFilter.isAllowedForListing(path))
+                    continue;
+                if (entry.isSymbolicLink())
+                    return incomplete();
+                if (entry.isDirectory())
+                    await walk(join(directory, entry.name), path, depth + 1);
+                else if (entry.isFile() && /\.(?:md|markdown|txt)$/i.test(path)) {
+                    if (!canReadEnterpriseStoragePath(path) || files.length >= maxFiles)
+                        return incomplete();
+                    files.push(path);
+                }
+            }
+        };
+        await walk(this.vaultPath);
         return files;
     }
     async getNoteOutline(path) {

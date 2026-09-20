@@ -1,6 +1,6 @@
 import { compilationPath, ordinaryCompilationDocument } from '../compilation-policy.js';
 import { id, object, unavailable } from '../evolution/policy.js';
-export const CURATION_OPERATIONS = ['deduplicate_relations'];
+export const CURATION_OPERATIONS = ['deduplicate_relations', 'archive_duplicate', 'merge_duplicates', 'merge_passages'];
 export function curationPath(value) {
     const path = compilationPath(value);
     if (!ordinaryCompilationDocument(path))

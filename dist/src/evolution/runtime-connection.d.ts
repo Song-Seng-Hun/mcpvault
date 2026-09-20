@@ -13,6 +13,7 @@ import { EvolutionOperations } from './operations.js';
 import type { RetrievalService } from '../retrieval-service.js';
 import { EvolutionDirectReview } from './direct-review.js';
 import type { CompilationService } from '../compilation-service.js';
+import type { LlmWikiService } from '../llm-wiki.js';
 export interface EvolutionRuntimeConfig {
     storage: HostWorkStorage<EvolutionConfig>;
     /** Reviewed code-owned checks only; no remote code or MCP-defined grading. */
@@ -27,6 +28,7 @@ interface Services {
     readOnly: boolean;
     retrieval: RetrievalService;
     compilation?: CompilationService;
+    wiki?: LlmWikiService;
     adapters?: Partial<Record<TargetKind, EvolutionAdapter>>;
 }
 /** Concrete existing-account connection. No registration, certificate binding or owner inference. */

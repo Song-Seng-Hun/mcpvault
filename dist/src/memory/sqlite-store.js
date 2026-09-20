@@ -2,6 +2,22 @@ import { Worker } from 'node:worker_threads';
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { memoryEntries, memoryReferencePath } from '../memory-contract.js';
+import { extractGraphAssertions } from '../graph-assertion.js';
+import { extractObsidianLinkOccurrences } from '../backlinks.js';
+import { posix } from 'node:path';
+// Discovery key only, never a resolved path or permission. Preserve raw reference in payload.
+function referenceKey(raw) {
+    return raw.replace(/^!?\[\[/, '').replace(/\]\]$/, '').split(/[|#]/, 1)[0].trim().replace(/\.md$/i, '').toLowerCase();
+}
+function occurrenceKey(assertion) {
+    if (assertion.syntax !== 'markdown')
+        return referenceKey(assertion.targetReference);
+    const link = extractObsidianLinkOccurrences(assertion.targetReference, 1)[0];
+    // Preserve the original occurrence as evidence. Only its advisory index key
+    // resolves explicit Markdown relativity; aliases still require live resolution.
+    return link ? referenceKey(posix.normalize(posix.join(posix.dirname(assertion.source.path), link.target)))
+        : referenceKey(assertion.targetReference);
+}
 /** One bounded RPC queue. SQLite and its native allocations stay off the request thread. */
 export class MemorySqliteStore {
     worker;
@@ -45,7 +61,9 @@ export class MemorySqliteStore {
             const entries = memoryEntries(row.frontmatter);
             if (!entries.length && row.frontmatter.mcpvault_type === 'journal_entry')
                 entries.push({ role: 'episodic', observed_at: row.frontmatter.date });
-            return { ...row, entries, edges: entries.flatMap(e => ['basis', 'corrects'].flatMap(kind => (e[kind] || []).map(r => ({ kind, target: memoryReferencePath(r.path).toLowerCase() })))) };
+            const graph = extractGraphAssertions({ repositoryId: 'private-read-index', path: row.path, revision: row.revision, frontmatter: row.frontmatter, content: row.text });
+            return { ...row, entries, graph: { version: 1, partial: graph.partial, occurrences: graph.assertions.map(a => ({ key: occurrenceKey(a), assertion: a })) },
+                edges: entries.flatMap(e => ['basis', 'corrects'].flatMap(kind => (e[kind] || []).map(r => ({ kind, target: memoryReferencePath(r.path).toLowerCase() })))) };
         });
         await this.call('put', data);
     }
@@ -65,6 +83,27 @@ export class MemorySqliteStore {
     get(paths) { paths.forEach(memoryReferencePath); if (paths.length > 500)
         throw Error('Invalid metadata window'); return this.call('get', paths); }
     explain(q) { return this.call('explain', q); }
+    graphQuery(q) {
+        if (!['incoming', 'outgoing'].includes(q.direction) || !Number.isInteger(q.limit) || q.limit < 1 || q.limit > 200
+            || !Array.isArray(q.keys) || !q.keys.length || q.keys.length > 200
+            || q.keys.some(k => typeof k !== 'string' || !k.length || k.length > 1024)
+            || q.after !== undefined && (!/^[a-f0-9]{64}$/.test(q.after) || q.expectedGeneration === undefined)
+            || q.expectedGeneration !== undefined && (!Number.isSafeInteger(q.expectedGeneration) || q.expectedGeneration < 0))
+            throw Error('Invalid graph window');
+        if (q.direction === 'outgoing')
+            q.keys.forEach(memoryReferencePath);
+        return { ...q, keys: [...new Set(q.direction === 'incoming' ? q.keys.map(referenceKey) : q.keys)] };
+    }
+    /** PRIVATE unresolved occurrences. Callers must re-resolve and authorize both endpoints.
+     * An empty page never certifies absence of links in the Vault. */
+    async graph(q) { return this.call('graph', this.graphQuery(q)); }
+    async graphExplain(q) { return this.call('graphExplain', this.graphQuery(q)); }
+    unindexedGraph(paths) {
+        paths.forEach(memoryReferencePath);
+        if (paths.length > 128)
+            throw Error('Invalid graph backfill window');
+        return this.call('unindexedGraph', paths);
+    }
     beginScan() { return this.call('beginScan'); }
     seen(paths) { if (paths.length > 128)
         throw Error('Invalid scan page'); return this.call('seen', paths); }

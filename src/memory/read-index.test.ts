@@ -150,3 +150,17 @@ test('index owner construction restrictions are preserved instead of cleared', a
   const result = await memory.read('recall', { scope: 'global', semantic: false });
   expect(result.status).toBe('partial'); expect(result.items).toEqual([]);
 }, 30000);
+
+test('background graph indexing covers ordinary knowledge without injecting it into memory results', async () => {
+  const { fs, index } = await setup();
+  await fs.writeNote({ path: 'Knowledge.md', content: '[[Target]]', frontmatter: { llm_wiki_type: 'knowledge' } });
+  await fs.writeNote({ path: 'Memory.md', content: 'event', frontmatter: { memory_role: 'episodic' } });
+  await index.start();
+  const store = (index as any).store;
+  expect((await store.graph({ direction: 'incoming', keys: ['target'], limit: 20 })).occurrences).toHaveLength(1);
+  expect((await index.capture({ root: '', prefix: '', query: '', canAccess: () => true })).notes.map(n => n.path)).toEqual(['Memory.md']);
+  await fs.writeNote({ path: 'Knowledge.md', content: '[[Changed]]', frontmatter: { llm_wiki_type: 'knowledge' } });
+  await index.invalidate([{ path: 'Knowledge.md', kind: 'upsert' }]);
+  expect((await store.graph({ direction: 'incoming', keys: ['target'], limit: 20 })).occurrences).toHaveLength(0);
+  expect((await store.graph({ direction: 'incoming', keys: ['changed'], limit: 20 })).occurrences).toHaveLength(1);
+}, 30000);

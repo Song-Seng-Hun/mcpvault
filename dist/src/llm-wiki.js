@@ -7192,7 +7192,7 @@ export class LlmWikiService {
      * so callers receive one revision-stamped notes.change_set instead of a
      * sequence of partially applied triage edits.
      */
-    async lifecycleTransitionPreview(principal, options) {
+    async lifecycleTransitionPreview(principal, options, hostPolicy) {
         const sourcePath = normalizePath(options.path);
         if (!sourcePath)
             throw guidanceError(new Error('path is required'), 'guid-2a8c2c9ea17aa474');
@@ -7381,7 +7381,7 @@ export class LlmWikiService {
         }
         let referenceImpact = { total: 0, ambiguousTotal: 0, truncated: false };
         try {
-            const impact = await this.fileSystem.previewDeleteNote({ path: sourcePath, limit: 4 }, canAccess);
+            const impact = await this.fileSystem.previewDeleteNote({ path: sourcePath, limit: 4 }, canAccess, hostPolicy?.referenceBudget);
             if (impact.hiddenReferencesPresent)
                 warnings.push({ reason: guidanceText('guid-7b1a1b7f4d02f32b', 'An inaccessible scope references this note or makes its identity ambiguous; the transition preserves the body and path and does not disclose hidden references.') });
             referenceImpact = {

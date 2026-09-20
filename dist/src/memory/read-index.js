@@ -106,13 +106,13 @@ export class DiskMemoryIndex {
                 return;
             }
             const entries = memoryEntries(metadata.frontmatter);
-            if ((!entries.length && metadata.frontmatter.mcpvault_type !== 'journal_entry') || isModerationHidden(metadata.frontmatter)
+            if ((!entries.length && metadata.frontmatter.mcpvault_type !== 'journal_entry' && metadata.frontmatter.llm_wiki_type !== 'knowledge') || isModerationHidden(metadata.frontmatter)
                 || isFictionDomain(metadata.frontmatter, path) || metadata.frontmatter.mcpvault_type === 'blog_post' && metadata.frontmatter.status === 'draft') {
                 await this.store.remove([path]);
                 return;
             }
             const prior = (await this.store.get([path])).notes[0];
-            if (prior?.revision !== metadata.revision) {
+            if (prior?.revision !== metadata.revision || (await this.store.unindexedGraph([path])).length) {
                 const note = await this.fs.readNote(path, 2 * 1024 * 1024);
                 if (!this.allowed(path) || note.revision !== metadata.revision)
                     throw Error('Memory changed during indexing');

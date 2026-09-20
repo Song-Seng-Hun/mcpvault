@@ -1,4 +1,5 @@
 import type { QueryNote } from '../types.js';
+import { type GraphAssertion } from '../graph-assertion.js';
 export interface MemoryIndexRow extends QueryNote {
     text: string;
 }
@@ -16,6 +17,21 @@ export interface MemoryIndexQuery {
     after?: string;
     limit: number;
 }
+export interface GraphIndexQuery {
+    direction: 'incoming' | 'outgoing';
+    keys: string[];
+    limit: number;
+    after?: string;
+    expectedGeneration?: number;
+}
+export interface GraphIndexPage {
+    occurrences: GraphAssertion[];
+    truncated: boolean;
+    next?: string;
+    generation: number;
+    incompleteOwners: string[];
+    coverage: 'candidates_only';
+}
 /** One bounded RPC queue. SQLite and its native allocations stay off the request thread. */
 export declare class MemorySqliteStore {
     private worker;
@@ -32,6 +48,12 @@ export declare class MemorySqliteStore {
     dependents(paths: string[], limit: number): Promise<MemoryIndexPage>;
     get(paths: string[]): Promise<MemoryIndexPage>;
     explain(q: MemoryIndexQuery): Promise<string[]>;
+    private graphQuery;
+    /** PRIVATE unresolved occurrences. Callers must re-resolve and authorize both endpoints.
+     * An empty page never certifies absence of links in the Vault. */
+    graph(q: GraphIndexQuery): Promise<GraphIndexPage>;
+    graphExplain(q: GraphIndexQuery): Promise<string[]>;
+    unindexedGraph(paths: string[]): Promise<string[]>;
     beginScan(): Promise<void>;
     seen(paths: string[]): Promise<void>;
     finishScan(): Promise<void>;

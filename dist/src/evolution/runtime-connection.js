@@ -36,7 +36,7 @@ export function connectEvolutionRuntime(config, services) {
         await authorize(principal);
     });
     const options = { storage: config.storage, readOnly: services.readOnly,
-        curation: new CurationService({ fs, access, config: () => config.storage.refresh(),
+        curation: new CurationService({ fs, access, ...(services.wiki && { wiki: services.wiki }), config: () => config.storage.refresh(),
             managedProof: (path, revision, principal) => services.compilation?.managedOutputProof(path, revision, principal) ?? Promise.resolve(undefined) }),
         authority: async (p) => {
             const revision = await authorize(p);

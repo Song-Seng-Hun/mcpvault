@@ -243,7 +243,11 @@ export declare class FileSystemService {
      * Details from inaccessible scopes are collapsed to one boolean barrier.
      */
     private collectMoveReferencePlans;
-    previewDeleteNote(params: DeleteNotePreviewParams, canAccessPath?: (path: string) => boolean): Promise<DeleteNotePreviewResult>;
+    previewDeleteNote(params: DeleteNotePreviewParams, canAccessPath?: (path: string) => boolean, budget?: {
+        maxFileBytes: number;
+        maxTotalBytes: number;
+        maxFiles: number;
+    }): Promise<DeleteNotePreviewResult>;
     private moveNoteToVaultTrash;
     deleteNote(params: DeleteNoteParams, canAccessPath?: (path: string) => boolean): Promise<DeleteResult>;
     private deleteNoteUnlocked;
@@ -334,6 +338,9 @@ export declare class FileSystemService {
         frontmatter?: Record<string, any>;
     }): Promise<DailyNoteResult>;
     private collectVaultFiles;
+    /** Small-vault compatibility only. Stop discovery before materializing an
+     * entire directory/tree; a partial or inaccessible scope is not absence. */
+    private collectBoundedReferenceFiles;
     getNoteOutline(path: string): Promise<NoteHeading[]>;
     readNoteLineWindow(params: ReadNoteLinesParams): Promise<{
         content: string;

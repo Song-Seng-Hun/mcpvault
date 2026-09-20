@@ -28,7 +28,7 @@ test('the existing MCP cycle endpoint exposes curation without new tools or impl
       accountId: 'operator', agentId: 'operator', modelId: 'synthetic', password: 'temporary-curation-fixture-only' } });
     const accessToken = JSON.parse(registration.content[0].text).accessToken;
     expect(await call({ kind: 'curation', op: 'diagnose', accessToken })).toMatchObject({
-      supportedOperations: ['deduplicate_relations'], automaticApplication: false });
+      supportedOperations: ['deduplicate_relations', 'archive_duplicate', 'merge_duplicates', 'merge_passages'], automaticApplication: false });
     const fs = new FileSystemService(root);
     await fs.writeNote({ path: 'A.md', content: '# Unmanaged', frontmatter: { llm_wiki_type: 'knowledge', related: ['[[B]]', '[[B]]'], managed: true } });
     const before = await fs.readNoteRevision('A.md');

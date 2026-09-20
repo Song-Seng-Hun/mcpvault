@@ -16,6 +16,7 @@ import type { RetrievalService } from '../retrieval-service.js';
 import { EvolutionDirectReview } from './direct-review.js';
 import { CurationService } from '../curation/service.js';
 import type { CompilationService } from '../compilation-service.js';
+import type { LlmWikiService } from '../llm-wiki.js';
 
 export interface EvolutionRuntimeConfig {
   storage: HostWorkStorage<EvolutionConfig>;
@@ -27,6 +28,7 @@ interface Services {
   refreshPolicy(): Promise<void>; readOnly: boolean;
   retrieval: RetrievalService;
   compilation?: CompilationService;
+  wiki?: LlmWikiService;
   adapters?: Partial<Record<TargetKind, EvolutionAdapter>>;
 }
 
@@ -53,7 +55,7 @@ export function connectEvolutionRuntime(config: EvolutionRuntimeConfig, services
     if (!principal || !auth.hasCapability(principal, 'write')) return unavailable(); await authorize(principal);
   });
   const options: EvolutionOptions = { storage: config.storage, readOnly: services.readOnly,
-    curation: new CurationService({ fs, access, config: () => config.storage.refresh(),
+    curation: new CurationService({ fs, access, ...(services.wiki && { wiki: services.wiki }), config: () => config.storage.refresh(),
       managedProof: (path, revision, principal) => services.compilation?.managedOutputProof(path, revision, principal) ?? Promise.resolve(undefined) }),
     authority: async p => {
       const revision = await authorize(p);

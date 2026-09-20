@@ -1,7 +1,7 @@
 import { compilationPath, ordinaryCompilationDocument } from '../compilation-policy.js';
 import { id, object, unavailable } from '../evolution/policy.js';
 
-export const CURATION_OPERATIONS = ['deduplicate_relations'] as const;
+export const CURATION_OPERATIONS = ['deduplicate_relations', 'archive_duplicate', 'merge_duplicates', 'merge_passages'] as const;
 export type CurationOperation = typeof CURATION_OPERATIONS[number];
 export interface CurationGrant { accountId: string; paths: string[]; operations: CurationOperation[] }
 export function curationPath(value: unknown): string {

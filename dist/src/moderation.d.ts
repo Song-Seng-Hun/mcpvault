@@ -93,19 +93,19 @@ export declare class ModerationService {
         accountId?: never;
         alreadyActive?: never;
     } | {
-        revision?: never;
         targetType?: never;
         targetId?: never;
         moderationStatus?: never;
+        revision?: never;
         warning?: never;
         success: boolean;
         action: "ban";
         accountId: string | undefined;
         alreadyActive: boolean;
     } | {
-        revision?: never;
         targetId?: never;
         moderationStatus?: never;
+        revision?: never;
         warning?: never;
         alreadyActive?: never;
         success: boolean;
@@ -115,9 +115,9 @@ export declare class ModerationService {
         familyId?: string;
         alreadyInactive: boolean;
     } | {
-        revision?: never;
         targetId?: never;
         moderationStatus?: never;
+        revision?: never;
         warning?: never;
         alreadyActive?: never;
         success: boolean;
