@@ -4,6 +4,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {withEnterpriseRequestContext} from './enterprise-request-context.js';
 import type {ScopePrincipal} from './scope-auth.js';
+import {OwnerActivityRuntime} from './owner-activity-runtime.js';
 const acl=vi.hoisted(()=>({deny:false}));
 vi.mock('./windows-private-acl.js',()=>({checkWindowsPrivateAcl:async()=>{if(acl.deny)throw Error('denied');}}));
 const roots:string[]=[];
@@ -37,6 +38,28 @@ test('loads an explicit private read-only skill bridge, with fixed loopback mand
     expect(await host.reviewedSkills.host.entry('not-admitted')).toBeUndefined();
     expect(host).not.toHaveProperty('admit');
   }finally{host.close();}
+});
+
+test('account-only reviewed reads need no certificates, bindings or extra listener',async()=>{
+  const f=await fixture();
+  f.policy.grants[0]!.executionTargets=['authenticated-skill-read'];await f.savePolicy();
+  const grant=f.policy.grants[0]!;
+  await writeFile(f.path,JSON.stringify({version:2,authorization:'account',vaultPath:f.config.vaultPath,hostPath:f.hostPath,ownerPolicyPath:f.ownerPolicyPath}));
+  for(const path of [f.bindingsPath,f.config.listener.certPath,f.config.listener.keyPath,f.config.listener.caPath])await rm(path);
+  const host=await f.load(),runtime=new OwnerActivityRuntime(host.ownerActivity);
+  try{
+    expect(host.listener).toBeUndefined();
+    const paths=['Community/Skills/test-skill/SKILL.md'];
+    const lease=await runtime.begin('skill-evolution','read',paths,principal);
+    expect(lease.canAccessPath(paths[0]!)).toBe(true);
+    await expect(runtime.begin('skill-evolution','read',paths)).rejects.toThrow();
+    await expect(runtime.begin('skill-evolution','read',paths,{accountId:'other'} as ScopePrincipal)).rejects.toThrow();
+    await expect(runtime.begin('skill-evolution','execute',paths,principal)).rejects.toThrow();
+    f.policy.grants=[];await f.savePolicy();
+    await expect(lease.revalidate()).rejects.toThrow();
+  }finally{host.close();}
+  f.policy.grants=[{...grant,executionTargets:['verified-host']}];await f.savePolicy();
+  await expect(f.load()).rejects.toThrow('Reviewed skill host unavailable');
 });
 
 test('a short host deadline expires warm authority and cannot be reopened after expiry',async()=>{

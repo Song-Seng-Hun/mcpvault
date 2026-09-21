@@ -85,7 +85,7 @@ Options:
                   Existing-account task observations and code-owned diagnostic evaluations.
                   Private storage only; no models, account bindings or access grants.
   --reviewed-skills-config FILE
-                  Private reviewed-copy reader with a separate loopback mTLS listener.
+                  Private reviewed-copy reader: existing login (v2) or optional mTLS (v1).
                   Requires --quarantine-skills and explicit skill-evolution feature.
                   Does not admit skills, execute bundles or grant write permissions.
   --explanation-config FILE
@@ -198,11 +198,11 @@ if (reviewedHost) lifecycle.add(reviewedHost);
 if (benchmarkWriter) lifecycle.add(benchmarkWriter);
 if(economy)lifecycle.add(economy.ledger);
 if (roleplay) lifecycle.add(roleplay);
-const ownsNetwork = mcpHttpPort !== undefined || restPort !== undefined || reviewedHost !== undefined;
+const ownsNetwork = mcpHttpPort !== undefined || restPort !== undefined || reviewedHost?.listener !== undefined;
 let isShuttingDown = false;
 
 try {
-  if (reviewedHost) {
+  if (reviewedHost?.listener) {
     const handle = await startMcpHttpApi(mcpServer, reviewedHost.listener);
     lifecycle.add(handle);
     console.error(`MCPVault reviewed-skill mTLS listener on https://${handle.host}:${handle.port}${handle.path}`);

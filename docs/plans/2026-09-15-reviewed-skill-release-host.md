@@ -1,6 +1,6 @@
 ---
 id: reviewed-skill-host-gates
-description: Private admission writer, bounded cards, mTLS startup and current verification gaps.
+description: Reviewed-copy admission and certificate-optional authenticated reads; historical evidence below.
 keywords: [host admission, mTLS, rollback, reviewed skills, 운영 검증]
 use_when: Resuming actual host provisioning, operator verification or release deployment.
 previous: 2026-09-15-reviewed-skill-release-canary.md
@@ -19,7 +19,6 @@ Prepared receipts resume by re-verifying applied bytes; completed IDs cannot res
 Old registry bytes are retained by hash; final authorization and receipt races are rejected.
 Ten writer tests passed; directory-junction test also asserts actual replacement occurred.
 Tests use real files but mocked Windows ACL observations, not a production approval.
-
 ## Reader integration
 
 `skill.resolve view=metadata` returns approved conditions and registered read actions.
@@ -29,14 +28,16 @@ Common retrieval/search integration and actual usage telemetry remain pending.
 No `wiki.context_route` implementation was found in this baseline; do not assume it exists.
 
 `--reviewed-skills-config` needs quarantine plus explicit skill-evolution selection.
-Private v1 config: vaultPath, hostPath, ownerPolicyPath, bindingsPath, listener.
-Listener fixes loopback/mTLS plus canonical skill.resolve-only request profile; see fences chapter.
+Private v1 config keeps vaultPath, hostPath, ownerPolicyPath, bindingsPath and mTLS listener.
+v2 uses version=2, authorization=account, vaultPath, hostPath and ownerPolicyPath only.
+v2 reuses normal login; no certificate, NAS registration, binding file or extra listener.
+v2 owner grants target `authenticated-skill-read`: a read consent scope, not runtime attestation.
 Owner policy accepts only skill-evolution read/discover and Community/Skills prefixes.
 Conflicting owner config fails; public HTTP remains unchanged; no automatic MCP registration.
 Changed config/TLS files invalidate the bridge until restart; owner/binding changes refresh.
 CLI never creates a certificate, account, grant, approval or directory.
 
-## Current operational evidence
+## Historical operational evidence (2026-09-15)
 
 New `C:\Users\meleb\MCPVaultHost\ReviewedSkills` has entries/blobs/receipts directories.
 Local/NAS boundary and real private Windows ACL checks passed; no credential was read.

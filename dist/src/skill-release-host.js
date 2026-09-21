@@ -28,7 +28,8 @@ function stamp(path, max) {
 }
 /** Explicit host opt-in only. Reads existing private material; never creates an
  * account, certificate, listener, approval, grant, MCP registration or directory.
- * The CLI starts a separate loopback mTLS listener without changing public HTTP.
+ * Version 1 uses loopback mTLS. Version 2 reuses authenticated account sessions;
+ * its fixed read-only target is a consent scope, not runtime/model attestation.
  * This bridge accepts only skill read/discover grants, even if another activity
  * already has broader consent elsewhere. A reviewed skill grants no execution. */
 export async function loadReviewedSkillsHost(path, expectedVault) {
@@ -45,7 +46,10 @@ export async function loadReviewedSkillsHost(path, expectedVault) {
                 return fail();
             return { path: canonical, text, stamp: before, max };
         };
-        const config = await readPrivate(path, 8192), raw = record(JSON.parse(config.text), ['version', 'vaultPath', 'hostPath', 'ownerPolicyPath', 'bindingsPath', 'listener'], ['expiresAt']);
+        const config = await readPrivate(path, 8192), input = JSON.parse(config.text), accountMode = input?.version === 2;
+        const raw = record(input, ['version', 'vaultPath', 'hostPath', 'ownerPolicyPath', ...(accountMode ? ['authorization'] : ['bindingsPath', 'listener'])], ['expiresAt']);
+        if (accountMode && raw.authorization !== 'account')
+            return fail();
         // Optional short inspection lease, not an access grant. Its absolute expiry
         // survives reloads; monotonic time also bounds reads after wall-clock rollback.
         let expiresAt = Infinity, deadline = Infinity;
@@ -56,19 +60,26 @@ export async function loadReviewedSkillsHost(path, expectedVault) {
                 return fail();
             deadline = performance.now() + remaining;
         }
-        if (raw.version !== 1 || typeof raw.vaultPath !== 'string' || await canonicalRoleplayPath(raw.vaultPath, false) !== await canonicalRoleplayPath(expectedVault, false))
+        if (raw.version !== (accountMode ? 2 : 1) || typeof raw.vaultPath !== 'string' || await canonicalRoleplayPath(raw.vaultPath, false) !== await canonicalRoleplayPath(expectedVault, false))
             return fail();
         const { hostPath, vaultPath } = await validateRoleplayStorage({ hostPath: raw.hostPath, vaultPath: expectedVault });
-        const listenerRaw = record(raw.listener, ['port', 'certPath', 'keyPath', 'caPath'], ['allowProcedureDiscovery']);
-        if (listenerRaw.allowProcedureDiscovery !== undefined && typeof listenerRaw.allowProcedureDiscovery !== 'boolean')
-            return fail();
-        if (!Number.isSafeInteger(listenerRaw.port) || listenerRaw.port < 0 || listenerRaw.port > 65535)
-            return fail();
-        const cert = await readPrivate(listenerRaw.certPath, 65536), key = await readPrivate(listenerRaw.keyPath, 65536), ca = await readPrivate(listenerRaw.caPath, 262144);
-        const pins = [config, cert, key, ca];
+        const pins = [config];
+        let listener, bindings;
+        if (!accountMode) {
+            const listenerRaw = record(raw.listener, ['port', 'certPath', 'keyPath', 'caPath'], ['allowProcedureDiscovery']);
+            if (listenerRaw.allowProcedureDiscovery !== undefined && typeof listenerRaw.allowProcedureDiscovery !== 'boolean')
+                return fail();
+            if (!Number.isSafeInteger(listenerRaw.port) || listenerRaw.port < 0 || listenerRaw.port > 65535)
+                return fail();
+            const cert = await readPrivate(listenerRaw.certPath, 65536), key = await readPrivate(listenerRaw.keyPath, 65536), ca = await readPrivate(listenerRaw.caPath, 262144);
+            pins.push(cert, key, ca);
+            bindings = await loadOwnerMtlsBindings(raw.bindingsPath, vaultPath);
+            listener = { host: '127.0.0.1', port: listenerRaw.port, requireClientCertificate: true, requestProfile: 'reviewed-skill-read',
+                allowProcedureDiscovery: listenerRaw.allowProcedureDiscovery === true,
+                tls: { cert: cert.text, key: key.text, ca: ca.text, requestCert: true, rejectUnauthorized: true } };
+        }
         let closed = false, ready = false, policyStamp;
         const ownerPolicyPath = await canonicalRoleplayPath(raw.ownerPolicyPath, true, true);
-        const bindings = await loadOwnerMtlsBindings(raw.bindingsPath, vaultPath);
         let policy = new OwnerActivityPolicy({ version: 1, owners: {}, grants: [] });
         const assertPins = () => {
             if (Date.now() >= expiresAt || performance.now() >= deadline) {
@@ -95,9 +106,10 @@ export async function loadReviewedSkillsHost(path, expectedVault) {
                         return fail();
                     const next = new OwnerActivityPolicy({ version: data.version, owners: data.owners, grants: data.grants });
                     if (data.grants.some((g) => g.activities.some((v) => v !== 'skill-evolution') || g.actions.some((v) => v !== 'read' && v !== 'discover')
-                        || g.dataPrefixes.some((v) => v !== 'Community/Skills' && !v.startsWith('Community/Skills/'))))
+                        || g.dataPrefixes.some((v) => v !== 'Community/Skills' && !v.startsWith('Community/Skills/'))
+                        || accountMode && g.executionTargets.some((v) => v !== 'authenticated-skill-read')))
                         return fail();
-                    await bindings.refresh();
+                    await bindings?.refresh();
                     assertPins();
                     if (stamp(owner.path, owner.max) !== owner.stamp)
                         return fail();
@@ -116,24 +128,23 @@ export async function loadReviewedSkillsHost(path, expectedVault) {
         };
         await refresh();
         const ownerActivity = { refresh, policy: () => policy,
-            execution: principal => { try {
-                assertPins();
-                if (!ready || !policyStamp || stamp(ownerPolicyPath, 262144) !== policyStamp)
+            execution: principal => {
+                try {
+                    assertPins();
+                    if (!principal || !ready || !policyStamp || stamp(ownerPolicyPath, 262144) !== policyStamp)
+                        return undefined;
+                    return accountMode ? { accountId: principal.accountId, executionTarget: 'authenticated-skill-read' } : bindings.execution(principal);
+                }
+                catch {
                     return undefined;
-                return bindings.execution(principal);
-            }
-            catch {
-                return undefined;
-            } } };
+                }
+            } };
         source = createSkillSourceInspector(vaultPath);
         const inspector = source;
         const host = await openReviewedSkillStore({ hostPath, vaultPath, sourceFingerprint: async (name) => {
                 const r = await inspector.inspect(name);
                 return r?.visible && r.inventory.complete ? r.inventory.fingerprint : null;
             } });
-        const listener = { host: '127.0.0.1', port: listenerRaw.port, requireClientCertificate: true, requestProfile: 'reviewed-skill-read',
-            allowProcedureDiscovery: listenerRaw.allowProcedureDiscovery === true,
-            tls: { cert: cert.text, key: key.text, ca: ca.text, requestCert: true, rejectUnauthorized: true } };
         assertPins();
         return { ownerPolicyPath, ownerActivity, reviewedSkills: { host, source: inspector }, listener,
             close() { closed = true; ready = false; inspector.close(); } };
