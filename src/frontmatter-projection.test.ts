@@ -12,6 +12,17 @@ const marker = '__mcpvault_inert_frontmatter_probe__';
 const globals = globalThis as unknown as Record<string, unknown>;
 afterEach(() => { delete globals[marker]; vi.restoreAllMocks(); });
 
+test.each(['\n', '\r\n'])('quoted YAML at the closing boundary preserves data and original bytes (%j)', eol => {
+  const header = ['---', 'argument-hint: "[show|forget|clear|status]"', 'moderation_status: "hidden"', '---'].join(eol);
+  const body = `# 메모 🧭${eol}Keep exact bytes.${eol}`;
+  const raw = header + eol + body, parsed = handler.parse(raw);
+  expect(parsed.frontmatter).toEqual({ 'argument-hint': '[show|forget|clear|status]', moderation_status: 'hidden' });
+  expect(parsed.content).toBe(body);
+  expect(parsed.originalContent).toBe(raw);
+  expect(parsed.matter).toContain('moderation_status: "hidden"');
+  expect(handler.parse(raw.replace('"hidden"', '"unterminated')).frontmatter).toEqual({});
+});
+
 test.each(['javascript', 'js', 'JAVASCRIPT', 'Js'])('frontmatter label %s cannot execute a benign process-local marker', language => {
   const raw = `---${language}\n({ probe: (globalThis[${JSON.stringify(marker)}] = true) })\n---\nKeep as text.\n`;
   const result = handler.parse(raw);
@@ -35,7 +46,8 @@ test.each([false, true])('large body is not copied into a parser input Buffer (h
 // oracle. Never feed a document-selected JavaScript engine into it.
 function oldDataParse(raw: string) {
   try {
-    const parsed = matter(raw, { engines: { yaml: { parse: parseYaml } } });
+    // Preserve legacy fields except the corrected split-CRLF YAML boundary.
+    const parsed = matter(raw, { engines: { yaml: { parse: (s: string) => parseYaml(s.endsWith('\r') ? s + '\n' : s) } } });
     return { frontmatter: parsed.data, content: parsed.content, originalContent: raw, matter: parsed.matter };
   } catch { return { frontmatter: {}, content: raw, originalContent: raw, matter: '' }; }
 }

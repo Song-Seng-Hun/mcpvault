@@ -11,7 +11,8 @@ const yamlEngine = {
   // YAML 1.2 schema (default). Dates stay as strings, but this avoids the
   // yaml-1.1 bug where single-letter keys like 'y'/'n' become booleans.
   // Merge keys (<<) are not resolved, which is fine for Obsidian frontmatter.
-  parse: (str: string) => parse(str),
+  // gray-matter splits before LF, leaving CR from the closing CRLF delimiter.
+  parse: (str: string) => parse(str.endsWith('\r') ? str + '\n' : str),
   stringify: (data: any) => stringify(data),
 };
 
