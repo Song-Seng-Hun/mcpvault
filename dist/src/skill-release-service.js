@@ -9,14 +9,14 @@ export class ReviewedSkillService {
     source;
     access;
     auth;
-    owner;
+    authorization;
     options;
-    constructor(host, source, access, auth, owner, options = {}) {
+    constructor(host, source, access, auth, authorization, options = {}) {
         this.host = host;
         this.source = source;
         this.access = access;
         this.auth = auth;
-        this.owner = owner;
+        this.authorization = authorization;
         this.options = options;
     }
     async resolve(p, captureDeliveryFence) {
@@ -58,34 +58,40 @@ export class ReviewedSkillService {
                 || p.view !== undefined && p.view !== 'procedure' && p.view !== 'metadata' || p.expectedRelease !== undefined && p.expectedRevision !== undefined && p.expectedRelease !== p.expectedRevision)
                 return fail();
             const { principal, assertFresh: assertIdentity, revalidate: refreshActor } = this.identity(p);
+            // Reviewed document reads use current source ACLs. Legacy hosts may also
+            // require owner consent; never invent a grant to satisfy that policy.
+            const owner = 'begin' in this.authorization ? this.authorization : undefined;
+            const hostFence = 'revalidate' in this.authorization ? this.authorization : undefined;
             let lease, discoveryLease, sourceName, paths = [];
             const assertPaths = () => {
                 assertIdentity();
-                if (!lease || !paths.length)
+                hostFence?.assertFresh();
+                if (!paths.length || owner && !lease)
                     return fail();
-                lease.assertFresh();
+                lease?.assertFresh();
                 discoveryLease?.assertFresh();
                 for (const path of paths)
-                    if (!lease.canAccessPath(path) || !this.access.canAccessPhysicalPath(path, principal)
-                        || discovery && !discoveryLease?.canAccessPath(path))
+                    if (!this.access.canAccessPhysicalPath(path, principal)
+                        || owner && (!lease?.canAccessPath(path) || discovery && !discoveryLease?.canAccessPath(path)))
                         return fail();
             };
             const authorization = { begin: async (_id, name) => {
                     await refreshActor();
+                    await hostFence?.revalidate();
                     if (!/^[a-z0-9][a-z0-9-]{0,99}$/.test(name))
                         return fail();
                     sourceName = name;
                     paths = [`Community/Skills/${name}/SKILL.md`];
-                    lease = await this.owner.begin('skill-evolution', 'read', paths, principal);
+                    lease = await owner?.begin('skill-evolution', 'read', paths, principal);
                     if (discovery)
-                        discoveryLease = await this.owner.begin('skill-evolution', 'discover', paths, principal);
+                        discoveryLease = await owner?.begin('skill-evolution', 'discover', paths, principal);
                     assertPaths();
-                    return { revalidate: async () => { await refreshActor(); await lease.revalidate(); await discoveryLease?.revalidate(); assertPaths(); }, assertFresh: assertPaths };
+                    return { revalidate: async () => { await refreshActor(); await hostFence?.revalidate(); await lease?.revalidate(); await discoveryLease?.revalidate(); assertPaths(); }, assertFresh: assertPaths };
                 } };
             const checkedHost = {
                 entry: this.host.entry.bind(this.host), assertFresh: this.host.assertFresh.bind(this.host), readBlob: this.host.readBlob.bind(this.host), verifyEvidence: this.host.verifyEvidence.bind(this.host),
                 sourceFingerprint: async (name) => {
-                    if (name !== sourceName || !lease)
+                    if (name !== sourceName || !paths.length || owner && !lease)
                         return null;
                     assertPaths();
                     const snapshot = await this.source.inspect(name);

@@ -11,7 +11,7 @@ import {createSkillSourceInspector} from './skill-release-source.js';
 const cleanup:Array<()=>Promise<unknown>>=[];
 afterEach(async()=>{for(const close of cleanup.splice(0).reverse())await close();});
 const hash=(s:Buffer|string)=>createHash('sha256').update(s).digest('hex');
-test('quarantined MCP reads use only the approved branch; originals and mutations stay unavailable',async()=>{
+test.each([false,true])('quarantined MCP reads keep originals and mutations unavailable (source access=%s)',async sourceAccess=>{
   const root=await mkdtemp(join(tmpdir(),'skill-release-mcp-'));cleanup.push(()=>rm(root,{recursive:true,force:true}));
   await mkdir(join(root,'Community','Skills','test-skill'),{recursive:true});
   await writeFile(join(root,'Community','Skills','test-skill','SKILL.md'),'# Unreviewed original marker\n');
@@ -28,13 +28,17 @@ test('quarantined MCP reads use only the approved branch; originals and mutation
   const host={async candidates(){return ['test-skill'];},async candidatesPage(cursor?:string){return paged&&!cursor?{candidates:[],nextCursor:'private-next',registryGeneration:'1'}:{candidates:['test-skill'],registryGeneration:'1'};},async entry(){return admitted?{releaseHash:hash(bytes),generation:'1',sourceName:'test-skill'}:undefined;},assertFresh(){if(!admitted)throw Error('revoked');},
     async readBlob(h:string){if(h===hash(body))bodyRead=true;return blobs.get(h)!;},async sourceFingerprint(){return snapshot!.inventory.fingerprint;},async verifyEvidence(){return true;}};
   const policy=new OwnerActivityPolicy({version:1,owners:{operator:'owner'},grants:[{id:'read-skills',ownerId:'owner',accountIds:['operator'],activities:['skill-evolution'],actions:['discover','read'],dataPrefixes:['Community/Skills'],executionTargets:['fixture-host'],expiresAt:'2999-01-01T00:00:00.000Z'}]});
-  const server=createServer(root,{readOnly:true,quarantineSkills:true,features:{version:1,selected:['wiki-core','skill-evolution']},reviewedSkills:{host,source},
-    ownerActivity:{refresh:async()=>{if(race&&bodyRead&&++postBodyRefreshes===2)admitted=false;},policy:()=>policy,execution:p=>p?{accountId:p.accountId,executionTarget:'fixture-host'}:undefined}});
+  const refresh=async()=>{if(race&&bodyRead&&++postBodyRefreshes===2)admitted=false;};
+  const server=createServer(root,{readOnly:true,quarantineSkills:true,features:{version:1,selected:['wiki-core','skill-evolution']},
+    reviewedSkills:{host,source,...(sourceAccess?{authorization:{revalidate:refresh,assertFresh(){if(!admitted)throw Error('revoked');}}}:{})},
+    ...(!sourceAccess?{ownerActivity:{refresh,policy:()=>policy,execution:(p:any)=>p?{accountId:p.accountId,executionTarget:'fixture-host'}:undefined}}:{})});
   const client=new Client({name:'reviewed-skill-fixture',version:'1'}),[a,b]=InMemoryTransport.createLinkedPair();
   cleanup.push(async()=>{await client.close();await server.close();});await Promise.all([client.connect(a),server.connect(b)]);
   const call=(endpointId:string,args:Record<string,unknown>)=>client.callTool({name:'call_endpoint',arguments:{endpointId,arguments:args}});
   const login=await call('auth.login',{accountId:'operator',password:'synthetic-test-password'});expect(login.isError).toBeFalsy();
   const accessToken=JSON.parse((login.content[0] as {text:string}).text).accessToken;
+  const catalog=await client.callTool({name:'search_capabilities',arguments:{query:'skill.resolve',limit:1,maxChars:5000,accessToken}});
+  expect(JSON.parse((catalog.content[0] as {text:string}).text).endpoints[0].available).toBe(true);
   const reply=await call('skill.resolve',{skillId:'test-skill',accessToken});expect(reply.isError,JSON.stringify(reply)).toBeFalsy();
   expect(JSON.parse((reply.content[0] as {text:string}).text)).toMatchObject({status:'reviewed_limited',content:body.toString(),executionAuthorized:false});
   const card=await call('skill.resolve',{skillId:'test-skill',view:'metadata',accessToken});expect(card.isError,JSON.stringify(card)).toBeFalsy();

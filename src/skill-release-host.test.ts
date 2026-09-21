@@ -62,6 +62,22 @@ test('account-only reviewed reads need no certificates, bindings or extra listen
   await expect(f.load()).rejects.toThrow('Reviewed skill host unavailable');
 });
 
+test('source-access host uses existing document permissions without an owner grant or certificate',async()=>{
+  const f=await fixture();
+  await writeFile(f.path,JSON.stringify({version:3,authorization:'source-access',vaultPath:f.config.vaultPath,hostPath:f.hostPath}));
+  for(const p of [f.ownerPolicyPath,f.bindingsPath,f.config.listener.certPath,f.config.listener.keyPath,f.config.listener.caPath])await rm(p);
+  const host=await f.load();
+  try{
+    expect(host.listener).toBeUndefined();expect(host.ownerActivity).toBeUndefined();expect(host.ownerPolicyPath).toBeUndefined();
+    expect(host.reviewedSkills.authorization).toBeDefined();
+    await host.reviewedSkills.authorization!.revalidate();
+    expect(await host.reviewedSkills.host.entry('not-admitted')).toBeUndefined();
+    await writeFile(f.path,(await readFile(f.path,'utf8'))+'\n');
+    await expect(host.reviewedSkills.authorization!.revalidate()).rejects.toThrow();
+    expect(()=>host.reviewedSkills.authorization!.assertFresh()).toThrow();
+  }finally{host.close();}
+});
+
 test('a short host deadline expires warm authority and cannot be reopened after expiry',async()=>{
   const f=await fixture(),now=Date.now();
   (f.config as any).expiresAt=new Date(now+60_000).toISOString();await f.save();

@@ -28,6 +28,7 @@ export interface MatchedEndpoint {
 export interface EndpointAvailabilityContext {
     readOnly: boolean;
     skillEvolutionEnabled?: boolean;
+    reviewedSourceAccess?: boolean;
     capabilities: Set<ScopeCapability>;
     authenticated: boolean;
     principalKey?: string;

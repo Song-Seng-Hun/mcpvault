@@ -813,7 +813,7 @@ export function createServer(vaultPath, options = {}) {
     if (skillEvolution)
         retrieval.attachSkillEvolution(skillEvolution);
     const reviewedSkills = hasFeature('skill-evolution') && options.reviewedSkills
-        ? new ReviewedSkillService(options.reviewedSkills.host, options.reviewedSkills.source, scopeAccess, scopeAuth, ownerActivityRuntime, {
+        ? new ReviewedSkillService(options.reviewedSkills.host, options.reviewedSkills.source, scopeAccess, scopeAuth, options.reviewedSkills.authorization ?? ownerActivityRuntime, {
             refreshAccess: refreshDocumentPolicy,
             assertActor: async (principal) => {
                 if (await moderation.isBanned(principal.accountId, principal.userId))
@@ -822,6 +822,7 @@ export function createServer(vaultPath, options = {}) {
         }) : undefined;
     if (reviewedSkills)
         retrieval.attachReviewedProcedures(reviewedSkills);
+    const reviewedSourceAccess = Boolean(reviewedSkills && options.reviewedSkills?.authorization);
     ideation?.attachOutputAdapter({
         assertReadable: async (principal, path, container) => {
             try {
@@ -1757,7 +1758,7 @@ export function createServer(vaultPath, options = {}) {
             }
             const trimmedArgs = trimPaths(rawArgs, scopeAccess, principal);
             const ownerActivity = ownerActivityForEndpointTool(ownerRegistrationName);
-            if (ownerActivity)
+            if (ownerActivity && !(reviewedSourceAccess && toolName === 'resolve_skill'))
                 ownerOperation = await ownerActivityRuntime.begin(ownerActivity, ownerActionForEndpointTool(ownerRegistrationName, MUTATING_TOOLS.has(toolName), rawArgs.op), ownerRequestPaths(toolName, trimmedArgs), principal);
             await audit.record({ tool: toolName, args: rawArgs, ...(principal && { principal }), outcome: 'attempt' });
             if (principal?.enterprise?.mode === 'public' && toolName === 'publish_blog_post' && trimmedArgs.status === 'draft') {
@@ -1941,7 +1942,7 @@ export function createServer(vaultPath, options = {}) {
                     }
                     case "list_active_capabilities": {
                         const ownerState = await ownerCatalogState(principal);
-                        const result = endpointRegistry.list(undefined, trimmedArgs.limit, trimmedArgs.maxChars, { readOnly, skillEvolutionEnabled: Boolean(skillEvolution?.enabled), authenticated: Boolean(principal), capabilities: new Set(principal?.capabilities || []), principalKey: JSON.stringify(principal), roleplayConfigured: Boolean(options.roleplay), roleplayWritesConfigured: Boolean(options.roleplay?.options.policy.administrators.length), economyConfigured: Boolean(options.economy?.policy.enabled), explanationsConfigured: Boolean(explanations), benchmarksConfigured: Boolean(benchmarks), ownerActivity: ownerState }, true, { compact: true, cursor: trimmedArgs.cursor });
+                        const result = endpointRegistry.list(undefined, trimmedArgs.limit, trimmedArgs.maxChars, { readOnly, reviewedSourceAccess, skillEvolutionEnabled: Boolean(skillEvolution?.enabled), authenticated: Boolean(principal), capabilities: new Set(principal?.capabilities || []), principalKey: JSON.stringify(principal), roleplayConfigured: Boolean(options.roleplay), roleplayWritesConfigured: Boolean(options.roleplay?.options.policy.administrators.length), economyConfigured: Boolean(options.economy?.policy.enabled), explanationsConfigured: Boolean(explanations), benchmarksConfigured: Boolean(benchmarks), ownerActivity: ownerState }, true, { compact: true, cursor: trimmedArgs.cursor });
                         if (JSON.stringify(await ownerCatalogState(principal)) !== JSON.stringify(ownerState)
                             || JSON.stringify(ownerCatalogSnapshot(principal)) !== JSON.stringify(ownerState))
                             throw guidanceError(new Error('Capability owner authority changed; restart the catalog request'), 'guid-0a62aacbd9767914');
@@ -1962,7 +1963,7 @@ export function createServer(vaultPath, options = {}) {
                     }
                     case "search_capabilities": {
                         const ownerState = await ownerCatalogState(principal);
-                        const result = endpointRegistry.list(trimmedArgs.query, trimmedArgs.limit, trimmedArgs.maxChars, { readOnly, skillEvolutionEnabled: Boolean(skillEvolution?.enabled), authenticated: Boolean(principal), capabilities: new Set(principal?.capabilities || []), roleplayConfigured: Boolean(options.roleplay), roleplayWritesConfigured: Boolean(options.roleplay?.options.policy.administrators.length), economyConfigured: Boolean(options.economy?.policy.enabled), explanationsConfigured: Boolean(explanations), benchmarksConfigured: Boolean(benchmarks), ownerActivity: ownerState }, false, { cursor: trimmedArgs.cursor });
+                        const result = endpointRegistry.list(trimmedArgs.query, trimmedArgs.limit, trimmedArgs.maxChars, { readOnly, reviewedSourceAccess, skillEvolutionEnabled: Boolean(skillEvolution?.enabled), authenticated: Boolean(principal), capabilities: new Set(principal?.capabilities || []), roleplayConfigured: Boolean(options.roleplay), roleplayWritesConfigured: Boolean(options.roleplay?.options.policy.administrators.length), economyConfigured: Boolean(options.economy?.policy.enabled), explanationsConfigured: Boolean(explanations), benchmarksConfigured: Boolean(benchmarks), ownerActivity: ownerState }, false, { cursor: trimmedArgs.cursor });
                         if (JSON.stringify(await ownerCatalogState(principal)) !== JSON.stringify(ownerState)
                             || JSON.stringify(ownerCatalogSnapshot(principal)) !== JSON.stringify(ownerState))
                             throw guidanceError(new Error('Capability owner authority changed; retry with current consent'), 'guid-4d8026375f487ffa');

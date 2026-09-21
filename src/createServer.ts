@@ -116,7 +116,7 @@ import { roleplayRevision } from './roleplay-model.js';
 import { validateRoleplayQuestArtifact } from './roleplay-quest.js';
 import { WorkService } from './work-service.js';
 import { ReviewedSkillService, type ReviewedSkillInspector } from './skill-release-service.js';
-import type { ReviewedSkillHost } from './skill-release-reader.js';
+import type { ReviewedSkillHost, ReviewedSkillDeliveryFence } from './skill-release-reader.js';
 import { CommunityFeaturesService } from "./community-features.js";
 import { COMMUNITY_FEATURE_MUTATING_TOOLS, getCommunityFeatureTools } from "./community-feature-tools.js";
 import { ObsidianSearchService } from "./obsidian-search.js";
@@ -303,7 +303,7 @@ export interface CreateServerOptions extends DocumentAuthorityOptions {
   /** Concrete existing-account runtime; mutually exclusive with custom legacy callbacks. */
   evolutionRuntime?: EvolutionRuntimeConfig;
   /** Private host admission only. Never request/Vault metadata; quarantine required. */
-  reviewedSkills?: { host: ReviewedSkillHost; source: ReviewedSkillInspector };
+  reviewedSkills?: { host: ReviewedSkillHost; source: ReviewedSkillInspector; authorization?: ReviewedSkillDeliveryFence | undefined };
   /** Host-private notice registration/delegation file, reloaded before operations. */
   noticeConfigPath?: string;
   guidanceDefinitions?: readonly GuidanceDefinition[];
@@ -879,13 +879,14 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
   }) : undefined;
   if (skillEvolution) retrieval.attachSkillEvolution(skillEvolution);
   const reviewedSkills = hasFeature('skill-evolution') && options.reviewedSkills
-    ? new ReviewedSkillService(options.reviewedSkills.host, options.reviewedSkills.source, scopeAccess, scopeAuth, ownerActivityRuntime, {
+    ? new ReviewedSkillService(options.reviewedSkills.host, options.reviewedSkills.source, scopeAccess, scopeAuth, options.reviewedSkills.authorization ?? ownerActivityRuntime, {
       refreshAccess: refreshDocumentPolicy,
       assertActor: async principal => {
         if (await moderation.isBanned(principal.accountId, principal.userId)) throw Error('Reviewed skill unavailable');
       },
     }) : undefined;
   if (reviewedSkills) retrieval.attachReviewedProcedures(reviewedSkills);
+  const reviewedSourceAccess = Boolean(reviewedSkills && options.reviewedSkills?.authorization);
   ideation?.attachOutputAdapter({
     assertReadable:async(principal,path,container)=>{
       try {
@@ -1811,7 +1812,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
       }
       const trimmedArgs = trimPaths(rawArgs, scopeAccess, principal);
       const ownerActivity = ownerActivityForEndpointTool(ownerRegistrationName);
-      if (ownerActivity) ownerOperation = await ownerActivityRuntime.begin(ownerActivity,
+      if (ownerActivity && !(reviewedSourceAccess && toolName === 'resolve_skill')) ownerOperation = await ownerActivityRuntime.begin(ownerActivity,
         ownerActionForEndpointTool(ownerRegistrationName, MUTATING_TOOLS.has(toolName), rawArgs.op), ownerRequestPaths(toolName, trimmedArgs), principal);
       await audit.record({ tool: toolName, args: rawArgs, ...(principal && { principal }), outcome: 'attempt' });
       if (principal?.enterprise?.mode === 'public' && toolName === 'publish_blog_post' && trimmedArgs.status === 'draft') {
@@ -1978,7 +1979,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
             undefined,
             trimmedArgs.limit,
             trimmedArgs.maxChars,
-            { readOnly, skillEvolutionEnabled: Boolean(skillEvolution?.enabled), authenticated: Boolean(principal), capabilities: new Set(principal?.capabilities || []), principalKey: JSON.stringify(principal), roleplayConfigured: Boolean(options.roleplay), roleplayWritesConfigured: Boolean(options.roleplay?.options.policy.administrators.length), economyConfigured: Boolean(options.economy?.policy.enabled), explanationsConfigured: Boolean(explanations), benchmarksConfigured: Boolean(benchmarks), ownerActivity: ownerState },
+            { readOnly, reviewedSourceAccess, skillEvolutionEnabled: Boolean(skillEvolution?.enabled), authenticated: Boolean(principal), capabilities: new Set(principal?.capabilities || []), principalKey: JSON.stringify(principal), roleplayConfigured: Boolean(options.roleplay), roleplayWritesConfigured: Boolean(options.roleplay?.options.policy.administrators.length), economyConfigured: Boolean(options.economy?.policy.enabled), explanationsConfigured: Boolean(explanations), benchmarksConfigured: Boolean(benchmarks), ownerActivity: ownerState },
             true,
             { compact: true, cursor: trimmedArgs.cursor },
           );
@@ -2005,7 +2006,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
             trimmedArgs.query,
             trimmedArgs.limit,
             trimmedArgs.maxChars,
-            { readOnly, skillEvolutionEnabled: Boolean(skillEvolution?.enabled), authenticated: Boolean(principal), capabilities: new Set(principal?.capabilities || []), roleplayConfigured: Boolean(options.roleplay), roleplayWritesConfigured: Boolean(options.roleplay?.options.policy.administrators.length), economyConfigured: Boolean(options.economy?.policy.enabled), explanationsConfigured: Boolean(explanations), benchmarksConfigured: Boolean(benchmarks), ownerActivity: ownerState },
+            { readOnly, reviewedSourceAccess, skillEvolutionEnabled: Boolean(skillEvolution?.enabled), authenticated: Boolean(principal), capabilities: new Set(principal?.capabilities || []), roleplayConfigured: Boolean(options.roleplay), roleplayWritesConfigured: Boolean(options.roleplay?.options.policy.administrators.length), economyConfigured: Boolean(options.economy?.policy.enabled), explanationsConfigured: Boolean(explanations), benchmarksConfigured: Boolean(benchmarks), ownerActivity: ownerState },
             false,
             { cursor: trimmedArgs.cursor },
           );

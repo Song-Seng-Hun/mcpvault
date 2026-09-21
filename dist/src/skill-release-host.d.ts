@@ -4,9 +4,30 @@ import type { McpHttpOptions } from './mcp-http.js';
  * account, certificate, listener, approval, grant, MCP registration or directory.
  * Version 1 uses loopback mTLS. Version 2 reuses authenticated account sessions;
  * its fixed read-only target is a consent scope, not runtime/model attestation.
- * This bridge accepts only skill read/discover grants, even if another activity
+ * Version 3 serves reviewed documents under existing account/source ACLs, with
+ * no owner mapping, account grant, runtime attestation or extra listener.
+ * Legacy bridges accept only skill read/discover grants, even if another activity
  * already has broader consent elsewhere. A reviewed skill grants no execution. */
 export declare function loadReviewedSkillsHost(path: string, expectedVault: string): Promise<{
+    ownerPolicyPath: undefined;
+    ownerActivity: undefined;
+    listener: undefined;
+    reviewedSkills: {
+        host: import("./skill-release-reader.js").ReviewedSkillHost;
+        source: {
+            inspect(sourceName: string, options?: {
+                signal?: AbortSignal;
+                timeoutMs?: number;
+            }): Promise<import("./skill-release-source.js").SkillSourceInspection | null>;
+            close(): void;
+        };
+        authorization: {
+            assertFresh: () => undefined;
+            revalidate(): Promise<void>;
+        };
+    };
+    close(): void;
+} | {
     ownerPolicyPath: string;
     ownerActivity: OwnerActivityRuntimeOptions & {
         refresh: () => Promise<void>;
@@ -20,6 +41,7 @@ export declare function loadReviewedSkillsHost(path: string, expectedVault: stri
             }): Promise<import("./skill-release-source.js").SkillSourceInspection | null>;
             close(): void;
         };
+        authorization: undefined;
     };
     listener: McpHttpOptions | undefined;
     close(): void;

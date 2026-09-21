@@ -12,7 +12,7 @@ export interface ReviewedSkillInspector {inspect(sourceName:string):Promise<Skil
  * Raw bytes are inspected only by the host-owned verifier, never returned here. */
 export class ReviewedSkillService {
   constructor(private readonly host:ReviewedSkillHost,private readonly source:ReviewedSkillInspector,
-    private readonly access:ScopeAccessPolicy,private readonly auth:ScopeAuthService,private readonly owner:OwnerActivityRuntime,
+    private readonly access:ScopeAccessPolicy,private readonly auth:ScopeAuthService,private readonly authorization:OwnerActivityRuntime|ReviewedSkillDeliveryFence,
     private readonly options:{assertActor?:(p:ScopePrincipal)=>Promise<void>;refreshAccess?:()=>Promise<void>}={}){}
 
   async resolve(p:Record<string,any>,captureDeliveryFence?:(fence:ReviewedSkillDeliveryFence)=>void):Promise<Record<string,any>>{
@@ -48,25 +48,29 @@ export class ReviewedSkillService {
       if(Object.keys(p).some(k=>!['skillId','accessToken','principal','resourceId','expectedRelease','expectedRevision','offset','maxChars','view','section','axis','prettyPrint'].includes(k))
         ||p.view!==undefined&&p.view!=='procedure'&&p.view!=='metadata'||p.expectedRelease!==undefined&&p.expectedRevision!==undefined&&p.expectedRelease!==p.expectedRevision)return fail();
       const {principal,assertFresh:assertIdentity,revalidate:refreshActor}=this.identity(p);
+      // Reviewed document reads use current source ACLs. Legacy hosts may also
+      // require owner consent; never invent a grant to satisfy that policy.
+      const owner='begin' in this.authorization?this.authorization:undefined;
+      const hostFence='revalidate' in this.authorization?this.authorization:undefined;
       let lease:OwnerActivityOperation|undefined,discoveryLease:OwnerActivityOperation|undefined,sourceName:string|undefined,paths:readonly string[]=[];
       const assertPaths=()=>{
-        assertIdentity();if(!lease||!paths.length)return fail();lease.assertFresh();
+        assertIdentity();hostFence?.assertFresh();if(!paths.length||owner&&!lease)return fail();lease?.assertFresh();
         discoveryLease?.assertFresh();
-        for(const path of paths)if(!lease.canAccessPath(path)||!this.access.canAccessPhysicalPath(path,principal)
-          ||discovery&&!discoveryLease?.canAccessPath(path))return fail();
+        for(const path of paths)if(!this.access.canAccessPhysicalPath(path,principal)
+          ||owner&&(!lease?.canAccessPath(path)||discovery&&!discoveryLease?.canAccessPath(path)))return fail();
       };
       const authorization:ReviewedSkillAuthorization={begin:async(_id,name)=>{
-        await refreshActor();
+        await refreshActor();await hostFence?.revalidate();
         if(!/^[a-z0-9][a-z0-9-]{0,99}$/.test(name))return fail();sourceName=name;
         paths=[`Community/Skills/${name}/SKILL.md`];
-        lease=await this.owner.begin('skill-evolution','read',paths,principal);
-        if(discovery)discoveryLease=await this.owner.begin('skill-evolution','discover',paths,principal);assertPaths();
-        return {revalidate:async()=>{await refreshActor();await lease!.revalidate();await discoveryLease?.revalidate();assertPaths();},assertFresh:assertPaths};
+        lease=await owner?.begin('skill-evolution','read',paths,principal);
+        if(discovery)discoveryLease=await owner?.begin('skill-evolution','discover',paths,principal);assertPaths();
+        return {revalidate:async()=>{await refreshActor();await hostFence?.revalidate();await lease?.revalidate();await discoveryLease?.revalidate();assertPaths();},assertFresh:assertPaths};
       }};
       const checkedHost:ReviewedSkillHost={
         entry:this.host.entry.bind(this.host),assertFresh:this.host.assertFresh.bind(this.host),readBlob:this.host.readBlob.bind(this.host),verifyEvidence:this.host.verifyEvidence.bind(this.host),
         sourceFingerprint:async name=>{
-          if(name!==sourceName||!lease)return null;assertPaths();
+          if(name!==sourceName||!paths.length||owner&&!lease)return null;assertPaths();
           const snapshot=await this.source.inspect(name);
           if(!snapshot?.visible||!snapshot.inventory.complete||!snapshot.inventory.fingerprint||!snapshot.inventory.files.length||snapshot.inventory.files.length>4096)return null;
           paths=snapshot.inventory.files.map(file=>{

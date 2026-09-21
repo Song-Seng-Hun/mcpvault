@@ -13,9 +13,9 @@ export declare class ReviewedSkillService {
     private readonly source;
     private readonly access;
     private readonly auth;
-    private readonly owner;
+    private readonly authorization;
     private readonly options;
-    constructor(host: ReviewedSkillHost, source: ReviewedSkillInspector, access: ScopeAccessPolicy, auth: ScopeAuthService, owner: OwnerActivityRuntime, options?: {
+    constructor(host: ReviewedSkillHost, source: ReviewedSkillInspector, access: ScopeAccessPolicy, auth: ScopeAuthService, authorization: OwnerActivityRuntime | ReviewedSkillDeliveryFence, options?: {
         assertActor?: (p: ScopePrincipal) => Promise<void>;
         refreshAccess?: () => Promise<void>;
     });

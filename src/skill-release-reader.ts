@@ -24,7 +24,7 @@ export interface ReviewedSkillHost {
   verifyEvidence(manifest:SkillReleaseManifest):Promise<boolean>;
 }
 export interface ReviewedSkillAuthorization {
-  /** Must check real current identity, original ACL, owner consent and runtime. */
+  /** Check current identity, source ACLs and host validity; legacy hosts also check owner consent. */
   begin(skillId:string,sourceName:string):Promise<{revalidate():Promise<void>;assertFresh():void}>;
 }
 export interface ReviewedSkillDeliveryFence {revalidate():Promise<void>;assertFresh():void}

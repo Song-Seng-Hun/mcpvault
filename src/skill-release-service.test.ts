@@ -10,7 +10,7 @@ import {OwnerActivityPolicy} from './owner-activity.js';
 const roots:string[]=[];
 afterEach(async()=>{for(const root of roots.splice(0))await rm(root,{recursive:true,force:true});});
 const hash=(s:Buffer|string)=>createHash('sha256').update(s).digest('hex');
-async function fixture(discover=false){
+async function fixture(discover=false,sourceAccess=false){
   const root=await mkdtemp(join(tmpdir(),'skill-release-service-'));roots.push(root);
   const auth=new ScopeAuthService(root),sponsor=await auth.register({accountId:'sponsor',modelId:'test',password:'synthetic-test-password'});
   await auth.register({accountId:'operator',agentId:'operator',modelId:'test',password:'synthetic-test-password',accessToken:sponsor.accessToken});
@@ -34,25 +34,26 @@ async function fixture(discover=false){
   const owner=new OwnerActivityRuntime({policy:()=>policy,execution:p=>p?{accountId:p.accountId,executionTarget:'test-host'}:undefined});
   const module=await import('./skill-release-service.js').catch(()=>({ReviewedSkillService:undefined}));
   expect(module.ReviewedSkillService,'reviewed resolution must re-use current auth, source ACL and owner consent').toBeTypeOf('function');
-  const service=new module.ReviewedSkillService!(host,inspector,access,auth,owner);
+  const service=new module.ReviewedSkillService!(host,inspector,access,auth,sourceAccess?{async revalidate(){},assertFresh(){}}:owner);
   const read=(extra:Record<string,unknown>={})=>service.resolve({skillId:'test-skill',accessToken:session.accessToken,principal:session.principal,...extra});
   return {read,service,host,auth,session:{accessToken:session.accessToken,principal:session.principal},hide:()=>{visible=false;},revoke:()=>{available=false;},denyReference:()=>{permitted=false;},get reads(){return reads;}};
 }
-test('current authenticated reader receives approved bytes without requiring write capability',async()=>{
-  const f=await fixture();expect((await f.read()).content).toContain('Review procedure');
+test.each([false,true])('current authenticated reader receives approved bytes without write capability (source access=%s)',async sourceAccess=>{
+  const f=await fixture(false,sourceAccess);expect((await f.read()).content).toContain('Review procedure');
+  if(sourceAccess)expect((await f.service.discover({query:'Review',...f.session})).cards).toHaveLength(1);
 });
-test('anonymous and forged identities cannot read a blob, even with a valid release record',async()=>{
-  const f=await fixture();await expect(f.read({accessToken:undefined,principal:undefined})).rejects.toThrow();expect(f.reads).toBe(0);
+test.each([false,true])('anonymous and forged identities cannot read a blob (source access=%s)',async sourceAccess=>{
+  const f=await fixture(false,sourceAccess);await expect(f.read({accessToken:undefined,principal:undefined})).rejects.toThrow();expect(f.reads).toBe(0);
   await expect(f.read({principal:{accountId:'operator',modelId:'invented',role:'model'}})).rejects.toThrow();expect(f.reads).toBe(0);
 });
-test('hidden original, inaccessible reference or absent approval cannot fall back to raw source',async()=>{
+test.each([false,true])('hidden original, inaccessible reference or absent approval cannot fall back (source access=%s)',async sourceAccess=>{
   for(const kind of ['hidden','reference','approval']){
-    const f=await fixture();if(kind==='hidden')f.hide();else if(kind==='reference')f.denyReference();else f.revoke();
+    const f=await fixture(false,sourceAccess);if(kind==='hidden')f.hide();else if(kind==='reference')f.denyReference();else f.revoke();
     await expect(f.read()).rejects.toThrow('Reviewed skill unavailable');
   }
 });
-test('logout during resource read invalidates the response',async()=>{
-  const f=await fixture(),original=f.host.readBlob;
+test.each([false,true])('logout during resource read invalidates the response (source access=%s)',async sourceAccess=>{
+  const f=await fixture(false,sourceAccess),original=f.host.readBlob;
   f.host.readBlob=async h=>{const b=await original(h);await f.auth.endSession(f.session.accessToken);return b;};
   await expect(f.read()).rejects.toThrow('Reviewed skill unavailable');
 });

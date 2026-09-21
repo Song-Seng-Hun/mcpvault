@@ -163,7 +163,7 @@ let reviewedHost: Awaited<ReturnType<typeof loadReviewedSkillsHost>> | undefined
 try {
   if (reviewedSkillsConfig) {
     reviewedHost = await loadReviewedSkillsHost(resolve(reviewedSkillsConfig), vaultPath);
-    if (ownerConsentPath && await canonicalRoleplayPath(resolve(ownerConsentPath), true, true) !== reviewedHost.ownerPolicyPath) {
+    if (ownerConsentPath && reviewedHost.ownerPolicyPath && await canonicalRoleplayPath(resolve(ownerConsentPath), true, true) !== reviewedHost.ownerPolicyPath) {
       throw new Error('Reviewed skills refuse conflicting owner consent configurations');
     }
   }
@@ -183,7 +183,7 @@ try {
     ...(compilationHost && { compilation: { host: compilationHost, structuralRuntime: builtinVerbatimRuntime } }),
     // A legacy bridge cannot verify the execution behind a client. A policy
     // file alone must not turn labels or localhost into runtime attestation.
-    ...(reviewedHost ? { ownerActivity: reviewedHost.ownerActivity } : ownerConsentPath ? { ownerActivity: { ...await loadOwnerActivityHostConfig(resolve(ownerConsentPath), vaultPath), execution: () => undefined } } : {}),
+    ...(reviewedHost?.ownerActivity ? { ownerActivity: reviewedHost.ownerActivity } : ownerConsentPath ? { ownerActivity: { ...await loadOwnerActivityHostConfig(resolve(ownerConsentPath), vaultPath), execution: () => undefined } } : {}),
     ...(hostBenchmark?.enabled && { benchmarks: {
       enabled: true, definitions: hostBenchmark.definitions,
       accountProfiles: async () => { await benchmarkWriter?.assertHeld(); return hostBenchmark.accountProfiles(); },

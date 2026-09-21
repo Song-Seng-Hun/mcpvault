@@ -35,6 +35,7 @@ export interface MatchedEndpoint {
 export interface EndpointAvailabilityContext {
   readOnly: boolean;
   skillEvolutionEnabled?: boolean;
+  reviewedSourceAccess?: boolean;
   capabilities: Set<ScopeCapability>;
   authenticated: boolean;
   principalKey?: string;
@@ -815,11 +816,12 @@ export class EndpointRegistry {
           || context.benchmarksConfigured === false && item.endpointId.startsWith('benchmark.');
         const roleplaySetupMissing = context.roleplayWritesConfigured === false && item.endpointId.startsWith('roleplay.') && item.endpointId !== 'roleplay.computer' && item.mutating;
         const disabled = context.readOnly && item.mutating || skillDisabled || hostMissing || roleplaySetupMissing;
-        const parentAvailable = !disabled && (item.requires.length === 0 || context.authenticated && missing.length === 0 || item.endpointId === 'auth.register' || item.endpointId === 'auth.login');
+        const reviewedRead = context.reviewedSourceAccess === true && item.endpointId === 'skill.resolve';
+        const parentAvailable = !disabled && (!reviewedRead || context.authenticated) && (item.requires.length === 0 || context.authenticated && missing.length === 0 || item.endpointId === 'auth.register' || item.endpointId === 'auth.login');
         const parentState = disabled ? 'disabled' as const : parentAvailable ? 'ready' as const : 'locked' as const;
-        const parentReason = hostMissing ? 'host configuration is missing' : roleplaySetupMissing ? 'host administrator configuration is missing' : skillDisabled ? 'skill evolution is disabled by the host' : disabled ? 'server is read-only' : !context.authenticated && item.requires.length > 0 && item.endpointId !== 'auth.register' && item.endpointId !== 'auth.login' ? 'authentication required' : missing.length > 0 ? `capability required: ${missing.join(', ')}` : undefined;
+        const parentReason = hostMissing ? 'host configuration is missing' : roleplaySetupMissing ? 'host administrator configuration is missing' : skillDisabled ? 'skill evolution is disabled by the host' : disabled ? 'server is read-only' : !context.authenticated && (item.requires.length > 0 || reviewedRead) && item.endpointId !== 'auth.register' && item.endpointId !== 'auth.login' ? 'authentication required' : missing.length > 0 ? `capability required: ${missing.join(', ')}` : undefined;
         const activity = ownerActivityForEndpointTool(item.toolName);
-        const consent = (action: OwnerActivityAction) => !activity || context.ownerActivity?.eligibility[activity]?.[action] === true;
+        const consent = (action: OwnerActivityAction) => !activity || reviewedRead || context.ownerActivity?.eligibility[activity]?.[action] === true;
         const ownerProject = <T extends { available: boolean; state: 'ready' | 'locked' | 'disabled'; reason?: string }>(value: T, action: OwnerActivityAction): T =>
           value.state === 'disabled' || consent(action) ? value : { ...value, available: false, state: 'locked', reason: guidanceText('guid-664ea33a123e5a04', 'owner consent required') };
         const base = ownerProject({ available: parentAvailable, state: parentState, requires: item.requires, ...(parentReason && { reason: parentReason }) },
