@@ -1,4 +1,5 @@
-import { boundedToolCatalog, enforceResponseBudget, normalizedResponseBudget } from './mcp-response-budget.js';
+import { boundedToolCatalog, enforceResponseBudget, normalizedResponseBudget, readResponseView } from './mcp-response-budget.js';
+import { jsonPointerNode } from './json-read-page.js';
 import { noteReadMaxChars, noteReadBudgetError, boundedPropertyReadResult, boundedNoteReadResult, navigationPageArgs, boundedNavigationResult, boundedDirectoryResult, boundedWikiProjectionResult, noteContinuationConflict, boundedOutlineResult, boundedLineWindowResult } from './mcp-note-response.js';
 import { guidanceError } from './guidance-runtime.js';
 import { TaskReanchorError } from './task-reanchoring.js';
@@ -502,7 +503,7 @@ const FIXED_MCP_TOOLS: Tool[] = [
   {
     name: 'call_endpoint',
     description: 'Run one exact endpoint selected by orient_wiki or search_capabilities, with its documented arguments. Do not call the URL or search again. If orientation sets stopAfterAction, answer after this call; do not chain guides or dashboards.',
-    inputSchema: { type: 'object', properties: { endpointId: { type: 'string' }, arguments: { type: 'object', additionalProperties: true }, accessToken: { type: 'string', description: 'Optional shortcut merged into arguments.accessToken' }, prettyPrint: { type: 'boolean', default: false } }, required: ['endpointId'] },
+    inputSchema: { type: 'object', properties: { endpointId: { type: 'string' }, arguments: { type: 'object', additionalProperties: true }, accessToken: { type: 'string', description: 'Optional shortcut merged into arguments.accessToken' }, prettyPrint: { type: 'boolean', default: false }, responseView: { type: 'string', description: 'Read-only JSON Pointer; reuse original arguments. Empty selects root.' }, responseCursor: { type: 'string', maxLength: 256 } }, required: ['endpointId'] },
   },
 ];
 
@@ -1063,8 +1064,8 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
             properties: {
               query: { type: "string", description: guidanceText('guid-469a14a455a30f23', "Search query text") },
               excerptMode: { type: 'string', enum: ['compact', 'context'], description: guidanceText('guid-edfcd36fb92461c0', 'Optional context returns source paragraphs/list items/table rows (up to 350 characters), heading context and a revision-guarded read action. Default compact output is unchanged.') },
-              resultKind: { type: 'string', enum: ['notes', 'procedures'], description: 'Default notes preserves document results. Opt-in procedures returns a separate bounded reviewed-skill card packet. Requires current authenticated host consent; unsupported strict/scoped filters yield no procedure recommendations. Example: query="review", resultKind="procedures".' },
-              cursor: { type: 'string', maxLength: 36, description: 'Procedure-only opaque nextCursor from a prior response. Keep the same authenticated query. Never an access grant; stale cursors require a fresh search.' },
+              resultKind: { type: 'string', enum: ['notes', 'procedures'], description: guidanceText('guid-bb5fd26ffbf7c09a', 'Default notes preserves document results. Opt-in procedures returns a separate bounded reviewed-skill card packet. Requires current authenticated host consent; unsupported strict/scoped filters yield no procedure recommendations. Example: query="review", resultKind="procedures".') },
+              cursor: { type: 'string', maxLength: 36, description: guidanceText('guid-5973b48ae2a27be6', 'Procedure-only opaque nextCursor from a prior response. Keep the same authenticated query. Never an access grant; stale cursors require a fresh search.') },
               limit: { type: "number", description: guidanceText('guid-49936a38a5591a50', "Maximum number of documents (default: 5, max: 20)"), default: 5 },
               maxChars: { type: "integer", minimum: 512, maximum: 12000, description: guidanceText('guid-bc0102593fde3b0f', "Maximum compact JSON characters returned (default: 4000)"), default: 4000 },
               searchContent: { type: "boolean", description: guidanceText('guid-ac658b7444849ab8', "Search in note content (default: true)"), default: true },
@@ -1644,8 +1645,8 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
       return { ...tool, inputSchema: { ...tool.inputSchema, properties: {
         ...schema.properties,
         ...(OBSERVED_ENDPOINTS.has(endpointIdForTool(tool.name)) && {
-          evolutionTask: { type: 'string', maxLength: 100, description: 'Optional server-issued task ID from evolution.context begin. Not a host-session assertion.' },
-          evolutionRequestId: { type: 'string', maxLength: 100, description: 'Unique observation request ID. On lost response inspect observations; never replay blindly.' },
+          evolutionTask: { type: 'string', maxLength: 100, description: guidanceText('guid-7e7845b77114c506', 'Optional server-issued task ID from evolution.context begin. Not a host-session assertion.') },
+          evolutionRequestId: { type: 'string', maxLength: 100, description: guidanceText('guid-a300322e1ead2860', 'Unique observation request ID. On lost response inspect observations; never replay blindly.') },
         }),
         accessToken: schema.properties?.accessToken || {
           type: 'string',
@@ -1665,7 +1666,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
   // MCP host relies on a cached tools/list response and skips re-listing.
   ensureEndpointRegistry();
 
-  const dispatchCore = async (requestedToolName: string, requestArgs: Record<string, unknown> = {}): Promise<any> => guidance.run(async () => {
+  const dispatchCore = async (requestedToolName: string, requestArgs: Record<string, unknown> = {}, mcpPresentation = false): Promise<any> => guidance.run(async () => {
     const request = { params: { name: requestedToolName, arguments: requestArgs } };
     let toolName = requestedToolName;
     let args = request.params.arguments;
@@ -1717,6 +1718,12 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
       ownerRegistrationName = registrationName;
       if (!featureToolAllowed(registrationName)) throw guidanceError(new Error('Endpoint feature is disabled or unavailable in this host selection'), 'guid-e735b30a3e528734');
       toolName = operationReadAlias(toolName, rawArgs.op) || toolName;
+      const viewRequested = requestedToolName === 'call_endpoint' && (requestArgs.responseView !== undefined || requestArgs.responseCursor !== undefined);
+      if (viewRequested) {
+        if (MUTATING_TOOLS.has(toolName)) throw guidanceError(Error('Read view cannot replay a mutation; use its documented verification read.'), 'guid-d8307f91cea611e6');
+        if (toolName === 'whoami_scope') throw guidanceError(Error('Read view is not available for authentication responses.'), 'guid-f76697779cc9272b');
+        jsonPointerNode({}, (requestArgs.responseView ?? '') as string);
+      }
       if (readOnly && MUTATING_TOOLS.has(toolName)) {
         throw guidanceError(new Error(`Endpoint '${toolName}' is disabled because MCPVault is running in read-only mode.`), 'guid-189f788b35f642fb');
       }
@@ -3933,7 +3940,12 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
       finalOwnerValidator?.();
       const responseContract = endpointRegistry.resolve(toolName === 'read_work_group' ? 'work.group' : toolName === 'read_work_project' ? 'work.project' : toolName === 'read_community_participation' ? 'community.participation' : endpointIdForTool(toolName))?.input;
       const responseBudget = trimmedArgs.maxChars ?? (toolName === 'search_capabilities' ? 20000 : toolName === 'get_wiki_answer_packet' && trimmedArgs.query === undefined ? 7000 : undefined);
-      return enforceResponseBudget(toolResponse, normalizedResponseBudget(responseBudget, responseContract), toolName === 'get_agent_pulse' ? trimmedArgs : undefined);
+      const budget = normalizedResponseBudget(responseBudget, responseContract);
+      if (!('isError' in toolResponse && toolResponse.isError) && (viewRequested || mcpPresentation && requestedToolName === 'call_endpoint' && toolName === 'get_wiki_organization_manifest' && Buffer.byteLength(JSON.stringify(toolResponse)) > 5000)) {
+        return readResponseView(toolResponse, (requestArgs.responseView ?? '') as string, requestArgs.responseCursor,
+          { toolName, args: trimmedArgs, principal: principalSnapshot, policy: documentPolicy.revision() }, budget);
+      }
+      return enforceResponseBudget(toolResponse, budget, toolName === 'get_agent_pulse' ? trimmedArgs : undefined);
     } catch (error) {
       await audit.record({ tool: toolName, ...(principal && { principal }), args: rawArgs, outcome: 'error', error });
       const errorLimit = Number.isInteger(rawArgs.maxChars) && Number(rawArgs.maxChars) >= 512 ? Math.min(Number(rawArgs.maxChars), 12000) : 12000;
@@ -3953,17 +3965,17 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
   });
 
   // Both transports call this wrapper. Raw envelopes never grant a harness or a host session.
-  const dispatchTool = async (name: string, input: Record<string, any> = {}): Promise<any> => {
+  const dispatchTool = async (name: string, input: Record<string, any> = {}, mcpPresentation = false): Promise<any> => {
     const args = name === 'call_endpoint' ? { ...input.arguments, ...(input.accessToken !== undefined && { accessToken: input.accessToken }) } : input;
-    if (args.evolutionTask === undefined && args.evolutionRequestId === undefined) return dispatchCore(name, input);
+    if (args.evolutionTask === undefined && args.evolutionRequestId === undefined) return dispatchCore(name, input, mcpPresentation);
     try {
       if (!evolutionConnection) throw Error('Evolution operational connection unavailable');
       const endpoint = name === 'call_endpoint' ? endpointRegistry.resolve(input.endpointId) : endpointRegistry.resolve(endpointIdForTool(name));
       if (!endpoint) throw Error('Unknown endpoint');
       const { evolutionTask: _task, evolutionRequestId: _request, ...clean } = args;
       return await evolutionConnection.operations.run(String(args.accessToken), endpoint.endpointId, args,
-        () => dispatchCore(name, name === 'call_endpoint' ? { ...input, arguments: clean } : clean));
-    } catch { return { isError: true, content: [{ type: 'text', text: 'Evolution observation unavailable; inspect the task receipt or use an untracked read.' }] }; }
+        () => dispatchCore(name, name === 'call_endpoint' ? { ...input, arguments: clean } : clean, mcpPresentation));
+    } catch { return { isError: true, content: [{ type: 'text', text: guidanceText('guid-6b1df470620d1c99', 'Evolution observation unavailable; inspect the task receipt or use an untracked read.') }] }; }
   };
 
   const installMcpHandlers = (target: Server): void => {
@@ -3973,7 +3985,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
 
     target.setRequestHandler("tools/call", async (request) =>
       requestGate.run(
-        () => dispatchTool(request.params.name, (request.params.arguments || {}) as Record<string, unknown>),
+        () => dispatchTool(request.params.name, (request.params.arguments || {}) as Record<string, unknown>, true),
         requestFairnessKey((request.params.arguments || {}) as Record<string, unknown>),
       ));
   };

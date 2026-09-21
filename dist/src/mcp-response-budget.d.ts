@@ -1,3 +1,5 @@
+/** Caller must reject mutation replays before dispatch and authorize every read. */
+export declare function readResponseView(response: any, path: string, cursor: unknown, basis: unknown, budget: number): any;
 /** MCP discovery keeps complete schemas; oversized translations use code-owned prose. */
 export declare function boundedToolCatalog<T>(original: readonly T[], localized: readonly T[], cursor?: unknown): {
     tools: T[];

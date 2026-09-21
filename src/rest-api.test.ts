@@ -123,6 +123,18 @@ test('REST adapter uses the same dynamic endpoint registry and dispatcher', asyn
     headers: { authorization: `Bearer ${accessToken}` },
   });
   const routeNote = await routeRead.json() as any;
+  const view = await fetch(`http://127.0.0.1:${api.port}/api/notes/nested/route.md?maxChars=4000&$view=/revision`, {
+    headers: { authorization: `Bearer ${accessToken}` },
+  });
+  expect(view.status).toBe(200);
+  expect((await view.json() as any).resultPage.value).toBe(routeNote.revision);
+  const replay = await fetch(`http://127.0.0.1:${api.port}/api/endpoint/notes.write?$view=`, {
+    method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify({ path: 'must-not-replay.md', content: 'forbidden replay' }),
+  });
+  expect(replay.status).toBe(400);
+  expect(JSON.stringify(await replay.json())).toMatch(/read view.*mutation/i);
+  await expect(readFile(join(vault, 'must-not-replay.md'))).rejects.toMatchObject({ code: 'ENOENT' });
   const changes = [{ path: 'nested/route.md', expectedRevision: routeNote.revision, patches: [{ oldString: '# Route', newString: '# Coordinated route' }] }];
   const changePreview = await fetch(`http://127.0.0.1:${api.port}/api/notes/change-set`, {
     method: 'POST', headers: { 'content-type': 'application/json' },

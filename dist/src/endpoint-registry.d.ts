@@ -2,6 +2,7 @@ import type { Tool } from '@modelcontextprotocol/server';
 import type { ScopeCapability } from './scope-auth.js';
 import { operationReadAlias } from './operation-contracts.js';
 export { operationReadAlias };
+import { type JsonReadPage as DescriptorPage } from './json-read-page.js';
 import type { Activity, OwnerActivityAction } from './owner-activity.js';
 export interface EndpointDescriptor {
     endpointId: string;
@@ -45,14 +46,6 @@ export interface EndpointAvailabilityContext {
 export declare function ownerActivityForEndpointTool(toolName: string): Activity | undefined;
 export declare function ownerActionForEndpointTool(toolName: string, mutating: boolean, op?: unknown): OwnerActivityAction;
 export declare function endpointIdForTool(toolName: string): string;
-type DescriptorPage = {
-    path: string;
-    parentQuery?: string;
-    revision: string;
-    kind: string;
-    value?: unknown;
-    entries?: Array<Record<string, unknown>>;
-};
 export declare class EndpointRegistry {
     private descriptors;
     private registrationGeneration;

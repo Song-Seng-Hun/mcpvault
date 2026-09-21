@@ -7,12 +7,18 @@ import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
 import { createHash } from 'node:crypto';
 
 let testVaultPath: string;
+let activeServers: Array<{ close: () => Promise<void> }>;
+let activeClients: Array<{ close: () => Promise<void> }>;
 
 beforeEach(async () => {
   testVaultPath = await mkdtemp(join(tmpdir(), "mcpvault-test-"));
+  activeServers = [];
+  activeClients = [];
 });
 
 afterEach(async () => {
+  await Promise.all(activeClients.splice(0).map(client => client.close()));
+  await Promise.all(activeServers.splice(0).map(server => server.close()));
   try {
     await rm(testVaultPath, { recursive: true });
   } catch {
@@ -438,7 +444,7 @@ test("directory and graph navigation reads are bounded and resumable", async () 
   await writeFile(join(testVaultPath, "Target.md"), "# Target");
   await writeFile(join(testVaultPath, "Links.md"), links);
   const { server, client } = await connectClient();
-  try {
+  {
     const directory = await client.callTool({ name: "list_directory", arguments: { path: "Pages", maxChars: 1024 } });
     const directoryText = (directory.content as any)[0].text as string;
     const directoryValue = JSON.parse(directoryText);
@@ -459,14 +465,13 @@ test("directory and graph navigation reads are bounded and resumable", async () 
     const backlinksNextValue = JSON.parse((backlinksNext.content as any)[0].text);
     expect(backlinksNextValue.offset).toBe(backlinksValue.returned);
     expect(backlinksNextValue.backlinks[0].line).toBeGreaterThan(backlinksValue.backlinks.at(-1).line);
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
 async function connectClient() {
   const { server, client } = await connectMcpClient(testVaultPath, { version: "1.0.0" }, "test-client");
+  activeServers.push(server);
+  activeClients.push(client);
   const registration = await client.callTool({
     name: "register_scope_account",
     arguments: { accountId: "test-owner", modelId: "codex", password: "test-owner-password" },
@@ -479,7 +484,7 @@ test.each(['wiki.summary_candidates', 'wiki.unused_knowledge', 'wiki.resurface_a
   await writeFile(join(testVaultPath, 'Old.md'), `---\nllm_wiki_type: knowledge\n${endpointId === 'wiki.resurface_archives' ? 'lifecycle: archived\n' : ''}updated_at: 2020-01-01\ntitle: ${'Long title '.repeat(20)}\n---\n${'Current knowledge. '.repeat(50)}`);
   if (endpointId === 'wiki.resurface_archives') await writeFile(join(testVaultPath, 'Reader.md'), '[[Old]]');
   const { server, client } = await connectClient();
-  try {
+  {
     for (const maxChars of [512, 600, 850, 1024, 1600]) {
       const result = await client.callTool({ name: 'call_endpoint', arguments: {
         endpointId, arguments: { maxChars, prettyPrint: true },
@@ -489,9 +494,6 @@ test.each(['wiki.summary_candidates', 'wiki.unused_knowledge', 'wiki.resurface_a
       expect(text.length).toBeLessThanOrEqual(maxChars);
       expect(JSON.parse(text).items[0]).toMatchObject({ path: 'Old.md', nextAction: { endpointId: 'notes.read' } });
     }
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
@@ -501,7 +503,7 @@ test('archive nextScan executes through the fixed MCP executor with the same aut
   for (let i = 0; i < 21; i++) await writeFile(join(root, `A${String(i).padStart(2, '0')}.md`), '---\nlifecycle: archived\n---\nArchive');
   await writeFile(join(root, 'Reader.md'), '[[A20]]');
   const { server, client, accessToken } = await connectClient();
-  try {
+  {
     const call = async (arguments_: any) => {
       const result = await client.callTool({ name: 'call_endpoint', arguments: { endpointId: 'wiki.resurface_archives', arguments: arguments_ } });
       expect(result.isError).toBeFalsy();
@@ -515,7 +517,7 @@ test('archive nextScan executes through the fixed MCP executor with the same aut
     expect(second.nextScan).toBeUndefined();
     const bad = await client.callTool({ name: 'call_endpoint', arguments: { endpointId: 'wiki.resurface_archives', arguments: { afterPath: '../outside.md', accessToken } } });
     expect(bad.isError).toBe(true);
-  } finally { await client.close(); await server.close(); }
+  }
 });
 
 test('quality diagnostics preserve a bounded executable read through the fixed MCP surface', async () => {
@@ -523,7 +525,7 @@ test('quality diagnostics preserve a bounded executable read through the fixed M
   await mkdir(root, { recursive: true });
   await writeFile(join(root, 'Concept.md'), `---\nllm_wiki_type: knowledge\nknowledge_role: model\ntitle: ${'Detailed title '.repeat(500)}\nsummary: Obsolete secret-looking summary\nsummary_of_content_sha256: ${'0'.repeat(64)}\n---\n# Current body\n\nRead this current explanation.`);
   const { server, client, accessToken } = await connectClient();
-  try {
+  {
     expect((await client.listTools()).tools).toHaveLength(5);
     for (const maxChars of [512, 600, 1000, 6000]) {
       const result = await client.callTool({ name: 'call_endpoint', arguments: {
@@ -544,20 +546,20 @@ test('quality diagnostics preserve a bounded executable read through the fixed M
       const current = JSON.parse((read.content as any)[0].text);
       expect(current.revision).toBe(quality.revision);
     }
-  } finally { await client.close(); await server.close(); }
+  }
 });
 
 test('quality MCP rejects hidden notes without returning their title or diagnostics', async () => {
   await writeFile(join(testVaultPath, 'Hidden.md'), '---\nllm_wiki_type: knowledge\nmoderation_status: hidden\ntitle: Private diagnostic title\n---\nDo not project this body.');
   const { server, client, accessToken } = await connectClient();
-  try {
+  {
     const result = await client.callTool({ name: 'call_endpoint', arguments: {
       endpointId: 'wiki.quality_check', arguments: { path: 'Hidden.md', accessToken },
     } });
     expect(result.isError).toBe(true);
     const text = (result.content as any)[0].text;
     expect(text).not.toMatch(/Private diagnostic title|Do not project this body|"score"/);
-  } finally { await client.close(); await server.close(); }
+  }
 });
 
 test('exception board keeps a bounded private next action executable through MCP', async () => {
@@ -566,7 +568,7 @@ test('exception board keeps a bounded private next action executable through MCP
   await writeFile(join(root, 'Concept.md'), '---\nllm_wiki_type: knowledge\nnote_kind: atomic\nlifecycle: invalid\n---\nCurrent explanation.');
   await writeFile(join(testVaultPath, 'Hidden.md'), '---\nllm_wiki_type: knowledge\nmoderation_status: hidden\n---\nPrivate body.');
   const { server, client, accessToken } = await connectClient();
-  try {
+  {
     expect((await client.listTools()).tools).toHaveLength(5);
     for (const grouped of [false, true]) for (const maxChars of [512, 7000]) {
       const result = await client.callTool({ name: 'call_endpoint', arguments: {
@@ -594,7 +596,7 @@ test('exception board keeps a bounded private next action executable through MCP
       expect(read.isError).toBeFalsy();
       expect(JSON.parse((read.content as any)[0].text).revision).toBe(item.revision);
     }
-  } finally { await client.close(); await server.close(); }
+  }
 });
 
 test('direct lint and organization health retain bounded executable scoped repairs through MCP', async () => {
@@ -603,7 +605,7 @@ test('direct lint and organization health retain bounded executable scoped repai
   await writeFile(join(root, 'Concept.md'), '---\nllm_wiki_type: knowledge\nlifecycle: invalid\n---\nCurrent explanation.');
   await writeFile(join(testVaultPath, 'Hidden.md'), '---\nllm_wiki_type: knowledge\nmoderation_status: hidden\n---\nPrivate body.');
   const { server, client, accessToken } = await connectClient();
-  try {
+  {
     expect((await client.listTools()).tools).toHaveLength(5);
     for (const endpointId of ['mcp.lint_wiki', 'wiki.organization_health']) {
       const result = await client.callTool({ name: 'call_endpoint', arguments: {
@@ -623,7 +625,7 @@ test('direct lint and organization health retain bounded executable scoped repai
       expect(read.isError).toBeFalsy();
       expect(JSON.parse((read.content as any)[0].text).revision).toBe(report.issues[0].revision);
     }
-  } finally { await client.close(); await server.close(); }
+  }
 });
 
 test('organization collection repair reads the exact scoped member without hidden or foreign groups', async () => {
@@ -635,7 +637,7 @@ test('organization collection repair reads the exact scoped member without hidde
   await writeFile(join(foreign, 'Foreign.md'), '---\nnote_kind: atomic\ndomain: Foreign group\n---\nForeign body.');
   await writeFile(join(testVaultPath, 'Hidden.md'), '---\nnote_kind: moc\ndomain: Hidden group\nmoderation_status: hidden\n---\nHidden body.');
   const { server, client, accessToken } = await connectClient();
-  try {
+  {
     expect((await client.listTools()).tools).toHaveLength(5);
     const result = await client.callTool({ name: 'call_endpoint', arguments: {
       endpointId: 'wiki.organization_health', arguments: { maxChars: 16000, accessToken },
@@ -652,12 +654,12 @@ test('organization collection repair reads the exact scoped member without hidde
     } });
     expect(read.isError).toBeFalsy();
     expect(JSON.parse((read.content as any)[0].text).revision).toBe(item.repairTarget.revision);
-  } finally { await client.close(); await server.close(); }
+  }
 });
 
 test("search_notes bounds output and prioritizes Wiki notes", async () => {
   const { server, client } = await connectClient();
-  try {
+  {
     await mkdir(join(testVaultPath, "_wiki"), { recursive: true });
     await writeFile(join(testVaultPath, "ordinary.md"), "# Ordinary\n\nneedle needle needle needle.");
     await writeFile(join(testVaultPath, "_wiki", "knowledge.md"), "---\nllm_wiki_type: knowledge\n---\n\n# Knowledge\n\nneedle once.");
@@ -667,9 +669,6 @@ test("search_notes bounds output and prioritizes Wiki notes", async () => {
     const parsed = JSON.parse(text);
     expect(parsed[0]).toMatchObject({ p: "_wiki/knowledge.md", wk: true });
     expect(text.length).toBeLessThanOrEqual(512);
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
@@ -688,7 +687,7 @@ test("search capability documents explicit authority confidence without implying
 
 test("external Markdown edits invalidate the Wiki catalog without a restart", async () => {
   const { server, client } = await connectClient();
-  try {
+  {
     await mkdir(join(testVaultPath, "_wiki"), { recursive: true });
     const before = await client.callTool({ name: "get_wiki_catalog", arguments: {} });
     expect(JSON.parse((before.content as any)[0].text).schemaPresent).toBe(false);
@@ -700,15 +699,12 @@ test("external Markdown edits invalidate the Wiki catalog without a restart", as
     const catalog = JSON.parse((after.content as any)[0].text);
     expect(catalog.schemaPresent).toBe(true);
     expect(catalog.entries).toContainEqual({ path: "_wiki/SCHEMA.md", type: "schema" });
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
 test("semantic search is optional and falls back to lexical results", async () => {
   const { server, client, accessToken } = await connectClient();
-  try {
+  {
     await client.callTool({ name: "write_note", arguments: { path: "korean.md", content: "# 한국어\n\n벡터 검색 장애에도 원문 검색은 계속되어야 합니다.", accessToken } });
     const result = await client.callTool({ name: "search_notes", arguments: { query: "벡터 검색", semantic: true, maxChars: 512 } });
     expect(result.isError).toBeFalsy();
@@ -718,15 +714,12 @@ test("semantic search is optional and falls back to lexical results", async () =
     const status = await client.callTool({ name: "semantic_search_status", arguments: {} });
     const statusJson = JSON.parse((status.content as any)[0].text);
     expect(statusJson).toMatchObject({ enabled: true, model: "Xenova/multilingual-e5-small" });
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
 test('wiki_link replacement resolves exact fragments through the dynamic read-only endpoint', async () => {
   const { server, client } = await connectClient();
-  try {
+  {
     await writeFile(join(testVaultPath, 'Fragment.md'), '# First\nvalue ^point\n# Last\nother');
     const call = await client.callTool({ name: 'call_endpoint', arguments: { endpointId: 'notes.resolve_link', arguments: { document: '[[Fragment#^point]]', maxChars: 2000 } } });
     expect(call.isError).toBeFalsy();
@@ -737,12 +730,12 @@ test('wiki_link replacement resolves exact fragments through the dynamic read-on
     await writeFile(join(testVaultPath, 'Fragment.md'), '# New\nchanged');
     const stale = await client.callTool({ name: 'call_endpoint', arguments: result.readAction });
     expect((stale.content as any)[0].text).toMatch(/revision_conflict|changed|revision/i);
-  } finally { await client.close(); await server.close(); }
+  }
 });
 
 test("wiki_link returns isError on invalid syntax (backslash in parsed)", async () => {
   const { server, client } = await connectClient();
-  try {
+  {
     const result = await client.callTool({
       name: "wiki_link",
       arguments: { document: "[[Foo\\\\|Bar]]" },
@@ -751,15 +744,12 @@ test("wiki_link returns isError on invalid syntax (backslash in parsed)", async 
     const text = (result.content as any)[0].text as string;
     expect(text).toMatch(/Invalid wiki-link syntax/);
     expect((result.structuredContent as any).rawInput).toBe("[[Foo\\\\|Bar]]");
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
 test("wiki_link returns isError on zero match with document echo", async () => {
   const { server, client } = await connectClient();
-  try {
+  {
     await writeFile(join(testVaultPath, "Other.md"), "# Other");
     const result = await client.callTool({
       name: "wiki_link",
@@ -771,15 +761,12 @@ test("wiki_link returns isError on zero match with document echo", async () => {
     expect(text).toContain("search_notes");
     const sc = result.structuredContent as any;
     expect(sc.document).toBe("Missing");
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
 test("wiki_link single match omits alternatives", async () => {
   const { server, client } = await connectClient();
-  try {
+  {
     await writeFile(join(testVaultPath, "Note.md"), "# Note\n\nbody");
     const result = await client.callTool({
       name: "wiki_link",
@@ -792,15 +779,12 @@ test("wiki_link single match omits alternatives", async () => {
     expect("alternatives" in sc).toBe(false);
     expect(sc.ambiguous).toBeUndefined();
     expect(sc.matches).toBeUndefined();
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
 test("wiki_link multi match resolves first sorted path and lists alternatives", async () => {
   const { server, client } = await connectClient();
-  try {
+  {
     await writeFile(join(testVaultPath, "Note.md"), "# Root Note");
     await mkdir(join(testVaultPath, "deep"), { recursive: true });
     await writeFile(join(testVaultPath, "deep/Note.md"), "# Deep Note");
@@ -814,15 +798,12 @@ test("wiki_link multi match resolves first sorted path and lists alternatives", 
     expect(sc.alternatives).toEqual(["deep/Note.md"]);
     expect(sc.ambiguous).toBeUndefined();
     expect(sc.matches).toBeUndefined();
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
 test("wiki_link unescapes table-authored \\| inside brackets", async () => {
   const { server, client } = await connectClient();
-  try {
+  {
     await writeFile(join(testVaultPath, "My Document.md"), "# My Document\n\ncontent");
     const result = await client.callTool({
       name: "wiki_link",
@@ -832,15 +813,12 @@ test("wiki_link unescapes table-authored \\| inside brackets", async () => {
     const sc = result.structuredContent as any;
     expect(sc.document).toBe("My Document");
     expect(sc.path).toBe("My Document.md");
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
 test("wiki_link resolves path-qualified link to the exact file", async () => {
   const { server, client } = await connectClient();
-  try {
+  {
     await writeFile(join(testVaultPath, "Note.md"), "# Root Note");
     await mkdir(join(testVaultPath, "deep"), { recursive: true });
     await writeFile(join(testVaultPath, "deep/Note.md"), "# Deep Note");
@@ -853,9 +831,6 @@ test("wiki_link resolves path-qualified link to the exact file", async () => {
     expect(sc.document).toBe("deep/Note");
     expect(sc.path).toBe("deep/Note.md");
     expect("alternatives" in sc).toBe(false);
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
@@ -963,7 +938,7 @@ test("read-only mode exposes read tools and rejects every vault mutation", async
 
 test("generic mutation tools cannot bypass managed community APIs", async () => {
   const { server, client, accessToken } = await connectClient();
-  try {
+  {
     for (const path of [
       "Community/Posts/forbidden.md",
       "Community/Ideas/forbidden.md",
@@ -975,15 +950,12 @@ test("generic mutation tools cannot bypass managed community APIs", async () => 
       expect(result.isError).toBe(true);
       expect((result.content as any)[0].text).toContain("dedicated community tool");
     }
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
 test("daily_note creates safely, appends, and reads the note", async () => {
   const { server, client, accessToken } = await connectClient();
-  try {
+  {
     const created = await client.callTool({
       name: "daily_note",
       arguments: { action: "create", date: "2026-09-01", folder: "Journal", content: "# Today", accessToken },
@@ -1011,15 +983,12 @@ test("daily_note creates safely, appends, and reads the note", async () => {
       arguments: { action: "create", date: "2026-09-01", folder: "Journal", content: "overwritten", accessToken },
     });
     expect(JSON.parse((noOverwrite.content as any)[0].text).created).toBe(false);
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
 test("list_tasks returns filtered tasks and ignores frontmatter and code fences", async () => {
   const { server, client } = await connectClient();
-  try {
+  {
     await mkdir(join(testVaultPath, "Projects"), { recursive: true });
     await writeFile(join(testVaultPath, "Projects/Plan.md"), [
       "---",
@@ -1046,15 +1015,12 @@ test("list_tasks returns filtered tasks and ignores frontmatter and code fences"
       { path: "Projects/Plan.md", line: 5, text: "Open task", status: "open" },
       { path: "Projects/Plan.md", line: 6, text: "Completed child", status: "completed" },
     ]);
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
 test("list_tasks keeps pathological task text inside an explicit response budget", async () => {
   const { server, client } = await connectClient();
-  try {
+  {
     await mkdir(join(testVaultPath, "Projects"), { recursive: true });
     await writeFile(join(testVaultPath, "Projects/Long task.md"), `- [ ] ${"context ".repeat(2000)}`);
 
@@ -1086,15 +1052,12 @@ test("list_tasks keeps pathological task text inside an explicit response budget
       returned: 1,
       truncated: true,
     });
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
 test("query_notes filters and sorts frontmatter through the MCP tool", async () => {
   const { server, client } = await connectClient();
-  try {
+  {
     await writeFile(join(testVaultPath, "Alpha.md"), [
       "---",
       "status: active",
@@ -1131,15 +1094,12 @@ test("query_notes filters and sorts frontmatter through the MCP tool", async () 
       total: 2,
       truncated: false,
     });
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
 test("revision tools checkpoint ordinary edits and restore one note safely", async () => {
   const { server, client, accessToken } = await connectClient();
-  try {
+  {
     const initialized = await client.callTool({
       name: "initialize_revision_history",
       arguments: { confirm: true, accessToken },
@@ -1218,15 +1178,12 @@ test("revision tools checkpoint ordinary edits and restore one note safely", asy
     expect(restored.isError).toBeFalsy();
     const note = await client.callTool({ name: "read_note", arguments: { path: "Plan.md" } });
     expect(JSON.parse((note.content as any)[0].text).content).toBe("version one");
-  } finally {
-    await client.close();
-    await server.close();
   }
 }, 15000);
 
 test("find_orphan_notes excludes linked notes and self-links", async () => {
   const { server, client } = await connectClient();
-  try {
+  {
     await writeFile(join(testVaultPath, "Linked.md"), "linked");
     await writeFile(join(testVaultPath, "Source.md"), "[[Linked]]");
     await writeFile(join(testVaultPath, "Self.md"), "[[Self]]");
@@ -1244,15 +1201,12 @@ test("find_orphan_notes excludes linked notes and self-links", async () => {
       total: 3,
       truncated: false,
     });
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
 test("find_unresolved_links reports only real broken internal links", async () => {
   const { server, client } = await connectClient();
-  try {
+  {
     await writeFile(join(testVaultPath, "Target.md"), "target");
     await writeFile(join(testVaultPath, "asset.png"), "not markdown");
     await writeFile(join(testVaultPath, "Source.md"), [
@@ -1281,15 +1235,12 @@ test("find_unresolved_links reports only real broken internal links", async () =
       total: 1,
       truncated: false,
     });
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
 test("get_outlinks returns destinations and ignores literal examples", async () => {
   const { server, client } = await connectClient();
-  try {
+  {
     await writeFile(join(testVaultPath, "Source.md"), [
       "See [[Target|the target]].",
       "Embed: ![[folder/Other#Details]].",
@@ -1327,15 +1278,12 @@ test("get_outlinks returns destinations and ignores literal examples", async () 
       total: 2,
       truncated: false,
     });
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
 test("get_outlinks hides private note targets from public callers", async () => {
   const { server, client } = await connectClient();
-  try {
+  {
     await mkdir(join(testVaultPath, "_scopes", "models", "private-model"), { recursive: true });
     await writeFile(join(testVaultPath, "_scopes", "models", "private-model", "Secret.md"), "private\n");
     await writeFile(join(testVaultPath, "Source.md"), "A hidden reference: [[Secret]].\n");
@@ -1343,15 +1291,12 @@ test("get_outlinks hides private note targets from public callers", async () => 
     const result = await client.callTool({ name: "get_outlinks", arguments: { path: "Source.md" } });
     expect(result.isError).toBeFalsy();
     expect(JSON.parse((result.content as any)[0].text)).toMatchObject({ outlinks: [], total: 0, truncated: false });
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
 test("get_backlinks returns real internal-link occurrences with line context", async () => {
   const { server, client } = await connectClient();
-  try {
+  {
     await mkdir(join(testVaultPath, "Projects"), { recursive: true });
     await writeFile(join(testVaultPath, "Target.md"), "# Target");
     await writeFile(join(testVaultPath, "Projects", "Source.md"), [
@@ -1394,8 +1339,5 @@ test("get_backlinks returns real internal-link occurrences with line context", a
         targetHeading: "Details",
       },
     ]);
-  } finally {
-    await client.close();
-    await server.close();
   }
 });

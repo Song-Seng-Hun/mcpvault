@@ -8,6 +8,7 @@ import { createMcpHandler } from '@modelcontextprotocol/server';
 import { getServerRuntime } from './createServer.js';
 import { withEnterpriseRequestContext } from './enterprise-request-context.js';
 import { allowedReviewedSkillRequest } from './skill-release-http-policy.js';
+import { configureHttpServer, createRateLimiter, isLoopbackHost, MAX_HTTP_BODY_BYTES, originAllowed, readRequestBody, requestHost } from './http-request-utils.js';
 function headerValues(request) {
     const headers = new Headers();
     for (const [name, value] of Object.entries(request.headers)) {
@@ -16,30 +17,14 @@ function headerValues(request) {
     }
     return headers;
 }
-async function readBody(request, maxBytes) {
-    const chunks = [];
-    let size = 0;
-    for await (const chunk of request) {
-        const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-        size += buffer.byteLength;
-        if (size > maxBytes)
-            throw guidanceError(new Error(`request body exceeds ${maxBytes} bytes`), 'guid-668226077e0f44fa');
-        chunks.push(buffer);
-    }
-    return Buffer.concat(chunks).toString('utf8');
-}
 function isRecord(value) {
     return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
-const MAX_HTTP_BODY_BYTES = 2 * 1024 * 1024;
 const MAX_RATE_BUCKETS = 4_096;
 const REGISTRATION_WINDOW_MS = 10 * 60 * 1_000;
 const MAX_REGISTRATIONS_PER_WINDOW = 5;
 const LOGIN_WINDOW_MS = 60 * 1_000;
 const MAX_LOGINS_PER_WINDOW = 120;
-function isLoopbackHost(host) {
-    return ['127.0.0.1', 'localhost', '::1'].includes(host.trim().toLowerCase());
-}
 /**
  * LAN mode must be addressed to a concrete private interface. Wildcard and
  * public binds are intentionally rejected so a typo cannot publish MCP over
@@ -95,21 +80,6 @@ function injectBearer(body, bearer) {
             arguments: { ...arguments_, accessToken: bearer },
         },
     };
-}
-function requestHost(request) {
-    const host = request.headers.host;
-    if (!host)
-        return undefined;
-    try {
-        return new URL(`http://${host}`).hostname.toLowerCase();
-    }
-    catch {
-        return undefined;
-    }
-}
-function originAllowed(request, allowedOrigins) {
-    const origin = request.headers.origin;
-    return typeof origin !== 'string' || allowedOrigins.includes(origin);
 }
 /**
  * A client certificate is trusted only after Node's TLS verifier accepts the
@@ -180,52 +150,8 @@ export async function startMcpHttpApi(server, options = {}) {
         responseMode: 'auto',
         onerror: error => console.error(error),
     });
-    const registrationWindows = new Map();
-    const registrationAllowed = (key) => {
-        const now = Date.now();
-        const current = registrationWindows.get(key);
-        if (!current || now - current.startedAt >= REGISTRATION_WINDOW_MS) {
-            if (registrationWindows.size >= MAX_RATE_BUCKETS) {
-                for (const [bucket, value] of registrationWindows) {
-                    if (now - value.startedAt >= REGISTRATION_WINDOW_MS)
-                        registrationWindows.delete(bucket);
-                    if (registrationWindows.size < MAX_RATE_BUCKETS)
-                        break;
-                }
-            }
-            if (registrationWindows.size >= MAX_RATE_BUCKETS && !registrationWindows.has(key))
-                return false;
-            registrationWindows.set(key, { startedAt: now, count: 1 });
-            return true;
-        }
-        if (current.count >= MAX_REGISTRATIONS_PER_WINDOW)
-            return false;
-        current.count += 1;
-        return true;
-    };
-    const loginWindows = new Map();
-    const loginAllowed = (key) => {
-        const now = Date.now();
-        const current = loginWindows.get(key);
-        if (!current || now - current.startedAt >= LOGIN_WINDOW_MS) {
-            if (loginWindows.size >= MAX_RATE_BUCKETS) {
-                for (const [bucket, value] of loginWindows) {
-                    if (now - value.startedAt >= LOGIN_WINDOW_MS)
-                        loginWindows.delete(bucket);
-                    if (loginWindows.size < MAX_RATE_BUCKETS)
-                        break;
-                }
-            }
-            if (loginWindows.size >= MAX_RATE_BUCKETS && !loginWindows.has(key))
-                return false;
-            loginWindows.set(key, { startedAt: now, count: 1 });
-            return true;
-        }
-        if (current.count >= MAX_LOGINS_PER_WINDOW)
-            return false;
-        current.count += 1;
-        return true;
-    };
+    const registrationAllowed = createRateLimiter(REGISTRATION_WINDOW_MS, MAX_REGISTRATIONS_PER_WINDOW, MAX_RATE_BUCKETS);
+    const loginAllowed = createRateLimiter(LOGIN_WINDOW_MS, MAX_LOGINS_PER_WINDOW, MAX_RATE_BUCKETS);
     const requestHandler = async (request, response) => {
         try {
             const requestUrl = new URL(request.url || '/', `http://${request.headers.host || host}`);
@@ -261,7 +187,7 @@ export async function startMcpHttpApi(server, options = {}) {
                 response.end('Client certificate required');
                 return;
             }
-            const rawBody = request.method === 'GET' || request.method === 'HEAD' ? '' : await readBody(request, maxBodyBytes);
+            const rawBody = request.method === 'GET' || request.method === 'HEAD' ? '' : await readRequestBody(request, maxBodyBytes);
             if (options.requestProfile === 'reviewed-skill-read') {
                 let candidate;
                 try {
@@ -345,12 +271,7 @@ export async function startMcpHttpApi(server, options = {}) {
             rejectUnauthorized: options.requireClientCertificate ? true : options.tls.rejectUnauthorized ?? Boolean(options.tls.ca),
         }, requestHandler)
         : createHttpServer(requestHandler);
-    httpServer.requestTimeout = 30_000;
-    httpServer.headersTimeout = 10_000;
-    httpServer.keepAliveTimeout = 5_000;
-    httpServer.maxHeadersCount = 64;
-    httpServer.maxRequestsPerSocket = 100;
-    httpServer.maxConnections = Math.min(Math.max(Math.trunc(options.maxConnections ?? 256), 1), 2_048);
+    configureHttpServer(httpServer, options.maxConnections);
     await new Promise((resolve, reject) => {
         const onError = (error) => { httpServer.off('listening', onListening); reject(error); };
         const onListening = () => { httpServer.off('error', onError); resolve(); };

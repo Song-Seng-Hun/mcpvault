@@ -1,5 +1,10 @@
 import { expect, test } from 'vitest';
 import * as budgets from './mcp-response-budget.js';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { connectMcpClient } from '../tests/server-fixture.js';
+import { getServerRuntime } from './createServer.js';
 
 test('MCP tool catalog keeps exact schemas within a 5,000-byte result', () => {
   expect(typeof budgets.boundedToolCatalog).toBe('function');
@@ -49,4 +54,50 @@ test('catalog cursors reject stale, malformed and out-of-range reads', () => {
 test('an indivisible oversized tool schema fails explicitly instead of disappearing', () => {
   const tools = [{ name: 'large', inputSchema: { const: 'x'.repeat(6000) } }];
   expect(() => budgets.boundedToolCatalog(tools, tools)).toThrow(/schema.*5000/i);
+});
+
+test('read views preserve exact large values and bind continuation to current authority and value', () => {
+  const text = '한국어😀\\"'.repeat(2000) + '\uD800';
+  const response = { content: [{ type: 'text', text: JSON.stringify({ source: text, count: 7 }) }] };
+  const first = budgets.readResponseView(response, '/source', undefined, 'actor:1', 512);
+  let page = first, restored = '';
+  for (;;) {
+    expect(Buffer.byteLength(JSON.stringify(page))).toBeLessThanOrEqual(512);
+    const value = JSON.parse(page.content[0].text);
+    restored += value.resultPage.value.text;
+    if (!value.nextCursor) break;
+    page = budgets.readResponseView(response, '/source', value.nextCursor, 'actor:1', 512);
+  }
+  expect(restored).toBe(text);
+  const cursor = JSON.parse(first.content[0].text).nextCursor;
+  expect(() => budgets.readResponseView(response, '/source', cursor, 'actor:2', 512)).toThrow(/cursor/i);
+  const changed = { content: [{ type: 'text', text: JSON.stringify({ source: text + 'changed' }) }] };
+  expect(() => budgets.readResponseView(changed, '/source', cursor, 'actor:1', 512)).toThrow(/cursor/i);
+  const changedSibling = { content: [{ type: 'text', text: JSON.stringify({ source: text, count: 8 }) }] };
+  expect(() => budgets.readResponseView(changedSibling, '/source', cursor, 'actor:1', 512)).toThrow(/cursor/i);
+  expect(() => budgets.readResponseView(response, '/missing', undefined, 'actor:1', 512)).toThrow(/path/i);
+  expect(() => budgets.readResponseView(response, '/bad~2key', undefined, 'actor:1', 512)).toThrow(/path/i);
+});
+
+test('dispatch reads an authorized response view and rejects mutation replay before execution', async () => {
+  const vault = await mkdtemp(join(tmpdir(), 'mcpvault-read-view-'));
+  const { server, client } = await connectMcpClient(vault, { readOnly: true });
+  try {
+    const call = getServerRuntime(server)!.dispatchTool;
+    const full = await call('get_wiki_organization_manifest', { maxChars: 20000 });
+    const viewed = await call('call_endpoint', { endpointId: 'wiki.organization_manifest', arguments: { maxChars: 20000 }, responseView: '/contracts/noteKinds' });
+    expect(viewed.isError).toBeFalsy();
+    expect(JSON.parse(viewed.content[0].text).resultPage.value).toEqual(JSON.parse(full.content[0].text).contracts.noteKinds);
+    expect(Buffer.byteLength(JSON.stringify(viewed))).toBeLessThanOrEqual(5000);
+    const legacy = await call('call_endpoint', { endpointId: 'wiki.organization_manifest', arguments: { maxChars: 20000 } });
+    expect(legacy).toEqual(full); // Internal/REST calls retain their existing JSON shape.
+    const root = await call('call_endpoint', { endpointId: 'wiki.organization_manifest', arguments: { maxChars: 20000 }, responseView: '' });
+    expect(JSON.parse(root.content[0].text).resultPage.path).toBe('');
+    expect(Buffer.byteLength(JSON.stringify(root))).toBeLessThanOrEqual(5000);
+    const displayed = await client.callTool({ name: 'call_endpoint', arguments: { endpointId: 'wiki.organization_manifest', arguments: { maxChars: 20000 } } });
+    expect(displayed).toEqual(root);
+    const rejected = await call('call_endpoint', { endpointId: 'auth.register', responseView: '' });
+    expect(rejected.isError).toBe(true);
+    expect(rejected.content[0].text).toMatch(/read view.*mutation/i);
+  } finally { await client.close(); await server.close(); await rm(vault, { recursive: true, force: true }); }
 });

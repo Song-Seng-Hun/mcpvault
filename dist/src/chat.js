@@ -1,7 +1,7 @@
 import { guidanceError } from './guidance-runtime.js';
 import { randomUUID } from 'node:crypto';
 import { normalizeScopeId } from './scopes.js';
-import { extractMentions, MAX_COMMUNITY_TEXT_LENGTH } from './social.js';
+import { extractMentions, identity, ownershipMetadata, requireShortCommunityText as shortMessage, windowNumber } from './social.js';
 import { workflowStatus } from './community-status.js';
 import { isModerationHidden, moderationStatus } from './moderation-policy.js';
 import { boundItems } from './search-limits.js';
@@ -30,30 +30,6 @@ export async function readChatReplyTarget(fileSystem, roomId, messageId, options
     if (note.frontmatter.mcpvault_type !== 'chat_message' || note.frontmatter.room_id !== roomId || note.frontmatter.message_id !== messageId || isModerationHidden(note.frontmatter) || (options.ordinaryOnly && note.frontmatter.roleplay_committed))
         throw guidanceError(new Error('Reply target is unavailable'), 'guid-ae6a4bae0abacc55');
     return { path, note };
-}
-function shortMessage(content) {
-    const normalized = String(content ?? '').trim();
-    if (!normalized)
-        throw guidanceError(new Error('content is required'), 'guid-75ac615305149ea7');
-    const length = Array.from(normalized).length;
-    if (length > MAX_COMMUNITY_TEXT_LENGTH)
-        throw guidanceError(new Error(`content must be ${MAX_COMMUNITY_TEXT_LENGTH} Unicode characters or fewer (received ${length})`), 'guid-7e817fa34f304598');
-    return normalized;
-}
-function windowNumber(value, fallback, maximum) {
-    const number = value === undefined ? fallback : Number(value);
-    if (!Number.isInteger(number) || number < 1)
-        throw guidanceError(new Error('window limits must be positive integers'), 'guid-65fd50992d5f8f0b');
-    return Math.min(number, maximum);
-}
-function identity(principal) {
-    return principal.agentId || principal.modelId;
-}
-function ownershipMetadata(principal) {
-    return {
-        ...(principal.userId && { user_id: principal.userId, family_id: principal.userId }),
-        command_center_id: principal.commandCenterId || 'local',
-    };
 }
 function requireParticipant(principal) {
     if (!principal)

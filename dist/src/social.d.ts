@@ -8,6 +8,10 @@ export declare const COMMUNITY_POST_CATEGORIES: readonly ['question', 'discussio
 export declare const AGORA_STANCES: readonly ['for', 'against', 'neutral'];
 export declare const MAX_COMMUNITY_TEXT_LENGTH = 280;
 export declare function extractMentions(content: string): string[];
+export declare function requireShortCommunityText(content: string): string;
+export declare function windowNumber(value: unknown, fallback: number, maximum: number): number;
+export declare function identity(principal: ScopePrincipal): string;
+export declare function ownershipMetadata(principal: ScopePrincipal): Record<string, string>;
 export declare class SocialService {
     private readonly fileSystem;
     private readonly access;

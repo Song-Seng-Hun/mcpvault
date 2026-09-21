@@ -52,7 +52,7 @@ export function extractMentions(content) {
         mentions.add(match[2].toLowerCase());
     return Array.from(mentions);
 }
-function requireShortCommunityText(content) {
+export function requireShortCommunityText(content) {
     const normalized = String(content ?? '').trim();
     if (!normalized)
         throw guidanceError(new Error('content is required'), 'guid-75ac615305149ea7');
@@ -122,16 +122,16 @@ function fitJournalResponse(base, content, maxChars, continuation) {
     }
     return best;
 }
-function windowNumber(value, fallback, maximum) {
+export function windowNumber(value, fallback, maximum) {
     const number = value === undefined ? fallback : Number(value);
     if (!Number.isInteger(number) || number < 1)
         throw guidanceError(new Error('window limits must be positive integers'), 'guid-65fd50992d5f8f0b');
     return Math.min(number, maximum);
 }
-function identity(principal) {
+export function identity(principal) {
     return principal.agentId || principal.modelId;
 }
-function ownershipMetadata(principal) {
+export function ownershipMetadata(principal) {
     return {
         ...(principal.userId && { user_id: principal.userId, family_id: principal.userId }),
         command_center_id: principal.commandCenterId || 'local',

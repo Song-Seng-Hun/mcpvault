@@ -62,7 +62,7 @@ export function extractMentions(content: string): string[] {
   return Array.from(mentions);
 }
 
-function requireShortCommunityText(content: string): string {
+export function requireShortCommunityText(content: string): string {
   const normalized = String(content ?? '').trim();
   if (!normalized) throw guidanceError(new Error('content is required'), 'guid-75ac615305149ea7');
   const length = Array.from(normalized).length;
@@ -124,17 +124,17 @@ function fitJournalResponse<T extends { path: string; revision: string; [key: st
   return best;
 }
 
-function windowNumber(value: unknown, fallback: number, maximum: number): number {
+export function windowNumber(value: unknown, fallback: number, maximum: number): number {
   const number = value === undefined ? fallback : Number(value);
   if (!Number.isInteger(number) || number < 1) throw guidanceError(new Error('window limits must be positive integers'), 'guid-65fd50992d5f8f0b');
   return Math.min(number, maximum);
 }
 
-function identity(principal: ScopePrincipal): string {
+export function identity(principal: ScopePrincipal): string {
   return principal.agentId || principal.modelId;
 }
 
-function ownershipMetadata(principal: ScopePrincipal): Record<string, string> {
+export function ownershipMetadata(principal: ScopePrincipal): Record<string, string> {
   return {
     ...(principal.userId && { user_id: principal.userId, family_id: principal.userId }),
     command_center_id: principal.commandCenterId || 'local',

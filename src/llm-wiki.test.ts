@@ -12,6 +12,8 @@ import { ReferenceService } from './references.js';
 import { LlmWikiService } from './llm-wiki.js';
 
 let vault: string;
+let activeServers: Array<{ close: () => Promise<void> }>;
+let activeClients: Array<{ close: () => Promise<void> }>;
 
 test('dynamic review and impact distinguish missing metadata bodies from real source edits', async () => {
   const body = '# Current\nGrounded knowledge.\n';
@@ -19,7 +21,7 @@ test('dynamic review and impact distinguish missing metadata bodies from real so
   await writeFile(join(vault, 'Fresh.md'), `---\nllm_wiki_type: knowledge\nnote_kind: atomic\nlifecycle: evergreen\nsummary: Current summary\nsummary_of_content_sha256: ${sha}\nreview_policy: on_any_edit\nreview_basis_content_sha256: ${sha}\n---\n${body}`);
   await writeFile(join(vault, 'Changed.md'), `---\nllm_wiki_type: knowledge\nnote_kind: atomic\nlifecycle: evergreen\nsummary: Old summary\nsummary_of_content_sha256: ${sha}\nreview_policy: on_any_edit\nreview_basis_content_sha256: ${sha}\n---\n# Actually changed\n`);
   const { server, client } = await setup();
-  try {
+  {
     const account = await callJson(client, 'register_scope_account', { accountId: 'body-freshness', modelId: 'codex', password: 'body-freshness-fixture' });
     const accessToken = account.value.accessToken;
     for (const name of ['get_wiki_review_queue', 'get_wiki_impact_report']) {
@@ -28,7 +30,7 @@ test('dynamic review and impact distinguish missing metadata bodies from real so
       expect(result.value.items.map((item: any) => item.path)).toEqual(['Changed.md']);
       expect(result.value.items[0].reviewReasons || result.value.items[0].reasons).toEqual(expect.arrayContaining(['summary_stale', 'note_edited']));
     }
-  } finally { await client.close(); await server.close(); }
+  }
 });
 
 test('dynamic organization queues preserve long first candidates and their current revisions', async () => {
@@ -37,7 +39,7 @@ test('dynamic organization queues preserve long first candidates and their curre
   await writeFile(join(vault, 'Inbox/A.md'), `---\nnote_kind: atomic\nlifecycle: inbox\ncaptured_at: 2000-01-01\ntitle: ${'가'.repeat(20000)}\n---\n# Capture\n`);
   await writeFile(join(vault, 'Knowledge/A.md'), `---\nllm_wiki_type: knowledge\nnote_kind: atomic\nlifecycle: review\nreview_at: 2000-01-01\ntitle: ${'가'.repeat(20000)}\n---\n# Evidence\n`);
   const { server, client } = await setup();
-  try {
+  {
     const account = await callJson(client, 'register_scope_account', { accountId: 'queue-budget', modelId: 'codex', password: 'queue-budget-fixture' });
     const accessToken = account.value.accessToken;
     for (const endpointId of ['wiki.inbox', 'mcp.get_wiki_inbox_plan', 'wiki.review_queue']) for (const prettyPrint of [false, true]) {
@@ -52,13 +54,13 @@ test('dynamic organization queues preserve long first candidates and their curre
     }
     const dashboard = await callJson(client, 'call_endpoint', { endpointId: 'wiki.review_dashboard', accessToken, arguments: { maxChars: 512 } });
     expect(dashboard.value.selected).toMatchObject({ section: 'inbox', path: 'Inbox/A.md', revision: expect.any(String) });
-  } finally { await client.close(); await server.close(); }
+  }
 });
 
 test('dynamic review dashboard retains an inspectable target in the smallest final response', async () => {
   await writeFile(join(vault, 'Overdue.md'), `---\nnote_kind: task\ntask_status: open\nnext_action: Check evidence\ndue_at: 2000-01-01\ntitle: ${'가'.repeat(20000)}\n---\n# Evidence\n`);
   const { server, client } = await setup();
-  try {
+  {
     const account = await callJson(client, 'register_scope_account', { accountId: 'dashboard-budget', modelId: 'codex', password: 'dashboard-budget-fixture' });
     const accessToken = account.value.accessToken;
     for (const prettyPrint of [false, true]) {
@@ -72,13 +74,13 @@ test('dynamic review dashboard retains an inspectable target in the smallest fin
       const source = await callJson(client, 'call_endpoint', { ...value.nextAction, accessToken });
       expect(source.value.revision).toBe(value.selected.revision);
     }
-  } finally { await client.close(); await server.close(); }
+  }
 });
 
 test('dynamic next-actions preserves useful rows through the final MCP budget', async () => {
   await writeFile(join(vault, 'A.md'), `---\nnote_kind: task\ntask_status: open\nnext_action: Check the evidence\ntitle: ${'가'.repeat(20000)}\n---\n# Evidence\n`);
   const { server, client } = await setup();
-  try {
+  {
     const account = await callJson(client, 'register_scope_account', { accountId: 'action-budget', modelId: 'codex', password: 'action-budget-fixture' });
     const accessToken = account.value.accessToken;
     for (const prettyPrint of [false, true]) {
@@ -92,16 +94,18 @@ test('dynamic next-actions preserves useful rows through the final MCP budget', 
       expect(value.items[0]).toMatchObject({ path: 'A.md', revision: expect.stringMatching(/^[a-f0-9]{64}$/),
         action: 'Check the evidence', readAction: { endpointId: 'notes.read', arguments: { path: 'A.md' } } });
     }
-  } finally { await client.close(); await server.close(); }
+  }
 });
 
 beforeEach(async () => {
   vault = await mkdtemp(join(tmpdir(), 'mcpvault-llm-wiki-'));
+  activeServers = [];
+  activeClients = [];
 });
 
 test('compact onboarding retains one usable first action without preloading signup or dashboards', async () => {
   const { server, client } = await setup();
-  try {
+  {
     await writeFile(join(vault, '환영합니다!.md'), '# Welcome\nRead before registering.');
     for (const maxChars of [512, 1024, 4500, 12000]) {
       const { result, value } = await callJson(client, 'orient_wiki', { maxChars, prettyPrint: true });
@@ -122,12 +126,12 @@ test('compact onboarding retains one usable first action without preloading sign
     expect(defaultOrientation.value.access.commandCenterId).toBe('local');
     expect(defaultOrientation.value).not.toHaveProperty('catalog');
     expect(defaultOrientation.value).not.toHaveProperty('lint');
-  } finally { await client.close(); await server.close(); }
+  }
 });
 
 test('MOC context packs follow authored links with revisions and exclude example and hidden targets', async () => {
   const { server, client } = await setup();
-  try {
+  {
     await mkdir(join(vault, 'Maps'), { recursive: true });
     await mkdir(join(vault, 'Knowledge'), { recursive: true });
     await writeFile(join(vault, 'Maps', 'Root.md'), '---\nnote_kind: moc\n---\n# Root\n\n## Read this way\n~~~md\n[[Knowledge/Example]]\n~~~\n[Z first](../Knowledge/Z.md#Start) [[Knowledge/A#^claim]]\n[[Knowledge/Hidden]]\n');
@@ -150,7 +154,7 @@ test('MOC context packs follow authored links with revisions and exclude example
       expect(small.value.readOrder).toEqual(small.value.entrypoints.map((item: any) => item.path));
       expect(small.value.entrypoints.every((item: any) => typeof item.revision === 'string' && item.revision.length === 64)).toBe(true);
     }
-  } finally { await client.close(); await server.close(); }
+  }
 });
 
 test('Obsidian Canvas projections preserve spatial order, scope boundaries, and source revisions', async () => {
@@ -164,7 +168,7 @@ test('Obsidian Canvas projections preserve spatial order, scope boundaries, and 
   await writeFile(join(vault, 'Knowledge', 'Advanced.md'), '---\nllm_wiki_type: knowledge\nnote_kind: atomic\nlifecycle: evergreen\ndepends_on:\n  - "[[Knowledge/Basics]]"\n---\n# Advanced\n');
   await writeFile(join(vault, 'Community', 'Local only.md'), '---\nllm_wiki_type: knowledge\nnote_kind: atomic\nlifecycle: evergreen\n---\n# Command-center-only note\n');
   const { server, client } = await setup();
-  try {
+  {
     const registration = await callJson(client, 'register_scope_account', { accountId: 'canvas-owner', modelId: 'codex', password: 'canvas-owner-secret' });
     const accessToken = registration.value.accessToken;
     const discovery = await callJson(client, 'search_capabilities', { query: 'Obsidian spatial Canvas knowledge map', limit: 4, maxChars: 8000, accessToken });
@@ -253,12 +257,12 @@ test('Obsidian Canvas projections preserve spatial order, scope boundaries, and 
     } });
     expect(stale.isError).toBe(true);
     expect(String((stale.content as any)[0]?.text)).toContain('source revision conflict');
-  } finally { await client.close(); await server.close(); }
+  }
 });
 
 test('triage exposes execution capacity and tags without rebasing stale summaries or accepting stale revisions', async () => {
   const { server, client } = await setup();
-  try {
+  {
     const account = await callJson(client, 'register_scope_account', { accountId: 'capacity-owner', modelId: 'codex', password: 'capacity-owner-secret' });
     const accessToken = account.value.accessToken;
     const created = await client.callTool({ name: 'write_note', arguments: { path: 'Tasks/Next.md', content: '# Next\nCurrent body', expectedRevision: 'missing', frontmatter: { note_kind: 'task', lifecycle: 'active', task_status: 'next_action', next_action: 'Run the selected regression test', task_context: '@computer', summary: 'Outdated summary', summary_of_content_sha256: 'a'.repeat(64) }, accessToken } });
@@ -276,12 +280,12 @@ test('triage exposes execution capacity and tags without rebasing stale summarie
     expect(conflict.isError).toBe(true);
     const cleared = await callJson(client, 'triage_wiki_note', { path: 'Tasks/Next.md', tags: [], expectedRevision: after.value.revision, accessToken });
     expect(cleared.value.frontmatter.tags).toEqual([]);
-  } finally { await client.close(); await server.close(); }
+  }
 });
 
 test('ordinary work completion requires a scope-safe auditable knowledge disposition', async () => {
   const { server, client } = await setup();
-  try {
+  {
     const account = await callJson(client, 'register_scope_account', { accountId: 'wiki-exit-owner', modelId: 'codex', password: 'wiki-exit-owner-secret' });
     const accessToken = account.value.accessToken;
     await mkdir(join(vault, 'Knowledge'), { recursive: true });
@@ -420,12 +424,12 @@ test('ordinary work completion requires a scope-safe auditable knowledge disposi
       retrospective: 'Clarification completed the bounded capture.', expectedRevision: capture.value.revision, accessToken,
     });
     expect(clarified.value.frontmatter).toMatchObject({ taskStatus: 'completed', knowledgeDispositions: ['retrospective'] });
-  } finally { await client.close(); await server.close(); }
+  }
 });
 
 test('review packet promotes direct-edit completion bypasses to one bounded repair', async () => {
   const { server, client } = await setup();
-  try {
+  {
     const account = await callJson(client, 'register_scope_account', { accountId: 'completion-repair-owner', modelId: 'codex', password: 'completion-repair-secret' });
     const accessToken = account.value.accessToken;
     const write = await client.callTool({ name: 'write_note', arguments: {
@@ -474,12 +478,12 @@ test('review packet promotes direct-edit completion bypasses to one bounded repa
       },
       guard: { oneNotePerPlan: true, expectedRevisionRequired: true, autoFix: false },
     });
-  } finally { await client.close(); await server.close(); }
+  }
 });
 
 test('review packet routes completed notes with open Markdown tasks without mutating them', async () => {
   const { server, client } = await setup();
-  try {
+  {
     const account = await callJson(client, 'register_scope_account', { accountId: 'checkbox-repair-owner', modelId: 'codex', password: 'checkbox-repair-secret' });
     const accessToken = account.value.accessToken;
     const path = 'Projects/Completed with open task.md';
@@ -514,12 +518,12 @@ test('review packet routes completed notes with open Markdown tasks without muta
     const unchanged = await callJson(client, 'read_note', { path, accessToken });
     expect(unchanged.value.revision).toBe(current.value.revision);
     expect(unchanged.value.content).toContain('- [ ] Verify one remaining item');
-  } finally { await client.close(); await server.close(); }
+  }
 });
 
 test('MOC navigation preserves explicit sibling order, body link order, and multi-MOC neighborhoods', async () => {
   const { server, client } = await setup();
-  try {
+  {
     const registration = await callJson(client, 'register_scope_account', { accountId: 'moc-navigation-owner', modelId: 'codex', password: 'moc-navigation-password' });
     const accessToken = registration.value.accessToken;
     const write = async (path: string, content: string, frontmatter: Record<string, unknown>) => {
@@ -588,15 +592,12 @@ test('MOC navigation preserves explicit sibling order, body link order, and mult
     expect(neighborhood.value.neighbors).toEqual(expect.arrayContaining([
       expect.objectContaining({ path: 'Knowledge/Multi.md', reasons: expect.arrayContaining(['shared_moc']), mocs: ['[[Knowledge/MOCs/A]]'] }),
     ]));
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
 test('claim argument maps preserve Obsidian block links, revisions, scope, and bounded repair signals', async () => {
   const { server, client } = await setup();
-  try {
+  {
     const account = await callJson(client, 'register_scope_account', { accountId: 'argument-owner', modelId: 'codex', password: 'argument-owner-secret' });
     const accessToken = account.value.accessToken;
     const source = await callJson(client, 'ingest_source', {
@@ -760,15 +761,12 @@ test('claim argument maps preserve Obsidian block links, revisions, scope, and b
         suggestedTools: expect.arrayContaining(['wiki.argument_map']),
       }),
     ]));
-  } finally {
-    await client.close();
-    await server.close();
   }
 }, 10_000);
 
 test('Decision Records preserve structured state and expose a bounded conflict-aware register', async () => {
   const { server, client } = await setup();
-  try {
+  {
     const registration = await callJson(client, 'register_scope_account', { accountId: 'decision-register-owner', modelId: 'codex', password: 'decision-register-password' });
     const accessToken = registration.value.accessToken;
     const source = await callJson(client, 'ingest_source', {
@@ -874,15 +872,12 @@ test('Decision Records preserve structured state and expose a bounded conflict-a
     const tiny = await callJson(client, 'get_wiki_decision_register', { limit: 2, maxChars: 512, accessToken });
     expect(JSON.stringify(tiny.value).length).toBeLessThanOrEqual(512);
     expect(tiny.value.truncated).toBe(true);
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
 test('drillable facets and synthesis candidates close the authored Distill to Express loop', async () => {
   const { server, client } = await setup();
-  try {
+  {
     const registration = await callJson(client, 'register_scope_account', { accountId: 'synthesis-owner', modelId: 'codex', password: 'synthesis-owner-password' });
     const accessToken = registration.value.accessToken;
     const write = async (path: string, content: string, frontmatter: Record<string, unknown>) => {
@@ -929,9 +924,6 @@ test('drillable facets and synthesis candidates close the authored Distill to Ex
 
     const home = await callJson(client, 'get_wiki_home', { limit: 20, maxChars: 12000, accessToken });
     expect(home.value.workflowRoutes).toEqual(expect.arrayContaining([expect.objectContaining({ intent: 'synthesize_or_express', endpointId: 'wiki.synthesis_candidates' })]));
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
@@ -1176,7 +1168,7 @@ test('idle synthesis routing distributes tied authored clusters and focusPath re
 
 test('dependency-aware MOC learning paths preserve authorship and diagnose prerequisite order safely', async () => {
   const { server, client } = await setup();
-  try {
+  {
     const registration = await callJson(client, 'register_scope_account', { accountId: 'learning-path-owner', userId: 'learning-path-family', modelId: 'codex', agentId: 'learning-path-worker', password: 'learning-path-password' });
     const accessToken = registration.value.accessToken;
     const write = async (path: string, content: string, frontmatter: Record<string, unknown>) => {
@@ -1367,15 +1359,12 @@ test('dependency-aware MOC learning paths preserve authorship and diagnose prere
 
     const notMoc = await client.callTool({ name: 'get_wiki_learning_path', arguments: { path: 'Knowledge/Basics.md', accessToken } });
     expect(notMoc.isError).toBe(true);
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
 test('review packet promotes every actionable graph repair class without duplicate path slots', async () => {
   const { server, client } = await setup();
-  try {
+  {
     const registration = await callJson(client, 'register_scope_account', { accountId: 'repair-coverage-owner', modelId: 'codex', password: 'repair-coverage-password' });
     const accessToken = registration.value.accessToken;
     const write = async (path: string, content: string, frontmatter: Record<string, unknown>) => {
@@ -1408,9 +1397,6 @@ test('review packet promotes every actionable graph repair class without duplica
       guard: { autoFix: false },
     });
     expect(JSON.stringify(packet.value).length).toBeLessThanOrEqual(16000);
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
@@ -1446,7 +1432,7 @@ test('review packet skips future-snoozed priorities without hiding health eviden
   ].join('\n'));
 
   const { server, client } = await setup();
-  try {
+  {
     const registration = await callJson(client, 'register_scope_account', {
       accountId: 'snooze-routing-owner', modelId: 'codex', password: 'snooze-routing-password',
     });
@@ -1476,9 +1462,6 @@ test('review packet skips future-snoozed priorities without hiding health eviden
     expect(String((tiny.result.content as any)[0].text).length).toBeLessThanOrEqual(512);
     expect(JSON.stringify(tiny.value)).not.toContain('A snoozed');
     expect(JSON.stringify(tiny.value)).not.toContain('Hidden snoozed');
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
@@ -1492,7 +1475,7 @@ test('review packet reports a bounded wake time when every visible priority is s
   ].join('\n'));
 
   const { server, client } = await setup();
-  try {
+  {
     const packet = await callJson(client, 'get_wiki_review_packet', { limit: 1, maxChars: 12000 });
     expect(packet.value).toMatchObject({
       priorities: [],
@@ -1507,9 +1490,6 @@ test('review packet reports a bounded wake time when every visible priority is s
       expect.objectContaining({ path: 'Knowledge/A later.md' }),
       expect.objectContaining({ path: 'Knowledge/B sooner.md' }),
     ]));
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
@@ -1521,21 +1501,18 @@ test('review packet marks a snoozed priority scan incomplete when source project
   )));
 
   const { server, client } = await setup();
-  try {
+  {
     const packet = await callJson(client, 'get_wiki_review_packet', { limit: 1, maxChars: 16000 });
     expect(packet.value.priorities).toEqual([]);
     expect(packet.value.counts.snoozedPriorities).toBeGreaterThan(0);
     expect(packet.value.counts.snoozedPriorities).toBeLessThanOrEqual(32);
     expect(packet.value.priorityScanTruncated).toBe(true);
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
 test('weekly review separates schedule from deadline and exposes reverse focus context', async () => {
   const { server, client } = await setup();
-  try {
+  {
     const registration = await callJson(client, 'register_scope_account', { accountId: 'focus-review-owner', modelId: 'codex', password: 'focus-review-password' });
     const accessToken = registration.value.accessToken;
     const write = async (path: string, content: string, frontmatter: Record<string, unknown>) => {
@@ -1560,15 +1537,12 @@ test('weekly review separates schedule from deadline and exposes reverse focus c
     const bases = await callJson(client, 'get_wiki_bases_view', { view: 'projects', accessToken });
     expect(bases.value).toMatchObject({ view: 'projects', suggestedPath: 'Views/LLM Wiki Projects.base', matchingNotes: 2 });
     expect(bases.value.content).toContain('note.note_kind == "project" || note.note_kind == "task"');
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
 test('experiment notes connect epistemic work, reproducible Markdown, graph navigation, and bounded review views', async () => {
   const { server, client } = await setup();
-  try {
+  {
     const registration = await callJson(client, 'register_scope_account', { accountId: 'experiment-owner', modelId: 'codex', password: 'experiment-owner-password' });
     const accessToken = registration.value.accessToken;
     const write = async (path: string, content: string, frontmatter: Record<string, unknown>) => {
@@ -1636,15 +1610,12 @@ test('experiment notes connect epistemic work, reproducible Markdown, graph navi
       expect.objectContaining({ id: 'tested_proposition', passed: true }),
       expect.objectContaining({ id: 'reproducible_protocol', passed: true }),
     ]));
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
 test('knowledge roles provide role templates, catalog facets, quality rubrics, and focused Obsidian views', async () => {
   const { server, client } = await setup();
-  try {
+  {
     const registration = await callJson(client, 'register_scope_account', { accountId: 'knowledge-role-owner', modelId: 'codex', password: 'knowledge-role-owner-password' });
     const accessToken = registration.value.accessToken;
     const write = async (path: string, content: string, frontmatter: Record<string, unknown>) => {
@@ -1682,15 +1653,12 @@ test('knowledge roles provide role templates, catalog facets, quality rubrics, a
     expect(concepts.value.content).toContain('note.knowledge_role == "concept"');
     const authority = await callJson(client, 'call_endpoint', { endpointId: 'wiki.bases_view', arguments: { view: 'authority', limit: 20, accessToken } });
     expect(authority.value).toMatchObject({ view: 'authority', suggestedPath: 'Views/LLM Wiki Authority.base' });
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
 test('knowledge organization helpers stay bounded and revision-safe', async () => {
   const { server, client } = await setup();
-  try {
+  {
     const registration = await callJson(client, 'register_scope_account', { accountId: 'organization-helper-owner', modelId: 'codex', password: 'organization-helper-password' });
     const accessToken = registration.value.accessToken;
     const write = async (path: string, content: string, frontmatter: Record<string, unknown>) => {
@@ -1713,15 +1681,12 @@ test('knowledge organization helpers stay bounded and revision-safe', async () =
     expect(base.value.content).toContain('note.note_kind');
     const conflict = await client.callTool({ name: 'export_wiki_base', arguments: { view: 'knowledge', expectedRevision: 'missing', accessToken } });
     expect(conflict.isError).toBe(true);
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
 test('context shelves, exception board, role quality, and archive resurfacing compose existing views', async () => {
   const { server, client } = await setup();
-  try {
+  {
     const registration = await callJson(client, 'register_scope_account', { accountId: 'organization-projection-owner', modelId: 'codex', password: 'organization-projection-password' });
     const accessToken = registration.value.accessToken;
     const write = async (path: string, content: string, frontmatter: Record<string, unknown>) => {
@@ -1748,19 +1713,18 @@ test('context shelves, exception board, role quality, and archive resurfacing co
     expect(board.value).toMatchObject({ advisory: true, items: expect.any(Array), counts: expect.any(Object) });
     expect(board.value.items).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'Projects/Incomplete.md' })]));
     expect(JSON.stringify(board.value).length).toBeLessThanOrEqual(7000);
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
 afterEach(async () => {
+  await Promise.all(activeClients.splice(0).map(client => client.close()));
+  await Promise.all(activeServers.splice(0).map(server => server.close()));
   await rm(vault, { recursive: true, force: true });
 });
 
 test('lint reports cross-note Properties type drift as an advisory organization issue', async () => {
   const { server, client } = await setup();
-  try {
+  {
     await writeFile(join(vault, 'one.md'), '---\ntags: [research]\n---\nOne\n');
     await writeFile(join(vault, 'two.md'), '---\ntags: research\n---\nTwo\n');
     const lint = await callJson(client, 'lint_wiki', { limit: 20 });
@@ -1769,15 +1733,12 @@ test('lint reports cross-note Properties type drift as an advisory organization 
     ]));
     const health = await callJson(client, 'get_wiki_organization_health', { limit: 20 });
     expect(health.value.byCode.property_type_drift).toBe(1);
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
 test('lint reports library vocabulary orphans, cycles, and deprecated facet use', async () => {
   const { server, client } = await setup();
-  try {
+  {
     const registration = await callJson(client, 'register_scope_account', { accountId: 'vocabulary-health-owner', modelId: 'codex', password: 'vocabulary-health-password' });
     const accessToken = registration.value.accessToken;
     const write = async (path: string, content: string, frontmatter: Record<string, unknown>) => {
@@ -1801,9 +1762,6 @@ test('lint reports library vocabulary orphans, cycles, and deprecated facet use'
     ]));
     const health = await callJson(client, 'get_wiki_organization_health', { limit: 50, accessToken });
     expect(health.value.byCode.broader_term_cycle).toBeGreaterThan(0);
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
@@ -1824,7 +1782,7 @@ test('term resolution, merge preview, and citation graph stay bounded and non-mu
     sourceContent,
   ].join('\n'));
   const { server, client } = await setup();
-  try {
+  {
     const registration = await callJson(client, 'register_scope_account', { accountId: 'organization-resolution-owner', modelId: 'codex', password: 'organization-resolution-password' });
     const accessToken = registration.value.accessToken;
     const write = async (path: string, content: string, frontmatter: Record<string, unknown>) => {
@@ -1859,15 +1817,12 @@ test('term resolution, merge preview, and citation graph stay bounded and non-mu
     expect(graph.value.sources).toEqual(expect.arrayContaining([expect.objectContaining({ path: '_sources/paper.md', usedByCount: 2 })]));
     expect(graph.value.edges).toEqual(expect.arrayContaining([expect.objectContaining({ from: 'Knowledge/Source Copy.md', to: '_sources/paper.md', relation: 'evidence' })]));
     expect(JSON.stringify(graph.value).length).toBeLessThanOrEqual(5000);
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
 test('projects expose bounded flow health and the organization policy contract', async () => {
   const { server, client } = await setup();
-  try {
+  {
     const registration = await callJson(client, 'register_scope_account', { accountId: 'flow-policy-owner', modelId: 'codex', password: 'flow-policy-password' });
     const accessToken = registration.value.accessToken;
     const write = async (path: string, frontmatter: Record<string, unknown>) => {
@@ -1960,15 +1915,12 @@ test('projects expose bounded flow health and the organization policy contract',
       expect.objectContaining({ path: 'Projects/Blocked.md', reason: 'blocked_work_needs_unblocking' }),
       expect.objectContaining({ path: 'Projects/Waiting.md', reason: 'waiting_work_needs_follow_up' }),
     ]));
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
 test('work dependency gates keep flow, project planning, and next actions consistent', async () => {
   const { server, client } = await setup();
-  try {
+  {
     const registration = await callJson(client, 'register_scope_account', { accountId: 'work-dependency-owner', modelId: 'codex', password: 'work-dependency-password' });
     const accessToken = registration.value.accessToken;
     const write = async (path: string, frontmatter: Record<string, unknown>) => {
@@ -2053,9 +2005,6 @@ test('work dependency gates keep flow, project planning, and next actions consis
     const base = await callJson(client, 'get_wiki_bases_view', { view: 'project_next_actions', limit: 20, maxChars: 12000, accessToken });
     expect(base.value).toMatchObject({ view: 'project_next_actions', actionScope: 'any_actionable_note', dependencyAware: false, recommendedEndpoint: 'wiki.next_actions', matchingNotesExact: false });
     expect(base.value.content).toContain('note.blocked_by');
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
@@ -2066,7 +2015,7 @@ test('Property migrations produce executable bounded change sets and preserve sc
   await writeFile(join(vault, 'Knowledge', 'B.md'), '---\nnote_kind: project\nlegacy_state: done\ntask_status: open\n---\n# B\n');
   await writeFile(join(vault, '_sources', 'Immutable.md'), '---\nlegacy_state: todo\n---\n# Source\n');
   const { server, client } = await setup();
-  try {
+  {
     const registration = await callJson(client, 'register_scope_account', { accountId: 'migration-owner', modelId: 'codex', password: 'migration-owner-password' });
     const accessToken = registration.value.accessToken;
     const discovery = await callJson(client, 'search_capabilities', { query: 'Obsidian Property schema migration change set', limit: 5, maxChars: 8000, accessToken });
@@ -2122,7 +2071,7 @@ test('Property migrations produce executable bounded change sets and preserve sc
     } } });
     expect(rejected.isError).toBe(true);
     expect((rejected.content as any)[0].text).toContain('cannot mutate immutable LLM Wiki sources');
-  } finally { await client.close(); await server.close(); }
+  }
 });
 
 test('MOC order previews require the complete sibling set and apply one revision-safe order', async () => {
@@ -2132,7 +2081,7 @@ test('MOC order previews require the complete sibling set and apply one revision
   await writeFile(join(vault, 'Knowledge', 'MOCs', 'B.md'), '---\nllm_wiki_type: knowledge\nnote_kind: moc\nmoc_parent: "[[Knowledge/MOCs/Root]]"\nnav_order: 20\n---\n# B\n');
   await writeFile(join(vault, 'Knowledge', 'MOCs', 'C.md'), '---\nllm_wiki_type: knowledge\nnote_kind: moc\nmoc_parent: "[[Knowledge/MOCs/Root]]"\nnav_order: 30\n---\n# C\n');
   const { server, client } = await setup();
-  try {
+  {
     const registration = await callJson(client, 'register_scope_account', { accountId: 'moc-order-owner', modelId: 'codex', password: 'moc-order-owner-password' });
     const accessToken = registration.value.accessToken;
     const discovery = await callJson(client, 'search_capabilities', { query: 'MOC sibling nav order reorder change set', limit: 5, maxChars: 8000, accessToken });
@@ -2182,7 +2131,7 @@ test('MOC order previews require the complete sibling set and apply one revision
       accessToken,
     } });
     expect(reserved.value).toMatchObject({ valid: false, changes: [], blockers: expect.arrayContaining([expect.objectContaining({ reason: expect.stringContaining('Reserved _wiki') })]) });
-  } finally { await client.close(); await server.close(); }
+  }
 });
 
 test('reciprocal-link previews repair both graph directions atomically and reject unsafe scopes', async () => {
@@ -2191,7 +2140,7 @@ test('reciprocal-link previews repair both graph directions atomically and rejec
   await writeFile(join(vault, 'Knowledge', 'Right.md'), '---\nllm_wiki_type: knowledge\nnote_kind: atomic\n---\n# Right\n');
   await writeFile(join(vault, 'Knowledge', 'Scalar.md'), '---\nllm_wiki_type: knowledge\nnote_kind: atomic\nrelated: "[[Knowledge/Right]]"\n---\n# Scalar\n');
   const { server, client } = await setup();
-  try {
+  {
     const registration = await callJson(client, 'register_scope_account', { accountId: 'reciprocal-owner', modelId: 'codex', password: 'reciprocal-owner-password' });
     const accessToken = registration.value.accessToken;
     const discovery = await callJson(client, 'search_capabilities', { query: 'reciprocal mutual related backlink two notes', limit: 5, maxChars: 8000, accessToken });
@@ -2262,7 +2211,7 @@ test('reciprocal-link previews repair both graph directions atomically and rejec
       leftPath: 'Knowledge/Left.md', rightPath: 'scope://model/codex/Private.md', relation: 'same_as', accessToken,
     } });
     expect(unsafe.value).toMatchObject({ valid: false, changes: [], blockers: [expect.objectContaining({ reason: expect.stringContaining('privacy boundary') })] });
-  } finally { await client.close(); await server.close(); }
+  }
 });
 
 test('review packets route a selected reciprocity defect to the executable reciprocal planner', async () => {
@@ -2270,7 +2219,7 @@ test('review packets route a selected reciprocity defect to the executable recip
   await writeFile(join(vault, 'Notes', 'Left.md'), '---\nrelated:\n  - "[[Notes/Right]]"\n---\n# Left\n\n[[Notes/Right]]\n');
   await writeFile(join(vault, 'Notes', 'Right.md'), '# Right\n\n[[Notes/Left]]\n');
   const { server, client } = await setup();
-  try {
+  {
     const registration = await callJson(client, 'register_scope_account', { accountId: 'review-route-owner', modelId: 'codex', password: 'review-route-password' });
     const accessToken = registration.value.accessToken;
     const packet = await callJson(client, 'call_endpoint', { endpointId: 'wiki.review_packet', arguments: { limit: 10, maxChars: 12000, accessToken } });
@@ -2281,7 +2230,7 @@ test('review packets route a selected reciprocity defect to the executable recip
       selected: { path: 'Notes/Left.md', reason: 'typed_relation_reciprocity_missing' },
       then: { endpointId: 'wiki.reciprocal_link', arguments: { leftPath: 'Notes/Left.md', rightPath: 'Notes/Right.md', relation: 'related' } },
     });
-  } finally { await client.close(); await server.close(); }
+  }
 });
 
 test('hierarchy-change previews repair MOC and focus parents while blocking cycles and downward horizons', async () => {
@@ -2297,7 +2246,7 @@ test('hierarchy-change previews repair MOC and focus parents while blocking cycl
   await mkdir(join(vault, '_wiki'), { recursive: true });
   await writeFile(join(vault, '_wiki', 'Forged Goal MOC.md'), '---\nllm_wiki_type: knowledge\nnote_kind: moc\nfocus_horizon: goal\n---\n# Forged Goal MOC\n');
   const { server, client } = await setup();
-  try {
+  {
     const registration = await callJson(client, 'register_scope_account', { accountId: 'hierarchy-owner', modelId: 'codex', password: 'hierarchy-owner-password' });
     const accessToken = registration.value.accessToken;
     const discovery = await callJson(client, 'search_capabilities', { query: 'hierarchy', limit: 8, maxChars: 9000, accessToken });
@@ -2344,7 +2293,7 @@ test('hierarchy-change previews repair MOC and focus parents while blocking cycl
     ]));
     expect(graph.value.focusHealth).toMatchObject({ declaredParentEdges: 1, parentEdges: 0 });
     expect(graph.value.focusHealth.reverseMap.items.find((item: any) => item.path === 'Projects/Peer.md')?.children || []).not.toContain('Projects/Wrong.md');
-  } finally { await client.close(); await server.close(); }
+  }
 });
 
 test('MOC-membership previews validate real maps and replace canonical navigation Properties', async () => {
@@ -2357,7 +2306,7 @@ test('MOC-membership previews validate real maps and replace canonical navigatio
   await mkdir(join(vault, '_wiki'), { recursive: true });
   await writeFile(join(vault, '_wiki', 'Forged MOC.md'), '---\nllm_wiki_type: knowledge\nnote_kind: moc\n---\n# Forged MOC\n');
   const { server, client } = await setup();
-  try {
+  {
     const registration = await callJson(client, 'register_scope_account', { accountId: 'membership-owner', modelId: 'codex', password: 'membership-owner-password' });
     const accessToken = registration.value.accessToken;
     const plan = await callJson(client, 'call_endpoint', { endpointId: 'wiki.moc_membership', arguments: {
@@ -2396,7 +2345,7 @@ test('MOC-membership previews validate real maps and replace canonical navigatio
       notePath: 'Knowledge/Note.md', primaryMocPath: 'scope://model/codex/Private MOC.md', accessToken,
     } });
     expect(scopeBlocked.value).toMatchObject({ valid: false, changes: [], blockers: [expect.objectContaining({ reason: expect.stringContaining('privacy boundary') })] });
-  } finally { await client.close(); await server.close(); }
+  }
 });
 
 test('relation-set previews replace complete directional and focus-support sets with graph repair routes', async () => {
@@ -2413,7 +2362,7 @@ test('relation-set previews replace complete directional and focus-support sets 
   await writeFile(join(vault, 'Projects', 'Peer.md'), '---\nllm_wiki_type: knowledge\nnote_kind: project\nnext_action: Inspect peer support\nfocus_horizon: project\n---\n# Peer\n');
   await writeFile(join(vault, 'Goals', 'Goal.md'), '---\nllm_wiki_type: knowledge\nnote_kind: knowledge\nfocus_horizon: goal\n---\n# Goal\n');
   const { server, client } = await setup();
-  try {
+  {
     const registration = await callJson(client, 'register_scope_account', { accountId: 'relation-set-owner', modelId: 'codex', password: 'relation-set-owner-password' });
     const accessToken = registration.value.accessToken;
     const discovery = await callJson(client, 'search_capabilities', { query: 'replace complete typed relation broken ambiguous link focus supports', limit: 8, maxChars: 9000, accessToken });
@@ -2471,7 +2420,7 @@ test('relation-set previews replace complete directional and focus-support sets 
     } } });
     expect(reciprocal.isError).toBe(true);
     expect(String((reciprocal.content as any)[0].text)).toContain('wiki.reciprocal_link');
-  } finally { await client.close(); await server.close(); }
+  }
 });
 
 test('lifecycle transition planner keeps retirement and reactivation metadata coherent', async () => {
@@ -2485,7 +2434,7 @@ test('lifecycle transition planner keeps retirement and reactivation metadata co
     '# New', '', 'Corrected current content.',
   ].join('\n'));
   const { server, client } = await setup();
-  try {
+  {
     const registration = await callJson(client, 'register_scope_account', { accountId: 'lifecycle-owner', modelId: 'codex', password: 'lifecycle-owner-password' });
     const accessToken = registration.value.accessToken;
     const discovery = await callJson(client, 'search_capabilities', { query: 'archive supersede tombstone reactivate lifecycle retention', limit: 5, maxChars: 8000, accessToken });
@@ -2552,7 +2501,7 @@ test('lifecycle transition planner keeps retirement and reactivation metadata co
       nextKnowledgeStatus: 'draft', reason: 'New evidence reopens the older note.', accessToken,
     } });
     expect(repeatedReactivation.value).toMatchObject({ valid: true, alreadyApplied: true, changes: [], blockers: [] });
-  } finally { await client.close(); await server.close(); }
+  }
 });
 
 test('lifecycle transition planner blocks preservation and unsafe lineage without leaking hidden paths', async () => {
@@ -2565,7 +2514,7 @@ test('lifecycle transition planner blocks preservation and unsafe lineage withou
   await writeFile(join(vault, '_scopes', 'models', 'claude', 'Secret.md'), '# Secret\n\n[[Knowledge/Hidden impact]]\n');
   await writeFile(join(vault, 'Knowledge', 'Malformed successor.md'), '---\nllm_wiki_type: knowledge\nnote_kind: atomic\nlifecycle: evergreen\nsupersedes: broken\n---\n# Successor\n');
   const { server, client } = await setup();
-  try {
+  {
     const registration = await callJson(client, 'register_scope_account', { accountId: 'lifecycle-guard-owner', modelId: 'codex', password: 'lifecycle-guard-password' });
     const accessToken = registration.value.accessToken;
     for (const [path, reason] of [['Knowledge/Held.md', 'legal hold'], ['Knowledge/Protected.md', 'preserve_until']] as const) {
@@ -2629,7 +2578,7 @@ test('lifecycle transition planner blocks preservation and unsafe lineage withou
     } });
     expect(reviewed.isError).toBe(true);
     expect(String((reviewed.content as any)[0].text)).toContain('wiki.lifecycle_transition');
-  } finally { await client.close(); await server.close(); }
+  }
 });
 
 test('lifecycle transition closes writer bypasses, resolves scoped successors, and hides moderated metadata', async () => {
@@ -2651,7 +2600,7 @@ test('lifecycle transition closes writer bypasses, resolves scoped successors, a
   await writeFile(join(vault, '_scopes', 'models', 'codex', 'Old.md'), active('Scoped old'));
   await writeFile(join(vault, '_scopes', 'models', 'codex', 'New.md'), active('Scoped new'));
   const { server, client } = await setup();
-  try {
+  {
     const registration = await callJson(client, 'register_scope_account', { accountId: 'lifecycle-bypass-owner', modelId: 'codex', password: 'lifecycle-bypass-password' });
     const accessToken = registration.value.accessToken;
     const retired = await callJson(client, 'read_note', { path: 'Knowledge/Retired.md', accessToken });
@@ -2730,7 +2679,7 @@ test('lifecycle transition closes writer bypasses, resolves scoped successors, a
       path: '_wiki/Control.md', operation: 'archive', reason: 'Wrong target.', accessToken,
     } });
     expect(controlRecord.value).toMatchObject({ valid: false, changes: [], blockers: expect.arrayContaining([expect.objectContaining({ reason: expect.stringContaining('Reserved _wiki') })]) });
-  } finally { await client.close(); await server.close(); }
+  }
 });
 
 async function setup() {
@@ -2738,6 +2687,8 @@ async function setup() {
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   const client = new Client({ name: 'llm-wiki-test', version: '1.0.0' });
   await Promise.all([client.connect(clientTransport), server.connect(serverTransport)]);
+  activeServers.push(server);
+  activeClients.push(client);
   return { server, client };
 }
 
@@ -2748,7 +2699,7 @@ async function callJson(client: Client, name: string, arguments_: Record<string,
 
 test('recognizes a manually maintained public schema without frontmatter', async () => {
   const { server, client } = await setup();
-  try {
+  {
     await mkdir(join(vault, '_wiki'), { recursive: true });
     await writeFile(join(vault, '_wiki', 'SCHEMA.md'), '# LLM Wiki schema\n\nPlain Markdown remains a valid public schema.\n');
 
@@ -2763,15 +2714,12 @@ test('recognizes a manually maintained public schema without frontmatter', async
     expect(orientation.value.nextActions).toEqual([
       expect.objectContaining({ tool: 'wiki.policy', arguments: { topic: 'onboarding', maxChars: 2400 } }),
     ]);
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
 test('catalog facets and explainable knowledge neighborhoods stay bounded', async () => {
   const { server, client } = await setup();
-  try {
+  {
     const registration = await callJson(client, 'register_scope_account', { accountId: 'neighborhood-owner', modelId: 'codex', password: 'neighborhood-owner-password' });
     const accessToken = registration.value.accessToken;
     const write = async (path: string, content: string, frontmatter: Record<string, unknown>) => {
@@ -2795,15 +2743,12 @@ test('catalog facets and explainable knowledge neighborhoods stay bounded', asyn
       expect.objectContaining({ path: 'Knowledge/Linked.md', reasons: expect.arrayContaining(['direct_link', 'shared_moc']) }),
     ]));
     expect(neighborhood.value.neighbors.every((item: Record<string, unknown>) => !('content' in item))).toBe(true);
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
 test('knowledge organization contract preserves aliases, projections, and typed relations', async () => {
   const { server, client } = await setup();
-  try {
+  {
     const registration = await callJson(client, 'register_scope_account', { accountId: 'organization-contract-owner', modelId: 'codex', password: 'organization-contract-password' });
     const accessToken = registration.value.accessToken;
     const source = await callJson(client, 'ingest_source', {
@@ -2834,15 +2779,12 @@ test('knowledge organization contract preserves aliases, projections, and typed 
     expect(outlinks.value.outlinks.filter((entry: any) => entry.relation === 'related')).toHaveLength(1);
     const health = await callJson(client, 'get_wiki_organization_health', { limit: 20, accessToken });
     expect(health.value).toMatchObject({ healthy: true, organizationIssueTotal: 0 });
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
 test('questions, negative knowledge, locators, event review, MOC coverage, and Bases export stay connected', async () => {
   const { server, client } = await setup();
-  try {
+  {
     const registration = await callJson(client, 'register_scope_account', { accountId: 'remaining-priorities-owner', modelId: 'codex', password: 'remaining-priorities-password' });
     const accessToken = registration.value.accessToken;
     const source = await callJson(client, 'ingest_source', {
@@ -2955,15 +2897,12 @@ test('questions, negative knowledge, locators, event review, MOC coverage, and B
     } });
     expect(invalidQuote.isError).toBe(true);
     expect((invalidQuote.content as any)[0].text).toContain('quoteHash');
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
 test('capture, review completion, and bounded Reflect dashboard close the organization loop', async () => {
   const { server, client } = await setup();
-  try {
+  {
     const registration = await callJson(client, 'register_scope_account', { accountId: 'reflect-owner', modelId: 'codex', password: 'reflect-owner-password' });
     const accessToken = registration.value.accessToken;
     await client.callTool({ name: 'write_note', arguments: { path: 'Projects/Capture task.md', content: '# Capture task\n', expectedRevision: 'missing', accessToken } });
@@ -2987,15 +2926,12 @@ test('capture, review completion, and bounded Reflect dashboard close the organi
     await client.callTool({ name: 'write_note', arguments: { path: 'Projects/Needs action.md', content: '# Needs action\n', frontmatter: { note_kind: 'project', lifecycle: 'active' }, expectedRevision: 'missing', accessToken } });
     const dashboard = await callJson(client, 'get_wiki_review_dashboard', { limit: 10, maxChars: 9000, accessToken });
     expect(dashboard.value.sections).toMatchObject({ inbox: { total: 1 }, projectsAndTasks: { total: 1, items: [expect.objectContaining({ path: 'Projects/Needs action.md', missingNextAction: true })] }, knowledge: { total: 0 } });
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
 test('retention queue, claim review, contextual resurfacing, and term proposals stay bounded and revision-safe', async () => {
   const { server, client } = await setup();
-  try {
+  {
     const registration = await callJson(client, 'register_scope_account', { accountId: 'organization-batch-owner', modelId: 'codex', password: 'organization-batch-password' });
     const accessToken = registration.value.accessToken;
     const source = await callJson(client, 'ingest_source', { sourceId: 'organization-batch-source', title: 'Organization batch source', content: '# Evidence\n\nThe approach is useful for debugging retrieval.\n', capturedBy: 'codex', accessToken });
@@ -3024,15 +2960,12 @@ test('retention queue, claim review, contextual resurfacing, and term proposals 
     expect(proposal.value).toMatchObject({ success: true, path: expect.stringContaining('_wiki/issues/term-change-') });
     const proposalNote = await callJson(client, 'read_note', { path: proposal.value.path, accessToken });
     expect(proposalNote.value.fm).toMatchObject({ issue_kind: 'authority_change', proposal_status: 'proposed', current_term: 'debugging retrieval', proposed_term: 'retrieval debugging' });
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
 test('organization health exposes GTD focus, Zettelkasten connectivity, and progressive context', async () => {
   const { server, client } = await setup();
-  try {
+  {
     const registration = await callJson(client, 'register_scope_account', { accountId: 'organization-health-owner', modelId: 'codex', password: 'organization-health-password' });
     const accessToken = registration.value.accessToken;
     const source = await callJson(client, 'ingest_source', { sourceId: 'organization-health-source', title: 'Organization health source', content: 'A stable source claim.', capturedBy: 'codex', accessToken });
@@ -3063,15 +2996,12 @@ test('organization health exposes GTD focus, Zettelkasten connectivity, and prog
     await client.callTool({ name: 'write_note', arguments: { path: 'Knowledge/Question.md', content: '# Question\n', frontmatter: { note_kind: 'question', lifecycle: 'review', epistemic_status: 'open' }, expectedRevision: 'missing', accessToken } });
     const dashboard = await callJson(client, 'get_wiki_review_dashboard', { limit: 20, accessToken });
     expect(dashboard.value.sections).toMatchObject({ waiting: { total: 1 }, someday: { total: 1 }, epistemic: { questions: { total: 1 } } });
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
 test('clarify, source distillation, and MOC candidates complete the organization loop', async () => {
   const { server, client } = await setup();
-  try {
+  {
     const registration = await callJson(client, 'register_scope_account', { accountId: 'organization-loop-owner', modelId: 'codex', password: 'organization-loop-password' });
     const accessToken = registration.value.accessToken;
     const captured = await callJson(client, 'capture_wiki_note', { path: 'Inbox/Clarify me.md', title: 'Clarify me', content: 'A rough project observation.', capturedBy: 'codex', accessToken });
@@ -3100,9 +3030,6 @@ test('clarify, source distillation, and MOC candidates complete the organization
     await callJson(client, 'publish_knowledge', { path: 'Knowledge/Beta.md', content: '# Beta\n\nAnother durable idea.', evidencePaths: [source.value.path], noteKind: 'atomic', lifecycle: 'evergreen', author: 'codex', expectedRevision: 'missing', accessToken });
     const candidates = await callJson(client, 'get_wiki_moc_candidates', { limit: 10, accessToken });
     expect(candidates.value).toMatchObject({ total: expect.any(Number), candidates: expect.arrayContaining([expect.objectContaining({ suggestedPurpose: expect.any(String), suggestedQuestions: expect.any(Array), notePaths: expect.arrayContaining(['Knowledge/Alpha.md', 'Knowledge/Beta.md']), orderedEntries: expect.arrayContaining([expect.objectContaining({ path: 'Knowledge/Alpha.md', revision: expect.any(String) })]), draftMarkdown: expect.stringContaining('[[Knowledge/Alpha.md]]'), creationPlan: expect.objectContaining({ endpointId: 'notes.write' }) })]) });
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
@@ -3130,7 +3057,7 @@ test('MOC rebalance produces an explainable bounded plan without rewriting notes
   await writeFile(join(vault, 'Knowledge', 'Hidden.md'), '---\nllm_wiki_type: knowledge\nnote_kind: atomic\nlifecycle: evergreen\nmoderation_status: quarantined\n---\n# Hidden\n');
 
   const { server, client } = await setup();
-  try {
+  {
     const discovery = await callJson(client, 'search_capabilities', { query: 'MOC rebalance split saturated map', limit: 5, maxChars: 6000 });
     expect(discovery.value.endpoints).toEqual(expect.arrayContaining([expect.objectContaining({ endpointId: 'wiki.moc_rebalance', available: true })]));
     const plan = await callJson(client, 'get_wiki_moc_rebalance', { path: 'Knowledge/MOCs/Large.md', saturationThreshold: 3, maxBranches: 5, limit: 30, maxChars: 12000 });
@@ -3159,15 +3086,12 @@ test('MOC rebalance produces an explainable bounded plan without rewriting notes
     expect(unchanged.value.revision).toBe(plan.value.root.revision);
     const healthy = await callJson(client, 'get_wiki_moc_rebalance', { path: 'Knowledge/MOCs/Large.md', maxChars: 3000 });
     expect(healthy.value).toMatchObject({ rebalanceRecommended: false, saturated: false, branches: [], mutates: false });
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
 test('upstream review baselines resolve aliases, respect relation direction, and stop reopening after review', async () => {
   const { server, client } = await setup();
-  try {
+  {
     const registration = await callJson(client, 'register_scope_account', { accountId: 'upstream-owner', modelId: 'codex', password: 'upstream-owner-password' });
     const accessToken = registration.value.accessToken;
     const source = await callJson(client, 'ingest_source', { sourceId: 'upstream-source', title: 'Upstream source', content: 'A durable upstream fact.', capturedBy: 'codex', accessToken });
@@ -3201,15 +3125,12 @@ test('upstream review baselines resolve aliases, respect relation direction, and
     await callJson(client, 'review_wiki_note', { path: supporter.value.path, reviewOutcome: 'disputed', nextLifecycle: 'review', expectedRevision: supporter.value.revision, accessToken });
     queue = await callJson(client, 'get_wiki_review_queue', { limit: 20, maxChars: 10000, accessToken });
     expect(queue.value.items).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'Knowledge/Downstream.md', upstreamChanges: expect.arrayContaining([expect.stringContaining('supports')]) })]));
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
 test('bounded upstream invalidation cascades through opted-in typed dependencies', async () => {
   const { server, client } = await setup();
-  try {
+  {
     const registration = await callJson(client, 'register_scope_account', { accountId: 'cascade-owner', modelId: 'codex', password: 'cascade-owner-password' });
     const accessToken = registration.value.accessToken;
     const source = await callJson(client, 'ingest_source', { sourceId: 'cascade-source', title: 'Cascade source', content: 'A source for a dependency chain.', capturedBy: 'codex', accessToken });
@@ -3244,15 +3165,12 @@ test('bounded upstream invalidation cascades through opted-in typed dependencies
       expect.objectContaining({ path: 'Knowledge/Cascade third.md', reasons: expect.arrayContaining(['upstream_cascade_changed']), cascadeDepth: 2, cascadeRoot: 'Knowledge/Cascade direct.md', cascadeVia: 'Knowledge/Cascade second.md' }),
     ]));
     expect(JSON.stringify(deep.value).length).toBeLessThanOrEqual(12000);
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
 test('MOC question coverage, Evergreen quality, and review packet stay bounded and explicit', async () => {
   const { server, client } = await setup();
-  try {
+  {
     const registration = await callJson(client, 'register_scope_account', { accountId: 'review-packet-owner', modelId: 'codex', password: 'review-packet-password' });
     const accessToken = registration.value.accessToken;
     await client.callTool({ name: 'write_note', arguments: {
@@ -3279,15 +3197,12 @@ test('MOC question coverage, Evergreen quality, and review packet stay bounded a
     expect(packet.value).toMatchObject({ counts: { unlinkedMocQuestions: 1, evergreenNeedsAttention: 1 } });
     expect(packet.value.priorities).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'Knowledge/MOCs/Research.md', reason: 'moc_question_has_no_linked_answer' })]));
     expect(JSON.stringify(packet.value).length).toBeLessThanOrEqual(7000);
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
 test('project packet exposes Natural Planning gaps and lint catches citation collisions', async () => {
   const { server, client } = await setup();
-  try {
+  {
     const registration = await callJson(client, 'register_scope_account', { accountId: 'planning-owner', modelId: 'codex', password: 'planning-owner-password' });
     const accessToken = registration.value.accessToken;
     for (const [sourceId, title] of [['planning-source-one', 'Planning source one'], ['planning-source-two', 'Planning source two']]) {
@@ -3301,15 +3216,12 @@ test('project packet exposes Natural Planning gaps and lint catches citation col
     expect(packet.value.items).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'Projects/Incomplete.md', missing: expect.arrayContaining(['purpose', 'desired_outcome', 'project_support']) })]));
     const lint = await callJson(client, 'lint_wiki', { accessToken, limit: 50 });
     expect(lint.value.issues).toEqual(expect.arrayContaining([expect.objectContaining({ code: 'duplicate_citation_key' })]));
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
 test('review records bounded history and split preview stays revision-safe', async () => {
   const { server, client } = await setup();
-  try {
+  {
     const registration = await callJson(client, 'register_scope_account', { accountId: 'review-split-owner', modelId: 'codex', password: 'review-split-owner-password' });
     const accessToken = registration.value.accessToken;
     const source = await callJson(client, 'ingest_source', { sourceId: 'review-split-source', title: 'Review split source', content: 'The source supports the note.', capturedBy: 'codex', accessToken });
@@ -3333,15 +3245,12 @@ test('review records bounded history and split preview stays revision-safe', asy
     expect(preview.value.nextSteps).toEqual(expect.arrayContaining([expect.stringContaining('expectedRevision') ]));
     const broad = await callJson(client, 'read_note', { path: 'Knowledge/Broad.md', accessToken });
     expect(broad.value.content).toContain('Second idea');
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
 test('ingest, publish, catalog, lint, and immutable source enforcement form one workflow', async () => {
   const { server, client } = await setup();
-  try {
+  {
     const registration = await callJson(client, 'register_scope_account', { accountId: 'wiki-owner', modelId: 'codex', password: 'wiki-owner-password' });
     const accessToken = registration.value.accessToken;
     const initialized = await callJson(client, 'initialize_llm_wiki', { actor: 'human', accessToken });
@@ -3409,15 +3318,12 @@ test('ingest, publish, catalog, lint, and immutable source enforcement form one 
     await writeFile(rawPath, (await readFile(rawPath, 'utf8')).replace('Persistent', 'Tampered'), 'utf8');
     const damaged = await callJson(client, 'lint_wiki', {});
     expect(damaged.value.issues).toContainEqual(expect.objectContaining({ code: 'source_hash_mismatch' }));
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
 test('organization metadata, catalog facets, review queue, and lint warnings stay bounded and discoverable', async () => {
   const { server, client } = await setup();
-  try {
+  {
     const registration = await callJson(client, 'register_scope_account', { accountId: 'organization-owner', modelId: 'codex', password: 'organization-owner-password' });
     const accessToken = registration.value.accessToken;
     const source = await callJson(client, 'ingest_source', {
@@ -3531,15 +3437,12 @@ test('organization metadata, catalog facets, review queue, and lint warnings sta
       expect.objectContaining({ code: 'knowledge_review_due' }),
       expect.objectContaining({ code: 'active_project_without_next_action', path: 'Projects/Stalled.md' }),
     ]));
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
 test('knowledge-related commits are blocked by Wiki errors while ordinary notes remain normal Git changes', async () => {
   const { server, client } = await setup();
-  try {
+  {
     const registration = await callJson(client, 'register_scope_account', { accountId: 'commit-owner', modelId: 'codex', password: 'commit-owner-password' });
     const accessToken = registration.value.accessToken;
     const initialized = await client.callTool({ name: 'initialize_revision_history', arguments: { confirm: true, accessToken } });
@@ -3557,15 +3460,12 @@ test('knowledge-related commits are blocked by Wiki errors while ordinary notes 
     expect(blocked.isError).toBe(true);
     expect((blocked.content as any)[0].text).toContain('Wiki validation blocked commit');
     expect((blocked.content as any)[0].text).toContain('knowledge_without_evidence');
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
 test('private source and knowledge workflows are visible only to their logged-in owner', async () => {
   const { server, client } = await setup();
-  try {
+  {
     await client.callTool({ name: 'register_scope_account', arguments: { accountId: 'alpha-owner', modelId: 'alpha', password: 'alpha-private-password' } });
     await client.callTool({ name: 'register_scope_account', arguments: { accountId: 'beta-owner', modelId: 'beta', password: 'beta-private-password' } });
     const alphaToken = (await callJson(client, 'login_scope', { accountId: 'alpha-owner', password: 'alpha-private-password' })).value.accessToken;
@@ -3601,15 +3501,12 @@ test('private source and knowledge workflows are visible only to their logged-in
     expect(alphaLineage.value.works).toEqual([expect.objectContaining({ workId: 'alpha-private-work' })]);
     const betaLineage = await callJson(client, 'get_wiki_source_lineage', { sourceFamily: 'alpha-private-work', accessToken: betaToken });
     expect(betaLineage.value.works).toEqual([]);
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
 test('claim provenance, progressive projections, duplicate preflight, impact, and graph health stay bounded', async () => {
   const { server, client } = await setup();
-  try {
+  {
     const registration = await callJson(client, 'register_scope_account', { accountId: 'quality-owner', modelId: 'codex', password: 'quality-owner-password' });
     const accessToken = registration.value.accessToken;
     const source = await callJson(client, 'ingest_source', {
@@ -3691,15 +3588,12 @@ test('claim provenance, progressive projections, duplicate preflight, impact, an
     await client.callTool({ name: 'write_note', arguments: { path: 'Knowledge/Old.md', content: '# Old\n\nOld knowledge.', frontmatter: { llm_wiki_type: 'knowledge', note_kind: 'knowledge', lifecycle: 'evergreen', updated_at: '2020-01-01T00:00:00.000Z', created_at: '2020-01-01T00:00:00.000Z' }, expectedRevision: 'missing', accessToken } });
     const unused = await callJson(client, 'get_wiki_unused_knowledge', { olderThanDays: 30, accessToken });
     expect(unused.value.items).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'Knowledge/Old.md', suggestedAction: 'review_then_archive_or_supersede' })]));
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
 test('next actions and knowledge rediscovery stay bounded while graph health checks epistemic flow', async () => {
   const { server, client } = await setup();
-  try {
+  {
     const registration = await callJson(client, 'register_scope_account', { accountId: 'organization-signals-owner', modelId: 'codex', password: 'organization-signals-password' });
     const accessToken = registration.value.accessToken;
     const write = async (path: string, content: string, frontmatter: Record<string, unknown>) => {
@@ -3763,15 +3657,12 @@ test('next actions and knowledge rediscovery stay bounded while graph health che
     expect(graph.value.typedRelations.unresolved.items).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'Knowledge/Typed gap.md', relation: 'supports' })]));
     const contract = await callJson(client, 'get_wiki_property_contract', { accessToken });
     expect(contract.value.relations).toEqual(expect.arrayContaining([expect.objectContaining({ field: 'supports', direction: 'directional' })]));
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
 test('composition candidates, projection-only updates, and waiting follow-up signals stay bounded and revision-safe', async () => {
   const { server, client } = await setup();
-  try {
+  {
     const registration = await callJson(client, 'register_scope_account', { accountId: 'organization-maintenance-owner', modelId: 'codex', password: 'organization-maintenance-password' });
     const accessToken = registration.value.accessToken;
     const body = [
@@ -3841,15 +3732,12 @@ test('composition candidates, projection-only updates, and waiting follow-up sig
     expect(dashboard.value.sections.waiting.items).toEqual(expect.arrayContaining([
       expect.objectContaining({ path: 'Projects/Waiting.md', waitingAgeDays: expect.any(Number), followUpNeeded: true, followUpReason: 'waiting_14_days_or_more' }),
     ]));
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
 test('Property contract is discoverable and review cadence schedules the next review', async () => {
   const { server, client } = await setup();
-  try {
+  {
     const contract = await callJson(client, 'get_wiki_property_contract', { maxChars: 12000 });
     expect(contract.value.fields).toEqual(expect.arrayContaining([
       expect.objectContaining({ name: 'note_kind', type: 'text' }),
@@ -3917,15 +3805,12 @@ test('Property contract is discoverable and review cadence schedules the next re
     const reviewedAt = Date.parse(reviewed.value.reviewedAt);
     const nextReviewAt = Date.parse(reviewed.value.reviewAt);
     expect(nextReviewAt - reviewedAt).toBe(7 * 24 * 60 * 60 * 1000);
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
 test('authority, maintenance debt, answer packets, and adaptive review stay bounded', async () => {
   const { server, client } = await setup();
-  try {
+  {
     const registration = await callJson(client, 'register_scope_account', { accountId: 'organization-views-owner', modelId: 'codex', password: 'organization-views-password' });
     const accessToken = registration.value.accessToken;
     const write = async (path: string, content: string, frontmatter: Record<string, unknown>) => {
@@ -3996,15 +3881,12 @@ test('authority, maintenance debt, answer packets, and adaptive review stay boun
     expect(health.value.quarantine).toMatchObject({ total: expect.any(Number), items: expect.any(Array) });
     expect(health.value.collectionHealth.items).toEqual(expect.arrayContaining([expect.objectContaining({ nextAction: expect.any(String), signals: expect.any(Array), attentionScore: expect.any(Number) })]));
     expect(legacyAuthority.value.entries).toEqual(expect.arrayContaining([expect.objectContaining({ term: 'Legacy anchor', preferred: 'Legacy anchor' })]));
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
 test('volatility classes control adaptive review defaults and caps without overriding explicit dates', async () => {
   const { server, client } = await setup();
-  try {
+  {
     const registration = await callJson(client, 'register_scope_account', { accountId: 'volatility-owner', modelId: 'codex', password: 'volatility-owner-password' });
     const accessToken = registration.value.accessToken;
     const cases = [
@@ -4069,9 +3951,6 @@ test('volatility classes control adaptive review defaults and caps without overr
     expect(revised.value.reviewIntervalDays).toBe(7);
     const disputed = await callJson(client, 'review_wiki_note', { path: revisedPath, reviewOutcome: 'disputed', expectedRevision: revised.value.revision, accessToken });
     expect(disputed.value.reviewIntervalDays).toBe(7);
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
@@ -4094,7 +3973,7 @@ test('authority shelves browse natural scheme order without leaking hidden colli
   await writeFile(join(vault, '_scopes', 'models', 'claude', 'Hidden duplicate.md'), authorityNote('Hidden duplicate', 'local-topics', 'AI.3'));
 
   const { server, client } = await setup();
-  try {
+  {
     const registration = await callJson(client, 'register_scope_account', { accountId: 'authority-shelf-owner', modelId: 'codex', password: 'authority-shelf-password' });
     const accessToken = registration.value.accessToken;
     const discovery = await callJson(client, 'search_capabilities', { query: 'call number close match authority shelf', limit: 3, maxChars: 4000, accessToken });
@@ -4138,9 +4017,6 @@ test('authority shelves browse natural scheme order without leaking hidden colli
     } });
     expect(invalid.isError).toBe(true);
     expect(String((invalid.content as any)[0]?.text)).toContain('aroundAuthorityId requires scheme');
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
@@ -4156,7 +4032,7 @@ test('authority integrity lint validates shapes and visible scheme-local collisi
   await writeFile(join(vault, '_scopes', 'models', 'claude', 'Hidden duplicate.md'), '---\nauthority_scheme: local-topics\nauthority_id: AI.7\n---\n# Hidden duplicate\n');
 
   const { server, client } = await setup();
-  try {
+  {
     const registration = await callJson(client, 'register_scope_account', { accountId: 'authority-lint-owner', modelId: 'codex', password: 'authority-lint-password' });
     const accessToken = registration.value.accessToken;
     const lint = await callJson(client, 'lint_wiki', { limit: 200, accessToken });
@@ -4177,15 +4053,12 @@ test('authority integrity lint validates shapes and visible scheme-local collisi
       expect.objectContaining({ code: 'duplicate_authority_id' }),
       expect.objectContaining({ code: 'authority_id_without_scheme' }),
     ]));
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
 test('canonical lineage and optional active recall stay in the Markdown organization model', async () => {
   const { server, client } = await setup();
-  try {
+  {
     const registration = await callJson(client, 'register_scope_account', { accountId: 'lineage-recall-owner', modelId: 'codex', password: 'lineage-recall-password' });
     const accessToken = registration.value.accessToken;
     const write = await client.callTool({ name: 'write_note', arguments: {
@@ -4220,15 +4093,12 @@ test('canonical lineage and optional active recall stay in the Markdown organiza
     expect(recalled.value).toMatchObject({ recallQuality: 'good', recallIntervalDays: 1, nextRecallAt: expect.any(String) });
     const after = await callJson(client, 'read_note', { path: 'Knowledge/Recall.md', includeContent: false, accessToken });
     expect(after.value.fm).toMatchObject({ recall_quality: 'good', recall_interval_days: 1 });
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
 test('agent active recall state is isolated from the shared knowledge note', async () => {
   const { server, client } = await setup();
-  try {
+  {
     const owner = await callJson(client, 'register_scope_account', { accountId: 'recall-isolation-owner', modelId: 'codex', password: 'recall-isolation-owner-password' });
     const ownerToken = owner.value.accessToken;
     const write = await client.callTool({ name: 'write_note', arguments: {
@@ -4251,15 +4121,12 @@ test('agent active recall state is isolated from the shared knowledge note', asy
     const after = await callJson(client, 'read_note', { path: 'Knowledge/Shared recall.md', includeContent: false, accessToken: ownerToken });
     expect(after.value.fm).not.toHaveProperty('last_recalled_at');
     expect(after.value.fm).not.toHaveProperty('recall_quality');
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
 test('vocabulary health detects bounded facet fragmentation and low-selectivity values without leaking hidden notes', async () => {
   const { server, client } = await setup();
-  try {
+  {
     const registration = await callJson(client, 'register_scope_account', { accountId: 'facet-health-owner', modelId: 'codex', password: 'facet-health-password' });
     const accessToken = registration.value.accessToken;
     for (let index = 0; index < 20; index += 1) {
@@ -4301,15 +4168,12 @@ test('vocabulary health detects bounded facet fragmentation and low-selectivity 
       expect.objectContaining({ reason: 'facet_fragmentation_needs_review', inspect: expect.objectContaining({ endpointId: 'wiki.vocabulary_health' }) }),
       expect.objectContaining({ reason: 'facet_low_selectivity_needs_review', inspect: expect.objectContaining({ endpointId: 'wiki.vocabulary_health' }) }),
     ]));
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
 test('recall queue, near-duplicate review, and typed relation health stay bounded', async () => {
   const { server, client } = await setup();
-  try {
+  {
     const registration = await callJson(client, 'register_scope_account', { accountId: 'organization-quality-3-owner', modelId: 'codex', password: 'organization-quality-3-password' });
     const accessToken = registration.value.accessToken;
     const write = async (path: string, content: string, frontmatter: Record<string, unknown>) => {
@@ -4351,15 +4215,12 @@ test('recall queue, near-duplicate review, and typed relation health stay bounde
     expect(contract.value.conventions.nativeCompatibility).toMatchObject({ safeTypes: expect.arrayContaining(['list']), mcpManagedComplexFields: expect.arrayContaining(['claims', 'evidence']) });
     const template = await callJson(client, 'call_endpoint', { endpointId: 'wiki.note_template', arguments: { noteKind: 'question', maxChars: 4000, accessToken } });
     expect(template.value).toMatchObject({ templateId: 'question', noteKind: 'question', properties: { epistemic_status: 'open' } });
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
 test('organization projections expose relation reverse navigation, MOC hierarchy, redirects, and focused Bases views', async () => {
   const { server, client } = await setup();
-  try {
+  {
     const registration = await callJson(client, 'register_scope_account', { accountId: 'organization-projections-owner', modelId: 'codex', password: 'organization-projections-password' });
     const accessToken = registration.value.accessToken;
     const write = async (path: string, content: string, frontmatter: Record<string, unknown>) => {
@@ -4395,15 +4256,12 @@ test('organization projections expose relation reverse navigation, MOC hierarchy
     expect(bases.value).toMatchObject({ view: 'inbox_oldest', matchingNotesExact: true });
     expect(bases.value.content).toContain('note.lifecycle == "inbox"');
     expect(bases.value.content).toContain('note.captured_at');
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
 test('triage persists primary MOC and retention safety metadata through the endpoint', async () => {
   const { server, client } = await setup();
-  try {
+  {
     const registration = await callJson(client, 'register_scope_account', { accountId: 'organization-retention-owner', modelId: 'codex', password: 'organization-retention-password' });
     const accessToken = registration.value.accessToken;
     const captured = await callJson(client, 'capture_wiki_note', { path: 'Inbox/Retention capture.md', content: 'A captured preservation decision.', expectedRevision: 'missing', accessToken });
@@ -4412,15 +4270,12 @@ test('triage persists primary MOC and retention safety metadata through the endp
       primaryMoc: '[[Knowledge/MOCs/Operations]]', retentionEvent: 'created', preserveUntil: '2031-01-01', legalHold: true,
     });
     expect(triaged.value.frontmatter).toMatchObject({ primaryMoc: '[[Knowledge/MOCs/Operations]]', retentionEvent: 'created', preserveUntil: '2031-01-01', legalHold: true });
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
 test('remaining organization loops connect issue retrospectives, recall repair, search learning, source lineage, and portable manifests', async () => {
   const { server, client } = await setup();
-  try {
+  {
     const registration = await callJson(client, 'register_scope_account', { accountId: 'remaining-loops-owner', modelId: 'codex', password: 'remaining-loops-password' });
     const accessToken = registration.value.accessToken;
     const source = await callJson(client, 'ingest_source', {
@@ -4456,15 +4311,12 @@ test('remaining organization loops connect issue retrospectives, recall repair, 
 
     const manifest = await callJson(client, 'get_wiki_organization_manifest', { accessToken, maxChars: 12000 });
     expect(manifest.value).toMatchObject({ format: 'mcpvault-organization-manifest', portable: true, contracts: expect.objectContaining({ relations: expect.any(Array) }), reservedPaths: expect.arrayContaining(['.mcpvault/']) });
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
 test('archival finding aid preserves collection context and original order without loading source bodies', async () => {
   const { server, client } = await setup();
-  try {
+  {
     const registration = await callJson(client, 'register_scope_account', { accountId: 'archive-owner', modelId: 'codex', password: 'archive-owner-password' });
     const accessToken = registration.value.accessToken;
     for (const source of [
@@ -4501,15 +4353,12 @@ test('archival finding aid preserves collection context and original order witho
 
     const capabilities = await callJson(client, 'search_capabilities', { query: 'archive original order', accessToken, limit: 5 });
     expect(capabilities.value.endpoints).toEqual(expect.arrayContaining([expect.objectContaining({ endpointId: 'wiki.archive_finding_aid' })]));
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
 test('portable migration preflight excludes non-global content and reports revision-safe compatibility hazards', async () => {
   const { server, client } = await setup();
-  try {
+  {
     const registration = await callJson(client, 'register_scope_account', { accountId: 'portable-owner', userId: 'portable-family', modelId: 'codex', agentId: 'portable-worker', password: 'portable-owner-password' });
     const accessToken = registration.value.accessToken;
     for (const [path, frontmatter] of [
@@ -4642,15 +4491,12 @@ test('portable migration preflight excludes non-global content and reports revis
     expect(String((tinyCompared.result.content as any)[0].text).length).toBeLessThanOrEqual(512);
     expect(tinyCompared.value.contractFingerprint).toMatch(/^[a-f0-9]{64}$/);
     expect(tinyCompared.value.migrationPreview).toMatchObject({ compatible: false, blockingIssues: expect.any(Number) });
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
 test('curation, synthesis, discussion, task lessons, and interrupted edits expose exact revision-safe next actions', async () => {
   const { server, client } = await setup();
-  try {
+  {
     const registration = await callJson(client, 'register_scope_account', { accountId: 'workflow-owner', userId: 'workflow-family', modelId: 'codex', agentId: 'workflow-worker', password: 'workflow-owner-password' });
     const accessToken = registration.value.accessToken;
     const source = await callJson(client, 'ingest_source', { sourceId: 'workflow-source', title: 'Workflow source', content: '# Evidence\n\nA checked fact.\n', capturedBy: 'codex', accessToken });
@@ -4695,15 +4541,12 @@ test('curation, synthesis, discussion, task lessons, and interrupted edits expos
     expect(checkpoint.value.revision).toMatch(/^[a-f0-9]{64}$/);
     expect(resumed.value.fm.pending_edits).toHaveLength(2);
     expect(resumed.value.fm.pending_edits[0]).toMatchObject({ expectedRevision: published.value.revision, endpointId: 'wiki.review' });
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
 test('mixed Korean and English retrieval keeps durable Wiki context ahead of noisy community matches', async () => {
   const { server, client } = await setup();
-  try {
+  {
     const registration = await callJson(client, 'register_scope_account', { accountId: 'retrieval-owner', userId: 'retrieval-family', modelId: 'codex', agentId: 'retrieval-worker', password: 'retrieval-owner-password' });
     const accessToken = registration.value.accessToken;
     const source = await callJson(client, 'ingest_source', { sourceId: 'retrieval-source', title: 'Retrieval source', content: '# Retrieval source\n\nRAG combines retrieval with generation. 검색 증강 생성은 검색 결과를 생성 과정에 연결한다.\n', capturedBy: 'codex', accessToken });
@@ -4751,15 +4594,12 @@ test('mixed Korean and English retrieval keeps durable Wiki context ahead of noi
     expect(packet.value.reasoningTrail.counterexamples).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'Knowledge/RAG Failure.md', revision: expect.stringMatching(/^[a-f0-9]{64}$/) })]));
     expect(packet.value.synthesisPlan.status).toBe('ready_for_decision_draft');
     expect(JSON.stringify(packet.value)).not.toContain('long community context long community context long community context');
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
 test('temporal validity and source-work diversity remain bounded review signals', async () => {
   const { server, client } = await setup();
-  try {
+  {
     const registration = await callJson(client, 'register_scope_account', { accountId: 'temporal-owner', modelId: 'codex', password: 'temporal-owner-password' });
     const accessToken = registration.value.accessToken;
     const sourceA1 = await callJson(client, 'ingest_source', { sourceId: 'temporal-a1', title: 'Study A first snapshot', content: '# Study A\n\nFirst retrieval.\n', sourceWorkId: 'study-a', sourceEditionId: 'edition-1', accessToken });
@@ -4823,8 +4663,5 @@ test('temporal validity and source-work diversity remain bounded review signals'
     expect(review.value.items).toEqual(expect.arrayContaining([
       expect.objectContaining({ path: 'Knowledge/Expired claim.md', reviewReasons: expect.arrayContaining(['validity_ended']), temporal: expect.objectContaining({ state: 'expired' }) }),
     ]));
-  } finally {
-    await client.close();
-    await server.close();
   }
 });

@@ -19,19 +19,28 @@ import { derivedStorageFixture } from '../tests/derived-storage-fixture.js';
 
 let vault: string;
 let snapshotHost: Awaited<ReturnType<typeof derivedStorageFixture>> | undefined;
+let activeServers: Array<{ close: () => Promise<void> }>;
+let activeClients: Array<{ close: () => Promise<void> }>;
 
 beforeEach(async () => {
   vault = await mkdtemp(join(tmpdir(), 'mcpvault-pulse-'));
+  activeServers = [];
+  activeClients = [];
 });
 
 afterEach(async () => {
   vi.unstubAllEnvs();
+  await Promise.all(activeClients.splice(0).map(client => client.close()));
+  await Promise.all(activeServers.splice(0).map(server => server.close()));
   await snapshotHost?.close(); snapshotHost = undefined;
   await rm(vault, { recursive: true, force: true });
 });
 
 async function setup() {
-  return connectMcpClient(vault, { version: '1.0.0' }, 'pulse-test');
+  const resources = await connectMcpClient(vault, { version: '1.0.0' }, 'pulse-test');
+  activeServers.push(resources.server);
+  activeClients.push(resources.client);
+  return resources;
 }
 
 async function json(client: Client, name: string, arguments_: Record<string, unknown>) {
@@ -95,7 +104,7 @@ test('unit routing without owner consent skips optional notification reads', asy
 
 test('anonymous pulse routes to complete conditional onboarding without demanding registration', async () => {
   const { server, client } = await setup();
-  try {
+  {
     const pulse = await json(client, 'get_agent_pulse', {});
     expect(pulse.value).toMatchObject({
       state: 'public_reader',
@@ -113,30 +122,24 @@ test('anonymous pulse routes to complete conditional onboarding without demandin
     for (const requirement of ['userId', 'modelId', 'agentId', 'accountId', '12 characters', 'verified host secret store', 'auth.login', 'auth.register', 'public reader', 'do not repeat orientation']) {
       expect(rules).toContain(requirement);
     }
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
 test.each([512, 700, 2000, 5000, 12000])('anonymous pulse budget %i preserves a safe read action', async (maxChars) => {
   const { server, client } = await setup();
-  try {
+  {
     const result = await client.callTool({ name: 'get_agent_pulse', arguments: { maxChars, limit: 1, prettyPrint: true } });
     const text = (result.content as any)[0].text as string;
     expect(result.isError).toBeFalsy();
     expect(text.length).toBeLessThanOrEqual(maxChars);
     expect(JSON.parse(text)).toMatchObject({ state: 'public_reader', nextAction: { tool: 'wiki.policy', arguments: { topic: 'onboarding', maxChars: 3000 } } });
     expect(text).not.toContain('Register yourself now');
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
 test('fixed and internal pulse descriptions agree on conditional registration', async () => {
   const { server, client } = await setup();
-  try {
+  {
     const fixed = (await client.listTools()).tools.find(tool => tool.name === 'get_agent_pulse')!;
     const internal = getAgentPulseTools()[0];
     for (const tool of [fixed, internal]) {
@@ -145,15 +148,12 @@ test('fixed and internal pulse descriptions agree on conditional registration', 
       expect(tool.description).toContain('assigned work');
       expect(tool.description).not.toContain('call register_scope_account');
     }
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
 test.each([512, 700, 1200, 3000])('public onboarding MCP read at %i preserves safe guidance with pretty printing', async (maxChars) => {
   const { server, client } = await setup();
-  try {
+  {
     const policy = await json(client, 'call_endpoint', {
       endpointId: 'wiki.policy', arguments: { topic: 'onboarding', maxChars, prettyPrint: true },
     });
@@ -172,15 +172,12 @@ test.each([512, 700, 1200, 3000])('public onboarding MCP read at %i preserves sa
       endpointId: 'community.comment', arguments: { slug: 'self-introductions', content: 'Anonymous reading grants no write permission.' },
     } });
     expect(rejected.isError).toBe(true);
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
 test('orientation exposes exactly one bounded public action instead of a preload checklist', async () => {
   const { server, client } = await setup();
-  try {
+  {
     const registration = await json(client, 'register_scope_account', { accountId: 'orientation-owner', modelId: 'codex', password: 'orientation-owner-password' });
     await client.callTool({ name: 'write_note', arguments: { path: '환영합니다!.md', content: '# Welcome\n\nJoin the shared Wiki.', accessToken: registration.value.accessToken } });
     await client.callTool({ name: 'initialize_llm_wiki', arguments: { actor: 'bootstrap', accessToken: registration.value.accessToken } });
@@ -209,15 +206,12 @@ test('orientation exposes exactly one bounded public action instead of a preload
     ]);
     expect(authenticated.value.primaryAction).toMatchObject({ endpointId: 'get_agent_pulse', via: 'direct_mcp' });
     expect(authenticated.value.access.mode).toBe('authenticated-global-community-and-private');
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
 test('a first-time session-agent can register without a parent token and use the returned token', async () => {
   const { server, client } = await setup();
-  try {
+  {
     const host = await json(client, 'register_scope_account', {
       accountId: 'intro-host', modelId: 'claude', password: 'intro-host-password-123',
     });
@@ -271,15 +265,12 @@ test('a first-time session-agent can register without a parent token and use the
     });
     expect(review.result.isError).toBeFalsy();
     expect(review.value.curationPlan.selected).toMatchObject({ path: 'Knowledge/Unlinked.md', reason: 'orphan_note' });
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
 test('assigned open task outranks onboarding and excludes completed work', async () => {
   const { server, client } = await setup();
-  try {
+  {
     const ownerId = 'assigned-task-owner'.padEnd(64, 'o');
     const workerId = 'assigned-task-worker'.padEnd(64, 'w');
     const proposedTaskId = 'assigned-proposed'.padEnd(64, 'p');
@@ -416,9 +407,6 @@ test('assigned open task outranks onboarding and excludes completed work', async
       signals: { assignedOpenTasks: 0 },
     });
     expect(socialPulse.value.signals.unreadNotifications).toBeGreaterThan(0);
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
@@ -445,7 +433,7 @@ test('assigned open task ordering uses updated_at then taskId', async () => {
 
 test('empty authenticated pulse does not invent a publication prerequisite', async () => {
   const { server, client } = await setup();
-  try {
+  {
     await client.callTool({ name: 'register_scope_account', arguments: { accountId: 'pulse-codex', modelId: 'codex', password: 'pulse-codex-password-123' } });
     const login = await json(client, 'login_scope', { accountId: 'pulse-codex', password: 'pulse-codex-password-123' });
     const pulse = await json(client, 'get_agent_pulse', { accessToken: login.value.accessToken });
@@ -456,9 +444,6 @@ test('empty authenticated pulse does not invent a publication prerequisite', asy
       signals: { ownPublishedPosts: 0 },
     });
     expect(pulse.value.nextAction.reason).toContain('only when you have something substantive');
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
@@ -470,7 +455,7 @@ test('crowded community orphan pages do not hide the next real Wiki repair', asy
   }
   await writeFile(join(vault, 'Knowledge', 'Unlinked.md'), '# Ordinary Wiki orphan\n');
   const { server, client } = await setup();
-  try {
+  {
     const graph = await json(client, 'call_endpoint', {
       endpointId: 'wiki.graph_health', arguments: { limit: 1, maxChars: 16000 },
     });
@@ -483,15 +468,12 @@ test('crowded community orphan pages do not hide the next real Wiki repair', asy
     expect(repair.result.isError).toBeFalsy();
     expect(repair.value.curationPlan?.selected).toMatchObject({ path: 'Knowledge/Unlinked.md', reason: 'orphan_note' });
     expect(repair.result.content[0].text.length).toBeLessThanOrEqual(4000);
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
 test('comment-only identity receives due review repeatedly and after server recreation', async () => {
   const { server, client } = await setup();
-  try {
+  {
     const registration = await json(client, 'register_scope_account', { accountId: 'review-pulse', modelId: 'codex', password: 'review-pulse-password-123' });
     const accessToken = registration.value.accessToken;
     const host = await json(client, 'register_scope_account', {
@@ -521,12 +503,9 @@ test('comment-only identity receives due review repeatedly and after server recr
         coverage: { posts: { state: 'skipped' } },
       });
     }
-  } finally {
-    await client.close();
-    await server.close();
   }
   const fresh = await setup();
-  try {
+  {
     const login = await json(fresh.client, 'login_scope', { accountId: 'review-pulse', password: 'review-pulse-password-123' });
     const pulse = await json(fresh.client, 'get_agent_pulse', { accessToken: login.value.accessToken });
     expect(pulse.value).toMatchObject({
@@ -534,15 +513,12 @@ test('comment-only identity receives due review repeatedly and after server recr
       signals: { knowledgeReviewQueue: 1 },
       coverage: { posts: { state: 'skipped' } },
     });
-  } finally {
-    await fresh.client.close();
-    await fresh.server.close();
   }
 });
 
 test('maintenance plan outranks an active post when direct work is empty', async () => {
   const { server, client } = await setup();
-  try {
+  {
     const registration = await json(client, 'register_scope_account', {
       accountId: 'maintenance-pulse', modelId: 'codex', password: 'maintenance-pulse-password-123',
     });
@@ -590,15 +566,12 @@ test('maintenance plan outranks an active post when direct work is empty', async
     });
     expect(pulse.value.nextAction.selectedRevision).toMatch(/^[a-f0-9]{64}$/);
     expect(pulse.value.nextAction.target).not.toBe('maintenance-pulse-introduction');
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
 test('distributes equal-priority maintenance by authenticated identity and keeps each route stable', async () => {
   const { server, client } = await setup();
-  try {
+  {
     const codex = await json(client, 'register_scope_account', {
       accountId: 'rendezvous-codex', modelId: 'codex', password: 'rendezvous-codex-password-123',
     });
@@ -677,15 +650,12 @@ test('distributes equal-priority maintenance by authenticated identity and keeps
     expect(publicPacket.value).not.toHaveProperty('attentionRouting');
     expect(publicPacket.value.curationPlan.selected.path).toBe('Knowledge/Rendezvous 01.md');
     expect(JSON.stringify([first.value, second.value, repeated.value])).not.toContain('attentionKey');
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
 test('minimum pulse budget recovers complete guidance and the exact maintenance action', async () => {
   const { server, client } = await setup();
-  try {
+  {
     const registration = await json(client, 'register_scope_account', {
       accountId: 'minimum-maintenance-pulse', modelId: 'codex', password: 'minimum-maintenance-password-123',
     });
@@ -727,15 +697,12 @@ test('minimum pulse budget recovers complete guidance and the exact maintenance 
       selectedRevision: packet.value.curationPlan.selected.revision,
     });
     expect(Boolean(pulse.nextAction.followUpPlan) || pulse.nextAction.followUpPlanOmitted === true).toBe(true);
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
 test('a tiny pulse retries with a larger budget instead of truncating a long maintenance action', async () => {
   const { server, client } = await setup();
-  try {
+  {
     const registration = await json(client, 'register_scope_account', {
       accountId: 'long-maintenance-pulse', modelId: 'codex', password: 'long-maintenance-pulse-password-123',
     });
@@ -775,9 +742,6 @@ test('a tiny pulse retries with a larger budget instead of truncating a long mai
       tool: 'wiki.read_projection', target: path,
       selectedRevision: JSON.parse(String((write.content as any)[0].text)).revision,
     });
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
@@ -786,7 +750,7 @@ test('a small-budget Pulse retry preserves relevant skill selection and host sta
     endpointId: 'skill.candidate', arguments: { skillId, candidateId: 'bounded-candidate', op: 'read' },
   }));
   const { server, client } = await setup();
-  try {
+  {
     const registration = await json(client, 'register_scope_account', { accountId: 'retry-skill', modelId: 'codex', password: 'retry-skill-password-123' });
     const accessToken = registration.value.accessToken;
     const tiny = await json(client, 'get_agent_pulse', { skillId: 'safe-edit', hostBusy: false, limit: 2, maxChars: 512, accessToken });
@@ -798,7 +762,7 @@ test('a small-budget Pulse retry preserves relevant skill selection and host sta
     expect(busy.value.nextAction.arguments.hostBusy).toBe(true);
     await json(client, 'get_agent_pulse', { ...busy.value.nextAction.arguments, accessToken });
     expect(skill).toHaveBeenCalledTimes(2);
-  } finally { skill.mockRestore(); await client.close(); await server.close(); }
+  }
 });
 
 test('a direct obligation suppresses maintenance projection lookup', async () => {
@@ -1300,29 +1264,23 @@ test('an oversized maintenance plan is omitted instead of returning truncated ar
 
 test('pulse is exposed alongside both read and mutating tools', async () => {
   const { server, client } = await setup();
-  try {
+  {
     const listed = await client.listTools();
     const names = listed.tools.map(tool => tool.name);
     expect(names).toContain('get_agent_pulse');
     expect(names).toEqual(['orient_wiki', 'get_agent_pulse', 'list_active_capabilities', 'search_capabilities', 'call_endpoint']);
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
 test('watch notifications still resolve through indexed public activity', async () => {
   const { server, client } = await setup();
-  try {
+  {
     const watcher = await json(client, 'register_scope_account', { accountId: 'watcher', modelId: 'codex', password: 'watcher-password-123' });
     const publisher = await json(client, 'register_scope_account', { accountId: 'publisher', modelId: 'claude', password: 'publisher-password-123' });
     await json(client, 'publish_blog_post', { slug: 'watched-post', title: 'Watched post', content: 'A post worth following.', expectedRevision: 'missing', accessToken: publisher.value.accessToken });
     await json(client, 'watch_target', { targetType: 'post', targetId: 'watched-post', accessToken: watcher.value.accessToken });
     const notifications = await json(client, 'list_notifications', { accessToken: watcher.value.accessToken });
     expect(notifications.value.notifications).toEqual(expect.arrayContaining([expect.objectContaining({ kind: 'watch', sourceId: 'watched-post', content: expect.stringContaining('A post worth following.') })]));
-  } finally {
-    await client.close();
-    await server.close();
   }
 });
 
@@ -1330,7 +1288,7 @@ test('persists and restores the public discovery snapshot after restart', async 
   snapshotHost = await derivedStorageFixture(vault);
   vi.stubEnv('MCPVAULT_DERIVED_CACHE_DIR', snapshotHost.host);
   const first = await setup();
-  try {
+  {
     const registration = await json(first.client, 'register_scope_account', { accountId: 'snapshot-agent', modelId: 'codex', password: 'snapshot-agent-password-123' });
     await json(first.client, 'publish_blog_post', {
       slug: 'snapshot-post', title: 'Snapshot post', content: 'A public post retained in the discovery snapshot.',
@@ -1341,18 +1299,12 @@ test('persists and restores the public discovery snapshot after restart', async 
     const snapshot = await readFile(snapshotHost.path('public-discovery.snapshot.bin'));
     expect(gunzipSync(snapshot!).subarray(0, 8).toString('ascii')).toBe('MCPVPUB1');
     expect(gunzipSync(snapshot!).readUInt32LE(8)).toBe(2);
-  } finally {
-    await first.client.close();
-    await first.server.close();
   }
 
   const second = await setup();
-  try {
+  {
     const login = await json(second.client, 'login_scope', { accountId: 'snapshot-agent', password: 'snapshot-agent-password-123' });
     const pulse = await json(second.client, 'get_agent_pulse', { accessToken: login.value.accessToken });
     expect(pulse.value.context).toEqual(expect.arrayContaining([expect.objectContaining({ kind: 'active_post', slug: 'snapshot-post' })]));
-  } finally {
-    await second.client.close();
-    await second.server.close();
   }
 }, 30000);

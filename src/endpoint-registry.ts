@@ -10,6 +10,7 @@ import { DOCUMENT_TOOL_ENDPOINTS } from './document-tools.js';
 import { EXPLANATION_ENDPOINTS } from './explanation-tools.js';
 import { BENCHMARK_TOOL_ENDPOINTS } from './benchmark-tools.js';
 import { createHash } from 'node:crypto';
+import { jsonPointerNode, pageJsonRead, type JsonReadPage as DescriptorPage } from './json-read-page.js';
 import { hostFeatureForTool } from './host-features.js';
 import type { Activity, OwnerActivityAction } from './owner-activity.js';
 
@@ -644,14 +645,6 @@ function compactEndpoint(endpoint: EndpointDescriptor & { available: boolean; st
 
 type AvailableDescriptor = EndpointDescriptor & { available: boolean; state: 'ready' | 'locked' | 'disabled'; reason?: string };
 type DescriptorQuery = { endpointId: string; path: string; query: string };
-type DescriptorPage = {
-  path: string;
-  parentQuery?: string;
-  revision: string;
-  kind: string;
-  value?: unknown;
-  entries?: Array<Record<string, unknown>>;
-};
 
 function parseDescriptorQuery(value: unknown): DescriptorQuery | undefined {
   if (typeof value !== 'string') return undefined;
@@ -665,118 +658,16 @@ function parseDescriptorQuery(value: unknown): DescriptorQuery | undefined {
   return { endpointId, path, query: `${endpointId}#${path}` };
 }
 
-function descriptorPathParts(path: string): string[] {
-  return path === '' ? [] : path.slice(1).split('/').map(part => part.replaceAll('~1', '/').replaceAll('~0', '~'));
-}
-
-function descriptorPointerPart(value: string): string {
-  return value.replaceAll('~', '~0').replaceAll('/', '~1');
-}
-
-function descriptorNode(root: unknown, path: string): unknown {
-  let current = root;
-  for (const part of descriptorPathParts(path)) {
-    if (current === null || typeof current !== 'object' || !Object.prototype.hasOwnProperty.call(current, part)) return undefined;
-    current = (current as Record<string, unknown>)[part];
-  }
-  return current;
-}
-
-function descriptorKind(value: unknown): string {
-  if (value === null) return 'null';
-  if (Array.isArray(value)) return 'array';
-  return typeof value;
-}
-
-function descriptorWireBytes(value: unknown): number {
-  return Buffer.byteLength(JSON.stringify({ content: [{ type: 'text', text: JSON.stringify(value) }] }), 'utf8');
-}
-
-function descriptorCursor(value: unknown, fingerprint: string, generation: number, count: number): number {
-  try {
-    if (typeof value !== 'string' || value.length > 256) throw new Error();
-    const parsed = JSON.parse(Buffer.from(value, 'base64url').toString('utf8'));
-    if (parsed.f !== fingerprint || parsed.g !== generation
-      || !Number.isInteger(parsed.o) || parsed.o < 0 || parsed.o >= count) throw new Error();
-    return parsed.o;
-  } catch {
-    throw guidanceError(new Error('Descriptor cursor is invalid or the descriptor, authority, or registration changed; restart the descriptor read.'), 'guid-7ba2a960bd917fa9');
-  }
-}
-
-function descriptorCursorValue(fingerprint: string, generation: number, offset: number): string {
-  return Buffer.from(JSON.stringify({ f: fingerprint, g: generation, o: offset })).toString('base64url');
-}
-
-function descriptorEnvelope(endpoints: AvailableDescriptor[], page: DescriptorPage, total: number, truncated: boolean, nextCursor?: string, nextAction?: { query: string; cursor?: string }): Record<string, unknown> {
-  return { endpoints: endpoints.map(endpoint => ({ endpointId: endpoint.endpointId })), total, truncated, descriptorPage: page,
-    ...(nextCursor && { nextCursor }), ...(nextAction && { nextAction }) };
-}
-
 function descriptorRead(endpoint: AvailableDescriptor, query: DescriptorQuery, requestedMaxChars: number, context: EndpointAvailabilityContext, activeOnly: boolean, cursor: unknown, generation: number): Record<string, unknown> {
-  const projected = projectGuidance(endpoint) as AvailableDescriptor;
-  const root = projected;
-  const revision = createHash('sha256').update(JSON.stringify({ root, generation, context: { ...context, capabilities: [...context.capabilities].sort() }, activeOnly, query: query.query })).digest('hex').slice(0, 16);
-  const node = descriptorNode(root, query.path);
+  const root = projectGuidance(endpoint);
+  const node = jsonPointerNode(root, query.path);
   if (node === undefined) return { endpoints: [], total: 0, truncated: false };
-  const budget = Math.min(requestedMaxChars, 5000);
-  const kind = descriptorKind(node);
-  const base = { path: query.path, revision, kind };
-  const fits = (value: unknown) => descriptorWireBytes(descriptorEnvelope([endpoint], { ...base, value }, 1, false)) <= budget;
-  let offset = 0;
-  if (cursor !== undefined) {
-    if (typeof node === 'string') {
-      offset = descriptorCursor(cursor, revision, generation, node.length);
-      if (offset > 0 && offset < node.length && /[\uD800-\uDBFF]/.test(node[offset - 1]!) && /[\uDC00-\uDFFF]/.test(node[offset]!)) {
-        throw guidanceError(new Error('Descriptor cursor splits a Unicode surrogate pair; restart the descriptor read.'), 'guid-3f2719ebb5f76ec5');
-      }
-    }
-    else if (node !== null && typeof node === 'object') offset = descriptorCursor(cursor, revision, generation, Array.isArray(node) ? node.length : Object.keys(node).length);
-    else {
-      descriptorCursor(cursor, revision, generation, 1);
-      throw guidanceError(new Error('Descriptor cursor is not valid for a complete scalar; restart the descriptor read.'), 'guid-250a546f8df21502');
-    }
-  }
-  if (cursor === undefined && fits(node)) return descriptorEnvelope([endpoint], { ...base, value: node }, 1, false);
-  if (typeof node === 'string') {
-    let text = node.slice(offset);
-    while (text) {
-      if (/[\uD800-\uDBFF]$/.test(text) && /[\uDC00-\uDFFF]/.test(node[offset + text.length] ?? '')) text = text.slice(0, -1);
-      if (!text) break;
-      const nextOffset = offset + text.length;
-      const next = nextOffset < node.length ? descriptorCursorValue(revision, generation, nextOffset) : undefined;
-      const fragment = { type: 'string-fragment', offset, total: node.length, text };
-      const candidate = descriptorEnvelope([endpoint], { ...base, value: fragment }, 1, next !== undefined, next);
-      if (descriptorWireBytes(candidate) <= budget) return candidate;
-      text = text.slice(0, Math.floor(text.length / 2));
-    }
-    throw guidanceError(new Error('Descriptor budget cannot preserve a readable string fragment; increase maxChars.'), 'guid-e7ed28d7f41b5ad6');
-  }
-  if (node === null || typeof node !== 'object') throw guidanceError(new Error('Descriptor budget cannot preserve this scalar; increase maxChars.'), 'guid-02cf315f219c89d0');
-  const entries = Array.isArray(node) ? node.map((value, index) => [String(index), value] as const) : Object.entries(node);
-  const selected: Array<Record<string, unknown>> = [];
-  while (offset < entries.length) {
-    const [key, value] = entries[offset]!;
-    const path = `${query.path}/${descriptorPointerPart(key)}`;
-    const childQuery = `${query.endpointId}#${path}`;
-    const detailedChild: Record<string, unknown> = { path, query: childQuery, kind: descriptorKind(value), value };
-    let child: Record<string, unknown> = fits(value) ? detailedChild : { path, query: childQuery };
-    const candidateOffset = offset + 1;
-    const candidateCursor = candidateOffset < entries.length ? descriptorCursorValue(revision, generation, candidateOffset) : undefined;
-    let candidate = { ...base, entries: [...selected, child] };
-    if (descriptorWireBytes(descriptorEnvelope([endpoint], candidate, entries.length, candidateOffset < entries.length, candidateCursor)) > budget && child === detailedChild) {
-      child = { path, query: childQuery };
-      candidate = { ...base, entries: [...selected, child] };
-    }
-    if (descriptorWireBytes(descriptorEnvelope([endpoint], candidate, entries.length, candidateOffset < entries.length, candidateCursor)) > budget) {
-      if (selected.length === 0) throw guidanceError(new Error('Descriptor budget cannot preserve a child entry; increase maxChars.'), 'guid-71365e58dfc35539');
-      break;
-    }
-    selected.push(child); offset += 1;
-  }
-  const truncated = offset < entries.length;
-  const next = truncated ? descriptorCursorValue(revision, generation, offset) : undefined;
-  return descriptorEnvelope([endpoint], { ...base, entries: selected }, entries.length, truncated, next);
+  const basis = { root, generation, context: { ...context, capabilities: [...context.capabilities].sort() }, activeOnly, query: query.query };
+  return pageJsonRead(node, query.path, basis, cursor, requestedMaxChars,
+    (descriptorPage, total, truncated, nextCursor) => ({
+      endpoints: [{ endpointId: endpoint.endpointId }], total, truncated, descriptorPage,
+      ...(nextCursor && { nextCursor }),
+    }), path => ({ path, query: `${query.endpointId}#${path}` }));
 }
 
 /**

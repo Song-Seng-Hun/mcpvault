@@ -4,6 +4,7 @@ import { createServer as createHttpsServer } from 'node:https';
 import { createHash } from 'node:crypto';
 import { URL } from 'node:url';
 import { getServerRuntime } from './createServer.js';
+import { configureHttpServer, createRateLimiter, isLoopbackHost, MAX_HTTP_BODY_BYTES, originAllowed, readRequestBody, requestHost } from './http-request-utils.js';
 function sendJson(request, response, status, value, cacheable = false) {
     const body = JSON.stringify(value);
     response.statusCode = status;
@@ -32,47 +33,11 @@ function tokenFrom(request) {
     const header = request.headers.authorization;
     return typeof header === 'string' && /^Bearer\s+/i.test(header) ? header.replace(/^Bearer\s+/i, '').trim() : undefined;
 }
-const MAX_HTTP_BODY_BYTES = 2 * 1024 * 1024;
 const MAX_RATE_BUCKETS = 4_096;
 const REGISTRATION_WINDOW_MS = 10 * 60 * 1_000;
 const MAX_REGISTRATIONS_PER_WINDOW = 5;
 const LOGIN_WINDOW_MS = 60 * 1_000;
 const MAX_LOGINS_PER_WINDOW = 120;
-function isLoopbackHost(host) {
-    return ['127.0.0.1', 'localhost', '::1'].includes(host.trim().toLowerCase());
-}
-function requestHost(request) {
-    const host = request.headers.host;
-    if (!host)
-        return undefined;
-    try {
-        return new URL(`http://${host}`).hostname.toLowerCase();
-    }
-    catch {
-        return undefined;
-    }
-}
-function originAllowed(request, allowedOrigins) {
-    const origin = request.headers.origin;
-    return typeof origin !== 'string' || allowedOrigins.includes(origin);
-}
-async function readBody(request, maxBytes) {
-    const chunks = [];
-    let size = 0;
-    for await (const chunk of request) {
-        const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-        size += buffer.byteLength;
-        if (size > maxBytes)
-            throw guidanceError(new Error(`request body exceeds ${maxBytes} bytes`), 'guid-668226077e0f44fa');
-        chunks.push(buffer);
-    }
-    if (chunks.length === 0)
-        return {};
-    const parsed = JSON.parse(Buffer.concat(chunks).toString('utf8'));
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed))
-        throw guidanceError(new Error('request body must be a JSON object'), 'guid-cb8f7c49eade4be2');
-    return parsed;
-}
 function resultValue(result) {
     const text = result?.content?.[0]?.text;
     if (typeof text !== 'string')
@@ -101,52 +66,8 @@ export async function startRestApi(server, options = {}) {
     const maxBodyBytes = Math.min(Math.max(Math.trunc(options.maxBodyBytes ?? 1_048_576), 1_024), MAX_HTTP_BODY_BYTES);
     const allowedOrigins = options.allowedOrigins || [];
     const allowedHosts = options.allowedHosts || (host === '127.0.0.1' ? ['127.0.0.1', 'localhost'] : [host]);
-    const registrationWindows = new Map();
-    const loginWindows = new Map();
-    const registrationAllowed = (key) => {
-        const now = Date.now();
-        const current = registrationWindows.get(key);
-        if (!current || now - current.startedAt >= REGISTRATION_WINDOW_MS) {
-            if (registrationWindows.size >= MAX_RATE_BUCKETS) {
-                for (const [bucket, value] of registrationWindows) {
-                    if (now - value.startedAt >= REGISTRATION_WINDOW_MS)
-                        registrationWindows.delete(bucket);
-                    if (registrationWindows.size < MAX_RATE_BUCKETS)
-                        break;
-                }
-            }
-            if (registrationWindows.size >= MAX_RATE_BUCKETS && !registrationWindows.has(key))
-                return false;
-            registrationWindows.set(key, { startedAt: now, count: 1 });
-            return true;
-        }
-        if (current.count >= MAX_REGISTRATIONS_PER_WINDOW)
-            return false;
-        current.count += 1;
-        return true;
-    };
-    const loginAllowed = (key) => {
-        const now = Date.now();
-        const current = loginWindows.get(key);
-        if (!current || now - current.startedAt >= LOGIN_WINDOW_MS) {
-            if (loginWindows.size >= MAX_RATE_BUCKETS) {
-                for (const [bucket, value] of loginWindows) {
-                    if (now - value.startedAt >= LOGIN_WINDOW_MS)
-                        loginWindows.delete(bucket);
-                    if (loginWindows.size < MAX_RATE_BUCKETS)
-                        break;
-                }
-            }
-            if (loginWindows.size >= MAX_RATE_BUCKETS && !loginWindows.has(key))
-                return false;
-            loginWindows.set(key, { startedAt: now, count: 1 });
-            return true;
-        }
-        if (current.count >= MAX_LOGINS_PER_WINDOW)
-            return false;
-        current.count += 1;
-        return true;
-    };
+    const registrationAllowed = createRateLimiter(REGISTRATION_WINDOW_MS, MAX_REGISTRATIONS_PER_WINDOW, MAX_RATE_BUCKETS);
+    const loginAllowed = createRateLimiter(LOGIN_WINDOW_MS, MAX_LOGINS_PER_WINDOW, MAX_RATE_BUCKETS);
     const requestHandler = async (request, response) => {
         try {
             const requestUrl = new URL(request.url || '/', `http://${host}`);
@@ -176,8 +97,15 @@ export async function startRestApi(server, options = {}) {
                 return;
             }
             let body = {};
-            if (request.method !== 'GET' && request.method !== 'HEAD')
-                body = await readBody(request, maxBodyBytes);
+            if (request.method !== 'GET' && request.method !== 'HEAD') {
+                const rawBody = await readRequestBody(request, maxBodyBytes);
+                if (rawBody) {
+                    const parsed = JSON.parse(rawBody);
+                    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed))
+                        throw guidanceError(new Error('request body must be a JSON object'), 'guid-cb8f7c49eade4be2');
+                    body = parsed;
+                }
+            }
             if (bearer && body.accessToken === undefined)
                 body.accessToken = bearer;
             const genericPrefix = '/api/endpoint/';
@@ -222,7 +150,7 @@ export async function startRestApi(server, options = {}) {
                 response.end('Login rate limit exceeded; retry later');
                 return;
             }
-            const queryArguments = Object.fromEntries(requestUrl.searchParams.entries());
+            const { $view: responseView, $cursor: responseCursor, ...queryArguments } = Object.fromEntries(requestUrl.searchParams.entries());
             if (endpointId === 'evolution.context') {
                 for (const key of ['maxChars', 'offset'])
                     if (/^\d{1,5}$/.test(queryArguments[key] ?? ''))
@@ -241,7 +169,7 @@ export async function startRestApi(server, options = {}) {
                 }
             }
             const arguments_ = { ...queryArguments, ...pathArguments, ...body };
-            const result = await runtime.dispatchTool('call_endpoint', { endpointId, arguments: arguments_ });
+            const result = await runtime.dispatchTool('call_endpoint', { endpointId, arguments: arguments_, responseView, responseCursor });
             sendJson(request, response, result.isError ? 400 : 200, resultValue(result), !result.isError && request.method === 'GET');
         }
         catch (error) {
@@ -251,12 +179,7 @@ export async function startRestApi(server, options = {}) {
     const httpServer = options.tls
         ? createHttpsServer({ key: options.tls.key, cert: options.tls.cert, ...(options.tls.ca && { ca: options.tls.ca }), requestCert: options.tls.requestCert ?? Boolean(options.tls.ca), rejectUnauthorized: options.tls.rejectUnauthorized ?? Boolean(options.tls.ca) }, requestHandler)
         : createHttpServer(requestHandler);
-    httpServer.requestTimeout = 30_000;
-    httpServer.headersTimeout = 10_000;
-    httpServer.keepAliveTimeout = 5_000;
-    httpServer.maxHeadersCount = 64;
-    httpServer.maxRequestsPerSocket = 100;
-    httpServer.maxConnections = Math.min(Math.max(Math.trunc(options.maxConnections ?? 256), 1), 2_048);
+    configureHttpServer(httpServer, options.maxConnections);
     await new Promise((resolve, reject) => {
         const onError = (error) => { httpServer.off('listening', onListening); reject(error); };
         const onListening = () => { httpServer.off('error', onError); resolve(); };

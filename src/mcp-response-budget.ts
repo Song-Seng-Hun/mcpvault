@@ -1,5 +1,19 @@
 import { guidanceError, guidanceText } from './guidance-runtime.js';
 import { createHash } from 'node:crypto';
+import { jsonPointerNode, pageJsonRead } from './json-read-page.js';
+
+/** Caller must reject mutation replays before dispatch and authorize every read. */
+export function readResponseView(response: any, path: string, cursor: unknown, basis: unknown, budget: number): any {
+  if (response?.content?.length !== 1 || response.content[0]?.type !== 'text') throw guidanceError(Error('Read view requires one JSON text result'), 'guid-18178cbeb279847e');
+  const root = JSON.parse(response.content[0].text);
+  const node = jsonPointerNode(root, path);
+  if (node === undefined) throw guidanceError(Error('Read view path is absent from the current authorized result'), 'guid-29db0efdf11db82e');
+  const value = pageJsonRead(node, path, { basis, root }, cursor, budget, (resultPage, total, truncated, nextCursor) => ({
+    resultPage, total, truncated, partial: Boolean(resultPage.entries) || typeof node === 'string' && typeof resultPage.value !== 'string',
+    ...(nextCursor && { nextCursor }),
+  }));
+  return { content: [{ type: 'text', text: JSON.stringify(value) }] };
+}
 
 /** MCP discovery keeps complete schemas; oversized translations use code-owned prose. */
 export function boundedToolCatalog<T>(original: readonly T[], localized: readonly T[], cursor?: unknown): { tools: T[]; nextCursor?: string } {
@@ -14,7 +28,7 @@ export function boundedToolCatalog<T>(original: readonly T[], localized: readonl
       const parsed = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8'));
       if (parsed.f !== fingerprint || !Number.isInteger(parsed.o) || parsed.o < 0 || parsed.o >= tools.length) throw Error();
       offset = parsed.o;
-    } catch { throw Error('Tool catalog cursor invalid or changed; restart tools/list.'); }
+    } catch { throw guidanceError(Error('Tool catalog cursor invalid or changed; restart tools/list.'), 'guid-7e1b0937db56865e'); }
   }
   const page = (count: number) => ({ tools: tools.slice(offset, offset + count),
     ...(offset + count < tools.length && { nextCursor: Buffer.from(JSON.stringify({ f: fingerprint, o: offset + count })).toString('base64url') }),
@@ -24,7 +38,7 @@ export function boundedToolCatalog<T>(original: readonly T[], localized: readonl
   if (fits(page(remaining))) return page(remaining);
   let count = 0;
   while (count + 1 < remaining && fits(page(count + 1))) count++;
-  if (!count) throw Error('Fixed MCP tool schema cannot fit 5000 bytes; reduce the code-owned schema.');
+  if (!count) throw guidanceError(Error('Fixed MCP tool schema cannot fit 5000 bytes; reduce the code-owned schema.'), 'guid-5bd06777d5cc8a8a');
   return page(count);
 }
 

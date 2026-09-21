@@ -5,6 +5,7 @@ import { createHash } from 'node:crypto';
 import { URL } from 'node:url';
 import type { Server } from '@modelcontextprotocol/server';
 import { getServerRuntime } from './createServer.js';
+import { configureHttpServer, createRateLimiter, isLoopbackHost, MAX_HTTP_BODY_BYTES, originAllowed, readRequestBody, requestHost } from './http-request-utils.js';
 
 export interface RestApiOptions {
   host?: string;
@@ -58,42 +59,11 @@ function tokenFrom(request: IncomingMessage): string | undefined {
   return typeof header === 'string' && /^Bearer\s+/i.test(header) ? header.replace(/^Bearer\s+/i, '').trim() : undefined;
 }
 
-const MAX_HTTP_BODY_BYTES = 2 * 1024 * 1024;
 const MAX_RATE_BUCKETS = 4_096;
 const REGISTRATION_WINDOW_MS = 10 * 60 * 1_000;
 const MAX_REGISTRATIONS_PER_WINDOW = 5;
 const LOGIN_WINDOW_MS = 60 * 1_000;
 const MAX_LOGINS_PER_WINDOW = 120;
-
-function isLoopbackHost(host: string): boolean {
-  return ['127.0.0.1', 'localhost', '::1'].includes(host.trim().toLowerCase());
-}
-
-function requestHost(request: IncomingMessage): string | undefined {
-  const host = request.headers.host;
-  if (!host) return undefined;
-  try { return new URL(`http://${host}`).hostname.toLowerCase(); } catch { return undefined; }
-}
-
-function originAllowed(request: IncomingMessage, allowedOrigins: readonly string[]): boolean {
-  const origin = request.headers.origin;
-  return typeof origin !== 'string' || allowedOrigins.includes(origin);
-}
-
-async function readBody(request: IncomingMessage, maxBytes: number): Promise<Record<string, unknown>> {
-  const chunks: Buffer[] = [];
-  let size = 0;
-  for await (const chunk of request) {
-    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-    size += buffer.byteLength;
-    if (size > maxBytes) throw guidanceError(new Error(`request body exceeds ${maxBytes} bytes`), 'guid-668226077e0f44fa');
-    chunks.push(buffer);
-  }
-  if (chunks.length === 0) return {};
-  const parsed: unknown = JSON.parse(Buffer.concat(chunks).toString('utf8'));
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw guidanceError(new Error('request body must be a JSON object'), 'guid-cb8f7c49eade4be2');
-  return parsed as Record<string, unknown>;
-}
 
 function resultValue(result: any): unknown {
   const text = result?.content?.[0]?.text;
@@ -117,44 +87,8 @@ export async function startRestApi(server: Server, options: RestApiOptions = {})
   const maxBodyBytes = Math.min(Math.max(Math.trunc(options.maxBodyBytes ?? 1_048_576), 1_024), MAX_HTTP_BODY_BYTES);
   const allowedOrigins = options.allowedOrigins || [];
   const allowedHosts = options.allowedHosts || (host === '127.0.0.1' ? ['127.0.0.1', 'localhost'] : [host]);
-  const registrationWindows = new Map<string, { startedAt: number; count: number }>();
-  const loginWindows = new Map<string, { startedAt: number; count: number }>();
-  const registrationAllowed = (key: string): boolean => {
-    const now = Date.now();
-    const current = registrationWindows.get(key);
-    if (!current || now - current.startedAt >= REGISTRATION_WINDOW_MS) {
-      if (registrationWindows.size >= MAX_RATE_BUCKETS) {
-        for (const [bucket, value] of registrationWindows) {
-          if (now - value.startedAt >= REGISTRATION_WINDOW_MS) registrationWindows.delete(bucket);
-          if (registrationWindows.size < MAX_RATE_BUCKETS) break;
-        }
-      }
-      if (registrationWindows.size >= MAX_RATE_BUCKETS && !registrationWindows.has(key)) return false;
-      registrationWindows.set(key, { startedAt: now, count: 1 });
-      return true;
-    }
-    if (current.count >= MAX_REGISTRATIONS_PER_WINDOW) return false;
-    current.count += 1;
-    return true;
-  };
-  const loginAllowed = (key: string): boolean => {
-    const now = Date.now();
-    const current = loginWindows.get(key);
-    if (!current || now - current.startedAt >= LOGIN_WINDOW_MS) {
-      if (loginWindows.size >= MAX_RATE_BUCKETS) {
-        for (const [bucket, value] of loginWindows) {
-          if (now - value.startedAt >= LOGIN_WINDOW_MS) loginWindows.delete(bucket);
-          if (loginWindows.size < MAX_RATE_BUCKETS) break;
-        }
-      }
-      if (loginWindows.size >= MAX_RATE_BUCKETS && !loginWindows.has(key)) return false;
-      loginWindows.set(key, { startedAt: now, count: 1 });
-      return true;
-    }
-    if (current.count >= MAX_LOGINS_PER_WINDOW) return false;
-    current.count += 1;
-    return true;
-  };
+  const registrationAllowed = createRateLimiter(REGISTRATION_WINDOW_MS, MAX_REGISTRATIONS_PER_WINDOW, MAX_RATE_BUCKETS);
+  const loginAllowed = createRateLimiter(LOGIN_WINDOW_MS, MAX_LOGINS_PER_WINDOW, MAX_RATE_BUCKETS);
 
   const requestHandler = async (request: IncomingMessage, response: ServerResponse) => {
     try {
@@ -187,7 +121,14 @@ export async function startRestApi(server: Server, options: RestApiOptions = {})
       }
 
       let body: Record<string, unknown> = {};
-      if (request.method !== 'GET' && request.method !== 'HEAD') body = await readBody(request, maxBodyBytes);
+      if (request.method !== 'GET' && request.method !== 'HEAD') {
+        const rawBody = await readRequestBody(request, maxBodyBytes);
+        if (rawBody) {
+          const parsed: unknown = JSON.parse(rawBody);
+          if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw guidanceError(new Error('request body must be a JSON object'), 'guid-cb8f7c49eade4be2');
+          body = parsed as Record<string, unknown>;
+        }
+      }
       if (bearer && body.accessToken === undefined) body.accessToken = bearer;
 
       const genericPrefix = '/api/endpoint/';
@@ -231,7 +172,7 @@ export async function startRestApi(server: Server, options: RestApiOptions = {})
         return;
       }
 
-      const queryArguments = Object.fromEntries(requestUrl.searchParams.entries());
+      const { $view: responseView, $cursor: responseCursor, ...queryArguments } = Object.fromEntries(requestUrl.searchParams.entries());
       if (endpointId === 'evolution.context') {
         for (const key of ['maxChars', 'offset']) if (/^\d{1,5}$/.test(queryArguments[key] ?? '')) (queryArguments as Record<string, unknown>)[key] = Number(queryArguments[key]);
       }
@@ -248,7 +189,7 @@ export async function startRestApi(server: Server, options: RestApiOptions = {})
         }
       }
       const arguments_ = { ...queryArguments, ...pathArguments, ...body };
-      const result = await runtime.dispatchTool('call_endpoint', { endpointId, arguments: arguments_ });
+      const result = await runtime.dispatchTool('call_endpoint', { endpointId, arguments: arguments_, responseView, responseCursor });
       sendJson(request, response, result.isError ? 400 : 200, resultValue(result), !result.isError && request.method === 'GET');
     } catch (error) {
       sendJson(request, response, 400, { error: error instanceof Error ? error.message : 'Unknown error' });
@@ -257,12 +198,7 @@ export async function startRestApi(server: Server, options: RestApiOptions = {})
   const httpServer = options.tls
     ? createHttpsServer({ key: options.tls.key, cert: options.tls.cert, ...(options.tls.ca && { ca: options.tls.ca }), requestCert: options.tls.requestCert ?? Boolean(options.tls.ca), rejectUnauthorized: options.tls.rejectUnauthorized ?? Boolean(options.tls.ca) }, requestHandler)
     : createHttpServer(requestHandler);
-  httpServer.requestTimeout = 30_000;
-  httpServer.headersTimeout = 10_000;
-  httpServer.keepAliveTimeout = 5_000;
-  httpServer.maxHeadersCount = 64;
-  httpServer.maxRequestsPerSocket = 100;
-  httpServer.maxConnections = Math.min(Math.max(Math.trunc(options.maxConnections ?? 256), 1), 2_048);
+  configureHttpServer(httpServer, options.maxConnections);
 
   await new Promise<void>((resolve, reject) => {
     const onError = (error: Error) => { httpServer.off('listening', onListening); reject(error); };
