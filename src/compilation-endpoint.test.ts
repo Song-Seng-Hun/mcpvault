@@ -3,8 +3,8 @@ import { mkdtemp, rm, readdir, mkdir, writeFile } from 'node:fs/promises';
 import { createHash, randomUUID } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
-import { createServer } from '../tests/server-fixture.js';
+import { Client } from '@modelcontextprotocol/client';
+import { createServer, connectMcpClient } from '../tests/server-fixture.js';
 import { parseCliArgs } from './cli.js';
 import type { CompilationHost } from './compilation-host.js';
 import { getCompilationTools } from './compilation-tools.js';
@@ -35,8 +35,7 @@ test('compilation submission schema exposes pinned preservation reports without 
 
 test('compilation is dynamic with public diagnosis, authenticated reads and read-only mutation rejection', async () => {
   vault = await mkdtemp(join(tmpdir(), 'compilation-endpoint-'));
-  server = createServer(vault, { readOnly: true }); client = new Client({ name: 'compilation-test', version: '1' });
-  const [ct, st] = InMemoryTransport.createLinkedPair(); await Promise.all([client.connect(ct), server.connect(st)]);
+  ({ server, client } = await connectMcpClient(vault, { readOnly: true }, 'compilation-test'));
   expect((await client.listTools()).tools).toHaveLength(5);
   const catalog = parse(await client.callTool({ name: 'search_capabilities', arguments: { query: 'wiki.compilation', maxChars: 12000, limit: 1 } }));
   const endpoint = catalog.endpoints.find((e: any) => e.endpointId === 'wiki.compilation');
@@ -90,12 +89,10 @@ test('explicit host factory connects source-only verification through MCP withou
     readState: async () => structuredClone(history), writeState: async state => { history = structuredClone(state); },
     acquire: async () => ({ assertHeld: async () => {}, close: async () => {} }),
   };
-  server = createServer(vault, { compilation: { host,
+  ({ server, client } = await connectMcpClient(vault, { compilation: { host,
     runtime: async () => ({ id: 'local', revision: 'verified-1', local: true, operations: ['index'] }),
     adapterFactory: (services: any) => new CompilationPublicationAdapter(services),
-  } } as any);
-  client = new Client({ name: 'observation-test', version: '1' });
-  const [ct, st] = InMemoryTransport.createLinkedPair(); await Promise.all([client.connect(ct), server.connect(st)]);
+  } } as any, 'observation-test'));
   const account = parse(await client.callTool({ name: 'call_endpoint', arguments: { endpointId: 'auth.register', arguments: {
     accountId: 'operator', modelId: 'codex', userId: 'fixture', agentId: 'worker', password: randomUUID(),
   } } }));
@@ -130,9 +127,7 @@ test('actual MCP preparation refreshes its request boundary after inheriting res
     readState: async () => structuredClone(history), writeState: async value => { history = structuredClone(value); },
     acquire: async () => ({ assertHeld: async () => {}, close: async () => {} }),
   };
-  server = createServer(vault, { compilation: { host, runtime: async () => ({ id: 'verified', revision: '1', local: true, operations: ['synthesize'] }) } });
-  client = new Client({ name: 'compilation-inheritance-test', version: '1' });
-  const [ct, st] = InMemoryTransport.createLinkedPair(); await Promise.all([client.connect(ct), server.connect(st)]);
+  ({ server, client } = await connectMcpClient(vault, { compilation: { host, runtime: async () => ({ id: 'verified', revision: '1', local: true, operations: ['synthesize'] }) } }, 'compilation-inheritance-test'));
   const account = parse(await client.callTool({ name: 'call_endpoint', arguments: { endpointId: 'auth.register', arguments: {
     accountId: 'operator', modelId: 'codex', userId: 'fixture', agentId: 'worker', password: randomUUID(),
   } } }));

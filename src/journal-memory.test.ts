@@ -2,8 +2,8 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
-import { createServer } from '../tests/server-fixture.js';
+import { Client } from '@modelcontextprotocol/client';
+import { connectMcpClient } from '../tests/server-fixture.js';
 import { getSocialTools } from './social-tools.js';
 import { SocialService } from './social.js';
 
@@ -13,10 +13,7 @@ beforeEach(async () => { vault = await mkdtemp(join(tmpdir(), 'mcpvault-journal-
 afterEach(async () => { vi.restoreAllMocks(); await rm(vault, { recursive: true, force: true }); });
 
 async function setup() {
-  const server = createServer(vault, { version: '1.0.0' });
-  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
-  const client = new Client({ name: 'journal-memory-test', version: '1.0.0' });
-  await Promise.all([client.connect(clientTransport), server.connect(serverTransport)]);
+  const { server, client } = await connectMcpClient(vault, { version: '1.0.0' }, 'journal-memory-test');
   const registration = await client.callTool({ name: 'register_scope_account', arguments: {
     accountId: 'journal-account', modelId: 'codex', agentId: 'journal-agent', password: 'journal-password-123',
   } });

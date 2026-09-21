@@ -167,6 +167,7 @@ export class CompilationBundleService {
             throw unavailable();
         const reader = new DocumentResourceReader(this.options.fs, new PathFilter(), this.options.access);
         const snapshot = await reader.read(this.options.access.toPublicPath(bundle.documentPath), current, { maxBytes: 512 * 1024 });
+        const assertSnapshot = async () => { await assertCurrent(); await reader.assertCurrent(snapshot, current); };
         // Managed records remain owned by their service even outside a known folder.
         reserveDocumentWork(documentFrontmatterEstimate(snapshot.text));
         const fm = new FrontmatterHandler().parse(snapshot.text).frontmatter;
@@ -174,14 +175,12 @@ export class CompilationBundleService {
             || fm.llm_wiki_type !== undefined && !['knowledge', 'manual', 'tool'].includes(String(fm.llm_wiki_type)))
             throw unavailable();
         if (snapshot.revision !== bundle.sourceRevision && !(op === 'read' && params.projection === 'original')) {
-            await assertCurrent();
-            await reader.assertCurrent(snapshot, current);
+            await assertSnapshot();
             return { status: 'review_required', reason: 'input_changed', automaticApplication: false };
         }
         const manifestId = bundleRecordId('manifest', bundle.bundleId), originalId = bundleRecordId('original', bundle.bundleId);
         const writeRecord = (id, value, revision) => records.write(id, value, revision, async () => {
-            await assertCurrent();
-            await reader.assertCurrent(snapshot, current);
+            await assertSnapshot();
         });
         if (op === 'prepare' && (bundle.status === 'prepared' || request?.value === undefined)) {
             const writer = await host.acquire();
@@ -190,8 +189,7 @@ export class CompilationBundleService {
                 const locked = await records.read(manifestId);
                 if (locked.revision !== manifest.revision)
                     throw unavailable();
-                await assertCurrent();
-                await reader.assertCurrent(snapshot, current);
+                await assertSnapshot();
                 const lockedRequest = await checkRequest();
                 if (locked.value === undefined && (lockedRequest.value !== undefined
                     || (await records.read(originalId)).value !== undefined))
@@ -199,8 +197,7 @@ export class CompilationBundleService {
                 if (bundle.status === 'prepared') {
                     if (bundle.attempts >= 3)
                         return { status: 'review_required', reason: 'attempt_limit', automaticApplication: false };
-                    await assertCurrent();
-                    await reader.assertCurrent(snapshot, current);
+                    await assertSnapshot();
                     bundle = { ...bundle, attempts: bundle.attempts + 1 };
                     await writeRecord(manifestId, bundle, locked.revision);
                     if (lockedRequest.value === undefined)
@@ -208,14 +205,12 @@ export class CompilationBundleService {
                     // The account/restriction/source basis exists durably before body bytes.
                     const original = await records.read(originalId);
                     if (original.value === undefined) {
-                        await assertCurrent();
-                        await reader.assertCurrent(snapshot, current);
+                        await assertSnapshot();
                         await writeRecord(originalId, { version: 1, bundleId: bundle.bundleId, path: bundle.documentPath,
                             revision: snapshot.revision, byteLength: snapshot.bytes.length, text: snapshot.text }, original.revision);
                     }
                     parseBundleOriginal((await records.read(originalId)).value, bundle);
-                    await assertCurrent();
-                    await reader.assertCurrent(snapshot, current);
+                    await assertSnapshot();
                     await writer.assertHeld();
                     const preserved = await records.read(manifestId);
                     if (compilationHash(parseCompilationBundle(preserved.value)) !== compilationHash(bundle))
@@ -250,8 +245,7 @@ export class CompilationBundleService {
                     throw unavailable();
             };
             const guard = async () => {
-                await assertCurrent();
-                await reader.assertCurrent(snapshot, current);
+                await assertSnapshot();
                 assertReferences(plan.items.map(item => item.path));
             };
             // Host record writes serialize their callbacks. Never reenter records.read

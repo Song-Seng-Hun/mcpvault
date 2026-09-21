@@ -114,13 +114,7 @@ export class CompilationPublicationAdapter implements CompilationAdapter {
         if (isModerationHidden(note.frontmatter) || note.revision !== input.revision || note.frontmatter.llm_wiki_type !== 'source'
           || note.frontmatter.immutable !== true || note.frontmatter.content_sha256 !== compilationContentHash(note.content)) return answer('partial');
         bodies.set(input.path, note);
-        const lines = note.content.split('\n'), covered = new Uint8Array(lines.length);
-        for (const checkpoint of evidence.coverage.filter(c => c.sourcePath === input.path)) {
-          const resolved = resolveEvidenceLocator(note.content, checkpoint.locator, note.revision);
-          if (!resolved.valid || !resolved.startLine || !resolved.endLine) return answer('partial');
-          covered.fill(1, resolved.startLine - 1, resolved.endLine);
-        }
-        if (lines.some((line, index) => line.trim() && !covered[index])) return answer('partial');
+        if (!this.covers(note, evidence.coverage.filter(c => c.sourcePath === input.path).map(c => c.locator))) return answer('partial');
         const compared = await this.options.comparison.read({ sourcePath: this.options.access.toPublicPath(input.path),
           expectedRevision: input.revision, query: evidence.query, includeSemantic: false, maxChars: 12000, principal });
         if (compared.source?.integrity !== 'verified' || compared.truncated) return answer('partial');

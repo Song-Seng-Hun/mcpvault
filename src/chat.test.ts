@@ -2,8 +2,8 @@ import { afterEach, beforeEach, expect, test } from 'vitest';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
-import { createServer } from '../tests/server-fixture.js';
+import { Client } from '@modelcontextprotocol/client';
+import { connectMcpClient } from '../tests/server-fixture.js';
 
 let vault: string;
 
@@ -16,11 +16,7 @@ afterEach(async () => {
 });
 
 async function setup() {
-  const server = createServer(vault, { version: '1.0.0' });
-  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
-  const client = new Client({ name: 'chat-test', version: '1.0.0' });
-  await Promise.all([client.connect(clientTransport), server.connect(serverTransport)]);
-  return { server, client };
+  return connectMcpClient(vault, { version: '1.0.0' }, 'chat-test');
 }
 
 async function json(client: Client, name: string, arguments_: Record<string, unknown>) {

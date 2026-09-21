@@ -5,8 +5,8 @@ import { join } from 'node:path';
 import { randomUUID, createHash } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
-import { createServer } from '../tests/server-fixture.js';
+import { Client } from '@modelcontextprotocol/client';
+import { createServer, connectMcpClient } from '../tests/server-fixture.js';
 import { loadCompilationHostConfig } from './compilation-host.js';
 
 const parse = (result: any) => JSON.parse(result.content.filter((c: any) => c.type === 'text').map((c: any) => c.text).join(''));
@@ -28,10 +28,8 @@ test.each(['source_only', 'synthesis_allowed', 'publication'])('MCP bundle%s pre
         chapterBundles: [{ documentPath: 'Manual.md', documentId: '9cac42de-e32d-41e2-8370-df5f19d3b19c', chapterRoot: 'Chapters',
           ...(variant === 'publication' && { publication: 'verbatim' }) }] }] }));
     const connect = async (readOnly: boolean) => {
-      server = createServer(vault, { readOnly, compilation: { host: await loadCompilationHostConfig(path, vault),
-        runtime: async () => ({ id: 'local', revision: 'v1', local: true, operations: ['index', 'synthesize'] }) } });
-      client = new Client({ name: 'bundle-mcp-test', version: '1' });
-      const [ct, st] = InMemoryTransport.createLinkedPair(); await Promise.all([client.connect(ct), server.connect(st)]);
+      ({ server, client } = await connectMcpClient(vault, { readOnly, compilation: { host: await loadCompilationHostConfig(path, vault),
+        runtime: async () => ({ id: 'local', revision: 'v1', local: true, operations: ['index', 'synthesize'] }) } }, 'bundle-mcp-test'));
     };
     await connect(false);
     const password = randomUUID();

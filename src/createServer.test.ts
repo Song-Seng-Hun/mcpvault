@@ -1,5 +1,5 @@
 import { test, expect, beforeEach, afterEach } from "vitest";
-import { createServer, getServerRuntime } from "../tests/server-fixture.js";
+import { createServer, getServerRuntime, connectMcpClient } from "../tests/server-fixture.js";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "fs/promises";
 import { join } from "path";
 import { tmpdir } from "os";
@@ -27,15 +27,7 @@ test("createServer returns a Server instance", () => {
 });
 
 test("server exposes only the dynamic control plane", async () => {
-  const server = createServer(testVaultPath, { version: "1.0.0" });
-  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
-
-  const client = new Client({ name: "test-client", version: "1.0.0" });
-
-  await Promise.all([
-    client.connect(clientTransport),
-    server.connect(serverTransport),
-  ]);
+  const { server, client } = await connectMcpClient(testVaultPath, { version: "1.0.0" }, "test-client");
 
   const result = await client.listTools();
   expect(result.tools.map((tool) => tool.name).sort()).toEqual([
@@ -140,10 +132,7 @@ test("server exposes only the dynamic control plane", async () => {
 
 test("dynamic control plane preserves compact onboarding and organization schemas", async () => {
   await writeFile(join(testVaultPath, '환영합니다!.md'), '# Welcome\nRead this first.');
-  const server = createServer(testVaultPath, { version: '1.0.0' });
-  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
-  const client = new Client({ name: 'organization-surface-test', version: '1.0.0' });
-  await Promise.all([client.connect(clientTransport), server.connect(serverTransport)]);
+  const { server, client } = await connectMcpClient(testVaultPath, { version: '1.0.0' }, 'organization-surface-test');
   try {
     const listed = await client.listTools();
     const orient = listed.tools.find(tool => tool.name === 'orient_wiki')!;
@@ -222,7 +211,10 @@ test("legacy discussion operations discover only canonical Community endpoints",
 
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   const client = new Client({ name: "legacy-discussion-discovery-test", version: "1.0.0" });
-  await Promise.all([client.connect(clientTransport), server.connect(serverTransport)]);
+  await Promise.all([
+    client.connect(clientTransport),
+    server.connect(serverTransport),
+  ]);
   try {
     for (const legacyEndpointId of legacyEndpointIds) {
       const result = await client.callTool({
@@ -260,10 +252,7 @@ test("legacy discussion operations discover only canonical Community endpoints",
 });
 
 test("broad capability queries retain all matching endpoints", async () => {
-  const server = createServer(testVaultPath, { version: "1.0.0" });
-  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
-  const client = new Client({ name: "broad-capability-discovery-test", version: "1.0.0" });
-  await Promise.all([client.connect(clientTransport), server.connect(serverTransport)]);
+  const { server, client } = await connectMcpClient(testVaultPath, { version: '1.0.0' }, 'broad-capability-discovery-test');
   try {
     const expectations = [
       ["status", ["idea.status", "community.status"]],
@@ -288,15 +277,7 @@ test("broad capability queries retain all matching endpoints", async () => {
 });
 
 test("server can read and write notes via tools", async () => {
-  const server = createServer(testVaultPath, { version: "1.0.0" });
-  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
-
-  const client = new Client({ name: "test-client", version: "1.0.0" });
-
-  await Promise.all([
-    client.connect(clientTransport),
-    server.connect(serverTransport),
-  ]);
+  const { server, client } = await connectMcpClient(testVaultPath, { version: "1.0.0" }, "test-client");
 
   const registration = await client.callTool({
     name: "register_scope_account",
@@ -482,13 +463,7 @@ test("directory and graph navigation reads are bounded and resumable", async () 
 });
 
 async function connectClient() {
-  const server = createServer(testVaultPath, { version: "1.0.0" });
-  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
-  const client = new Client({ name: "test-client", version: "1.0.0" });
-  await Promise.all([
-    client.connect(clientTransport),
-    server.connect(serverTransport),
-  ]);
+  const { server, client } = await connectMcpClient(testVaultPath, { version: "1.0.0" }, "test-client");
   const registration = await client.callTool({
     name: "register_scope_account",
     arguments: { accountId: "test-owner", modelId: "codex", password: "test-owner-password" },
@@ -884,16 +859,10 @@ test("wiki_link resolves path-qualified link to the exact file", async () => {
 test("read-only mode exposes read tools and rejects every vault mutation", async () => {
   await writeFile(join(testVaultPath, "existing.md"), "---\nauthority_scheme: local-topics\nauthority_id: AI.1\npreferred_term: Existing\n---\n# Existing\n\nSafe content");
 
-  const server = createServer(testVaultPath, {
+  const { server, client } = await connectMcpClient(testVaultPath, {
     version: "1.0.0",
     readOnly: true,
-  });
-  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
-  const client = new Client({ name: "read-only-client", version: "1.0.0" });
-  await Promise.all([
-    client.connect(clientTransport),
-    server.connect(serverTransport),
-  ]);
+  }, "read-only-client");
 
   try {
     const listedTools = await client.listTools();

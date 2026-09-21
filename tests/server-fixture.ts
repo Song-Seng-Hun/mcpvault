@@ -1,6 +1,7 @@
 import { createServer as createCoreServer, type CreateServerOptions } from '../src/createServer.js';
 import { HOST_FEATURE_IDS_V1 } from '../src/host-features.js';
 import { OwnerActivityPolicy, type Activity } from '../src/owner-activity.js';
+import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
 export { getServerRuntime } from '../src/createServer.js';
 export type { CreateServerOptions, ServerRuntime } from '../src/createServer.js';
 
@@ -22,4 +23,11 @@ const fixtureOwnerActivity: NonNullable<CreateServerOptions['ownerActivity']> = 
 export function createServer(vaultPath: string, options: CreateServerOptions = {}) {
   return createCoreServer(vaultPath, { features: { version: 1, selected: [...HOST_FEATURE_IDS_V1] },
     ownerActivity: fixtureOwnerActivity, ...options });
+}
+
+export async function connectMcpClient(vaultPath: string, options: CreateServerOptions = {}, name = 'test-client') {
+  const server = createServer(vaultPath, options), client = new Client({ name, version: '1.0.0' });
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+  await Promise.all([client.connect(clientTransport), server.connect(serverTransport)]);
+  return { server, client };
 }
