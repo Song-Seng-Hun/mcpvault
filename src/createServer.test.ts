@@ -30,6 +30,7 @@ test("server exposes only the dynamic control plane", async () => {
   const { server, client } = await connectMcpClient(testVaultPath, { version: "1.0.0" }, "test-client");
 
   const result = await client.listTools();
+  expect(Buffer.byteLength(JSON.stringify(result))).toBeLessThanOrEqual(5000);
   expect(result.tools.map((tool) => tool.name).sort()).toEqual([
     "call_endpoint",
     "get_agent_pulse",
@@ -44,6 +45,9 @@ test("server exposes only the dynamic control plane", async () => {
   });
   const catalog = JSON.parse((capabilities.content as any)[0].text);
   expect(catalog.endpoints.some((endpoint: any) => endpoint.endpointId === "notes.write")).toBe(true);
+  const schemaRead = await client.callTool({ name: 'search_capabilities', arguments: { query: 'notes.write#/input/properties/path/type' } });
+  expect(Buffer.byteLength(JSON.stringify(schemaRead))).toBeLessThanOrEqual(5000);
+  expect(JSON.parse((schemaRead.content as any)[0].text).descriptorPage.value).toBe('string');
   const catalogCapabilities = await client.callTool({
     name: "search_capabilities",
     arguments: { query: "wiki catalog" },
@@ -136,7 +140,6 @@ test("dynamic control plane preserves compact onboarding and organization schema
   try {
     const listed = await client.listTools();
     const orient = listed.tools.find(tool => tool.name === 'orient_wiki')!;
-    expect(orient.description).toContain('exactly one primary action');
     expect((orient.inputSchema.properties as any).maxChars.default).toBe(3000);
     const orientation = await client.callTool({ name: 'orient_wiki', arguments: { maxChars: 512, prettyPrint: true } });
     const text = String((orientation.content as any)[0].text);

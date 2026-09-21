@@ -45,6 +45,14 @@ export interface EndpointAvailabilityContext {
 export declare function ownerActivityForEndpointTool(toolName: string): Activity | undefined;
 export declare function ownerActionForEndpointTool(toolName: string, mutating: boolean, op?: unknown): OwnerActivityAction;
 export declare function endpointIdForTool(toolName: string): string;
+type DescriptorPage = {
+    path: string;
+    parentQuery?: string;
+    revision: string;
+    kind: string;
+    value?: unknown;
+    entries?: Array<Record<string, unknown>>;
+};
 export declare class EndpointRegistry {
     private descriptors;
     private registrationGeneration;
@@ -64,6 +72,11 @@ export declare class EndpointRegistry {
         total: number;
         truncated: boolean;
         nextCursor?: string;
+        descriptorPage?: DescriptorPage;
+        nextAction?: {
+            query: string;
+            cursor?: string;
+        };
     };
     size(): number;
 }

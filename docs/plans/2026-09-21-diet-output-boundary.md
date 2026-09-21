@@ -7,7 +7,7 @@ use_when: Refactoring response projection or implementing the transport byte cei
 position: Diet companion; transport work remains incomplete.
 parent: 2026-09-21-diet.md
 previous: 2026-09-21-runtime-diet.md
-next: ../agent-rules/validation.md
+next: 2026-09-21-discovery-diet.md
 ---
 # Response boundary (응답 경계)
 
@@ -33,4 +33,14 @@ Moves reduce the god file, not total code. Count prefix-loop consolidation separ
 - Count the serialized response envelope, not only the first text block.
 - Test ASCII, Korean, emoji, escaping, multiple blocks and minimum-budget continuations.
 
-No 5KB compliance, token savings or transport-completion claim is made for this extraction.
+## Discovery bundle (deployed; global ceiling incomplete)
+
+Native tools/list now preserves full schemas in pages bounded to 5,000 UTF-8 bytes.
+Oversized translated tool prose falls back to the same code-owned tool definition.
+Descriptor reads use exact endpoint ID plus JSON Pointer; [bundle evidence](2026-09-21-discovery-diet.md).
+Reuse the search prefix selector for metadata lists; retain both helpers' boundary tests.
+Remove test-only expression-names and its two exclusive tests: no package export, CLI,
+worker, dynamic import or operational-document caller. Keep bilingual expression policy tests.
+Retain four other unconnected modules: documented host adapters are not proven dead code.
+Removed source/build files remain recoverable from Git and the retained prior release.
+General tool-call/REST byte limits and token savings remain unverified; no overall 5KB claim.

@@ -7,7 +7,6 @@ export declare const STORY_OPERATIONS: Record<string, {
     writes: readonly string[];
 }>;
 export declare const STORY_MUTATING_TOOLS: Set<string>;
-export declare function storyReadAlias(tool: string, op: unknown): string | undefined;
 export declare function storyEndpointForTool(tool: string): string | undefined;
 export declare function assertStoryOperation(endpoint: string, op: unknown): void;
 export declare function getStoryTools(): Tool[];

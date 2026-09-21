@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
-test('guidance ID conflict is detected before any source or catalog replacement', async () => {
+test('guidance generation rejects conflicts; catalog-only refresh leaves source untouched', async () => {
   const root = await mkdtemp(join(tmpdir(), 'guidance-preflight-'));
   try {
     await mkdir(join(root, 'src'));
@@ -20,5 +20,12 @@ test('guidance ID conflict is detected before any source or catalog replacement'
     expect(result.stderr).toContain('Conflicting guidance ID guid-collision');
     expect(await readFile(join(root, 'src/a.ts'), 'utf8')).toBe(first);
     expect(await readFile(join(root, 'src/guidance-defaults.generated.ts'), 'utf8')).toBe('original catalog\n');
+    await writeFile(join(root, 'src/b.ts'), '');
+    const refreshed = spawnSync(process.execPath, ['--max-old-space-size=384', resolve('node_modules/tsx/dist/cli.mjs'), resolve('scripts/guidance-build.ts'), '--write-catalog'], {
+      cwd: root, encoding: 'utf8', windowsHide: true, timeout: 30000, maxBuffer: 1024 * 1024,
+    });
+    expect(refreshed.status).toBe(0);
+    expect(await readFile(join(root, 'src/a.ts'), 'utf8')).toBe(first);
+    expect(await readFile(join(root, 'src/guidance-defaults.generated.ts'), 'utf8')).toContain('First source needs instrumentation');
   } finally { await rm(root, { recursive: true, force: true }); }
 }, 35000);

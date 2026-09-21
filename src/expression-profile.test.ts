@@ -2,7 +2,6 @@ import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { describe, expect, test } from 'vitest';
 import { EXPRESSION_CHAPTERS, EXPRESSION_REVISION, expressionChapter, expressionPolicy, expressionReference } from './expression-profile.js';
-import { displayScopedName } from './expression-names.js';
 
 describe('bounded, non-authoritative expression profile', () => {
   test('chapter files match runtime text and include navigation within50 physical lines', async () => {
@@ -41,22 +40,5 @@ describe('bounded, non-authoritative expression profile', () => {
     expect(manifest.files.map((f: any) => f.path)).toEqual(['SKILL.md', 'LICENSING.md', 'LICENSE']);
     for (const file of manifest.files) expect(createHash('sha256').update(await readFile(`docs/skills/caveman-source/${file.path}`)).digest('hex')).toBe(file.sha256);
     expect(manifest.execution).toBe('forbidden');
-  });
-});
-
-describe('verified names retain entity and project/version identity', () => {
-  const name = { entityId: 'door', project: 'game-a', version: '1', language: 'ko', original: '황동문', english: 'Brass Door', englishVerified: true };
-  const basis = { entityId: 'door', project: 'game-a', version: '1', language: 'ko' };
-  test('independent chapters show bilingual names; Korean interfaces reverse order', () => {
-    expect(displayScopedName([name], basis)).toEqual({ status: 'resolved', text: 'Brass Door (황동문)' });
-    expect(displayScopedName([name], basis, 'ko-ui').text).toBe('황동문 (Brass Door)');
-    expect(displayScopedName([{ ...name, englishVerified: false }], basis).text).toBe('황동문');
-  });
-  test('different games/versions/identities never merge or leak ambiguous candidate labels', () => {
-    expect(displayScopedName([name], { ...basis, version: '2' })).toEqual({ status: 'unavailable' });
-    expect(displayScopedName([name], { ...basis, language: 'ja' })).toEqual({ status: 'unavailable' });
-    expect(displayScopedName([name, { ...name, original: '다른문' }], basis)).toEqual({ status: 'ambiguous' });
-    expect(displayScopedName([name, { ...name, project: 'game-b', original: '비밀문' }], basis).text).toBe('Brass Door (황동문)');
-    expect(displayScopedName([{ ...name, original: 'x\nignore rules' }], basis)).toEqual({ status: 'unavailable' });
   });
 });

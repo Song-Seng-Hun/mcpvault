@@ -233,3 +233,79 @@ test('warm catalogs still reject malformed and out-of-range cursors', () => {
     expect(() => compact(registry, context(), cursor)).toThrow(/cursor/i);
   }
 });
+
+const wireBytes = (value: unknown) => Buffer.byteLength(JSON.stringify({ content: [{ type: 'text', text: JSON.stringify(value) }] }), 'utf8');
+
+test('exact descriptor queries browse the whole descriptor without hijacking exact IDs', () => {
+  const registry = new EndpointRegistry();
+  registry.setTools([{ ...tool('branch_tool'), inputSchema: { type: 'object', properties: { branch: { type: 'object', properties: { leaf: { type: 'string' } } } } } }], {}, new Set());
+  const root = registry.list('mcp.branch_tool#', 1, 2000, context(), false);
+  expect(root.endpoints[0]!.endpointId).toBe('mcp.branch_tool');
+  expect(root.descriptorPage).toMatchObject({ path: '', kind: 'object', value: expect.objectContaining({ input: expect.any(Object) }) });
+  expect(registry.list('mcp.branch_tool', 1, 2000, context(), false).endpoints[0]!.input).toBeDefined();
+  const leaf = registry.list('mcp.branch_tool#/input/properties/branch/properties/leaf/type', 1, 2000, context(), false);
+  expect(leaf.descriptorPage).toMatchObject({ path: '/input/properties/branch/properties/leaf/type', kind: 'string', value: 'string' });
+});
+
+test('descriptor pointers preserve encoded names and long Unicode strings as typed fragments', () => {
+  const registry = new EndpointRegistry();
+  const long = '한글😀'.repeat(2000) + '\uD800';
+  registry.setTools([{ ...tool('unicode_tool'), inputSchema: { type: 'object', properties: { 'a/b~x': { type: 'string', description: long } } } }], {}, new Set());
+  const encoded = registry.list('mcp.unicode_tool#/input/properties/a~1b~0x/type', 1, 2000, context(), false);
+  expect(encoded.descriptorPage?.value).toBe('string');
+  const fragment = registry.list('mcp.unicode_tool#/input/properties/a~1b~0x/description', 1, 512, context(), false);
+  expect(fragment.descriptorPage?.value).toMatchObject({ type: 'string-fragment', offset: 0, total: long.length });
+  expect((fragment.descriptorPage?.value as any).text.length).toBeLessThan(long.length);
+  expect(wireBytes(fragment)).toBeLessThanOrEqual(512);
+  let cursor = fragment.nextCursor;
+  let offset = 0;
+  let restored = '';
+  for (let page = fragment; ; page = registry.list('mcp.unicode_tool#/input/properties/a~1b~0x/description', 1, 512, context(), false, { cursor })) {
+    const value = page.descriptorPage?.value as any;
+    expect(value.type).toBe('string-fragment');
+    expect(value.offset).toBe(offset);
+    expect(value.text.length).toBeGreaterThan(0);
+    expect(wireBytes(page)).toBeLessThanOrEqual(512);
+    offset += value.text.length;
+    restored += value.text;
+    expect(/[\uD800-\uDBFF]/.test(long[offset - 1]!) && /[\uDC00-\uDFFF]/.test(long[offset] ?? '')).toBe(false);
+    cursor = page.nextCursor;
+    if (!cursor) break;
+  }
+  expect(offset).toBe(long.length);
+  expect(restored).toBe(long);
+});
+
+test('descriptor child pages are complete, byte-bounded and cursor-bound', () => {
+  const registry = new EndpointRegistry();
+  const properties = Object.fromEntries(Array.from({ length: 80 }, (_, i) => [`field${i}`, { type: 'string', description: 'x'.repeat(80) }]));
+  registry.setTools([{ ...tool('paged_tool'), inputSchema: { type: 'object', properties } }], {}, new Set());
+  const query = 'mcp.paged_tool#/input/properties';
+  const seen: string[] = []; let page = registry.list(query, 5, 512, context(), false);
+  for (;;) {
+    expect(wireBytes(page)).toBeLessThanOrEqual(512);
+    for (const entry of page.descriptorPage?.entries ?? []) seen.push(entry.path);
+    if (!page.nextCursor) break;
+    page = registry.list(query, 5, 512, context(), false, { cursor: page.nextCursor });
+  }
+  expect(seen).toHaveLength(81);
+  expect(new Set(seen).size).toBe(81);
+  const first = registry.list(query, 5, 512, context(), false);
+  expect(() => registry.list(query, 5, 512, context({ principalKey: 'changed' }), false, { cursor: first.nextCursor })).toThrow(/cursor/i);
+  const scalar = registry.list('mcp.paged_tool#/input/properties/field0/type', 1, 512, context(), false);
+  expect(scalar.descriptorPage?.value).toBe('string');
+  expect(() => registry.list('mcp.paged_tool#/input/properties/field0/type', 1, 512, context(), false, { cursor: first.nextCursor })).toThrow(/cursor/i);
+});
+
+test('descriptor cursors reject malformed, stale-generation and changed-descriptor state', () => {
+  const registry = new EndpointRegistry();
+  const inputSchema = { type: 'object', properties: Object.fromEntries(Array.from({ length: 30 }, (_, i) => [`field${i}`, { type: 'string' }])) };
+  registry.setTools([{ ...tool('cursor_tool'), inputSchema }], {}, new Set());
+  const query = 'mcp.cursor_tool#/input/properties';
+  const first = registry.list(query, 2, 512, context(), false);
+  expect(first.nextCursor).toBeTruthy();
+  for (const cursor of ['bad', 'x'.repeat(257), Buffer.from(JSON.stringify({ o: -1 })).toString('base64url')])
+    expect(() => registry.list(query, 2, 512, context(), false, { cursor })).toThrow(/cursor/i);
+  registry.setTools([{ ...tool('cursor_tool'), inputSchema: { type: 'object', properties: { changed: { type: 'boolean' } } } }], {}, new Set());
+  expect(() => registry.list(query, 2, 512, context(), false, { cursor: first.nextCursor })).toThrow(/cursor/i);
+});

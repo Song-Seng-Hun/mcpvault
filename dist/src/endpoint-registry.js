@@ -592,8 +592,144 @@ function compactEndpoint(endpoint) {
         ...(endpoint.requires.length > 0 && { requires: endpoint.requires }),
         ...(endpoint.reason && { reason: endpoint.reason }),
         schemaOmitted: true,
-        hint: endpoint.operations ? 'Read and write permissions differ by operation. Retry with a larger maxChars for the schema and exact operation permissions.' : 'Retry with a larger maxChars to receive the input schema.',
+        nextAction: { query: `${endpoint.endpointId}#` },
     };
+}
+function parseDescriptorQuery(value) {
+    if (typeof value !== 'string')
+        return undefined;
+    const query = value.trim();
+    const separator = query.indexOf('#');
+    if (separator <= 0)
+        return undefined;
+    const endpointId = query.slice(0, separator);
+    const path = query.slice(separator + 1);
+    if (path !== '' && !path.startsWith('/'))
+        return undefined;
+    for (const part of path.split('/').slice(1))
+        if (/~(?![01])/.test(part))
+            return undefined;
+    return { endpointId, path, query: `${endpointId}#${path}` };
+}
+function descriptorPathParts(path) {
+    return path === '' ? [] : path.slice(1).split('/').map(part => part.replaceAll('~1', '/').replaceAll('~0', '~'));
+}
+function descriptorPointerPart(value) {
+    return value.replaceAll('~', '~0').replaceAll('/', '~1');
+}
+function descriptorNode(root, path) {
+    let current = root;
+    for (const part of descriptorPathParts(path)) {
+        if (current === null || typeof current !== 'object' || !Object.prototype.hasOwnProperty.call(current, part))
+            return undefined;
+        current = current[part];
+    }
+    return current;
+}
+function descriptorKind(value) {
+    if (value === null)
+        return 'null';
+    if (Array.isArray(value))
+        return 'array';
+    return typeof value;
+}
+function descriptorWireBytes(value) {
+    return Buffer.byteLength(JSON.stringify({ content: [{ type: 'text', text: JSON.stringify(value) }] }), 'utf8');
+}
+function descriptorCursor(value, fingerprint, generation, count) {
+    try {
+        if (typeof value !== 'string' || value.length > 256)
+            throw new Error();
+        const parsed = JSON.parse(Buffer.from(value, 'base64url').toString('utf8'));
+        if (parsed.f !== fingerprint || parsed.g !== generation
+            || !Number.isInteger(parsed.o) || parsed.o < 0 || parsed.o >= count)
+            throw new Error();
+        return parsed.o;
+    }
+    catch {
+        throw guidanceError(new Error('Descriptor cursor is invalid or the descriptor, authority, or registration changed; restart the descriptor read.'), 'guid-7ba2a960bd917fa9');
+    }
+}
+function descriptorCursorValue(fingerprint, generation, offset) {
+    return Buffer.from(JSON.stringify({ f: fingerprint, g: generation, o: offset })).toString('base64url');
+}
+function descriptorEnvelope(endpoints, page, total, truncated, nextCursor, nextAction) {
+    return { endpoints: endpoints.map(endpoint => ({ endpointId: endpoint.endpointId })), total, truncated, descriptorPage: page,
+        ...(nextCursor && { nextCursor }), ...(nextAction && { nextAction }) };
+}
+function descriptorRead(endpoint, query, requestedMaxChars, context, activeOnly, cursor, generation) {
+    const projected = projectGuidance(endpoint);
+    const root = projected;
+    const revision = createHash('sha256').update(JSON.stringify({ root, generation, context: { ...context, capabilities: [...context.capabilities].sort() }, activeOnly, query: query.query })).digest('hex').slice(0, 16);
+    const node = descriptorNode(root, query.path);
+    if (node === undefined)
+        return { endpoints: [], total: 0, truncated: false };
+    const budget = Math.min(requestedMaxChars, 5000);
+    const kind = descriptorKind(node);
+    const base = { path: query.path, revision, kind };
+    const fits = (value) => descriptorWireBytes(descriptorEnvelope([endpoint], { ...base, value }, 1, false)) <= budget;
+    let offset = 0;
+    if (cursor !== undefined) {
+        if (typeof node === 'string') {
+            offset = descriptorCursor(cursor, revision, generation, node.length);
+            if (offset > 0 && offset < node.length && /[\uD800-\uDBFF]/.test(node[offset - 1]) && /[\uDC00-\uDFFF]/.test(node[offset])) {
+                throw guidanceError(new Error('Descriptor cursor splits a Unicode surrogate pair; restart the descriptor read.'), 'guid-3f2719ebb5f76ec5');
+            }
+        }
+        else if (node !== null && typeof node === 'object')
+            offset = descriptorCursor(cursor, revision, generation, Array.isArray(node) ? node.length : Object.keys(node).length);
+        else {
+            descriptorCursor(cursor, revision, generation, 1);
+            throw guidanceError(new Error('Descriptor cursor is not valid for a complete scalar; restart the descriptor read.'), 'guid-250a546f8df21502');
+        }
+    }
+    if (cursor === undefined && fits(node))
+        return descriptorEnvelope([endpoint], { ...base, value: node }, 1, false);
+    if (typeof node === 'string') {
+        let text = node.slice(offset);
+        while (text) {
+            if (/[\uD800-\uDBFF]$/.test(text) && /[\uDC00-\uDFFF]/.test(node[offset + text.length] ?? ''))
+                text = text.slice(0, -1);
+            if (!text)
+                break;
+            const nextOffset = offset + text.length;
+            const next = nextOffset < node.length ? descriptorCursorValue(revision, generation, nextOffset) : undefined;
+            const fragment = { type: 'string-fragment', offset, total: node.length, text };
+            const candidate = descriptorEnvelope([endpoint], { ...base, value: fragment }, 1, next !== undefined, next);
+            if (descriptorWireBytes(candidate) <= budget)
+                return candidate;
+            text = text.slice(0, Math.floor(text.length / 2));
+        }
+        throw guidanceError(new Error('Descriptor budget cannot preserve a readable string fragment; increase maxChars.'), 'guid-e7ed28d7f41b5ad6');
+    }
+    if (node === null || typeof node !== 'object')
+        throw guidanceError(new Error('Descriptor budget cannot preserve this scalar; increase maxChars.'), 'guid-02cf315f219c89d0');
+    const entries = Array.isArray(node) ? node.map((value, index) => [String(index), value]) : Object.entries(node);
+    const selected = [];
+    while (offset < entries.length) {
+        const [key, value] = entries[offset];
+        const path = `${query.path}/${descriptorPointerPart(key)}`;
+        const childQuery = `${query.endpointId}#${path}`;
+        const detailedChild = { path, query: childQuery, kind: descriptorKind(value), value };
+        let child = fits(value) ? detailedChild : { path, query: childQuery };
+        const candidateOffset = offset + 1;
+        const candidateCursor = candidateOffset < entries.length ? descriptorCursorValue(revision, generation, candidateOffset) : undefined;
+        let candidate = { ...base, entries: [...selected, child] };
+        if (descriptorWireBytes(descriptorEnvelope([endpoint], candidate, entries.length, candidateOffset < entries.length, candidateCursor)) > budget && child === detailedChild) {
+            child = { path, query: childQuery };
+            candidate = { ...base, entries: [...selected, child] };
+        }
+        if (descriptorWireBytes(descriptorEnvelope([endpoint], candidate, entries.length, candidateOffset < entries.length, candidateCursor)) > budget) {
+            if (selected.length === 0)
+                throw guidanceError(new Error('Descriptor budget cannot preserve a child entry; increase maxChars.'), 'guid-71365e58dfc35539');
+            break;
+        }
+        selected.push(child);
+        offset += 1;
+    }
+    const truncated = offset < entries.length;
+    const next = truncated ? descriptorCursorValue(revision, generation, offset) : undefined;
+    return descriptorEnvelope([endpoint], { ...base, entries: selected }, entries.length, truncated, next);
 }
 /**
  * Preserve a callable JSON Schema when prose-heavy tool descriptions do not
@@ -712,7 +848,8 @@ export class EndpointRegistry {
         return undefined;
     }
     list(query, requestedLimit, requestedMaxChars, context, activeOnly, page = {}) {
-        const text = typeof query === 'string' ? query.trim().toLowerCase() : '';
+        const descriptor = parseDescriptorQuery(query);
+        const text = descriptor ? descriptor.endpointId.toLowerCase() : typeof query === 'string' ? query.trim().toLowerCase() : '';
         const terms = endpointQueryTerms(text);
         const limit = catalogLimit(requestedLimit);
         const descriptors = [...this.descriptors.values()];
@@ -762,6 +899,12 @@ export class EndpointRegistry {
             return { ...item, ...base };
         })
             .filter(item => !activeOnly || item.available);
+        if (descriptor) {
+            const endpoint = endpoints.find(item => item.endpointId === descriptor.endpointId);
+            if (!endpoint)
+                return { endpoints: [], total: 0, truncated: false };
+            return descriptorRead(endpoint, descriptor, maxChars, context, activeOnly, page.cursor, this.registrationGeneration);
+        }
         if (page.compact) {
             // Full schemas are static within a registration generation. Cache only
             // their digest; authority and availability above are evaluated every time.

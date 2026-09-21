@@ -41,20 +41,8 @@ export function boundSearchResults(results, maxChars) {
 }
 /** Bound metadata/list responses without cutting JSON in the middle. */
 export function boundItems(items, maxChars) {
-    const bounded = [];
-    let serializedLength = 2; // []
-    for (const item of items) {
-        const candidateLength = serializedLength + (bounded.length > 0 ? 1 : 0) + serializedArrayItemLength(item);
-        if (candidateLength > maxChars) {
-            return { items: bounded, truncated: true };
-        }
-        bounded.push(item);
-        serializedLength = candidateLength;
-        if (serializedLength >= maxChars) {
-            return { items: bounded, truncated: bounded.length < items.length };
-        }
-    }
-    return { items: bounded, truncated: false };
+    const bounded = boundSearchResults(items, maxChars);
+    return { items: bounded, truncated: bounded.length < items.length };
 }
 /**
  * Keep only the best K items while iterating a large result set. `compare`

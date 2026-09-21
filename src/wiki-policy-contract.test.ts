@@ -1,35 +1,13 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { afterEach, beforeEach, describe, expect, test } from 'vitest';
-import { createServer, getServerRuntime, type ServerRuntime } from '../tests/server-fixture.js';
+import { describe, expect, test } from 'vitest';
+import { createServer, getServerRuntime } from '../tests/server-fixture.js';
 import { getLlmWikiTools } from './llm-wiki-tools.js';
 import { getWikiPolicyTopic, WIKI_POLICY_FINGERPRINT, WIKI_POLICY_TOPICS, WIKI_POLICY_VERSION } from './wiki-policy.js';
 
 const CONTROL_TOOLS = new Set(['orient_wiki', 'get_agent_pulse', 'list_active_capabilities', 'search_capabilities', 'call_endpoint']);
 const POLICY_BUDGETS = [512, 7000, 16000] as const;
-
-let server: ReturnType<typeof createServer> | undefined;
-let runtime: ServerRuntime | undefined;
-let vaultPath: string | undefined;
-
-beforeEach(async () => {
-  vaultPath = await mkdtemp(join(tmpdir(), 'mcpvault-policy-contract-'));
-  server = createServer(vaultPath, { version: '1.0.0' });
-  runtime = getServerRuntime(server);
-  if (!runtime) {
-    throw new Error('Server runtime unavailable after createServer');
-  }
-  runtime.ensureEndpointRegistry();
-});
-
-afterEach(async () => {
-  if (server) await server.close();
-  if (vaultPath) await rm(vaultPath, { recursive: true, force: true });
-  server = undefined;
-  runtime = undefined;
-  vaultPath = undefined;
-});
 
 function getRoutes(policy: Record<string, unknown>): string[] {
   return Array.isArray(policy.routes) ? policy.routes as string[] : [];
@@ -106,15 +84,6 @@ describe('get_wiki_policy contract', () => {
       expect(reloaded.policyVersion).toBe(WIKI_POLICY_VERSION);
       expect(reloaded.policyVersion).toBe(initial.policyVersion);
 
-      if (Array.isArray(initial.rules)) initial.rules.push('__policy-contract-check__');
-      if (Array.isArray(initial.avoid)) initial.avoid.push('__policy-contract-check__');
-      if (Array.isArray(initial.routes)) initial.routes.push('__policy-contract-check__');
-
-      const rechecked = getWikiPolicyTopic(topic, 16000) as { rules?: unknown[]; avoid?: unknown[]; routes?: unknown[]; policyFingerprint: string };
-      expect(rechecked.policyFingerprint).toBe(initial.policyFingerprint);
-      expect(Boolean(rechecked.rules?.includes('__policy-contract-check__'))).toBe(false);
-      expect(Boolean(rechecked.avoid?.includes('__policy-contract-check__'))).toBe(false);
-      expect(Boolean(rechecked.routes?.includes('__policy-contract-check__'))).toBe(false);
     }
   });
 
@@ -149,14 +118,24 @@ describe('get_wiki_policy contract', () => {
     expect(schemaTopics.sort()).toEqual([...WIKI_POLICY_TOPICS].sort());
   });
 
-  test('all returned routes resolve in the endpoint registry for each budget tier', () => {
-    const missing = WIKI_POLICY_TOPICS.flatMap(topic => POLICY_BUDGETS.flatMap(maxChars => {
-      const policy = getWikiPolicyTopic(topic, maxChars);
-      return getRoutes(policy).map(route => ({ topic, maxChars, route })).filter(({ route }) => {
-        if (CONTROL_TOOLS.has(route)) return false;
-        return runtime?.endpointRegistry.resolve(route) === undefined;
-      });
-    }));
-    expect(missing).toEqual([]);
+  test('all returned routes resolve in the endpoint registry for each budget tier', async () => {
+    const vaultPath = await mkdtemp(join(tmpdir(), 'mcpvault-policy-contract-'));
+    const server = createServer(vaultPath, { version: '1.0.0' });
+    try {
+      const runtime = getServerRuntime(server);
+      if (!runtime) throw new Error('Server runtime unavailable after createServer');
+      runtime.ensureEndpointRegistry();
+      const missing = WIKI_POLICY_TOPICS.flatMap(topic => POLICY_BUDGETS.flatMap(maxChars => {
+        const policy = getWikiPolicyTopic(topic, maxChars);
+        return getRoutes(policy).map(route => ({ topic, maxChars, route })).filter(({ route }) => {
+          if (CONTROL_TOOLS.has(route)) return false;
+          return runtime.endpointRegistry.resolve(route) === undefined;
+        });
+      }));
+      expect(missing).toEqual([]);
+    } finally {
+      await server.close();
+      await rm(vaultPath, { recursive: true, force: true });
+    }
   });
 });

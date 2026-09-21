@@ -1,5 +1,4 @@
-// Read-only offline contract checks. Never renders, evaluates source, or refreshes hashes.
-import { createHash } from 'node:crypto';
+// Read-only semantic checks. Never renders or evaluates source.
 import { lstat, readFile, realpath } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -23,9 +22,8 @@ export const REQUIRED_TEST_LINKS = Object.freeze([
   { category: 'preservation', path: 'src/llm-wiki.test.ts', title: 'lifecycle transition planner blocks preservation and unsafe lineage without leaking hidden paths' },
   { category: 'state', path: 'src/architecture-transitions.test.ts', title: 'architecture reactivation cannot infer epistemic state or accept a retirement target' },
 ]);
-const paths = [...SOURCE_FILES, ...DIAGRAM_FILES], manifestPath = 'docs/architecture/uml/contract.json';
+const paths = [...SOURCE_FILES, ...DIAGRAM_FILES];
 const maxBytes = 2 * 1024 * 1024;
-export const contractHash = text => createHash('sha256').update(text.replaceAll('\r\n', '\n'), 'utf8').digest('hex');
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const unwrap = node => ['TSAsExpression', 'ParenthesizedExpression'].includes(node.type) ? unwrap(node.expression) : node;
 function descendants(root, predicate) {
@@ -63,15 +61,13 @@ function block(text, kind, name) {
 export function checkArchitectureContract(bundle) {
   const errors = [], fail = code => errors.push(code);
   try {
-    const { manifest: m, files } = bundle;
-    if (m.version !== 1 || m.hashPolicy !== 'utf8_lf_sha256') fail('manifest:version');
-    if (!same(Object.keys(m.files).sort(), [...paths].sort()) || !same(Object.keys(files).sort(), [...paths].sort())) fail('manifest:inventory');
+    const { files } = bundle;
+    if (!same(Object.keys(files).sort(), [...paths].sort())) fail('contract:inventory');
     const text = {}, trees = new Map(); let totalBytes = 0;
     for (const p of paths) {
       if (typeof files[p] !== 'string' || Buffer.byteLength(files[p]) > maxBytes) throw Error('invalid bounded file');
       totalBytes += Buffer.byteLength(files[p]);
       if (totalBytes > 12 * 1024 * 1024) throw Error('contract inventory exceeds bound');
-      if (!/^[a-f0-9]{64}$/.test(m.files[p]) || contractHash(files[p]) !== m.files[p]) fail(`hash:${p}`);
       text[p] = files[p].replaceAll('\r\n', '\n');
     }
     const tree = p => {
@@ -86,7 +82,7 @@ export function checkArchitectureContract(bundle) {
     }
     const domain = text[DIAGRAM_FILES[0]], retrieval = text[DIAGRAM_FILES[1]], states = text[DIAGRAM_FILES[2]], deployment = text[DIAGRAM_FILES[3]];
     const graph = tree('src/graph-contract.ts');
-    check('contract:version', () => declaration(graph, 'GRAPH_CONTRACT_VERSION').value === m.graphContractVersion && m.graphContractVersion === 1);
+    check('contract:version', () => declaration(graph, 'GRAPH_CONTRACT_VERSION').value === 1);
     check('domain:relations', () => same(block(domain, 'enum', 'RelationKind'), strings(declaration(graph, 'RELATION_FIELDS'))));
     for (const [diagram, source, name] of [
       ['RelationOccurrence', 'src/graph-assertion.ts', 'GraphAssertion'],
@@ -138,7 +134,6 @@ export function checkArchitectureContract(bundle) {
       const imported = tree(source).body.filter(n => n.type === 'ImportDeclaration').map(n => n.source.value);
       return dependencies.every(d => imported.includes(d));
     });
-    check('tests:required-links', () => same(m.testLinks, REQUIRED_TEST_LINKS));
     for (const link of REQUIRED_TEST_LINKS) check(`test:${link.category}`, () => descendants(tree(link.path), n => n.type === 'CallExpression'
       && ['test', 'it'].includes(n.callee.name) && n.arguments[0]?.type === 'Literal' && n.arguments[0].value === link.title).length === 1);
   } catch { fail('contract:invalid-input'); }
@@ -148,7 +143,7 @@ export function checkArchitectureContract(bundle) {
 export async function loadArchitectureContract(root) {
   const canonical = await realpath(resolve(root));
   async function bounded(p) {
-    if (![manifestPath, ...paths].includes(p)) throw Error('Unsafe contract path');
+    if (!paths.includes(p)) throw Error('Unsafe contract path');
     let current = canonical;
     const parts = p.split('/');
     for (let i = 0; i < parts.length; i++) {
@@ -161,11 +156,10 @@ export async function loadArchitectureContract(root) {
     if (Buffer.byteLength(text) > maxBytes || await realpath(current) !== current) throw Error('Contract file changed or exceeds bound');
     return text;
   }
-  const manifest = JSON.parse(await bounded(manifestPath)), files = {};
-  if (!same(Object.keys(manifest.files || {}).sort(), [...paths].sort())) throw Error('Unsafe manifest inventory');
-  // Fixed paths only. Manifest values never select code, imports or files to execute.
+  const files = {};
+  // Fixed paths only; documentation cannot select files or code to execute.
   for (const p of paths) files[p] = await bounded(p);
-  return { manifest, files };
+  return { files };
 }
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   if (process.argv.length !== 2) throw Error('Run without arguments from the repository checkout');

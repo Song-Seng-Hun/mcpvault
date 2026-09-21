@@ -1,4 +1,40 @@
 import { guidanceError, guidanceText } from './guidance-runtime.js';
+import { createHash } from 'node:crypto';
+/** MCP discovery keeps complete schemas; oversized translations use code-owned prose. */
+export function boundedToolCatalog(original, localized, cursor) {
+    const fits = (value) => Buffer.byteLength(JSON.stringify(value)) <= 5000;
+    const tools = original.map((tool, index) => fits({ tools: [localized[index] ?? tool] }) ? localized[index] ?? tool : tool);
+    if (cursor === undefined && fits({ tools }))
+        return { tools };
+    const fingerprint = createHash('sha256').update(JSON.stringify(tools)).digest('hex').slice(0, 32);
+    let offset = 0;
+    if (cursor !== undefined) {
+        try {
+            if (typeof cursor !== 'string' || cursor.length > 256)
+                throw Error();
+            const parsed = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8'));
+            if (parsed.f !== fingerprint || !Number.isInteger(parsed.o) || parsed.o < 0 || parsed.o >= tools.length)
+                throw Error();
+            offset = parsed.o;
+        }
+        catch {
+            throw Error('Tool catalog cursor invalid or changed; restart tools/list.');
+        }
+    }
+    const page = (count) => ({ tools: tools.slice(offset, offset + count),
+        ...(offset + count < tools.length && { nextCursor: Buffer.from(JSON.stringify({ f: fingerprint, o: offset + count })).toString('base64url') }),
+    });
+    // The final page drops its cursor. Check it before bounded prefixes.
+    const remaining = tools.length - offset;
+    if (fits(page(remaining)))
+        return page(remaining);
+    let count = 0;
+    while (count + 1 < remaining && fits(page(count + 1)))
+        count++;
+    if (!count)
+        throw Error('Fixed MCP tool schema cannot fit 5000 bytes; reduce the code-owned schema.');
+    return page(count);
+}
 export function enforceResponseBudget(response, requestedMaxChars, pulseRequest) {
     const maxChars = Number(requestedMaxChars);
     if (!Number.isInteger(maxChars) || maxChars < 1 || !response?.content)

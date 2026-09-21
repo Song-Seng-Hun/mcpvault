@@ -41,7 +41,8 @@ Targets: 34 files / 276 passed; build passed. Initial full run stopped at stale 
 Architecture hash refreshed. v2 then hit a 5s pulse timeout; unchanged isolated file passed 45/45.
 v3 isolates first 20 files, then uses 20-file batches. Keep timeouts/assertions; no production fix claimed.
 Final v3: 566 files; 7,457 passed / 7,461 total; four unchanged Windows skips. Source basis verified.
-First-to-last test timestamps: 2,742.1s (45.70 min), not a whole-process or billing measurement.
+Final native runner exit 0: 45m45.481s; first-to-last tests 2,742.1s; no billing measurement.
+Initial CLI resume failed before tests; retain its log separately from the successful native resume.
 Staged paths passed. NAS runtime deployed; live search/read/continuation/graph checks passed.
 Canonical originals/world/economy bytes preserved; no Vault body writes or new account bindings.
 Retain previous release and v1/v2 failure records. Fork commit/push follows this release record.

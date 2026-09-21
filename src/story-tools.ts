@@ -66,13 +66,6 @@ export const STORY_OPERATIONS: Record<string, { tool: string; defaultOp: string;
   visual: { tool: 'manage_story_visual', defaultOp: 'read', reads: ['read', 'preview'], writes: ['propose'] },
 };
 export const STORY_MUTATING_TOOLS = new Set(Object.values(STORY_OPERATIONS).filter(spec => spec.writes.length).map(spec => spec.tool));
-export function storyReadAlias(tool: string, op: unknown): string | undefined {
-  const entry = Object.entries(STORY_OPERATIONS).find(([, spec]) => spec.tool === tool);
-  if (!entry || !STORY_MUTATING_TOOLS.has(tool)) return;
-  const [endpoint, spec] = entry;
-  if (spec.reads.includes(op === undefined ? spec.defaultOp : op as string)) return `read_story_${endpoint}`;
-  return undefined;
-}
 export function storyEndpointForTool(tool: string): string | undefined {
   return Object.keys(STORY_OPERATIONS).find(endpoint => STORY_OPERATIONS[endpoint]!.tool === tool
     || (STORY_OPERATIONS[endpoint]!.reads.length > 0 && tool === `read_story_${endpoint}`));

@@ -1,4 +1,4 @@
-import { enforceResponseBudget, normalizedResponseBudget } from './mcp-response-budget.js';
+import { boundedToolCatalog, enforceResponseBudget, normalizedResponseBudget } from './mcp-response-budget.js';
 import { noteReadMaxChars, noteReadBudgetError, boundedPropertyReadResult, boundedNoteReadResult, navigationPageArgs, boundedNavigationResult, boundedDirectoryResult, boundedWikiProjectionResult, noteContinuationConflict, boundedOutlineResult, boundedLineWindowResult } from './mcp-note-response.js';
 import { guidanceError } from './guidance-runtime.js';
 import { TaskReanchorError } from './task-reanchoring.js';
@@ -485,23 +485,23 @@ const FIXED_MCP_TOOL_NAMES = new Set([
 const FIXED_MCP_TOOLS: Tool[] = [
   {
     name: 'orient_wiki',
-    description: 'Start every session here. It returns exactly one primary action. Execute only that action, then stop tool use and answer the user unless their request explicitly requires more.',
+    description: 'Start each session here. Execute exactly primaryAction, then answer the user. Continue tool use only when their request explicitly requires more.',
     inputSchema: { type: 'object', properties: { accessToken: { type: 'string', description: 'Optional token from login or registration' }, maxChars: { type: 'integer', minimum: 512, maximum: 20000, default: 3000, description: 'Hard response budget; orientation stays compact even when a larger budget is allowed' }, prettyPrint: { type: 'boolean', default: false } } },
   },
   ...getAgentPulseTools(),
   {
     name: 'list_active_capabilities',
-    description: 'Optional compact catalog with availability and nextCursor. Follow pages without changing session/configuration; use an exact ID search for its schema. Availability is permission/host readiness, not proof that task data is ready. Not required before following orientation.',
+    description: 'Optional catalog with availability and nextCursor. Keep session/configuration unchanged between pages. Search an exact ID for its schema. Availability means permission/host readiness, not data readiness. Orientation does not require this list.',
     inputSchema: { type: 'object', properties: { cursor: { type: 'string', maxLength: 256 }, limit: { type: 'integer', minimum: 1, maximum: 100, default: 50 }, maxChars: { type: 'integer', minimum: 512, maximum: 20000, default: 12000 }, accessToken: { type: 'string' }, prettyPrint: { type: 'boolean', default: false } } },
   },
   {
     name: 'search_capabilities',
-    description: 'Search the endpoint catalog by capability, endpoint id, action, or natural-language description. Use one focused query per intent (limit 3), select a result, then stop searching and call_endpoint with its exact endpointId.',
-    inputSchema: { type: 'object', properties: { query: { type: 'string', description: 'Capability or action to search for' }, limit: { type: 'integer', minimum: 1, maximum: 100, default: 20 }, maxChars: { type: 'integer', minimum: 512, maximum: 20000, default: 20000 }, accessToken: { type: 'string' }, prettyPrint: { type: 'boolean', default: false } } },
+    description: 'Find an endpoint with one query per intent (limit 3). Select it, then call_endpoint. For large schemas, read endpointId# plus a JSON Pointer; follow descriptor queries or nextCursor without changing the query.',
+    inputSchema: { type: 'object', properties: { query: { type: 'string', description: 'Endpoint/intent, or exact endpointId# followed by a JSON Pointer' }, cursor: { type: 'string', maxLength: 256 }, limit: { type: 'integer', minimum: 1, maximum: 100, default: 20 }, maxChars: { type: 'integer', minimum: 512, maximum: 20000, default: 20000 }, accessToken: { type: 'string' }, prettyPrint: { type: 'boolean', default: false } } },
   },
   {
     name: 'call_endpoint',
-    description: 'Execute one exact endpoint returned by orient_wiki or search_capabilities. Pass its endpointId and documented input object; do not call the URL directly or search again after selecting it. If orientation set stopAfterAction, return to the user after this call instead of chaining guides or dashboards.',
+    description: 'Run one exact endpoint selected by orient_wiki or search_capabilities, with its documented arguments. Do not call the URL or search again. If orientation sets stopAfterAction, answer after this call; do not chain guides or dashboards.',
     inputSchema: { type: 'object', properties: { endpointId: { type: 'string' }, arguments: { type: 'object', additionalProperties: true }, accessToken: { type: 'string', description: 'Optional shortcut merged into arguments.accessToken' }, prettyPrint: { type: 'boolean', default: false } }, required: ['endpointId'] },
   },
 ];
@@ -2000,6 +2000,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
             trimmedArgs.maxChars,
             { readOnly, skillEvolutionEnabled: Boolean(skillEvolution?.enabled), authenticated: Boolean(principal), capabilities: new Set(principal?.capabilities || []), roleplayConfigured: Boolean(options.roleplay), roleplayWritesConfigured: Boolean(options.roleplay?.options.policy.administrators.length), economyConfigured: Boolean(options.economy?.policy.enabled), explanationsConfigured: Boolean(explanations), benchmarksConfigured: Boolean(benchmarks), ownerActivity: ownerState },
             false,
+            { cursor: trimmedArgs.cursor },
           );
           if (JSON.stringify(await ownerCatalogState(principal)) !== JSON.stringify(ownerState)
             || JSON.stringify(ownerCatalogSnapshot(principal)) !== JSON.stringify(ownerState)) throw guidanceError(new Error('Capability owner authority changed; retry with current consent'), 'guid-4d8026375f487ffa');
@@ -2007,7 +2008,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
             if (JSON.stringify(ownerCatalogSnapshot(principal)) !== JSON.stringify(ownerState)) throw guidanceError(new Error('Capability owner authority changed; retry with current consent'), 'guid-4d8026375f487ffa');
           };
           finalOwnerRefresh = async () => { await options.ownerActivity?.refresh?.(); };
-          return jsonResult(result, trimmedArgs.prettyPrint);
+          return jsonResult(result, typeof trimmedArgs.query === 'string' && trimmedArgs.query.includes('#') ? false : trimmedArgs.prettyPrint);
         }
 
         case "get_agent_pulse": {
@@ -3967,7 +3968,8 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
 
   const installMcpHandlers = (target: Server): void => {
     // Definitions are runtime-local and static; availability/auth remain per call.
-    target.setRequestHandler("tools/list", async () => guidance.run(() => ({ tools: projectGuidance(FIXED_MCP_TOOLS) })));
+    target.setRequestHandler("tools/list", async request => guidance.run(() =>
+      boundedToolCatalog(FIXED_MCP_TOOLS, projectGuidance(FIXED_MCP_TOOLS), request.params?.cursor)));
 
     target.setRequestHandler("tools/call", async (request) =>
       requestGate.run(

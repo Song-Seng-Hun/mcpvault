@@ -24,7 +24,7 @@ describe('progressive Wiki policy', () => {
   });
 
   test('keeps the eager MCP constitution compact but actionable', () => {
-    expect(MCPVAULT_SERVER_INSTRUCTIONS.length).toBeLessThanOrEqual(3500);
+    expect(Buffer.byteLength(MCPVAULT_SERVER_INSTRUCTIONS, 'utf8')).toBeLessThanOrEqual(3500);
     expect(MCPVAULT_SERVER_INSTRUCTIONS).toContain('orient_wiki');
     expect(MCPVAULT_SERVER_INSTRUCTIONS).toContain('wiki.policy');
     expect(MCPVAULT_SERVER_INSTRUCTIONS).toContain('expectedRevision');
