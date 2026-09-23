@@ -47,6 +47,20 @@ test('approved skill remains readable with an OAuth capability ceiling but denie
   await f.auth.updateAgentCapabilities({accessToken:f.sponsor.accessToken,agentId:'operator',capabilities:['profile']});
   await expect(f.read()).rejects.toThrow('Reviewed skill unavailable');
 });
+test('procedure continuation survives renewal of the same authorized OAuth identity',async()=>{
+  const f=await fixture(false,true,true);
+  Object.assign(f.host,{candidatesPage:async(cursor?:string)=>cursor
+    ?{candidates:[],registryGeneration:'g1'}
+    :{candidates:['test-skill'],nextCursor:'next',registryGeneration:'g1'}});
+  const args={query:'Review',limit:1,maxChars:4000};
+  const first=await f.service.discover({...f.session,...args});
+  expect(first.cards.map(card=>card.skillId)).toEqual(['test-skill']);
+  expect(first.nextCursor).toBeDefined();
+  const renewed=await f.auth.issueTrustedResearchSession('operator');
+  expect(renewed.principal.sessionId).not.toBe(f.session.principal.sessionId);
+  const second=await f.service.discover({...args,accessToken:renewed.accessToken,principal:renewed.principal,cursor:first.nextCursor});
+  expect(second.cards).toEqual([]);
+});
 test.each([false,true])('current authenticated reader receives approved bytes without write capability (source access=%s)',async sourceAccess=>{
   const f=await fixture(false,sourceAccess);expect((await f.read()).content).toContain('Review procedure');
   if(sourceAccess)expect((await f.service.discover({query:'Review',...f.session})).cards).toHaveLength(1);

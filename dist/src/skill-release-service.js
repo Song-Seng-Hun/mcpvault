@@ -54,7 +54,13 @@ export class ReviewedSkillService {
             await this.options.assertActor?.(principal);
             assertFresh();
         };
-        return { principal, scopeKey: originalIdentity, revalidate, assertFresh };
+        // OAuth may issue a fresh sessionId on every stateless HTTP call. Cursors
+        // bind to the stable authorized identity; every page still revalidates the
+        // current session, capabilities, source access and registry generation.
+        const scopeKey = fingerprint({ accountId: principal.accountId, modelId: principal.modelId,
+            agentId: principal.agentId, userId: principal.userId, commandCenterId: principal.commandCenterId,
+            role: principal.role, capabilities: principal.capabilities, enterprise: principal.enterprise });
+        return { principal, scopeKey, revalidate, assertFresh };
     }
     async read(p, captureDeliveryFence, discovery) {
         try {
