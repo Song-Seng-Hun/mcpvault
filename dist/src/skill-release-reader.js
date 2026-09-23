@@ -25,12 +25,13 @@ export async function readReviewedSkill(host, authorization, p, captureDeliveryF
         const permission = await authorization.begin(skillId, entry.sourceName);
         if (p.expectedRelease !== undefined && sha(p.expectedRelease) !== release)
             return fail();
-        const manifestBytes = await host.readBlob(release);
+        const manifestBytes = await host.readBlob(release, entry);
         if (!Buffer.isBuffer(manifestBytes) || manifestBytes.length > 65536 || digest(manifestBytes) !== release)
             return fail();
         const manifest = parseSkillReleaseManifest(JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(manifestBytes)));
         const deliveredBlobs = Object.freeze([...new Set([release, ...manifest.resources.map(r => r.blob)])]);
-        if (manifest.skillId !== skillId || await host.sourceFingerprint(entry.sourceName) !== manifest.sourceFingerprint || !await host.verifyEvidence(manifest))
+        const currentSource = entry.contentFingerprint === undefined ? manifest.sourceFingerprint : sha(entry.contentFingerprint);
+        if (manifest.skillId !== skillId || await host.sourceFingerprint(entry.sourceName) !== currentSource || !await host.verifyEvidence(manifest))
             return fail();
         const resourceId = p.resourceId === undefined ? manifest.mainResource : id(p.resourceId), resource = manifest.resources.find(r => r.id === resourceId);
         if (!resource)
@@ -40,7 +41,7 @@ export async function readReviewedSkill(host, authorization, p, captureDeliveryF
             // Admission binds the whole resource set, not only the currently read page.
             // Manifest bounds cap this at 32 files / 4 MiB; no dependency crawling.
             for (const item of manifest.resources) {
-                const bytes = await host.readBlob(item.blob);
+                const bytes = await host.readBlob(item.blob, entry);
                 if (!Buffer.isBuffer(bytes) || bytes.length !== item.bytes || digest(bytes) !== item.blob)
                     return fail();
                 const text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
@@ -88,11 +89,11 @@ export async function readReviewedSkill(host, authorization, p, captureDeliveryF
             result = reviewedSkillCard(manifest, release, max, p, checked.descriptor);
         if (JSON.stringify(result).length > max)
             return fail();
-        if (await host.sourceFingerprint(entry.sourceName) !== manifest.sourceFingerprint)
+        if (await host.sourceFingerprint(entry.sourceName) !== currentSource)
             return fail();
         await checkResources();
         const current = await host.entry(skillId);
-        if (!current || current.releaseHash !== release || current.generation !== generation || current.sourceName !== entry.sourceName)
+        if (!current || current.releaseHash !== release || current.generation !== generation || current.sourceName !== entry.sourceName || current.contentFingerprint !== entry.contentFingerprint)
             return fail();
         await permission.revalidate();
         permission.assertFresh();
@@ -102,7 +103,7 @@ export async function readReviewedSkill(host, authorization, p, captureDeliveryF
         captureDeliveryFence?.({
             revalidate: async () => {
                 try {
-                    if (await host.sourceFingerprint(entry.sourceName) !== manifest.sourceFingerprint)
+                    if (await host.sourceFingerprint(entry.sourceName) !== currentSource)
                         return fail();
                     await checkResources();
                     await permission.revalidate();

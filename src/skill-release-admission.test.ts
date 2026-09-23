@@ -5,6 +5,8 @@ import {join} from 'node:path';
 import {createHash} from 'node:crypto';
 import {skillReleaseReviewBasis} from './skill-release-evidence.js';
 import {openReviewedSkillStore} from './skill-release-store.js';
+import {openVaultReviewedSkills,VAULT_SKILL_REVIEWS} from './skill-release-vault.js';
+import {readReviewedSkill} from './skill-release-reader.js';
 import type {SkillReleaseManifest} from './skill-release-manifest.js';
 const acl=vi.hoisted(()=>({deny:false}));
 vi.mock('./windows-private-acl.js',()=>({checkWindowsPrivateAcl:async()=>{if(acl.deny)throw Error('denied');}}));
@@ -52,6 +54,42 @@ test('independent trial artifacts persist and revalidate on retry without granti
   const f=await fixture(undefined,true),first=await f.admit();expect(first.executionAuthorized).toBe(false);
   for(const h of f.trialArtifactHashes)expect(await readFile(join(f.hostPath,'blobs',h))).toEqual(f.blobs.get(h));
   f.blobs.clear();expect((await f.admit()).revision).toBe(first.revision);
+});
+
+test('NAS delivery needs no local body store and binds current output separately from original review evidence',async()=>{
+  const f=await fixture({version:1,kind:'procedure',purpose:'Review permitted material.'});await f.admit();
+  const metadata=join(f.vaultPath,VAULT_SKILL_REVIEWS),folder=join(f.vaultPath,'Community','Skills','test-skill');
+  await mkdir(join(metadata,'blobs'),{recursive:true});await mkdir(folder,{recursive:true});
+  const bodyPath=join(folder,'SKILL.md');
+  const manifest=JSON.parse(f.blobs.get(f.request.releaseHash)!.toString()) as SkillReleaseManifest;
+  const resources=manifest.resources.map(r=>({blob:r.blob,path:r.id===manifest.mainResource?'SKILL.md':'metadata.json'}));
+  for(const r of resources)await writeFile(join(folder,r.path),f.blobs.get(r.blob)!);
+  for(const [h,b] of f.blobs)if(!resources.some(r=>r.blob===h))await writeFile(join(metadata,'blobs',h),b);
+  const contentFingerprint=hash('current NAS output');
+  const registration=JSON.parse(await readFile(f.entryPath,'utf8'));
+  const record={registration,contentFingerprint,resources};
+  const registry=Buffer.from(JSON.stringify({version:1,entries:[record]})),registryPath=join(metadata,'registry.json');
+  await writeFile(registryPath,registry);await rm(f.hostPath,{recursive:true});
+  const open=()=>openVaultReviewedSkills({vaultPath:f.vaultPath,registryHash:hash(registry),sourceFingerprint:async()=>contentFingerprint});
+  const store=await open(),permission={begin:async()=>({revalidate:async()=>{},assertFresh(){}})};
+  const args={skillId:'test-skill'};
+  expect((await readReviewedSkill(store,permission,args)).content).toBe(f.body.toString());
+  expect((await readReviewedSkill(await open(),permission,args)).executionAuthorized).toBe(false);
+  expect((await store.candidatesPage!()).candidates).toEqual(['test-skill']);
+  // An unchanged archived copy must never conceal a changed current NAS file.
+  await writeFile(join(metadata,'blobs',hash(f.body)),f.body);await writeFile(bodyPath,'changed');
+  await expect(readReviewedSkill(store,permission,args)).rejects.toThrow();await writeFile(bodyPath,f.body);
+  await expect(readReviewedSkill({...store,sourceFingerprint:async()=>hash('drift')},permission,args)).rejects.toThrow();
+  await expect(readReviewedSkill(store,{begin:async()=>{throw Error('revoked');}},args)).rejects.toThrow();
+  await expect(readReviewedSkill(store,permission,{...args,resourceId:'unregistered'})).rejects.toThrow();
+  const entry=await store.entry('test-skill');
+  await writeFile(registryPath,JSON.stringify({version:1,entries:[]}));
+  expect(()=>store.assertFresh(entry!)).toThrow();await expect(open()).rejects.toThrow();
+  for(const path of ['../outside.md','sub/../../outside.md','C:/outside.md','.hidden/SKILL.md']){
+    const bad=Buffer.from(JSON.stringify({version:1,entries:[{...record,resources:[...record.resources,{blob:hash(path),path}]}]}));
+    await writeFile(registryPath,bad);
+    await expect(openVaultReviewedSkills({vaultPath:f.vaultPath,registryHash:hash(bad),sourceFingerprint:async()=>contentFingerprint})).rejects.toThrow();
+  }
 });
 test('independent evidence does not bypass host denial or missing-response checks',async()=>{
   for(const change of ['authority','missing_response']){

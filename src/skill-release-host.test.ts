@@ -5,6 +5,8 @@ import {join} from 'node:path';
 import {withEnterpriseRequestContext} from './enterprise-request-context.js';
 import type {ScopePrincipal} from './scope-auth.js';
 import {OwnerActivityRuntime} from './owner-activity-runtime.js';
+import {createHash} from 'node:crypto';
+import {VAULT_SKILL_REVIEWS} from './skill-release-vault.js';
 const acl=vi.hoisted(()=>({deny:false}));
 vi.mock('./windows-private-acl.js',()=>({checkWindowsPrivateAcl:async()=>{if(acl.deny)throw Error('denied');}}));
 const roots:string[]=[];
@@ -38,6 +40,21 @@ test('loads an explicit private read-only skill bridge, with fixed loopback mand
     expect(await host.reviewedSkills.host.entry('not-admitted')).toBeUndefined();
     expect(host).not.toHaveProperty('admit');
   }finally{host.close();}
+});
+
+test('NAS mode pins only registry configuration; no hostPath, grants or certificate binding',async()=>{
+  const f=await fixture(),metadata=join(f.config.vaultPath,VAULT_SKILL_REVIEWS),bytes=Buffer.from('{"version":1,"entries":[]}');
+  await mkdir(metadata);await writeFile(join(metadata,'registry.json'),bytes);
+  await writeFile(f.path,JSON.stringify({version:4,authorization:'source-access',vaultPath:f.config.vaultPath,
+    registryHash:createHash('sha256').update(bytes).digest('hex')}));
+  const host=await f.load();
+  try{
+    expect(host.listener).toBeUndefined();expect(host.ownerActivity).toBeUndefined();
+    expect(await host.reviewedSkills.host.entry('not-reviewed')).toBeUndefined();
+    await writeFile(join(metadata,'registry.json'),'{"version":1,"entries":[],"active":true}');
+    await expect(host.reviewedSkills.host.entry('not-reviewed')).rejects.toThrow();
+  }finally{host.close();}
+  await expect(f.load()).rejects.toThrow();
 });
 
 test('account-only reviewed reads need no certificates, bindings or extra listener',async()=>{

@@ -5,6 +5,11 @@ import {parseReleaseDescriptor} from './skill-release-descriptor.js';
 import type {SkillDescriptor} from './skill-descriptor.js';
 
 /** Host-code adapters only; never construct these from an endpoint argument. */
+export interface ReviewedSkillEntry {
+  releaseHash:string;generation:string;sourceName:string;
+  /** Current NAS output binding; manifest sourceFingerprint remains review provenance. */
+  contentFingerprint?:string;
+}
 export interface ReviewedSkillHost {
   /** Private bounded discovery window, not an inventory or an access decision.
    * IDs must never be returned until the same release reader authorizes them. */
@@ -14,12 +19,12 @@ export interface ReviewedSkillHost {
   candidatesPage?(cursor?:string,scanBudget?:number):Promise<{
     candidates:readonly string[];nextCursor?:string;registryGeneration:string;
   }>;
-  entry(skillId:string):Promise<{releaseHash:string;generation:string;sourceName:string}|undefined>;
+  entry(skillId:string):Promise<ReviewedSkillEntry|undefined>;
   /** Final synchronous registry and complete delivered-resource fence. Optional
    * hashes preserve entry-only host checks; readers always provide their full set.
    * No callback or awaited IO may follow the delivery fence. */
-  assertFresh(entry:{releaseHash:string;generation:string;sourceName:string},blobHashes?:readonly string[]):void;
-  readBlob(sha256:string):Promise<Buffer>;
+  assertFresh(entry:ReviewedSkillEntry,blobHashes?:readonly string[]):void;
+  readBlob(sha256:string,entry?:ReviewedSkillEntry):Promise<Buffer>;
   sourceFingerprint(sourceName:string):Promise<string|null>;
   verifyEvidence(manifest:SkillReleaseManifest):Promise<boolean>;
 }
@@ -47,11 +52,12 @@ export async function readReviewedSkill(host:ReviewedSkillHost,authorization:Rev
     const release=sha(entry.releaseHash),generation=entry.generation;
     const permission=await authorization.begin(skillId,entry.sourceName);
     if(p.expectedRelease!==undefined&&sha(p.expectedRelease)!==release)return fail();
-    const manifestBytes=await host.readBlob(release);
+    const manifestBytes=await host.readBlob(release,entry);
     if(!Buffer.isBuffer(manifestBytes)||manifestBytes.length>65536||digest(manifestBytes)!==release)return fail();
     const manifest=parseSkillReleaseManifest(JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(manifestBytes)));
     const deliveredBlobs=Object.freeze([...new Set([release,...manifest.resources.map(r=>r.blob)])]);
-    if(manifest.skillId!==skillId||await host.sourceFingerprint(entry.sourceName)!==manifest.sourceFingerprint||!await host.verifyEvidence(manifest))return fail();
+    const currentSource=entry.contentFingerprint===undefined?manifest.sourceFingerprint:sha(entry.contentFingerprint);
+    if(manifest.skillId!==skillId||await host.sourceFingerprint(entry.sourceName)!==currentSource||!await host.verifyEvidence(manifest))return fail();
     const resourceId=p.resourceId===undefined?manifest.mainResource:id(p.resourceId),resource=manifest.resources.find(r=>r.id===resourceId);
     if(!resource)return fail();
     const checkResources=async()=>{
@@ -59,7 +65,7 @@ export async function readReviewedSkill(host:ReviewedSkillHost,authorization:Rev
       // Admission binds the whole resource set, not only the currently read page.
       // Manifest bounds cap this at 32 files / 4 MiB; no dependency crawling.
       for(const item of manifest.resources){
-        const bytes=await host.readBlob(item.blob);
+        const bytes=await host.readBlob(item.blob,entry);
         if(!Buffer.isBuffer(bytes)||bytes.length!==item.bytes||digest(bytes)!==item.blob)return fail();
         const text=new TextDecoder('utf-8',{fatal:true}).decode(bytes);
         if(item.id===manifest.descriptorResource)descriptor=parseReleaseDescriptor(item,bytes);
@@ -90,10 +96,10 @@ export async function readReviewedSkill(host:ReviewedSkillHost,authorization:Rev
     }
     if(metadata)result=reviewedSkillCard(manifest,release,max,p,checked.descriptor);
     if(JSON.stringify(result).length>max)return fail();
-    if(await host.sourceFingerprint(entry.sourceName)!==manifest.sourceFingerprint)return fail();
+    if(await host.sourceFingerprint(entry.sourceName)!==currentSource)return fail();
     await checkResources();
     const current=await host.entry(skillId);
-    if(!current||current.releaseHash!==release||current.generation!==generation||current.sourceName!==entry.sourceName)return fail();
+    if(!current||current.releaseHash!==release||current.generation!==generation||current.sourceName!==entry.sourceName||current.contentFingerprint!==entry.contentFingerprint)return fail();
     await permission.revalidate();
     permission.assertFresh();
     host.assertFresh(entry,deliveredBlobs);
@@ -102,7 +108,7 @@ export async function readReviewedSkill(host:ReviewedSkillHost,authorization:Rev
     captureDeliveryFence?.({
       revalidate:async()=>{
         try{
-          if(await host.sourceFingerprint(entry.sourceName)!==manifest.sourceFingerprint)return fail();
+          if(await host.sourceFingerprint(entry.sourceName)!==currentSource)return fail();
           await checkResources();
           await permission.revalidate();permission.assertFresh();host.assertFresh(entry,deliveredBlobs);
         }catch{return fail();}

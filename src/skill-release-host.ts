@@ -8,6 +8,7 @@ import type {OwnerActivityRuntimeOptions} from './owner-activity-runtime.js';
 import {loadOwnerMtlsBindings} from './owner-activity-mtls.js';
 import {createSkillSourceInspector} from './skill-release-source.js';
 import {openReviewedSkillStore} from './skill-release-store.js';
+import {openVaultReviewedSkills} from './skill-release-vault.js';
 import type {McpHttpOptions} from './mcp-http.js';
 
 const fail=():never=>{throw Error('Reviewed skill host unavailable');};
@@ -31,6 +32,7 @@ function stamp(path:string,max:number):string{
  * its fixed read-only target is a consent scope, not runtime/model attestation.
  * Version 3 serves reviewed documents under existing account/source ACLs, with
  * no owner mapping, account grant, runtime attestation or extra listener.
+ * Version 4 reads NAS skill files; only the registry hash is pinned locally.
  * Legacy bridges accept only skill read/discover grants, even if another activity
  * already has broader consent elsewhere. A reviewed skill grants no execution. */
 export async function loadReviewedSkillsHost(path:string,expectedVault:string){
@@ -44,8 +46,8 @@ export async function loadReviewedSkillsHost(path:string,expectedVault:string){
       await assertHostPrivateStorage([dirname(canonical),canonical]);if(stamp(canonical,max)!==before)return fail();
       return {path:canonical,text,stamp:before,max};
     };
-    const config=await readPrivate(path,8192),input=JSON.parse(config.text),accountMode=input?.version===2,sourceAccess=input?.version===3;
-    const raw=record(input,['version','vaultPath','hostPath',...(sourceAccess?['authorization']:['ownerPolicyPath',...(accountMode?['authorization']:['bindingsPath','listener'])])],['expiresAt']);
+    const config=await readPrivate(path,8192),input=JSON.parse(config.text),accountMode=input?.version===2,vaultMode=input?.version===4,sourceAccess=input?.version===3||vaultMode;
+    const raw=record(input,['version','vaultPath',vaultMode?'registryHash':'hostPath',...(sourceAccess?['authorization']:['ownerPolicyPath',...(accountMode?['authorization']:['bindingsPath','listener'])])],['expiresAt']);
     if(accountMode&&raw.authorization!=='account')return fail();
     if(sourceAccess&&raw.authorization!=='source-access')return fail();
     // Optional short inspection lease, not an access grant. Its absolute expiry
@@ -57,8 +59,9 @@ export async function loadReviewedSkillsHost(path:string,expectedVault:string){
       if(!Number.isFinite(expiresAt)||new Date(expiresAt).toISOString()!==raw.expiresAt||remaining<=0||remaining>900_000)return fail();
       deadline=performance.now()+remaining;
     }
-    if(raw.version!==(sourceAccess?3:accountMode?2:1)||typeof raw.vaultPath!=='string'||await canonicalRoleplayPath(raw.vaultPath,false)!==await canonicalRoleplayPath(expectedVault,false))return fail();
-    const {hostPath,vaultPath}=await validateRoleplayStorage({hostPath:raw.hostPath,vaultPath:expectedVault});
+    if(raw.version!==(vaultMode?4:sourceAccess?3:accountMode?2:1)||typeof raw.vaultPath!=='string'||await canonicalRoleplayPath(raw.vaultPath,false)!==await canonicalRoleplayPath(expectedVault,false))return fail();
+    const {hostPath,vaultPath}=vaultMode?{hostPath:undefined,vaultPath:await canonicalRoleplayPath(expectedVault,false)}
+      :await validateRoleplayStorage({hostPath:raw.hostPath,vaultPath:expectedVault});
     if(sourceAccess){
       let closed=false;
       const assertFresh=()=>{
@@ -69,10 +72,12 @@ export async function loadReviewedSkillsHost(path:string,expectedVault:string){
         assertFresh();await assertHostPrivateStorage([dirname(config.path),config.path]);assertFresh();
       }};
       await authorization.revalidate();source=createSkillSourceInspector(vaultPath);const inspector=source;
-      const host=await openReviewedSkillStore({hostPath,vaultPath,sourceFingerprint:async name=>{
+      const sourceFingerprint=async(name:string)=>{
         await authorization.revalidate();const r=await inspector.inspect(name);assertFresh();
         return r?.visible&&r.inventory.complete?r.inventory.fingerprint:null;
-      }});
+      };
+      const host=vaultMode?await openVaultReviewedSkills({vaultPath,registryHash:raw.registryHash,sourceFingerprint})
+        :await openReviewedSkillStore({hostPath:hostPath!,vaultPath,sourceFingerprint});
       assertFresh();
       return {ownerPolicyPath:undefined,ownerActivity:undefined,listener:undefined,
         reviewedSkills:{host,source:inspector,authorization},close(){closed=true;inspector.close();}};
@@ -120,7 +125,7 @@ export async function loadReviewedSkillsHost(path:string,expectedVault:string){
         return accountMode?{accountId:principal.accountId,executionTarget:'authenticated-skill-read'}:bindings!.execution(principal);
       }catch{return undefined;}}};
     source=createSkillSourceInspector(vaultPath);const inspector=source;
-    const host=await openReviewedSkillStore({hostPath,vaultPath,sourceFingerprint:async name=>{
+    const host=await openReviewedSkillStore({hostPath:hostPath!,vaultPath,sourceFingerprint:async name=>{
       const r=await inspector.inspect(name);return r?.visible&&r.inventory.complete?r.inventory.fingerprint:null;
     }});
     assertPins();

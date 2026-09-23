@@ -1,5 +1,12 @@
 import { type SkillReleaseManifest } from './skill-release-manifest.js';
 /** Host-code adapters only; never construct these from an endpoint argument. */
+export interface ReviewedSkillEntry {
+    releaseHash: string;
+    generation: string;
+    sourceName: string;
+    /** Current NAS output binding; manifest sourceFingerprint remains review provenance. */
+    contentFingerprint?: string;
+}
 export interface ReviewedSkillHost {
     /** Private bounded discovery window, not an inventory or an access decision.
      * IDs must never be returned until the same release reader authorizes them. */
@@ -11,20 +18,12 @@ export interface ReviewedSkillHost {
         nextCursor?: string;
         registryGeneration: string;
     }>;
-    entry(skillId: string): Promise<{
-        releaseHash: string;
-        generation: string;
-        sourceName: string;
-    } | undefined>;
+    entry(skillId: string): Promise<ReviewedSkillEntry | undefined>;
     /** Final synchronous registry and complete delivered-resource fence. Optional
      * hashes preserve entry-only host checks; readers always provide their full set.
      * No callback or awaited IO may follow the delivery fence. */
-    assertFresh(entry: {
-        releaseHash: string;
-        generation: string;
-        sourceName: string;
-    }, blobHashes?: readonly string[]): void;
-    readBlob(sha256: string): Promise<Buffer>;
+    assertFresh(entry: ReviewedSkillEntry, blobHashes?: readonly string[]): void;
+    readBlob(sha256: string, entry?: ReviewedSkillEntry): Promise<Buffer>;
     sourceFingerprint(sourceName: string): Promise<string | null>;
     verifyEvidence(manifest: SkillReleaseManifest): Promise<boolean>;
 }

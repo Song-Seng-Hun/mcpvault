@@ -6,6 +6,7 @@ import type { McpHttpOptions } from './mcp-http.js';
  * its fixed read-only target is a consent scope, not runtime/model attestation.
  * Version 3 serves reviewed documents under existing account/source ACLs, with
  * no owner mapping, account grant, runtime attestation or extra listener.
+ * Version 4 reads NAS skill files; only the registry hash is pinned locally.
  * Legacy bridges accept only skill read/discover grants, even if another activity
  * already has broader consent elsewhere. A reviewed skill grants no execution. */
 export declare function loadReviewedSkillsHost(path: string, expectedVault: string): Promise<{
