@@ -1,6 +1,6 @@
 import { guidanceError, guidanceText } from './guidance-runtime.js';
 import { createHash, randomBytes, scrypt as scryptCallback, timingSafeEqual } from 'node:crypto';
-import { mkdir, readFile, rename, writeFile, chmod, open as openFile, unlink } from 'node:fs/promises';
+import { mkdir, readFile, rename, chmod, open as openFile, unlink } from 'node:fs/promises';
 import { dirname, join, resolve, relative, isAbsolute, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { realpathSync, existsSync } from 'node:fs';
@@ -8,6 +8,7 @@ import { promisify } from 'node:util';
 import { normalizeScopeId } from './scopes.js';
 import { getEnterpriseRequestContext } from './enterprise-request-context.js';
 import { authorIdentity } from './enterprise-identity.js';
+import { assertPrivateAccountStore } from './account-store.js';
 const scrypt = promisify(scryptCallback);
 const AUTH_VERSION = 1;
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
@@ -164,6 +165,7 @@ export class ScopeAuthService {
     enterpriseRegistry;
     authPath;
     authLockPath;
+    privateAccountStore;
     moderatorAccounts;
     commandCenterId;
     sessions = new Map();
@@ -176,6 +178,12 @@ export class ScopeAuthService {
     databaseInFlight;
     principalCache;
     constructor(vaultPath, options = {}) {
+        if (options.accountStorePath !== undefined) {
+            if (options.authPath !== undefined || options.enterpriseRegistry || !isAbsolute(options.accountStorePath)) {
+                throw new Error('Private account store requires an absolute personal-host path without enterprise overrides');
+            }
+            this.privateAccountStore = { vaultPath: resolve(vaultPath), path: options.accountStorePath };
+        }
         this.enterpriseRegistry = options.enterpriseRegistry;
         if (this.enterpriseRegistry && !options.authPath)
             throw guidanceError(new Error('Enterprise authentication requires an explicit host-private account store'), 'guid-5684d8bebbaf600d');
@@ -196,8 +204,8 @@ export class ScopeAuthService {
                     throw guidanceError(new Error('Enterprise account store must be outside the Vault and protected service directories'), 'guid-f6ded6094e327fe8');
             }
         }
-        this.authPath = options.authPath ? resolve(options.authPath) : join(resolve(vaultPath), '.mcpvault', 'scope-auth.json');
-        this.authLockPath = this.enterpriseRegistry ? `${this.authPath}.lock` : join(resolve(vaultPath), '.mcpvault', 'scope-auth.lock');
+        this.authPath = this.privateAccountStore?.path ?? (options.authPath ? resolve(options.authPath) : join(resolve(vaultPath), '.mcpvault', 'scope-auth.json'));
+        this.authLockPath = this.enterpriseRegistry || this.privateAccountStore ? `${this.authPath}.lock` : join(resolve(vaultPath), '.mcpvault', 'scope-auth.lock');
         const configured = options.moderatorAccounts || String(process.env.MCPVAULT_MODERATOR_ACCOUNTS || '').split(',');
         this.moderatorAccounts = new Set(configured.map(value => String(value).trim().toLowerCase()).filter(Boolean));
         this.commandCenterId = normalizeScopeId(options.commandCenterId || process.env.MCPVAULT_COMMAND_CENTER_ID || 'local', 'commandCenterId');
@@ -211,6 +219,7 @@ export class ScopeAuthService {
         return Array.from(new Set(capabilities));
     }
     async readDatabase(fresh = false) {
+        await this.assertAccountStore();
         const cached = this.databaseCache;
         if (!fresh && cached && cached.expiresAt > Date.now())
             return cached.value;
@@ -237,7 +246,7 @@ export class ScopeAuthService {
                 return { version: AUTH_VERSION, accounts: parsed.accounts };
             }
             catch (error) {
-                if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
+                if (!this.privateAccountStore && error instanceof Error && 'code' in error && error.code === 'ENOENT') {
                     return { version: AUTH_VERSION, accounts: [] };
                 }
                 throw error;
@@ -259,11 +268,31 @@ export class ScopeAuthService {
         }
     }
     async writeDatabase(database) {
+        await this.assertAccountStore();
         const directory = dirname(this.authPath);
         await mkdir(directory, { recursive: true, mode: 0o700 });
         const temporary = `${this.authPath}.${randomBytes(8).toString('hex')}.tmp`;
-        await writeFile(temporary, `${JSON.stringify(database, null, 2)}\n`, { encoding: 'utf8', mode: 0o600, flag: 'wx' });
-        await rename(temporary, this.authPath);
+        const handle = await openFile(temporary, 'wx', 0o600);
+        try {
+            if (this.privateAccountStore)
+                await assertPrivateAccountStore(this.privateAccountStore.vaultPath, temporary);
+            await handle.writeFile(`${JSON.stringify(database, null, 2)}\n`, 'utf8');
+            await handle.sync();
+        }
+        catch (error) {
+            await handle.close();
+            await unlink(temporary).catch(() => undefined);
+            throw error;
+        }
+        await handle.close();
+        try {
+            await this.assertAccountStore();
+            await rename(temporary, this.authPath);
+        }
+        catch (error) {
+            await unlink(temporary).catch(() => undefined);
+            throw error;
+        }
         this.databaseCache = { expiresAt: Date.now() + AUTH_DATABASE_CACHE_TTL_MS, value: database };
         this.principalCache = undefined;
         // Windows may ignore POSIX modes; on Unix this narrows permissions even
@@ -273,6 +302,10 @@ export class ScopeAuthService {
     defaultCapabilities(role) {
         return [...(role === 'agent' ? DEFAULT_AGENT_CAPABILITIES : DEFAULT_MODEL_CAPABILITIES)];
     }
+    async assertAccountStore() {
+        if (this.privateAccountStore)
+            await assertPrivateAccountStore(this.privateAccountStore.vaultPath, this.privateAccountStore.path);
+    }
     async exclusive(operation) {
         let release;
         const previous = this.mutationQueue;
@@ -280,6 +313,7 @@ export class ScopeAuthService {
         await previous;
         let fileLock;
         try {
+            await this.assertAccountStore();
             fileLock = await acquireAuthFileLock(this.authLockPath);
             // Another process may have committed while this instance's short cache
             // was still warm. Always reload under the OS lock before read-modify-write.
@@ -350,7 +384,45 @@ export class ScopeAuthService {
                     sharedMemoryEnabled: verified.employee.sharedMemoryEnabled, ...verifiedDepartments(verified.employee),
                 } };
         }
-        return { ...session.principal, capabilities: this.effectiveCapabilities(session.principal) };
+        const capabilities = this.effectiveCapabilities(session.principal);
+        return { ...session.principal, capabilities: session.capabilityCeiling
+                ? capabilities.filter(capability => session.capabilityCeiling.includes(capability)) : capabilities };
+    }
+    /** Host-only bridge for a JWT already verified at the HTTP boundary. Never
+     * register this as a tool: the caller must supply the approved account ID. */
+    async issueTrustedResearchSession(accountId, reportedAgentLabel) {
+        if (this.enterpriseRegistry)
+            throw new Error('Research OAuth sessions are unavailable in enterprise mode');
+        if (reportedAgentLabel !== undefined && !/^[a-z0-9][a-z0-9-]{0,63}$/.test(reportedAgentLabel)) {
+            throw new Error('Invalid reported agent label');
+        }
+        const database = await this.readDatabase(true);
+        const account = database.accounts.find(candidate => candidate.accountId === accountId);
+        if (!account || account.role !== 'agent' || (account.commandCenterId && account.commandCenterId !== this.commandCenterId)) {
+            throw new Error('Approved research account is unavailable');
+        }
+        const ceiling = ['write', 'comment', 'journal', 'profile'];
+        const principal = {
+            accountId: account.accountId,
+            modelId: account.modelId,
+            agentId: account.agentId,
+            userId: account.userId || account.accountId,
+            commandCenterId: account.commandCenterId || this.commandCenterId,
+            role: account.role,
+            capabilities: account.capabilities || this.defaultCapabilities(account.role),
+            sessionId: randomBytes(16).toString('hex'),
+            ...(reportedAgentLabel && { reportedAgentLabel }),
+        };
+        const granted = this.effectiveCapabilities(principal);
+        if (granted.includes('moderate'))
+            throw new Error('Approved research account cannot be a moderator');
+        if (!granted.includes('write') || !granted.includes('comment')) {
+            throw new Error('Approved research account lacks required capabilities');
+        }
+        const accessToken = randomBytes(32).toString('base64url');
+        const digest = tokenDigest(accessToken);
+        this.sessions.set(digest, { principal, expiresAt: Date.now() + 5 * 60_000, capabilityCeiling: ceiling });
+        return { accessToken, principal: this.authenticate(accessToken), revoke: () => { this.sessions.delete(digest); } };
     }
     /** Called before auth endpoints as well, preventing REST/stdio from bypassing mTLS. */
     requireEnterpriseRuntime() {

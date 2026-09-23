@@ -1,7 +1,10 @@
 import { type Server as HttpServer } from 'node:http';
 import { type Server as HttpsServer } from 'node:https';
 import { type Server } from '@modelcontextprotocol/server';
+import type { Auth0Resource } from './auth0-resource.js';
 export interface McpHttpOptions {
+    /** Explicit host-configured OAuth resource; legacy HTTP remains unchanged when absent. */
+    auth0?: Auth0Resource;
     host?: string;
     port?: number;
     path?: string;

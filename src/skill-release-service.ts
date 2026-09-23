@@ -37,7 +37,10 @@ export class ReviewedSkillService {
     const revalidate=async()=>{
       await this.options.refreshAccess?.();
       const current=(await this.auth.listPrincipals({fresh:true})).find(a=>a.accountId===principal.accountId);
-      if(!current||['accountId','modelId','agentId','userId','commandCenterId','role','capabilities','enterprise'].some(k=>fingerprint((current as any)[k]??null)!==fingerprint((principal as any)[k]??null)))return fail();
+      if(!current||['accountId','modelId','agentId','userId','commandCenterId','role','enterprise'].some(k=>fingerprint((current as any)[k]??null)!==fingerprint((principal as any)[k]??null)))return fail();
+      // Trusted OAuth sessions carry a capability ceiling. A subset is valid,
+      // but revoking any capability actually held by the session still fails.
+      if((principal.capabilities??[]).some(capability=>!current.capabilities?.includes(capability)))return fail();
       await this.options.assertActor?.(principal);assertFresh();
     };
     return {principal,scopeKey:originalIdentity,revalidate,assertFresh};

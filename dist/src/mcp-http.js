@@ -81,6 +81,45 @@ function injectBearer(body, bearer) {
         },
     };
 }
+function forbiddenOAuthCall(body) {
+    const identityEndpoints = new Set([
+        'mcp.create_agent_scope', 'mcp.handoff_agent_scope', 'mcp.resume_agent_scope', 'mcp.update_agent_capabilities',
+    ]);
+    const requests = Array.isArray(body) ? body : [body];
+    return requests.some(item => {
+        if (!isRecord(item) || item.method !== 'tools/call' || !isRecord(item.params))
+            return false;
+        const params = item.params;
+        if (!isRecord(params.arguments))
+            return false;
+        const args = params.arguments;
+        if (Object.hasOwn(args, 'accessToken'))
+            return true;
+        if (params.name !== 'call_endpoint')
+            return false;
+        if (isRecord(args.arguments) && Object.hasOwn(args.arguments, 'accessToken'))
+            return true;
+        const endpoint = args.endpointId;
+        return typeof endpoint === 'string' && ((endpoint.startsWith('auth.') && endpoint !== 'auth.whoami') || identityEndpoints.has(endpoint));
+    });
+}
+function reportedOAuthLabel(body, allowed) {
+    const requests = Array.isArray(body) ? body : [body];
+    const labels = new Set();
+    for (const item of requests) {
+        if (!isRecord(item) || item.method !== 'tools/call' || !isRecord(item.params) || !isRecord(item.params.arguments))
+            continue;
+        const args = item.params.arguments;
+        if (!Object.hasOwn(args, 'agentLabel'))
+            continue;
+        if (typeof args.agentLabel !== 'string' || !allowed.includes(args.agentLabel))
+            throw new Error('Unapproved agent label');
+        labels.add(args.agentLabel);
+    }
+    if (labels.size > 1)
+        throw new Error('Conflicting agent labels');
+    return labels.values().next().value;
+}
 /**
  * A client certificate is trusted only after Node's TLS verifier accepts the
  * peer. Headers and JSON bodies are deliberately excluded from this boundary.
@@ -136,12 +175,16 @@ export async function startMcpHttpApi(server, options = {}) {
     if (options.requestProfile !== undefined && (options.requestProfile !== 'reviewed-skill-read' || !isLoopbackHost(host) || !options.requireClientCertificate)) {
         throw new Error('Reviewed skill HTTP profile requires loopback and mandatory mTLS');
     }
+    if (options.auth0 && (!isLoopbackHost(host) || options.requestProfile || options.requireClientCertificate)) {
+        throw new Error('Auth0 MCP HTTP requires its own loopback listener');
+    }
     if (options.allowProcedureDiscovery !== undefined && (typeof options.allowProcedureDiscovery !== 'boolean' || options.requestProfile !== 'reviewed-skill-read')) {
         throw new Error('Procedure discovery requires the reviewed-skill HTTP profile');
     }
     // Freeze host choice at startup; a later mutation of the options object is not approval.
     const allowProcedureDiscovery = options.allowProcedureDiscovery === true;
     const path = options.path || '/mcp';
+    const protectedResourceMetadataPath = `/.well-known/oauth-protected-resource${path === '/' ? '' : path}`;
     const maxBodyBytes = Math.min(Math.max(Math.trunc(options.maxBodyBytes ?? 1_048_576), 1_024), MAX_HTTP_BODY_BYTES);
     const allowedOrigins = options.allowedOrigins || [];
     const allowedHosts = options.allowedHosts || (host === '127.0.0.1' ? ['127.0.0.1', 'localhost'] : [host]);
@@ -153,14 +196,34 @@ export async function startMcpHttpApi(server, options = {}) {
     const registrationAllowed = createRateLimiter(REGISTRATION_WINDOW_MS, MAX_REGISTRATIONS_PER_WINDOW, MAX_RATE_BUCKETS);
     const loginAllowed = createRateLimiter(LOGIN_WINDOW_MS, MAX_LOGINS_PER_WINDOW, MAX_RATE_BUCKETS);
     const requestHandler = async (request, response) => {
+        let researchSession;
+        let researchAuthorization;
         try {
             const requestUrl = new URL(request.url || '/', `http://${request.headers.host || host}`);
-            if (requestUrl.pathname === '/evolution/review' && runtime.evolutionReview && isLoopbackHost(host)
+            if (requestUrl.pathname === '/evolution/review' && runtime.evolutionReview && isLoopbackHost(host) && !options.auth0
                 && !options.requireClientCertificate && !options.requestProfile) {
                 await runtime.evolutionReview.handle(request, response);
                 return;
             }
             addCorsHeaders(response, request, allowedOrigins);
+            if (options.auth0 && (requestUrl.pathname === '/.well-known/oauth-protected-resource'
+                || requestUrl.pathname === protectedResourceMetadataPath)) {
+                if (!originAllowed(request, allowedOrigins) || !allowedHosts.includes(requestHost(request) || '')) {
+                    response.statusCode = 403;
+                    response.end('Forbidden');
+                    return;
+                }
+                if (request.method !== 'GET') {
+                    response.statusCode = 405;
+                    response.end('Method not allowed');
+                    return;
+                }
+                response.statusCode = 200;
+                response.setHeader('content-type', 'application/json; charset=utf-8');
+                response.setHeader('cache-control', 'public, max-age=300');
+                response.end(JSON.stringify(options.auth0.metadata()));
+                return;
+            }
             if (requestUrl.pathname !== path) {
                 response.statusCode = 404;
                 response.end('Not found');
@@ -205,7 +268,70 @@ export async function startMcpHttpApi(server, options = {}) {
             const bearer = typeof bearerHeader === 'string' && /^Bearer\s+/i.test(bearerHeader)
                 ? bearerHeader.replace(/^Bearer\s+/i, '').trim()
                 : undefined;
-            if (rawBody) {
+            if (options.auth0) {
+                const resourceUrl = new URL(options.auth0.config.resource);
+                const metadataUrl = new URL(`/.well-known/oauth-protected-resource${resourceUrl.pathname === '/' ? '' : resourceUrl.pathname}`, resourceUrl).href;
+                // tunnel-client probes with an empty JSON POST. Its own discovery must
+                // fetch the local metadata, not the connector-only public gateway URL.
+                const localDiscoveryProbe = request.method === 'POST' && !rawBody
+                    && request.headers.accept === 'application/json'
+                    && request.headers['user-agent']?.startsWith('oai-tunnel-client/');
+                const challengeMetadataUrl = localDiscoveryProbe
+                    ? new URL(protectedResourceMetadataPath, `${options.tls ? 'https' : 'http'}://${request.headers.host}`).href
+                    : metadataUrl;
+                const challenge = () => {
+                    response.statusCode = 401;
+                    response.setHeader('www-authenticate', `Bearer resource_metadata="${challengeMetadataUrl}", scope="${options.auth0.config.scope}"`);
+                    response.setHeader('cache-control', 'no-store');
+                    response.end('Unauthorized');
+                };
+                if (!bearer) {
+                    challenge();
+                    return;
+                }
+                try {
+                    researchAuthorization = await options.auth0.verifyAccessToken(bearer);
+                }
+                catch {
+                    challenge();
+                    return;
+                }
+                let parsed;
+                let reportedAgentLabel;
+                if (rawBody) {
+                    try {
+                        parsed = JSON.parse(rawBody);
+                        if (forbiddenOAuthCall(parsed)) {
+                            response.statusCode = 403;
+                            response.end('Credential operation unavailable');
+                            return;
+                        }
+                        reportedAgentLabel = reportedOAuthLabel(parsed, options.auth0.config.allowedAgentLabels);
+                    }
+                    catch {
+                        response.statusCode = 403;
+                        response.end('Invalid OAuth MCP request');
+                        return;
+                    }
+                }
+                if (!runtime.issueTrustedResearchSession) {
+                    response.statusCode = 503;
+                    response.end('Research account unavailable');
+                    return;
+                }
+                try {
+                    researchSession = await runtime.issueTrustedResearchSession(researchAuthorization.accountId, reportedAgentLabel);
+                }
+                catch {
+                    response.statusCode = 503;
+                    response.end('Research account unavailable');
+                    return;
+                }
+                if (rawBody) {
+                    body = JSON.stringify(injectBearer(parsed, researchSession.accessToken));
+                }
+            }
+            if (!options.auth0 && rawBody) {
                 const parsedBody = JSON.parse(rawBody);
                 if (isRegistrationCall(parsedBody) && !registrationAllowed(request.socket.remoteAddress || 'unknown')) {
                     response.statusCode = 429;
@@ -229,10 +355,14 @@ export async function startMcpHttpApi(server, options = {}) {
                     return;
                 }
             }
-            if (bearer && rawBody) {
+            if (!options.auth0 && bearer && rawBody) {
                 body = JSON.stringify(injectBearer(JSON.parse(rawBody), bearer));
             }
             const headers = headerValues(request);
+            // The external JWT is verified only at this boundary. The MCP handler
+            // receives a short-lived internal session in the tool body, never JWTs.
+            if (options.auth0)
+                headers.delete('authorization');
             if (body !== rawBody) {
                 // The Authorization header was folded into the JSON-RPC body, so the
                 // original byte count no longer describes the Request we construct.
@@ -244,8 +374,15 @@ export async function startMcpHttpApi(server, options = {}) {
                 headers,
                 ...(body && request.method !== 'GET' && request.method !== 'HEAD' ? { body } : {}),
             });
-            const webResponse = await withEnterpriseRequestContext({ transport: 'http', ...(certFingerprint ? { certFingerprint } : {}) }, () => mcpHandler.fetch(webRequest));
-            await writeResponse(response, webResponse);
+            const dispatch = async () => {
+                const webResponse = await withEnterpriseRequestContext({ transport: 'http', ...(certFingerprint ? { certFingerprint } : {}) }, () => mcpHandler.fetch(webRequest));
+                await writeResponse(response, webResponse);
+            };
+            if (options.auth0 && researchAuthorization && researchSession) {
+                await options.auth0.withResearchSession(researchAuthorization, researchSession.principal, dispatch);
+            }
+            else
+                await dispatch();
         }
         catch (error) {
             // A failed stream is incomplete, not a successful truncated result or a
@@ -259,7 +396,10 @@ export async function startMcpHttpApi(server, options = {}) {
             addCorsHeaders(response, request, allowedOrigins);
             response.statusCode = 400;
             response.setHeader('content-type', 'application/json; charset=utf-8');
-            response.end(JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }));
+            response.end(JSON.stringify({ error: options.auth0 ? 'Invalid MCP request' : error instanceof Error ? error.message : 'Unknown error' }));
+        }
+        finally {
+            researchSession?.revoke();
         }
     };
     const httpServer = options.tls

@@ -273,6 +273,8 @@ function requestFairnessKey(args: Record<string, unknown>): string {
 }
 
 export interface CreateServerOptions extends DocumentAuthorityOptions {
+  /** Existing personal-host account file, outside Vault/source. Never a tool argument. */
+  accountStorePath?: string;
   /** Explicit immutable host selection; never populated by a client request. */
   features?: HostFeatureConfig;
   /** Explicit host-selected sources; no automatic Vault-wide translation. */
@@ -503,7 +505,7 @@ const FIXED_MCP_TOOLS: Tool[] = [
   {
     name: 'call_endpoint',
     description: 'Run one exact endpoint selected by orient_wiki or search_capabilities, with its documented arguments. Do not call the URL or search again. If orientation sets stopAfterAction, answer after this call; do not chain guides or dashboards.',
-    inputSchema: { type: 'object', properties: { endpointId: { type: 'string' }, arguments: { type: 'object', additionalProperties: true }, accessToken: { type: 'string', description: 'Optional shortcut merged into arguments.accessToken' }, prettyPrint: { type: 'boolean', default: false }, responseView: { type: 'string', description: 'Read-only JSON Pointer; reuse original arguments. Empty selects root.' }, responseCursor: { type: 'string', maxLength: 256 } }, required: ['endpointId'] },
+    inputSchema: { type: 'object', properties: { endpointId: { type: 'string' }, arguments: { type: 'object', additionalProperties: true }, accessToken: { type: 'string', description: 'Optional shortcut merged into arguments.accessToken' }, agentLabel: { type: 'string', description: 'Optional self-reported activity label for approved OAuth clients; not an authentication identity' }, prettyPrint: { type: 'boolean', default: false }, responseView: { type: 'string', description: 'Read-only JSON Pointer; reuse original arguments. Empty selects root.' }, responseCursor: { type: 'string', maxLength: 256 } }, required: ['endpointId'] },
   },
 ];
 
@@ -513,6 +515,8 @@ const FIXED_MCP_TOOLS: Tool[] = [
 const ALLOW_HIDDEN_DIRECT_TOOLS_IN_TESTS = process.env.VITEST === 'true';
 
 export interface ServerRuntime {
+  /** Trusted HTTP adapter only; never an MCP/REST endpoint. */
+  issueTrustedResearchSession?: (accountId: string, reportedAgentLabel?: string) => Promise<{ accessToken: string; principal: ScopePrincipal; revoke(): void }>;
   /** Host-only acknowledgement of actually retained context; never an MCP argument. */
   confirmMemoryRetention?: (accessToken: string, receipt: string, contextGeneration: string) => Promise<void>;
   invalidateMemoryRetention?: (accessToken: string) => Promise<void>;
@@ -622,6 +626,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
   const effectiveCenterId = enterpriseProfile?.realmId || commandCenterId;
   void cleanupStaleDerivedTemps(resolvedVaultPath);
   const scopeAuth = new ScopeAuthService(resolvedVaultPath, {
+    ...(options.accountStorePath !== undefined && { accountStorePath: options.accountStorePath }),
     ...(moderatorAccounts === undefined ? {} : { moderatorAccounts }),
     ...(effectiveCenterId && { commandCenterId: effectiveCenterId }),
     ...(enterpriseRegistry && { enterpriseRegistry, authPath: `${options.enterpriseRegistryPath}.accounts.json` }),
@@ -3994,6 +3999,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
   installMcpHandlers(server);
 
   SERVER_RUNTIMES.set(server, {
+    issueTrustedResearchSession: (accountId, reportedAgentLabel) => scopeAuth.issueTrustedResearchSession(accountId, reportedAgentLabel),
     ...(layeredMemory && { confirmMemoryRetention: async (accessToken: string, receipt: string, contextGeneration: string) => {
       const principal = await scopeAuth.authenticate(accessToken); if (!principal) throw Error('Memory session unavailable');
       layeredMemory.exposure.confirm(principal, receipt, contextGeneration);

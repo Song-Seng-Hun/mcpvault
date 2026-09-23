@@ -1,4 +1,5 @@
 import { guidanceError } from './guidance-runtime.js';
+import { isLoopbackHost } from './http-request-utils.js';
 /**
  * Parse runtime options without importing server.ts, which starts the MCP
  * server as a side effect. Unknown positional arguments remain part of the
@@ -7,6 +8,8 @@ import { guidanceError } from './guidance-runtime.js';
 export function parseCliArgs(args) {
     const pathArgs = [];
     let readOnly = false;
+    let accountStorePath;
+    let auth0Config;
     let quarantineSkills;
     let restPort;
     let mcpHttpPort;
@@ -27,6 +30,20 @@ export function parseCliArgs(args) {
     let evolutionConfig;
     for (let index = 0; index < args.length; index += 1) {
         const arg = args[index];
+        if (arg === '--account-store' || arg.startsWith('--account-store=')) {
+            const value = arg === '--account-store' ? args[++index] : arg.slice('--account-store='.length);
+            if (!value || !value.trim() || value.startsWith('--') || accountStorePath !== undefined)
+                throw new Error('--account-store requires one existing private host account file');
+            accountStorePath = value;
+            continue;
+        }
+        if (arg === '--auth0-config' || arg.startsWith('--auth0-config=')) {
+            const value = arg === '--auth0-config' ? args[++index] : arg.slice('--auth0-config='.length);
+            if (!value || !value.trim() || value.startsWith('--') || auth0Config !== undefined)
+                throw new Error('--auth0-config requires one existing private host configuration file');
+            auth0Config = value;
+            continue;
+        }
         if (arg === '--evolution-config' || arg.startsWith('--evolution-config=')) {
             const value = arg === '--evolution-config' ? args[++index] : arg.slice('--evolution-config='.length);
             if (!value || !value.trim() || value.startsWith('--') || evolutionConfig !== undefined)
@@ -219,9 +236,15 @@ export function parseCliArgs(args) {
         }
         pathArgs.push(arg);
     }
+    if (auth0Config !== undefined && (accountStorePath === undefined || mcpHttpPort === undefined || restPort !== undefined || readOnly
+        || (mcpHttpHost !== undefined && !isLoopbackHost(mcpHttpHost)))) {
+        throw new Error('--auth0-config requires --account-store, writable --mcp-http, and loopback binding');
+    }
     return {
         vaultPathArg: pathArgs.join(" ").trim(),
         readOnly,
+        ...(accountStorePath !== undefined && { accountStorePath }),
+        ...(auth0Config !== undefined && { auth0Config }),
         ...(quarantineSkills && { quarantineSkills }),
         ...(stdio === false && { stdio }),
         ...(restPort !== undefined && { restPort }),

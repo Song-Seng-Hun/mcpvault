@@ -72,6 +72,7 @@ export class AuditService {
             tool: String(params.tool).slice(0, 120),
             actor: identity.actor,
             role: identity.role,
+            ...(params.principal?.reportedAgentLabel && { reportedAgentLabel: params.principal.reportedAgentLabel }),
             outcome: params.outcome,
             ...(target ? { target } : {}),
             ...(paths.length && { paths }),

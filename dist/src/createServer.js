@@ -437,7 +437,7 @@ const FIXED_MCP_TOOLS = [
     {
         name: 'call_endpoint',
         description: 'Run one exact endpoint selected by orient_wiki or search_capabilities, with its documented arguments. Do not call the URL or search again. If orientation sets stopAfterAction, answer after this call; do not chain guides or dashboards.',
-        inputSchema: { type: 'object', properties: { endpointId: { type: 'string' }, arguments: { type: 'object', additionalProperties: true }, accessToken: { type: 'string', description: 'Optional shortcut merged into arguments.accessToken' }, prettyPrint: { type: 'boolean', default: false }, responseView: { type: 'string', description: 'Read-only JSON Pointer; reuse original arguments. Empty selects root.' }, responseCursor: { type: 'string', maxLength: 256 } }, required: ['endpointId'] },
+        inputSchema: { type: 'object', properties: { endpointId: { type: 'string' }, arguments: { type: 'object', additionalProperties: true }, accessToken: { type: 'string', description: 'Optional shortcut merged into arguments.accessToken' }, agentLabel: { type: 'string', description: 'Optional self-reported activity label for approved OAuth clients; not an authentication identity' }, prettyPrint: { type: 'boolean', default: false }, responseView: { type: 'string', description: 'Read-only JSON Pointer; reuse original arguments. Empty selects root.' }, responseCursor: { type: 'string', maxLength: 256 } }, required: ['endpointId'] },
     },
 ];
 // Existing service-level tests exercise the internal dispatcher by tool name.
@@ -543,6 +543,7 @@ export function createServer(vaultPath, options = {}) {
     const effectiveCenterId = enterpriseProfile?.realmId || commandCenterId;
     void cleanupStaleDerivedTemps(resolvedVaultPath);
     const scopeAuth = new ScopeAuthService(resolvedVaultPath, {
+        ...(options.accountStorePath !== undefined && { accountStorePath: options.accountStorePath }),
         ...(moderatorAccounts === undefined ? {} : { moderatorAccounts }),
         ...(effectiveCenterId && { commandCenterId: effectiveCenterId }),
         ...(enterpriseRegistry && { enterpriseRegistry, authPath: `${options.enterpriseRegistryPath}.accounts.json` }),
@@ -3827,6 +3828,7 @@ export function createServer(vaultPath, options = {}) {
     };
     installMcpHandlers(server);
     SERVER_RUNTIMES.set(server, {
+        issueTrustedResearchSession: (accountId, reportedAgentLabel) => scopeAuth.issueTrustedResearchSession(accountId, reportedAgentLabel),
         ...(layeredMemory && { confirmMemoryRetention: async (accessToken, receipt, contextGeneration) => {
                 const principal = await scopeAuth.authenticate(accessToken);
                 if (!principal)

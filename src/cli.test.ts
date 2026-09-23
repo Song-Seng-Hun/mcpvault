@@ -1,6 +1,29 @@
 import { describe, expect, test } from "vitest";
 import { parseCliArgs } from "./cli.js";
 
+test('account store is one explicit host file and does not consume the Vault path', () => {
+  expect(parseCliArgs(['Vault', '--account-store', 'private.json'])).toEqual({ vaultPathArg: 'Vault', readOnly: false, accountStorePath: 'private.json' });
+  expect(parseCliArgs(['--account-store=private.json', 'Vault'])).toEqual({ vaultPathArg: 'Vault', readOnly: false, accountStorePath: 'private.json' });
+  for (const args of [['--account-store'], ['--account-store='], ['--account-store', '--read-only'], ['--account-store=a', '--account-store=b']]) {
+    expect(() => parseCliArgs(args)).toThrow(/account-store/);
+  }
+});
+
+test('Auth0 writer requires a private account store and a writable loopback MCP HTTP listener', () => {
+  expect(parseCliArgs(['/vault', '--account-store=C:\\Private\\accounts.json', '--mcp-http=8788', '--auth0-config=C:\\Private\\auth0.json']))
+    .toMatchObject({ accountStorePath: 'C:\\Private\\accounts.json', mcpHttpPort: 8788, auth0Config: 'C:\\Private\\auth0.json', readOnly: false });
+  for (const args of [
+    ['--auth0-config'],
+    ['--auth0-config='],
+    ['--auth0-config=a', '--auth0-config=b'],
+    ['--auth0-config=a', '--mcp-http'],
+    ['--auth0-config=a', '--account-store=b'],
+    ['--auth0-config=a', '--account-store=b', '--mcp-http', '--read-only'],
+    ['--auth0-config=a', '--account-store=b', '--mcp-http', '--mcp-http-host=192.168.1.20'],
+    ['--auth0-config=a', '--account-store=b', '--mcp-http', '--http'],
+  ]) expect(() => parseCliArgs(['/vault', ...args])).toThrow(/auth0|Auth0/);
+});
+
 test('evolution runtime uses one explicit configuration and never consumes the Vault path', () => {
   expect(parseCliArgs(['Vault', '--evolution-config=private.json'])).toEqual({ vaultPathArg: 'Vault', readOnly: false, evolutionConfig: 'private.json' });
   expect(parseCliArgs(['--evolution-config', 'private.json', 'Vault']).vaultPathArg).toBe('Vault');

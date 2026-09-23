@@ -67,6 +67,16 @@ test('unavailable Work coverage does not masquerade as no assigned work', async 
   expect(f.calls).toEqual(['continuity', 'work']);
 });
 
+test('capability-limited research sessions skip inaccessible task guidance without widening authority', async () => {
+  const f = fixture({ work: { coverage: 'unavailable' } });
+  const research = { ...principal, capabilities: ['write', 'comment', 'profile', 'journal'] as const };
+  const pulse = await f.service.get({ principal: research });
+  expect(pulse.nextAction).toBeDefined();
+  expect(pulse.coverage).toMatchObject({ work: { state: 'skipped' }, tasks: { state: 'skipped' } });
+  expect(f.calls).not.toContain('work');
+  expect(f.calls).not.toContain('tasks');
+});
+
 test('current Work wins before legacy tasks and all optional sources', async () => {
   const f = fixture({ work: { coverage: 'loaded', nextAction: { tool: 'work.packet', arguments: { taskId: 'assigned' } } } });
   const value = await f.service.get({ principal });

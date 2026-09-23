@@ -10,13 +10,15 @@ import {OwnerActivityPolicy} from './owner-activity.js';
 const roots:string[]=[];
 afterEach(async()=>{for(const root of roots.splice(0))await rm(root,{recursive:true,force:true});});
 const hash=(s:Buffer|string)=>createHash('sha256').update(s).digest('hex');
-async function fixture(discover=false,sourceAccess=false){
+async function fixture(discover=false,sourceAccess=false,researchSession=false){
   const root=await mkdtemp(join(tmpdir(),'skill-release-service-'));roots.push(root);
   const auth=new ScopeAuthService(root),sponsor=await auth.register({accountId:'sponsor',modelId:'test',password:'synthetic-test-password'});
   await auth.register({accountId:'operator',agentId:'operator',modelId:'test',password:'synthetic-test-password',accessToken:sponsor.accessToken});
-  await auth.updateAgentCapabilities({accessToken:sponsor.accessToken,agentId:'operator',capabilities:['profile']});
-  const session=await auth.login({accountId:'operator',password:'synthetic-test-password'});
-  expect(auth.hasCapability(session.principal,'write')).toBe(false);
+  await auth.updateAgentCapabilities({accessToken:sponsor.accessToken,agentId:'operator',capabilities:researchSession
+    ? ['write','publish','comment','chat','status','whisper','task','profile','journal'] : ['profile']});
+  const session=researchSession?await auth.issueTrustedResearchSession('operator')
+    :await auth.login({accountId:'operator',password:'synthetic-test-password'});
+  expect(auth.hasCapability(session.principal,'write')).toBe(researchSession);
   const source=hash('source'),body=Buffer.from('Review procedure. No bundled execution.');
   const manifest={version:1,skillId:'test-skill',sourceFingerprint:source,metadataEvidenceHash:hash('metadata'),policyRevision:'review-v1',mode:'procedural_reference',mainResource:'main',
     resources:[{id:'main',blob:hash(body),bytes:body.length,title:'Procedure',kind:'procedure'}],retainedFunctions:['Review source.'],limitations:['No execution.'],useWhen:['Authorized task.'],avoidWhen:['Missing source.'],
@@ -36,8 +38,15 @@ async function fixture(discover=false,sourceAccess=false){
   expect(module.ReviewedSkillService,'reviewed resolution must re-use current auth, source ACL and owner consent').toBeTypeOf('function');
   const service=new module.ReviewedSkillService!(host,inspector,access,auth,sourceAccess?{async revalidate(){},assertFresh(){}}:owner);
   const read=(extra:Record<string,unknown>={})=>service.resolve({skillId:'test-skill',accessToken:session.accessToken,principal:session.principal,...extra});
-  return {read,service,host,auth,session:{accessToken:session.accessToken,principal:session.principal},hide:()=>{visible=false;},revoke:()=>{available=false;},denyReference:()=>{permitted=false;},get reads(){return reads;}};
+  return {read,service,host,auth,sponsor,session:{accessToken:session.accessToken,principal:session.principal},hide:()=>{visible=false;},revoke:()=>{available=false;},denyReference:()=>{permitted=false;},get reads(){return reads;}};
 }
+test('approved skill remains readable with an OAuth capability ceiling but denies revoked capabilities',async()=>{
+  const f=await fixture(false,true,true);
+  expect(f.session.principal.capabilities).toEqual(['write','comment','profile','journal']);
+  expect((await f.read()).content).toContain('Review procedure');
+  await f.auth.updateAgentCapabilities({accessToken:f.sponsor.accessToken,agentId:'operator',capabilities:['profile']});
+  await expect(f.read()).rejects.toThrow('Reviewed skill unavailable');
+});
 test.each([false,true])('current authenticated reader receives approved bytes without write capability (source access=%s)',async sourceAccess=>{
   const f=await fixture(false,sourceAccess);expect((await f.read()).content).toContain('Review procedure');
   if(sourceAccess)expect((await f.service.discover({query:'Review',...f.session})).cards).toHaveLength(1);

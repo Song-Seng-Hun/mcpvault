@@ -17,6 +17,7 @@ while($null -ne ($line=[Console]::ReadLine())) {
     if($id -lt 1 -or $request.paths.Count -gt 64){throw 'Invalid request'}
     $status=0
     foreach($path in $request.paths) {
+      if($request.fixedLocal -eq $true -and ([IO.DriveInfo]::new([IO.Path]::GetPathRoot($path))).DriveType -ne [IO.DriveType]::Fixed){$status=4; break}
       if([IO.Directory]::Exists($path)) {$acl=[IO.Directory]::GetAccessControl($path)}
       else {$acl=[IO.File]::GetAccessControl($path)}
       $owner=$acl.GetOwner([Security.Principal.SecurityIdentifier]).Value
@@ -75,10 +76,10 @@ class Inspector {
     });
   }
 
-  check(paths: readonly string[]): Promise<void> {
+  check(paths: readonly string[], fixedLocal = false): Promise<void> {
     if (this.closed || this.pending.size >= 64 || this.nextId >= 999999999999999) return Promise.reject(unavailable());
     const id = ++this.nextId;
-    const frame = JSON.stringify({ id, paths }) + '\n';
+    const frame = JSON.stringify({ id, paths, fixedLocal }) + '\n';
     if (paths.length > 64 || Buffer.byteLength(frame, 'utf8') > 256 * 1024) return Promise.reject(unavailable());
     clearTimeout(this.idle);
     return new Promise<void>((resolve, reject) => {
@@ -112,9 +113,9 @@ class Inspector {
 }
 
 /** Internal Windows ACL transport; permission decisions are never cached. */
-export function checkWindowsPrivateAcl(paths: readonly string[]): Promise<void> {
+export function checkWindowsPrivateAcl(paths: readonly string[], fixedLocal = false): Promise<void> {
   if (paths.length > 64 || paths.some(path => typeof path !== 'string')
     || Buffer.byteLength(JSON.stringify(paths), 'utf8') > 256 * 1024 - 64) return Promise.reject(unavailable());
   inspector ??= new Inspector();
-  return inspector.check(paths);
+  return inspector.check(paths, fixedLocal);
 }

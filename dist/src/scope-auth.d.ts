@@ -25,6 +25,8 @@ export interface ScopePrincipal {
     sessionGeneration?: number;
     actorId?: string;
     authorLabel?: string;
+    /** Client-reported activity label; never authorization or model attestation. */
+    reportedAgentLabel?: string;
 }
 /**
  * Persistent model/agent accounts with process-local bearer sessions.
@@ -34,6 +36,7 @@ export declare class ScopeAuthService {
     private readonly enterpriseRegistry;
     private readonly authPath;
     private readonly authLockPath;
+    private readonly privateAccountStore?;
     private readonly moderatorAccounts;
     private readonly commandCenterId;
     private readonly sessions;
@@ -50,17 +53,26 @@ export declare class ScopeAuthService {
         commandCenterId?: string;
         enterpriseRegistry?: EnterpriseRegistry;
         authPath?: string;
+        accountStorePath?: string;
         protectedServicePaths?: string[];
     });
     private effectiveCapabilities;
     private readDatabase;
     private writeDatabase;
     private defaultCapabilities;
+    private assertAccountStore;
     private exclusive;
     private consumeLoginAttempt;
     private consumeRegistrationAttempt;
     private rememberLoginFailure;
     authenticate(accessToken: unknown): ScopePrincipal | undefined;
+    /** Host-only bridge for a JWT already verified at the HTTP boundary. Never
+     * register this as a tool: the caller must supply the approved account ID. */
+    issueTrustedResearchSession(accountId: string, reportedAgentLabel?: string): Promise<{
+        accessToken: string;
+        principal: ScopePrincipal;
+        revoke(): void;
+    }>;
     /** Called before auth endpoints as well, preventing REST/stdio from bypassing mTLS. */
     requireEnterpriseRuntime(): import("./enterprise-registry.js").EnterpriseRuntime | undefined;
     private assertEnterprisePrincipal;

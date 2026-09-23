@@ -8,6 +8,8 @@ import { loadCompilationHostConfig } from './src/compilation-host.js';
 import { loadEvolutionStorage } from './src/evolution/host.js';
 import { createServerLifecycle } from "./src/server-lifecycle.js";
 import { parseCliArgs } from "./src/cli.js";
+import { assertPrivateAccountStore } from './src/account-store.js';
+import { loadAuth0Resource } from './src/auth0-resource.js';
 import { startRestApi } from "./src/rest-api.js";
 import { startMcpHttpApi } from "./src/mcp-http.js";
 import { loadEconomyHostConfig, probeEconomyStorage } from './src/economy-host.js';
@@ -104,6 +106,13 @@ Options:
                   Connect clients to the same /mcp URL; keep this process running
                   Optional LAN/TLS flags: --mcp-http-host HOST,
                   --mcp-http-cert FILE, --mcp-http-key FILE
+
+  --account-store FILE
+                  Existing owner-private local account database outside Vault/source.
+                  No automatic migration, account creation, or permission changes.
+  --auth0-config FILE
+                  Protect loopback MCP HTTP with Auth0; requires --account-store.
+                  Keep this configuration owner-private and outside Vault/source.
                   Optional env: MCPVAULT_MCP_HTTP_HOST,
                   MCPVAULT_MCP_HTTP_TLS_CERT, MCPVAULT_MCP_HTTP_TLS_KEY,
                   MCPVAULT_ALLOWED_HOSTS, MCPVAULT_ALLOWED_ORIGINS
@@ -120,7 +129,7 @@ Examples:
 }
 // Remove runtime options before joining trailing args, preserving support for
 // unquoted vault paths with spaces. When omitted, use the current directory.
-const { vaultPathArg, readOnly, quarantineSkills, restPort, mcpHttpPort, mcpHttpHost, mcpHttpTlsCert, mcpHttpTlsKey, stdio, economyConfig, roleplayConfig, skillEvolutionConfig, reviewedSkillsConfig, explanationConfig, benchmarkConfig, featuresConfig, ownerActivityConfig, maintenanceConfig, compilationConfig, evolutionConfig } = parseCliArgs(cliArgs);
+const { vaultPathArg, readOnly, accountStorePath, auth0Config, quarantineSkills, restPort, mcpHttpPort, mcpHttpHost, mcpHttpTlsCert, mcpHttpTlsKey, stdio, economyConfig, roleplayConfig, skillEvolutionConfig, reviewedSkillsConfig, explanationConfig, benchmarkConfig, featuresConfig, ownerActivityConfig, maintenanceConfig, compilationConfig, evolutionConfig } = parseCliArgs(cliArgs);
 const vaultPath = resolve(vaultPathArg || process.cwd());
 const featurePath = featuresConfig ?? process.env.MCPVAULT_FEATURE_CONFIG;
 const ownerConsentPath = ownerActivityConfig ?? process.env.MCPVAULT_OWNER_ACTIVITY_CONFIG;
@@ -153,7 +162,12 @@ let mcpServer;
 let roleplay;
 let benchmarkWriter;
 let reviewedHost;
+let auth0;
 try {
+    if (accountStorePath !== undefined)
+        await assertPrivateAccountStore(vaultPath, accountStorePath);
+    if (auth0Config !== undefined)
+        auth0 = await loadAuth0Resource(vaultPath, auth0Config);
     if (reviewedSkillsConfig) {
         reviewedHost = await loadReviewedSkillsHost(resolve(reviewedSkillsConfig), vaultPath);
         if (ownerConsentPath && reviewedHost.ownerPolicyPath && await canonicalRoleplayPath(resolve(ownerConsentPath), true, true) !== reviewedHost.ownerPolicyPath) {
@@ -169,16 +183,19 @@ try {
     const explanations = features.selected.includes('explanation-translation') && explanationConfig ? await loadExplanationHostConfig(resolve(explanationConfig), vaultPath) : undefined;
     if (features.selected.includes('roleplay') && roleplayConfig)
         roleplay = await RoleplayStore.open(await loadRoleplayHostConfig(resolve(roleplayConfig), vaultPath));
-    mcpServer = createServer(vaultPath, { version: VERSION, readOnly, ...(quarantineSkills && { quarantineSkills }), features, ...(economy && { economy }), ...(roleplay && { roleplay }), ...(skillEvolution && { skillEvolution }),
+    mcpServer = createServer(vaultPath, { version: VERSION, readOnly, ...(accountStorePath !== undefined && { accountStorePath }), ...(quarantineSkills && { quarantineSkills }), features, ...(economy && { economy }), ...(roleplay && { roleplay }), ...(skillEvolution && { skillEvolution }),
         ...(evolutionStorage && { evolutionRuntime: { storage: evolutionStorage } }),
         ...(reviewedHost && { reviewedSkills: reviewedHost.reviewedSkills }),
         ...(maintenance && { maintenance }),
         // Only code-owned verbatim processing is attested here. Generated content
         // still requires a separate real execution verifier; no inference fallback.
         ...(compilationHost && { compilation: { host: compilationHost, structuralRuntime: builtinVerbatimRuntime } }),
-        // A legacy bridge cannot verify the execution behind a client. A policy
-        // file alone must not turn labels or localhost into runtime attestation.
-        ...(reviewedHost?.ownerActivity ? { ownerActivity: reviewedHost.ownerActivity } : ownerConsentPath ? { ownerActivity: { ...await loadOwnerActivityHostConfig(resolve(ownerConsentPath), vaultPath), execution: () => undefined } } : {}),
+        // Verified OAuth request sessions identify the research channel, not the
+        // model/device. Legacy bridges remain unattested; consent never grants ACLs.
+        ...(reviewedHost?.ownerActivity ? { ownerActivity: reviewedHost.ownerActivity } : ownerConsentPath ? { ownerActivity: {
+                ...await loadOwnerActivityHostConfig(resolve(ownerConsentPath), vaultPath),
+                execution: principal => auth0?.ownerExecution(principal),
+            } } : auth0 ? { ownerActivity: auth0.ownerActivity() } : {}),
         ...(hostBenchmark?.enabled && { benchmarks: {
                 enabled: true, definitions: hostBenchmark.definitions,
                 accountProfiles: async () => { await benchmarkWriter?.assertHeld(); return hostBenchmark.accountProfiles(); },
@@ -187,18 +204,28 @@ try {
                 bindAuthority: (service) => { benchmarkAuthority = service; },
             } }),
         ...(explanations?.enabled && { explanations: { sources: explanations.sources }, workCollaboration: { executionProfiles: explanations.executionProfiles } }) });
+    if (auth0) {
+        const session = await getServerRuntime(mcpServer).issueTrustedResearchSession(auth0.config.accountId);
+        session.revoke();
+    }
 }
 catch (error) {
-    reviewedHost?.close();
     try {
-        await roleplay?.close();
+        if (typeof mcpServer !== 'undefined')
+            await mcpServer.close();
     }
     finally {
+        reviewedHost?.close();
         try {
-            await economy?.ledger.close();
+            await roleplay?.close();
         }
         finally {
-            await benchmarkWriter?.close();
+            try {
+                await economy?.ledger.close();
+            }
+            finally {
+                await benchmarkWriter?.close();
+            }
         }
     }
     throw error;
@@ -250,6 +277,7 @@ try {
         const configuredOrigins = String(process.env.MCPVAULT_ALLOWED_ORIGINS || '').split(',').map(value => value.trim()).filter(Boolean);
         const mcpHttpHandle = await startMcpHttpApi(mcpServer, {
             port: mcpHttpPort,
+            ...(auth0 && { auth0 }),
             ...(configuredHost && { host: configuredHost }),
             ...(configuredHosts.length > 0 && { allowedHosts: configuredHosts }),
             ...(configuredOrigins.length > 0 && { allowedOrigins: configuredOrigins }),

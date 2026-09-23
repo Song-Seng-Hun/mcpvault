@@ -22,6 +22,12 @@ login are MCP tool calls with ordinary string arguments; `modelId` and
 | Cursor IDE | `.cursor/mcp.json` | `.cursor/rules/` | Project rules are the reliable IDE entry point |
 | Cursor CLI | `.cursor/mcp.json` | `.cursor/rules/`, `AGENTS.md` | CLI and IDE rule discovery are not identical |
 
+## OpenAI Secure MCP Tunnel
+
+For the Windows DPAPI-backed launcher, diagnosis, and client-discovery steps, see
+the [tunnel runbook](SECURE-MCP-TUNNEL.md). A running tunnel is transport only;
+it does not prove that Codex or Antigravity has registered the MCP server.
+
 For an external-client smoke test, use a dedicated root/profile rather than a
 child directory of a workspace that already has MCP configuration. Clients may
 discover a parent or global config before the nested test config. Antigravity
@@ -35,12 +41,21 @@ inspect which Vault answered".
 
 ## Authentication boundary
 
-MCPVault itself is not an OAuth provider. Client OAuth support can authenticate
-the outer remote MCP transport when the deployment provides OAuth, but it does
-not replace `register_scope_account` or `login_scope`. For local stdio, the
-agent can call those tools directly. For remote deployments, use the transport
-authentication required by the host and keep MCPVault account credentials in a
-host-managed secret store or a genuinely private, persistent per-agent sandbox.
+MCPVault itself is not an OAuth provider. The optional Auth0 research adapter
+verifies the approved scope and exact subject and maps them to an existing
+server-owned research account. On that connection, OAuth replaces model-visible
+`register_scope_account`/`login_scope`: do not pass an `accessToken`, ask another
+agent to grant each action, or create a second owner-consent file. Normal
+research writing and comments use the mapped role, selected features and
+existing document ACLs. Task/work ownership, administrative and User-scope
+operations remain denied. The first-session pulse skips task/work guidance for
+this ceiling and can still suggest permitted reads.
+
+Legacy local stdio retains account registration/login. Other remote deployments
+must use the transport authentication required by their host; do not assume
+that generic OAuth alone supplies an MCPVault account mapping. Keep any legacy
+credentials in host-managed secret storage or a genuinely private persistent
+per-agent sandbox.
 
 There is no cross-client standard for a private agent sandbox. Never assume
 that `.agents`, `.cursor`, `.grok`, `.claude`, or a project directory is private

@@ -23,6 +23,8 @@ import { EndpointRegistry } from "./endpoint-registry.js";
 import { type EconomyLedger } from './economy-ledger.js';
 import type { EconomyPolicy } from './economy-model.js';
 export interface CreateServerOptions extends DocumentAuthorityOptions {
+    /** Existing personal-host account file, outside Vault/source. Never a tool argument. */
+    accountStorePath?: string;
     /** Explicit immutable host selection; never populated by a client request. */
     features?: HostFeatureConfig;
     /** Explicit host-selected sources; no automatic Vault-wide translation. */
@@ -87,6 +89,12 @@ export interface CreateServerOptions extends DocumentAuthorityOptions {
     commandCenterId?: string;
 }
 export interface ServerRuntime {
+    /** Trusted HTTP adapter only; never an MCP/REST endpoint. */
+    issueTrustedResearchSession?: (accountId: string, reportedAgentLabel?: string) => Promise<{
+        accessToken: string;
+        principal: ScopePrincipal;
+        revoke(): void;
+    }>;
     /** Host-only acknowledgement of actually retained context; never an MCP argument. */
     confirmMemoryRetention?: (accessToken: string, receipt: string, contextGeneration: string) => Promise<void>;
     invalidateMemoryRetention?: (accessToken: string) => Promise<void>;

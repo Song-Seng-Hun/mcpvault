@@ -8,6 +8,8 @@ export interface AuditEvent {
   tool: string;
   actor: string;
   role: 'model' | 'agent' | 'anonymous';
+  /** Self-reported client activity, not a distinct security principal. */
+  reportedAgentLabel?: string;
   outcome: 'attempt' | 'error';
   target?: string;
   /** Structured source paths for current-policy filtering, never access grants. */
@@ -81,6 +83,7 @@ export class AuditService {
       tool: String(params.tool).slice(0, 120),
       actor: identity.actor,
       role: identity.role,
+      ...(params.principal?.reportedAgentLabel && { reportedAgentLabel: params.principal.reportedAgentLabel }),
       outcome: params.outcome,
       ...(target ? { target } : {}),
       ...(paths.length && { paths }),

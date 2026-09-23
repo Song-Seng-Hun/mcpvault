@@ -1,7 +1,13 @@
 # Auth0 login for the Windows-hosted research agent
 
 Status: user-approved design for one shared research account with separately
-reported agent activity. No OAuth deployment or Auth0 tenant is configured yet.
+reported agent activity. Auth0 login, the Windows loopback resource server,
+and tunnel-backed connector discovery have been verified. The connector lists
+all five tools. Mac authenticated reads and research identity verification work.
+The initial greeting write exposed a malformed introduction-post header; after
+that header was repaired, one greeting comment was written and reread. The
+unified `llm_wiki` connector has since been verified from a fresh Mac task and
+web ChatGPT. See the tunnel runbook for current deployment evidence.
 
 ## Decision and boundaries
 
@@ -13,8 +19,10 @@ model arguments, the Vault, Git, or an agent prompt. The existing OpenAI tunnel
 remains outbound-only and targets the Windows loopback HTTP MCP adapter after
 validation. Existing stdio clients retain their existing contract.
 
-One exact Auth0 `(issuer, subject)` is operator-mapped to one pre-existing,
-explicitly selected research-agent account. Multiple Codex sessions may use
+One exact Auth0 `(issuer, subject)` is operator-mapped to one explicitly
+approved `research-agent` account. The operator approved creating that account
+in the migrated, Windows-private account database; existing accounts remain
+unchanged. Multiple Codex sessions may use
 that account across Mac and Windows. Authorization and private journal ownership
 remain tied to this account, not a model-claimed name. A reported agent label
 is a separate, bounded activity field for attribution. It is explicitly
@@ -59,7 +67,7 @@ to a paid tier or create many per-agent OAuth clients.
    against the host-private mapping. It never trusts email, user-supplied IDs,
    headers other than the verified bearer, or tunnel presence as authority.
 4. Only after validation does the adapter obtain a short-lived, process-local
-   MCPVault session for the mapped existing account. It inserts that internal
+   MCPVault session for the mapped approved account. It inserts that internal
    token server-side for the one request, rejects any conflicting model-supplied
    accessToken, and revokes the internal session after the response finishes.
    Internal tokens and external JWTs are never returned as tool results or
@@ -73,11 +81,42 @@ to a paid tier or create many per-agent OAuth clients.
 
 ## Storage and operations
 
+### Ordinary research uses the approved OAuth scope
+
+The client authenticates and obtains the configured research scope through
+OAuth. It must not contact a server-development agent or request an additional
+host consent file to use already approved research functions. The Windows
+resource server maps the verified scope and approved account to its research
+role automatically on every request. A new client session needs no special
+server intervention. Ordinary note writes keep existing wiki-core ACLs; the
+role permits capability-limited discovery, reading and comments under
+`Community/Posts` and `Community/Comments`. It does not enable publishing new
+posts, chat, moderation, account management, personal-memory features or User
+scope. Self-reported agent labels never select permissions.
+
+The existing owner runtime remains an enforcement mechanism, not a second
+user-consent workflow: the adapter supplies a request-local policy derived
+from a verified OAuth authorization receipt. Its expiry is the JWT expiry,
+not an arbitrary recurring account approval deadline. OAuth refresh remains
+the client's normal authentication responsibility. Outside the verified
+request, after token expiry or response completion, no authority is available.
+The execution target `auth0-research` identifies this authenticated channel,
+not a model/device or proof of local inference. Existing explicit host owner
+policies remain supported when deliberately configured; no policy schema,
+expiry, revocation or unrelated optional-feature gate is weakened.
+
+Rejected approaches: asking the development agent to install per-operation
+grants; adding a second permanent consent file after OAuth approval; removing
+owner checks globally. Those either retain the broken client workflow or
+expand unrelated permissions. The acceptance test remains one greeting comment
+and a reread, not a one-use account authorization.
+
 The account database and Auth0 subject mapping live in separate owner-private
 Windows-host files outside the Vault and source checkout. Existing account IDs,
 password verifiers, note paths and journal ownership are preserved. Do not
 infer an account from names or create a replacement database. The operator
-selects the research account and the Auth0 subject after tenant setup. The
+approved one new `research-agent` in the preserved database and selects the
+Auth0 subject after tenant setup. The
 server fails closed if either mapping or account store is unavailable. Protect
 rollback copies; never print verifier or token values.
 

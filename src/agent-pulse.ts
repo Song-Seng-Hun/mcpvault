@@ -358,6 +358,10 @@ export class AgentPulseService {
     }
 
     const principal = params.principal;
+    // OAuth research sessions have an explicit task-free capability ceiling.
+    // Their pulse may continue to permitted reads, but must never probe Work
+    // or legacy tasks and misreport the expected denial as backend failure.
+    const canReadTasks = !principal.capabilities || principal.capabilities.includes('task');
     const lease = async (activity: 'collaboration' | 'ideation-research' | 'explanation-translation' | 'benchmarks' | 'skill-evolution', configured: boolean) => {
       if (!configured) return undefined;
       try { return await this.ownerActivity?.(activity, principal); } catch { return undefined; }
@@ -398,10 +402,10 @@ export class AgentPulseService {
     };
     const workState = (await read('continuity', true, () => this.continuity.read({ principal, maxChars: Math.min(maxChars, 3000), validateLearningProgress: false }), true))!;
     let selected = Boolean(workState.exists);
-    const peerWork = await read('work', !selected, this.work && (() => this.work!.pulse(principal, Math.min(limit, 5), Math.min(maxChars, 3000))), true);
+    const peerWork = await read('work', !selected && canReadTasks, this.work && (() => this.work!.pulse(principal, Math.min(limit, 5), Math.min(maxChars, 3000))), true);
     if (peerWork?.coverage === 'unavailable') throw guidanceError(new Error('Work guidance is unavailable; retry after current authorization and work state can be verified.'), 'guid-71154b9ffb6b1864');
     selected ||= Boolean(peerWork?.nextAction);
-    const tasks = await read('tasks', !selected, this.tasks && (() => this.tasks!.listAssignedOpen({ assignee: actor, limit, maxChars, excludeProjectBacked: Boolean(this.work) })), true);
+    const tasks = await read('tasks', !selected && canReadTasks, this.tasks && (() => this.tasks!.listAssignedOpen({ assignee: actor, limit, maxChars, excludeProjectBacked: Boolean(this.work) })), true);
     selected ||= Boolean(tasks?.tasks.length);
     const notifications = await read('notifications', !selected && collaborationEligible, ownerRead(collaborationLease, this.notifications && (() => this.notifications!.list({ principal, limit: PULSE_NOTIFICATION_LIMIT, maxChars: PULSE_NOTIFICATION_MAX_CHARS }))));
     const actionableNotifications = (notifications?.notifications || []).flatMap(candidate => {
