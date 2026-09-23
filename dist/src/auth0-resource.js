@@ -23,9 +23,27 @@ function httpsUrl(value, field, rootOnly) {
     }
     return value;
 }
+function parseLocalResource(value) {
+    if (!isRecord(value) || Object.keys(value).some(key => !['resource', 'clientId'].includes(key))
+        || typeof value.resource !== 'string' || typeof value.clientId !== 'string'
+        || !/^[A-Za-z0-9_-]{1,128}$/.test(value.clientId))
+        throw new Error('Invalid Auth0 local resource');
+    let url;
+    try {
+        url = new URL(value.resource);
+    }
+    catch {
+        throw new Error('Invalid Auth0 local resource');
+    }
+    if (url.protocol !== 'http:' || url.hostname !== '127.0.0.1' || url.port !== '8789'
+        || url.pathname !== '/antigravity/mcp' || url.username || url.password || url.search || url.hash
+        || url.href !== value.resource)
+        throw new Error('Invalid Auth0 local resource');
+    return { resource: value.resource, clientId: value.clientId };
+}
 export function parseAuth0ResourceConfig(value) {
     if (!isRecord(value) || Object.keys(value).some(key => ![
-        'version', 'issuer', 'resource', 'scope', 'subject', 'accountId', 'allowedAgentLabels',
+        'version', 'issuer', 'resource', 'scope', 'subject', 'accountId', 'allowedAgentLabels', 'localResource',
     ].includes(key)) || value.version !== 1)
         throw new Error('Invalid Auth0 resource configuration');
     const issuer = httpsUrl(value.issuer, 'issuer', true);
@@ -47,6 +65,7 @@ export function parseAuth0ResourceConfig(value) {
     return {
         version: 1, issuer, resource, scope: value.scope, subject: value.subject,
         accountId: value.accountId, allowedAgentLabels: [...value.allowedAgentLabels],
+        ...(value.localResource !== undefined && { localResource: parseLocalResource(value.localResource) }),
     };
 }
 export class Auth0Resource {
@@ -104,18 +123,23 @@ export class Auth0Resource {
             return undefined;
         return { accountId: context.accountId, executionTarget: 'auth0-research' };
     }
-    async verifyAccessToken(token) {
+    async verifyAccessToken(token, channel = 'primary') {
         if (!token || token.length > 16_384)
             throw new Error('Invalid Auth0 bearer token');
+        const local = channel === 'local' ? this.config.localResource : undefined;
+        if (channel === 'local' && !local)
+            throw new Error('Auth0 local resource unavailable');
+        const audience = local?.resource ?? this.config.resource;
         const { payload } = await jwtVerify(token, this.keys, {
             issuer: this.config.issuer,
-            audience: this.config.resource,
+            audience,
             algorithms: ['RS256'],
         });
-        const approvedAudience = payload.aud === this.config.resource || (Array.isArray(payload.aud) && payload.aud.length === 2
-            && payload.aud.includes(this.config.resource)
+        const approvedAudience = payload.aud === audience || (Array.isArray(payload.aud) && payload.aud.length === 2
+            && payload.aud.includes(audience)
             && payload.aud.includes(`${this.config.issuer}userinfo`));
         if (!Number.isSafeInteger(payload.exp) || Math.abs(payload.exp * 1000) > 8640000000000000 || !approvedAudience
+            || (local && payload.azp !== local.clientId)
             || payload.sub !== this.config.subject
             || typeof payload.scope !== 'string'
             || !payload.scope.split(/\s+/).includes(this.config.scope)) {
@@ -125,9 +149,12 @@ export class Auth0Resource {
         this.authorizations.set(authorization, payload.exp * 1000);
         return authorization;
     }
-    metadata() {
+    metadata(channel = 'primary') {
+        const local = channel === 'local' ? this.config.localResource : undefined;
+        if (channel === 'local' && !local)
+            throw new Error('Auth0 local resource unavailable');
         return {
-            resource: this.config.resource,
+            resource: local?.resource ?? this.config.resource,
             authorization_servers: [this.config.issuer],
             scopes_supported: [this.config.scope],
             bearer_methods_supported: ['header'],

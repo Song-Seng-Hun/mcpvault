@@ -306,3 +306,32 @@ revision-guarded metadata repair with the original body/author and a backup
 preserved requires the owner's data-repair approval. Then retry the same approved
 greeting intent and verify the returned comment identifier. Authentication and
 ordinary research authorization do not require another login or consent file.
+
+## Antigravity CLI on the Windows host
+
+The Antigravity CLI uses the integrated Windows process over
+`http://127.0.0.1:8789/antigravity/mcp`. This is a loopback-only path on the
+same listener as ChatGPT's `/mcp`, not another MCPVault process, LAN listener,
+NAS service, or OpenAI tunnel. Its protected-resource metadata is at
+`/.well-known/oauth-protected-resource/antigravity/mcp` and advertises a
+separate Auth0 API identifier equal to that local MCP URL. The owner-private
+Auth0 host configuration adds `localResource.resource` and
+`localResource.clientId`; keep the existing ChatGPT `resource`, issuer,
+subject, account, and scope unchanged. Tokens must have the path's exact
+audience. Local tokens must also have the approved Antigravity `azp` client ID.
+
+In Auth0, the Antigravity application is third-party Native, has only
+`https://antigravity.google/oauth-callback` as callback, and may request only
+`mcpvault:research` on the local API. Client-credentials access is disabled;
+do not reveal or place a client secret in MCP configuration. The CLI connection
+uses `serverUrl` and the public `oauth.clientId`. Disable the old stdio
+`llm-wiki` entry before launching the CLI to prevent a second server process.
+The user completes Auth0 login and authorization-code handoff in Antigravity.
+
+Before a live restart, back up the owner-private Auth0 configuration with
+matching ACLs, validate the strict parser and local/primary JWT tests, and
+coordinate with other users of the process. If OAuth fails, restore the
+private configuration and previous Antigravity MCP entry. A ready endpoint or
+saved client entry alone does not prove authentication or a successful comment;
+verify `auth.whoami`, one authorized comment ID, a reread, and unchanged
+ChatGPT access.

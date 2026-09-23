@@ -185,6 +185,8 @@ export async function startMcpHttpApi(server, options = {}) {
     const allowProcedureDiscovery = options.allowProcedureDiscovery === true;
     const path = options.path || '/mcp';
     const protectedResourceMetadataPath = `/.well-known/oauth-protected-resource${path === '/' ? '' : path}`;
+    const localPath = options.auth0?.config.localResource ? '/antigravity/mcp' : undefined;
+    const localMetadataPath = localPath && `/.well-known/oauth-protected-resource${localPath}`;
     const maxBodyBytes = Math.min(Math.max(Math.trunc(options.maxBodyBytes ?? 1_048_576), 1_024), MAX_HTTP_BODY_BYTES);
     const allowedOrigins = options.allowedOrigins || [];
     const allowedHosts = options.allowedHosts || (host === '127.0.0.1' ? ['127.0.0.1', 'localhost'] : [host]);
@@ -206,8 +208,11 @@ export async function startMcpHttpApi(server, options = {}) {
                 return;
             }
             addCorsHeaders(response, request, allowedOrigins);
+            const metadataChannel = requestUrl.pathname === localMetadataPath
+                ? 'local' : requestUrl.pathname === '/.well-known/oauth-protected-resource'
+                || requestUrl.pathname === protectedResourceMetadataPath ? 'primary' : undefined;
             if (options.auth0 && (requestUrl.pathname === '/.well-known/oauth-protected-resource'
-                || requestUrl.pathname === protectedResourceMetadataPath)) {
+                || requestUrl.pathname === protectedResourceMetadataPath || requestUrl.pathname === localMetadataPath)) {
                 if (!originAllowed(request, allowedOrigins) || !allowedHosts.includes(requestHost(request) || '')) {
                     response.statusCode = 403;
                     response.end('Forbidden');
@@ -221,10 +226,12 @@ export async function startMcpHttpApi(server, options = {}) {
                 response.statusCode = 200;
                 response.setHeader('content-type', 'application/json; charset=utf-8');
                 response.setHeader('cache-control', 'public, max-age=300');
-                response.end(JSON.stringify(options.auth0.metadata()));
+                response.end(JSON.stringify(options.auth0.metadata(metadataChannel)));
                 return;
             }
-            if (requestUrl.pathname !== path) {
+            const resourceChannel = requestUrl.pathname === path
+                ? 'primary' : requestUrl.pathname === localPath ? 'local' : undefined;
+            if (!resourceChannel) {
                 response.statusCode = 404;
                 response.end('Not found');
                 return;
@@ -269,16 +276,19 @@ export async function startMcpHttpApi(server, options = {}) {
                 ? bearerHeader.replace(/^Bearer\s+/i, '').trim()
                 : undefined;
             if (options.auth0) {
-                const resourceUrl = new URL(options.auth0.config.resource);
+                const resourceUrl = new URL(resourceChannel === 'local'
+                    ? options.auth0.config.localResource.resource : options.auth0.config.resource);
                 const metadataUrl = new URL(`/.well-known/oauth-protected-resource${resourceUrl.pathname === '/' ? '' : resourceUrl.pathname}`, resourceUrl).href;
                 // tunnel-client probes with an empty JSON POST. Its own discovery must
                 // fetch the local metadata, not the connector-only public gateway URL.
                 const localDiscoveryProbe = request.method === 'POST' && !rawBody
                     && request.headers.accept === 'application/json'
                     && request.headers['user-agent']?.startsWith('oai-tunnel-client/');
-                const challengeMetadataUrl = localDiscoveryProbe
-                    ? new URL(protectedResourceMetadataPath, `${options.tls ? 'https' : 'http'}://${request.headers.host}`).href
-                    : metadataUrl;
+                const challengeMetadataUrl = resourceChannel === 'local'
+                    ? new URL(localMetadataPath, `${options.tls ? 'https' : 'http'}://${request.headers.host}`).href
+                    : localDiscoveryProbe
+                        ? new URL(protectedResourceMetadataPath, `${options.tls ? 'https' : 'http'}://${request.headers.host}`).href
+                        : metadataUrl;
                 const challenge = () => {
                     response.statusCode = 401;
                     response.setHeader('www-authenticate', `Bearer resource_metadata="${challengeMetadataUrl}", scope="${options.auth0.config.scope}"`);
@@ -290,7 +300,7 @@ export async function startMcpHttpApi(server, options = {}) {
                     return;
                 }
                 try {
-                    researchAuthorization = await options.auth0.verifyAccessToken(bearer);
+                    researchAuthorization = await options.auth0.verifyAccessToken(bearer, resourceChannel);
                 }
                 catch {
                     challenge();

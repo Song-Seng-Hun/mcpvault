@@ -5,6 +5,7 @@ interface ResearchAuthorization {
     readonly accountId: string;
     readonly subject: string;
 }
+export type Auth0ResourceChannel = 'primary' | 'local';
 export interface Auth0ResourceConfig {
     version: 1;
     issuer: string;
@@ -13,6 +14,10 @@ export interface Auth0ResourceConfig {
     subject: string;
     accountId: string;
     allowedAgentLabels: string[];
+    localResource?: {
+        resource: string;
+        clientId: string;
+    };
 }
 export declare function parseAuth0ResourceConfig(value: unknown): Auth0ResourceConfig;
 export declare class Auth0Resource {
@@ -32,8 +37,8 @@ export declare class Auth0Resource {
     /** Labels, legacy tokens and localhost alone never enter the verified
      * request context. Independent capability and document checks still apply. */
     ownerExecution(principal?: ScopePrincipal): OwnerActivityExecution | undefined;
-    verifyAccessToken(token: string): Promise<ResearchAuthorization>;
-    metadata(): {
+    verifyAccessToken(token: string, channel?: Auth0ResourceChannel): Promise<ResearchAuthorization>;
+    metadata(channel?: Auth0ResourceChannel): {
         resource: string;
         authorization_servers: string[];
         scopes_supported: string[];

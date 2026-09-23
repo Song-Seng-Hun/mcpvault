@@ -79,6 +79,40 @@ test('rejects unsupported signing algorithms and malformed configuration', async
   }
 });
 
+test('accepts only the fixed loopback Antigravity resource configuration', () => {
+  const localResource = {
+    resource: 'http://127.0.0.1:8789/antigravity/mcp',
+    clientId: 'antigravity-public-client-id',
+  };
+  expect(parseAuth0ResourceConfig({ ...config, localResource }).localResource).toEqual(localResource);
+  for (const change of [
+    { resource: 'http://localhost:8789/antigravity/mcp' },
+    { resource: 'http://127.0.0.1:8789/mcp' },
+    { resource: 'http://127.0.0.1:8789/antigravity/mcp?token=unsafe' },
+    { clientId: '' },
+  ]) {
+    expect(() => parseAuth0ResourceConfig({ ...config, localResource: { ...localResource, ...change } })).toThrow();
+  }
+});
+
+test('local audience is accepted only with its approved OAuth client ID', async () => {
+  const localResource = { resource: 'http://127.0.0.1:8789/antigravity/mcp', clientId: 'antigravity-public-client-id' };
+  const pair = await generateKeyPair('RS256');
+  const jwk = await exportJWK(pair.publicKey);
+  const resource = new Auth0Resource(parseAuth0ResourceConfig({ ...config, localResource }),
+    createLocalJWKSet({ keys: [{ ...jwk, kid: 'local-key', alg: 'RS256', use: 'sig' }] }));
+  const sign = (claims: Record<string, unknown>) => new SignJWT({
+    iss: config.issuer, sub: config.subject, scope: config.scope,
+    exp: Math.floor(Date.now() / 1000) + 300, ...claims,
+  }).setProtectedHeader({ alg: 'RS256', kid: 'local-key' }).sign(pair.privateKey);
+  const local = await sign({ aud: localResource.resource, azp: localResource.clientId });
+  expect(await resource.verifyAccessToken(local, 'local')).toEqual({ accountId: config.accountId, subject: config.subject });
+  await expect(resource.verifyAccessToken(local)).rejects.toThrow();
+  await expect(resource.verifyAccessToken(await sign({ aud: config.resource }), 'local')).rejects.toThrow();
+  await expect(resource.verifyAccessToken(await sign({ aud: localResource.resource, azp: 'other-client' }), 'local')).rejects.toThrow();
+  expect(resource.metadata('local').resource).toBe(localResource.resource);
+});
+
 test('owner execution belongs only to the active matching research request, not labels or another session', async () => {
   const { resource, sign } = await fixture();
   const authorize = async () => resource.verifyAccessToken(await sign());

@@ -20,7 +20,7 @@ afterEach(async () => {
   }
 });
 
-async function fixture(consent: 'oauth' | 'explicit' | 'none' = 'oauth') {
+async function fixture(consent: 'oauth' | 'explicit' | 'none' = 'oauth', withLocal = false) {
   const vault = await mkdtemp(join(tmpdir(), 'mcpvault-auth0-http-'));
   await mkdir(join(vault, '_scopes', 'users', 'research-agent'), { recursive: true });
   await writeFile(join(vault, '_scopes', 'users', 'research-agent', 'Secret.md'), 'USER_SCOPE_SECRET_FOR_TEST');
@@ -34,7 +34,10 @@ async function fixture(consent: 'oauth' | 'explicit' | 'none' = 'oauth') {
   const config = parseAuth0ResourceConfig({
     version: 1, issuer: 'https://research.us.auth0.com/', resource: 'https://research.example.com/mcp',
     scope: 'mcpvault:research', subject: 'auth0|researcher', accountId: 'research-agent',
-    allowedAgentLabels: ['codex-mac'],
+    allowedAgentLabels: ['codex-mac', 'antigravity-claude-sonnet'],
+    ...(withLocal && { localResource: {
+      resource: 'http://127.0.0.1:8789/antigravity/mcp', clientId: 'antigravity-public-client-id',
+    } }),
   });
   const auth0 = new Auth0Resource(config, createLocalJWKSet({ keys: [{ ...jwk, kid: 'test-key', alg: 'RS256', use: 'sig' }] }));
   const policyConfig = { version: 1, owners: { 'research-agent': 'research-owner' }, grants: [{
@@ -94,6 +97,32 @@ test('gives a loopback metadata URL to an empty POST discovery probe', async () 
   const metadata = await fetch(localMetadataUrl);
   expect(metadata.status).toBe(200);
   expect(await metadata.json()).toEqual(auth0.metadata());
+});
+
+test('local Antigravity path discovers its own resource and rejects cross-audience tokens', async () => {
+  const { base, api, auth0, token, item } = await fixture('oauth', true);
+  const localPath = '/antigravity/mcp';
+  const metadataUrl = `${base}/.well-known/oauth-protected-resource${localPath}`;
+  const metadata = await fetch(metadataUrl);
+  expect(metadata.status).toBe(200);
+  expect(await metadata.json()).toEqual(auth0.metadata('local'));
+  const anonymous = await fetch(`${base}${localPath}`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
+  });
+  expect(anonymous.status).toBe(401);
+  expect(anonymous.headers.get('www-authenticate')).toContain(`resource_metadata="${metadataUrl}"`);
+  const localToken = await token({ aud: auth0.config.localResource!.resource, azp: auth0.config.localResource!.clientId });
+  const client = new Client({ name: 'antigravity-local-test', version: '1.0.0' }, { versionNegotiation: { mode: 'auto' } });
+  item.client = client;
+  await client.connect(new StreamableHTTPClientTransport(new URL(`${base}${localPath}`), { authProvider: { token: async () => localToken } }));
+  const identity = await client.callTool({ name: 'call_endpoint', arguments: { endpointId: 'auth.whoami', agentLabel: 'antigravity-claude-sonnet' } });
+  expect(identity.isError).toBeFalsy();
+  expect(JSON.stringify(identity)).toContain('research-agent');
+  const body = JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list' });
+  const headers = { 'content-type': 'application/json' };
+  expect((await fetch(`${base}${api.path}`, { method: 'POST', headers: { ...headers, authorization: `Bearer ${localToken}` }, body })).status).toBe(401);
+  expect((await fetch(`${base}${localPath}`, { method: 'POST', headers: { ...headers, authorization: `Bearer ${await token()}` }, body })).status).toBe(401);
 });
 
 test('does not expose the unauthenticated evolution review route on the OAuth listener', async () => {
