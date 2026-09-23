@@ -12,8 +12,9 @@ source_revision: "6bf6656271dda225841d3018dfe9e959a2ee27d6"
 ---
 # Control plane
 
-Only five MCP tools exist: `orient_wiki`, `get_agent_pulse`,
-`list_active_capabilities`, `search_capabilities`, and `call_endpoint`.
+The five control tools are `orient_wiki`, `get_agent_pulse`, `list_active_capabilities`, `search_capabilities`, and `call_endpoint`.
+Direct recording tools include `create_journal_entry` for private logs and `create_note` for authorized shared research or Wiki knowledge.
+Use direct recording tools for recording; keep `call_endpoint` for other advanced actions.
 
 Call `orient_wiki` once. Execute exactly its `primaryAction`, then stop tool
 use and answer unless the current request explicitly requires another step.

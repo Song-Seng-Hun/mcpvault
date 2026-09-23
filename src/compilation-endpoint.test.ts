@@ -36,7 +36,7 @@ test('compilation submission schema exposes pinned preservation reports without 
 test('compilation is dynamic with public diagnosis, authenticated reads and read-only mutation rejection', async () => {
   vault = await mkdtemp(join(tmpdir(), 'compilation-endpoint-'));
   ({ server, client } = await connectMcpClient(vault, { readOnly: true }, 'compilation-test'));
-  expect((await client.listTools()).tools).toHaveLength(5);
+  expect((await client.listTools()).tools).toHaveLength(16);
   const catalog = parse(await client.callTool({ name: 'search_capabilities', arguments: { query: 'wiki.compilation', maxChars: 12000, limit: 1 } }));
   const endpoint = catalog.endpoints.find((e: any) => e.endpointId === 'wiki.compilation');
   expect(endpoint).toBeDefined(); expect(endpoint.mutating).toBe(true);

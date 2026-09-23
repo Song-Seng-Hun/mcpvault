@@ -190,6 +190,32 @@ test('accepts a valid JWT, denies forged authority and never returns either toke
   expect(await malformed.text()).not.toContain('SECRET_MARKER_FOR_TEST');
 });
 
+test('OAuth bearer reaches direct recording tools without exposing credentials or User storage', async () => {
+  const { base, api, token, item } = await fixture();
+  const jwt = await token();
+  const client = new Client({ name: 'auth0-record-test', version: '1.0.0' }, { versionNegotiation: { mode: 'auto' } });
+  item.client = client;
+  await client.connect(new StreamableHTTPClientTransport(new URL(`${base}${api.path}`), { authProvider: { token: async () => jwt } }));
+  const listed = await client.listTools();
+  expect(listed.tools.map(tool => tool.name)).toContain('create_note');
+  const created = await client.callTool({ name: 'create_note', arguments: {
+    path: 'Research/OAuth.md', content: '# Authenticated research', frontmatter: { note_kind: 'experiment' }, agentLabel: 'codex-mac',
+  } });
+  expect(created.isError).toBeFalsy();
+  expect(JSON.stringify(created)).not.toContain(jwt);
+  expect(JSON.stringify(created)).not.toContain('accessToken');
+  const read = await client.callTool({ name: 'read_note', arguments: { path: 'Research/OAuth.md' } });
+  expect(read.isError).toBeFalsy();
+  expect(JSON.stringify(read)).toContain('Authenticated research');
+  const denied = await client.callTool({ name: 'create_note', arguments: {
+    path: 'scope://user/research-agent/Denied.md', content: 'Do not write User storage',
+  } });
+  expect(denied.isError).toBe(true);
+  const audit = await readFile(join(item.vault, '.mcpvault', 'audit.ndjson'), 'utf8');
+  expect(audit).toContain('"reportedAgentLabel":"codex-mac"');
+  expect(audit).not.toContain(jwt);
+});
+
 test('an explicit additional owner policy still restricts paths and supports revocation', async () => {
   const { base, api, token, runtime, item, revokeConsent } = await fixture('explicit');
   const client = new Client({ name: 'auth0-comment-test', version: '1.0.0' }, { versionNegotiation: { mode: 'auto' } });

@@ -80,7 +80,7 @@ test.each(['source_only', 'synthesis_allowed', 'publication'])('MCP bundle%s pre
       const candidate = await call(candidateRead); expect(candidate.isError, JSON.stringify(candidate.content)).toBeFalsy();
       expect(parse(candidate).part.text).toContain('Only approved edits. 승인 required. 😀');
     }
-    expect((await client!.listTools()).tools).toHaveLength(5);
+    expect((await client!.listTools()).tools).toHaveLength(16);
     for (const op of ['prepare', 'submit', 'check', 'retry', 'split_apply', 'split_revert']) expect((await call({ op, requestId: 'denied' })).isError).toBe(true);
     const anonymous = await call(readArgs, '');
     expect(anonymous.isError).toBe(true); expect(JSON.stringify(anonymous)).not.toContain('승인 required');

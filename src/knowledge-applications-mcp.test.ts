@@ -36,7 +36,7 @@ async function fixture() {
 test('five tools, authenticated capture, anonymous bounded applications and revision-safe edits', async () => {
   const record = await fixture(); const c = await connect();
   try {
-    expect((await c.client.listTools()).tools).toHaveLength(5);
+    expect((await c.client.listTools()).tools).toHaveLength(16);
     const auth = await c.call('auth.register', { accountId: 'application-worker', agentId: 'application-worker', userId: 'fixture', modelId: 'codex', password: randomUUID() });
     expect(auth.error, auth.text).toBeFalsy(); const token = auth.value.accessToken;
     expect((await c.call('wiki.capture', { content: 'No auth', knowledgeApplications: [record] })).error).toBe(true);

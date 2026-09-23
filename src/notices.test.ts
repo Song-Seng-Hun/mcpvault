@@ -36,7 +36,7 @@ async function fixture(readOnly = false) {
 
 test('registered notices route onboarding and reject generic body/property/delete/ancestor mutations', async () => {
   const { call, tokens, vault, client } = await fixture();
-  expect((await client.listTools()).tools).toHaveLength(5);
+  expect((await client.listTools()).tools).toHaveLength(16);
   const read = await call('notice.read', { id: 'welcome' });
   expect(read.error).toBe(false);
   expect(read.value.content).toContain('Original conditions');

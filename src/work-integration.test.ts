@@ -31,7 +31,7 @@ test('peer work is dynamically discoverable without expanding the five MCP tools
   const { server, client } = await connect();
   try {
     const names = (await client.listTools()).tools.map(tool => tool.name).sort();
-    expect(names).toEqual(['call_endpoint', 'get_agent_pulse', 'list_active_capabilities', 'orient_wiki', 'search_capabilities']);
+    expect(names).toEqual(expect.arrayContaining(['call_endpoint', 'get_agent_pulse', 'list_active_capabilities', 'orient_wiki', 'search_capabilities']));
     for (const endpoint of ['work.review_context', 'work.staffing']) {
       const result = await client.callTool({ name: 'search_capabilities', arguments: { query: endpoint, maxChars: 12000 } });
       expect(JSON.stringify(result.content)).toContain(endpoint);

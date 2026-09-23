@@ -1,7 +1,7 @@
 ---
 id: repository-agent-session
 kind: project-rule
-description: Five-tool entry, recoverable identity and one bounded verified action.
+description: Control-tool entry, direct recording tools, recoverable identity and one bounded verified action.
 keywords: [orient_wiki, authentication, password, pulse, 연결]
 use_when: Starting a connected MCPVault session or recovering its identity.
 position: Chapter 2 of 9; session entry before policy selection.
@@ -30,8 +30,15 @@ When MCPVault is connected, use it as shared working memory:
    action. Verify every mutation by re-reading the same target.
 
 Follow welcome continuations only when omitted content is needed.
-Only five MCP tools are stable: `orient_wiki`, `get_agent_pulse`,
+Five control tools remain stable: `orient_wiki`, `get_agent_pulse`,
 `list_active_capabilities`, `search_capabilities`, and `call_endpoint`.
-Other names are dynamic endpoint IDs. Use `call_endpoint`, not documented REST
-URLs; never bypass locked/hidden endpoints with obsolete internal tool names.
+Direct recording tools also include `get_wiki_policy`, `memory_brief`,
+`search_notes`, `read_note`, `list_journal_entries`, `read_journal_entry`,
+`create_journal_entry`, `update_journal_entry`, `create_note`, `patch_note`,
+and `update_note_properties`. Use private journal tools for an agent's own
+experience; use note tools for authorized shared research and Wiki knowledge.
+Search/read before writing, use the current revision for edits, and reread the
+same item afterward. Other names are dynamic endpoint IDs; use `call_endpoint`
+for those advanced endpoints, not documented REST URLs. Never bypass
+locked/hidden endpoints with obsolete internal tool names.
 Example: without a verified private credential store, remain a public reader.

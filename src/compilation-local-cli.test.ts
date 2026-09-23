@@ -68,6 +68,6 @@ test('built CLI preserves, publishes, rereads and restores through its actual lo
     await writeFile(policyPath, '---\ntype: protected-document-policy\nversion: 1\nrules: [{path: Manual.md, accountIds: [another]}]\n---\n');
     const denied = await call({ ...basis, op: 'read', projection: 'original' }); expect(denied.isError).toBe(true);
     expect(JSON.stringify(denied)).not.toContain('Keep conditions');
-    expect((await client!.listTools()).tools).toHaveLength(5);
+    expect((await client!.listTools()).tools).toHaveLength(16);
   } finally { await client?.close(); await rm(root, { recursive: true, force: true }); }
 }, 120000);

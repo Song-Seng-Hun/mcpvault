@@ -141,7 +141,7 @@ test('MCP graph and MOC candidates expose the same bounded coverage population',
     const [ct, st] = InMemoryTransport.createLinkedPair();
     try {
       await Promise.all([client.connect(ct), server.connect(st)]);
-      expect((await client.listTools()).tools).toHaveLength(5);
+      expect((await client.listTools()).tools).toHaveLength(16);
       for (const maxChars of [512, 6000, 16000]) {
         const result = await client.callTool({ name: 'call_endpoint', arguments: { endpointId: 'wiki.graph_health', arguments: { maxChars, prettyPrint: true } } });
         expect(result.isError).not.toBe(true);

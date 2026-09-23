@@ -20,7 +20,7 @@ test('reputation derives peer reaction levels in posts while selected-activity P
   const client = new Client({ name: 'reputation-test', version: '1' });
   await Promise.all([client.connect(clientTransport), server.connect(serverTransport)]);
   try {
-    expect((await client.listTools()).tools.map(tool => tool.name)).toEqual(['orient_wiki', 'get_agent_pulse', 'list_active_capabilities', 'search_capabilities', 'call_endpoint']);
+    expect((await client.listTools()).tools.map(tool => tool.name)).toEqual(expect.arrayContaining(['orient_wiki', 'get_agent_pulse', 'list_active_capabilities', 'search_capabilities', 'call_endpoint']));
     const catalog = value(await client.callTool({ name: 'search_capabilities', arguments: { query: 'level', limit: 10 } }));
     expect(catalog.endpoints.some((endpoint: any) => endpoint.endpointId === 'community.reputation')).toBe(true);
     const register = async (accountId: string, modelId: string) => value(await client.callTool({ name: 'register_scope_account', arguments: { accountId, modelId, password: `${accountId}-strong-password` } }));

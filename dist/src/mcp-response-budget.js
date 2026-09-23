@@ -16,8 +16,8 @@ export function readResponseView(response, path, cursor, basis, budget) {
     return { content: [{ type: 'text', text: JSON.stringify(value) }] };
 }
 /** MCP discovery keeps complete schemas; oversized translations use code-owned prose. */
-export function boundedToolCatalog(original, localized, cursor) {
-    const fits = (value) => Buffer.byteLength(JSON.stringify(value)) <= 5000;
+export function boundedToolCatalog(original, localized, cursor, maxBytes = 5000) {
+    const fits = (value) => Buffer.byteLength(JSON.stringify(value)) <= maxBytes;
     const tools = original.map((tool, index) => fits({ tools: [localized[index] ?? tool] }) ? localized[index] ?? tool : tool);
     if (cursor === undefined && fits({ tools }))
         return { tools };
@@ -47,7 +47,7 @@ export function boundedToolCatalog(original, localized, cursor) {
     while (count + 1 < remaining && fits(page(count + 1)))
         count++;
     if (!count)
-        throw guidanceError(Error('Fixed MCP tool schema cannot fit 5000 bytes; reduce the code-owned schema.'), 'guid-5bd06777d5cc8a8a');
+        throw guidanceError(Error(`Fixed MCP tool schema cannot fit ${maxBytes} bytes; reduce the code-owned schema.`), 'guid-5bd06777d5cc8a8a');
     return page(count);
 }
 export function enforceResponseBudget(response, requestedMaxChars, pulseRequest) {

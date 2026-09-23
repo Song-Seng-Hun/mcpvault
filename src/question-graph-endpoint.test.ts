@@ -18,9 +18,9 @@ beforeEach(async () => {
 });
 afterEach(async () => { try { await client?.close(); } finally { try { await server?.close(); } finally { await rm(vault, { recursive: true, force: true }); } } });
 const parse = (r: any) => JSON.parse(r.content.filter((c: any) => c.type === 'text').map((c: any) => c.text).join(''));
-test('graph is an optional read-only dynamic endpoint argument, not a sixth tool', async () => {
+test('graph remains an optional read-only dynamic endpoint argument', async () => {
   const tools = await client.listTools();
-  expect(tools.tools).toHaveLength(5);
+  expect(tools.tools).toHaveLength(16);
   const catalog = parse(await client.callTool({ name: 'search_capabilities', arguments: { query: 'wiki.answer_packet', limit: 3, maxChars: 10000 } }));
   const descriptor = catalog.endpoints.find((e: any) => e.endpointId === 'wiki.answer_packet');
   expect(descriptor.input.properties.graphDepth.enum).toEqual([1, 2]);

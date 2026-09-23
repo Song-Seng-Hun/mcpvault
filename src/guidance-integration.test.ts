@@ -36,7 +36,7 @@ async function fixture() {
 
 test('MCP descriptions reflect Vault edits but ordinary document content is not translated', async () => {
   const { client, call, vault, definition, path } = await fixture();
-  expect((await client.listTools()).tools).toHaveLength(5);
+  expect((await client.listTools()).tools).toHaveLength(16);
   const search = () => client.callTool({ name: 'search_capabilities', arguments: { query: 'notes.read', limit: 1, maxChars: 12000 } });
   expect(JSON.stringify(await search())).toContain('볼트 기준 문서 경로');
   expect((await call('notes.read', { path: 'Ordinary.md' })).value.content).toBe(definition.template);

@@ -48,7 +48,7 @@ test.each(['overwrite', 'append', 'prepend'] as const)('notes.write %s returns a
   expect(result).toMatchObject({ success: true, path, mode, revision: await fs.readNoteRevision(path) });
   expect(result).not.toHaveProperty('content');
   expect(result).not.toHaveProperty('originalContent');
-  expect((await client.listTools()).tools).toHaveLength(5);
+  expect((await client.listTools()).tools).toHaveLength(16);
 });
 
 test.each([true, false])('Properties merge=%s returns a revision without echoing Properties or body', async merge => {

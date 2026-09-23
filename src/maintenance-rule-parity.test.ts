@@ -139,7 +139,7 @@ test('MCP repair inspection reads the chosen question rather than a project list
     const [ct, st] = InMemoryTransport.createLinkedPair();
     try {
       await Promise.all([client.connect(ct), server.connect(st)]);
-      expect((await client.listTools()).tools).toHaveLength(5);
+      expect((await client.listTools()).tools).toHaveLength(16);
       const discovered = await client.callTool({ name: 'search_capabilities', arguments: { query: 'triage_wiki_note', limit: 1, maxChars: 20000 } });
       expect(discovered.isError).not.toBe(true);
       const endpoint = JSON.parse((discovered.content as any)[0].text).endpoints[0];

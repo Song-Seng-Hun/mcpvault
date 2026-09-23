@@ -125,7 +125,7 @@ async function measure(mode) {
       clients.push(client);
       await client.connect(transport, { timeout: 10000 });
       const tools = (await client.listTools()).tools.map(tool => tool.name).sort();
-      if (tools.join(',') !== 'call_endpoint,get_agent_pulse,list_active_capabilities,orient_wiki,search_capabilities') throw new Error('Fixed tool mismatch');
+      if (tools.join(',') !== 'call_endpoint,create_journal_entry,create_note,get_agent_pulse,get_wiki_policy,list_active_capabilities,list_journal_entries,memory_brief,orient_wiki,patch_note,read_journal_entry,read_note,search_capabilities,search_notes,update_journal_entry,update_note_properties') throw new Error('Fixed tool mismatch');
     }
     const startupMs = round(performance.now() - started);
     await snapshot(); // Establish identities before warm-up; outside startup/workload timings.

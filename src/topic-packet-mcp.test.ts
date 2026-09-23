@@ -21,7 +21,7 @@ test('topic endpoint is discoverable, bounded and read-only within five MCP tool
   const client = new Client({ name: 'topic-test', version: '1' });
   try {
     const [a, b] = InMemoryTransport.createLinkedPair(); await Promise.all([client.connect(a), server.connect(b)]);
-    expect((await client.listTools()).tools).toHaveLength(5);
+    expect((await client.listTools()).tools).toHaveLength(16);
     for (const maxChars of [768, 7000]) {
       const result = await client.callTool({ name: 'call_endpoint', arguments: { endpointId: 'wiki.topic_packet', arguments: { mocPath: 'Map.md', maxChars, prettyPrint: true } } });
       expect(result.isError, JSON.stringify(result.content)).toBeFalsy();

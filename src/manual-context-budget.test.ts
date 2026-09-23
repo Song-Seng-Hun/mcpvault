@@ -10,10 +10,20 @@ const group = (path: string) => path === 'AGENTS.md' || path.startsWith('docs/ag
 const normalize = (text: string) => text.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1').replaceAll('`', '').replace(/\s+/g, ' ').trim();
 // User-approved 2026-09-21 workflow amendment. The immutable source bytes/hash
 // stay unchanged; only this exact superseded requirement has a new expectation.
-const currentProse = (path: string, text: string) => path !== 'AGENTS.md' ? text : text.replace(
-  '5. Run targeted tests, `npm run build`, the full `npm test`, and\n   `git diff --check`.',
-  '5. Use [risk-scoped validation](validation.md): targets during work, full regression at integration.\n   Run `npm run build` for code changes and `git diff --check` before staging.',
-);
+const currentProse = (path: string, text: string) => {
+  if (path === 'AGENTS.md') return text.replace(
+    '5. Run targeted tests, `npm run build`, the full `npm test`, and\n   `git diff --check`.',
+    '5. Use [risk-scoped validation](validation.md): targets during work, full regression at integration.\n   Run `npm run build` for code changes and `git diff --check` before staging.',
+  ).replace(
+    'Only five MCP tools are stable: `orient_wiki`, `get_agent_pulse`,\n`list_active_capabilities`, `search_capabilities`, and `call_endpoint`.\nOther names are dynamic endpoint IDs. Use `call_endpoint`, not documented REST\nURLs; never bypass locked/hidden endpoints with obsolete internal tool names.',
+    'Five control tools remain stable: `orient_wiki`, `get_agent_pulse`,\n`list_active_capabilities`, `search_capabilities`, and `call_endpoint`.\nDirect recording tools also include `get_wiki_policy`, `memory_brief`,\n`search_notes`, `read_note`, `list_journal_entries`, `read_journal_entry`,\n`create_journal_entry`, `update_journal_entry`, `create_note`, `patch_note`,\nand `update_note_properties`. Use private journal tools for an agent\'s own\nexperience; use note tools for authorized shared research and Wiki knowledge.\nSearch/read before writing, use the current revision for edits, and reread the\nsame item afterward. Other names are dynamic endpoint IDs; use `call_endpoint`\nfor those advanced endpoints, not documented REST URLs. Never bypass\nlocked/hidden endpoints with obsolete internal tool names.',
+  );
+  if (path === 'plugins/mcpvault-local/skills/mcpvault-agent/SKILL.md') return text.replace(
+    'Only five MCP tools exist: `orient_wiki`, `get_agent_pulse`,\n`list_active_capabilities`, `search_capabilities`, and `call_endpoint`.',
+    'The five control tools are `orient_wiki`, `get_agent_pulse`, `list_active_capabilities`, `search_capabilities`, and `call_endpoint`.\nDirect recording tools include `create_journal_entry` for private logs and `create_note` for authorized shared research or Wiki knowledge.',
+  );
+  return text;
+};
 
 // Admission test precedes chapter promotion. Count blank lines and metadata, too.
 test.each(['AGENTS.md', 'README.md', 'plugins/mcpvault-local/skills/mcpvault-agent/SKILL.md'])(

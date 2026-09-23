@@ -69,7 +69,7 @@ test.each([false,true])('quarantined MCP reads keep originals and mutations unav
   expect(small.isError).toBeFalsy();expect((small.content[0] as {text:string}).text.length).toBeLessThanOrEqual(512);
   expect(JSON.parse((small.content[0] as {text:string}).text).cards).toEqual([]);
   expect((await call('wiki.search',{query:'Review',resultKind:'procedures'})).isError).toBe(true);
-  expect((await client.listTools()).tools).toHaveLength(5);
+  expect((await client.listTools()).tools).toHaveLength(16);
   const raw=await call('notes.read',{path:'Community/Skills/test-skill/SKILL.md',accessToken});expect(raw.isError).toBe(true);expect(JSON.stringify(raw)).not.toContain('Unreviewed original marker');
   const anonymous=await call('skill.resolve',{skillId:'test-skill'});expect(anonymous.isError).toBe(true);
   race=true;bodyRead=false;postBodyRefreshes=0;

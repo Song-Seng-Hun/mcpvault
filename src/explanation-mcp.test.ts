@@ -33,7 +33,7 @@ afterEach(async () => {
 });
 test('five-tool plane exposes bounded explanation endpoints with unchanged originals', async () => {
   await setup();
-  expect((await client.listTools()).tools).toHaveLength(5);
+  expect((await client.listTools()).tools).toHaveLength(16);
   token = (await call('auth.register', { accountId: 'writer', agentId: 'writer', modelId: 'gemini', userId: 'owner', password: 'temporary-test-password-1' })).accessToken;
   const jobs = await call('explanations.list'); expect(jobs.items).toHaveLength(1);
   const j = jobs.items[0];

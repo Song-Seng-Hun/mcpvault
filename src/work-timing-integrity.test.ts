@@ -32,7 +32,7 @@ test('actual MCP preserves unknown waiting age, bounded responses and hidden-not
   const [ct, st] = InMemoryTransport.createLinkedPair();
   try {
     await Promise.all([client.connect(ct), server.connect(st)]);
-    expect((await client.listTools()).tools).toHaveLength(5);
+    expect((await client.listTools()).tools).toHaveLength(16);
     for (const endpointId of ['wiki.flow_health', 'wiki.review_dashboard']) {
       for (const maxChars of [512, 1024, 16000]) {
         const response = await client.callTool({ name: 'call_endpoint', arguments: { endpointId, arguments: { maxChars, prettyPrint: true } } });

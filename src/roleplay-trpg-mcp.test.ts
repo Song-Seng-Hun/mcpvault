@@ -24,7 +24,7 @@ test('dynamic TRPG routing preserves public reads, authenticated preview, read-o
     const result = await target.callTool({ name: 'call_endpoint', arguments: { endpointId, arguments: args } });
     if (result.isError) throw Error(JSON.stringify(result.content)); return JSON.parse((result.content[0] as any).text);
   };
-  expect((await client.listTools()).tools).toHaveLength(5);
+  expect((await client.listTools()).tools).toHaveLength(16);
   const tokens: Record<string, string> = {};
   for (const accountId of ['host', 'player']) tokens[accountId] = (await call('auth.register', { accountId, agentId: accountId, modelId: 'gpt', userId: 'human', password: 'temporary-trpg-wiring-only' })).accessToken;
   let serial = 0;

@@ -142,7 +142,7 @@ test('fixed MCP executor replays a private Canvas action and enforces its child 
     expect(stale.result.isError).toBe(true);
     expect(stale.text).toMatch(/snapshot.*preview/i);
     expect(await fs.readNoteRevision('_scopes/models/codex/Views/Root Spatial.canvas')).toBe(saved.value.revision);
-    expect((await client.listTools()).tools).toHaveLength(5);
+    expect((await client.listTools()).tools).toHaveLength(16);
   } finally { await client.close(); await server.close(); }
 });
 

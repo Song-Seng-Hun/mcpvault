@@ -92,7 +92,7 @@ test('public MCP fallback action reads the original post, not its forged ID', as
   const [ct, st] = InMemoryTransport.createLinkedPair();
   try {
     await Promise.all([client.connect(ct), server.connect(st)]);
-    expect((await client.listTools()).tools).toHaveLength(5);
+    expect((await client.listTools()).tools).toHaveLength(16);
     const call = async (endpointId: string, args: Record<string, unknown>) => {
       const response: any = await client.callTool({ name: 'call_endpoint', arguments: { endpointId, arguments: args } });
       expect(response.isError).not.toBe(true);

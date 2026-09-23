@@ -21,7 +21,7 @@ test('computer world discovery, authenticated MCP writes and read-only replay us
       const text = (result.content as any[])[0].text;
       return { error: result.isError, value: result.isError ? text : JSON.parse(text) };
     };
-    expect((await client.listTools()).tools).toHaveLength(5);
+    expect((await client.listTools()).tools).toHaveLength(16);
     expect(hostFeatureForTool('manage_roleplay_computer')).toBe('roleplay');
     expect(operationReadAlias('manage_roleplay_computer', 'context')).toBe('read_roleplay_computer');
     expect(operationReadAlias('manage_roleplay_computer', 'bind')).toBeUndefined();

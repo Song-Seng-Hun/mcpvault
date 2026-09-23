@@ -84,7 +84,7 @@ test('MCP compact date warnings recover Properties, keep source guards, and do n
   };
   try {
     await Promise.all([client.connect(ct), server.connect(st)]);
-    expect((await client.listTools()).tools).toHaveLength(5);
+    expect((await client.listTools()).tools).toHaveLength(16);
     let repair: any;
     for (const view of views) {
       for (const maxChars of [512, 1024, 12000]) {

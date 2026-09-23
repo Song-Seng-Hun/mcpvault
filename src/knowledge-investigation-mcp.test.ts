@@ -34,7 +34,7 @@ test('progressive instructions and schema explain plan-first investigation witho
 test('five tools support plan/result/review discovery while anonymous and read-only writes remain rejected', async () => {
   const c = await connect();
   try {
-    expect((await c.client.listTools()).tools).toHaveLength(5);
+    expect((await c.client.listTools()).tools).toHaveLength(16);
     const auth = await c.call('auth.register', { accountId: 'investigator', agentId: 'investigator', userId: 'fixture', modelId: 'codex', password: randomUUID() });
     expect(auth.error, auth.text).toBeFalsy(); const token = auth.value.accessToken;
     const source = await c.call('mcp.ingest_source', { sourceId: 'data', title: 'Results', content: 'No consistent difference was observed.' }, token);

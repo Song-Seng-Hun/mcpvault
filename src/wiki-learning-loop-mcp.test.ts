@@ -39,9 +39,9 @@ async function knowledgeFiles() {
 test('Stage 8 deterministic protocol story covers the bounded learning loop without claiming model-quality evidence', async () => {
   const c = await connect();
   try {
-    expect((await c.client.listTools()).tools.map(tool => tool.name).sort()).toEqual([
+    expect((await c.client.listTools()).tools.map(tool => tool.name).sort()).toEqual(expect.arrayContaining([
       'call_endpoint', 'get_agent_pulse', 'list_active_capabilities', 'orient_wiki', 'search_capabilities',
-    ]);
+    ]));
     const auth = await c.call('auth.register', { accountId: 'learning-loop-account', agentId: 'learning-loop-worker', userId: 'fixture', modelId: 'codex', password: randomUUID() });
     expect(auth.error, auth.text).toBeFalsy();
     const token = auth.value.accessToken;

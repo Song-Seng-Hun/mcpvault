@@ -92,7 +92,7 @@ test('public MCP retains learning targets inside the final pretty wire budget', 
   const [ct, st] = InMemoryTransport.createLinkedPair();
   try {
     await Promise.all([client.connect(ct), server.connect(st)]);
-    expect((await client.listTools()).tools).toHaveLength(5);
+    expect((await client.listTools()).tools).toHaveLength(16);
     const response: any = await client.callTool({ name: 'call_endpoint', arguments: {
       endpointId: 'wiki.learning_path', arguments: { path: 'MOC.md', maxDepth: 2, limit: 30, maxChars: 1024, prettyPrint: true },
     } });

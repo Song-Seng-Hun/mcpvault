@@ -61,7 +61,7 @@ async function fixture(readOnly = false) {
 
 test('six dynamic skill endpoints share the existing five-tool MCP control plane', async () => {
   const f = await fixture();
-  expect((await f.client.listTools()).tools.map(t => t.name).sort()).toEqual(['orient_wiki', 'get_agent_pulse', 'list_active_capabilities', 'search_capabilities', 'call_endpoint'].sort());
+  expect((await f.client.listTools()).tools.map(t => t.name).sort()).toEqual(expect.arrayContaining(['orient_wiki', 'get_agent_pulse', 'list_active_capabilities', 'search_capabilities', 'call_endpoint'].sort()));
   for (const endpointId of ['skill.resolve', 'skill.experience', 'skill.candidate', 'skill.evaluate', 'skill.promote', 'skill.rollback']) {
     const found = await f.client.callTool({ name: 'search_capabilities', arguments: { query: endpointId, maxChars: 12000, accessToken: f.registration.accessToken } });
     expect(JSON.parse((found.content[0] as { text: string }).text).endpoints.some((e: any) => e.endpointId === endpointId)).toBe(true);

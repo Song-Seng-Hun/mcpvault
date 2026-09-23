@@ -32,18 +32,19 @@ test("createServer returns a Server instance", () => {
   expect(typeof server.connect).toBe("function");
 });
 
-test("server exposes only the dynamic control plane", async () => {
+test("server exposes control and direct recording tools within one bounded listing", async () => {
   const { server, client } = await connectMcpClient(testVaultPath, { version: "1.0.0" }, "test-client");
 
   const result = await client.listTools();
-  expect(Buffer.byteLength(JSON.stringify(result))).toBeLessThanOrEqual(5000);
-  expect(result.tools.map((tool) => tool.name).sort()).toEqual([
+  expect(Buffer.byteLength(JSON.stringify(result))).toBeLessThanOrEqual(16 * 1024);
+  expect(result.tools).toHaveLength(16);
+  expect(result.tools.map((tool) => tool.name).sort()).toEqual(expect.arrayContaining([
     "call_endpoint",
     "get_agent_pulse",
     "list_active_capabilities",
     "orient_wiki",
     "search_capabilities",
-  ]);
+  ]));
 
   const capabilities = await client.callTool({
     name: "search_capabilities",
@@ -526,7 +527,7 @@ test('quality diagnostics preserve a bounded executable read through the fixed M
   await writeFile(join(root, 'Concept.md'), `---\nllm_wiki_type: knowledge\nknowledge_role: model\ntitle: ${'Detailed title '.repeat(500)}\nsummary: Obsolete secret-looking summary\nsummary_of_content_sha256: ${'0'.repeat(64)}\n---\n# Current body\n\nRead this current explanation.`);
   const { server, client, accessToken } = await connectClient();
   {
-    expect((await client.listTools()).tools).toHaveLength(5);
+    expect((await client.listTools()).tools).toHaveLength(16);
     for (const maxChars of [512, 600, 1000, 6000]) {
       const result = await client.callTool({ name: 'call_endpoint', arguments: {
         endpointId: 'wiki.quality_check', arguments: { path: 'scope://model/codex/Concept.md', maxChars, prettyPrint: true, accessToken },
@@ -569,7 +570,7 @@ test('exception board keeps a bounded private next action executable through MCP
   await writeFile(join(testVaultPath, 'Hidden.md'), '---\nllm_wiki_type: knowledge\nmoderation_status: hidden\n---\nPrivate body.');
   const { server, client, accessToken } = await connectClient();
   {
-    expect((await client.listTools()).tools).toHaveLength(5);
+    expect((await client.listTools()).tools).toHaveLength(16);
     for (const grouped of [false, true]) for (const maxChars of [512, 7000]) {
       const result = await client.callTool({ name: 'call_endpoint', arguments: {
         endpointId: 'wiki.exception_board', arguments: { grouped, limit: 10, maxChars, prettyPrint: true, accessToken },
@@ -606,7 +607,7 @@ test('direct lint and organization health retain bounded executable scoped repai
   await writeFile(join(testVaultPath, 'Hidden.md'), '---\nllm_wiki_type: knowledge\nmoderation_status: hidden\n---\nPrivate body.');
   const { server, client, accessToken } = await connectClient();
   {
-    expect((await client.listTools()).tools).toHaveLength(5);
+    expect((await client.listTools()).tools).toHaveLength(16);
     for (const endpointId of ['mcp.lint_wiki', 'wiki.organization_health']) {
       const result = await client.callTool({ name: 'call_endpoint', arguments: {
         endpointId, arguments: { limit: 20, maxChars: 512, prettyPrint: true, accessToken },
@@ -638,7 +639,7 @@ test('organization collection repair reads the exact scoped member without hidde
   await writeFile(join(testVaultPath, 'Hidden.md'), '---\nnote_kind: moc\ndomain: Hidden group\nmoderation_status: hidden\n---\nHidden body.');
   const { server, client, accessToken } = await connectClient();
   {
-    expect((await client.listTools()).tools).toHaveLength(5);
+    expect((await client.listTools()).tools).toHaveLength(16);
     const result = await client.callTool({ name: 'call_endpoint', arguments: {
       endpointId: 'wiki.organization_health', arguments: { maxChars: 16000, accessToken },
     } });
@@ -845,13 +846,14 @@ test("read-only mode exposes read tools and rejects every vault mutation", async
   try {
     const listedTools = await client.listTools();
     const toolNames = listedTools.tools.map((tool) => tool.name);
-    expect(toolNames).toEqual([
+    expect(toolNames).toHaveLength(16);
+    expect(toolNames).toEqual(expect.arrayContaining([
       "orient_wiki",
       "get_agent_pulse",
       "list_active_capabilities",
       "search_capabilities",
       "call_endpoint",
-    ]);
+    ]));
 
     const readResult = await client.callTool({
       name: "read_note",

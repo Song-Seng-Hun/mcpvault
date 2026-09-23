@@ -2977,7 +2977,7 @@ test('organization health exposes GTD focus, Zettelkasten connectivity, and prog
     expect(progressiveRead.value).toMatchObject({ view: 'progressive', summaryFresh: true, summaryStale: false });
     expect(progressiveRead.value.content).toContain('Selected passages:');
     expect(progressiveRead.value.content).toContain('Does a second agent agree?');
-    const changed = await client.callTool({ name: 'patch_note', arguments: { path: 'Knowledge/Progressive.md', oldString: 'A durable claim.\n', newString: 'A changed durable claim.\n', replaceAll: true, expectedRevision: progressive.value.revision, accessToken } });
+    const changed = await client.callTool({ name: 'call_endpoint', arguments: { endpointId: 'notes.patch', arguments: { path: 'Knowledge/Progressive.md', oldString: 'A durable claim.\n', newString: 'A changed durable claim.\n', replaceAll: true, expectedRevision: progressive.value.revision, accessToken } } });
     expect(changed.isError).toBeFalsy();
     const staleRead = await callJson(client, 'read_wiki_projection', { path: 'Knowledge/Progressive.md', view: 'progressive', accessToken });
     expect(staleRead.value).toMatchObject({ summaryFresh: false, summaryStale: true });
@@ -3305,7 +3305,7 @@ test('ingest, publish, catalog, lint, and immutable source enforcement form one 
 
     for (const mutation of [
       { name: 'write_note', arguments: { path: '_sources/karpathy-idea.md', content: 'tampered', accessToken } },
-      { name: 'patch_note', arguments: { path: '_sources/karpathy-idea.md', oldString: 'Persistent', newString: 'Ephemeral', accessToken } },
+      { name: 'call_endpoint', arguments: { endpointId: 'notes.patch', arguments: { path: '_sources/karpathy-idea.md', oldString: 'Persistent', newString: 'Ephemeral', accessToken } } },
       { name: 'delete_note', arguments: { path: '_sources/karpathy-idea.md', confirmPath: '_sources/karpathy-idea.md', accessToken } },
       { name: 'move_note', arguments: { oldPath: '_sources/karpathy-idea.md', newPath: 'moved.md', accessToken } },
     ]) {

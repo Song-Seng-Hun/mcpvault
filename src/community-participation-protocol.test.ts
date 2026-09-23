@@ -19,7 +19,7 @@ async function fixture(readOnly = false, existing?: string) {
 test('only five tools, default-off account settings, authenticated revisions, and community purpose execute through the public executor', async () => {
   const f = await fixture();
   try {
-    const tools = await f.client.listTools(); expect(tools.tools.map(t => t.name).sort()).toEqual(['call_endpoint', 'get_agent_pulse', 'list_active_capabilities', 'orient_wiki', 'search_capabilities']);
+    const tools = await f.client.listTools(); expect(tools.tools.map(t => t.name).sort()).toEqual(expect.arrayContaining(['call_endpoint', 'get_agent_pulse', 'list_active_capabilities', 'orient_wiki', 'search_capabilities']));
     await f.endpoint('auth.register', { accountId: 'member', modelId: 'gpt', agentId: 'community-worker', password: 'test-only-long-password' });
     const accessToken = data(await f.endpoint('auth.login', { accountId: 'member', password: 'test-only-long-password' })).accessToken;
     expect((await f.endpoint('community.participation')).isError).toBe(true);

@@ -332,7 +332,7 @@ test('MCP exposes a bounded read-only rebalance plan through the fixed tool surf
     const [ct, st] = InMemoryTransport.createLinkedPair();
     try {
       await Promise.all([client.connect(ct), server.connect(st)]);
-      expect((await client.listTools()).tools).toHaveLength(5);
+      expect((await client.listTools()).tools).toHaveLength(16);
       for (const maxChars of [700, 4000, 16000]) {
         const result = await client.callTool({ name: 'call_endpoint', arguments: { endpointId: 'wiki.moc_rebalance', arguments: { path, saturationThreshold: 3, maxChars, prettyPrint: true } } });
         expect(result.isError).not.toBe(true);

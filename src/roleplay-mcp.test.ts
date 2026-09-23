@@ -37,7 +37,7 @@ let harness: Awaited<ReturnType<typeof setupHarness>>;
 beforeEach(async () => { harness = await setupHarness(); });
 test('nine dynamic endpoints keep five MCP tools; two authenticated players share one state and immutable chat projection', async () => {
   const { vaultPath, world, client, second, call, tokens } = harness;
-  expect((await client.listTools()).tools).toHaveLength(5);
+  expect((await client.listTools()).tools).toHaveLength(16);
   let serial = 0;
   const act = async (endpoint: string, data: Record<string, unknown>, account = 'host') => call(`roleplay.${endpoint}`, { ...data, requestId: `request-${++serial}`, expectedRevision: roleplayRevision(await world.snapshot()), accessToken: tokens[account] });
   expect((await act('world', { op: 'initialize', title: 'Lantern Archive', places: { hall: ['garden'], garden: ['hall'] } }, 'alice')).error).toBe(true);

@@ -13,7 +13,7 @@ test('five fixed MCP tools expose shared bounded read-only document endpoints an
   const server = createServer(root, { readOnly: true }); cleanup.push(() => server.close());
   const client = new Client({ name: 'document-test', version: '1' }); cleanup.push(() => client.close());
   const [c, s] = InMemoryTransport.createLinkedPair(); await server.connect(s); await client.connect(c);
-  expect((await client.listTools()).tools).toHaveLength(5);
+  expect((await client.listTools()).tools).toHaveLength(16);
   const registry = getServerRuntime(server)!.endpointRegistry;
   for (const id of ['documents.outline', 'documents.read', 'documents.search', 'resources.manifest', 'resources.export']) {
     const endpoint = registry.resolve(id);

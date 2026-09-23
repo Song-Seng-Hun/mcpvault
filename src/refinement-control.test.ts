@@ -33,7 +33,7 @@ async function fixture() {
 test('public pulse uses its one complete schema including notice receipts and relevant skill', async () => {
   const { client } = await fixture();
   const tools = (await client.listTools()).tools;
-  expect(tools).toHaveLength(5);
+  expect(tools).toHaveLength(16);
   const schema = tools.find(t => t.name === 'get_agent_pulse')!.inputSchema;
   expect(schema.properties).toHaveProperty('knownNoticeRevisions');
   expect(schema.properties).toHaveProperty('noticeTopic');

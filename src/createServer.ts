@@ -155,6 +155,7 @@ import { fingerprint as workFingerprint } from './work-model.js';
 import type { EconomyPolicy } from './economy-model.js';
 import { validateMarkdownContract, verifyMarkdownContract } from './quest-verifier.js';
 import { getWikiPolicyTopic, MCPVAULT_SERVER_INSTRUCTIONS } from './wiki-policy.js';
+import { RECORDING_MCP_TOOLS, RECORDING_TOOL_NAMES, routeRecordingTool } from './record-tools.js';
 
 const REQUEST_QUEUE_WAIT_MS = 10_000;
 
@@ -489,22 +490,26 @@ const FIXED_MCP_TOOLS: Tool[] = [
   {
     name: 'orient_wiki',
     description: 'Start each session here. Execute exactly primaryAction, then answer the user. Continue tool use only when their request explicitly requires more.',
+    annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     inputSchema: { type: 'object', properties: { accessToken: { type: 'string', description: 'Optional token from login or registration' }, maxChars: { type: 'integer', minimum: 512, maximum: 20000, default: 3000, description: 'Hard response budget; orientation stays compact even when a larger budget is allowed' }, prettyPrint: { type: 'boolean', default: false } } },
   },
-  ...getAgentPulseTools(),
+  ...getAgentPulseTools().map(tool => ({ ...tool, annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false } })),
   {
     name: 'list_active_capabilities',
     description: 'Optional catalog with availability and nextCursor. Keep session/configuration unchanged between pages. Search an exact ID for its schema. Availability means permission/host readiness, not data readiness. Orientation does not require this list.',
+    annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     inputSchema: { type: 'object', properties: { cursor: { type: 'string', maxLength: 256 }, limit: { type: 'integer', minimum: 1, maximum: 100, default: 50 }, maxChars: { type: 'integer', minimum: 512, maximum: 20000, default: 12000 }, accessToken: { type: 'string' }, prettyPrint: { type: 'boolean', default: false } } },
   },
   {
     name: 'search_capabilities',
-    description: 'Find an endpoint with one query per intent (limit 3). Select it, then call_endpoint. For large schemas, read endpointId# plus a JSON Pointer; follow descriptor queries or nextCursor without changing the query.',
+    description: 'Find an advanced endpoint with one query per intent (limit 3); use direct recording tools for journal and note work. For large schemas, read endpointId# plus a JSON Pointer and follow nextCursor without changing the query.',
+    annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     inputSchema: { type: 'object', properties: { query: { type: 'string', description: 'Endpoint/intent, or exact endpointId# followed by a JSON Pointer' }, cursor: { type: 'string', maxLength: 256 }, limit: { type: 'integer', minimum: 1, maximum: 100, default: 20 }, maxChars: { type: 'integer', minimum: 512, maximum: 20000, default: 20000 }, accessToken: { type: 'string' }, prettyPrint: { type: 'boolean', default: false } } },
   },
   {
     name: 'call_endpoint',
-    description: 'Run one exact endpoint selected by orient_wiki or search_capabilities, with its documented arguments. Do not call the URL or search again. If orientation sets stopAfterAction, answer after this call; do not chain guides or dashboards.',
+    description: 'Run one exact advanced endpoint selected by orient_wiki or search_capabilities; it may mutate or reach external systems. Use direct recording tools for journals and notes. If orientation sets stopAfterAction, answer after this call.',
+    annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
     inputSchema: { type: 'object', properties: { endpointId: { type: 'string' }, arguments: { type: 'object', additionalProperties: true }, accessToken: { type: 'string', description: 'Optional shortcut merged into arguments.accessToken' }, agentLabel: { type: 'string', description: 'Optional self-reported activity label for approved OAuth clients; not an authentication identity' }, prettyPrint: { type: 'boolean', default: false }, responseView: { type: 'string', description: 'Read-only JSON Pointer; reuse original arguments. Empty selects root.' }, responseCursor: { type: 'string', maxLength: 256 } }, required: ['endpointId'] },
   },
 ];
@@ -1713,6 +1718,11 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
           ...(rawArgs.accessToken !== undefined && { accessToken: rawArgs.accessToken }),
         };
         rawArgs = args as Record<string, unknown>;
+      } else if (RECORDING_TOOL_NAMES.has(requestedToolName)) {
+        const routed = routeRecordingTool(requestedToolName, rawArgs);
+        toolName = routed.toolName;
+        args = routed.args;
+        rawArgs = routed.args;
       } else if (!FIXED_MCP_TOOL_NAMES.has(requestedToolName) && !ALLOW_HIDDEN_DIRECT_TOOLS_IN_TESTS) {
         throw guidanceError(new Error(`Direct MCP tool '${requestedToolName}' is not exposed. Use search_capabilities and call_endpoint.`), 'guid-e5b95513008be9fa');
       }
@@ -3986,8 +3996,10 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
 
   const installMcpHandlers = (target: Server): void => {
     // Definitions are runtime-local and static; availability/auth remain per call.
-    target.setRequestHandler("tools/list", async request => guidance.run(() =>
-      boundedToolCatalog(FIXED_MCP_TOOLS, projectGuidance(FIXED_MCP_TOOLS), request.params?.cursor)));
+    target.setRequestHandler("tools/list", async request => guidance.run(() => {
+      const tools = [...FIXED_MCP_TOOLS, ...RECORDING_MCP_TOOLS];
+      return boundedToolCatalog(tools, projectGuidance(tools), request.params?.cursor, 16 * 1024);
+    }));
 
     target.setRequestHandler("tools/call", async (request) =>
       requestGate.run(

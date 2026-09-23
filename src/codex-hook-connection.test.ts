@@ -35,7 +35,7 @@ test('host connection reuses actual continuity service, keeps five MCP tools and
   } } as any);
   client = new Client({ name: 'hook-connection', version: '1' });
   const [ct, st] = InMemoryTransport.createLinkedPair(); await Promise.all([client.connect(ct), server.connect(st)]);
-  expect((await client.listTools()).tools).toHaveLength(5);
+  expect((await client.listTools()).tools).toHaveLength(16);
   const registration = await client.callTool({ name: 'call_endpoint', arguments: { endpointId: 'auth.register', arguments: {
     accountId: 'operator', modelId: 'codex', agentId: 'worker', userId: 'fixture', password: randomUUID(),
   } } });

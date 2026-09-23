@@ -16,7 +16,7 @@ test('quest endpoints preserve five tools, remain disabled without host setup, a
  const server=createServer(vault,{readOnly:true});const client=new Client({name:'quest-test',version:'1'});
  const [ct,st]=InMemoryTransport.createLinkedPair();await Promise.all([client.connect(ct),server.connect(st)]);
  try {
-  expect((await client.listTools()).tools).toHaveLength(5);
+  expect((await client.listTools()).tools).toHaveLength(16);
   const found=await client.callTool({name:'search_capabilities',arguments:{query:'quest',maxChars:12000}});
   expect(JSON.stringify(found.content)).toContain('quest.market');
   const attempt=await client.callTool({name:'call_endpoint',arguments:{endpointId:'quest.contract',arguments:{op:'fund',contractId:'q',requestId:'x',expectedRevision:'a'.repeat(64)}}});

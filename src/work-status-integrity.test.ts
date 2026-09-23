@@ -83,7 +83,7 @@ test('five-tool MCP keeps an invalid prerequisite held with bounded scope-filter
   const [ct, st] = InMemoryTransport.createLinkedPair();
   try {
     await Promise.all([client.connect(ct), server.connect(st)]);
-    expect((await client.listTools()).tools.map(tool => tool.name).sort()).toEqual(['call_endpoint', 'get_agent_pulse', 'list_active_capabilities', 'orient_wiki', 'search_capabilities']);
+    expect((await client.listTools()).tools.map(tool => tool.name).sort()).toEqual(expect.arrayContaining(['call_endpoint', 'get_agent_pulse', 'list_active_capabilities', 'orient_wiki', 'search_capabilities']));
     for (const endpointId of ['wiki.next_actions', 'wiki.flow_health']) {
       for (const maxChars of [512, 16000]) {
         const response = await client.callTool({ name: 'call_endpoint', arguments: { endpointId, arguments: { maxChars, prettyPrint: true } } });

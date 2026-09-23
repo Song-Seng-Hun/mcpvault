@@ -58,7 +58,7 @@ test('learning configuration preview is an authenticated read-only dynamic endpo
   await expect(call('continuity.save',{topic:'Course',summary:'Begin',nextAction:'Read',learningProgress:preview.checkpointAction.learningProgress})).rejects.toThrow(/read.only/i);
 });
 test('fixed five tools share host-opened benchmark service, with sealed submission and no mint by default', async () => {
-  await setup(); expect((await client.listTools()).tools).toHaveLength(5); await register();
+  await setup(); expect((await client.listTools()).tools).toHaveLength(16); await register();
   await service.open('demo', 'operator', { expectedRevision: 'missing', requestId: 'open' });
   const list = await call('benchmark.list'); expect(list.items).toHaveLength(1);
   const current = await call('benchmark.read', { challengeId: 'demo' });

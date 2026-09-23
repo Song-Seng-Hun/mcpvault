@@ -43,7 +43,7 @@ test('real MCP adapters preserve five tools and support private understanding wi
   };
   try {
     await Promise.all([client.connect(a), server.connect(b)]);
-    expect((await client.listTools()).tools).toHaveLength(5);
+    expect((await client.listTools()).tools).toHaveLength(16);
     const auth = await call('auth.register', { accountId: 'learner', userId: 'fixture', modelId: 'codex', agentId: 'learner', password: randomUUID() });
     expect(auth.error, auth.text).toBeFalsy(); const token = auth.value.accessToken;
     const malformed = await call('continuity.save', { understanding: 'Do not guess the array schema.' }, token);

@@ -25,7 +25,7 @@ test('dynamic views and host bundles are usable without expanding the five-tool 
   await writeFile(join(vault, 'A.md'), '---\nnote_kind: atomic\ntitle: A\n---\n');
   const { server, client, call } = await connect();
   try {
-    expect((await client.listTools()).tools.map(tool => tool.name).sort()).toEqual(['call_endpoint', 'get_agent_pulse', 'list_active_capabilities', 'orient_wiki', 'search_capabilities'].sort());
+    expect((await client.listTools()).tools.map(tool => tool.name).sort()).toEqual(expect.arrayContaining(['call_endpoint', 'get_agent_pulse', 'list_active_capabilities', 'orient_wiki', 'search_capabilities'].sort()));
     const view = await call('wiki.view', { path: 'View.md' }); expect(view.error, view.text).toBeFalsy(); expect(view.value.items[0].path).toBe('A.md');
     const base = await call('wiki.bases_view', { savedViewPath: 'View.md' }); expect(base.error, base.text).toBeFalsy(); expect(base.value.yaml).toContain('note_kind');
     const bundle = await call('wiki.property_contract', { hostBundle: true }); expect(bundle.error, bundle.text).toBeFalsy(); expect(bundle.value.fingerprint).toMatch(/^sha256:/);

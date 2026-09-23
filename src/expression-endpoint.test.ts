@@ -27,7 +27,7 @@ test('read-only MCP exposes profile cards and exact chapters without document wr
     }
     const stale = await call({ ...cards.items[0].readAction.arguments, expectedProfileRevision: '0'.repeat(64) });
     expect(stale.isError).toBe(true);
-    expect((await client.listTools()).tools).toHaveLength(5);
+    expect((await client.listTools()).tools).toHaveLength(16);
     // Existing endpoint audit runs on reads too; it is not a document mutation.
     expect((await readdir(root)).filter(p => p !== '.mcpvault')).toEqual(before);
     expect((await readdir(root, { recursive: true })).map(p => p.replaceAll('\\', '/'))

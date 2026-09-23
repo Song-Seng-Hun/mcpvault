@@ -41,14 +41,14 @@ test("serves legacy handshake-based MCP clients", async () => {
   try {
     const result = await client.listTools();
     expect(client.getProtocolEra()).toBe("legacy");
-    expect(result.tools).toHaveLength(5);
-    expect(result.tools.map((tool) => tool.name)).toEqual([
+    expect(result.tools).toHaveLength(16);
+    expect(result.tools.map((tool) => tool.name)).toEqual(expect.arrayContaining([
       "orient_wiki",
       "get_agent_pulse",
       "list_active_capabilities",
       "search_capabilities",
       "call_endpoint",
-    ]);
+    ]));
   } finally {
     await client.close();
   }
@@ -59,14 +59,14 @@ test("serves MCP 2026-07-28 clients", async () => {
   try {
     const result = await client.listTools();
     expect(client.getProtocolEra()).toBe("modern");
-    expect(result.tools).toHaveLength(5);
-    expect(result.tools.map((tool) => tool.name)).toEqual([
+    expect(result.tools).toHaveLength(16);
+    expect(result.tools.map((tool) => tool.name)).toEqual(expect.arrayContaining([
       "orient_wiki",
       "get_agent_pulse",
       "list_active_capabilities",
       "search_capabilities",
       "call_endpoint",
-    ]);
+    ]));
   } finally {
     await client.close();
   }

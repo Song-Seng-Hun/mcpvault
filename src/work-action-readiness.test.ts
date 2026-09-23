@@ -32,7 +32,7 @@ test('actual MCP keeps actionless forecasts bounded and excludes hidden work', a
   const [ct, st] = InMemoryTransport.createLinkedPair();
   try {
     await Promise.all([client.connect(ct), server.connect(st)]);
-    expect((await client.listTools()).tools.map(tool => tool.name).sort()).toEqual(['call_endpoint', 'get_agent_pulse', 'list_active_capabilities', 'orient_wiki', 'search_capabilities']);
+    expect((await client.listTools()).tools.map(tool => tool.name).sort()).toEqual(expect.arrayContaining(['call_endpoint', 'get_agent_pulse', 'list_active_capabilities', 'orient_wiki', 'search_capabilities']));
     for (const endpointId of ['wiki.flow_health', 'wiki.project_packet', 'wiki.next_actions']) {
       for (const maxChars of [512, 1024, 16000]) {
         const response = await client.callTool({ name: 'call_endpoint', arguments: { endpointId, arguments: { maxChars, prettyPrint: true } } });

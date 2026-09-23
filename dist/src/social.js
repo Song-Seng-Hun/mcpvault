@@ -266,16 +266,18 @@ export class SocialService {
         const path = existing?.path || `${agentJournalRoot(principal.agentId)}/${date}/${resolvedEntryId}.md`;
         const timestamp = now();
         const existingFrontmatter = existing?.frontmatter || {};
+        const title = params.title === undefined ? existingFrontmatter.title : params.title;
+        const retainedTitle = typeof title === 'string' ? title.trim() : '';
         const references = await this.references.validateAndNormalize(params.references ?? existingFrontmatter.references, path, principal, content);
         const expectedRevision = existing ? params.expectedRevision : (params.expectedRevision || 'missing');
         await this.fileSystem.writeNote({
             path,
-            content: params.title?.trim() ? `# ${params.title.trim()}\n\n${content}\n` : `${content}\n`,
+            content: retainedTitle ? `# ${retainedTitle}\n\n${content}\n` : `${content}\n`,
             frontmatter: {
                 ...existingFrontmatter,
                 mcpvault_type: 'journal_entry', entry_id: resolvedEntryId, date, kind,
                 author: this.author(principal), author_role: principal.role, ...this.ownership(principal),
-                ...(params.title?.trim() && { title: params.title.trim() }),
+                ...(retainedTitle && { title: retainedTitle }),
                 ...(params.mood?.trim() && { mood: params.mood.trim() }),
                 ...(params.tags !== undefined && { tags: cleanTags(params.tags) }),
                 ...(params.memory_entries !== undefined && { memory_entries: params.memory_entries }),

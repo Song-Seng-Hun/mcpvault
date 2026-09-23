@@ -16,8 +16,8 @@ export function readResponseView(response: any, path: string, cursor: unknown, b
 }
 
 /** MCP discovery keeps complete schemas; oversized translations use code-owned prose. */
-export function boundedToolCatalog<T>(original: readonly T[], localized: readonly T[], cursor?: unknown): { tools: T[]; nextCursor?: string } {
-  const fits = (value: unknown) => Buffer.byteLength(JSON.stringify(value)) <= 5000;
+export function boundedToolCatalog<T>(original: readonly T[], localized: readonly T[], cursor?: unknown, maxBytes = 5000): { tools: T[]; nextCursor?: string } {
+  const fits = (value: unknown) => Buffer.byteLength(JSON.stringify(value)) <= maxBytes;
   const tools = original.map((tool, index) => fits({ tools: [localized[index] ?? tool] }) ? localized[index] ?? tool : tool);
   if (cursor === undefined && fits({ tools })) return { tools };
   const fingerprint = createHash('sha256').update(JSON.stringify(tools)).digest('hex').slice(0, 32);
@@ -38,7 +38,7 @@ export function boundedToolCatalog<T>(original: readonly T[], localized: readonl
   if (fits(page(remaining))) return page(remaining);
   let count = 0;
   while (count + 1 < remaining && fits(page(count + 1))) count++;
-  if (!count) throw guidanceError(Error('Fixed MCP tool schema cannot fit 5000 bytes; reduce the code-owned schema.'), 'guid-5bd06777d5cc8a8a');
+  if (!count) throw guidanceError(Error(`Fixed MCP tool schema cannot fit ${maxBytes} bytes; reduce the code-owned schema.`), 'guid-5bd06777d5cc8a8a');
   return page(count);
 }
 

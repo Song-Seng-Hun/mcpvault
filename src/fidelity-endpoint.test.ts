@@ -13,7 +13,7 @@ test('fidelity is discoverable read-only through the existing fixed-five control
   vault = await mkdtemp(join(tmpdir(), 'fidelity-endpoint-'));
   server = createServer(vault, { readOnly: true }); client = new Client({ name: 'fidelity-test', version: '1' });
   const [ct, st] = InMemoryTransport.createLinkedPair(); await Promise.all([client.connect(ct), server.connect(st)]);
-  expect((await client.listTools()).tools).toHaveLength(5);
+  expect((await client.listTools()).tools).toHaveLength(16);
   const discovery = parse(await client.callTool({ name: 'search_capabilities', arguments: { query: 'wiki.fidelity_check', limit: 1, maxChars: 12000 } }));
   const endpoint = discovery.endpoints.find((e: any) => e.endpointId === 'wiki.fidelity_check');
   expect(endpoint).toBeDefined(); expect(endpoint.mutating).toBe(false);

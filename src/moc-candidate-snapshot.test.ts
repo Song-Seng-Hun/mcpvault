@@ -336,7 +336,7 @@ test('MCP candidate discovery preserves the fixed surface, budgets and source by
     const [ct, st] = InMemoryTransport.createLinkedPair();
     try {
       await Promise.all([client.connect(ct), server.connect(st)]);
-      expect((await client.listTools()).tools).toHaveLength(5);
+      expect((await client.listTools()).tools).toHaveLength(16);
       for (const maxChars of [512, 4000, 16000]) {
         const result = await client.callTool({ name: 'call_endpoint', arguments: { endpointId: 'wiki.moc_candidates', arguments: { maxChars, prettyPrint: true } } });
         expect(result.isError).not.toBe(true);

@@ -1268,7 +1268,7 @@ test('pulse is exposed alongside both read and mutating tools', async () => {
     const listed = await client.listTools();
     const names = listed.tools.map(tool => tool.name);
     expect(names).toContain('get_agent_pulse');
-    expect(names).toEqual(['orient_wiki', 'get_agent_pulse', 'list_active_capabilities', 'search_capabilities', 'call_endpoint']);
+    expect(names).toEqual(expect.arrayContaining(['orient_wiki', 'get_agent_pulse', 'list_active_capabilities', 'search_capabilities', 'call_endpoint']));
   }
 });
 

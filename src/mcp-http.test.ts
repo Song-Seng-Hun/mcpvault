@@ -64,13 +64,13 @@ test('serves MCP 2026 Stateless Streamable HTTP with a fresh protocol server per
 
   await client.connect(transport);
   expect(client.getProtocolEra()).toBe('modern');
-  expect((await client.listTools()).tools.map(tool => tool.name).sort()).toEqual([
+  expect((await client.listTools()).tools.map(tool => tool.name).sort()).toEqual(expect.arrayContaining([
     'call_endpoint',
     'get_agent_pulse',
     'list_active_capabilities',
     'orient_wiki',
     'search_capabilities',
-  ]);
+  ]));
 
   const first = await client.callTool({ name: 'orient_wiki', arguments: { maxChars: 2000 } });
   expect(first.isError).toBeFalsy();

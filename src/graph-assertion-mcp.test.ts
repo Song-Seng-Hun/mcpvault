@@ -20,7 +20,7 @@ test('assertions are optional on existing read-only neighborhood endpoint; fixed
   const client = new Client({ name: 'assertion-test', version: '1' });
   try {
     const [a,b] = InMemoryTransport.createLinkedPair(); await Promise.all([client.connect(a), server.connect(b)]);
-    expect((await client.listTools()).tools).toHaveLength(5);
+    expect((await client.listTools()).tools).toHaveLength(16);
     for (const view of [undefined, 'neighbors', 'assertions']) {
       const result = await client.callTool({ name: 'call_endpoint', arguments: { endpointId: 'wiki.neighborhood', arguments: { path: 'A.md', ...(view && { view }), maxChars: 4000, prettyPrint: true } } });
       expect(result.isError, JSON.stringify(result.content)).toBeFalsy();
@@ -63,7 +63,7 @@ test('core-only MCP connects configured disk resolution and keeps the five-tool 
   const scans = vi.spyOn(FileSystemService.prototype, 'createNoteReferenceResolver');
   try {
     const [a, b] = InMemoryTransport.createLinkedPair(); await Promise.all([client.connect(a), server.connect(b)]);
-    expect((await client.listTools()).tools).toHaveLength(5);
+    expect((await client.listTools()).tools).toHaveLength(16);
     let packet: any;
     const deadline = Date.now() + 15000;
     do {

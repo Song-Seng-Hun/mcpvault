@@ -117,7 +117,7 @@ test('MCP placement repair is bounded and inspection targets the exact note', as
     const [ct, st] = InMemoryTransport.createLinkedPair();
     try {
       await Promise.all([client.connect(ct), server.connect(st)]);
-      expect((await client.listTools()).tools).toHaveLength(5);
+      expect((await client.listTools()).tools).toHaveLength(16);
       for (const maxChars of [512, 1000, 12000]) {
         const result = await client.callTool({ name: 'call_endpoint', arguments: { endpointId: 'wiki.maintenance_debt', arguments: { maxChars, prettyPrint: true } } });
         expect(result.isError).not.toBe(true);

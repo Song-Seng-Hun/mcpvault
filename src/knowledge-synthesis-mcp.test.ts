@@ -36,7 +36,7 @@ test('public guidance teaches the existing conditional synthesis contract withou
 test('five-tool MCP supports conditional publication, bounded candidates and read-only rejection', async () => {
   const c = await connect();
   try {
-    expect((await c.client.listTools()).tools).toHaveLength(5);
+    expect((await c.client.listTools()).tools).toHaveLength(16);
     const auth = await c.call('auth.register', { accountId: 'synthesis-worker', agentId: 'synthesis-worker', userId: 'fixture', modelId: 'codex', password: randomUUID() });
     expect(auth.error, auth.text).toBeFalsy(); const token = auth.value.accessToken;
     const captured = await c.call('mcp.ingest_source', { sourceId: 'source', title: 'Observation', content: 'Use the conditions of the original observation.' }, token);

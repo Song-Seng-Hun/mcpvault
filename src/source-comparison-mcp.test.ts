@@ -43,11 +43,11 @@ async function call(endpointId: string, args: Record<string, unknown> = {}) {
   return { error: result.isError, text, value: result.isError ? undefined : JSON.parse(text) as Record<string, any> };
 }
 
-test('keeps the MCP surface at exactly five tools and discovers source comparison', async () => {
+test('keeps source comparison discoverable beside direct recording tools', async () => {
   const tools = await client.listTools();
-  expect(tools.tools.map(tool => tool.name).sort()).toEqual([
+  expect(tools.tools.map(tool => tool.name).sort()).toEqual(expect.arrayContaining([
     'call_endpoint', 'get_agent_pulse', 'list_active_capabilities', 'orient_wiki', 'search_capabilities',
-  ]);
+  ]));
 
   const found = await client.callTool({ name: 'search_capabilities', arguments: { query: 'source comparison', limit: 3, maxChars: 12000 } });
   const text = (found.content as Array<{ text?: string }>).map(item => item.text || '').join('');

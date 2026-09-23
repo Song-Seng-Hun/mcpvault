@@ -28,7 +28,7 @@ async function fixture(root?: string, readOnly = false) {
 
 test('fixed five MCP tools discover all nine story endpoints and deny anonymous mutations', async () => {
   const f = await fixture();
-  expect((await f.client.listTools()).tools.map(t => t.name).sort()).toEqual(['call_endpoint', 'get_agent_pulse', 'list_active_capabilities', 'orient_wiki', 'search_capabilities']);
+  expect((await f.client.listTools()).tools.map(t => t.name).sort()).toEqual(expect.arrayContaining(['call_endpoint', 'get_agent_pulse', 'list_active_capabilities', 'orient_wiki', 'search_capabilities']));
   for (const endpoint of ['project', 'artifact', 'sequence', 'context', 'review', 'adopt', 'session', 'export', 'visual']) {
     const result = await f.client.callTool({ name: 'search_capabilities', arguments: { query: `story.${endpoint}`, maxChars: 20000 } });
     expect(JSON.parse((result.content as any[])[0].text).endpoints[0]?.endpointId).toBe(`story.${endpoint}`);
