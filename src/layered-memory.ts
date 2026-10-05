@@ -97,7 +97,7 @@ export class LayeredMemoryService {
     const routing = planMemory(mode, params.taskContext, Boolean(query || params.role || params.pathPrefix || params.dateFrom || params.dateTo || params.includeHistory || params.cursor));
     if (routing && routing.strategy !== 'selective') return {
       scope, mode, status: routing.strategy === 'none' ? 'not_needed' : 'route_only', items: [], routing, truncated: false,
-      warnings: ['Only optional memory was skipped. Mandatory rules still apply. No context retention or checkpoint validity was inferred.'],
+      warnings: [guidanceText('guid-df1eb91df758c48c', 'Only optional memory was skipped. Mandatory rules still apply. No context retention or checkpoint validity was inferred.')],
       nextAction: routing.strategy === 'continuity' ? { endpointId: 'continuity.resume', arguments: { maxChars: 2000, prettyPrint: false } }
         : { endpointId: 'memory.recall', arguments: { scope, maxChars: 4000 } },
     };
@@ -123,7 +123,7 @@ export class LayeredMemoryService {
       ...(params.dateFrom && { dateFrom: params.dateFrom }), ...(params.dateTo && { dateTo: params.dateTo }), canAccess });
     if (indexed?.reason) return { scope, mode, status: 'partial', items: [], truncated: true, reason: indexed.reason,
       nextAction: { endpointId: 'memory.recall', reuseOriginalArguments: true },
-      warnings: ['Memory index is not verified for this request. Use an exact authorized source read or retry after background preparation.'] };
+      warnings: [guidanceText('guid-728189957f238e2f', 'Memory index is not verified for this request. Use an exact authorized source read or retry after background preparation.')] };
     const page = indexed ?? await capture();
     const corrections = new Map<string, string[]>();
     const incomingCorrections = new Map<string, string[]>();

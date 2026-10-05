@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import {createHash,randomUUID} from 'node:crypto';
 import {constants,openSync,closeSync,writeFileSync,fsyncSync,fstatSync,lstatSync,readSync,realpathSync,renameSync,unlinkSync,type BigIntStats} from 'node:fs';
 import {join,dirname,parse} from 'node:path';
@@ -7,7 +8,7 @@ import {parseSkillReleaseManifest} from './skill-release-manifest.js';
 import {verifySkillReleaseEvidence} from './skill-release-evidence.js';
 import {parseReviewedSkillRegistration,type ReviewedSkillRegistration} from './skill-release-store.js';
 
-const fail=():never=>{throw Error('Reviewed skill admission unavailable; preserve host records for review');};
+const fail=():never=>{throw guidanceError(Error('Reviewed skill admission unavailable; preserve host records for review'), 'guid-28723a4b74420e51');};
 const hash=(b:Buffer|string)=>createHash('sha256').update(b).digest('hex');
 const id=(v:unknown):v is string=>typeof v==='string'&&/^[a-z0-9][a-z0-9-]{0,99}$/.test(v);
 const sha=(v:unknown):v is string=>typeof v==='string'&&/^[a-f0-9]{64}$/.test(v);

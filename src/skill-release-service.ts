@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import {readReviewedSkill,type ReviewedSkillHost,type ReviewedSkillAuthorization,type ReviewedSkillDeliveryFence} from './skill-release-reader.js';
 import type {SkillSourceInspection} from './skill-release-source.js';
 import type {ScopeAccessPolicy} from './scope-access.js';
@@ -5,7 +6,7 @@ import type {ScopeAuthService,ScopePrincipal} from './scope-auth.js';
 import type {OwnerActivityRuntime,OwnerActivityOperation} from './owner-activity-runtime.js';
 import {fingerprint} from './skill-evolution-store.js';
 import {discoverReviewedProcedures} from './skill-release-discovery.js';
-const fail=():never=>{throw Error('Reviewed skill unavailable');};
+const fail=():never=>{throw guidanceError(Error('Reviewed skill unavailable'), 'guid-9d9bb7483d9c38ff');};
 export interface ReviewedSkillInspector {inspect(sourceName:string):Promise<SkillSourceInspection|null>}
 
 /** Shared read service. Original PathFilter quarantine remains untouched.

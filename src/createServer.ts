@@ -614,8 +614,8 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
     moderatorAccounts,
     commandCenterId,
   } = options;
-  if (options.quarantineSkills !== undefined && typeof options.quarantineSkills !== 'boolean') throw new Error('Invalid host skill quarantine policy');
-  if (options.reviewedSkills && options.quarantineSkills !== true) throw new Error('Reviewed skills require quarantine');
+  if (options.quarantineSkills !== undefined && typeof options.quarantineSkills !== 'boolean') throw guidanceError(new Error('Invalid host skill quarantine policy'), 'guid-72c8f90b6634d561');
+  if (options.reviewedSkills && options.quarantineSkills !== true) throw guidanceError(new Error('Reviewed skills require quarantine'), 'guid-438233927132be39');
   const pathFilter = options.quarantineSkills ? new PathFilter({ quarantineSkills: true }, configuredPathFilter) : configuredPathFilter;
 
   const resolvedVaultPath = resolve(vaultPath);
@@ -760,7 +760,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
     ? options.compilation.adapterFactory?.({ fs: fileSystem, access: scopeAccess, wiki: llmWiki, comparison: sourceComparison, authorize: compilationAuthorize }) : undefined);
   const compilation = new CompilationService({ fs: fileSystem, access: scopeAccess, readOnly,
     ...options.compilation, ...(compilationAdapter && { adapter: compilationAdapter }), documentPolicy, authorize: compilationAuthorize });
-  if (options.evolution && options.evolutionRuntime) throw new Error('Choose one evolution runtime connection');
+  if (options.evolution && options.evolutionRuntime) throw guidanceError(new Error('Choose one evolution runtime connection'), 'guid-f322f95ad91242d5');
   const evolutionConnection = options.evolutionRuntime ? connectEvolutionRuntime(options.evolutionRuntime, {
     auth: scopeAuth, access: scopeAccess, fs: fileSystem, moderation, refreshPolicy: refreshDocumentPolicy,
     readOnly: Boolean(readOnly), retrieval, compilation, curationIndex: memoryIndex, wiki: llmWiki, adapters: { wiki: wikiEvolutionAdapter(compilation) },
@@ -892,7 +892,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
     ? new ReviewedSkillService(options.reviewedSkills.host, options.reviewedSkills.source, scopeAccess, scopeAuth, options.reviewedSkills.authorization ?? ownerActivityRuntime, {
       refreshAccess: refreshDocumentPolicy,
       assertActor: async principal => {
-        if (await moderation.isBanned(principal.accountId, principal.userId)) throw Error('Reviewed skill unavailable');
+        if (await moderation.isBanned(principal.accountId, principal.userId)) throw guidanceError(Error('Reviewed skill unavailable'), 'guid-9d9bb7483d9c38ff');
       },
     }) : undefined;
   if (reviewedSkills) retrieval.attachReviewedProcedures(reviewedSkills);
@@ -1903,19 +1903,19 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
           const { accessToken: _token, ...args } = trimmedArgs;
           const endpoint = toolName.endsWith('_feedback') ? 'feedback' : toolName.endsWith('_cycle') ? 'cycle' : 'context';
           if (endpoint === 'feedback' && args.op === 'request_review') {
-            if (!evolutionConnection) throw Error('Evolution operational connection unavailable');
+            if (!evolutionConnection) throw guidanceError(Error('Evolution operational connection unavailable'), 'guid-b07bf216bcd8fa4d');
             return jsonResult(await evolutionConnection.review.prepare(String(_token), args), false);
           }
           if (endpoint === 'cycle' && args.op === 'request_effect_review') {
-            if (!evolutionConnection) throw Error('Evolution operational connection unavailable');
+            if (!evolutionConnection) throw guidanceError(Error('Evolution operational connection unavailable'), 'guid-b07bf216bcd8fa4d');
             return jsonResult(await evolutionConnection.review.prepareEffect(String(_token), args), false);
           }
           if (endpoint === 'context' && args.op === 'begin') {
-            if (!evolutionConnection) throw Error('Evolution operational connection unavailable');
+            if (!evolutionConnection) throw guidanceError(Error('Evolution operational connection unavailable'), 'guid-b07bf216bcd8fa4d');
             return jsonResult(await evolutionConnection.operations.begin(String(_token), args), false);
           }
           if (endpoint === 'context' && args.op === 'observations') {
-            if (!evolutionConnection) throw Error('Evolution operational connection unavailable');
+            if (!evolutionConnection) throw guidanceError(Error('Evolution operational connection unavailable'), 'guid-b07bf216bcd8fa4d');
             return jsonResult(await evolutionConnection.operations.observations(String(_token), args), false);
           }
           const result = await evolution.execute(endpoint, args, principal, async () => { await revalidateActor(); });
@@ -3153,7 +3153,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         case 'read_work_project': return jsonResult(await requiredService(work).project({ ...trimmedArgs, principal }), false);
         case 'resolve_skill': {
           if (options.quarantineSkills) {
-            if (!reviewedSkills) throw Error('Reviewed skill unavailable');
+            if (!reviewedSkills) throw guidanceError(Error('Reviewed skill unavailable'), 'guid-9d9bb7483d9c38ff');
             return jsonResult(await reviewedSkills.resolve({ ...trimmedArgs, principal }, fence => {
               finalOwnerRefresh = fence.revalidate; finalOwnerValidator = fence.assertFresh;
             }), false);
@@ -3426,8 +3426,8 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         }
 
             case "search_notes": {
-          if (trimmedArgs.resultKind !== undefined && !['notes', 'procedures'].includes(trimmedArgs.resultKind)) throw Error('Invalid search result kind');
-          if (trimmedArgs.cursor !== undefined && trimmedArgs.resultKind !== 'procedures') throw Error('Continuation requires procedure search');
+          if (trimmedArgs.resultKind !== undefined && !['notes', 'procedures'].includes(trimmedArgs.resultKind)) throw guidanceError(Error('Invalid search result kind'), 'guid-a9737fd102fc799e');
+          if (trimmedArgs.cursor !== undefined && trimmedArgs.resultKind !== 'procedures') throw guidanceError(Error('Continuation requires procedure search'), 'guid-11514e958b008491');
           if (trimmedArgs.resultKind === 'procedures') {
             return jsonResult(await retrieval.searchProcedures({ ...trimmedArgs, principal }, fence => {
               finalOwnerRefresh = fence.revalidate; finalOwnerValidator = fence.assertFresh;
@@ -3985,9 +3985,9 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
     const args = name === 'call_endpoint' ? { ...input.arguments, ...(input.accessToken !== undefined && { accessToken: input.accessToken }) } : input;
     if (args.evolutionTask === undefined && args.evolutionRequestId === undefined) return dispatchCore(name, input, mcpPresentation);
     try {
-      if (!evolutionConnection) throw Error('Evolution operational connection unavailable');
+      if (!evolutionConnection) throw guidanceError(Error('Evolution operational connection unavailable'), 'guid-b07bf216bcd8fa4d');
       const endpoint = name === 'call_endpoint' ? endpointRegistry.resolve(input.endpointId) : endpointRegistry.resolve(endpointIdForTool(name));
-      if (!endpoint) throw Error('Unknown endpoint');
+      if (!endpoint) throw guidanceError(Error('Unknown endpoint'), 'guid-0dc2e17ffad26766');
       const { evolutionTask: _task, evolutionRequestId: _request, ...clean } = args;
       return await evolutionConnection.operations.run(String(args.accessToken), endpoint.endpointId, args,
         () => dispatchCore(name, name === 'call_endpoint' ? { ...input, arguments: clean } : clean, mcpPresentation));
@@ -4013,10 +4013,10 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
   SERVER_RUNTIMES.set(server, {
     issueTrustedResearchSession: (accountId, reportedAgentLabel) => scopeAuth.issueTrustedResearchSession(accountId, reportedAgentLabel),
     ...(layeredMemory && { confirmMemoryRetention: async (accessToken: string, receipt: string, contextGeneration: string) => {
-      const principal = await scopeAuth.authenticate(accessToken); if (!principal) throw Error('Memory session unavailable');
+      const principal = await scopeAuth.authenticate(accessToken); if (!principal) throw guidanceError(Error('Memory session unavailable'), 'guid-6c0d7855e65819af');
       layeredMemory.exposure.confirm(principal, receipt, contextGeneration);
     }, invalidateMemoryRetention: async (accessToken: string) => {
-      const principal = await scopeAuth.authenticate(accessToken); if (!principal) throw Error('Memory session unavailable');
+      const principal = await scopeAuth.authenticate(accessToken); if (!principal) throw guidanceError(Error('Memory session unavailable'), 'guid-6c0d7855e65819af');
       layeredMemory.exposure.invalidate(principal);
     } }),
     ...(evolutionConnection && { evolutionHost: evolutionConnection.host }),

@@ -128,14 +128,14 @@ export class SkillEvolutionService {
     } catch { return { ...original, ...(current && { current }), status: 'needs_review', reason: guidanceText('guid-fc0ee7e770e458a6', 'Current version or its evaluation basis changed; using the source pending review.') }; }
   }
   async resolve(p: Params): Promise<SkillData> {
-    if(p.view!==undefined&&p.view!=='procedure'&&p.view!=='metadata')throw new Error('Invalid skill resolve view');
-    if(p.section!==undefined&&p.view!=='metadata')throw new Error('Skill metadata section requires metadata view');
+    if(p.view!==undefined&&p.view!=='procedure'&&p.view!=='metadata')throw guidanceError(new Error('Invalid skill resolve view'), 'guid-4272ed95276d0396');
+    if(p.section!==undefined&&p.view!=='metadata')throw guidanceError(new Error('Skill metadata section requires metadata view'), 'guid-a89319550ca964e3');
     const section=p.view==='metadata'?skillMetadataSection(p.section):undefined;
     const axis=skillMetadataAxis(p.axis);
-    if(axis&&section!=='impact')throw new Error('Skill axis requires metadata impact section');
+    if(axis&&section!=='impact')throw guidanceError(new Error('Skill axis requires metadata impact section'), 'guid-e6e65f7ff13dd9be');
     const id = skillId(p.skillId), b = await this.basis(id, p.principal);
     for(const [key,actual] of [['expectedRevision',b.revision],['expectedSourceRevision',b.source.revision],['expectedBundleRevision',fingerprint(b.sourceGuards)]]){
-      if(p[key!]!==undefined&&revision(p[key!])!==actual)throw new Error('Skill revision basis changed; resolve current metadata again');
+      if(p[key!]!==undefined&&revision(p[key!])!==actual)throw guidanceError(new Error('Skill revision basis changed; resolve current metadata again'), 'guid-1f149de573a1448c');
     }
     const actor=this.telemetryActor(p),version={skillId:id,path:b.path,revision:b.revision};
     if(section){

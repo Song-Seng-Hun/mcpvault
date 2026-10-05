@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { createHash } from 'node:crypto';
 import { parseSkillDescriptor, type SkillDescriptor } from './skill-descriptor.js';
 import type { SkillInventory } from './skill-review-inventory.js';
@@ -5,7 +6,7 @@ import type { SkillInventory } from './skill-review-inventory.js';
 const FIELDS=['kind','domains','purpose','useWhen','avoidWhen','keywords','inputs','outputs','effects','connections','examples','impactClaims','compatibility','relatedSkills','incompatibleSkills'] as const;
 type Field=typeof FIELDS[number];
 export interface SkillMetadataEvidence {fields:Field[];path:string;sha256:string;startLine:number;endLine:number;quote:string;interpretation:'literal'|'reviewer_inference'}
-const fail=():never=>{throw Error('Skill metadata evidence unavailable');};
+const fail=():never=>{throw guidanceError(Error('Skill metadata evidence unavailable'), 'guid-da2c2fef56532145');};
 const sha=(v:unknown):string=>typeof v==='string'&&/^[a-f0-9]{64}$/.test(v)?v:fail();
 function object(value:unknown,keys:readonly string[]):Record<string,unknown>{
   if(!value||typeof value!=='object'||Array.isArray(value))return fail();

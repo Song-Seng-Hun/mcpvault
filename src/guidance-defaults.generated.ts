@@ -12,7 +12,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 76
+        "line": 77
       }
     ]
   },
@@ -42,7 +42,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1369
+        "line": 1380
       }
     ]
   },
@@ -370,7 +370,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/computer-worlds.ts",
-        "line": 107
+        "line": 108
       }
     ]
   },
@@ -416,6 +416,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/independent-research.ts",
         "line": 93
+      }
+    ]
+  },
+  {
+    "id": "guid-01205736b4e7e021",
+    "kind": "error",
+    "template": "Invalid Auth0 agent labels",
+    "parts": [
+      "Invalid Auth0 agent labels"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/auth0-resource.ts",
+        "line": 70
       }
     ]
   },
@@ -732,7 +747,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 139
+        "line": 140
       }
     ]
   },
@@ -793,7 +808,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 4147
+        "line": 4166
       }
     ]
   },
@@ -1119,7 +1134,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1112
+        "line": 1123
       }
     ]
   },
@@ -1210,7 +1225,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 156
+        "line": 157
       }
     ]
   },
@@ -1286,7 +1301,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3282
+        "line": 3298
       }
     ]
   },
@@ -1429,7 +1444,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 276
+        "line": 277
       }
     ]
   },
@@ -1595,7 +1610,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 511
+        "line": 575
       }
     ]
   },
@@ -1659,7 +1674,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1554
+        "line": 1565
       }
     ]
   },
@@ -1674,7 +1689,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 112
+        "line": 113
       }
     ]
   },
@@ -1689,7 +1704,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/skill-release-evidence.ts",
-        "line": 7
+        "line": 8
       }
     ]
   },
@@ -1839,7 +1854,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1380
+        "line": 1391
       }
     ]
   },
@@ -2022,7 +2037,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 521
+        "line": 585
       }
     ]
   },
@@ -2322,7 +2337,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 141
+        "line": 142
       }
     ]
   },
@@ -2493,7 +2508,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/cli.ts",
-        "line": 76
+        "line": 91
       }
     ]
   },
@@ -2528,6 +2543,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-080db5b85e021b6d",
+    "kind": "prose",
+    "template": "Read one entry in this authenticated agent's private journal and its revision.",
+    "parts": [
+      "Read one entry in this authenticated agent's private journal and its revision."
+    ],
+    "binding": "projection",
+    "sources": [
+      {
+        "file": "src/record-tools.ts",
+        "line": 38
+      }
+    ]
+  },
+  {
     "id": "guid-081fd0d3ca94e84b",
     "kind": "error",
     "template": "Configure managed facilitation before submitting a managed step",
@@ -2553,7 +2583,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 704
+        "line": 768
       }
     ]
   },
@@ -2630,7 +2660,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3321
+        "line": 3337
       }
     ]
   },
@@ -2739,7 +2769,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 147
+        "line": 148
       }
     ]
   },
@@ -2814,7 +2844,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1134
+        "line": 1145
       }
     ]
   },
@@ -2829,7 +2859,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/endpoint-registry.ts",
-        "line": 876
+        "line": 878
       }
     ]
   },
@@ -3019,7 +3049,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 65
+        "line": 66
       }
     ]
   },
@@ -3299,7 +3329,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 185
+        "line": 186
       }
     ]
   },
@@ -3314,11 +3344,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1986
+        "line": 2002
       },
       {
         "file": "src/createServer.ts",
-        "line": 1988
+        "line": 2004
       }
     ]
   },
@@ -3333,7 +3363,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 105
+        "line": 106
       }
     ]
   },
@@ -3348,7 +3378,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/social.ts",
-        "line": 434
+        "line": 436
       }
     ]
   },
@@ -3637,6 +3667,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/work-tools.ts",
         "line": 13
+      }
+    ]
+  },
+  {
+    "id": "guid-0afc825b92b6ed1e",
+    "kind": "error",
+    "template": "--auth0-config requires --account-store, writable --mcp-http, and loopback binding",
+    "parts": [
+      "--auth0-config requires --account-store, writable --mcp-http, and loopback binding"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/cli.ts",
+        "line": 241
       }
     ]
   },
@@ -4158,7 +4203,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 153
+        "line": 157
       }
     ]
   },
@@ -4188,7 +4233,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 305
+        "line": 306
       }
     ]
   },
@@ -4225,6 +4270,10 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/independent-research-model.ts",
         "line": 63
+      },
+      {
+        "file": "src/record-tools.ts",
+        "line": 76
       },
       {
         "file": "src/work-model.ts",
@@ -4306,6 +4355,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/community-participation.ts",
         "line": 144
+      }
+    ]
+  },
+  {
+    "id": "guid-0cb2d36f65cb11b1",
+    "kind": "prose",
+    "template": "Relevant topic, such as knowledge or memory.",
+    "parts": [
+      "Relevant topic, such as knowledge or memory."
+    ],
+    "binding": "projection",
+    "sources": [
+      {
+        "file": "src/record-tools.ts",
+        "line": 15
       }
     ]
   },
@@ -4395,7 +4459,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1653
+        "line": 1664
       }
     ]
   },
@@ -4506,7 +4570,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 214
+        "line": 215
       }
     ]
   },
@@ -4738,7 +4802,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3974
+        "line": 3990
       }
     ]
   },
@@ -4768,7 +4832,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 260
+        "line": 261
       }
     ]
   },
@@ -4798,7 +4862,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1529
+        "line": 1540
       }
     ]
   },
@@ -4964,7 +5028,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 162
+        "line": 163
       }
     ]
   },
@@ -5009,7 +5073,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1016
+        "line": 1027
       }
     ]
   },
@@ -5039,7 +5103,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/social.ts",
-        "line": 542
+        "line": 544
       }
     ]
   },
@@ -5054,11 +5118,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1822
+        "line": 1838
       },
       {
         "file": "src/createServer.ts",
-        "line": 2859
+        "line": 2875
       }
     ]
   },
@@ -5251,7 +5315,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1105
+        "line": 1116
       }
     ]
   },
@@ -5590,7 +5654,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 200
+        "line": 201
       }
     ]
   },
@@ -5710,7 +5774,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/cli.ts",
-        "line": 66
+        "line": 81
       }
     ]
   },
@@ -5815,7 +5879,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3414
+        "line": 3430
       }
     ]
   },
@@ -5960,6 +6024,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-119cba938638a56f",
+    "kind": "prose",
+    "template": "Find an advanced endpoint with one query per intent (limit 3); use direct recording tools for journal and note work. For large schemas, read endpointId# plus a JSON Pointer and follow nextCursor without changing the query.",
+    "parts": [
+      "Find an advanced endpoint with one query per intent (limit 3); use direct recording tools for journal and note work. For large schemas, read endpointId# plus a JSON Pointer and follow nextCursor without changing the query."
+    ],
+    "binding": "projection",
+    "sources": [
+      {
+        "file": "src/createServer.ts",
+        "line": 505
+      }
+    ]
+  },
+  {
     "id": "guid-11a38fc1b40c95cc",
     "kind": "error",
     "template": "Invalid story sequence operation",
@@ -5985,7 +6064,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 326
+        "line": 327
       }
     ]
   },
@@ -6046,6 +6125,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/story-session.ts",
         "line": 158
+      }
+    ]
+  },
+  {
+    "id": "guid-11e05b3662aced30",
+    "kind": "error",
+    "template": "Approved research account cannot be a moderator",
+    "parts": [
+      "Approved research account cannot be a moderator"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/scope-auth.ts",
+        "line": 429
       }
     ]
   },
@@ -6150,7 +6244,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 921
+        "line": 932
       }
     ]
   },
@@ -6316,7 +6410,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 169
+        "line": 170
       }
     ]
   },
@@ -6331,7 +6425,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 70
+        "line": 71
       }
     ]
   },
@@ -6511,7 +6605,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2050
+        "line": 2066
       }
     ]
   },
@@ -6735,7 +6829,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 198
+        "line": 199
       }
     ]
   },
@@ -6830,7 +6924,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 281
+        "line": 282
       }
     ]
   },
@@ -7003,7 +7097,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1525
+        "line": 1536
       }
     ]
   },
@@ -7026,19 +7120,19 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       },
       {
         "file": "src/createServer.ts",
-        "line": 3690
+        "line": 3706
       },
       {
         "file": "src/createServer.ts",
-        "line": 3747
+        "line": 3763
       },
       {
         "file": "src/createServer.ts",
-        "line": 3809
+        "line": 3825
       },
       {
         "file": "src/endpoint-registry.ts",
-        "line": 112
+        "line": 113
       },
       {
         "file": "src/filesystem.ts",
@@ -7116,7 +7210,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       },
       {
         "file": "src/social.ts",
-        "line": 322
+        "line": 324
       }
     ]
   },
@@ -7206,7 +7300,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 644
+        "line": 708
       }
     ]
   },
@@ -7324,7 +7418,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/computer-worlds.ts",
-        "line": 83
+        "line": 84
       }
     ]
   },
@@ -7553,7 +7647,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/owner-activity-mtls.ts",
-        "line": 11
+        "line": 12
       }
     ]
   },
@@ -7674,11 +7768,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 857
+        "line": 867
       },
       {
         "file": "src/createServer.ts",
-        "line": 871
+        "line": 881
       }
     ]
   },
@@ -7723,7 +7817,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 338
+        "line": 339
       }
     ]
   },
@@ -7939,7 +8033,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1239
+        "line": 1250
       }
     ]
   },
@@ -7970,7 +8064,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1617
+        "line": 1628
       }
     ]
   },
@@ -8031,7 +8125,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 152
+        "line": 153
       }
     ]
   },
@@ -8106,7 +8200,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1384
+        "line": 1395
       }
     ]
   },
@@ -8490,7 +8584,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1728
+        "line": 1744
       }
     ]
   },
@@ -8535,7 +8629,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 267
+        "line": 268
       }
     ]
   },
@@ -8631,6 +8725,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-194f59451bdcf4e3",
+    "kind": "error",
+    "template": "Research OAuth sessions are unavailable in enterprise mode",
+    "parts": [
+      "Research OAuth sessions are unavailable in enterprise mode"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/scope-auth.ts",
+        "line": 407
+      }
+    ]
+  },
+  {
     "id": "guid-1952a59a9dfb5c69",
     "kind": "error",
     "template": "{arg0} must use a supported scope URI",
@@ -8661,7 +8770,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1307
+        "line": 1318
       }
     ]
   },
@@ -8916,7 +9025,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2304
+        "line": 2320
       }
     ]
   },
@@ -8951,7 +9060,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 182
+        "line": 183
       }
     ]
   },
@@ -9191,7 +9300,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 291
+        "line": 292
       }
     ]
   },
@@ -9331,7 +9440,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3367
+        "line": 3383
       }
     ]
   },
@@ -9423,7 +9532,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1106
+        "line": 1117
       }
     ]
   },
@@ -9493,7 +9602,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/social.ts",
-        "line": 840
+        "line": 842
       }
     ]
   },
@@ -9689,7 +9798,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1258
+        "line": 1269
       }
     ]
   },
@@ -9796,7 +9905,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 142
+        "line": 143
       }
     ]
   },
@@ -9973,7 +10082,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/computer-world-tools.ts",
-        "line": 14
+        "line": 15
       }
     ]
   },
@@ -10019,7 +10128,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/computer-worlds.ts",
-        "line": 137
+        "line": 138
       }
     ]
   },
@@ -10065,7 +10174,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 4167
+        "line": 4186
       }
     ]
   },
@@ -10110,7 +10219,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 225
+        "line": 226
       }
     ]
   },
@@ -10187,7 +10296,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 321
+        "line": 322
       }
     ]
   },
@@ -10217,7 +10326,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3100
+        "line": 3116
       }
     ]
   },
@@ -10507,7 +10616,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 238
+        "line": 239
       }
     ]
   },
@@ -10639,7 +10748,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/social.ts",
-        "line": 435
+        "line": 437
       }
     ]
   },
@@ -10684,7 +10793,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1201
+        "line": 1212
       }
     ]
   },
@@ -10729,7 +10838,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3686
+        "line": 3702
       },
       {
         "file": "src/filesystem.ts",
@@ -10823,7 +10932,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1348
+        "line": 1359
       }
     ]
   },
@@ -10947,7 +11056,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2056
+        "line": 2072
       }
     ]
   },
@@ -10962,7 +11071,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/social.ts",
-        "line": 858
+        "line": 860
       }
     ]
   },
@@ -11114,7 +11223,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 224
+        "line": 225
       }
     ]
   },
@@ -11435,6 +11544,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-2122ab3188c5c8d5",
+    "kind": "error",
+    "template": "Invalid Auth0 resource configuration",
+    "parts": [
+      "Invalid Auth0 resource configuration"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/auth0-resource.ts",
+        "line": 55
+      }
+    ]
+  },
+  {
     "id": "guid-212b5867b16f9ed0",
     "kind": "error",
     "template": "Evolution reference visibility changed; refresh",
@@ -11537,7 +11661,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 279
+        "line": 280
       }
     ]
   },
@@ -11576,7 +11700,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       },
       {
         "file": "src/social.ts",
-        "line": 443
+        "line": 445
       }
     ]
   },
@@ -11606,7 +11730,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 768
+        "line": 778
       }
     ]
   },
@@ -11666,7 +11790,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 211
+        "line": 212
       }
     ]
   },
@@ -11696,11 +11820,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/computer-worlds.ts",
-        "line": 101
+        "line": 102
       },
       {
         "file": "src/computer-worlds.ts",
-        "line": 196
+        "line": 197
       }
     ]
   },
@@ -11715,7 +11839,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 241
+        "line": 242
       }
     ]
   },
@@ -11776,7 +11900,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 515
+        "line": 579
       }
     ]
   },
@@ -11830,7 +11954,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 71
+        "line": 72
       }
     ]
   },
@@ -11876,7 +12000,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3329
+        "line": 3345
       }
     ]
   },
@@ -11891,7 +12015,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 128
+        "line": 129
       }
     ]
   },
@@ -12027,7 +12151,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 212
+        "line": 213
       }
     ]
   },
@@ -12193,7 +12317,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/social.ts",
-        "line": 476
+        "line": 478
       }
     ]
   },
@@ -12208,7 +12332,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1130
+        "line": 1141
       }
     ]
   },
@@ -12375,11 +12499,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/computer-worlds.ts",
-        "line": 134
+        "line": 135
       },
       {
         "file": "src/computer-worlds.ts",
-        "line": 168
+        "line": 169
       }
     ]
   },
@@ -12425,7 +12549,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/computer-world-tools.ts",
-        "line": 21
+        "line": 22
       }
     ]
   },
@@ -12471,7 +12595,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 490
+        "line": 494
       }
     ]
   },
@@ -12486,7 +12610,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1604
+        "line": 1615
       }
     ]
   },
@@ -12652,7 +12776,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 4158
+        "line": 4177
       }
     ]
   },
@@ -12853,7 +12977,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1778
+        "line": 1794
       }
     ]
   },
@@ -13043,7 +13167,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 424
+        "line": 488
       }
     ]
   },
@@ -13058,7 +13182,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 146
+        "line": 147
       }
     ]
   },
@@ -13327,7 +13451,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3325
+        "line": 3341
       }
     ]
   },
@@ -13422,7 +13546,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3704
+        "line": 3720
       },
       {
         "file": "src/filesystem.ts",
@@ -13572,7 +13696,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 96
+        "line": 97
       }
     ]
   },
@@ -13677,7 +13801,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1414
+        "line": 1425
       }
     ]
   },
@@ -13707,7 +13831,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 220
+        "line": 221
       }
     ]
   },
@@ -13893,7 +14017,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1998
+        "line": 2014
       }
     ]
   },
@@ -13998,7 +14122,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/computer-worlds.ts",
-        "line": 64
+        "line": 65
       }
     ]
   },
@@ -14047,7 +14171,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 985
+        "line": 996
       }
     ]
   },
@@ -14167,7 +14291,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/skill-release-admission.ts",
-        "line": 10
+        "line": 11
       }
     ]
   },
@@ -14197,7 +14321,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 272
+        "line": 273
       }
     ]
   },
@@ -14212,7 +14336,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1206
+        "line": 1217
       }
     ]
   },
@@ -14227,7 +14351,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 83
+        "line": 84
       }
     ]
   },
@@ -14243,15 +14367,15 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/social.ts",
-        "line": 759
+        "line": 761
       },
       {
         "file": "src/social.ts",
-        "line": 839
+        "line": 841
       },
       {
         "file": "src/social.ts",
-        "line": 857
+        "line": 859
       }
     ]
   },
@@ -14266,7 +14390,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1192
+        "line": 1203
       }
     ]
   },
@@ -14390,7 +14514,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 167
+        "line": 168
       }
     ]
   },
@@ -14471,7 +14595,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       },
       {
         "file": "src/social.ts",
-        "line": 981
+        "line": 983
       }
     ]
   },
@@ -14652,7 +14776,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 255
+        "line": 256
       }
     ]
   },
@@ -14667,7 +14791,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1471
+        "line": 1482
       }
     ]
   },
@@ -14682,7 +14806,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1175
+        "line": 1186
       }
     ]
   },
@@ -14727,7 +14851,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 618
+        "line": 627
       }
     ]
   },
@@ -14826,6 +14950,30 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-2ab49cc206963279",
+    "kind": "error",
+    "template": "Invalid Auth0 {arg0}",
+    "parts": [
+      "Invalid Auth0 ",
+      ""
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/auth0-resource.ts",
+        "line": 30
+      },
+      {
+        "file": "src/auth0-resource.ts",
+        "line": 32
+      },
+      {
+        "file": "src/auth0-resource.ts",
+        "line": 35
+      }
+    ]
+  },
+  {
     "id": "guid-2ab84d9fc5a09972",
     "kind": "error",
     "template": "Unknown staffing field",
@@ -14870,7 +15018,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 240
+        "line": 241
       }
     ]
   },
@@ -14990,7 +15138,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 444
+        "line": 508
       }
     ]
   },
@@ -15212,7 +15360,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 312
+        "line": 313
       }
     ]
   },
@@ -15448,7 +15596,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 171
+        "line": 172
       }
     ]
   },
@@ -15539,7 +15687,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/frontmatter.ts",
-        "line": 53
+        "line": 54
       }
     ]
   },
@@ -15781,7 +15929,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 506
+        "line": 513
       }
     ]
   },
@@ -16282,7 +16430,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/cli.ts",
-        "line": 96
+        "line": 111
       }
     ]
   },
@@ -16523,7 +16671,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 253
+        "line": 254
       }
     ]
   },
@@ -16614,7 +16762,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1388
+        "line": 1399
       }
     ]
   },
@@ -16932,7 +17080,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 159
+        "line": 163
       }
     ]
   },
@@ -17010,6 +17158,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/work-responsibility.ts",
         "line": 22
+      }
+    ]
+  },
+  {
+    "id": "guid-322cb2e37c28d777",
+    "kind": "error",
+    "template": "Invalid research request session",
+    "parts": [
+      "Invalid research request session"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/auth0-resource.ts",
+        "line": 99
       }
     ]
   },
@@ -17145,7 +17308,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1052
+        "line": 1063
       }
     ]
   },
@@ -17485,7 +17648,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3279
+        "line": 3295
       }
     ]
   },
@@ -17515,7 +17678,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 159
+        "line": 160
       }
     ]
   },
@@ -17624,7 +17787,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3579
+        "line": 3595
       }
     ]
   },
@@ -17731,7 +17894,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 216
+        "line": 217
       }
     ]
   },
@@ -18089,7 +18252,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/social.ts",
-        "line": 348
+        "line": 350
       }
     ]
   },
@@ -18343,7 +18506,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 180
+        "line": 181
       }
     ]
   },
@@ -18358,7 +18521,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 311
+        "line": 312
       }
     ]
   },
@@ -18403,7 +18566,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 329
+        "line": 330
       }
     ]
   },
@@ -18441,7 +18604,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 84
+        "line": 85
       }
     ]
   },
@@ -18567,6 +18730,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/wiki-moc-regions.ts",
         "line": 92
+      }
+    ]
+  },
+  {
+    "id": "guid-37995853a8abc8b9",
+    "kind": "error",
+    "template": "Invalid Auth0 bearer token",
+    "parts": [
+      "Invalid Auth0 bearer token"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/auth0-resource.ts",
+        "line": 134
       }
     ]
   },
@@ -18967,7 +19145,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/computer-worlds.ts",
-        "line": 24
+        "line": 25
       }
     ]
   },
@@ -19012,11 +19190,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/social.ts",
-        "line": 841
+        "line": 843
       },
       {
         "file": "src/social.ts",
-        "line": 859
+        "line": 861
       }
     ]
   },
@@ -19386,7 +19564,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 302
+        "line": 303
       }
     ]
   },
@@ -19416,7 +19594,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 245
+        "line": 246
       }
     ]
   },
@@ -19571,7 +19749,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2033
+        "line": 2049
       }
     ]
   },
@@ -19726,7 +19904,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 99
+        "line": 100
       }
     ]
   },
@@ -19741,7 +19919,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 236
+        "line": 237
       }
     ]
   },
@@ -19803,7 +19981,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3846
+        "line": 3862
       }
     ]
   },
@@ -19818,7 +19996,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 67
+        "line": 68
       }
     ]
   },
@@ -19930,7 +20108,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/skill-release-source.ts",
-        "line": 28
+        "line": 29
       }
     ]
   },
@@ -19975,11 +20153,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1602
+        "line": 1613
       },
       {
         "file": "src/createServer.ts",
-        "line": 1620
+        "line": 1631
       }
     ]
   },
@@ -20116,22 +20294,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 4160
-      }
-    ]
-  },
-  {
-    "id": "guid-3c52ddad5dacddd5",
-    "kind": "prose",
-    "template": "Find an endpoint with one query per intent (limit 3). Select it, then call_endpoint. For large schemas, read endpointId# plus a JSON Pointer; follow descriptor queries or nextCursor without changing the query.",
-    "parts": [
-      "Find an endpoint with one query per intent (limit 3). Select it, then call_endpoint. For large schemas, read endpointId# plus a JSON Pointer; follow descriptor queries or nextCursor without changing the query."
-    ],
-    "binding": "projection",
-    "sources": [
-      {
-        "file": "src/createServer.ts",
-        "line": 500
+        "line": 4179
       }
     ]
   },
@@ -20434,15 +20597,15 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 839
+        "line": 849
       },
       {
         "file": "src/createServer.ts",
-        "line": 861
+        "line": 871
       },
       {
         "file": "src/createServer.ts",
-        "line": 1834
+        "line": 1850
       }
     ]
   },
@@ -20457,7 +20620,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1132
+        "line": 1143
       }
     ]
   },
@@ -20487,7 +20650,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 209
+        "line": 210
       }
     ]
   },
@@ -20834,7 +20997,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 489
+        "line": 492
       }
     ]
   },
@@ -20912,6 +21075,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/llm-wiki-tools.ts",
         "line": 321
+      }
+    ]
+  },
+  {
+    "id": "guid-3ede548dcda0efe6",
+    "kind": "error",
+    "template": "Invalid reported agent label",
+    "parts": [
+      "Invalid reported agent label"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/scope-auth.ts",
+        "line": 409
       }
     ]
   },
@@ -21003,7 +21181,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/computer-worlds.ts",
-        "line": 105
+        "line": 106
       }
     ]
   },
@@ -21094,7 +21272,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1944
+        "line": 1960
       }
     ]
   },
@@ -21192,7 +21370,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1391
+        "line": 1402
       }
     ]
   },
@@ -21207,7 +21385,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1803
+        "line": 1819
       }
     ]
   },
@@ -21291,7 +21469,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 197
+        "line": 198
       }
     ]
   },
@@ -21382,7 +21560,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2737
+        "line": 2753
       }
     ]
   },
@@ -21397,7 +21575,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3708
+        "line": 3724
       },
       {
         "file": "src/filesystem.ts",
@@ -21581,7 +21759,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 183
+        "line": 184
       }
     ]
   },
@@ -21611,7 +21789,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1702
+        "line": 1713
       }
     ]
   },
@@ -21631,6 +21809,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/independent-research.ts",
         "line": 265
+      }
+    ]
+  },
+  {
+    "id": "guid-41b7eab724a67a5e",
+    "kind": "error",
+    "template": "Conflicting agent labels",
+    "parts": [
+      "Conflicting agent labels"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/mcp-http.ts",
+        "line": 151
       }
     ]
   },
@@ -21695,7 +21888,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 590
+        "line": 654
       }
     ]
   },
@@ -21870,7 +22063,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 76
+        "line": 77
       }
     ]
   },
@@ -22127,7 +22320,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 250
+        "line": 251
       }
     ]
   },
@@ -22157,7 +22350,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 186
+        "line": 187
       }
     ]
   },
@@ -22247,7 +22440,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1698
+        "line": 1709
       }
     ]
   },
@@ -22292,7 +22485,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 609
+        "line": 618
       }
     ]
   },
@@ -22307,7 +22500,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 180
+        "line": 184
       }
     ]
   },
@@ -22352,7 +22545,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 199
+        "line": 200
       }
     ]
   },
@@ -22548,7 +22741,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1246
+        "line": 1257
       }
     ]
   },
@@ -22563,7 +22756,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1076
+        "line": 1087
       }
     ]
   },
@@ -22594,6 +22787,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/organization.ts",
         "line": 264
+      }
+    ]
+  },
+  {
+    "id": "guid-4480698b9bbbdd1e",
+    "kind": "error",
+    "template": "Reviewed NAS skill unavailable",
+    "parts": [
+      "Reviewed NAS skill unavailable"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/skill-release-vault.ts",
+        "line": 16
       }
     ]
   },
@@ -22698,7 +22906,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 204
+        "line": 205
       }
     ]
   },
@@ -22908,7 +23116,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 151
+        "line": 152
       }
     ]
   },
@@ -23021,7 +23229,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1308
+        "line": 1319
       }
     ]
   },
@@ -23052,7 +23260,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 553
+        "line": 562
       }
     ]
   },
@@ -23173,7 +23381,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1065
+        "line": 1076
       }
     ]
   },
@@ -23430,15 +23638,15 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1440
+        "line": 1451
       },
       {
         "file": "src/createServer.ts",
-        "line": 1453
+        "line": 1464
       },
       {
         "file": "src/createServer.ts",
-        "line": 1467
+        "line": 1478
       }
     ]
   },
@@ -23499,6 +23707,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/continuity-tools.ts",
         "line": 25
+      }
+    ]
+  },
+  {
+    "id": "guid-47a5d36409333d67",
+    "kind": "error",
+    "template": "Auth0 configuration must use an absolute private host path",
+    "parts": [
+      "Auth0 configuration must use an absolute private host path"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/auth0-resource.ts",
+        "line": 175
       }
     ]
   },
@@ -23618,7 +23841,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 443
+        "line": 507
       }
     ]
   },
@@ -23828,7 +24051,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/computer-worlds.ts",
-        "line": 118
+        "line": 119
       }
     ]
   },
@@ -24065,7 +24288,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 326
+        "line": 327
       }
     ]
   },
@@ -24204,7 +24427,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 294
+        "line": 295
       }
     ]
   },
@@ -24234,7 +24457,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1189
+        "line": 1200
       }
     ]
   },
@@ -24279,7 +24502,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/computer-worlds.ts",
-        "line": 141
+        "line": 142
       }
     ]
   },
@@ -24339,7 +24562,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1069
+        "line": 1080
       }
     ]
   },
@@ -24354,7 +24577,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1302
+        "line": 1313
       }
     ]
   },
@@ -24369,115 +24592,115 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 987
+        "line": 998
       },
       {
         "file": "src/createServer.ts",
-        "line": 1040
+        "line": 1051
       },
       {
         "file": "src/createServer.ts",
-        "line": 1080
+        "line": 1091
       },
       {
         "file": "src/createServer.ts",
-        "line": 1093
+        "line": 1104
       },
       {
         "file": "src/createServer.ts",
-        "line": 1194
+        "line": 1205
       },
       {
         "file": "src/createServer.ts",
-        "line": 1220
+        "line": 1231
       },
       {
         "file": "src/createServer.ts",
-        "line": 1232
+        "line": 1243
       },
       {
         "file": "src/createServer.ts",
-        "line": 1259
+        "line": 1270
       },
       {
         "file": "src/createServer.ts",
-        "line": 1311
+        "line": 1322
       },
       {
         "file": "src/createServer.ts",
-        "line": 1324
+        "line": 1335
       },
       {
         "file": "src/createServer.ts",
-        "line": 1336
+        "line": 1347
       },
       {
         "file": "src/createServer.ts",
-        "line": 1344
+        "line": 1355
       },
       {
         "file": "src/createServer.ts",
-        "line": 1358
+        "line": 1369
       },
       {
         "file": "src/createServer.ts",
-        "line": 1373
+        "line": 1384
       },
       {
         "file": "src/createServer.ts",
-        "line": 1394
+        "line": 1405
       },
       {
         "file": "src/createServer.ts",
-        "line": 1404
+        "line": 1415
       },
       {
         "file": "src/createServer.ts",
-        "line": 1429
+        "line": 1440
       },
       {
         "file": "src/createServer.ts",
-        "line": 1442
+        "line": 1453
       },
       {
         "file": "src/createServer.ts",
-        "line": 1456
+        "line": 1467
       },
       {
         "file": "src/createServer.ts",
-        "line": 1472
+        "line": 1483
       },
       {
         "file": "src/createServer.ts",
-        "line": 1500
+        "line": 1511
       },
       {
         "file": "src/createServer.ts",
-        "line": 1515
+        "line": 1526
       },
       {
         "file": "src/createServer.ts",
-        "line": 1544
+        "line": 1555
       },
       {
         "file": "src/createServer.ts",
-        "line": 1558
+        "line": 1569
       },
       {
         "file": "src/createServer.ts",
-        "line": 1573
+        "line": 1584
       },
       {
         "file": "src/createServer.ts",
-        "line": 1589
+        "line": 1600
       },
       {
         "file": "src/createServer.ts",
-        "line": 1605
+        "line": 1616
       },
       {
         "file": "src/createServer.ts",
-        "line": 1622
+        "line": 1633
       }
     ]
   },
@@ -24522,7 +24745,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2843
+        "line": 2859
       }
     ]
   },
@@ -24567,7 +24790,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 503
+        "line": 567
       }
     ]
   },
@@ -24768,11 +24991,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/social.ts",
-        "line": 882
+        "line": 884
       },
       {
         "file": "src/social.ts",
-        "line": 912
+        "line": 914
       }
     ]
   },
@@ -24803,7 +25026,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 518
+        "line": 582
       }
     ]
   },
@@ -24940,7 +25163,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2308
+        "line": 2324
       }
     ]
   },
@@ -25091,7 +25314,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/skill-release-store.ts",
-        "line": 10
+        "line": 11
       }
     ]
   },
@@ -25186,7 +25409,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 506
+        "line": 513
       }
     ]
   },
@@ -25556,7 +25779,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/computer-worlds.ts",
-        "line": 111
+        "line": 112
       }
     ]
   },
@@ -25601,7 +25824,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 596
+        "line": 605
       }
     ]
   },
@@ -25648,7 +25871,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 155
+        "line": 159
       }
     ]
   },
@@ -25773,11 +25996,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2013
+        "line": 2029
       },
       {
         "file": "src/createServer.ts",
-        "line": 2015
+        "line": 2031
       }
     ]
   },
@@ -25822,7 +26045,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 116
+        "line": 117
       }
     ]
   },
@@ -26035,7 +26258,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/mcp-http.ts",
-        "line": 178
+        "line": 218
       }
     ]
   },
@@ -26156,7 +26379,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 578
+        "line": 642
       }
     ]
   },
@@ -26233,7 +26456,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 223
+        "line": 224
       }
     ]
   },
@@ -26263,7 +26486,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1427
+        "line": 1438
       }
     ]
   },
@@ -26388,6 +26611,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/llm-wiki.ts",
         "line": 6916
+      }
+    ]
+  },
+  {
+    "id": "guid-4f68ff13ce9e486c",
+    "kind": "prose",
+    "template": "Optional self-reported activity label for approved OAuth clients; not an authentication identity",
+    "parts": [
+      "Optional self-reported activity label for approved OAuth clients; not an authentication identity"
+    ],
+    "binding": "projection",
+    "sources": [
+      {
+        "file": "src/createServer.ts",
+        "line": 513
       }
     ]
   },
@@ -26538,7 +26776,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 187
+        "line": 188
       }
     ]
   },
@@ -26553,7 +26791,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/skill-release-manifest.ts",
-        "line": 10
+        "line": 11
       }
     ]
   },
@@ -26598,7 +26836,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1370
+        "line": 1381
       }
     ]
   },
@@ -26720,11 +26958,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       },
       {
         "file": "src/social.ts",
-        "line": 557
+        "line": 559
       },
       {
         "file": "src/social.ts",
-        "line": 827
+        "line": 829
       }
     ]
   },
@@ -26754,7 +26992,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2044
+        "line": 2060
       }
     ]
   },
@@ -26932,7 +27170,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1148
+        "line": 1159
       }
     ]
   },
@@ -26992,7 +27230,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 91
+        "line": 92
       }
     ]
   },
@@ -27007,7 +27245,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 204
+        "line": 205
       }
     ]
   },
@@ -27128,7 +27366,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3639
+        "line": 3655
       }
     ]
   },
@@ -27301,7 +27539,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 938
+        "line": 949
       }
     ]
   },
@@ -27362,11 +27600,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/frontmatter.ts",
-        "line": 103
+        "line": 104
       },
       {
         "file": "src/frontmatter.ts",
-        "line": 200
+        "line": 201
       }
     ]
   },
@@ -27471,7 +27709,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1806
+        "line": 1822
       }
     ]
   },
@@ -27655,7 +27893,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 983
+        "line": 994
       }
     ]
   },
@@ -27779,7 +28017,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1162
+        "line": 1173
       }
     ]
   },
@@ -27825,7 +28063,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1810
+        "line": 1826
       }
     ]
   },
@@ -27885,7 +28123,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1770
+        "line": 1786
       }
     ]
   },
@@ -28081,7 +28319,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1116
+        "line": 1127
       }
     ]
   },
@@ -28294,7 +28532,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 296
+        "line": 297
       }
     ]
   },
@@ -28310,6 +28548,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/organization.ts",
         "line": 284
+      }
+    ]
+  },
+  {
+    "id": "guid-551377e658a9f804",
+    "kind": "error",
+    "template": "Invalid Auth0 account ID",
+    "parts": [
+      "Invalid Auth0 account ID"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/auth0-resource.ts",
+        "line": 65
       }
     ]
   },
@@ -28467,6 +28720,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-5574930dbe40beb6",
+    "kind": "error",
+    "template": "Approved research account is unavailable",
+    "parts": [
+      "Approved research account is unavailable"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/scope-auth.ts",
+        "line": 414
+      }
+    ]
+  },
+  {
     "id": "guid-55753ada0c1a566d",
     "kind": "prose",
     "template": "For noteKind=decision, prefer wiki.decision_record for creation and state transitions",
@@ -28569,7 +28837,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 215
+        "line": 216
       }
     ]
   },
@@ -28644,7 +28912,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1310
+        "line": 1321
       }
     ]
   },
@@ -28689,7 +28957,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 304
+        "line": 305
       }
     ]
   },
@@ -28719,11 +28987,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1161
+        "line": 1172
       },
       {
         "file": "src/createServer.ts",
-        "line": 1178
+        "line": 1189
       }
     ]
   },
@@ -28888,7 +29156,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1603
+        "line": 1614
       }
     ]
   },
@@ -28918,7 +29186,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 217
+        "line": 218
       }
     ]
   },
@@ -28948,7 +29216,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 210
+        "line": 221
       }
     ]
   },
@@ -28963,7 +29231,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/computer-worlds.ts",
-        "line": 72
+        "line": 73
       }
     ]
   },
@@ -29143,7 +29411,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 168
+        "line": 169
       }
     ]
   },
@@ -29549,7 +29817,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/cli.ts",
-        "line": 171
+        "line": 186
       }
     ]
   },
@@ -29581,7 +29849,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3608
+        "line": 3624
       }
     ]
   },
@@ -29687,7 +29955,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1177
+        "line": 1188
       }
     ]
   },
@@ -29732,7 +30000,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 201
+        "line": 202
       }
     ]
   },
@@ -30087,7 +30355,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1068
+        "line": 1079
       }
     ]
   },
@@ -30132,7 +30400,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 98
+        "line": 99
       }
     ]
   },
@@ -30358,7 +30626,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 73
+        "line": 74
       }
     ]
   },
@@ -30768,7 +31036,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/skill-evolution-tools.ts",
-        "line": 28
+        "line": 29
       }
     ]
   },
@@ -30813,7 +31081,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1793
+        "line": 1809
       }
     ]
   },
@@ -30896,9 +31164,10 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
   {
     "id": "guid-5bd06777d5cc8a8a",
     "kind": "error",
-    "template": "Fixed MCP tool schema cannot fit 5000 bytes; reduce the code-owned schema.",
+    "template": "Fixed MCP tool schema cannot fit {arg0} bytes; reduce the code-owned schema.",
     "parts": [
-      "Fixed MCP tool schema cannot fit 5000 bytes; reduce the code-owned schema."
+      "Fixed MCP tool schema cannot fit ",
+      " bytes; reduce the code-owned schema."
     ],
     "binding": "call",
     "sources": [
@@ -30934,7 +31203,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1074
+        "line": 1085
       }
     ]
   },
@@ -30964,7 +31233,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 125
+        "line": 126
       }
     ]
   },
@@ -31145,7 +31414,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 501
+        "line": 507
       }
     ]
   },
@@ -31360,7 +31629,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 697
+        "line": 761
       }
     ]
   },
@@ -31375,7 +31644,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 85
+        "line": 86
       }
     ]
   },
@@ -31439,7 +31708,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 76
+        "line": 77
       }
     ]
   },
@@ -31484,7 +31753,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1051
+        "line": 1062
       }
     ]
   },
@@ -31514,7 +31783,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 87
+        "line": 88
       }
     ]
   },
@@ -31655,7 +31924,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 702
+        "line": 766
       }
     ]
   },
@@ -31670,7 +31939,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 248
+        "line": 249
       }
     ]
   },
@@ -31766,7 +32035,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 163
+        "line": 164
       }
     ]
   },
@@ -31954,7 +32223,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/endpoint-registry.ts",
-        "line": 857
+        "line": 859
       }
     ]
   },
@@ -32099,7 +32368,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1421
+        "line": 1432
       }
     ]
   },
@@ -32148,7 +32417,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 143
+        "line": 144
       }
     ]
   },
@@ -32230,7 +32499,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 399
+        "line": 463
       }
     ]
   },
@@ -32480,7 +32749,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1163
+        "line": 1174
       }
     ]
   },
@@ -32510,7 +32779,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 156
+        "line": 157
       }
     ]
   },
@@ -32525,7 +32794,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 252
+        "line": 253
       }
     ]
   },
@@ -32570,7 +32839,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1455
+        "line": 1466
       }
     ]
   },
@@ -32615,7 +32884,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 226
+        "line": 227
       }
     ]
   },
@@ -32724,7 +32993,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 894
+        "line": 905
       }
     ]
   },
@@ -32769,7 +33038,22 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 278
+        "line": 279
+      }
+    ]
+  },
+  {
+    "id": "guid-61aba53b38236717",
+    "kind": "prose",
+    "template": "Merge Properties into an existing note without rewriting its body; read it first.",
+    "parts": [
+      "Merge Properties into an existing note without rewriting its body; read it first."
+    ],
+    "binding": "projection",
+    "sources": [
+      {
+        "file": "src/record-tools.ts",
+        "line": 65
       }
     ]
   },
@@ -32814,7 +33098,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 94
+        "line": 95
       }
     ]
   },
@@ -32829,7 +33113,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 359
+        "line": 386
       }
     ]
   },
@@ -32908,7 +33192,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 261
+        "line": 262
       }
     ]
   },
@@ -32959,7 +33243,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 4182
+        "line": 4201
       }
     ]
   },
@@ -33120,7 +33404,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2307
+        "line": 2323
       },
       {
         "file": "src/question-packet.ts",
@@ -33695,7 +33979,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1014
+        "line": 1025
       }
     ]
   },
@@ -34043,7 +34327,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/endpoint-registry.ts",
-        "line": 824
+        "line": 826
       }
     ]
   },
@@ -34092,7 +34376,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1053
+        "line": 1064
       }
     ]
   },
@@ -34107,7 +34391,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 984
+        "line": 995
       }
     ]
   },
@@ -34187,7 +34471,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 627
+        "line": 691
       }
     ]
   },
@@ -34368,7 +34652,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/computer-worlds.ts",
-        "line": 219
+        "line": 220
       }
     ]
   },
@@ -34689,7 +34973,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 478
+        "line": 542
       }
     ]
   },
@@ -34704,7 +34988,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 97
+        "line": 98
       }
     ]
   },
@@ -34905,7 +35189,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 221
+        "line": 222
       }
     ]
   },
@@ -34996,7 +35280,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 275
+        "line": 276
       }
     ]
   },
@@ -35026,7 +35310,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 177
+        "line": 178
       }
     ]
   },
@@ -35253,7 +35537,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/skill-usage.ts",
-        "line": 18
+        "line": 19
       }
     ]
   },
@@ -35283,7 +35567,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/skill-release-descriptor.ts",
-        "line": 10
+        "line": 11
       }
     ]
   },
@@ -35314,7 +35598,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 232
+        "line": 233
       }
     ]
   },
@@ -35479,7 +35763,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3978
+        "line": 3994
       }
     ]
   },
@@ -35540,7 +35824,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/social.ts",
-        "line": 454
+        "line": 456
       }
     ]
   },
@@ -35585,7 +35869,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1160
+        "line": 1171
       }
     ]
   },
@@ -35675,7 +35959,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 148
+        "line": 149
       }
     ]
   },
@@ -35735,7 +36019,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 371
+        "line": 372
       }
     ]
   },
@@ -35782,7 +36066,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 620
+        "line": 629
       }
     ]
   },
@@ -35831,7 +36115,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1335
+        "line": 1346
       }
     ]
   },
@@ -35846,11 +36130,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3997
+        "line": 4016
       },
       {
         "file": "src/createServer.ts",
-        "line": 4000
+        "line": 4019
       }
     ]
   },
@@ -35880,7 +36164,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 308
+        "line": 309
       }
     ]
   },
@@ -36015,7 +36299,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1385
+        "line": 1396
       }
     ]
   },
@@ -36302,7 +36586,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1828
+        "line": 1844
       }
     ]
   },
@@ -36332,15 +36616,15 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3724
+        "line": 3740
       },
       {
         "file": "src/createServer.ts",
-        "line": 3726
+        "line": 3742
       },
       {
         "file": "src/createServer.ts",
-        "line": 3730
+        "line": 3746
       }
     ]
   },
@@ -36355,7 +36639,22 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 270
+        "line": 271
+      }
+    ]
+  },
+  {
+    "id": "guid-6d3725dc060183c9",
+    "kind": "prose",
+    "template": "Read one Vault policy topic before authoring; guidance does not grant access.",
+    "parts": [
+      "Read one Vault policy topic before authoring; guidance does not grant access."
+    ],
+    "binding": "projection",
+    "sources": [
+      {
+        "file": "src/record-tools.ts",
+        "line": 13
       }
     ]
   },
@@ -36430,7 +36729,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 131
+        "line": 132
       }
     ]
   },
@@ -36475,7 +36774,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/mcp-http.ts",
-        "line": 166
+        "line": 203
       }
     ]
   },
@@ -36617,7 +36916,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 315
+        "line": 316
       }
     ]
   },
@@ -37019,7 +37318,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 982
+        "line": 993
       }
     ]
   },
@@ -37064,7 +37363,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 315
+        "line": 316
       }
     ]
   },
@@ -37155,7 +37454,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 149
+        "line": 150
       }
     ]
   },
@@ -37689,7 +37988,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/agent-pulse.ts",
-        "line": 402
+        "line": 406
       }
     ]
   },
@@ -37749,7 +38048,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 299
+        "line": 300
       }
     ]
   },
@@ -37907,7 +38206,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 397
+        "line": 398
       }
     ]
   },
@@ -38016,7 +38315,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2324
+        "line": 2340
       }
     ]
   },
@@ -38284,7 +38583,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1596
+        "line": 1607
       }
     ]
   },
@@ -38375,7 +38674,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1352
+        "line": 1363
       }
     ]
   },
@@ -38390,7 +38689,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 608
+        "line": 617
       },
       {
         "file": "src/pathfilter.ts",
@@ -38484,7 +38783,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 267
+        "line": 268
       }
     ]
   },
@@ -38797,7 +39096,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 127
+        "line": 128
       }
     ]
   },
@@ -39037,7 +39336,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/computer-worlds.ts",
-        "line": 41
+        "line": 42
       }
     ]
   },
@@ -39067,7 +39366,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 140
+        "line": 141
       }
     ]
   },
@@ -39248,7 +39547,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 354
+        "line": 381
       }
     ]
   },
@@ -39416,11 +39715,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/cli.ts",
-        "line": 178
+        "line": 193
       },
       {
         "file": "src/cli.ts",
-        "line": 186
+        "line": 201
       }
     ]
   },
@@ -39592,6 +39891,29 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/filesystem.ts",
         "line": 1439
+      }
+    ]
+  },
+  {
+    "id": "guid-76898a003bde43e1",
+    "kind": "error",
+    "template": "Invalid Auth0 local resource",
+    "parts": [
+      "Invalid Auth0 local resource"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/auth0-resource.ts",
+        "line": 43
+      },
+      {
+        "file": "src/auth0-resource.ts",
+        "line": 45
+      },
+      {
+        "file": "src/auth0-resource.ts",
+        "line": 48
       }
     ]
   },
@@ -39786,7 +40108,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 251
+        "line": 252
       }
     ]
   },
@@ -39937,7 +40259,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 735
+        "line": 799
       }
     ]
   },
@@ -40028,7 +40350,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3123
+        "line": 3139
       }
     ]
   },
@@ -40043,7 +40365,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 280
+        "line": 281
       }
     ]
   },
@@ -40073,7 +40395,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/computer-world-tools.ts",
-        "line": 25
+        "line": 26
       }
     ]
   },
@@ -40273,7 +40595,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 621
+        "line": 630
       }
     ]
   },
@@ -40760,7 +41082,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 153
+        "line": 154
       }
     ]
   },
@@ -40775,7 +41097,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 334
+        "line": 335
       }
     ]
   },
@@ -40850,7 +41172,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1322
+        "line": 1333
       }
     ]
   },
@@ -40910,7 +41232,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 229
+        "line": 230
       }
     ]
   },
@@ -41091,11 +41413,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/computer-worlds.ts",
-        "line": 93
+        "line": 94
       },
       {
         "file": "src/computer-worlds.ts",
-        "line": 189
+        "line": 190
       }
     ]
   },
@@ -41327,7 +41649,22 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/computer-worlds.ts",
-        "line": 155
+        "line": 156
+      }
+    ]
+  },
+  {
+    "id": "guid-7bc17cb42ff8d0df",
+    "kind": "prose",
+    "template": "Replace an existing private journal entry after reading its ID and revision; preserves omitted metadata.",
+    "parts": [
+      "Replace an existing private journal entry after reading its ID and revision; preserves omitted metadata."
+    ],
+    "binding": "projection",
+    "sources": [
+      {
+        "file": "src/record-tools.ts",
+        "line": 49
       }
     ]
   },
@@ -41342,7 +41679,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1454
+        "line": 1465
       }
     ]
   },
@@ -41728,7 +42065,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 273
+        "line": 274
       }
     ]
   },
@@ -41822,7 +42159,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1015
+        "line": 1026
       }
     ]
   },
@@ -41945,6 +42282,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/story-media.ts",
         "line": 179
+      }
+    ]
+  },
+  {
+    "id": "guid-7d69fdf2de6d53d1",
+    "kind": "error",
+    "template": "--account-store requires one existing private host account file",
+    "parts": [
+      "--account-store requires one existing private host account file"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/cli.ts",
+        "line": 62
       }
     ]
   },
@@ -42115,11 +42467,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/frontmatter.ts",
-        "line": 20
+        "line": 21
       },
       {
         "file": "src/frontmatter.ts",
-        "line": 21
+        "line": 22
       }
     ]
   },
@@ -42182,7 +42534,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 495
+        "line": 499
       }
     ]
   },
@@ -42227,7 +42579,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3320
+        "line": 3336
       }
     ]
   },
@@ -42302,7 +42654,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1648
+        "line": 1659
       }
     ]
   },
@@ -42368,7 +42720,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3739
+        "line": 3755
       }
     ]
   },
@@ -42459,7 +42811,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1253
+        "line": 1264
       }
     ]
   },
@@ -42662,7 +43014,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/computer-worlds.ts",
-        "line": 42
+        "line": 43
       }
     ]
   },
@@ -42864,11 +43216,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/social.ts",
-        "line": 733
+        "line": 735
       },
       {
         "file": "src/social.ts",
-        "line": 755
+        "line": 757
       }
     ]
   },
@@ -42898,7 +43250,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 496
+        "line": 560
       }
     ]
   },
@@ -42993,7 +43345,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 88
+        "line": 89
       }
     ]
   },
@@ -43038,7 +43390,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1001
+        "line": 1012
       }
     ]
   },
@@ -43053,7 +43405,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 196
+        "line": 197
       }
     ]
   },
@@ -43268,7 +43620,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 274
+        "line": 275
       }
     ]
   },
@@ -43373,7 +43725,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3575
+        "line": 3591
       }
     ]
   },
@@ -43480,7 +43832,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3108
+        "line": 3124
       }
     ]
   },
@@ -43608,7 +43960,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 119
+        "line": 120
       }
     ]
   },
@@ -43668,7 +44020,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1368
+        "line": 1379
       }
     ]
   },
@@ -43758,7 +44110,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1075
+        "line": 1086
       }
     ]
   },
@@ -43878,7 +44230,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 267
+        "line": 268
       }
     ]
   },
@@ -44075,7 +44427,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1117
+        "line": 1128
       }
     ]
   },
@@ -44429,7 +44781,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1470
+        "line": 1481
       }
     ]
   },
@@ -44459,7 +44811,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 379
+        "line": 443
       }
     ]
   },
@@ -44535,7 +44887,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1818
+        "line": 1834
       }
     ]
   },
@@ -44550,7 +44902,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/mcp-http.ts",
-        "line": 172
+        "line": 209
       }
     ]
   },
@@ -44610,7 +44962,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1131
+        "line": 1142
       }
     ]
   },
@@ -44640,7 +44992,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1176
+        "line": 1187
       }
     ]
   },
@@ -44773,7 +45125,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 416
+        "line": 480
       }
     ]
   },
@@ -44863,7 +45215,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/social.ts",
-        "line": 547
+        "line": 549
       }
     ]
   },
@@ -44893,11 +45245,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1514
+        "line": 1525
       },
       {
         "file": "src/createServer.ts",
-        "line": 1527
+        "line": 1538
       }
     ]
   },
@@ -44972,7 +45324,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 209
+        "line": 210
       }
     ]
   },
@@ -45253,7 +45605,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 245
+        "line": 246
       }
     ]
   },
@@ -45328,7 +45680,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/social.ts",
-        "line": 452
+        "line": 454
       }
     ]
   },
@@ -45360,7 +45712,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3838
+        "line": 3854
       }
     ]
   },
@@ -45671,7 +46023,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 111
+        "line": 112
       }
     ]
   },
@@ -45701,7 +46053,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 309
+        "line": 310
       }
     ]
   },
@@ -45907,6 +46259,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-89b2e4c108fca361",
+    "kind": "error",
+    "template": "Auth0 MCP HTTP requires its own loopback listener",
+    "parts": [
+      "Auth0 MCP HTTP requires its own loopback listener"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/mcp-http.ts",
+        "line": 215
+      }
+    ]
+  },
+  {
     "id": "guid-89b9f6e7fd68a36c",
     "kind": "prose",
     "template": "Visible note identities resolve exact paths, filenames, titles, aliases, preferred terms, stable IDs, and explicit relative paths; ambiguity is repair debt, not permission to guess.",
@@ -45917,7 +46284,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 145
+        "line": 146
       }
     ]
   },
@@ -46101,7 +46468,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/skill-evolution-tools.ts",
-        "line": 32
+        "line": 33
       }
     ]
   },
@@ -46242,19 +46609,19 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1542
+        "line": 1553
       },
       {
         "file": "src/createServer.ts",
-        "line": 1556
+        "line": 1567
       },
       {
         "file": "src/createServer.ts",
-        "line": 1571
+        "line": 1582
       },
       {
         "file": "src/createServer.ts",
-        "line": 1587
+        "line": 1598
       }
     ]
   },
@@ -46362,7 +46729,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/cli.ts",
-        "line": 150
+        "line": 165
       }
     ]
   },
@@ -46392,7 +46759,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1830
+        "line": 1846
       }
     ]
   },
@@ -46438,7 +46805,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 322
+        "line": 323
       }
     ]
   },
@@ -46499,7 +46866,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 213
+        "line": 214
       }
     ]
   },
@@ -46668,7 +47035,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1207
+        "line": 1218
       }
     ]
   },
@@ -46728,7 +47095,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 172
+        "line": 173
       }
     ]
   },
@@ -46819,7 +47186,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 222
+        "line": 223
       }
     ]
   },
@@ -46879,7 +47246,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 234
+        "line": 235
       }
     ]
   },
@@ -47000,7 +47367,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3835
+        "line": 3851
       }
     ]
   },
@@ -47075,7 +47442,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/cli.ts",
-        "line": 57
+        "line": 72
       }
     ]
   },
@@ -47292,7 +47659,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3333
+        "line": 3349
       }
     ]
   },
@@ -47368,6 +47735,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/moderation-tools.ts",
         "line": 14
+      }
+    ]
+  },
+  {
+    "id": "guid-8ed5a2cf383e15ff",
+    "kind": "prose",
+    "template": "Optional Obsidian Properties including note_kind and evidence_paths.",
+    "parts": [
+      "Optional Obsidian Properties including note_kind and evidence_paths."
+    ],
+    "binding": "projection",
+    "sources": [
+      {
+        "file": "src/record-tools.ts",
+        "line": 57
       }
     ]
   },
@@ -47488,7 +47870,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 490
+        "line": 494
       }
     ]
   },
@@ -47820,7 +48202,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/computer-worlds.ts",
-        "line": 179
+        "line": 180
       }
     ]
   },
@@ -48001,6 +48383,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/llm-wiki-tools.ts",
         "line": 324
+      }
+    ]
+  },
+  {
+    "id": "guid-90e7e4634bbc9463",
+    "kind": "prose",
+    "template": "Run one exact advanced endpoint selected by orient_wiki or search_capabilities; it may mutate or reach external systems. Use direct recording tools for journals and notes. If orientation sets stopAfterAction, answer after this call.",
+    "parts": [
+      "Run one exact advanced endpoint selected by orient_wiki or search_capabilities; it may mutate or reach external systems. Use direct recording tools for journals and notes. If orientation sets stopAfterAction, answer after this call."
+    ],
+    "binding": "projection",
+    "sources": [
+      {
+        "file": "src/createServer.ts",
+        "line": 511
       }
     ]
   },
@@ -48218,7 +48615,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 177
+        "line": 178
       }
     ]
   },
@@ -48249,7 +48646,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3961
+        "line": 3977
       }
     ]
   },
@@ -48529,7 +48926,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/skill-release-host.ts",
-        "line": 13
+        "line": 15
       }
     ]
   },
@@ -48589,7 +48986,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/skill-descriptor.ts",
-        "line": 17
+        "line": 18
       }
     ]
   },
@@ -48649,7 +49046,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 144
+        "line": 145
       }
     ]
   },
@@ -48679,7 +49076,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/social.ts",
-        "line": 798
+        "line": 800
       }
     ]
   },
@@ -48728,7 +49125,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 242
+        "line": 243
       }
     ]
   },
@@ -48833,7 +49230,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 335
+        "line": 362
       }
     ]
   },
@@ -48848,7 +49245,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 323
+        "line": 324
       }
     ]
   },
@@ -49077,7 +49474,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1494
+        "line": 1505
       }
     ]
   },
@@ -49168,7 +49565,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 986
+        "line": 997
       }
     ]
   },
@@ -49277,7 +49674,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 151
+        "line": 155
       }
     ]
   },
@@ -49444,7 +49841,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 190
+        "line": 191
       }
     ]
   },
@@ -49956,7 +50353,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3710
+        "line": 3726
       },
       {
         "file": "src/filesystem.ts",
@@ -50170,7 +50567,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 119
+        "line": 120
       }
     ]
   },
@@ -50249,7 +50646,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1078
+        "line": 1089
       }
     ]
   },
@@ -50294,7 +50691,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 190
+        "line": 191
       }
     ]
   },
@@ -50324,7 +50721,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 239
+        "line": 240
       }
     ]
   },
@@ -50354,7 +50751,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1079
+        "line": 1090
       }
     ]
   },
@@ -50384,7 +50781,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1469
+        "line": 1480
       }
     ]
   },
@@ -50445,7 +50842,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/cli.ts",
-        "line": 112
+        "line": 127
       }
     ]
   },
@@ -50602,7 +50999,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 72
+        "line": 73
       }
     ]
   },
@@ -50632,7 +51029,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/mcp-http.ts",
-        "line": 175
+        "line": 212
       }
     ]
   },
@@ -51022,7 +51419,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/social.ts",
-        "line": 760
+        "line": 762
       }
     ]
   },
@@ -51176,7 +51573,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1393
+        "line": 1404
       }
     ]
   },
@@ -51258,6 +51655,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-9bc10cf4a46e918b",
+    "kind": "error",
+    "template": "Unapproved agent label",
+    "parts": [
+      "Unapproved agent label"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/mcp-http.ts",
+        "line": 148
+      }
+    ]
+  },
+  {
     "id": "guid-9bc2b606e7b4bfb1",
     "kind": "prose",
     "template": "treating a manifest as an access grant",
@@ -51268,7 +51680,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 326
+        "line": 327
       }
     ]
   },
@@ -51328,7 +51740,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1126
+        "line": 1137
       }
     ]
   },
@@ -51343,7 +51755,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/windows-private-acl.ts",
-        "line": 35
+        "line": 36
       }
     ]
   },
@@ -51391,6 +51803,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/workshop-facilitation.ts",
         "line": 419
+      }
+    ]
+  },
+  {
+    "id": "guid-9cd0b39c6022a8b0",
+    "kind": "error",
+    "template": "Private account store is missing, unsafe or unavailable; host provisioning is required",
+    "parts": [
+      "Private account store is missing, unsafe or unavailable; host provisioning is required"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/account-store.ts",
+        "line": 19
       }
     ]
   },
@@ -51497,7 +51924,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/computer-worlds.ts",
-        "line": 102
+        "line": 103
       }
     ]
   },
@@ -51546,7 +51973,22 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1827
+        "line": 1843
+      }
+    ]
+  },
+  {
+    "id": "guid-9d32d5dde50a813a",
+    "kind": "error",
+    "template": "linked file",
+    "parts": [
+      "linked file"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/account-store.ts",
+        "line": 15
       }
     ]
   },
@@ -51636,11 +52078,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/social.ts",
-        "line": 779
+        "line": 781
       },
       {
         "file": "src/social.ts",
-        "line": 797
+        "line": 799
       }
     ]
   },
@@ -51715,27 +52157,27 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 885
+        "line": 895
       },
       {
         "file": "src/createServer.ts",
-        "line": 3140
+        "line": 3156
       },
       {
         "file": "src/skill-release-card.ts",
-        "line": 10
+        "line": 11
       },
       {
         "file": "src/skill-release-discovery.ts",
-        "line": 15
+        "line": 16
       },
       {
         "file": "src/skill-release-reader.ts",
-        "line": 31
+        "line": 37
       },
       {
         "file": "src/skill-release-service.ts",
-        "line": 8
+        "line": 9
       }
     ]
   },
@@ -51952,7 +52394,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2970
+        "line": 2986
       }
     ]
   },
@@ -52021,7 +52463,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 257
+        "line": 258
       }
     ]
   },
@@ -52187,7 +52629,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/computer-worlds.ts",
-        "line": 32
+        "line": 33
       }
     ]
   },
@@ -52357,7 +52799,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/computer-worlds.ts",
-        "line": 37
+        "line": 38
       }
     ]
   },
@@ -52404,7 +52846,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 91
+        "line": 92
       }
     ]
   },
@@ -52509,7 +52951,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/cli.ts",
-        "line": 113
+        "line": 128
       }
     ]
   },
@@ -52569,7 +53011,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 177
+        "line": 178
       }
     ]
   },
@@ -52646,11 +53088,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/cli.ts",
-        "line": 193
+        "line": 208
       },
       {
         "file": "src/cli.ts",
-        "line": 201
+        "line": 216
       }
     ]
   },
@@ -52759,7 +53201,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1354
+        "line": 1365
       }
     ]
   },
@@ -52789,7 +53231,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1426
+        "line": 1437
       }
     ]
   },
@@ -52804,7 +53246,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 290
+        "line": 291
       }
     ]
   },
@@ -52853,7 +53295,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1970
+        "line": 1986
       }
     ]
   },
@@ -52883,7 +53325,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1155
+        "line": 1166
       }
     ]
   },
@@ -53069,7 +53511,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3283
+        "line": 3299
       }
     ]
   },
@@ -53159,7 +53601,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 285
+        "line": 286
       }
     ]
   },
@@ -53348,7 +53790,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1649
+        "line": 1660
       }
     ]
   },
@@ -53363,7 +53805,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1585
+        "line": 1596
       }
     ]
   },
@@ -53408,7 +53850,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/social.ts",
-        "line": 481
+        "line": 483
       }
     ]
   },
@@ -53470,7 +53912,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 397
+        "line": 398
       }
     ]
   },
@@ -53501,7 +53943,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 524
+        "line": 588
       }
     ]
   },
@@ -53760,7 +54202,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 397
+        "line": 398
       }
     ]
   },
@@ -53855,6 +54297,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/story-projects.ts",
         "line": 66
+      }
+    ]
+  },
+  {
+    "id": "guid-a4426c1cde3030b3",
+    "kind": "error",
+    "template": "Invalid Auth0 scope",
+    "parts": [
+      "Invalid Auth0 scope"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/auth0-resource.ts",
+        "line": 59
       }
     ]
   },
@@ -54080,7 +54537,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 254
+        "line": 255
       }
     ]
   },
@@ -54231,7 +54688,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 91
+        "line": 92
       }
     ]
   },
@@ -54246,7 +54703,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1392
+        "line": 1403
       }
     ]
   },
@@ -54321,7 +54778,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 235
+        "line": 236
       }
     ]
   },
@@ -54381,7 +54838,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/cli.ts",
-        "line": 71
+        "line": 86
       }
     ]
   },
@@ -54487,7 +54944,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1038
+        "line": 1049
       }
     ]
   },
@@ -54517,7 +54974,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 593
+        "line": 657
       }
     ]
   },
@@ -54876,7 +55333,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 258
+        "line": 259
       }
     ]
   },
@@ -54992,7 +55449,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1568
+        "line": 1579
       }
     ]
   },
@@ -55172,7 +55629,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 338
+        "line": 339
       }
     ]
   },
@@ -55187,7 +55644,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 173
+        "line": 174
       }
     ]
   },
@@ -55333,7 +55790,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/computer-worlds.ts",
-        "line": 75
+        "line": 76
       }
     ]
   },
@@ -55484,7 +55941,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 999
+        "line": 1010
       }
     ]
   },
@@ -55499,7 +55956,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3413
+        "line": 3429
       }
     ]
   },
@@ -55559,7 +56016,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 263
+        "line": 264
       }
     ]
   },
@@ -55697,7 +56154,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1479
+        "line": 1490
       }
     ]
   },
@@ -55808,7 +56265,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 237
+        "line": 238
       }
     ]
   },
@@ -55853,7 +56310,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1009
+        "line": 1020
       }
     ]
   },
@@ -55928,7 +56385,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 122
+        "line": 123
       }
     ]
   },
@@ -56004,7 +56461,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 81
+        "line": 82
       }
     ]
   },
@@ -56034,7 +56491,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3737
+        "line": 3753
       }
     ]
   },
@@ -56365,7 +56822,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 288
+        "line": 289
       }
     ]
   },
@@ -56425,7 +56882,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 150
+        "line": 151
       }
     ]
   },
@@ -56543,7 +57000,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1071
+        "line": 1082
       }
     ]
   },
@@ -56604,7 +57061,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1002
+        "line": 1013
       }
     ]
   },
@@ -56650,6 +57107,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/expression-profile.ts",
         "line": 23
+      }
+    ]
+  },
+  {
+    "id": "guid-acd377c668be57e6",
+    "kind": "error",
+    "template": "Invalid Auth0 subject",
+    "parts": [
+      "Invalid Auth0 subject"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/auth0-resource.ts",
+        "line": 62
       }
     ]
   },
@@ -56774,6 +57246,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-ad4f0d80c2047ed3",
+    "kind": "error",
+    "template": "--auth0-config requires one existing private host configuration file",
+    "parts": [
+      "--auth0-config requires one existing private host configuration file"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/cli.ts",
+        "line": 67
+      }
+    ]
+  },
+  {
     "id": "guid-ad6d20f0c683f558",
     "kind": "error",
     "template": "Recover the pending delegated output before closing",
@@ -56893,7 +57380,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1390
+        "line": 1401
       }
     ]
   },
@@ -57031,7 +57518,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       },
       {
         "file": "src/social.ts",
-        "line": 804
+        "line": 806
       }
     ]
   },
@@ -57095,7 +57582,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/computer-worlds.ts",
-        "line": 40
+        "line": 41
       }
     ]
   },
@@ -57290,7 +57777,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 114
+        "line": 115
       }
     ]
   },
@@ -57365,7 +57852,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1569
+        "line": 1580
       }
     ]
   },
@@ -57520,7 +58007,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1037
+        "line": 1048
       }
     ]
   },
@@ -57535,7 +58022,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1023
+        "line": 1034
       }
     ]
   },
@@ -57550,7 +58037,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1343
+        "line": 1354
       }
     ]
   },
@@ -57672,23 +58159,23 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1890
+        "line": 1906
       },
       {
         "file": "src/createServer.ts",
-        "line": 1894
+        "line": 1910
       },
       {
         "file": "src/createServer.ts",
-        "line": 1898
+        "line": 1914
       },
       {
         "file": "src/createServer.ts",
-        "line": 1902
+        "line": 1918
       },
       {
         "file": "src/createServer.ts",
-        "line": 3972
+        "line": 3988
       }
     ]
   },
@@ -57883,7 +58370,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 134
+        "line": 135
       }
     ]
   },
@@ -57959,7 +58446,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 58
+        "line": 59
       }
     ]
   },
@@ -58034,7 +58521,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1436
+        "line": 1447
       }
     ]
   },
@@ -58049,7 +58536,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 174
+        "line": 175
       }
     ]
   },
@@ -58157,6 +58644,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-b1ff1d8ff9f33750",
+    "kind": "prose",
+    "template": "Read one visible Wiki/research note and its current revision; use that revision for edits.",
+    "parts": [
+      "Read one visible Wiki/research note and its current revision; use that revision for edits."
+    ],
+    "binding": "projection",
+    "sources": [
+      {
+        "file": "src/record-tools.ts",
+        "line": 28
+      }
+    ]
+  },
+  {
     "id": "guid-b20827703930ef73",
     "kind": "error",
     "template": "High-risk work cannot use automatic mechanical payment",
@@ -58258,7 +58760,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 156
+        "line": 157
       }
     ]
   },
@@ -58273,7 +58775,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1227
+        "line": 1238
       }
     ]
   },
@@ -58333,7 +58835,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 82
+        "line": 83
       }
     ]
   },
@@ -58348,7 +58850,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 193
+        "line": 194
       }
     ]
   },
@@ -58531,7 +59033,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/skill-usage.ts",
-        "line": 8
+        "line": 9
       }
     ]
   },
@@ -58591,7 +59093,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 119
+        "line": 120
       }
     ]
   },
@@ -58624,7 +59126,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 126
+        "line": 127
       }
     ]
   },
@@ -58689,7 +59191,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3319
+        "line": 3335
       }
     ]
   },
@@ -58768,7 +59270,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 307
+        "line": 308
       }
     ]
   },
@@ -58813,7 +59315,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1100
+        "line": 1111
       }
     ]
   },
@@ -58904,11 +59406,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1159
+        "line": 1170
       },
       {
         "file": "src/createServer.ts",
-        "line": 1321
+        "line": 1332
       }
     ]
   },
@@ -58968,7 +59470,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 229
+        "line": 230
       }
     ]
   },
@@ -59176,7 +59678,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 100
+        "line": 101
       }
     ]
   },
@@ -59221,7 +59723,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 229
+        "line": 230
       }
     ]
   },
@@ -59297,7 +59799,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 66
+        "line": 67
       }
     ]
   },
@@ -59328,7 +59830,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 79
+        "line": 80
       }
     ]
   },
@@ -59393,7 +59895,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 218
+        "line": 219
       }
     ]
   },
@@ -59409,6 +59911,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/enterprise-registry.ts",
         "line": 583
+      }
+    ]
+  },
+  {
+    "id": "guid-b5aecabf26a81915",
+    "kind": "prose",
+    "template": "Local session token; omit for OAuth, whose host supplies it.",
+    "parts": [
+      "Local session token; omit for OAuth, whose host supplies it."
+    ],
+    "binding": "projection",
+    "sources": [
+      {
+        "file": "src/record-tools.ts",
+        "line": 4
       }
     ]
   },
@@ -59483,7 +60000,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/cli.ts",
-        "line": 131
+        "line": 146
       }
     ]
   },
@@ -59547,7 +60064,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 699
+        "line": 763
       }
     ]
   },
@@ -59612,7 +60129,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1215
+        "line": 1226
       }
     ]
   },
@@ -59672,7 +60189,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 320
+        "line": 321
       }
     ]
   },
@@ -59687,7 +60204,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 101
+        "line": 102
       }
     ]
   },
@@ -59824,7 +60341,22 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1317
+        "line": 1328
+      }
+    ]
+  },
+  {
+    "id": "guid-b6f8ab194166cca0",
+    "kind": "error",
+    "template": "expectedRevision must be the current 64-character revision",
+    "parts": [
+      "expectedRevision must be the current 64-character revision"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/record-tools.ts",
+        "line": 82
       }
     ]
   },
@@ -60200,7 +60732,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/cli.ts",
-        "line": 106
+        "line": 121
       }
     ]
   },
@@ -60290,7 +60822,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1410
+        "line": 1421
       }
     ]
   },
@@ -60383,7 +60915,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 219
+        "line": 220
       }
     ]
   },
@@ -60458,7 +60990,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3572
+        "line": 3588
       }
     ]
   },
@@ -60519,7 +61051,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/social.ts",
-        "line": 397
+        "line": 399
       }
     ]
   },
@@ -60534,7 +61066,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 429
+        "line": 493
       }
     ]
   },
@@ -60564,7 +61096,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1174
+        "line": 1185
       }
     ]
   },
@@ -60871,7 +61403,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/computer-worlds.ts",
-        "line": 35
+        "line": 36
       }
     ]
   },
@@ -60886,7 +61418,22 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/audit.ts",
-        "line": 102
+        "line": 105
+      }
+    ]
+  },
+  {
+    "id": "guid-baaa71412419a0c8",
+    "kind": "prose",
+    "template": "Create a new Wiki/research Markdown note at an authorized path; never overwrite an existing note.",
+    "parts": [
+      "Create a new Wiki/research Markdown note at an authorized path; never overwrite an existing note."
+    ],
+    "binding": "projection",
+    "sources": [
+      {
+        "file": "src/record-tools.ts",
+        "line": 54
       }
     ]
   },
@@ -60931,7 +61478,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/computer-worlds.ts",
-        "line": 139
+        "line": 140
       }
     ]
   },
@@ -61088,7 +61635,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1387
+        "line": 1398
       }
     ]
   },
@@ -61103,7 +61650,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 259
+        "line": 260
       }
     ]
   },
@@ -61163,7 +61710,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1067
+        "line": 1078
       }
     ]
   },
@@ -61311,7 +61858,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       },
       {
         "file": "src/frontmatter.ts",
-        "line": 215
+        "line": 216
       }
     ]
   },
@@ -61387,7 +61934,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1070
+        "line": 1081
       }
     ]
   },
@@ -61418,7 +61965,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/social.ts",
-        "line": 466
+        "line": 468
       }
     ]
   },
@@ -61629,7 +62176,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1054
+        "line": 1065
       }
     ]
   },
@@ -61659,7 +62206,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/skill-passport.ts",
-        "line": 8
+        "line": 9
       }
     ]
   },
@@ -61693,7 +62240,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 476
+        "line": 540
       }
     ]
   },
@@ -61896,6 +62443,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-be7e1cd1ca1f454c",
+    "kind": "error",
+    "template": "Approved research account lacks required capabilities",
+    "parts": [
+      "Approved research account lacks required capabilities"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/scope-auth.ts",
+        "line": 431
+      }
+    ]
+  },
+  {
     "id": "guid-be8515a686263419",
     "kind": "error",
     "template": "Every participant must identify a registered account",
@@ -61921,7 +62483,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 4176
+        "line": 4195
       }
     ]
   },
@@ -61936,7 +62498,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1389
+        "line": 1400
       }
     ]
   },
@@ -62156,7 +62718,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       },
       {
         "file": "src/social.ts",
-        "line": 569
+        "line": 571
       }
     ]
   },
@@ -62293,7 +62855,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1025
+        "line": 1036
       }
     ]
   },
@@ -62342,7 +62904,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/computer-worlds.ts",
-        "line": 162
+        "line": 163
       }
     ]
   },
@@ -62462,7 +63024,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 310
+        "line": 311
       }
     ]
   },
@@ -62628,7 +63190,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 285
+        "line": 286
       }
     ]
   },
@@ -62643,7 +63205,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1775
+        "line": 1791
       }
     ]
   },
@@ -62768,7 +63330,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 388
+        "line": 452
       }
     ]
   },
@@ -62784,6 +63346,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/llm-wiki.ts",
         "line": 13260
+      }
+    ]
+  },
+  {
+    "id": "guid-c12290389af50945",
+    "kind": "prose",
+    "template": "Replace one exact passage in an existing note, preserving unrelated body and Properties; read it first.",
+    "parts": [
+      "Replace one exact passage in an existing note, preserving unrelated body and Properties; read it first."
+    ],
+    "binding": "projection",
+    "sources": [
+      {
+        "file": "src/record-tools.ts",
+        "line": 60
       }
     ]
   },
@@ -62923,7 +63500,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 331
+        "line": 332
       }
     ]
   },
@@ -63003,7 +63580,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/computer-worlds.ts",
-        "line": 114
+        "line": 115
       }
     ]
   },
@@ -63124,11 +63701,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1513
+        "line": 1524
       },
       {
         "file": "src/createServer.ts",
-        "line": 1526
+        "line": 1537
       }
     ]
   },
@@ -63338,11 +63915,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1353
+        "line": 1364
       },
       {
         "file": "src/createServer.ts",
-        "line": 1386
+        "line": 1397
       }
     ]
   },
@@ -63357,7 +63934,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/computer-worlds.ts",
-        "line": 100
+        "line": 101
       }
     ]
   },
@@ -63508,7 +64085,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/endpoint-registry.ts",
-        "line": 118
+        "line": 119
       },
       {
         "file": "src/search-limits.ts",
@@ -63562,7 +64139,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 181
+        "line": 182
       }
     ]
   },
@@ -63782,7 +64359,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/social.ts",
-        "line": 982
+        "line": 984
       }
     ]
   },
@@ -63918,7 +64495,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/social.ts",
-        "line": 396
+        "line": 398
       }
     ]
   },
@@ -64003,6 +64580,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-c4ca4dcc8cecd877",
+    "kind": "error",
+    "template": "Private account store requires an absolute personal-host path without enterprise overrides",
+    "parts": [
+      "Private account store requires an absolute personal-host path without enterprise overrides"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/scope-auth.ts",
+        "line": 216
+      }
+    ]
+  },
+  {
     "id": "guid-c4cf9013a99eeca3",
     "kind": "error",
     "template": "Evidence locator is invalid for {arg0}: {arg1}",
@@ -64076,7 +64668,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 178
+        "line": 182
       }
     ]
   },
@@ -64284,7 +64876,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 739
+        "line": 803
       }
     ]
   },
@@ -64474,7 +65066,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 119
+        "line": 120
       }
     ]
   },
@@ -64489,7 +65081,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/computer-worlds.ts",
-        "line": 28
+        "line": 29
       }
     ]
   },
@@ -64504,7 +65096,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 332
+        "line": 333
       }
     ]
   },
@@ -64519,7 +65111,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 131
+        "line": 132
       }
     ]
   },
@@ -64703,7 +65295,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1679
+        "line": 1690
       }
     ]
   },
@@ -64861,7 +65453,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 115
+        "line": 116
       }
     ]
   },
@@ -64876,27 +65468,27 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1039
+        "line": 1050
       },
       {
         "file": "src/createServer.ts",
-        "line": 1543
+        "line": 1554
       },
       {
         "file": "src/createServer.ts",
-        "line": 1557
+        "line": 1568
       },
       {
         "file": "src/createServer.ts",
-        "line": 1572
+        "line": 1583
       },
       {
         "file": "src/createServer.ts",
-        "line": 1588
+        "line": 1599
       },
       {
         "file": "src/createServer.ts",
-        "line": 1621
+        "line": 1632
       }
     ]
   },
@@ -65031,7 +65623,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 113
+        "line": 114
       }
     ]
   },
@@ -65046,7 +65638,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 362
+        "line": 389
       }
     ]
   },
@@ -65076,7 +65668,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1309
+        "line": 1320
       }
     ]
   },
@@ -65091,7 +65683,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 207
+        "line": 208
       }
     ]
   },
@@ -65181,7 +65773,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3264
+        "line": 3280
       }
     ]
   },
@@ -65400,21 +65992,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-c8bcabfd301a5c8f",
-    "kind": "prose",
-    "template": "Run one exact endpoint selected by orient_wiki or search_capabilities, with its documented arguments. Do not call the URL or search again. If orientation sets stopAfterAction, answer after this call; do not chain guides or dashboards.",
-    "parts": [
-      "Run one exact endpoint selected by orient_wiki or search_capabilities, with its documented arguments. Do not call the URL or search again. If orientation sets stopAfterAction, answer after this call; do not chain guides or dashboards."
-    ],
-    "binding": "projection",
-    "sources": [
-      {
-        "file": "src/createServer.ts",
-        "line": 505
-      }
-    ]
-  },
-  {
     "id": "guid-c8d6bdd82febaacb",
     "kind": "error",
     "template": "Host feature configuration requires exactly version and selected fields",
@@ -65516,7 +66093,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1046
+        "line": 1057
       }
     ]
   },
@@ -65531,7 +66108,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1193
+        "line": 1204
       }
     ]
   },
@@ -65821,7 +66398,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1364
+        "line": 1375
       }
     ]
   },
@@ -65866,7 +66443,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1584
+        "line": 1595
       }
     ]
   },
@@ -65926,7 +66503,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1017
+        "line": 1028
       }
     ]
   },
@@ -65986,7 +66563,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1790
+        "line": 1806
       }
     ]
   },
@@ -66122,7 +66699,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 62
+        "line": 63
       }
     ]
   },
@@ -66138,7 +66715,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 4195
+        "line": 4214
       }
     ]
   },
@@ -66260,7 +66837,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1425
+        "line": 1436
       }
     ]
   },
@@ -66290,7 +66867,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 295
+        "line": 296
       }
     ]
   },
@@ -66335,7 +66912,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1032
+        "line": 1043
       }
     ]
   },
@@ -66822,7 +67399,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 293
+        "line": 294
       }
     ]
   },
@@ -66837,7 +67414,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/computer-worlds.ts",
-        "line": 39
+        "line": 40
       }
     ]
   },
@@ -66921,7 +67498,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/endpoint-registry.ts",
-        "line": 730
+        "line": 731
       }
     ]
   },
@@ -67071,7 +67648,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 292
+        "line": 293
       }
     ]
   },
@@ -67147,7 +67724,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/skill-passport.ts",
-        "line": 12
+        "line": 13
       }
     ]
   },
@@ -67162,7 +67739,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1509
+        "line": 1520
       }
     ]
   },
@@ -67290,7 +67867,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1191
+        "line": 1202
       }
     ]
   },
@@ -67395,7 +67972,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 299
+        "line": 300
       }
     ]
   },
@@ -67456,7 +68033,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1463
+        "line": 1474
       }
     ]
   },
@@ -67760,7 +68337,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1019
+        "line": 1030
       }
     ]
   },
@@ -67836,7 +68413,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 76
+        "line": 77
       }
     ]
   },
@@ -67866,7 +68443,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1372
+        "line": 1383
       }
     ]
   },
@@ -67941,7 +68518,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 138
+        "line": 139
       }
     ]
   },
@@ -68001,7 +68578,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 69
+        "line": 70
       }
     ]
   },
@@ -68291,35 +68868,35 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 980
+        "line": 991
       },
       {
         "file": "src/createServer.ts",
-        "line": 998
+        "line": 1009
       },
       {
         "file": "src/createServer.ts",
-        "line": 1013
+        "line": 1024
       },
       {
         "file": "src/createServer.ts",
-        "line": 1050
+        "line": 1061
       },
       {
         "file": "src/createServer.ts",
-        "line": 1231
+        "line": 1242
       },
       {
         "file": "src/createServer.ts",
-        "line": 1243
+        "line": 1254
       },
       {
         "file": "src/createServer.ts",
-        "line": 1600
+        "line": 1611
       },
       {
         "file": "src/createServer.ts",
-        "line": 1616
+        "line": 1627
       }
     ]
   },
@@ -68425,15 +69002,15 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2055
+        "line": 2071
       },
       {
         "file": "src/createServer.ts",
-        "line": 2060
+        "line": 2076
       },
       {
         "file": "src/createServer.ts",
-        "line": 2061
+        "line": 2077
       }
     ]
   },
@@ -68608,7 +69185,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/frontmatter.ts",
-        "line": 51
+        "line": 52
       }
     ]
   },
@@ -68668,7 +69245,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1036
+        "line": 1047
       }
     ]
   },
@@ -68713,7 +69290,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1323
+        "line": 1334
       }
     ]
   },
@@ -68744,7 +69321,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3932
+        "line": 3948
       }
     ]
   },
@@ -68774,7 +69351,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 91
+        "line": 92
       }
     ]
   },
@@ -68835,7 +69412,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/mcp-http.ts",
-        "line": 169
+        "line": 206
       }
     ]
   },
@@ -69094,7 +69671,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3956
+        "line": 3972
       }
     ]
   },
@@ -69110,6 +69687,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/global-sync.ts",
         "line": 823
+      }
+    ]
+  },
+  {
+    "id": "guid-d336dc0c8552cb0d",
+    "kind": "prose",
+    "template": "Optional approved OAuth activity label, not an identity or access grant.",
+    "parts": [
+      "Optional approved OAuth activity label, not an identity or access grant."
+    ],
+    "binding": "projection",
+    "sources": [
+      {
+        "file": "src/record-tools.ts",
+        "line": 5
       }
     ]
   },
@@ -69204,7 +69796,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1133
+        "line": 1144
       }
     ]
   },
@@ -69264,7 +69856,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1000
+        "line": 1011
       }
     ]
   },
@@ -69294,7 +69886,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/social.ts",
-        "line": 377
+        "line": 379
       }
     ]
   },
@@ -69385,7 +69977,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 86
+        "line": 87
       }
     ]
   },
@@ -69492,7 +70084,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 105
+        "line": 106
       }
     ]
   },
@@ -69507,7 +70099,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1185
+        "line": 1196
       }
     ]
   },
@@ -69717,7 +70309,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 105
+        "line": 106
       }
     ]
   },
@@ -69837,7 +70429,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 245
+        "line": 246
       }
     ]
   },
@@ -69875,7 +70467,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 285
+        "line": 286
       }
     ]
   },
@@ -69971,7 +70563,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 4169
+        "line": 4188
       }
     ]
   },
@@ -70190,7 +70782,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1357
+        "line": 1368
       }
     ]
   },
@@ -70251,7 +70843,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1601
+        "line": 1612
       }
     ]
   },
@@ -70341,7 +70933,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 245
+        "line": 246
       }
     ]
   },
@@ -70401,7 +70993,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 204
+        "line": 205
       }
     ]
   },
@@ -70416,7 +71008,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1077
+        "line": 1088
       }
     ]
   },
@@ -70495,7 +71087,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 407
+        "line": 408
       }
     ]
   },
@@ -70601,7 +71193,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1723
+        "line": 1739
       }
     ]
   },
@@ -70798,7 +71390,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1092
+        "line": 1103
       }
     ]
   },
@@ -70813,7 +71405,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 439
+        "line": 503
       }
     ]
   },
@@ -70873,7 +71465,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1170
+        "line": 1181
       }
     ]
   },
@@ -70888,7 +71480,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 321
+        "line": 348
       }
     ]
   },
@@ -70918,7 +71510,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1306
+        "line": 1317
       }
     ]
   },
@@ -70948,7 +71540,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1024
+        "line": 1035
       }
     ]
   },
@@ -71009,7 +71601,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1540
+        "line": 1551
       }
     ]
   },
@@ -71024,7 +71616,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/cli.ts",
-        "line": 62
+        "line": 77
       }
     ]
   },
@@ -71162,7 +71754,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/skill-review-evidence.ts",
-        "line": 8
+        "line": 9
       }
     ]
   },
@@ -71268,7 +71860,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1487
+        "line": 1498
       }
     ]
   },
@@ -71283,7 +71875,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/social.ts",
-        "line": 320
+        "line": 322
       }
     ]
   },
@@ -71364,7 +71956,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 901
+        "line": 912
       }
     ]
   },
@@ -71394,7 +71986,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 285
+        "line": 286
       }
     ]
   },
@@ -71503,7 +72095,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/computer-worlds.ts",
-        "line": 23
+        "line": 24
       }
     ]
   },
@@ -71578,7 +72170,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 976
+        "line": 987
       }
     ]
   },
@@ -71718,7 +72310,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 333
+        "line": 334
       }
     ]
   },
@@ -72065,7 +72657,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1612
+        "line": 1623
       }
     ]
   },
@@ -72096,7 +72688,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 709
+        "line": 773
       }
     ]
   },
@@ -72161,7 +72753,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 262
+        "line": 263
       }
     ]
   },
@@ -72236,19 +72828,19 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1541
+        "line": 1552
       },
       {
         "file": "src/createServer.ts",
-        "line": 1555
+        "line": 1566
       },
       {
         "file": "src/createServer.ts",
-        "line": 1570
+        "line": 1581
       },
       {
         "file": "src/createServer.ts",
-        "line": 1586
+        "line": 1597
       }
     ]
   },
@@ -72263,7 +72855,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 102
+        "line": 103
       }
     ]
   },
@@ -72449,7 +73041,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/computer-worlds.ts",
-        "line": 108
+        "line": 109
       }
     ]
   },
@@ -72464,7 +73056,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 137
+        "line": 138
       }
     ]
   },
@@ -72479,7 +73071,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 480
+        "line": 544
       }
     ]
   },
@@ -72524,7 +73116,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 170
+        "line": 171
       }
     ]
   },
@@ -72539,7 +73131,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/computer-worlds.ts",
-        "line": 74
+        "line": 75
       }
     ]
   },
@@ -72554,7 +73146,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1208
+        "line": 1219
       }
     ]
   },
@@ -72737,7 +73329,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 353
+        "line": 354
       }
     ]
   },
@@ -72752,7 +73344,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1113
+        "line": 1124
       }
     ]
   },
@@ -72797,7 +73389,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 299
+        "line": 300
       }
     ]
   },
@@ -72876,7 +73468,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 124
+        "line": 125
       }
     ]
   },
@@ -72921,7 +73513,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3778
+        "line": 3794
       }
     ]
   },
@@ -73104,6 +73696,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-dfaa9968acd7bf83",
+    "kind": "prose",
+    "template": "Create a new private diary, work log or reflection for the authenticated agent; never update an existing entry.",
+    "parts": [
+      "Create a new private diary, work log or reflection for the authenticated agent; never update an existing entry."
+    ],
+    "binding": "projection",
+    "sources": [
+      {
+        "file": "src/record-tools.ts",
+        "line": 43
+      }
+    ]
+  },
+  {
     "id": "guid-dfb6cc43281f49f8",
     "kind": "error",
     "template": "afterPath must be a nonempty path of at most 1024 characters",
@@ -73159,7 +73766,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 204
+        "line": 205
       }
     ]
   },
@@ -73447,7 +74054,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 437
+        "line": 501
       }
     ]
   },
@@ -73507,7 +74114,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 397
+        "line": 398
       }
     ]
   },
@@ -73522,7 +74129,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1061
+        "line": 1072
       }
     ]
   },
@@ -73571,7 +74178,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 318
+        "line": 319
       }
     ]
   },
@@ -73601,7 +74208,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1073
+        "line": 1084
       }
     ]
   },
@@ -73754,7 +74361,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/social.ts",
-        "line": 1089
+        "line": 1091
       }
     ]
   },
@@ -73844,7 +74451,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 918
+        "line": 929
       }
     ]
   },
@@ -73874,7 +74481,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 264
+        "line": 265
       }
     ]
   },
@@ -74116,7 +74723,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1441
+        "line": 1452
       }
     ]
   },
@@ -74191,7 +74798,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1244
+        "line": 1255
       }
     ]
   },
@@ -74252,7 +74859,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1781
+        "line": 1797
       }
     ]
   },
@@ -74372,7 +74979,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/social.ts",
-        "line": 346
+        "line": 348
       }
     ]
   },
@@ -74448,7 +75055,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/social.ts",
-        "line": 462
+        "line": 464
       }
     ]
   },
@@ -74495,7 +75102,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 165
+        "line": 166
       }
     ]
   },
@@ -74601,7 +75208,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 282
+        "line": 283
       }
     ]
   },
@@ -74870,7 +75477,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/computer-world-tools.ts",
-        "line": 7
+        "line": 8
       }
     ]
   },
@@ -74920,6 +75527,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-e537c501dbb4c25b",
+    "kind": "prose",
+    "template": "Read a bounded packet of this agent's relevant past experience; never writes memory.",
+    "parts": [
+      "Read a bounded packet of this agent's relevant past experience; never writes memory."
+    ],
+    "binding": "projection",
+    "sources": [
+      {
+        "file": "src/record-tools.ts",
+        "line": 18
+      }
+    ]
+  },
+  {
     "id": "guid-e5457d38030bcded",
     "kind": "error",
     "template": "feedback posts must include sourcePaths with one or more repository-relative source code locations",
@@ -74930,7 +75552,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/social.ts",
-        "line": 459
+        "line": 461
       }
     ]
   },
@@ -74960,7 +75582,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1619
+        "line": 1630
       }
     ]
   },
@@ -74975,7 +75597,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/skill-evolution-tools.ts",
-        "line": 37
+        "line": 38
       }
     ]
   },
@@ -75076,7 +75698,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1711
+        "line": 1727
       }
     ]
   },
@@ -75200,7 +75822,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1087
+        "line": 1098
       }
     ]
   },
@@ -75433,7 +76055,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1371
+        "line": 1382
       }
     ]
   },
@@ -75448,7 +76070,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1719
+        "line": 1735
       }
     ]
   },
@@ -75588,7 +76210,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/social.ts",
-        "line": 568
+        "line": 570
       }
     ]
   },
@@ -75618,7 +76240,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1449
+        "line": 1460
       }
     ]
   },
@@ -75633,7 +76255,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 941
+        "line": 952
       }
     ]
   },
@@ -76090,7 +76712,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3617
+        "line": 3633
       }
     ]
   },
@@ -76105,7 +76727,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1245
+        "line": 1256
       }
     ]
   },
@@ -76198,7 +76820,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3020
+        "line": 3036
       }
     ]
   },
@@ -76228,7 +76850,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/cli.ts",
-        "line": 81
+        "line": 96
       }
     ]
   },
@@ -76349,7 +76971,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 338
+        "line": 339
       }
     ]
   },
@@ -76545,7 +77167,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 981
+        "line": 992
       }
     ]
   },
@@ -76710,7 +77332,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3459
+        "line": 3475
       }
     ]
   },
@@ -76800,7 +77422,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 136
+        "line": 137
       }
     ]
   },
@@ -76905,7 +77527,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 994
+        "line": 1005
       }
     ]
   },
@@ -76995,7 +77617,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 64
+        "line": 65
       }
     ]
   },
@@ -77041,7 +77663,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/skill-evolution-tools.ts",
-        "line": 30
+        "line": 31
       }
     ]
   },
@@ -77071,7 +77693,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1205
+        "line": 1216
       }
     ]
   },
@@ -77131,7 +77753,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 108
+        "line": 109
       }
     ]
   },
@@ -77642,7 +78264,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 164
+        "line": 165
       }
     ]
   },
@@ -77661,7 +78283,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       },
       {
         "file": "src/social.ts",
-        "line": 433
+        "line": 435
       }
     ]
   },
@@ -77823,7 +78445,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/social.ts",
-        "line": 590
+        "line": 592
       }
     ]
   },
@@ -77838,7 +78460,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1066
+        "line": 1077
       }
     ]
   },
@@ -78022,7 +78644,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 131
+        "line": 132
       }
     ]
   },
@@ -78067,7 +78689,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 364
+        "line": 365
       }
     ]
   },
@@ -78143,6 +78765,40 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/benchmark-service.ts",
         "line": 265
+      }
+    ]
+  },
+  {
+    "id": "guid-ef0547ee4de670c0",
+    "kind": "error",
+    "template": "Private Auth0 configuration is invalid or unavailable",
+    "parts": [
+      "Private Auth0 configuration is invalid or unavailable"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/auth0-resource.ts",
+        "line": 180
+      }
+    ]
+  },
+  {
+    "id": "guid-ef0d5afe33ff8632",
+    "kind": "error",
+    "template": "Auth0 local resource unavailable",
+    "parts": [
+      "Auth0 local resource unavailable"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/auth0-resource.ts",
+        "line": 136
+      },
+      {
+        "file": "src/auth0-resource.ts",
+        "line": 162
       }
     ]
   },
@@ -78431,7 +79087,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 210
+        "line": 211
       }
     ]
   },
@@ -78476,7 +79132,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 161
+        "line": 162
       }
     ]
   },
@@ -78521,7 +79177,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 256
+        "line": 257
       }
     ]
   },
@@ -78686,7 +79342,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 277
+        "line": 278
       }
     ]
   },
@@ -78823,7 +79479,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 166
+        "line": 167
       }
     ]
   },
@@ -78898,7 +79554,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3887
+        "line": 3903
       }
     ]
   },
@@ -78973,7 +79629,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1091
+        "line": 1102
       }
     ]
   },
@@ -79019,7 +79675,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/cli.ts",
-        "line": 101
+        "line": 116
       }
     ]
   },
@@ -79050,6 +79706,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/organization.ts",
         "line": 170
+      }
+    ]
+  },
+  {
+    "id": "guid-f1f2ea712d6779a2",
+    "kind": "prose",
+    "template": "Find existing visible Wiki/research notes before creating or changing one.",
+    "parts": [
+      "Find existing visible Wiki/research notes before creating or changing one."
+    ],
+    "binding": "projection",
+    "sources": [
+      {
+        "file": "src/record-tools.ts",
+        "line": 23
       }
     ]
   },
@@ -79158,7 +79829,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/computer-worlds.ts",
-        "line": 185
+        "line": 186
       }
     ]
   },
@@ -79309,7 +79980,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 877
+        "line": 887
       }
     ]
   },
@@ -79446,7 +80117,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 753
+        "line": 763
       }
     ]
   },
@@ -79643,7 +80314,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 68
+        "line": 69
       }
     ]
   },
@@ -79658,7 +80329,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1331
+        "line": 1342
       }
     ]
   },
@@ -79734,7 +80405,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1356
+        "line": 1367
       }
     ]
   },
@@ -79944,7 +80615,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 335
+        "line": 336
       }
     ]
   },
@@ -79989,7 +80660,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3832
+        "line": 3848
       }
     ]
   },
@@ -80094,7 +80765,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 184
+        "line": 185
       }
     ]
   },
@@ -80248,7 +80919,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1528
+        "line": 1539
       }
     ]
   },
@@ -80323,7 +80994,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1428
+        "line": 1439
       }
     ]
   },
@@ -80338,7 +81009,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3255
+        "line": 3271
       }
     ]
   },
@@ -80383,11 +81054,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 619
+        "line": 683
       },
       {
         "file": "src/scope-auth.ts",
-        "line": 728
+        "line": 792
       }
     ]
   },
@@ -80507,7 +81178,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1257
+        "line": 1268
       }
     ]
   },
@@ -80737,7 +81408,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 222
+        "line": 233
       }
     ]
   },
@@ -80846,7 +81517,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1724
+        "line": 1740
       }
     ]
   },
@@ -80921,7 +81592,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 190
+        "line": 191
       }
     ]
   },
@@ -80936,7 +81607,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1142
+        "line": 1153
       }
     ]
   },
@@ -80951,7 +81622,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3118
+        "line": 3134
       }
     ]
   },
@@ -80966,7 +81637,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1219
+        "line": 1230
       }
     ]
   },
@@ -81136,6 +81807,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-f833e006605b543a",
+    "kind": "prose",
+    "template": "Revision from the latest read of this item.",
+    "parts": [
+      "Revision from the latest read of this item."
+    ],
+    "binding": "projection",
+    "sources": [
+      {
+        "file": "src/record-tools.ts",
+        "line": 6
+      }
+    ]
+  },
+  {
     "id": "guid-f83ee70da08f1adb",
     "kind": "error",
     "template": "Explicit host administrators array required",
@@ -81191,7 +81877,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 212
+        "line": 223
       }
     ]
   },
@@ -81236,7 +81922,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/endpoint-registry.ts",
-        "line": 705
+        "line": 706
       }
     ]
   },
@@ -81251,7 +81937,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1355
+        "line": 1366
       }
     ]
   },
@@ -81392,7 +82078,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/computer-worlds.ts",
-        "line": 103
+        "line": 104
       }
     ]
   },
@@ -81629,7 +82315,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/computer-worlds.ts",
-        "line": 171
+        "line": 172
       }
     ]
   },
@@ -81764,7 +82450,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/mcp-http.ts",
-        "line": 162
+        "line": 199
       },
       {
         "file": "src/rest-api.ts",
@@ -81859,7 +82545,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1400
+        "line": 1411
       }
     ]
   },
@@ -82121,7 +82807,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1618
+        "line": 1629
       }
     ]
   },
@@ -82167,6 +82853,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/work-service.ts",
         "line": 720
+      }
+    ]
+  },
+  {
+    "id": "guid-faecdb1525938b80",
+    "kind": "error",
+    "template": "Auth0 bearer token is not approved for this resource",
+    "parts": [
+      "Auth0 bearer token is not approved for this resource"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/auth0-resource.ts",
+        "line": 153
       }
     ]
   },
@@ -82289,11 +82990,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/social.ts",
-        "line": 440
+        "line": 442
       },
       {
         "file": "src/social.ts",
-        "line": 540
+        "line": 542
       }
     ]
   },
@@ -82339,7 +83040,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1072
+        "line": 1083
       }
     ]
   },
@@ -82482,7 +83183,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1521
+        "line": 1532
       }
     ]
   },
@@ -82527,7 +83228,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/cli.ts",
-        "line": 86
+        "line": 101
       }
     ]
   },
@@ -83162,7 +83863,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 315
+        "line": 316
       }
     ]
   },
@@ -83257,7 +83958,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 110
+        "line": 111
       }
     ]
   },
@@ -83366,7 +84067,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/cli.ts",
-        "line": 91
+        "line": 106
       }
     ]
   },
@@ -83441,7 +84142,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 491
+        "line": 555
       }
     ]
   },
@@ -83475,15 +84176,15 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 248
+        "line": 260
       },
       {
         "file": "src/scope-auth.ts",
-        "line": 250
+        "line": 262
       },
       {
         "file": "src/scope-auth.ts",
-        "line": 255
+        "line": 267
       }
     ]
   },
@@ -83513,11 +84214,26 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/cli.ts",
-        "line": 208
+        "line": 223
       },
       {
         "file": "src/cli.ts",
-        "line": 216
+        "line": 231
+      }
+    ]
+  },
+  {
+    "id": "guid-ff2ebd9e01b191c2",
+    "kind": "prose",
+    "template": "List this authenticated agent's private journal IDs and revisions.",
+    "parts": [
+      "List this authenticated agent's private journal IDs and revisions."
+    ],
+    "binding": "projection",
+    "sources": [
+      {
+        "file": "src/record-tools.ts",
+        "line": 33
       }
     ]
   },
@@ -83562,7 +84278,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1190
+        "line": 1201
       }
     ]
   },
@@ -83577,7 +84293,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1468
+        "line": 1479
       }
     ]
   },
@@ -83607,7 +84323,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 306
+        "line": 307
       }
     ]
   },
@@ -83667,7 +84383,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/wiki-policy.ts",
-        "line": 195
+        "line": 196
       }
     ]
   },
@@ -83743,7 +84459,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/computer-world-tools.ts",
-        "line": 13
+        "line": 14
       }
     ]
   },
@@ -83758,7 +84474,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1018
+        "line": 1029
       }
     ]
   },

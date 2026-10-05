@@ -1905,7 +1905,7 @@ export class FileSystemService {
     // full resolver. Missing configured coverage must not trigger a full scan.
     const provider = budget && !includeMovedSource && this.referenceImpact;
     const index = provider ? provider() : undefined;
-    if (provider && !index) throw Error('Reference integrity unavailable');
+    if (provider && !index) throw guidanceError(Error('Reference integrity unavailable'), 'guid-96f837768e412ed5');
     const capture = index ? await index.capture(oldPath, canAccessPath) : undefined;
     const physicalPaths = (capture ? [oldPath, ...capture.candidates.map(c => c.path)]
       : budget ? await this.collectBoundedReferenceFiles(budget.maxFiles) : await this.collectVaultFiles())
@@ -1952,7 +1952,7 @@ export class FileSystemService {
     if (capture) {
       for (const expected of [{ path: oldPath, revision: capture.targetRevision }, ...capture.candidates]) {
         const observed = documents.find(d => d.sourcePath === expected.path);
-        if (!observed || this.revision(observed.sourceContent) !== expected.revision) throw Error('Reference integrity changed');
+        if (!observed || this.revision(observed.sourceContent) !== expected.revision) throw guidanceError(Error('Reference integrity changed'), 'guid-bdc274016beeaa86');
       }
     }
     // Candidate-only resolution deliberately overestimates collisions. Using
@@ -2030,7 +2030,7 @@ export class FileSystemService {
    * observation fence into a writer. JSON/client claims never acquire one. */
   referencePreviewFence(preview: DeleteNotePreviewResult): () => void {
     const fence = this.referenceImpactFences.get(preview);
-    if (this.referenceImpact && !fence) throw Error('Reference preview is not current');
+    if (this.referenceImpact && !fence) throw guidanceError(Error('Reference preview is not current'), 'guid-6a1e94efc6d22b74');
     return fence ?? (() => {});
   }
 
@@ -3176,9 +3176,9 @@ export class FileSystemService {
   /** Small-vault compatibility only. Stop discovery before materializing an
    * entire directory/tree; a partial or inaccessible scope is not absence. */
   private async collectBoundedReferenceFiles(maxFiles: number): Promise<string[]> {
-    if (!Number.isInteger(maxFiles) || maxFiles < 1 || maxFiles > 10000) throw Error('Invalid reference capture budget');
+    if (!Number.isInteger(maxFiles) || maxFiles < 1 || maxFiles > 10000) throw guidanceError(Error('Invalid reference capture budget'), 'guid-4f85b2cac66f219a');
     const files: string[] = []; let inspected = 0;
-    const incomplete = () => { throw Error('Reference capture incomplete'); };
+    const incomplete = () => { throw guidanceError(Error('Reference capture incomplete'), 'guid-c32fea54a497d745'); };
     const walk = async (directory: string, prefix = '', depth = 0): Promise<void> => {
       assertEnterpriseStorageFresh();
       if (depth > 64 || prefix && !this.canTraverseEnterpriseReadPath(prefix)) return incomplete();
@@ -3203,14 +3203,14 @@ export class FileSystemService {
     const self = this;
     async function* walk(directory: string, prefix = '', depth = 0): AsyncGenerator<string> {
       assertEnterpriseStorageFresh();
-      if (depth > 64 || prefix && !self.canTraverseEnterpriseReadPath(prefix)) throw Error('Reference enumeration incomplete');
+      if (depth > 64 || prefix && !self.canTraverseEnterpriseReadPath(prefix)) throw guidanceError(Error('Reference enumeration incomplete'), 'guid-c35955f5613148e2');
       for await (const entry of await opendir(directory)) {
         const path = prefix ? `${prefix}/${entry.name}` : entry.name;
         if (!self.pathFilter.isAllowedForListing(path)) continue;
-        if (entry.isSymbolicLink()) throw Error('Reference enumeration incomplete');
+        if (entry.isSymbolicLink()) throw guidanceError(Error('Reference enumeration incomplete'), 'guid-c35955f5613148e2');
         if (entry.isDirectory()) yield* walk(join(directory, entry.name), path, depth + 1);
         else if (entry.isFile() && /\.(?:md|markdown|txt)$/i.test(path)) {
-          if (!canReadEnterpriseStoragePath(path)) throw Error('Reference enumeration incomplete');
+          if (!canReadEnterpriseStoragePath(path)) throw guidanceError(Error('Reference enumeration incomplete'), 'guid-c35955f5613148e2');
           yield path;
         }
       }

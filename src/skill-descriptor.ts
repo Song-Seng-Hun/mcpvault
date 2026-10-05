@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 /** Untrusted declarations for discovery. None of these fields grants authority. */
 export const SKILL_EFFECTS = ['read_public','read_private','write_workspace','delete_data','read_credentials','modify_account',
   'write_environment','network_send','install_dependencies','start_process','register_mcp','register_hook','financial_transaction','irreversible_action'] as const;
@@ -14,7 +15,7 @@ export interface SkillDescriptor {
   effects:SkillEffect[];connections:SkillConnection[];examples:SkillExample[];impactClaims:SkillImpactClaim[];
   compatibility:string[];relatedSkills:string[];incompatibleSkills:string[];
 }
-const fail=():never=>{throw new Error('Invalid or sensitive skill descriptor; review the source without echoing it');};
+const fail=():never=>{throw guidanceError(new Error('Invalid or sensitive skill descriptor; review the source without echoing it'), 'guid-92d9326ef30e9b92');};
 function object(value:unknown,keys:readonly string[]):Record<string,unknown>{
   if(!value||typeof value!=='object'||Array.isArray(value))return fail();
   const proto=Object.getPrototypeOf(value);

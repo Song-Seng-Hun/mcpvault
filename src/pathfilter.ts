@@ -28,7 +28,7 @@ export class PathFilter {
   private readonly quarantineSkills: boolean;
 
   constructor(config?: Partial<PathFilterConfig>, private readonly parent?: PathFilter) {
-    if (config?.quarantineSkills !== undefined && typeof config.quarantineSkills !== 'boolean') throw new Error('Invalid host skill quarantine policy');
+    if (config?.quarantineSkills !== undefined && typeof config.quarantineSkills !== 'boolean') throw guidanceError(new Error('Invalid host skill quarantine policy'), 'guid-72c8f90b6634d561');
     this.quarantineSkills = config?.quarantineSkills === true;
     const ignoredPatterns = [
       '.obsidian',

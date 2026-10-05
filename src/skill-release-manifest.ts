@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 /** Host release DATA only. Parsing this file is not review, admission or execution authority. */
 export interface SkillReleaseResource {id:string;blob:string;bytes:number;title:string;kind:'procedure'|'reference'|'license'|'descriptor'}
 export interface SkillReleaseManifest {
@@ -7,7 +8,7 @@ export interface SkillReleaseManifest {
   retainedFunctions:string[];limitations:string[];useWhen:string[];avoidWhen:string[];
   review:{reviewer:string;evidenceHashes:string[];normalCaseHashes:string[];adversarialCaseHashes:string[]};
 }
-const fail=():never=>{throw Error('Reviewed skill manifest unavailable');};
+const fail=():never=>{throw guidanceError(Error('Reviewed skill manifest unavailable'), 'guid-4ff0c5b43006b897');};
 function object(value:unknown,keys:readonly string[],optional:readonly string[]=[]):Record<string,unknown>{
   if(!value||typeof value!=='object'||Array.isArray(value))return fail();
   if(Object.getPrototypeOf(value)!==Object.prototype&&Object.getPrototypeOf(value)!==null)return fail();

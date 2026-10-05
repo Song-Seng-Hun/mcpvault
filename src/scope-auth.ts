@@ -213,7 +213,7 @@ export class ScopeAuthService {
   constructor(vaultPath: string, options: { moderatorAccounts?: string[]; commandCenterId?: string; enterpriseRegistry?: EnterpriseRegistry; authPath?: string; accountStorePath?: string; protectedServicePaths?: string[] } = {}) {
     if (options.accountStorePath !== undefined) {
       if (options.authPath !== undefined || options.enterpriseRegistry || !isAbsolute(options.accountStorePath)) {
-        throw new Error('Private account store requires an absolute personal-host path without enterprise overrides');
+        throw guidanceError(new Error('Private account store requires an absolute personal-host path without enterprise overrides'), 'guid-c4ca4dcc8cecd877');
       }
       this.privateAccountStore = { vaultPath: resolve(vaultPath), path: options.accountStorePath };
     }
@@ -404,14 +404,14 @@ export class ScopeAuthService {
   /** Host-only bridge for a JWT already verified at the HTTP boundary. Never
    * register this as a tool: the caller must supply the approved account ID. */
   async issueTrustedResearchSession(accountId: string, reportedAgentLabel?: string): Promise<{ accessToken: string; principal: ScopePrincipal; revoke(): void }> {
-    if (this.enterpriseRegistry) throw new Error('Research OAuth sessions are unavailable in enterprise mode');
+    if (this.enterpriseRegistry) throw guidanceError(new Error('Research OAuth sessions are unavailable in enterprise mode'), 'guid-194f59451bdcf4e3');
     if (reportedAgentLabel !== undefined && !/^[a-z0-9][a-z0-9-]{0,63}$/.test(reportedAgentLabel)) {
-      throw new Error('Invalid reported agent label');
+      throw guidanceError(new Error('Invalid reported agent label'), 'guid-3ede548dcda0efe6');
     }
     const database = await this.readDatabase(true);
     const account = database.accounts.find(candidate => candidate.accountId === accountId);
     if (!account || account.role !== 'agent' || (account.commandCenterId && account.commandCenterId !== this.commandCenterId)) {
-      throw new Error('Approved research account is unavailable');
+      throw guidanceError(new Error('Approved research account is unavailable'), 'guid-5574930dbe40beb6');
     }
     const ceiling: ScopeCapability[] = ['write', 'comment', 'journal', 'profile'];
     const principal: ScopePrincipal = {
@@ -426,9 +426,9 @@ export class ScopeAuthService {
       ...(reportedAgentLabel && { reportedAgentLabel }),
     };
     const granted = this.effectiveCapabilities(principal);
-    if (granted.includes('moderate')) throw new Error('Approved research account cannot be a moderator');
+    if (granted.includes('moderate')) throw guidanceError(new Error('Approved research account cannot be a moderator'), 'guid-11e05b3662aced30');
     if (!granted.includes('write') || !granted.includes('comment')) {
-      throw new Error('Approved research account lacks required capabilities');
+      throw guidanceError(new Error('Approved research account lacks required capabilities'), 'guid-be7e1cd1ca1f454c');
     }
     const accessToken = randomBytes(32).toString('base64url');
     const digest = tokenDigest(accessToken);

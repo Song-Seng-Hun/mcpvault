@@ -59,26 +59,26 @@ export function parseCliArgs(args: string[]): ParsedCliArgs {
     const arg = args[index]!;
     if (arg === '--account-store' || arg.startsWith('--account-store=')) {
       const value = arg === '--account-store' ? args[++index] : arg.slice('--account-store='.length);
-      if (!value || !value.trim() || value.startsWith('--') || accountStorePath !== undefined) throw new Error('--account-store requires one existing private host account file');
+      if (!value || !value.trim() || value.startsWith('--') || accountStorePath !== undefined) throw guidanceError(new Error('--account-store requires one existing private host account file'), 'guid-7d69fdf2de6d53d1');
       accountStorePath = value; continue;
     }
     if (arg === '--auth0-config' || arg.startsWith('--auth0-config=')) {
       const value = arg === '--auth0-config' ? args[++index] : arg.slice('--auth0-config='.length);
-      if (!value || !value.trim() || value.startsWith('--') || auth0Config !== undefined) throw new Error('--auth0-config requires one existing private host configuration file');
+      if (!value || !value.trim() || value.startsWith('--') || auth0Config !== undefined) throw guidanceError(new Error('--auth0-config requires one existing private host configuration file'), 'guid-ad4f0d80c2047ed3');
       auth0Config = value; continue;
     }
     if (arg === '--evolution-config' || arg.startsWith('--evolution-config=')) {
       const value = arg === '--evolution-config' ? args[++index] : arg.slice('--evolution-config='.length);
-      if (!value || !value.trim() || value.startsWith('--') || evolutionConfig !== undefined) throw new Error('--evolution-config requires one private host configuration file');
+      if (!value || !value.trim() || value.startsWith('--') || evolutionConfig !== undefined) throw guidanceError(new Error('--evolution-config requires one private host configuration file'), 'guid-8d3e7e6f120aced5');
       evolutionConfig = value; continue;
     }
     if (arg === '--reviewed-skills-config' || arg.startsWith('--reviewed-skills-config=')) {
       const value = arg === '--reviewed-skills-config' ? args[++index] : arg.slice('--reviewed-skills-config='.length);
-      if (!value || !value.trim() || value.startsWith('--') || reviewedSkillsConfig !== undefined) throw new Error('--reviewed-skills-config requires one private host configuration file');
+      if (!value || !value.trim() || value.startsWith('--') || reviewedSkillsConfig !== undefined) throw guidanceError(new Error('--reviewed-skills-config requires one private host configuration file'), 'guid-d99fac916b807fb7');
       reviewedSkillsConfig = value; continue;
     }
     if (arg === '--quarantine-skills' || arg.startsWith('--quarantine-skills=')) {
-      if (arg !== '--quarantine-skills' || quarantineSkills) throw new Error('--quarantine-skills accepts one flag without a value');
+      if (arg !== '--quarantine-skills' || quarantineSkills) throw guidanceError(new Error('--quarantine-skills accepts one flag without a value'), 'guid-10e73a69510fff52');
       quarantineSkills = true; continue;
     }
     if (arg === '--compilation-config' || arg.startsWith('--compilation-config=')) {
@@ -238,7 +238,7 @@ export function parseCliArgs(args: string[]): ParsedCliArgs {
 
   if (auth0Config !== undefined && (accountStorePath === undefined || mcpHttpPort === undefined || restPort !== undefined || readOnly
     || (mcpHttpHost !== undefined && !isLoopbackHost(mcpHttpHost)))) {
-    throw new Error('--auth0-config requires --account-store, writable --mcp-http, and loopback binding');
+    throw guidanceError(new Error('--auth0-config requires --account-store, writable --mcp-http, and loopback binding'), 'guid-0afc825b92b6ed1e');
   }
   return {
     vaultPathArg: pathArgs.join(" ").trim(),

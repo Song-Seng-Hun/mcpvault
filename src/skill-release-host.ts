@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import {dirname,parse,join} from 'node:path';
 import {lstatSync,realpathSync} from 'node:fs';
 import {canonicalRoleplayPath,validateRoleplayStorage} from './roleplay-storage-host.js';
@@ -11,7 +12,7 @@ import {openReviewedSkillStore} from './skill-release-store.js';
 import {openVaultReviewedSkills} from './skill-release-vault.js';
 import type {McpHttpOptions} from './mcp-http.js';
 
-const fail=():never=>{throw Error('Reviewed skill host unavailable');};
+const fail=():never=>{throw guidanceError(Error('Reviewed skill host unavailable'), 'guid-9267716c3b451924');};
 function record(v:unknown,keys:string[],optional:string[]=[]):Record<string,any>{
   if(!v||typeof v!=='object'||Array.isArray(v)||Object.keys(v).some(k=>!keys.includes(k)&&!optional.includes(k))||keys.some(k=>!Object.hasOwn(v,k)))return fail();
   return v as Record<string,any>;

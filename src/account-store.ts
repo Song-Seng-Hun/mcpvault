@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { lstat } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { canonicalRoleplayPath, validateRoleplayStorage } from './roleplay-storage-host.js';
@@ -11,10 +12,10 @@ export async function assertPrivateAccountStore(vaultPath: string, path: string)
     const directory = dirname(path);
     await validateRoleplayStorage({ vaultPath, hostPath: directory });
     await canonicalRoleplayPath(path, true, true);
-    if ((await lstat(path)).nlink !== 1) throw new Error('linked file');
+    if ((await lstat(path)).nlink !== 1) throw guidanceError(new Error('linked file'), 'guid-9d32d5dde50a813a');
     if (process.platform === 'win32') await checkWindowsPrivateAcl([directory, path], true);
     else await assertHostPrivateStorage([directory, path]);
   } catch {
-    throw new Error('Private account store is missing, unsafe or unavailable; host provisioning is required');
+    throw guidanceError(new Error('Private account store is missing, unsafe or unavailable; host provisioning is required'), 'guid-9cd0b39c6022a8b0');
   }
 }

@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import {createHash} from 'node:crypto';
 import {constants,openSync,closeSync,fstatSync,lstatSync,readSync,realpathSync,type Stats} from 'node:fs';
 import {join,parse} from 'node:path';
@@ -12,7 +13,7 @@ export interface VaultSkillRegistration {
   contentFingerprint:string;
   resources:ReadonlyArray<{blob:string;path:string}>;
 }
-const fail=():never=>{throw Error('Reviewed NAS skill unavailable');};
+const fail=():never=>{throw guidanceError(Error('Reviewed NAS skill unavailable'), 'guid-4480698b9bbbdd1e');};
 const digest=(b:Buffer)=>createHash('sha256').update(b).digest('hex');
 const sha=(s:unknown):s is string=>typeof s==='string'&&/^[a-f0-9]{64}$/.test(s);
 const id=(s:unknown):s is string=>typeof s==='string'&&/^[a-z0-9][a-z0-9-]{0,99}$/.test(s);

@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import {createHash,randomUUID} from 'node:crypto';
 import {constants,openSync,closeSync,fstatSync,lstatSync,readSync,realpathSync,type BigIntStats, type Dir} from 'node:fs';
 import {opendir} from 'node:fs/promises';
@@ -7,7 +8,7 @@ import {assertHostPrivateStorage} from './skill-evolution-host.js';
 import {verifySkillReleaseEvidence} from './skill-release-evidence.js';
 import type {ReviewedSkillHost} from './skill-release-reader.js';
 
-const fail=():never=>{throw Error('Reviewed skill store unavailable');};
+const fail=():never=>{throw guidanceError(Error('Reviewed skill store unavailable'), 'guid-4b5920053226ac70');};
 const digest=(b:Buffer|string)=>createHash('sha256').update(b).digest('hex');
 const id=(s:unknown):s is string=>typeof s==='string'&&/^[a-z0-9][a-z0-9-]{0,99}$/.test(s);
 const sha=(s:unknown):s is string=>typeof s==='string'&&/^[a-f0-9]{64}$/.test(s);

@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import {parseSkillDescriptor,IMPACT_AXES,type ImpactAxis} from './skill-descriptor.js';
 import type {SkillUsageTelemetry} from './skill-usage.js';
 import {skillPotentialImpact} from './skill-impact.js';
@@ -5,11 +6,11 @@ import {budget,fingerprint} from './skill-evolution-store.js';
 export const SKILL_METADATA_SECTIONS=['summary','description','impact','connections','usage'] as const;
 export type SkillMetadataSection=typeof SKILL_METADATA_SECTIONS[number];
 export function skillMetadataSection(value:unknown):SkillMetadataSection{
-  if(value===undefined)return 'summary';if(!SKILL_METADATA_SECTIONS.includes(value as SkillMetadataSection))throw new Error('Invalid skill metadata section');return value as SkillMetadataSection;
+  if(value===undefined)return 'summary';if(!SKILL_METADATA_SECTIONS.includes(value as SkillMetadataSection))throw guidanceError(new Error('Invalid skill metadata section'), 'guid-bd648de3ce77178e');return value as SkillMetadataSection;
 }
 export function skillMetadataAxis(value:unknown):ImpactAxis|undefined{
   if(value===undefined)return undefined;
-  if(!IMPACT_AXES.includes(value as ImpactAxis))throw new Error('Invalid skill impact axis');return value as ImpactAxis;
+  if(!IMPACT_AXES.includes(value as ImpactAxis))throw guidanceError(new Error('Invalid skill impact axis'), 'guid-cd9bae0cbedd67f3');return value as ImpactAxis;
 }
 export type SkillPassportBasis={source:{path:string;revision:string};path:string;revision:string;sourceGuards:Array<{path:string;revision:string}>;declaration?:unknown;status:string};
 /** Read-only projection. Host assessment/approval and caller declarations stay distinct. */

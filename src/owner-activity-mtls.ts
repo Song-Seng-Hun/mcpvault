@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import {dirname} from 'node:path';
 import {lstatSync,realpathSync,type Stats} from 'node:fs';
 import type {ScopePrincipal} from './scope-auth.js';
@@ -8,7 +9,7 @@ import {assertHostPrivateStorage} from './skill-evolution-host.js';
 import {readFederationFile} from './public-federation-storage.js';
 
 interface Binding {accountId:string;executionTarget:string;certFingerprint:string;expiresAt:number}
-const unavailable=()=>Error('Owner mTLS binding unavailable');
+const unavailable=()=>guidanceError(Error('Owner mTLS binding unavailable'), 'guid-16075951ebcaa7d0');
 const stamp=(s:Stats)=>[s.dev,s.ino,s.size,s.mtimeMs,s.ctimeMs,s.nlink].join(':');
 const id=(v:unknown):v is string=>typeof v==='string'&&/^[a-z0-9][a-z0-9._-]{0,99}$/.test(v);
 function record(value:unknown,keys:string[]):Record<string,any>{

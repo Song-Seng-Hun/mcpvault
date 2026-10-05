@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import {createHash} from 'node:crypto';
 const hash=(value:string)=>createHash('sha256').update(value).digest('hex');
 export type SkillUsageVersion={skillId:string;path:string;revision:string};
@@ -5,7 +6,7 @@ type Entry=SkillUsageVersion&{resolvedCalls:number;reportedApplications:number;r
 const versionKey=(v:SkillUsageVersion)=>`${v.skillId}:${v.revision}`;
 export function skillUsageTaskId(value:unknown):string|undefined{
   if(value===undefined)return undefined;
-  if(typeof value!=='string'||!/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/.test(value))throw new Error('Skill taskId must be an opaque identifier, not a path or transcript');
+  if(typeof value!=='string'||!/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/.test(value))throw guidanceError(new Error('Skill taskId must be an opaque identifier, not a path or transcript'), 'guid-b2f51be360f80964');
   return value;
 }
 /** Private, bounded process observations. No transcript, host path, token or persistent file. */
@@ -15,7 +16,7 @@ export class SkillUsageTelemetry {
   private readonly receipts=new Set<string>();
   private readonly tasks=new Map<string,{actor:string;members:Map<string,SkillUsageVersion>}>();
   private saturated=false;
-  constructor(private readonly capacity=1024){if(!Number.isSafeInteger(capacity)||capacity<1||capacity>10000)throw new Error('Invalid skill observation capacity');}
+  constructor(private readonly capacity=1024){if(!Number.isSafeInteger(capacity)||capacity<1||capacity>10000)throw guidanceError(new Error('Invalid skill observation capacity'), 'guid-6a60068be679be5b');}
   private entry(actor:string|undefined,v:SkillUsageVersion):Entry|undefined{
     if(!actor)return undefined;const key=hash(actor+':'+versionKey(v));let entry=this.entries.get(key);
     if(!entry){if(this.entries.size>=this.capacity){this.saturated=true;return undefined;}

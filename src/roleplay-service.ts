@@ -262,10 +262,10 @@ export class RoleplayService {
     // Normalize source references BEFORE hashing/persisting the immutable command.
     await validate(state);
     if (previewOnly) {
-      if (op !== 'evolution_propose') throw Error('Evolution preview only');
+      if (op !== 'evolution_propose') throw guidanceError(Error('Evolution preview only'), 'guid-43e0e922e117c434');
       const simulated = applyRoleplayCommand(state, command, this.store!.options.policy);
       await validate(state);
-      if (roleplayRevision((await this.current(principal)).state) !== roleplayRevision(state)) throw Error('World changed during evolution preview');
+      if (roleplayRevision((await this.current(principal)).state) !== roleplayRevision(state)) throw guidanceError(Error('World changed during evolution preview'), 'guid-69fe32148102dfcf');
       const proposal = simulated.state.evolution?.proposals[simulated.receipt.id];
       return { revision: roleplayRevision(state), outputRevision: simulated.receipt.revision, proposalId: simulated.receipt.id,
         automatic: proposal?.automatic === true, fingerprint: roleplayHash(command), warning };
@@ -320,7 +320,7 @@ export class RoleplayService {
       }
     } else if (endpoint === 'world') {
       envelope.worldKind = 'fiction';
-      envelope.computerWorlds = { endpointId: 'roleplay.computer', arguments: { op: 'list' }, hint: 'Real computer environments use private computer worlds, not fictional turns.' };
+      envelope.computerWorlds = { endpointId: 'roleplay.computer', arguments: { op: 'list' }, hint: guidanceText('guid-094d0b6bb7678649', 'Real computer environments use private computer worlds, not fictional turns.') };
       envelope.enabled = true; envelope.title = state.title ?? null;
       envelope.ready = !!state.title && !!this.store!.options.policy.administrators.length;
       if (!envelope.ready) envelope.setupRequired = this.store!.options.policy.administrators.length ? ['worldInitialization'] : ['administrators', 'worldInitialization'];
