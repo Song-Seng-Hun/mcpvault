@@ -6,7 +6,7 @@ import { validateCapabilitySelection, type CapabilityNode } from './capability-g
 /** Explicit v1 snapshot. Adding a future feature must not expand saved selections. */
 export const HOST_FEATURE_IDS_V1 = Object.freeze([
   'wiki-core', 'document-search', 'personal-memory', 'work-management', 'collaboration',
-  'ideation-research', 'explanation-translation', 'roleplay', 'skill-evolution',
+  'ideation-research', 'roleplay', 'skill-evolution',
 ] as const);
 export type HostFeatureId = typeof HOST_FEATURE_IDS_V1[number];
 export interface HostFeatureConfig {
@@ -148,9 +148,6 @@ const toolsByFeature: Record<HostFeatureId, readonly string[]> = {
     'create_workshop', 'evaluate_idea', 'list_ideas', 'list_workshop_methods', 'list_workshops', 'read_idea',
     'read_workshop', 'read_workshop_facilitation', 'synthesize_workshop', 'update_idea_status',
     'update_workshop_facilitation', 'update_workshop_phase', 'read_workshop_research', 'update_workshop_research',
-  ],
-  'explanation-translation': [
-    'list_explanations', 'read_explanation', 'claim_explanation', 'release_explanation', 'submit_explanation', 'review_explanation',
   ],
   roleplay: [
     'manage_roleplay_computer',

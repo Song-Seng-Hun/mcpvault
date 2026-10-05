@@ -11,7 +11,7 @@ function api(): typeof import('./host-features.js') {
 }
 const ids = [
   'wiki-core', 'document-search', 'personal-memory', 'work-management', 'collaboration',
-  'ideation-research', 'explanation-translation', 'roleplay', 'skill-evolution',
+  'ideation-research', 'roleplay', 'skill-evolution',
 ] as const;
 const config = (...selected: string[]) => ({ version: 1, selected });
 
@@ -22,7 +22,7 @@ test('exports an explicit frozen v1 feature snapshot and core-only default', () 
   expect(f.DEFAULT_HOST_FEATURE_CONFIG).toEqual(config('wiki-core'));
   expect(Object.isFrozen(f.DEFAULT_HOST_FEATURE_CONFIG)).toBe(true);
   expect(Object.isFrozen(f.DEFAULT_HOST_FEATURE_CONFIG.selected)).toBe(true);
-  expect(f.parseHostFeatureConfig(config(...ids)).selected).toHaveLength(9);
+  expect(f.parseHostFeatureConfig(config(...ids)).selected).toHaveLength(ids.length);
 });
 
 test.each(ids.slice(1))('%s can be selected independently with core and never silently enabled', id => {
@@ -121,7 +121,6 @@ const representatives = [
   ['wiki-core', 'get_wiki_canvas_view'], ['document-search', 'search_documents'],
   ['personal-memory', 'memory_recall'], ['work-management', 'read_work_board'],
   ['collaboration', 'publish_blog_post'], ['ideation-research', 'get_wiki_bridge_candidates'],
-  ['explanation-translation', 'submit_explanation'],
   ['roleplay', 'manage_story_project'], ['skill-evolution', 'promote_skill'],
 ] as const;
 test.each(representatives)('maps %s to its exact internal tool %s independently of caller permission', (feature, tool) => {

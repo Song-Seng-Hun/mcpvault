@@ -26,7 +26,6 @@ function fixture(values: Record<string, unknown> = {}, failures: string[] = [], 
     { pulse: read('work', { coverage: 'loaded' }) } as any,
     undefined,
     { nextAction: read('skills', undefined) } as any,
-    undefined,
     // Scheduling tests explicitly admit optional reads; no production grant.
     async () => ownerConsent ? ({ run: async <T>(reader: () => Promise<T>) => reader(),
       revalidate: async () => {}, assertFresh: () => {} }) : undefined,

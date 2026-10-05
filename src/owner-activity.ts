@@ -7,7 +7,7 @@ import { createHash } from 'node:crypto';
  * Preferences (including model family), feature flags, account capabilities,
  * room membership and locality labels are never sources of owner consent.
  */
-export type Activity = 'collaboration' | 'ideation-research' | 'explanation-translation'
+export type Activity = 'collaboration' | 'ideation-research'
   | 'roleplay' | 'skill-evolution';
 export type OwnerActivityAction = 'discover' | 'read' | 'claim' | 'execute';
 export type OwnerActivityReason = 'granted' | 'owner_unknown' | 'consent_required'
@@ -59,7 +59,7 @@ export interface OwnerActivityDecision {
   permissionsGranted: false;
 }
 
-const activities: readonly Activity[] = ['collaboration', 'ideation-research', 'explanation-translation',
+const activities: readonly Activity[] = ['collaboration', 'ideation-research',
   'roleplay', 'skill-evolution'];
 const actions: readonly OwnerActivityAction[] = ['discover', 'read', 'claim', 'execute'];
 const invalid = () => guidanceError(new Error('Invalid owner activity policy'), 'guid-4bbe53fca7727ba4');

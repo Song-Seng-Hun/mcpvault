@@ -69,7 +69,6 @@ const changedContexts: Array<[string, Partial<EndpointAvailabilityContext>]> = [
   ['skill configuration', { skillEvolutionEnabled: false }],
   ['roleplay configuration', { roleplayConfigured: false }],
   ['roleplay write configuration', { roleplayWritesConfigured: false }],
-  ['explanations configuration', { explanationsConfigured: false }],
 ];
 test.each(changedContexts)('a warm catalog rejects a cursor after changing %s', (_name, change) => {
   const registry = new EndpointRegistry();

@@ -18,7 +18,6 @@ import { RoleplayStore } from './src/roleplay-store.js';
 import { loadRoleplayHostConfig } from './src/roleplay-host.js';
 import { loadSkillEvolutionHostConfig } from './src/skill-evolution-host.js';
 import { loadReviewedSkillsHost } from './src/skill-release-host.js';
-import { loadExplanationHostConfig } from './src/explanation-host.js';
 import { builtinVerbatimRuntime } from './src/compilation-local-runtime.js';
 import { existsSync, readFileSync } from "fs";
 import { fileURLToPath } from "url";
@@ -82,9 +81,6 @@ Options:
                   Private reviewed-copy reader: existing login (v2) or optional mTLS (v1).
                   Requires --quarantine-skills and explicit skill-evolution feature.
                   Does not admit skills, execute bundles or grant write permissions.
-  --explanation-config FILE
-                  Explicit source collection and host-verified reviewer profiles.
-                  Pull-only Gemini explanation preference; never calls a model.
   --features-config FILE
                   Explicit owner-private v1 feature selection, applied at startup.
                   Default: wiki-core only. Does not grant data/provider/owner consent.
@@ -125,7 +121,7 @@ Examples:
 
 // Remove runtime options before joining trailing args, preserving support for
 // unquoted vault paths with spaces. When omitted, use the current directory.
-const { vaultPathArg, readOnly, accountStorePath, auth0Config, quarantineSkills, restPort, mcpHttpPort, mcpHttpHost, mcpHttpTlsCert, mcpHttpTlsKey, stdio, roleplayConfig, skillEvolutionConfig, reviewedSkillsConfig, explanationConfig, featuresConfig, ownerActivityConfig, maintenanceConfig, compilationConfig, evolutionConfig } = parseCliArgs(cliArgs);
+const { vaultPathArg, readOnly, accountStorePath, auth0Config, quarantineSkills, restPort, mcpHttpPort, mcpHttpHost, mcpHttpTlsCert, mcpHttpTlsKey, stdio, roleplayConfig, skillEvolutionConfig, reviewedSkillsConfig, featuresConfig, ownerActivityConfig, maintenanceConfig, compilationConfig, evolutionConfig } = parseCliArgs(cliArgs);
 const vaultPath = resolve(vaultPathArg || process.cwd());
 const featurePath = featuresConfig ?? process.env.MCPVAULT_FEATURE_CONFIG;
 const ownerConsentPath = ownerActivityConfig ?? process.env.MCPVAULT_OWNER_ACTIVITY_CONFIG;
@@ -155,7 +151,6 @@ try {
   const compilationHost = compilationConfig ? await loadCompilationHostConfig(resolve(compilationConfig), vaultPath) : undefined;
   const evolutionStorage = evolutionConfig ? await loadEvolutionStorage(resolve(evolutionConfig), vaultPath) : undefined;
   const skillEvolution = features.selected.includes('skill-evolution') && skillEvolutionConfig ? await loadSkillEvolutionHostConfig(resolve(skillEvolutionConfig), vaultPath) : undefined;
-  const explanations = features.selected.includes('explanation-translation') && explanationConfig ? await loadExplanationHostConfig(resolve(explanationConfig), vaultPath) : undefined;
   if (features.selected.includes('roleplay') && roleplayConfig) roleplay = await RoleplayStore.open(await loadRoleplayHostConfig(resolve(roleplayConfig), vaultPath));
   mcpServer=createServer(vaultPath, { version: VERSION, readOnly, ...(accountStorePath !== undefined && { accountStorePath }), ...(quarantineSkills && { quarantineSkills }), features, ...(roleplay && { roleplay }), ...(skillEvolution && { skillEvolution }),
     ...(evolutionStorage && { evolutionRuntime: { storage: evolutionStorage } }),
@@ -169,8 +164,7 @@ try {
     ...(reviewedHost?.ownerActivity ? { ownerActivity: reviewedHost.ownerActivity } : ownerConsentPath ? { ownerActivity: {
       ...await loadOwnerActivityHostConfig(resolve(ownerConsentPath), vaultPath),
       execution: principal => auth0?.ownerExecution(principal),
-    } } : auth0 ? { ownerActivity: auth0.ownerActivity() } : {}),
-    ...(explanations?.enabled && { explanations: { sources: explanations.sources }, workCollaboration: { executionProfiles: explanations.executionProfiles } }) });
+    } } : auth0 ? { ownerActivity: auth0.ownerActivity() } : {}) });
   if (auth0) {
     const session = await getServerRuntime(mcpServer)!.issueTrustedResearchSession!(auth0.config.accountId);
     session.revoke();

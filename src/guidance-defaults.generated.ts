@@ -42,7 +42,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1318
+        "line": 1292
       }
     ]
   },
@@ -295,7 +295,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 805
+        "line": 803
       }
     ]
   },
@@ -733,7 +733,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 4048
+        "line": 3992
       }
     ]
   },
@@ -1044,7 +1044,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1063
+        "line": 1038
       }
     ]
   },
@@ -1554,7 +1554,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1503
+        "line": 1477
       }
     ]
   },
@@ -1704,7 +1704,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 648
+        "line": 646
       }
     ]
   },
@@ -1734,7 +1734,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1329
+        "line": 1303
       }
     ]
   },
@@ -1855,7 +1855,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 732
+        "line": 730
       }
     ]
   },
@@ -2052,7 +2052,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 705
+        "line": 703
       }
     ]
   },
@@ -2328,7 +2328,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/cli.ts",
-        "line": 87
+        "line": 85
       }
     ]
   },
@@ -2450,7 +2450,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3219
+        "line": 3170
       }
     ]
   },
@@ -2609,21 +2609,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-08d2263d8fe2a125",
-    "kind": "error",
-    "template": "Verified family and exact version required",
-    "parts": [
-      "Verified family and exact version required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/explanation-host.ts",
-        "line": 29
-      }
-    ]
-  },
-  {
     "id": "guid-08e0c6059910a305",
     "kind": "prose",
     "template": "Token from login_scope; telemetry is isolated to this account",
@@ -2634,7 +2619,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1085
+        "line": 1060
       }
     ]
   },
@@ -2649,7 +2634,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/endpoint-registry.ts",
-        "line": 861
+        "line": 858
       }
     ]
   },
@@ -3119,11 +3104,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1940
+        "line": 1913
       },
       {
         "file": "src/createServer.ts",
-        "line": 1942
+        "line": 1915
       }
     ]
   },
@@ -3289,7 +3274,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       },
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 578
+        "line": 576
       }
     ]
   },
@@ -3441,7 +3426,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/cli.ts",
-        "line": 226
+        "line": 219
       }
     ]
   },
@@ -3858,7 +3843,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 374
+        "line": 372
       }
     ]
   },
@@ -4174,7 +4159,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1602
+        "line": 1575
       }
     ]
   },
@@ -4237,21 +4222,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/llm-wiki.ts",
         "line": 465
-      }
-    ]
-  },
-  {
-    "id": "guid-0d29e009d634ef83",
-    "kind": "error",
-    "template": "Passing criteria must cover every explanation block",
-    "parts": [
-      "Passing criteria must cover every explanation block"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/explanation-model.ts",
-        "line": 101
       }
     ]
   },
@@ -4379,21 +4349,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-0d919996ac2c7773",
-    "kind": "error",
-    "template": "At most 64 explicitly configured explanation sources",
-    "parts": [
-      "At most 64 explicitly configured explanation sources"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/explanation-service.ts",
-        "line": 47
-      }
-    ]
-  },
-  {
     "id": "guid-0d965f7866678c17",
     "kind": "prose",
     "template": "Return a bounded advisory report of notes whose PARA filing folder disagrees with lifecycle or note_kind Properties. It does not move, rename, delete, or expose private notes; review the current revision before triage_wiki_note or move_note.",
@@ -4449,7 +4404,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3872
+        "line": 3816
       }
     ]
   },
@@ -4509,7 +4464,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1478
+        "line": 1452
       }
     ]
   },
@@ -4705,7 +4660,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 967
+        "line": 942
       }
     ]
   },
@@ -4750,34 +4705,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1776
+        "line": 1749
       },
       {
         "file": "src/createServer.ts",
-        "line": 2813
-      }
-    ]
-  },
-  {
-    "id": "guid-0eca92cf4f67980c",
-    "kind": "error",
-    "template": "Explanation review authority changed",
-    "parts": [
-      "Explanation review authority changed"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/explanation-service.ts",
-        "line": 172
-      },
-      {
-        "file": "src/explanation-service.ts",
-        "line": 198
-      },
-      {
-        "file": "src/explanation-service.ts",
-        "line": 229
+        "line": 2775
       }
     ]
   },
@@ -4932,7 +4864,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1056
+        "line": 1031
       }
     ]
   },
@@ -5346,7 +5278,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/cli.ts",
-        "line": 77
+        "line": 75
       }
     ]
   },
@@ -5377,21 +5309,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/workshop-facilitation.ts",
         "line": 591
-      }
-    ]
-  },
-  {
-    "id": "guid-110f84fb8e3b5a91",
-    "kind": "error",
-    "template": "Explanation WIP limit reached",
-    "parts": [
-      "Explanation WIP limit reached"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/explanation-service.ts",
-        "line": 255
       }
     ]
   },
@@ -5451,7 +5368,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3312
+        "line": 3256
       }
     ]
   },
@@ -5572,7 +5489,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 486
+        "line": 479
       }
     ]
   },
@@ -5692,7 +5609,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 747
+        "line": 745
       }
     ]
   },
@@ -5753,21 +5670,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/enterprise-federation.ts",
         "line": 158
-      }
-    ]
-  },
-  {
-    "id": "guid-12316a80ad1a7548",
-    "kind": "error",
-    "template": "Current explanation task account required",
-    "parts": [
-      "Current explanation task account required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/createServer.ts",
-        "line": 890
       }
     ]
   },
@@ -6128,7 +6030,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2004
+        "line": 1977
       }
     ]
   },
@@ -6245,7 +6147,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 693
+        "line": 691
       }
     ]
   },
@@ -6575,7 +6477,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1474
+        "line": 1448
       }
     ]
   },
@@ -6598,19 +6500,19 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       },
       {
         "file": "src/createServer.ts",
-        "line": 3588
+        "line": 3532
       },
       {
         "file": "src/createServer.ts",
-        "line": 3645
+        "line": 3589
       },
       {
         "file": "src/createServer.ts",
-        "line": 3707
+        "line": 3651
       },
       {
         "file": "src/endpoint-registry.ts",
-        "line": 109
+        "line": 107
       },
       {
         "file": "src/filesystem.ts",
@@ -6753,21 +6655,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-14f26f072123bac3",
-    "kind": "prose",
-    "template": "Opt in to one current approved explanationAction without replacing the original learning route. Omitted if unavailable or outside the response budget.",
-    "parts": [
-      "Opt in to one current approved explanationAction without replacing the original learning route. Omitted if unavailable or outside the response budget."
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/llm-wiki-tools.ts",
-        "line": 372
-      }
-    ]
-  },
-  {
     "id": "guid-14f2d2a3c0317484",
     "kind": "error",
     "template": "Recovery inspection fingerprint changed",
@@ -6862,7 +6749,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 875
+        "line": 873
       }
     ]
   },
@@ -7302,7 +7189,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 571
+        "line": 569
       }
     ]
   },
@@ -7443,7 +7330,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1190
+        "line": 1165
       }
     ]
   },
@@ -7474,7 +7361,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1566
+        "line": 1540
       }
     ]
   },
@@ -7595,7 +7482,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1333
+        "line": 1307
       }
     ]
   },
@@ -7843,7 +7730,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 502
+        "line": 500
       }
     ]
   },
@@ -7979,7 +7866,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1682
+        "line": 1655
       }
     ]
   },
@@ -8150,7 +8037,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1256
+        "line": 1230
       }
     ]
   },
@@ -8390,7 +8277,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2258
+        "line": 2231
       }
     ]
   },
@@ -8516,21 +8403,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/ideation.ts",
         "line": 35
-      }
-    ]
-  },
-  {
-    "id": "guid-1a90aff603ddf4ae",
-    "kind": "error",
-    "template": "Explanation requires 1..24 mapped blocks",
-    "parts": [
-      "Explanation requires 1..24 mapped blocks"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/explanation-model.ts",
-        "line": 59
       }
     ]
   },
@@ -8775,7 +8647,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3265
+        "line": 3209
       }
     ]
   },
@@ -8867,7 +8739,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1057
+        "line": 1032
       }
     ]
   },
@@ -9058,7 +8930,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 671
+        "line": 669
       }
     ]
   },
@@ -9118,7 +8990,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1209
+        "line": 1184
       }
     ]
   },
@@ -9479,7 +9351,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 4068
+        "line": 4012
       }
     ]
   },
@@ -9494,7 +9366,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 573
+        "line": 571
       }
     ]
   },
@@ -9571,7 +9443,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 489
+        "line": 487
       }
     ]
   },
@@ -10064,7 +9936,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1152
+        "line": 1127
       }
     ]
   },
@@ -10109,7 +9981,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3584
+        "line": 3528
       },
       {
         "file": "src/filesystem.ts",
@@ -10203,7 +10075,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1297
+        "line": 1271
       }
     ]
   },
@@ -10297,7 +10169,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2010
+        "line": 1983
       }
     ]
   },
@@ -10357,7 +10229,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 589
+        "line": 587
       }
     ]
   },
@@ -10525,7 +10397,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 785
+        "line": 783
       }
     ]
   },
@@ -10688,7 +10560,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 420
+        "line": 418
       }
     ]
   },
@@ -10956,7 +10828,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 759
+        "line": 752
       }
     ]
   },
@@ -11065,7 +10937,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 896
+        "line": 894
       }
     ]
   },
@@ -11196,7 +11068,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3227
+        "line": 3178
       }
     ]
   },
@@ -11392,7 +11264,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 770
+        "line": 768
       }
     ]
   },
@@ -11407,7 +11279,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 535
+        "line": 533
       }
     ]
   },
@@ -11528,7 +11400,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1081
+        "line": 1056
       }
     ]
   },
@@ -11650,7 +11522,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 876
+        "line": 874
       }
     ]
   },
@@ -11776,7 +11648,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 475
+        "line": 468
       }
     ]
   },
@@ -11791,7 +11663,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1553
+        "line": 1527
       }
     ]
   },
@@ -11942,7 +11814,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 4059
+        "line": 4003
       }
     ]
   },
@@ -12073,21 +11945,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-24d6479b15a34364",
-    "kind": "error",
-    "template": "Explanation draft changed",
-    "parts": [
-      "Explanation draft changed"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/explanation-service.ts",
-        "line": 101
-      }
-    ]
-  },
-  {
     "id": "guid-24d7960d163adde5",
     "kind": "prose",
     "template": "Daily note already exists; it was not overwritten.",
@@ -12128,7 +11985,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1732
+        "line": 1705
       }
     ]
   },
@@ -12378,7 +12235,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       },
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 570
+        "line": 568
       }
     ]
   },
@@ -12536,7 +12393,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       },
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 568
+        "line": 566
       }
     ]
   },
@@ -12568,7 +12425,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3223
+        "line": 3174
       }
     ]
   },
@@ -12632,7 +12489,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       },
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 578
+        "line": 576
       }
     ]
   },
@@ -12663,7 +12520,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3602
+        "line": 3546
       },
       {
         "file": "src/filesystem.ts",
@@ -12918,7 +12775,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1363
+        "line": 1337
       }
     ]
   },
@@ -13104,7 +12961,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 637
+        "line": 635
       }
     ]
   },
@@ -13134,7 +12991,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1952
+        "line": 1925
       }
     ]
   },
@@ -13273,22 +13130,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 936
-      }
-    ]
-  },
-  {
-    "id": "guid-283ed9fec9b69608",
-    "kind": "error",
-    "template": "Explanation requestId reused with different content",
-    "parts": [
-      "Explanation requestId reused with different content"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/explanation-service.ts",
-        "line": 244
+        "line": 911
       }
     ]
   },
@@ -13378,7 +13220,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 938
+        "line": 936
       }
     ]
   },
@@ -13438,7 +13280,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1157
+        "line": 1132
       }
     ]
   },
@@ -13492,7 +13334,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1143
+        "line": 1118
       }
     ]
   },
@@ -13507,7 +13349,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 691
+        "line": 689
       }
     ]
   },
@@ -13541,7 +13383,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       },
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 582
+        "line": 580
       }
     ]
   },
@@ -13586,7 +13428,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/agent-pulse.ts",
-        "line": 266
+        "line": 263
       }
     ]
   },
@@ -13788,7 +13630,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 417
+        "line": 415
       }
     ]
   },
@@ -13863,7 +13705,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1420
+        "line": 1394
       }
     ]
   },
@@ -13878,7 +13720,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1126
+        "line": 1101
       }
     ]
   },
@@ -13923,7 +13765,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 608
+        "line": 601
       }
     ]
   },
@@ -13968,7 +13810,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 455
+        "line": 453
       }
     ]
   },
@@ -14180,7 +14022,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 933
+        "line": 931
       }
     ]
   },
@@ -14658,21 +14500,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-2dafe7e39718e2c1",
-    "kind": "error",
-    "template": "Explanation context changed during read; retry",
-    "parts": [
-      "Explanation context changed during read; retry"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/explanation-service.ts",
-        "line": 149
-      }
-    ]
-  },
-  {
     "id": "guid-2dc8704313f9aae4",
     "kind": "error",
     "template": "frontmatter must be a JSON object, got {arg0}",
@@ -14926,7 +14753,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 494
+        "line": 487
       }
     ]
   },
@@ -14958,21 +14785,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/filesystem.ts",
         "line": 2325
-      }
-    ]
-  },
-  {
-    "id": "guid-2e846485b9267816",
-    "kind": "error",
-    "template": "Invalid profile budget",
-    "parts": [
-      "Invalid profile budget"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/explanation-host.ts",
-        "line": 34
       }
     ]
   },
@@ -15231,7 +15043,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 820
+        "line": 818
       }
     ]
   },
@@ -15367,22 +15179,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 525
-      }
-    ]
-  },
-  {
-    "id": "guid-2fd6b72137024d82",
-    "kind": "error",
-    "template": "--explanation-config requires one private host configuration file",
-    "parts": [
-      "--explanation-config requires one private host configuration file"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/cli.ts",
-        "line": 102
+        "line": 523
       }
     ]
   },
@@ -15669,7 +15466,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1337
+        "line": 1311
       }
     ]
   },
@@ -16049,7 +15846,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 784
+        "line": 782
       }
     ]
   },
@@ -16114,21 +15911,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-325f3e23cf6f8966",
-    "kind": "error",
-    "template": "Explanation configuration must be host private",
-    "parts": [
-      "Explanation configuration must be host private"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/explanation-host.ts",
-        "line": 51
-      }
-    ]
-  },
-  {
     "id": "guid-326189a7fb29e8d9",
     "kind": "prose",
     "template": "System trash unavailable; moved note to vault trash instead: {arg0}",
@@ -16185,7 +15967,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1003
+        "line": 978
       }
     ]
   },
@@ -16649,7 +16431,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3477
+        "line": 3421
       }
     ]
   },
@@ -16726,7 +16508,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 673
+        "line": 671
       }
     ]
   },
@@ -16989,7 +16771,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 524
+        "line": 522
       }
     ]
   },
@@ -17181,21 +16963,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-365150c1b58e0c2b",
-    "kind": "error",
-    "template": "Explanation record incomplete",
-    "parts": [
-      "Explanation record incomplete"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/explanation-service.ts",
-        "line": 107
-      }
-    ]
-  },
-  {
     "id": "guid-367b50f2d8962854",
     "kind": "error",
     "template": "Private recall revision conflict: pass expectedStateRevision from queue stateRevision or the last receipt; refresh before retrying",
@@ -17296,7 +17063,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 639
+        "line": 637
       }
     ]
   },
@@ -17624,7 +17391,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 921
+        "line": 919
       }
     ]
   },
@@ -18456,7 +18223,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1987
+        "line": 1960
       }
     ]
   },
@@ -18616,21 +18383,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-3b49f711da486220",
-    "kind": "error",
-    "template": "Work in progress limit reached",
-    "parts": [
-      "Work in progress limit reached"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/explanation-service.ts",
-        "line": 254
-      }
-    ]
-  },
-  {
     "id": "guid-3b5483e4876445a4",
     "kind": "error",
     "template": "Stale review source revision",
@@ -18673,7 +18425,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3744
+        "line": 3688
       }
     ]
   },
@@ -18800,11 +18552,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1551
+        "line": 1525
       },
       {
         "file": "src/createServer.ts",
-        "line": 1569
+        "line": 1543
       }
     ]
   },
@@ -18926,7 +18678,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 4061
+        "line": 4005
       }
     ]
   },
@@ -19229,15 +18981,15 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
+        "line": 823
+      },
+      {
+        "file": "src/createServer.ts",
         "line": 830
       },
       {
         "file": "src/createServer.ts",
-        "line": 837
-      },
-      {
-        "file": "src/createServer.ts",
-        "line": 1788
+        "line": 1761
       }
     ]
   },
@@ -19252,22 +19004,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1083
-      }
-    ]
-  },
-  {
-    "id": "guid-3d2c2b2879299b0d",
-    "kind": "error",
-    "template": "Bounded verified host profiles required",
-    "parts": [
-      "Bounded verified host profiles required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/explanation-host.ts",
-        "line": 18
+        "line": 1058
       }
     ]
   },
@@ -19282,7 +19019,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 201
+        "line": 198
       }
     ]
   },
@@ -19599,7 +19336,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 473
+        "line": 466
       }
     ]
   },
@@ -19874,7 +19611,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1898
+        "line": 1871
       }
     ]
   },
@@ -19957,7 +19694,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1340
+        "line": 1314
       }
     ]
   },
@@ -19972,7 +19709,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1757
+        "line": 1730
       }
     ]
   },
@@ -20117,7 +19854,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2691
+        "line": 2653
       }
     ]
   },
@@ -20132,7 +19869,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3606
+        "line": 3550
       },
       {
         "file": "src/filesystem.ts",
@@ -20211,7 +19948,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 761
+        "line": 759
       }
     ]
   },
@@ -20276,21 +20013,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-41a346eababd1e3c",
-    "kind": "error",
-    "template": "Explanation revision changed",
-    "parts": [
-      "Explanation revision changed"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/explanation-service.ts",
-        "line": 208
-      }
-    ]
-  },
-  {
     "id": "guid-41a4e3eba322dd9f",
     "kind": "error",
     "template": "call_endpoint.arguments must be an object",
@@ -20301,7 +20023,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1651
+        "line": 1624
       }
     ]
   },
@@ -20867,21 +20589,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-4322d307a62703b3",
-    "kind": "error",
-    "template": "Invalid explanation source locator or size",
-    "parts": [
-      "Invalid explanation source locator or size"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/explanation-model.ts",
-        "line": 66
-      }
-    ]
-  },
-  {
     "id": "guid-433c347861bd3681",
     "kind": "error",
     "template": "credential state contains duplicate active credentials",
@@ -20922,7 +20629,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1647
+        "line": 1620
       }
     ]
   },
@@ -20967,7 +20674,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 599
+        "line": 592
       }
     ]
   },
@@ -21193,7 +20900,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1197
+        "line": 1172
       }
     ]
   },
@@ -21208,7 +20915,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1027
+        "line": 1002
       }
     ]
   },
@@ -21681,7 +21388,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1257
+        "line": 1231
       }
     ]
   },
@@ -21712,7 +21419,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 543
+        "line": 536
       }
     ]
   },
@@ -21727,7 +21434,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 485
+        "line": 483
       }
     ]
   },
@@ -21777,21 +21484,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-466884b8e4e321ff",
-    "kind": "error",
-    "template": "Absolute explanation host configuration and Vault required",
-    "parts": [
-      "Absolute explanation host configuration and Vault required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/explanation-host.ts",
-        "line": 48
-      }
-    ]
-  },
-  {
     "id": "guid-4673c07d39c59c60",
     "kind": "error",
     "template": "workflowStatus must be active, all, or one of: {arg0}",
@@ -21833,7 +21525,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1016
+        "line": 991
       }
     ]
   },
@@ -22015,7 +21707,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 578
+        "line": 576
       }
     ]
   },
@@ -22075,15 +21767,15 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1389
+        "line": 1363
       },
       {
         "file": "src/createServer.ts",
-        "line": 1402
+        "line": 1376
       },
       {
         "file": "src/createServer.ts",
-        "line": 1416
+        "line": 1390
       }
     ]
   },
@@ -22113,7 +21805,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/agent-pulse.ts",
-        "line": 268
+        "line": 265
       }
     ]
   },
@@ -22248,7 +21940,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 737
+        "line": 735
       }
     ]
   },
@@ -22620,7 +22312,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 669
+        "line": 667
       }
     ]
   },
@@ -22710,7 +22402,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 455
+        "line": 453
       }
     ]
   },
@@ -22864,7 +22556,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1140
+        "line": 1115
       }
     ]
   },
@@ -22969,7 +22661,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1020
+        "line": 995
       }
     ]
   },
@@ -22984,7 +22676,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1251
+        "line": 1225
       }
     ]
   },
@@ -22999,115 +22691,115 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 938
+        "line": 913
       },
       {
         "file": "src/createServer.ts",
-        "line": 991
+        "line": 966
       },
       {
         "file": "src/createServer.ts",
-        "line": 1031
+        "line": 1006
       },
       {
         "file": "src/createServer.ts",
-        "line": 1044
+        "line": 1019
       },
       {
         "file": "src/createServer.ts",
-        "line": 1145
+        "line": 1120
       },
       {
         "file": "src/createServer.ts",
-        "line": 1171
+        "line": 1146
       },
       {
         "file": "src/createServer.ts",
-        "line": 1183
+        "line": 1158
       },
       {
         "file": "src/createServer.ts",
-        "line": 1210
+        "line": 1185
       },
       {
         "file": "src/createServer.ts",
-        "line": 1260
+        "line": 1234
       },
       {
         "file": "src/createServer.ts",
-        "line": 1273
+        "line": 1247
       },
       {
         "file": "src/createServer.ts",
-        "line": 1285
+        "line": 1259
       },
       {
         "file": "src/createServer.ts",
-        "line": 1293
+        "line": 1267
       },
       {
         "file": "src/createServer.ts",
-        "line": 1307
+        "line": 1281
       },
       {
         "file": "src/createServer.ts",
-        "line": 1322
+        "line": 1296
       },
       {
         "file": "src/createServer.ts",
-        "line": 1343
+        "line": 1317
       },
       {
         "file": "src/createServer.ts",
-        "line": 1353
+        "line": 1327
       },
       {
         "file": "src/createServer.ts",
-        "line": 1378
+        "line": 1352
       },
       {
         "file": "src/createServer.ts",
-        "line": 1391
+        "line": 1365
       },
       {
         "file": "src/createServer.ts",
-        "line": 1405
+        "line": 1379
       },
       {
         "file": "src/createServer.ts",
-        "line": 1421
+        "line": 1395
       },
       {
         "file": "src/createServer.ts",
-        "line": 1449
+        "line": 1423
       },
       {
         "file": "src/createServer.ts",
-        "line": 1464
+        "line": 1438
       },
       {
         "file": "src/createServer.ts",
-        "line": 1493
+        "line": 1467
       },
       {
         "file": "src/createServer.ts",
-        "line": 1507
+        "line": 1481
       },
       {
         "file": "src/createServer.ts",
-        "line": 1522
+        "line": 1496
       },
       {
         "file": "src/createServer.ts",
-        "line": 1538
+        "line": 1512
       },
       {
         "file": "src/createServer.ts",
-        "line": 1554
+        "line": 1528
       },
       {
         "file": "src/createServer.ts",
-        "line": 1571
+        "line": 1545
       }
     ]
   },
@@ -23122,7 +22814,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 605
+        "line": 603
       }
     ]
   },
@@ -23152,7 +22844,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2797
+        "line": 2759
       }
     ]
   },
@@ -23540,7 +23232,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2262
+        "line": 2235
       }
     ]
   },
@@ -23615,7 +23307,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 715
+        "line": 713
       }
     ]
   },
@@ -23771,7 +23463,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 494
+        "line": 487
       }
     ]
   },
@@ -23816,7 +23508,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/agent-pulse.ts",
-        "line": 348
+        "line": 345
       }
     ]
   },
@@ -23916,21 +23608,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-4c4190550bcf410c",
-    "kind": "error",
-    "template": "Invalid or oversized explanation source",
-    "parts": [
-      "Invalid or oversized explanation source"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/explanation-model.ts",
-        "line": 19
-      }
-    ]
-  },
-  {
     "id": "guid-4c44014b245f6c85",
     "kind": "prose",
     "template": "Preferred Obsidian MOC entry point for this note; navigation only",
@@ -23945,7 +23622,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       },
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 570
+        "line": 568
       }
     ]
   },
@@ -24156,7 +23833,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 586
+        "line": 579
       }
     ]
   },
@@ -24328,11 +24005,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1967
+        "line": 1940
       },
       {
         "file": "src/createServer.ts",
-        "line": 1969
+        "line": 1942
       }
     ]
   },
@@ -24485,7 +24162,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 947
+        "line": 945
       }
     ]
   },
@@ -24500,7 +24177,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 386
+        "line": 384
       }
     ]
   },
@@ -24773,7 +24450,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1376
+        "line": 1350
       }
     ]
   },
@@ -24912,7 +24589,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 494
+        "line": 487
       }
     ]
   },
@@ -25108,7 +24785,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1319
+        "line": 1293
       }
     ]
   },
@@ -25187,7 +24864,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 387
+        "line": 385
       }
     ]
   },
@@ -25264,7 +24941,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1998
+        "line": 1971
       }
     ]
   },
@@ -25402,21 +25079,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-50c37fcc579f19e9",
-    "kind": "error",
-    "template": "Explanation block serialized budget exceeded",
-    "parts": [
-      "Explanation block serialized budget exceeded"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/explanation-model.ts",
-        "line": 79
-      }
-    ]
-  },
-  {
     "id": "guid-50f2812534d27332",
     "kind": "prose",
     "template": "Token from login_scope; returns only this account's telemetry",
@@ -25427,7 +25089,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1099
+        "line": 1074
       }
     ]
   },
@@ -25593,7 +25255,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 625
+        "line": 623
       }
     ]
   },
@@ -25623,7 +25285,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3537
+        "line": 3481
       }
     ]
   },
@@ -25655,7 +25317,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 667
+        "line": 665
       }
     ]
   },
@@ -25847,21 +25509,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-51c82ece4fb82ba3",
-    "kind": "error",
-    "template": "Invalid explanation source configuration",
-    "parts": [
-      "Invalid explanation source configuration"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/explanation-service.ts",
-        "line": 49
-      }
-    ]
-  },
-  {
     "id": "guid-51c972f6c1f44fe5",
     "kind": "prose",
     "template": "Import one bounded page of verified public community activities from the configured Hub. Local hiding and origin tombstones remain distinct.",
@@ -25932,7 +25579,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1760
+        "line": 1733
       }
     ]
   },
@@ -25948,21 +25595,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/document-service.ts",
         "line": 151
-      }
-    ]
-  },
-  {
-    "id": "guid-5209886a2b2e43fe",
-    "kind": "prose",
-    "template": "An explanation is derived guidance, not evidence that the original is factually true.",
-    "parts": [
-      "An explanation is derived guidance, not evidence that the original is factually true."
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/explanation-service.ts",
-        "line": 227
       }
     ]
   },
@@ -26101,7 +25733,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 934
+        "line": 909
       }
     ]
   },
@@ -26135,7 +25767,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 762
+        "line": 760
       }
     ]
   },
@@ -26210,7 +25842,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1113
+        "line": 1088
       }
     ]
   },
@@ -26256,7 +25888,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1764
+        "line": 1737
       }
     ]
   },
@@ -26301,7 +25933,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1724
+        "line": 1697
       }
     ]
   },
@@ -26331,7 +25963,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 738
+        "line": 736
       }
     ]
   },
@@ -26441,21 +26073,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-53d091ebd2bc4991",
-    "kind": "error",
-    "template": "Explanation configuration unavailable or malformed",
-    "parts": [
-      "Explanation configuration unavailable or malformed"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/explanation-host.ts",
-        "line": 56
-      }
-    ]
-  },
-  {
     "id": "guid-53dc7576cf9b1d6f",
     "kind": "error",
     "template": "Stale or invalid {arg0}; repeat the current read",
@@ -26482,7 +26099,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1067
+        "line": 1042
       }
     ]
   },
@@ -27030,7 +26647,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1259
+        "line": 1233
       }
     ]
   },
@@ -27090,11 +26707,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1112
+        "line": 1087
       },
       {
         "file": "src/createServer.ts",
-        "line": 1129
+        "line": 1104
       }
     ]
   },
@@ -27244,7 +26861,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1552
+        "line": 1526
       }
     ]
   },
@@ -27349,7 +26966,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 507
+        "line": 505
       }
     ]
   },
@@ -27364,7 +26981,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 695
+        "line": 693
       }
     ]
   },
@@ -27440,21 +27057,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/organization.ts",
         "line": 234
-      }
-    ]
-  },
-  {
-    "id": "guid-56f85b0b3d9f26fe",
-    "kind": "error",
-    "template": "A submitted explanation draft is required",
-    "parts": [
-      "A submitted explanation draft is required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/explanation-service.ts",
-        "line": 260
       }
     ]
   },
@@ -27553,7 +27155,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 395
+        "line": 393
       }
     ]
   },
@@ -27573,21 +27175,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-5765deaad4ec8546",
-    "kind": "error",
-    "template": "Explanation revision conflict",
-    "parts": [
-      "Explanation revision conflict"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/explanation-service.ts",
-        "line": 247
-      }
-    ]
-  },
-  {
     "id": "guid-577532c54da96293",
     "kind": "prose",
     "template": "List recent public chat messages and community comments that mention the authenticated model or agent with @identity. Closed items are excluded by default; set includeClosed to inspect completed discussions. Results are bounded and can continue older than a cursor with nearby context.",
@@ -27599,29 +27186,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/social-tools.ts",
         "line": 85
-      }
-    ]
-  },
-  {
-    "id": "guid-577a3438bd997d6a",
-    "kind": "error",
-    "template": "Invalid host execution profile",
-    "parts": [
-      "Invalid host execution profile"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/explanation-host.ts",
-        "line": 20
-      },
-      {
-        "file": "src/explanation-host.ts",
-        "line": 24
-      },
-      {
-        "file": "src/explanation-host.ts",
-        "line": 26
       }
     ]
   },
@@ -27860,7 +27424,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/cli.ts",
-        "line": 171
+        "line": 164
       }
     ]
   },
@@ -27892,7 +27456,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3506
+        "line": 3450
       }
     ]
   },
@@ -27998,7 +27562,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1128
+        "line": 1103
       }
     ]
   },
@@ -28353,7 +27917,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 835
+        "line": 833
       }
     ]
   },
@@ -28398,7 +27962,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1019
+        "line": 994
       }
     ]
   },
@@ -28464,21 +28028,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-599da163ef09f089",
-    "kind": "error",
-    "template": "Explanation source unavailable",
-    "parts": [
-      "Explanation source unavailable"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/explanation-service.ts",
-        "line": 34
-      }
-    ]
-  },
-  {
     "id": "guid-59c729af4bf0352b",
     "kind": "error",
     "template": "understanding exceeds 10000 JSON characters",
@@ -28534,7 +28083,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 849
+        "line": 847
       }
     ]
   },
@@ -29034,7 +28583,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1747
+        "line": 1720
       }
     ]
   },
@@ -29141,7 +28690,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1025
+        "line": 1000
       }
     ]
   },
@@ -29276,7 +28825,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 776
+        "line": 774
       }
     ]
   },
@@ -29322,7 +28871,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 488
+        "line": 481
       }
     ]
   },
@@ -29612,7 +29161,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1002
+        "line": 977
       }
     ]
   },
@@ -30022,7 +29571,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/endpoint-registry.ts",
-        "line": 842
+        "line": 839
       }
     ]
   },
@@ -30152,7 +29701,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1370
+        "line": 1344
       }
     ]
   },
@@ -30233,7 +29782,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 605
+        "line": 603
       }
     ]
   },
@@ -30413,7 +29962,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 670
+        "line": 668
       }
     ]
   },
@@ -30503,7 +30052,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1114
+        "line": 1089
       }
     ]
   },
@@ -30563,7 +30112,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1404
+        "line": 1378
       }
     ]
   },
@@ -30677,21 +30226,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-6191b36446503b4f",
-    "kind": "error",
-    "template": "Explanation context changed; read again",
-    "parts": [
-      "Explanation context changed; read again"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/explanation-service.ts",
-        "line": 123
-      }
-    ]
-  },
-  {
     "id": "guid-619a9c57010ef0a6",
     "kind": "error",
     "template": "Output or basis unavailable",
@@ -30702,7 +30236,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 863
+        "line": 856
       }
     ]
   },
@@ -30952,7 +30486,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 4083
+        "line": 4027
       }
     ]
   },
@@ -31113,7 +30647,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2261
+        "line": 2234
       },
       {
         "file": "src/question-packet.ts",
@@ -31438,7 +30972,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 455
+        "line": 453
       }
     ]
   },
@@ -31639,7 +31173,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 965
+        "line": 940
       }
     ]
   },
@@ -31670,7 +31204,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 427
+        "line": 425
       }
     ]
   },
@@ -31836,22 +31370,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 786
-      }
-    ]
-  },
-  {
-    "id": "guid-65ee6077b435bebd",
-    "kind": "prose",
-    "template": "Optional exact root or returned authored-entry path to explain; defaults to the root MOC. Never discovers an unreturned or hidden entry.",
-    "parts": [
-      "Optional exact root or returned authored-entry path to explain; defaults to the root MOC. Never discovers an unreturned or hidden entry."
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/llm-wiki-tools.ts",
-        "line": 373
+        "line": 784
       }
     ]
   },
@@ -31957,7 +31476,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/endpoint-registry.ts",
-        "line": 809
+        "line": 806
       }
     ]
   },
@@ -32006,7 +31525,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1004
+        "line": 979
       }
     ]
   },
@@ -32021,7 +31540,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 935
+        "line": 910
       }
     ]
   },
@@ -32036,7 +31555,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 567
+        "line": 565
       }
     ]
   },
@@ -32051,7 +31570,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 853
+        "line": 851
       }
     ]
   },
@@ -32237,7 +31756,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 926
+        "line": 924
       }
     ]
   },
@@ -32252,7 +31771,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 551
+        "line": 549
       }
     ]
   },
@@ -32483,21 +32002,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-68118cdc702ac7ef",
-    "kind": "error",
-    "template": "Explanation history capacity reached",
-    "parts": [
-      "Explanation history capacity reached"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/explanation-service.ts",
-        "line": 248
-      }
-    ]
-  },
-  {
     "id": "guid-6827108f3d2a2142",
     "kind": "error",
     "template": "context must be at most 2000 Unicode characters",
@@ -32588,7 +32092,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 593
+        "line": 591
       }
     ]
   },
@@ -32850,7 +32354,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 773
+        "line": 771
       }
     ]
   },
@@ -33092,7 +32596,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 497
+        "line": 495
       }
     ]
   },
@@ -33348,7 +32852,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3876
+        "line": 3820
       }
     ]
   },
@@ -33454,7 +32958,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1111
+        "line": 1086
       }
     ]
   },
@@ -33651,7 +33155,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 610
+        "line": 603
       }
     ]
   },
@@ -33685,7 +33189,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1284
+        "line": 1258
       }
     ]
   },
@@ -33700,11 +33204,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3898
+        "line": 3842
       },
       {
         "file": "src/createServer.ts",
-        "line": 3901
+        "line": 3845
       }
     ]
   },
@@ -33779,7 +33283,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 526
+        "line": 524
       }
     ]
   },
@@ -33854,7 +33358,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1334
+        "line": 1308
       }
     ]
   },
@@ -33869,7 +33373,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 840
+        "line": 838
       }
     ]
   },
@@ -33914,7 +33418,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 855
+        "line": 853
       }
     ]
   },
@@ -33960,21 +33464,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/community-participation.ts",
         "line": 132
-      }
-    ]
-  },
-  {
-    "id": "guid-6cd712c8c23e1925",
-    "kind": "error",
-    "template": "All explanation review criteria are required",
-    "parts": [
-      "All explanation review criteria are required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/explanation-model.ts",
-        "line": 92
       }
     ]
   },
@@ -34096,7 +33585,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1782
+        "line": 1755
       }
     ]
   },
@@ -34126,15 +33615,15 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3622
+        "line": 3566
       },
       {
         "file": "src/createServer.ts",
-        "line": 3624
+        "line": 3568
       },
       {
         "file": "src/createServer.ts",
-        "line": 3628
+        "line": 3572
       }
     ]
   },
@@ -34405,21 +33894,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-6e0ad5923681e336",
-    "kind": "error",
-    "template": "Invalid explanation review judgment or mapped evidence",
-    "parts": [
-      "Invalid explanation review judgment or mapped evidence"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/explanation-model.ts",
-        "line": 97
-      }
-    ]
-  },
-  {
     "id": "guid-6e2eedb043ed8f40",
     "kind": "prose",
     "template": "Optional read projection for a large array. Follow cursor with the same field and expectedRevision.",
@@ -34445,7 +33919,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 517
+        "line": 515
       }
     ]
   },
@@ -34518,21 +33992,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/workshop-facilitation.ts",
         "line": 657
-      }
-    ]
-  },
-  {
-    "id": "guid-6e7caeb0e3ef7bfd",
-    "kind": "error",
-    "template": "Explanation reviewer profile changed at write boundary",
-    "parts": [
-      "Explanation reviewer profile changed at write boundary"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/explanation-service.ts",
-        "line": 294
       }
     ]
   },
@@ -34768,7 +34227,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 803
+        "line": 801
       }
     ]
   },
@@ -34783,7 +34242,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 933
+        "line": 908
       }
     ]
   },
@@ -34956,21 +34415,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-6fde0e3c829c7504",
-    "kind": "error",
-    "template": "Independent host-verified review family required",
-    "parts": [
-      "Independent host-verified review family required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/explanation-service.ts",
-        "line": 266
-      }
-    ]
-  },
-  {
     "id": "guid-6ff71ac48e257d08",
     "kind": "prose",
     "template": "Read one private journal entry from the authenticated agent scope in one fresh body-and-revision snapshot. An expectedRevision rejects drift; oversized bodies return a revision-checked mcp.read_note_lines continuation.",
@@ -35086,7 +34530,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 460
+        "line": 458
       }
     ]
   },
@@ -35312,7 +34756,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 407
+        "line": 405
       }
     ]
   },
@@ -35408,7 +34852,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/agent-pulse.ts",
-        "line": 405
+        "line": 402
       }
     ]
   },
@@ -35453,7 +34897,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 897
+        "line": 895
       }
     ]
   },
@@ -35641,7 +35085,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 578
+        "line": 576
       }
     ]
   },
@@ -35720,7 +35164,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2278
+        "line": 2251
       }
     ]
   },
@@ -35856,7 +35300,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 725
+        "line": 723
       }
     ]
   },
@@ -35959,25 +35403,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-7297de355e2fd271",
-    "kind": "error",
-    "template": "Invalid explanation host configuration",
-    "parts": [
-      "Invalid explanation host configuration"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/explanation-host.ts",
-        "line": 14
-      },
-      {
-        "file": "src/explanation-host.ts",
-        "line": 16
-      }
-    ]
-  },
-  {
     "id": "guid-729b58c8dff2c560",
     "kind": "prose",
     "template": "Get a bounded heading page from one checked snapshot. Follow nextAction unchanged: it pins expectedRevision. On revision_conflict restart with the returned fresh-outline action; never combine changed versions. A budget error supplies retryArguments for this same request.",
@@ -35988,7 +35413,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1545
+        "line": 1519
       }
     ]
   },
@@ -36079,7 +35504,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1301
+        "line": 1275
       }
     ]
   },
@@ -36094,7 +35519,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 598
+        "line": 591
       },
       {
         "file": "src/pathfilter.ts",
@@ -36542,22 +35967,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 672
-      }
-    ]
-  },
-  {
-    "id": "guid-743c21d5b1cce717",
-    "kind": "error",
-    "template": "Invalid example label",
-    "parts": [
-      "Invalid example label"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/explanation-model.ts",
-        "line": 67
+        "line": 670
       }
     ]
   },
@@ -36877,21 +36287,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-754022c2e84d4657",
-    "kind": "error",
-    "template": "Explanation author profile changed at write boundary",
-    "parts": [
-      "Explanation author profile changed at write boundary"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/explanation-service.ts",
-        "line": 292
-      }
-    ]
-  },
-  {
     "id": "guid-75422b4849df2849",
     "kind": "prose",
     "template": "Authenticated account identity is derived from accessToken; do not supply an actor.",
@@ -37086,11 +36481,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/cli.ts",
-        "line": 178
+        "line": 171
       },
       {
         "file": "src/cli.ts",
-        "line": 186
+        "line": 179
       }
     ]
   },
@@ -37315,21 +36710,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/llm-wiki.ts",
         "line": 7062
-      }
-    ]
-  },
-  {
-    "id": "guid-76b5caa102b3d369",
-    "kind": "error",
-    "template": "Exact source and job revisions required",
-    "parts": [
-      "Exact source and job revisions required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/explanation-service.ts",
-        "line": 236
       }
     ]
   },
@@ -37830,7 +37210,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 518
+        "line": 516
       }
     ]
   },
@@ -37846,21 +37226,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/organization-queue-packet.ts",
         "line": 40
-      }
-    ]
-  },
-  {
-    "id": "guid-78561fa1b6cafa4f",
-    "kind": "error",
-    "template": "Protected source code block changed or omitted",
-    "parts": [
-      "Protected source code block changed or omitted"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/explanation-model.ts",
-        "line": 86
       }
     ]
   },
@@ -37890,7 +37255,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 611
+        "line": 604
       }
     ]
   },
@@ -37935,7 +37300,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 605
+        "line": 603
       }
     ]
   },
@@ -38407,7 +37772,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1271
+        "line": 1245
       }
     ]
   },
@@ -38452,7 +37817,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 488
+        "line": 486
       }
     ]
   },
@@ -38606,7 +37971,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 512
+        "line": 510
       }
     ]
   },
@@ -38744,7 +38109,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 619
+        "line": 617
       }
     ]
   },
@@ -38884,7 +38249,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1403
+        "line": 1377
       }
     ]
   },
@@ -39334,7 +38699,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 966
+        "line": 941
       }
     ]
   },
@@ -39349,7 +38714,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 680
+        "line": 678
       }
     ]
   },
@@ -39471,7 +38836,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/cli.ts",
-        "line": 58
+        "line": 56
       }
     ]
   },
@@ -39577,7 +38942,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 468
+        "line": 466
       }
     ]
   },
@@ -39709,7 +39074,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 480
+        "line": 473
       }
     ]
   },
@@ -39724,7 +39089,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 739
+        "line": 737
       }
     ]
   },
@@ -39754,7 +39119,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3218
+        "line": 3169
       }
     ]
   },
@@ -39799,7 +39164,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 702
+        "line": 700
       }
     ]
   },
@@ -39814,22 +39179,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1597
-      }
-    ]
-  },
-  {
-    "id": "guid-7e79da72e3e65232",
-    "kind": "error",
-    "template": "Explanation job already claimed",
-    "parts": [
-      "Explanation job already claimed"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/explanation-service.ts",
-        "line": 253
+        "line": 1570
       }
     ]
   },
@@ -39880,7 +39230,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3637
+        "line": 3581
       }
     ]
   },
@@ -39971,7 +39321,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1204
+        "line": 1179
       }
     ]
   },
@@ -40535,7 +39885,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 952
+        "line": 927
       }
     ]
   },
@@ -40670,7 +40020,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 599
+        "line": 597
       }
     ]
   },
@@ -40840,7 +40190,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3473
+        "line": 3417
       }
     ]
   },
@@ -40933,21 +40283,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/expression-profile.ts",
         "line": 51
-      }
-    ]
-  },
-  {
-    "id": "guid-82691cbd40ccccde",
-    "kind": "error",
-    "template": "Explanation feature is not configured by the host",
-    "parts": [
-      "Explanation feature is not configured by the host"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/createServer.ts",
-        "line": 3055
       }
     ]
   },
@@ -41120,7 +40455,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1317
+        "line": 1291
       }
     ]
   },
@@ -41150,7 +40485,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 540
+        "line": 538
       }
     ]
   },
@@ -41210,7 +40545,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1026
+        "line": 1001
       }
     ]
   },
@@ -41381,21 +40716,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-83de2cbd405e28dc",
-    "kind": "error",
-    "template": "Protected source literal changed, omitted or invented",
-    "parts": [
-      "Protected source literal changed, omitted or invented"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/explanation-model.ts",
-        "line": 70
-      }
-    ]
-  },
-  {
     "id": "guid-83ef283ebab99518",
     "kind": "error",
     "template": "Research round is closed; start a new independent round",
@@ -41422,21 +40742,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/workshop-facilitation.ts",
         "line": 644
-      }
-    ]
-  },
-  {
-    "id": "guid-8414d83b232a2fe1",
-    "kind": "error",
-    "template": "Review authority changed",
-    "parts": [
-      "Review authority changed"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/explanation-service.ts",
-        "line": 296
       }
     ]
   },
@@ -41512,7 +40817,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1068
+        "line": 1043
       }
     ]
   },
@@ -41542,7 +40847,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 712
+        "line": 710
       }
     ]
   },
@@ -41633,7 +40938,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 556
+        "line": 554
       }
     ]
   },
@@ -41798,7 +41103,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 542
+        "line": 540
       }
     ]
   },
@@ -41828,7 +41133,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1419
+        "line": 1393
       }
     ]
   },
@@ -41934,7 +41239,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1772
+        "line": 1745
       }
     ]
   },
@@ -42009,7 +41314,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1082
+        "line": 1057
       }
     ]
   },
@@ -42039,7 +41344,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1127
+        "line": 1102
       }
     ]
   },
@@ -42277,11 +41582,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1463
+        "line": 1437
       },
       {
         "file": "src/createServer.ts",
-        "line": 1476
+        "line": 1450
       }
     ]
   },
@@ -42714,7 +42019,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3736
+        "line": 3680
       }
     ]
   },
@@ -43196,7 +42501,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 640
+        "line": 638
       }
     ]
   },
@@ -43331,7 +42636,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 473
+        "line": 471
       }
     ]
   },
@@ -43551,19 +42856,19 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1491
+        "line": 1465
       },
       {
         "file": "src/createServer.ts",
-        "line": 1505
+        "line": 1479
       },
       {
         "file": "src/createServer.ts",
-        "line": 1520
+        "line": 1494
       },
       {
         "file": "src/createServer.ts",
-        "line": 1536
+        "line": 1510
       }
     ]
   },
@@ -43671,7 +42976,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/cli.ts",
-        "line": 150
+        "line": 143
       }
     ]
   },
@@ -43701,7 +43006,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1784
+        "line": 1757
       }
     ]
   },
@@ -43716,7 +43021,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 543
+        "line": 541
       }
     ]
   },
@@ -43748,21 +43053,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/wiki-policy.ts",
         "line": 323
-      }
-    ]
-  },
-  {
-    "id": "guid-8b92767f773fec64",
-    "kind": "error",
-    "template": "Explanation author required",
-    "parts": [
-      "Explanation author required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/explanation-service.ts",
-        "line": 270
       }
     ]
   },
@@ -43898,7 +43188,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 578
+        "line": 576
       }
     ]
   },
@@ -43962,7 +43252,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1158
+        "line": 1133
       }
     ]
   },
@@ -44264,7 +43554,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3733
+        "line": 3677
       }
     ]
   },
@@ -44339,7 +43629,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/cli.ts",
-        "line": 68
+        "line": 66
       }
     ]
   },
@@ -44511,7 +43801,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3231
+        "line": 3182
       }
     ]
   },
@@ -44692,7 +43982,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 475
+        "line": 468
       }
     ]
   },
@@ -44797,7 +44087,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 375
+        "line": 373
       }
     ]
   },
@@ -44889,7 +44179,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 522
+        "line": 520
       }
     ]
   },
@@ -44934,7 +44224,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 578
+        "line": 576
       }
     ]
   },
@@ -45039,7 +44329,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 781
+        "line": 779
       }
     ]
   },
@@ -45069,7 +44359,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 655
+        "line": 653
       }
     ]
   },
@@ -45174,7 +44464,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 492
+        "line": 485
       }
     ]
   },
@@ -45408,7 +44698,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3859
+        "line": 3803
       }
     ]
   },
@@ -46221,7 +45511,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1443
+        "line": 1417
       }
     ]
   },
@@ -46297,7 +45587,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 937
+        "line": 912
       }
     ]
   },
@@ -46603,7 +45893,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 716
+        "line": 714
       }
     ]
   },
@@ -46619,21 +45909,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/reference-tools.ts",
         "line": 5
-      }
-    ]
-  },
-  {
-    "id": "guid-96478f80cb1ec3a7",
-    "kind": "error",
-    "template": "Explanation review basis changed",
-    "parts": [
-      "Explanation review basis changed"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/explanation-service.ts",
-        "line": 104
       }
     ]
   },
@@ -47006,7 +46281,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3608
+        "line": 3552
       },
       {
         "file": "src/filesystem.ts",
@@ -47299,7 +46574,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1029
+        "line": 1004
       }
     ]
   },
@@ -47404,7 +46679,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1030
+        "line": 1005
       }
     ]
   },
@@ -47434,7 +46709,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1418
+        "line": 1392
       }
     ]
   },
@@ -47464,7 +46739,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 442
+        "line": 440
       }
     ]
   },
@@ -47546,7 +46821,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 864
+        "line": 862
       }
     ]
   },
@@ -48041,7 +47316,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 438
+        "line": 436
       }
     ]
   },
@@ -48131,7 +47406,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1342
+        "line": 1316
       }
     ]
   },
@@ -48208,7 +47483,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 704
+        "line": 702
       }
     ]
   },
@@ -48298,7 +47573,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1077
+        "line": 1052
       }
     ]
   },
@@ -48314,21 +47589,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/windows-private-acl.ts",
         "line": 36
-      }
-    ]
-  },
-  {
-    "id": "guid-9cc164e7f30ba754",
-    "kind": "error",
-    "template": "Explanation source coverage is incomplete",
-    "parts": [
-      "Explanation source coverage is incomplete"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/explanation-model.ts",
-        "line": 84
       }
     ]
   },
@@ -48516,7 +47776,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1781
+        "line": 1754
       }
     ]
   },
@@ -48576,7 +47836,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 497
+        "line": 495
       }
     ]
   },
@@ -48685,11 +47945,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 853
+        "line": 846
       },
       {
         "file": "src/createServer.ts",
-        "line": 3079
+        "line": 3030
       },
       {
         "file": "src/skill-release-card.ts",
@@ -48907,7 +48167,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2924
+        "line": 2886
       }
     ]
   },
@@ -49036,7 +48296,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 382
+        "line": 380
       }
     ]
   },
@@ -49203,25 +48463,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/continuity.ts",
         "line": 261
-      }
-    ]
-  },
-  {
-    "id": "guid-9fb374d40f180a4b",
-    "kind": "error",
-    "template": "Host-verified profile required to claim explanation work",
-    "parts": [
-      "Host-verified profile required to claim explanation work"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/explanation-service.ts",
-        "line": 234
-      },
-      {
-        "file": "src/explanation-service.ts",
-        "line": 291
       }
     ]
   },
@@ -49484,21 +48725,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-a0bb466d35c0c051",
-    "kind": "error",
-    "template": "Protected source constraint must remain verbatim beside the explanation",
-    "parts": [
-      "Protected source constraint must remain verbatim beside the explanation"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/explanation-model.ts",
-        "line": 74
-      }
-    ]
-  },
-  {
     "id": "guid-a0d463f5f4bec0f9",
     "kind": "error",
     "template": "{arg0} capacity reached ({arg1})",
@@ -49556,11 +48782,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/cli.ts",
-        "line": 193
+        "line": 186
       },
       {
         "file": "src/cli.ts",
-        "line": 201
+        "line": 194
       }
     ]
   },
@@ -49605,7 +48831,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 873
+        "line": 871
       }
     ]
   },
@@ -49654,7 +48880,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1303
+        "line": 1277
       }
     ]
   },
@@ -49684,7 +48910,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1375
+        "line": 1349
       }
     ]
   },
@@ -49748,7 +48974,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1924
+        "line": 1897
       }
     ]
   },
@@ -49778,7 +49004,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1106
+        "line": 1081
       }
     ]
   },
@@ -49809,25 +49035,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/organization.ts",
         "line": 312
-      }
-    ]
-  },
-  {
-    "id": "guid-a224c80ed8a87d35",
-    "kind": "error",
-    "template": "Original reading context changed; retry",
-    "parts": [
-      "Original reading context changed; retry"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/explanation-hint.ts",
-        "line": 21
-      },
-      {
-        "file": "src/explanation-hint.ts",
-        "line": 24
       }
     ]
   },
@@ -50212,7 +49419,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1598
+        "line": 1571
       }
     ]
   },
@@ -50227,7 +49434,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1534
+        "line": 1508
       }
     ]
   },
@@ -50380,7 +49587,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 794
+        "line": 792
       }
     ]
   },
@@ -50444,7 +49651,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 856
+        "line": 854
       }
     ]
   },
@@ -50748,7 +49955,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/agent-pulse.ts",
-        "line": 353
+        "line": 350
       }
     ]
   },
@@ -51050,7 +50257,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1341
+        "line": 1315
       }
     ]
   },
@@ -51065,7 +50272,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 734
+        "line": 732
       }
     ]
   },
@@ -51155,7 +50362,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 452
+        "line": 450
       }
     ]
   },
@@ -51185,7 +50392,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/cli.ts",
-        "line": 82
+        "line": 80
       }
     ]
   },
@@ -51261,7 +50468,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 989
+        "line": 964
       }
     ]
   },
@@ -51336,7 +50543,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 760
+        "line": 758
       }
     ]
   },
@@ -51751,7 +50958,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1517
+        "line": 1491
       }
     ]
   },
@@ -52179,7 +51386,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 724
+        "line": 722
       }
     ]
   },
@@ -52194,7 +51401,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 950
+        "line": 925
       }
     ]
   },
@@ -52209,7 +51416,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3311
+        "line": 3255
       }
     ]
   },
@@ -52299,7 +51506,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 802
+        "line": 800
       }
     ]
   },
@@ -52407,7 +51614,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1428
+        "line": 1402
       }
     ]
   },
@@ -52422,7 +51629,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 495
+        "line": 493
       }
     ]
   },
@@ -52548,7 +51755,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 960
+        "line": 935
       }
     ]
   },
@@ -52699,7 +51906,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3635
+        "line": 3579
       }
     ]
   },
@@ -52819,7 +52026,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 632
+        "line": 630
       }
     ]
   },
@@ -53060,7 +52267,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 901
+        "line": 899
       }
     ]
   },
@@ -53193,7 +52400,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1022
+        "line": 997
       }
     ]
   },
@@ -53223,7 +52430,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 787
+        "line": 785
       }
     ]
   },
@@ -53254,7 +52461,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 953
+        "line": 928
       }
     ]
   },
@@ -53449,7 +52656,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/cli.ts",
-        "line": 63
+        "line": 61
       }
     ]
   },
@@ -53494,7 +52701,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 527
+        "line": 525
       }
     ]
   },
@@ -53558,7 +52765,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1339
+        "line": 1313
       }
     ]
   },
@@ -53606,21 +52813,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/git-history.ts",
         "line": 228
-      }
-    ]
-  },
-  {
-    "id": "guid-ae3d9af6be80b0ed",
-    "kind": "error",
-    "template": "Unknown explanation operation",
-    "parts": [
-      "Unknown explanation operation"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/explanation-service.ts",
-        "line": 232
       }
     ]
   },
@@ -53790,7 +52982,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 863
+        "line": 861
       }
     ]
   },
@@ -54015,7 +53207,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1518
+        "line": 1492
       }
     ]
   },
@@ -54155,7 +53347,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 696
+        "line": 694
       }
     ]
   },
@@ -54170,7 +53362,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 988
+        "line": 963
       }
     ]
   },
@@ -54185,7 +53377,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 974
+        "line": 949
       }
     ]
   },
@@ -54200,7 +53392,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1292
+        "line": 1266
       }
     ]
   },
@@ -54246,7 +53438,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 641
+        "line": 639
       }
     ]
   },
@@ -54322,23 +53514,23 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1844
+        "line": 1817
       },
       {
         "file": "src/createServer.ts",
-        "line": 1848
+        "line": 1821
       },
       {
         "file": "src/createServer.ts",
-        "line": 1852
+        "line": 1825
       },
       {
         "file": "src/createServer.ts",
-        "line": 1856
+        "line": 1829
       },
       {
         "file": "src/createServer.ts",
-        "line": 3870
+        "line": 3814
       }
     ]
   },
@@ -54639,7 +53831,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1385
+        "line": 1359
       }
     ]
   },
@@ -54723,7 +53915,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 443
+        "line": 441
       }
     ]
   },
@@ -54802,7 +53994,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 706
+        "line": 704
       }
     ]
   },
@@ -54878,7 +54070,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1178
+        "line": 1153
       }
     ]
   },
@@ -55136,7 +54328,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 578
+        "line": 576
       }
     ]
   },
@@ -55279,7 +54471,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3217
+        "line": 3168
       }
     ]
   },
@@ -55299,21 +54491,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/independent-research-model.ts",
         "line": 149
-      }
-    ]
-  },
-  {
-    "id": "guid-b393042fa17c3a86",
-    "kind": "error",
-    "template": "Explanation host configuration changed; verified restart required",
-    "parts": [
-      "Explanation host configuration changed; verified restart required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/explanation-host.ts",
-        "line": 65
       }
     ]
   },
@@ -55403,7 +54580,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1051
+        "line": 1026
       }
     ]
   },
@@ -55479,11 +54656,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1110
+        "line": 1085
       },
       {
         "file": "src/createServer.ts",
-        "line": 1270
+        "line": 1244
       }
     ]
   },
@@ -56043,7 +55220,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/cli.ts",
-        "line": 131
+        "line": 124
       }
     ]
   },
@@ -56172,7 +55349,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1166
+        "line": 1141
       }
     ]
   },
@@ -56369,7 +55546,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1266
+        "line": 1240
       }
     ]
   },
@@ -56575,7 +55752,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 657
+        "line": 655
       }
     ]
   },
@@ -56635,7 +55812,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 674
+        "line": 672
       }
     ]
   },
@@ -56650,7 +55827,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 544
+        "line": 542
       }
     ]
   },
@@ -56745,7 +55922,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/cli.ts",
-        "line": 112
+        "line": 105
       }
     ]
   },
@@ -56835,7 +56012,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1359
+        "line": 1333
       }
     ]
   },
@@ -56988,7 +56165,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3470
+        "line": 3414
       }
     ]
   },
@@ -57094,7 +56271,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1125
+        "line": 1100
       }
     ]
   },
@@ -57139,7 +56316,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 861
+        "line": 859
       }
     ]
   },
@@ -57185,21 +56362,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/community-participation-activities.ts",
         "line": 42
-      }
-    ]
-  },
-  {
-    "id": "guid-b99e9635475377ef",
-    "kind": "error",
-    "template": "Host-verified author profile required for a draft",
-    "parts": [
-      "Host-verified author profile required for a draft"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/explanation-service.ts",
-        "line": 275
       }
     ]
   },
@@ -57545,23 +56707,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-bb19c04f48c9e128",
-    "kind": "prose",
-    "template": "Source-pinned plain-language explanation {arg0}. Originals are immutable. Host-selected sources only; Gemini is an advisory drafting preference. Independent verified cross-family review is required before reuse, and source drift invalidates it. No model calls. {arg1}",
-    "parts": [
-      "Source-pinned plain-language explanation ",
-      ". Originals are immutable. Host-selected sources only; Gemini is an advisory drafting preference. Independent verified cross-family review is required before reuse, and source drift invalidates it. No model calls. ",
-      ""
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/explanation-tools.ts",
-        "line": 32
-      }
-    ]
-  },
-  {
     "id": "guid-bb2ad9ac925fc9bb",
     "kind": "error",
     "template": "Public Federation process lock is invalid; refusing to remove it automatically",
@@ -57618,7 +56763,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1336
+        "line": 1310
       }
     ]
   },
@@ -57693,22 +56838,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1018
-      }
-    ]
-  },
-  {
-    "id": "guid-bb620058782fe622",
-    "kind": "error",
-    "template": "Duplicate host profile account",
-    "parts": [
-      "Duplicate host profile account"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/explanation-host.ts",
-        "line": 37
+        "line": 993
       }
     ]
   },
@@ -57887,7 +57017,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1021
+        "line": 996
       }
     ]
   },
@@ -58129,7 +57259,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1005
+        "line": 980
       }
     ]
   },
@@ -58421,7 +57551,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 4077
+        "line": 4021
       }
     ]
   },
@@ -58436,7 +57566,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1338
+        "line": 1312
       }
     ]
   },
@@ -58778,7 +57908,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 976
+        "line": 951
       }
     ]
   },
@@ -59022,7 +58152,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 855
+        "line": 853
       }
     ]
   },
@@ -59037,7 +58167,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 419
+        "line": 417
       }
     ]
   },
@@ -59113,7 +58243,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1729
+        "line": 1702
       }
     ]
   },
@@ -59223,7 +58353,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 954
+        "line": 952
       }
     ]
   },
@@ -59283,11 +58413,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 448
+        "line": 446
       },
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 612
+        "line": 610
       }
     ]
   },
@@ -59423,7 +58553,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 829
+        "line": 827
       }
     ]
   },
@@ -59549,7 +58679,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 497
+        "line": 495
       }
     ]
   },
@@ -59594,11 +58724,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1462
+        "line": 1436
       },
       {
         "file": "src/createServer.ts",
-        "line": 1475
+        "line": 1449
       }
     ]
   },
@@ -59748,7 +58878,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 756
+        "line": 754
       }
     ]
   },
@@ -59778,7 +58908,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 714
+        "line": 712
       }
     ]
   },
@@ -59793,11 +58923,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1302
+        "line": 1276
       },
       {
         "file": "src/createServer.ts",
-        "line": 1335
+        "line": 1309
       }
     ]
   },
@@ -59948,7 +59078,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/endpoint-registry.ts",
-        "line": 115
+        "line": 113
       },
       {
         "file": "src/search-limits.ts",
@@ -60002,7 +59132,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 173
+        "line": 170
       }
     ]
   },
@@ -60146,7 +59276,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 642
+        "line": 640
       }
     ]
   },
@@ -60470,7 +59600,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 605
+        "line": 603
       }
     ]
   },
@@ -60637,7 +59767,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 497
+        "line": 495
       }
     ]
   },
@@ -60724,7 +59854,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 745
+        "line": 743
       }
     ]
   },
@@ -60846,7 +59976,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 384
+        "line": 382
       }
     ]
   },
@@ -61124,7 +60254,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1628
+        "line": 1601
       }
     ]
   },
@@ -61227,21 +60357,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-c72cc5837903688a",
-    "kind": "error",
-    "template": "Explanation author profile changed; submit a new draft basis",
-    "parts": [
-      "Explanation author profile changed; submit a new draft basis"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/explanation-service.ts",
-        "line": 262
-      }
-    ]
-  },
-  {
     "id": "guid-c73e9523423c0645",
     "kind": "error",
     "template": "Output unavailable; use cancel_output only when absent",
@@ -61282,27 +60397,27 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 990
+        "line": 965
       },
       {
         "file": "src/createServer.ts",
-        "line": 1492
+        "line": 1466
       },
       {
         "file": "src/createServer.ts",
-        "line": 1506
+        "line": 1480
       },
       {
         "file": "src/createServer.ts",
-        "line": 1521
+        "line": 1495
       },
       {
         "file": "src/createServer.ts",
-        "line": 1537
+        "line": 1511
       },
       {
         "file": "src/createServer.ts",
-        "line": 1570
+        "line": 1544
       }
     ]
   },
@@ -61482,7 +60597,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1258
+        "line": 1232
       }
     ]
   },
@@ -61527,7 +60642,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 917
+        "line": 915
       }
     ]
   },
@@ -61558,21 +60673,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/llm-wiki.ts",
         "line": 6846
-      }
-    ]
-  },
-  {
-    "id": "guid-c833e7c3baa6f4e5",
-    "kind": "error",
-    "template": "Explanation configuration belongs to another Vault",
-    "parts": [
-      "Explanation configuration belongs to another Vault"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/explanation-host.ts",
-        "line": 58
       }
     ]
   },
@@ -61801,7 +60901,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 997
+        "line": 972
       }
     ]
   },
@@ -61816,7 +60916,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1144
+        "line": 1119
       }
     ]
   },
@@ -62076,7 +61176,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1313
+        "line": 1287
       }
     ]
   },
@@ -62121,7 +61221,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1533
+        "line": 1507
       }
     ]
   },
@@ -62181,7 +61281,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 968
+        "line": 943
       }
     ]
   },
@@ -62241,7 +61341,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1744
+        "line": 1717
       }
     ]
   },
@@ -62393,7 +61493,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 4096
+        "line": 4040
       }
     ]
   },
@@ -62515,7 +61615,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1374
+        "line": 1348
       }
     ]
   },
@@ -62590,7 +61690,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 983
+        "line": 958
       }
     ]
   },
@@ -63161,7 +62261,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/endpoint-registry.ts",
-        "line": 716
+        "line": 713
       }
     ]
   },
@@ -63297,7 +62397,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 497
+        "line": 495
       }
     ]
   },
@@ -63357,7 +62457,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1458
+        "line": 1432
       }
     ]
   },
@@ -63421,7 +62521,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       },
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 578
+        "line": 576
       },
       {
         "file": "src/organization.ts",
@@ -63455,7 +62555,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 475
+        "line": 473
       }
     ]
   },
@@ -63470,7 +62570,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1142
+        "line": 1117
       }
     ]
   },
@@ -63501,21 +62601,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/organization.ts",
         "line": 438
-      }
-    ]
-  },
-  {
-    "id": "guid-ce09ffc89ae149b2",
-    "kind": "error",
-    "template": "Explanation source changed; reread the original",
-    "parts": [
-      "Explanation source changed; reread the original"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/explanation-service.ts",
-        "line": 167
       }
     ]
   },
@@ -63636,7 +62721,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1412
+        "line": 1386
       }
     ]
   },
@@ -63910,7 +62995,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 882
+        "line": 880
       }
     ]
   },
@@ -63925,7 +63010,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 970
+        "line": 945
       }
     ]
   },
@@ -64031,7 +63116,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1321
+        "line": 1295
       }
     ]
   },
@@ -64137,21 +63222,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/skill-evolution.ts",
         "line": 350
-      }
-    ]
-  },
-  {
-    "id": "guid-d00d3ac7da8081e1",
-    "kind": "error",
-    "template": "Explanation record integrity unavailable",
-    "parts": [
-      "Explanation record integrity unavailable"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/explanation-service.ts",
-        "line": 98
       }
     ]
   },
@@ -64392,7 +63462,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 874
+        "line": 872
       }
     ]
   },
@@ -64441,7 +63511,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 916
+        "line": 914
       }
     ]
   },
@@ -64456,35 +63526,35 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 931
+        "line": 907
       },
       {
         "file": "src/createServer.ts",
-        "line": 949
+        "line": 924
       },
       {
         "file": "src/createServer.ts",
-        "line": 964
+        "line": 939
       },
       {
         "file": "src/createServer.ts",
-        "line": 1001
+        "line": 976
       },
       {
         "file": "src/createServer.ts",
-        "line": 1182
+        "line": 1157
       },
       {
         "file": "src/createServer.ts",
-        "line": 1194
+        "line": 1169
       },
       {
         "file": "src/createServer.ts",
-        "line": 1549
+        "line": 1523
       },
       {
         "file": "src/createServer.ts",
-        "line": 1565
+        "line": 1539
       }
     ]
   },
@@ -64590,15 +63660,15 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2009
+        "line": 1982
       },
       {
         "file": "src/createServer.ts",
-        "line": 2014
+        "line": 1987
       },
       {
         "file": "src/createServer.ts",
-        "line": 2015
+        "line": 1988
       }
     ]
   },
@@ -64784,7 +63854,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 722
+        "line": 720
       }
     ]
   },
@@ -64814,22 +63884,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 987
-      }
-    ]
-  },
-  {
-    "id": "guid-d200ca8b355bafb1",
-    "kind": "error",
-    "template": "Duplicate explanation source",
-    "parts": [
-      "Duplicate explanation source"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/explanation-service.ts",
-        "line": 52
+        "line": 962
       }
     ]
   },
@@ -64844,7 +63899,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1272
+        "line": 1246
       }
     ]
   },
@@ -64875,7 +63930,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3830
+        "line": 3774
       }
     ]
   },
@@ -65027,7 +64082,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 682
+        "line": 680
       }
     ]
   },
@@ -65119,7 +64174,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 659
+        "line": 657
       }
     ]
   },
@@ -65195,7 +64250,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3854
+        "line": 3798
       }
     ]
   },
@@ -65293,7 +64348,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1084
+        "line": 1059
       }
     ]
   },
@@ -65353,7 +64408,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 951
+        "line": 926
       }
     ]
   },
@@ -65414,7 +64469,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 569
+        "line": 567
       }
     ]
   },
@@ -65596,7 +64651,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1136
+        "line": 1111
       }
     ]
   },
@@ -65998,7 +65053,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 437
+        "line": 435
       }
     ]
   },
@@ -66045,7 +65100,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 4070
+        "line": 4014
       }
     ]
   },
@@ -66113,7 +65168,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       },
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 589
+        "line": 587
       }
     ]
   },
@@ -66234,7 +65289,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 887
+        "line": 885
       }
     ]
   },
@@ -66264,7 +65319,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1306
+        "line": 1280
       }
     ]
   },
@@ -66325,7 +65380,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1550
+        "line": 1524
       }
     ]
   },
@@ -66355,7 +65410,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 603
+        "line": 601
       }
     ]
   },
@@ -66370,7 +65425,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 585
+        "line": 583
       }
     ]
   },
@@ -66475,7 +65530,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1028
+        "line": 1003
       }
     ]
   },
@@ -66505,7 +65560,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 578
+        "line": 576
       }
     ]
   },
@@ -66605,21 +65660,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-d7e4afe9c79aa587",
-    "kind": "error",
-    "template": "Explanation source changed; restart the job",
-    "parts": [
-      "Explanation source changed; restart the job"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/explanation-service.ts",
-        "line": 204
-      }
-    ]
-  },
-  {
     "id": "guid-d8045b43d6d47fd0",
     "kind": "error",
     "template": "Shared skill text contains private scope or sensitive material; keep it private",
@@ -66645,7 +65685,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1677
+        "line": 1650
       }
     ]
   },
@@ -66827,7 +65867,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1043
+        "line": 1018
       }
     ]
   },
@@ -66887,7 +65927,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1121
+        "line": 1096
       }
     ]
   },
@@ -66932,7 +65972,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1255
+        "line": 1229
       }
     ]
   },
@@ -66962,7 +66002,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 975
+        "line": 950
       }
     ]
   },
@@ -67023,7 +66063,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1489
+        "line": 1463
       }
     ]
   },
@@ -67038,7 +66078,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/cli.ts",
-        "line": 73
+        "line": 71
       }
     ]
   },
@@ -67068,7 +66108,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 409
+        "line": 407
       }
     ]
   },
@@ -67252,7 +66292,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1436
+        "line": 1410
       }
     ]
   },
@@ -67348,7 +66388,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 870
+        "line": 863
       }
     ]
   },
@@ -67562,7 +66602,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 927
+        "line": 903
       }
     ]
   },
@@ -67808,7 +66848,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 736
+        "line": 734
       }
     ]
   },
@@ -68019,7 +67059,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1561
+        "line": 1535
       }
     ]
   },
@@ -68190,19 +67230,19 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1490
+        "line": 1464
       },
       {
         "file": "src/createServer.ts",
-        "line": 1504
+        "line": 1478
       },
       {
         "file": "src/createServer.ts",
-        "line": 1519
+        "line": 1493
       },
       {
         "file": "src/createServer.ts",
-        "line": 1535
+        "line": 1509
       }
     ]
   },
@@ -68247,7 +67287,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 811
+        "line": 809
       }
     ]
   },
@@ -68493,7 +67533,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1159
+        "line": 1134
       }
     ]
   },
@@ -68661,7 +67701,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1064
+        "line": 1039
       }
     ]
   },
@@ -68815,7 +67855,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3676
+        "line": 3620
       }
     ]
   },
@@ -68864,7 +67904,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/agent-pulse.ts",
-        "line": 265
+        "line": 262
       }
     ]
   },
@@ -68970,7 +68010,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 610
+        "line": 608
       }
     ]
   },
@@ -69038,7 +68078,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 601
+        "line": 599
       }
     ]
   },
@@ -69084,21 +68124,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/workshop-output.ts",
         "line": 84
-      }
-    ]
-  },
-  {
-    "id": "guid-dffcb291ce93f03a",
-    "kind": "error",
-    "template": "Explanation record byte budget exceeded; prior readable record preserved",
-    "parts": [
-      "Explanation record byte budget exceeded; prior readable record preserved"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/explanation-service.ts",
-        "line": 284
       }
     ]
   },
@@ -69224,7 +68249,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       },
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 589
+        "line": 587
       }
     ]
   },
@@ -69401,7 +68426,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1012
+        "line": 987
       }
     ]
   },
@@ -69416,7 +68441,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 447
+        "line": 445
       }
     ]
   },
@@ -69480,7 +68505,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1024
+        "line": 999
       }
     ]
   },
@@ -69698,21 +68723,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-e1d6de0cb54b65d0",
-    "kind": "error",
-    "template": "Explanation actor changed",
-    "parts": [
-      "Explanation actor changed"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/createServer.ts",
-        "line": 887
-      }
-    ]
-  },
-  {
     "id": "guid-e1e19fab9ad0426c",
     "kind": "prose",
     "template": "The Workshop is closed and the artifact remains linked to its contribution history.",
@@ -69775,21 +68785,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-e1fcac77fa5d4c59",
-    "kind": "error",
-    "template": "Approved explanation is immutable; a changed source starts a new job",
-    "parts": [
-      "Approved explanation is immutable; a changed source starts a new job"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/explanation-service.ts",
-        "line": 271
-      }
-    ]
-  },
-  {
     "id": "guid-e1fe002c42892eba",
     "kind": "prose",
     "template": "Read your own bounded metadata-only MCP security audit events. It records tool, target identifier, attempt/error, and timestamp, never note bodies, passwords, or access tokens.",
@@ -69815,7 +68810,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 561
+        "line": 559
       }
     ]
   },
@@ -69905,7 +68900,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 429
+        "line": 427
       }
     ]
   },
@@ -69980,7 +68975,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1390
+        "line": 1364
       }
     ]
   },
@@ -70040,7 +69035,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1195
+        "line": 1170
       }
     ]
   },
@@ -70101,7 +69096,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1735
+        "line": 1708
       }
     ]
   },
@@ -70237,7 +69232,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 592
+        "line": 590
       }
     ]
   },
@@ -70410,21 +69405,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-e4109887f3d3d34d",
-    "kind": "error",
-    "template": "Invalid profile labels",
-    "parts": [
-      "Invalid profile labels"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/explanation-host.ts",
-        "line": 33
-      }
-    ]
-  },
-  {
     "id": "guid-e410f89a6d12fe8a",
     "kind": "error",
     "template": "Profile path is reserved for the agent directory: {arg0}",
@@ -70563,7 +69543,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 854
+        "line": 852
       }
     ]
   },
@@ -70745,7 +69725,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1568
+        "line": 1542
       }
     ]
   },
@@ -70861,7 +69841,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1665
+        "line": 1638
       }
     ]
   },
@@ -70981,7 +69961,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1038
+        "line": 1013
       }
     ]
   },
@@ -71154,7 +70134,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1320
+        "line": 1294
       }
     ]
   },
@@ -71169,7 +70149,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1673
+        "line": 1646
       }
     ]
   },
@@ -71324,7 +70304,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1398
+        "line": 1372
       }
     ]
   },
@@ -71593,21 +70573,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-e88ddeba59a5d72a",
-    "kind": "error",
-    "template": "Invalid explanation fields",
-    "parts": [
-      "Invalid explanation fields"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/explanation-model.ts",
-        "line": 13
-      }
-    ]
-  },
-  {
     "id": "guid-e894d93200665095",
     "kind": "error",
     "template": "Projection targets changed or became unavailable; export again",
@@ -71633,7 +70598,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 617
+        "line": 615
       }
     ]
   },
@@ -71781,7 +70746,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3515
+        "line": 3459
       }
     ]
   },
@@ -71796,7 +70761,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1196
+        "line": 1171
       }
     ]
   },
@@ -71889,7 +70854,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2974
+        "line": 2936
       }
     ]
   },
@@ -71919,7 +70884,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/cli.ts",
-        "line": 92
+        "line": 90
       }
     ]
   },
@@ -72085,7 +71050,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 602
+        "line": 600
       }
     ]
   },
@@ -72100,7 +71065,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 759
+        "line": 757
       }
     ]
   },
@@ -72207,21 +71172,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/chat.ts",
         "line": 124
-      }
-    ]
-  },
-  {
-    "id": "guid-ea9dc3973b564acf",
-    "kind": "prose",
-    "template": "Opt in to a current approved explanationAction for this original only; no draft or explanation text is mixed into the source. The optional link is omitted if unavailable or it cannot fit.",
-    "parts": [
-      "Opt in to a current approved explanationAction for this original only; no draft or explanation text is mixed into the source. The optional link is omitted if unavailable or it cannot fit."
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/createServer.ts",
-        "line": 932
       }
     ]
   },
@@ -72386,7 +71336,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3357
+        "line": 3301
       }
     ]
   },
@@ -72506,7 +71456,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 922
+        "line": 920
       }
     ]
   },
@@ -72581,7 +71531,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 945
+        "line": 920
       }
     ]
   },
@@ -72702,7 +71652,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 402
+        "line": 400
       }
     ]
   },
@@ -72717,7 +71667,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1156
+        "line": 1131
       }
     ]
   },
@@ -73126,7 +72076,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 487
+        "line": 485
       }
     ]
   },
@@ -73393,11 +72343,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 783
+        "line": 781
       },
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 796
+        "line": 794
       }
     ]
   },
@@ -73427,7 +72377,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1017
+        "line": 992
       }
     ]
   },
@@ -73671,7 +72621,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 750
+        "line": 748
       }
     ]
   },
@@ -73716,7 +72666,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 804
+        "line": 802
       }
     ]
   },
@@ -73795,7 +72745,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 911
+        "line": 909
       }
     ]
   },
@@ -73844,7 +72794,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       },
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 570
+        "line": 568
       }
     ]
   },
@@ -74431,7 +73381,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3785
+        "line": 3729
       }
     ]
   },
@@ -74506,7 +73456,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1042
+        "line": 1017
       }
     ]
   },
@@ -74552,7 +73502,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/cli.ts",
-        "line": 107
+        "line": 100
       }
     ]
   },
@@ -74612,7 +73562,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 571
+        "line": 569
       }
     ]
   },
@@ -74661,7 +73611,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 455
+        "line": 453
       }
     ]
   },
@@ -74676,7 +73626,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 871
+        "line": 869
       }
     ]
   },
@@ -74857,7 +73807,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 845
+        "line": 838
       }
     ]
   },
@@ -74949,7 +73899,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 906
+        "line": 904
       }
     ]
   },
@@ -74964,7 +73914,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 827
+        "line": 825
       }
     ]
   },
@@ -74994,7 +73944,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 744
+        "line": 737
       }
     ]
   },
@@ -75191,7 +74141,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1280
+        "line": 1254
       }
     ]
   },
@@ -75267,7 +74217,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1305
+        "line": 1279
       }
     ]
   },
@@ -75492,7 +74442,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3730
+        "line": 3674
       }
     ]
   },
@@ -75582,7 +74532,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 658
+        "line": 656
       }
     ]
   },
@@ -75751,22 +74701,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1477
-      }
-    ]
-  },
-  {
-    "id": "guid-f51c1564999c99bb",
-    "kind": "error",
-    "template": "Claim the explanation job first",
-    "parts": [
-      "Claim the explanation job first"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/explanation-service.ts",
-        "line": 258
+        "line": 1451
       }
     ]
   },
@@ -75811,7 +74746,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1377
+        "line": 1351
       }
     ]
   },
@@ -75875,7 +74810,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 683
+        "line": 681
       }
     ]
   },
@@ -75980,7 +74915,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1208
+        "line": 1183
       }
     ]
   },
@@ -76255,7 +75190,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 385
+        "line": 383
       }
     ]
   },
@@ -76289,7 +75224,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1678
+        "line": 1651
       }
     ]
   },
@@ -76364,7 +75299,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1093
+        "line": 1068
       }
     ]
   },
@@ -76379,7 +75314,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3065
+        "line": 3016
       }
     ]
   },
@@ -76394,7 +75329,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1170
+        "line": 1145
       }
     ]
   },
@@ -76664,7 +75599,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/endpoint-registry.ts",
-        "line": 691
+        "line": 688
       }
     ]
   },
@@ -76679,7 +75614,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1304
+        "line": 1278
       }
     ]
   },
@@ -77072,7 +76007,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 604
+        "line": 602
       }
     ]
   },
@@ -77242,7 +76177,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1349
+        "line": 1323
       }
     ]
   },
@@ -77504,7 +76439,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1567
+        "line": 1541
       }
     ]
   },
@@ -77707,7 +76642,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1023
+        "line": 998
       }
     ]
   },
@@ -77738,21 +76673,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/llm-wiki-tools.ts",
         "line": 51
-      }
-    ]
-  },
-  {
-    "id": "guid-fb642f2fbb25fa06",
-    "kind": "error",
-    "template": "Authenticated task account required",
-    "parts": [
-      "Authenticated task account required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/explanation-service.ts",
-        "line": 86
       }
     ]
   },
@@ -77835,7 +76755,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1470
+        "line": 1444
       }
     ]
   },
@@ -77865,7 +76785,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 455
+        "line": 453
       }
     ]
   },
@@ -77880,7 +76800,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/cli.ts",
-        "line": 97
+        "line": 95
       }
     ]
   },
@@ -78046,7 +76966,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 758
+        "line": 756
       }
     ]
   },
@@ -78061,7 +76981,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 455
+        "line": 453
       }
     ]
   },
@@ -78080,7 +77000,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       },
       {
         "file": "src/llm-wiki-tools.ts",
-        "line": 578
+        "line": 576
       }
     ]
   },
@@ -78787,11 +77707,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/cli.ts",
-        "line": 208
+        "line": 201
       },
       {
         "file": "src/cli.ts",
-        "line": 216
+        "line": 209
       }
     ]
   },
@@ -78851,7 +77771,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1141
+        "line": 1116
       }
     ]
   },
@@ -78866,7 +77786,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1417
+        "line": 1391
       }
     ]
   },
@@ -78927,21 +77847,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/community-participation.ts",
         "line": 169
-      }
-    ]
-  },
-  {
-    "id": "guid-ffadd35adb365dce",
-    "kind": "error",
-    "template": "Duplicate or missing explanation criterion",
-    "parts": [
-      "Duplicate or missing explanation criterion"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/explanation-model.ts",
-        "line": 100
       }
     ]
   },
@@ -79047,7 +77952,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 969
+        "line": 944
       }
     ]
   },

@@ -14,7 +14,6 @@ export interface ParsedCliArgs {
   roleplayConfig?: string;
   skillEvolutionConfig?: string;
   reviewedSkillsConfig?: string;
-  explanationConfig?: string;
   featuresConfig?: string;
   ownerActivityConfig?: string;
   maintenanceConfig?: string;
@@ -44,7 +43,6 @@ export function parseCliArgs(args: string[]): ParsedCliArgs {
   let roleplayConfig: string | undefined;
   let skillEvolutionConfig: string | undefined;
   let reviewedSkillsConfig: string | undefined;
-  let explanationConfig: string | undefined;
   let featuresConfig: string | undefined;
   let ownerActivityConfig: string | undefined;
   let maintenanceConfig: string | undefined;
@@ -96,11 +94,6 @@ export function parseCliArgs(args: string[]): ParsedCliArgs {
       const value = arg === '--features-config' ? args[++index] : arg.slice('--features-config='.length);
       if (!value || !value.trim() || value.startsWith('--') || featuresConfig !== undefined) throw guidanceError(new Error('--features-config requires one host configuration file'), 'guid-fc0e1ded2f8c054c');
       featuresConfig = value; continue;
-    }
-    if (arg === '--explanation-config' || arg.startsWith('--explanation-config=')) {
-      const value = arg === '--explanation-config' ? args[++index] : arg.slice('--explanation-config='.length);
-      if (!value || !value.trim() || value.startsWith('--') || explanationConfig !== undefined) throw guidanceError(Error('--explanation-config requires one private host configuration file'), 'guid-2fd6b72137024d82');
-      explanationConfig = value; continue;
     }
     if (arg === '--skill-evolution-config' || arg.startsWith('--skill-evolution-config=')) {
       const value = arg === '--skill-evolution-config' ? args[++index] : arg.slice('--skill-evolution-config='.length);
@@ -240,7 +233,6 @@ export function parseCliArgs(args: string[]): ParsedCliArgs {
     ...(roleplayConfig !== undefined && { roleplayConfig }),
     ...(skillEvolutionConfig !== undefined && { skillEvolutionConfig }),
     ...(reviewedSkillsConfig !== undefined && { reviewedSkillsConfig }),
-    ...(explanationConfig !== undefined && { explanationConfig }),
     ...(featuresConfig !== undefined && { featuresConfig }),
     ...(ownerActivityConfig !== undefined && { ownerActivityConfig }),
     ...(maintenanceConfig !== undefined && { maintenanceConfig }),

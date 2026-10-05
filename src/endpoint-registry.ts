@@ -7,7 +7,6 @@ import { STORY_OPERATIONS } from './story-tools.js';
 import { operationAvailability, operationReadAlias } from './operation-contracts.js';
 export { operationReadAlias };
 import { DOCUMENT_TOOL_ENDPOINTS } from './document-tools.js';
-import { EXPLANATION_ENDPOINTS } from './explanation-tools.js';
 import { createHash } from 'node:crypto';
 import { jsonPointerNode, pageJsonRead, type JsonReadPage as DescriptorPage } from './json-read-page.js';
 import { hostFeatureForTool } from './host-features.js';
@@ -40,7 +39,6 @@ export interface EndpointAvailabilityContext {
   principalKey?: string;
   roleplayConfigured?: boolean;
   roleplayWritesConfigured?: boolean;
-  explanationsConfigured?: boolean;
   ownerActivity?: {
     policyFingerprint: string;
     executionBindingGeneration: string;
@@ -49,7 +47,7 @@ export interface EndpointAvailabilityContext {
   };
 }
 
-const OPTIONAL_ACTIVITIES = new Set<Activity>(['collaboration', 'ideation-research', 'explanation-translation',
+const OPTIONAL_ACTIVITIES = new Set<Activity>(['collaboration', 'ideation-research',
   'roleplay', 'skill-evolution']);
 export function ownerActivityForEndpointTool(toolName: string): Activity | undefined {
   const feature = hostFeatureForTool(toolName);
@@ -132,7 +130,6 @@ function endpointScore(endpoint: EndpointDescriptor, terms: string[]): number {
 
 const EXPLICIT_IDS: Record<string, string> = {
   ...DOCUMENT_TOOL_ENDPOINTS,
-  ...EXPLANATION_ENDPOINTS,
   check_reusable_configuration: 'configuration.check',
   preview_learning_configuration: 'configuration.learning_preview',
   list_guidance_catalog: 'guidance.catalog',
@@ -796,7 +793,7 @@ export class EndpointRegistry {
         const missing = item.requires.filter(required => !context.capabilities.has(required as ScopeCapability));
         const skillDisabled = context.skillEvolutionEnabled === false && item.endpointId.startsWith('skill.') && item.endpointId !== 'skill.resolve';
         const roleplayMissing = context.roleplayConfigured === false && item.endpointId.startsWith('roleplay.') && item.endpointId !== 'roleplay.computer';
-        const hostMissing = roleplayMissing || context.explanationsConfigured === false && item.endpointId.startsWith('explanations.');
+        const hostMissing = roleplayMissing;
         const roleplaySetupMissing = context.roleplayWritesConfigured === false && item.endpointId.startsWith('roleplay.') && item.endpointId !== 'roleplay.computer' && item.mutating;
         const disabled = context.readOnly && item.mutating || skillDisabled || hostMissing || roleplaySetupMissing;
         const reviewedRead = context.reviewedSourceAccess === true && item.endpointId === 'skill.resolve';

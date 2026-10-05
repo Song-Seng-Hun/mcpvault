@@ -15,7 +15,6 @@ function pulse(options: { checkpoint?: boolean; busy?: boolean; ownerConsent?: b
     { reviewQueue: async () => ({ items: [], total: 0 }), inbox: async () => ({ items: [], total: 0 }), reviewPacket: async () => ({}) } as any,
     undefined, undefined, undefined,
     { nextAction: async ({ skillId }: { skillId: string }) => { calls.push(skillId); return { endpointId: 'skill.candidate', arguments: { skillId, candidateId: '123', op: 'read' } }; } } as any,
-    undefined,
     async () => options.ownerConsent === false ? undefined : ({
       run: async <T>(reader: () => Promise<T>) => reader(), revalidate: async () => {}, assertFresh: () => {},
     }),

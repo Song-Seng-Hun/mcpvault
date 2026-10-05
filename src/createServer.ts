@@ -84,9 +84,6 @@ import { getAuditTools } from "./audit-tools.js";
 import { AgentTaskService } from "./agent-tasks.js";
 import { AGENT_TASK_MUTATING_TOOLS, getAgentTaskTools } from "./agent-task-tools.js";
 import { getWorkTools, WORK_MUTATING_TOOLS, WORK_TASK_PROPERTIES } from './work-tools.js';
-import { getExplanationTools, EXPLANATION_MUTATING_TOOLS, EXPLANATION_ENDPOINTS } from './explanation-tools.js';
-import { ExplanationService } from './explanation-service.js';
-import { attachExplanationHint } from './explanation-hint.js';
 import { checkReusableConfiguration, getConfigurationTools } from './configuration-tools.js';
 import { SkillEvolutionService, type SkillEvolutionHost } from './skill-evolution.js';
 import { getSkillEvolutionTools, SKILL_MUTATING_TOOLS } from './skill-evolution-tools.js';
@@ -269,8 +266,6 @@ export interface CreateServerOptions extends DocumentAuthorityOptions {
   accountStorePath?: string;
   /** Explicit immutable host selection; never populated by a client request. */
   features?: HostFeatureConfig;
-  /** Explicit host-selected sources; no automatic Vault-wide translation. */
-  explanations?: { sources: import('./explanation-service.js').ExplanationSourceConfig[] };
   /** Trusted host integrations only; never populated from API arguments or Vault notes. */
   workCollaboration?: Pick<import('./work-service.js').WorkServiceOptions, 'executionProfiles' | 'readReviewGitSource' | 'verifyReviewExecution' | 'deterministicCoverage'>;
   /** Trusted human-owner consent and independently verified execution identity. */
@@ -319,7 +314,6 @@ export interface CreateServerOptions extends DocumentAuthorityOptions {
 const MUTATING_TOOLS = new Set([
   'manage_evolution_feedback', 'manage_evolution_cycle', 'get_evolution_context',
   'manage_wiki_compilation',
-  ...EXPLANATION_MUTATING_TOOLS,
   ...STORY_MUTATING_TOOLS,
   ...SKILL_MUTATING_TOOLS,
   ...ENTERPRISE_FEDERATION_MUTATING_TOOLS,
@@ -436,7 +430,6 @@ const CAPABILITY_FOR_TOOL: Partial<Record<string, ScopeCapability>> = {
   handoff_work_task: 'task',
   review_work_task: 'task',
   read_work_review_context: 'task', read_work_staffing: 'task',
-  list_explanations: 'task', claim_explanation: 'task', release_explanation: 'task', submit_explanation: 'task', review_explanation: 'task',
   update_agent_task: "task",
   save_work_state: "journal",
   preview_learning_configuration: 'journal',
@@ -549,7 +542,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
   const features = parseHostFeatureConfig(options.features ?? DEFAULT_HOST_FEATURE_CONFIG);
   const selectedFeatures = new Set(features.selected);
   const ownerActivityRuntime = new OwnerActivityRuntime(options.ownerActivity);
-  const catalogActivities: readonly Activity[] = ['collaboration', 'ideation-research', 'explanation-translation',
+  const catalogActivities: readonly Activity[] = ['collaboration', 'ideation-research',
     'roleplay', 'skill-evolution'];
   const catalogActions: readonly OwnerActivityAction[] = ['discover', 'read', 'claim', 'execute'];
   const ownerCatalogSnapshot = (principal?: ScopePrincipal): NonNullable<EndpointAvailabilityContext['ownerActivity']> => {
@@ -576,7 +569,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
   // Shared task records support selected story workflows without exposing
   // the optional work board. Journal/saved-item methods likewise share storage
   // helpers with social methods, but need no social indexes or subscriptions.
-  const needsTaskRecords = ['work-management', 'roleplay', 'explanation-translation'].some(id => selectedFeatures.has(id as HostFeatureId));
+  const needsTaskRecords = ['work-management', 'roleplay'].some(id => selectedFeatures.has(id as HostFeatureId));
   const needsPersonalStorage = hasFeature('personal-memory') || hasFeature('collaboration');
   const featureToolAllowed = (tool: string) => {
     const feature = hostFeatureForTool(tool);
@@ -880,26 +873,9 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         {revisionGuards:guards,workshopOutput:receipt,assertOutputAccess:assertAccess});
     },
   });
-  const explanationService = (validate?: () => Promise<ScopePrincipal>) => hasFeature('explanation-translation') && options.explanations ? new ExplanationService(fileSystem, scopeAccess, {
-    sources: options.explanations.sources,
-    executionProfiles: options.workCollaboration?.executionProfiles ?? (async () => []),
-    assertActor: async actor => {
-      if (validate && (await validate()).accountId !== actor.accountId) throw guidanceError(Error('Explanation actor changed'), 'guid-e1d6de0cb54b65d0');
-      const current = (await scopeAuth.listPrincipals()).find(p => p.accountId === actor.accountId);
-      if (!current || current.agentId !== actor.agentId || current.modelId !== actor.modelId || !scopeAuth.hasCapability(current, 'task')
-        || await moderation.isBanned(current.accountId, current.userId)) throw guidanceError(Error('Current explanation task account required'), 'guid-12316a80ad1a7548');
-    },
-    accountAvailable: async accountId => {
-      const current = (await scopeAuth.listPrincipals()).find(p => p.accountId === accountId);
-      return Boolean(current && scopeAuth.hasCapability(current, 'task') && !await moderation.isBanned(current.accountId, current.userId));
-    },
-    canTakeWork: async actor => !(await requiredService(agentTasks).listAssignedOpen({ assignee: actor.agentId || actor.modelId, limit: 1, maxChars: 1200 })).tasks.length,
-  }) : undefined;
-  const explanations = explanationService();
   const agentPulse = new AgentPulseService(notifications, hasFeature('collaboration') ? social : undefined, chat,
     hasFeature('work-management') ? agentTasks : undefined, continuity, reputation, llmWiki, ideation,
     hasFeature('work-management') ? work : undefined, participation, skillEvolution,
-    { ...(explanations && { explanation: (principal: ScopePrincipal) => explanations.nextAction(principal) }) },
     async (activity, principal) => {
       const operation = await ownerActivityRuntime.begin(activity, 'discover', undefined, principal);
       if (!operation.canAccessPath('.')) return undefined;
@@ -929,7 +905,6 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
             type: "object",
             properties: {
               path: { type: "string", description: guidanceText('guid-d0f5144b3c280de2', "Path to the note relative to vault root") },
-              includeExplanation: { type: "boolean", default: false, description: guidanceText('guid-ea9dc3973b564acf', "Opt in to a current approved explanationAction for this original only; no draft or explanation text is mixed into the source. The optional link is omitted if unavailable or it cannot fit.") },
               property: { type: "string", minLength: 1, maxLength: 128, description: guidanceText('guid-6f56646f7295c3c3', "Optional exact string Property name, for example recall_prompt. Excludes the body and all other Properties; missing/non-string values return an error.") },
               offset: { type: "integer", minimum: 0, description: guidanceText('guid-52b5f95b56ba5ee7', "UTF-16 character offset within property only. Nonzero continuations require expectedRevision; use the returned nextAction unchanged.") },
               knownRevision: { type: "string", description: guidanceText('guid-666034ff3af37e36', "Optional response-cache hint. After reading the current snapshot and checking visibility, unchanged notes return notModified without a body. This saves response tokens, not source reads; it does not reject changed notes.") },
@@ -1235,7 +1210,6 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         ...getAuditTools(),
         ...getAgentTaskTools(),
         ...getWorkTools(),
-        ...getExplanationTools(),
         ...getConfigurationTools(),
         ...getSkillEvolutionTools(),
         ...getCommunityFeatureTools(),
@@ -1584,7 +1558,6 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
       ...(enterpriseProfile.mode === 'public' ? [
         ...getChatTools(), ...getRoleplayTools(), ...getNotificationTools(), ...getAgentTaskTools(),
         ...getCommunityFeatureTools(), ...getReputationTools(), ...getIdeationTools(),
-        ...getExplanationTools(),
       ].map(tool => tool.name) : []),
     ] : []);
     return buildInternalTools().filter(tool => !unavailable.has(tool.name) && featureToolAllowed(tool.name)).map(tool => {
@@ -1932,7 +1905,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
             undefined,
             trimmedArgs.limit,
             trimmedArgs.maxChars,
-            { readOnly, reviewedSourceAccess, skillEvolutionEnabled: Boolean(skillEvolution?.enabled), authenticated: Boolean(principal), capabilities: new Set(principal?.capabilities || []), principalKey: JSON.stringify(principal), roleplayConfigured: Boolean(options.roleplay), roleplayWritesConfigured: Boolean(options.roleplay?.options.policy.administrators.length), explanationsConfigured: Boolean(explanations), ownerActivity: ownerState },
+            { readOnly, reviewedSourceAccess, skillEvolutionEnabled: Boolean(skillEvolution?.enabled), authenticated: Boolean(principal), capabilities: new Set(principal?.capabilities || []), principalKey: JSON.stringify(principal), roleplayConfigured: Boolean(options.roleplay), roleplayWritesConfigured: Boolean(options.roleplay?.options.policy.administrators.length), ownerActivity: ownerState },
             true,
             { compact: true, cursor: trimmedArgs.cursor },
           );
@@ -1959,7 +1932,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
             trimmedArgs.query,
             trimmedArgs.limit,
             trimmedArgs.maxChars,
-            { readOnly, reviewedSourceAccess, skillEvolutionEnabled: Boolean(skillEvolution?.enabled), authenticated: Boolean(principal), capabilities: new Set(principal?.capabilities || []), roleplayConfigured: Boolean(options.roleplay), roleplayWritesConfigured: Boolean(options.roleplay?.options.policy.administrators.length), explanationsConfigured: Boolean(explanations), ownerActivity: ownerState },
+            { readOnly, reviewedSourceAccess, skillEvolutionEnabled: Boolean(skillEvolution?.enabled), authenticated: Boolean(principal), capabilities: new Set(principal?.capabilities || []), roleplayConfigured: Boolean(options.roleplay), roleplayWritesConfigured: Boolean(options.roleplay?.options.policy.administrators.length), ownerActivity: ownerState },
             false,
             { cursor: trimmedArgs.cursor },
           );
@@ -2283,18 +2256,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
 
         case "get_wiki_learning_path": {
           const result = await llmWiki.learningPath(principal, trimmedArgs.path, trimmedArgs.maxDepth, trimmedArgs.limit, trimmedArgs.maxChars, false, trimmedArgs.prettyPrint);
-          const service = trimmedArgs.includeExplanation === true ? explanationService(principal ? revalidateActor : undefined) : undefined;
-          if (!service) return jsonResult(result, trimmedArgs.prettyPrint);
-          const value = result as Record<string, any>;
-          const guards = [value.root, ...(value.authoredOrder ?? [])].filter(item => item?.path && item?.revision)
-            .map(item => ({ path: scopeAccess.resolveExternalPath(item.path, principal), revision: item.revision as string }));
-          const targetPath = typeof trimmedArgs.explanationPath === 'string' ? scopeAccess.resolveExternalPath(trimmedArgs.explanationPath, principal) : trimmedArgs.path;
-          const target = guards.find(item => item.path === targetPath);
-          if (!target) return jsonResult(result, trimmedArgs.prettyPrint);
-          return jsonResult(await attachExplanationHint({ result: value, target, guards, fs: fileSystem, admitted: canAccessPath,
-            maxChars: trimmedArgs.maxChars ?? 7000, prettyPrint: trimmedArgs.prettyPrint,
-            approvedAction: () => service.approvedAction({ sourcePath: scopeAccess.toPublicPath(target.path), expectedSourceRevision: target.revision }, principal),
-          }), trimmedArgs.prettyPrint);
+          return jsonResult(result, trimmedArgs.prettyPrint);
         }
 
         case "get_wiki_authority_map": {
@@ -3049,17 +3011,6 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
           });
           return jsonResult(await service.execute(endpoints[toolName]!, trimmedArgs, principal), false);
         }
-        case 'list_explanations': case 'read_explanation': case 'claim_explanation':
-        case 'release_explanation': case 'submit_explanation': case 'review_explanation': {
-          const service = explanationService(principal ? revalidateActor : undefined);
-          if (!service) throw guidanceError(Error('Explanation feature is not configured by the host'), 'guid-82691cbd40ccccde');
-          // This service owns URI normalization. Forward only its contract fields;
-          // authentication material must never participate in durable retry hashes.
-          const params = Object.fromEntries(['sourcePath', 'expectedSourceRevision', 'expectedRevision', 'requestId', 'draft', 'review', 'cursor', 'limit', 'maxChars']
-            .filter(key => rawArgs[key] !== undefined).map(key => [key, rawArgs[key]]));
-          return jsonResult(await service.execute(EXPLANATION_ENDPOINTS[toolName]!.split('.')[1]!, params, principal), false);
-        }
-
         case "get_wiki_topic_packet": {
           const result = await llmWiki.topicPacket(principal, trimmedArgs);
           if (JSON.stringify(await scopeAuth.authenticate(rawArgs.accessToken)) !== JSON.stringify(principal)) throw guidanceError(new Error('Authentication changed; retry topic request'), 'guid-f7cbf440ff304bd3');
@@ -3239,14 +3190,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
             if (text.length > maxChars) return noteReadBudgetError(text.length + 64, note.revision);
             return { content: [{ type: 'text', text }] };
           }
-          const result = boundedNoteReadResult(trimmedArgs.path, note, trimmedArgs.maxChars, trimmedArgs.prettyPrint);
-          const service = trimmedArgs.includeExplanation === true ? explanationService(principal ? revalidateActor : undefined) : undefined;
-          if (!service || 'isError' in result) return result;
-          const target = { path: trimmedArgs.path, revision: note.revision };
-          return jsonResult(await attachExplanationHint({ result: JSON.parse(result.content[0]!.text), target, guards: [target], fs: fileSystem,
-            admitted: canAccessPath, maxChars, prettyPrint: trimmedArgs.prettyPrint,
-            approvedAction: () => service.approvedAction({ sourcePath: scopeAccess.toPublicPath(target.path), expectedSourceRevision: note.revision }, principal),
-          }), trimmedArgs.prettyPrint);
+          return boundedNoteReadResult(trimmedArgs.path, note, trimmedArgs.maxChars, trimmedArgs.prettyPrint);
         }
 
         case "write_note": {

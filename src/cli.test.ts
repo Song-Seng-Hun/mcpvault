@@ -44,12 +44,6 @@ test('feature selection config is an explicit single host file, independent of p
   for (const args of [['--features-config'], ['--features-config='], ['--features-config', '--read-only'], ['--features-config=a', '--features-config=b']]) expect(() => parseCliArgs(args)).toThrow(/features-config/);
 });
 
-test('parses explanation configuration without changing Vault or enabling economy', () => {
-  expect(parseCliArgs(['Vault', '--explanation-config=private.json'])).toEqual({ vaultPathArg: 'Vault', readOnly: false, explanationConfig: 'private.json' });
-  expect(parseCliArgs(['--explanation-config', 'private.json', 'Vault']).vaultPathArg).toBe('Vault');
-  for (const args of [['--explanation-config'], ['--explanation-config='], ['--explanation-config=a', '--explanation-config=b']]) expect(() => parseCliArgs(args)).toThrow(/explanation-config/);
-});
-
 test('parses skill evolution host configuration without consuming the NAS path or enabling other services', () => {
   const vault = '\\\\172.30.1.24\\MCPVault';
   for (const args of [['--skill-evolution-config=C:\\Private\\skill.json'], ['--skill-evolution-config', 'C:\\Private\\skill.json']]) {
