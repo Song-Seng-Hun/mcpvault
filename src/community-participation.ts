@@ -98,7 +98,7 @@ export async function aggregateParticipationOwnerUsage(fs:FileSystemService,prin
     try {
       fresh();policy.assertAccess();
       if(write.path!==target)throw conflict();
-      assertEnterpriseStorageAccess(target,true);
+      assertEnterpriseStorageAccess(target);
       for(const guard of ownGuards)assertEnterpriseStorageAccess(guard.path);
       const merged=new Map<string,RevisionGuard>();
       for(const guard of [...guards,...ownGuards]){
@@ -107,7 +107,7 @@ export async function aggregateParticipationOwnerUsage(fs:FileSystemService,prin
         const prior=merged.get(identity);if(prior&&prior.expectedRevision!==guard.expectedRevision)throw conflict();
         merged.set(identity,{path:posix.normalize(guard.path.replace(/\\/g,'/')),expectedRevision:guard.expectedRevision});
       }
-      const assertAccess=AsyncResource.bind(()=>{fresh();policy.assertAccess();assertEnterpriseStorageAccess(target,true);for(const guard of ownGuards)assertEnterpriseStorageAccess(guard.path);});
+      const assertAccess=AsyncResource.bind(()=>{fresh();policy.assertAccess();assertEnterpriseStorageAccess(target);for(const guard of ownGuards)assertEnterpriseStorageAccess(guard.path);});
       return await host(()=>merged.size?fs.writeNoteWithRevisionGuardsAndReceipt(write,[...merged.values()],{...policy,assertAccess}):fs.writeNoteWithReceipt(write,{...policy,assertAccess}));
     }catch{throw conflict();}
   }};

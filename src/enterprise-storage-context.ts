@@ -10,7 +10,7 @@ interface DocumentContext { access: ScopeAccessPolicy; principal?: ScopePrincipa
   canAccessPath?: (path: string) => boolean;
   canTraversePath?: (path: string) => boolean;
   beforeWrite?: (path: string) => Promise<void> }
-interface StorageContext extends DocumentContext { publicCommunityWriter?: boolean; documentContext?: DocumentContext }
+interface StorageContext extends DocumentContext { documentContext?: DocumentContext }
 const context = new AsyncLocalStorage<StorageContext>();
 interface PublicationStage { owner: string; paths: ReadonlySet<string>; active: boolean; parent: PublicationStage | undefined }
 const publicationStage = new AsyncLocalStorage<PublicationStage>();
@@ -62,7 +62,6 @@ export async function prepareDocumentWrite(path: string): Promise<void> {
 export function assertEnterpriseStorageFresh(): void {
   const current = context.getStore();
   if (current?.documentContext?.access.hasDocumentPolicy()) current.documentContext.assertFresh();
-  if (current?.access.getEnterpriseProfile()) current.assertFresh();
 }
 
 /** recordSource=false is for internal filename discovery only. Every physical
@@ -71,9 +70,7 @@ export function canReadEnterpriseStoragePath(path: string, recordSource = true):
   const current = context.getStore();
   if (current?.documentContext?.canAccessPath?.(path) === false) return false;
   if (current?.documentContext && !current.documentContext.access.canReadProtectedDocument(path, current.documentContext.principal, recordSource)) return false;
-  if (!current?.access.getEnterpriseProfile()) return true;
-  current.assertFresh();
-  return current.access.canAccessPhysicalPath(path, current.principal, recordSource);
+  return true;
 }
 
 /** Directory enumeration only. The caller must first establish that the
@@ -86,9 +83,7 @@ export function canTraverseEnterpriseStoragePath(path: string, recordSource = tr
     current.documentContext.assertFresh();
     if (!current.documentContext.access.canReadProtectedDocument(path, current.documentContext.principal, recordSource)) return false;
   }
-  if (!current?.access.getEnterpriseProfile()) return true;
-  current.assertFresh();
-  return current.access.canAccessPhysicalPath(path === '.' ? '' : path, current.principal, recordSource);
+  return true;
 }
 
 /** Optional-activity guard for trusted storage adapters whose root is not an
@@ -108,23 +103,11 @@ export async function prepareOwnerActivityStorageWrite(path: string): Promise<vo
 }
 
 /** A second boundary at physical IO protects service-internal reads and writes. */
-export function assertEnterpriseStorageAccess(path: string, write = false): void {
+export function assertEnterpriseStorageAccess(path: string): void {
   const current = context.getStore();
   if (current?.documentContext?.canAccessPath?.(path) === false) throw guidanceError(new Error('Access denied: owner activity data scope unavailable'), 'guid-c0c9e18369c559ac');
   if (current?.documentContext?.access.hasDocumentPolicy()) {
     current.documentContext.assertFresh();
     if (!current.documentContext.access.canReadProtectedDocument(path, current.documentContext.principal)) throw guidanceError(new Error('Access denied: protected document unavailable'), 'guid-5f2a63e873739df9');
-  }
-  if (!current?.access.getEnterpriseProfile()) return;
-  current.assertFresh();
-  if (!current.access.canAccessPhysicalPath(path, current.principal)) throw guidanceError(new Error('Access denied: enterprise resource unavailable'), 'guid-2bd7b875156d94ee');
-  if (write && /^publiccommunity(?:\/|$)/i.test(path.replace(/\\/g, '/')) && !current.publicCommunityWriter) {
-    throw guidanceError(new Error('Managed public community writes require a dedicated community operation'), 'guid-9547ed46542e6dac');
-  }
-  if (write && current.access.getEnterpriseProfile()!.mode === 'company') {
-    const p = path.replace(/\\/g, '/').toLowerCase();
-    if (!p.startsWith('community/') && !p.startsWith('_scopes/') && !p.startsWith('_whispers/')) {
-      throw guidanceError(new Error('Company agents cannot write public Global material; use the administrator export workflow'), 'guid-3ba0b1a806d118bc');
-    }
   }
 }

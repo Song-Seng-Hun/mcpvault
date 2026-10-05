@@ -147,16 +147,6 @@ test('an edit arriving during changed-metadata validation cannot reuse the old s
   expect((await summary()).total).toBe(2);
 });
 
-test('principal membership changes do not reuse another department summary', async () => {
-  await note('Department.md');
-  const principal: ScopePrincipal = { accountId: 'alice', modelId: 'gpt', agentId: 'alice', role: 'agent',
-    enterprise: { mode: 'company', realmId: 'company', runtimeId: 'local', sharedMemoryEnabled: false, departmentIds: ['one'] } };
-  vi.spyOn(access, 'canAccessPhysicalPath').mockImplementation((_path, caller) => caller?.enterprise?.departmentIds?.includes('one') === true);
-  expect((await summary(principal)).total).toBe(1);
-  principal.enterprise!.departmentIds = ['two'];
-  expect((await summary(principal)).total).toBe(0);
-});
-
 test.each(['generation', 'access', 'policy'] as const)('computed and shared summaries reject %s changes before delivery', async reason => {
   await note('Knowledge/A.md');
   let allowed = true, policy = 'one';

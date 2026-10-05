@@ -133,7 +133,6 @@ const toolsByFeature: Record<HostFeatureId, readonly string[]> = {
   collaboration: [
     'comment_on_blog_post', 'delete_blog_comment', 'delete_blog_post', 'edit_blog_comment', 'list_blog_comments',
     'list_blog_posts', 'list_mentions', 'publish_blog_post', 'read_blog_post', 'update_community_status',
-    'public_federation_get', 'public_federation_list', 'public_federation_pull', 'public_federation_retry',
     'manage_community_participation', 'record_community_participation',
     'archive_chat_room', 'create_chat_room', 'delete_chat_message', 'edit_chat_message', 'list_chat_rooms',
     'read_chat_room', 'send_chat_message', 'list_whispers', 'send_whisper', 'read_context',

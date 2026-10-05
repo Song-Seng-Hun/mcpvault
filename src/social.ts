@@ -221,11 +221,7 @@ export class SocialService {
   private commentPath(slug: string, commentId: string) { return commentPath(this.communityRoot, slug, commentId); }
   private author(principal: ScopePrincipal) { return this.options.publicMode ? persistentActorId(principal) : identity(principal); }
   private ownership(principal: ScopePrincipal) { return this.options.publicMode ? { ...authorIdentity(principal), ...(principal.authorLabel && { authorLabel: principal.authorLabel }) } : ownershipMetadata(principal); }
-  private mentions(content: string, principal: ScopePrincipal): string[] {
-    const mentions = extractMentions(content);
-    if (principal.enterprise && mentions.some(mention => !mention.startsWith('actor:'))) throw guidanceError(new Error('Enterprise mentions require an exact @actor:realm:agent ID; model names do not select a persistent agent'), 'guid-d6055bf1aadd9850');
-    return mentions;
-  }
+  private mentions(content: string): string[] { return extractMentions(content); }
 
   private async findJournalEntry(agentId: string, entryId: string) {
     const normalizedId = normalizeScopeId(entryId, 'entryId');
@@ -816,7 +812,7 @@ export class SocialService {
         const frontmatter = attachPublicCreateRequest(request, {
           mcpvault_type: 'blog_comment', comment_id: commentId, post_id: slug,
           author: this.author(principal), author_role: principal.role, ...this.ownership(principal), created_at: timestamp, updated_at: timestamp,
-          mentions: this.mentions(content, principal), references, workflow_status: 'open', ...(stance && { stance }), ...(replyTo && { reply_to: replyTo }),
+          mentions: this.mentions(content), references, workflow_status: 'open', ...(stance && { stance }), ...(replyTo && { reply_to: replyTo }),
         }, body);
         const receipt = await this.fileSystem.writeNoteWithRevisionGuardsAndReceipt(
           { path, content: body, frontmatter, expectedRevision: 'missing' },
@@ -845,7 +841,7 @@ export class SocialService {
     const post = await this.readBlogPost(slug);
     const stance = debateStance(params.stance ?? note.frontmatter.stance, post.note.frontmatter.category === 'agora');
     const references = await this.references.validateAndNormalize(params.references ?? note.frontmatter.references, path, principal, text);
-    await this.fileSystem.writeNote({ path, content: `${text}\n`, frontmatter: { ...note.frontmatter, content_status: 'published', mentions: this.mentions(text, principal), references, ...(stance ? { stance } : {}), updated_at: now() }, expectedRevision: params.expectedRevision });
+    await this.fileSystem.writeNote({ path, content: `${text}\n`, frontmatter: { ...note.frontmatter, content_status: 'published', mentions: this.mentions(text), references, ...(stance ? { stance } : {}), updated_at: now() }, expectedRevision: params.expectedRevision });
     const updated = await this.fileSystem.readNote(path);
     return { success: true, commentId, postId: slug, revision: updated.revision };
   }
@@ -988,7 +984,7 @@ export class SocialService {
 
   async listMentions(params: { principal?: ScopePrincipal; limit?: number; maxChars?: number; contextBefore?: number; contextAfter?: number; afterMentionId?: string; includeClosed?: boolean }) {
     const principal = requirePublisher(params.principal);
-    const targets = new Set(principal.enterprise ? [persistentActorId(principal)] : [this.author(principal), identity(principal), principal.modelId, ...(principal.agentId ? [principal.agentId] : [])]);
+    const targets = new Set([this.author(principal), identity(principal), principal.modelId, ...(principal.agentId ? [principal.agentId] : [])]);
     const notes = this.notifications && this.communityRoot === 'Community'
       ? await this.notifications.mentionCandidates(targets, params.includeClosed === true)
       : undefined;

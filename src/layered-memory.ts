@@ -75,8 +75,7 @@ export class LayeredMemoryService {
   async read(mode: 'recall' | 'brief' | 'consolidate', params: MemoryRequest) {
     const scope = params.scope ?? 'personal';
     if (!['personal', 'user', 'community', 'global'].includes(scope)) throw guidanceError(new Error('Invalid memory scope'), 'guid-ab10cde3174fe499');
-    const userRoot = this.access.userMemoryRoot(params.principal);
-    if (scope === 'user' && !userRoot) throw guidanceError(new Error('User shared memory requires an explicitly provisioned enterprise employee'), 'guid-9b66e9b92c671fb2');
+    if (scope === 'user') throw guidanceError(new Error('User shared memory is unavailable on this host'), 'guid-9b66e9b92c671fb2');
     if (scope === 'personal' && !params.principal?.agentId) throw guidanceError(new Error('Login with an agent account for personal memory; no public fallback'), 'guid-b6cb88c287a05e70');
     if (params.role !== undefined && !MEMORY_ROLES.includes(params.role as any)) throw guidanceError(new Error('Invalid memory role'), 'guid-0aa9e154f08508c0');
     memoryDate(params.dateFrom, 'dateFrom'); memoryDate(params.dateTo, 'dateTo');
@@ -85,7 +84,7 @@ export class LayeredMemoryService {
     const maxChars = number(params.maxChars, mode === 'brief' ? 2000 : 4000, 1000, mode === 'brief' ? 4000 : 12000);
     const limit = number(params.limit, 20, 1, 100);
     const root = scope === 'personal' ? `_scopes/agents/${params.principal!.agentId}`
-      : scope === 'user' ? userRoot! : scope === 'community' ? this.access.getCommunityRoot() : '';
+      : scope === 'community' ? this.access.getCommunityRoot() : '';
     const canAccess = (path: string) => {
       if (!this.access.canAccessPhysicalPath(path, params.principal)) return false;
       const p = path.toLowerCase();

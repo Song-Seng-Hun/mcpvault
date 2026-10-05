@@ -167,15 +167,14 @@ test('capacity ledger reconciles periodically while preserving foreign host file
   expect(await import('node:fs/promises').then(fs => fs.readFile(join(f.host.host, 'foreign.json'), 'utf8'))).toBe('host-owned');
 }, 30000);
 
-test.each(['account', 'department'])('queued authorization pins the submitting principal rather than a mutable caller object: %s', async field => {
+test('queued authorization pins the submitting principal rather than a mutable caller object', async () => {
   const f = await fixture();
   vi.spyOn(privacy, 'assertHostPrivateStorage').mockResolvedValue(undefined);
   let revoked = false;
-  const actor = { accountId: 'a', modelId: 'model', agentId: 'worker', role: 'agent' as const,
-    enterprise: { mode: 'public' as const, realmId: 'realm', runtimeId: 'runtime', sharedMemoryEnabled: false, departmentIds: ['a'] } };
+  const actor = { accountId: 'a', modelId: 'model', agentId: 'worker', role: 'agent' as const };
   const original = f.reader.access.canAccessPhysicalPath.bind(f.reader.access);
   vi.spyOn(f.reader.access, 'canAccessPhysicalPath').mockImplementation((path, principal) => original(path, principal)
-    && (path !== 'Queued.md' || (field === 'account' ? principal?.accountId === 'b' : principal?.enterprise?.departmentIds?.includes('b')) || !revoked));
+    && (path !== 'Queued.md' || principal?.accountId === 'b' || !revoked));
   let release!: () => void;
   gate.wait = new Promise<void>(resolve => { release = resolve; });
   const entered = new Promise<void>(resolve => { gate.entered = resolve; });
@@ -184,7 +183,7 @@ test.each(['account', 'department'])('queued authorization pins the submitting p
     await writeFile(join(f.vault, 'Queued.md'), '# Queued');
     await f.index.load('Queued.md', actor);
     revoked = true;
-    if (field === 'account') actor.accountId = 'b'; else actor.enterprise.departmentIds[0] = 'b';
+    actor.accountId = 'b';
   } finally { release(); await (f.index as any).diskQueue; }
   expect(gate.publications).toBe(1);
 });

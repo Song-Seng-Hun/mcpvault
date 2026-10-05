@@ -5,7 +5,6 @@ import { tmpdir } from 'node:os';
 import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
 import { createServer } from '../tests/server-fixture.js';
 import { FileSystemService } from './filesystem.js';
-import { GlobalSyncHub } from './global-sync.js';
 import { projectSkill, previewSkills, applySkills } from './skill-library.js';
 
 test('imported Community skill is searchable and readable through existing bounded MCP routes', async () => {
@@ -41,8 +40,6 @@ test('imported Community skill is searchable and readable through existing bound
     expect(JSON.stringify(template)).toContain('skill');
     const policy=await call('wiki.policy',{topic:'retrieval',maxChars:12000});
     expect(JSON.stringify(policy)).toContain('Community/Skills');
-    const hub=new GlobalSyncHub(join(root,'hub-test'),{hubId:'skill-test'});
-    await expect(hub.submitProposal({documentId:notes[0].path,content:notes[0].content,author:'test',reason:'scope check',origin:'test'})).rejects.toThrow(/Global document|private or service/);
     const mutation=await client.callTool({name:'call_endpoint',arguments:{endpointId:'notes.write',arguments:{path:notes[0].path,content:'Overwrite'}}});
     expect(mutation.isError).toBe(true);
   } finally { await client.close();await server.close();await rm(root,{recursive:true,force:true}); }

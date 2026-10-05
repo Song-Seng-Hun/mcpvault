@@ -17,7 +17,7 @@ import { bundleExecution } from './compilation-local-runtime.js';
 
 const unavailable = () => guidanceError(new Error('Document bundle unavailable'), 'guid-72ba6eede0a50b17');
 const actorBasis = (p: ScopePrincipal) => compilationHash({ account: p.accountId, model: p.modelId, agent: p.agentId,
-  user: p.userId, center: p.commandCenterId, role: p.role, capabilities: p.capabilities, enterprise: p.enterprise });
+  user: p.userId, center: p.commandCenterId, role: p.role, capabilities: p.capabilities });
 
 /** Private preservation and projections; physical writes delegate to publication.
  * A journal receipt is not a grant. Every return rechecks current admission. */

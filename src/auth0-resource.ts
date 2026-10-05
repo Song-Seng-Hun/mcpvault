@@ -95,7 +95,7 @@ export class Auth0Resource {
     const expiresAt = this.authorizations.get(authorization);
     this.authorizations.delete(authorization);
     if (principal.accountId !== this.config.accountId || principal.role !== 'agent'
-      || principal.enterprise || !principal.sessionId || authorization.accountId !== principal.accountId
+      || !principal.sessionId || authorization.accountId !== principal.accountId
       || expiresAt === undefined || Date.now() >= expiresAt) throw guidanceError(new Error('Invalid research request session'), 'guid-322cb2e37c28d777');
     const owner = principal.userId || principal.accountId;
     const policy = new OwnerActivityPolicy({ version: 1, owners: { [principal.accountId]: owner }, grants: [{

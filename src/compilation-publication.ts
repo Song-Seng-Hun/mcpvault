@@ -22,7 +22,7 @@ function fail(): never { throw guidanceError(Error('Document publication unavail
 // Host principal enumeration has no transport session receipt. Match current
 // authority fields; the request boundary separately verifies session validity.
 const actorKey = (p: ScopePrincipal) => compilationHash({ account: p.accountId, model: p.modelId, agent: p.agentId,
-  user: p.userId, center: p.commandCenterId, role: p.role, capabilities: p.capabilities, enterprise: p.enterprise });
+  user: p.userId, center: p.commandCenterId, role: p.role, capabilities: p.capabilities });
 
 /** Concrete owner adapter: existing private journal + filesystem change sets +
  * protected policy. No generic execution, model calls, or new grants. */

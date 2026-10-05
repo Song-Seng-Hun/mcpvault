@@ -4,7 +4,6 @@ import { promisify } from 'node:util';
 import type { FileSystemService } from './filesystem.js';
 import type { VaultFileCatalog } from './vault-catalog.js';
 import type { ScopePrincipal } from './scope-auth.js';
-import { persistentActorId } from './enterprise-identity.js';
 import { normalizeScopeId } from './scopes.js';
 import type { ReputationService } from './reputation.js';
 import type { QueryNote } from './types.js';
@@ -851,7 +850,7 @@ export class NotificationService {
     const snapshot = await this.cachedPublicSnapshot();
     const { messages, postsByPostId, postsBySeriesId, postsByAuthor, postsByTag, postsByMention, commentsByPostId, commentsByCommentId, commentsByAuthor, commentsByMention, commentsByReplyTo, messagesByMessageId, messagesByMention, messagesByReplyTo, postTitles, roomTitles } = snapshot;
     const targetKey = target.toLowerCase();
-    const mentionKey = principal.enterprise ? persistentActorId(principal).toLowerCase() : targetKey;
+    const mentionKey = targetKey;
     const ownedPostIds = new Set((postsByAuthor.get(targetKey) || []).map(note => text(note.frontmatter.post_id)));
     const ownedCommentIds = new Set((commentsByAuthor.get(targetKey) || []).map(note => text(note.frontmatter.comment_id)));
     const ownedMessageIds = new Set(messages.filter(note => text(note.frontmatter.author).toLowerCase() === targetKey).map(note => text(note.frontmatter.message_id)));

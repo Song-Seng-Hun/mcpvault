@@ -31,7 +31,6 @@ import { CollaborationService } from "./scopes.js";
 import { COLLABORATION_MUTATING_TOOLS, getCollaborationTools } from "./collaboration-tools.js";
 import { ScopeAuthService, type ScopeCapability, type ScopePrincipal } from "./scope-auth.js";
 import { ScopeAccessPolicy } from "./scope-access.js";
-import { EnterpriseRegistry } from './enterprise-registry.js';
 import { withEnterpriseStorageContext } from './enterprise-storage-context.js';
 import type { MaintenanceHost } from './maintenance-host.js';
 import { CompilationService, type CompilationOptions } from './compilation-service.js';
@@ -60,9 +59,7 @@ import { getScopeAuthTools, SCOPE_AUTH_MUTATING_TOOLS, SCOPE_AUTH_TOOL_NAMES } f
 import { LlmWikiService } from "./llm-wiki.js";
 import { getLlmWikiTools, LLM_WIKI_MUTATING_TOOLS } from "./llm-wiki-tools.js";
 import { SocialService } from "./social.js";
-import { EnterpriseFederationAdapter, type PublicFederationHostConfig } from './enterprise-federation.js';
 import { readEnterpriseVaultMarker } from './enterprise-vault-marker.js';
-import { getEnterpriseFederationTools, ENTERPRISE_FEDERATION_MUTATING_TOOLS } from './enterprise-federation-tools.js';
 import { getSocialTools, SOCIAL_MUTATING_TOOLS } from "./social-tools.js";
 import { ChatService } from "./chat.js";
 import { getChatTools, CHAT_MUTATING_TOOLS } from "./chat-tools.js";
@@ -279,9 +276,6 @@ export interface CreateServerOptions extends DocumentAuthorityOptions {
   /** Host-private notice registration/delegation file, reloaded before operations. */
   noticeConfigPath?: string;
   guidanceDefinitions?: readonly GuidanceDefinition[];
-  /** Opt-in host-private enterprise registry. Never inferred from Vault content. */
-  enterpriseRegistryPath?: string;
-  publicFederation?: PublicFederationHostConfig;
   name?: string;
   version?: string;
   pathFilter?: PathFilter;
@@ -300,7 +294,6 @@ const MUTATING_TOOLS = new Set([
   'manage_evolution_feedback', 'manage_evolution_cycle', 'get_evolution_context',
   'manage_wiki_compilation',
   ...SKILL_MUTATING_TOOLS,
-  ...ENTERPRISE_FEDERATION_MUTATING_TOOLS,
   "write_note",
   "manage_wiki_moc_region",
   "patch_note",
@@ -340,7 +333,6 @@ const CAPABILITY_FOR_TOOL: Partial<Record<string, ScopeCapability>> = {
   manage_evolution_feedback: 'write',
   manage_evolution_cycle: 'write',
   get_evolution_context: 'write',
-  public_federation_pull: 'write', public_federation_retry: 'publish',
   update_wiki_projection: 'write',
   manage_wiki_moc_region: 'write',
   write_note: "write",
@@ -553,22 +545,17 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
   const pathFilter = options.quarantineSkills ? new PathFilter({ quarantineSkills: true }, configuredPathFilter) : configuredPathFilter;
 
   const resolvedVaultPath = resolve(vaultPath);
-  const enterpriseRegistry = options.enterpriseRegistryPath
-    ? new EnterpriseRegistry({ registryPath: options.enterpriseRegistryPath, vaultPath: resolvedVaultPath }) : undefined;
-  const enterpriseProfile = enterpriseRegistry?.getPolicy();
-  const enterpriseMarker = readEnterpriseVaultMarker(resolvedVaultPath);
-  if (enterpriseMarker && (!enterpriseProfile || enterpriseProfile.mode !== enterpriseMarker.mode || enterpriseProfile.realmId !== enterpriseMarker.realmId)) {
-    throw guidanceError(new Error('This Vault requires its matching enterprise registry; legacy, REST and stdio startup cannot open it as a public Vault'), 'guid-2a47f6b4bdcd8f7a');
+  // Enterprise mode was removed; a Vault bound to an enterprise realm must not
+  // silently reopen without its realm ACLs.
+  if (readEnterpriseVaultMarker(resolvedVaultPath)) {
+    throw guidanceError(new Error('This Vault is bound to an enterprise instance, which this server no longer supports; it cannot be opened as a public Vault'), 'guid-2a47f6b4bdcd8f7a');
   }
-  if (options.publicFederation && enterpriseProfile?.mode !== 'public') throw guidanceError(new Error('Public federation credentials require an explicit public enterprise instance'), 'guid-6bebc6f6619d2973');
-  if (enterpriseProfile && commandCenterId && commandCenterId !== enterpriseProfile.realmId) throw guidanceError(new Error('Enterprise realm and commandCenterId must match'), 'guid-7867dcc3c79b8470');
-  const effectiveCenterId = enterpriseProfile?.realmId || commandCenterId;
+  const effectiveCenterId = commandCenterId;
   void cleanupStaleDerivedTemps(resolvedVaultPath);
   const scopeAuth = new ScopeAuthService(resolvedVaultPath, {
     ...(options.accountStorePath !== undefined && { accountStorePath: options.accountStorePath }),
     ...(moderatorAccounts === undefined ? {} : { moderatorAccounts }),
     ...(effectiveCenterId && { commandCenterId: effectiveCenterId }),
-    ...(enterpriseRegistry && { enterpriseRegistry, authPath: `${options.enterpriseRegistryPath}.accounts.json` }),
   });
   const documentPolicy = new DocumentPolicyStore(resolvedVaultPath);
   let documentPolicyReady = false;
@@ -582,7 +569,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
     // Additional trusted host constraints never replace persisted restrictions.
     return configured?.length ? Object.freeze([...stored, ...configured]) : stored;
   };
-  const scopeAccess = new ScopeAccessPolicy({ ...(effectiveCenterId && { commandCenterId: effectiveCenterId }), ...(enterpriseProfile && { enterprise: enterpriseProfile }),
+  const scopeAccess = new ScopeAccessPolicy({ ...(effectiveCenterId && { commandCenterId: effectiveCenterId }),
     documentRules, ...(options.localInferenceAllowed && { localInferenceAllowed: options.localInferenceAllowed }) });
   const guidance = new GuidanceCatalog(resolvedVaultPath, () => noticeRegistry.load().guidance, options.guidanceDefinitions ?? GUIDANCE_DEFINITIONS,
     path => pathFilter.isAllowed(path) && scopeAccess.canAccessPhysicalPath(path));
@@ -732,16 +719,13 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
   const notifications = reputation ? new NotificationService(fileSystem, reputation, resolvedVaultPath, fileCatalog) : undefined;
   notificationsCache = notifications;
   const social = needsPersonalStorage ? new SocialService(fileSystem, scopeAccess, references, reputation, notifications, {
-    ...(enterpriseProfile?.mode === 'public' && { communityRoot: 'PublicCommunity/Local', publicMode: true }),
     noticeFeedback: (id, revision, principal) => notices.feedback(id, revision, principal),
     noticeFeedbackReview: (id, path, revision, principal) => notices.feedbackReview(id, path, revision, principal),
   }) : undefined;
   const chat = hasFeature('collaboration') ? new ChatService(fileSystem, references, reputation!) : undefined;
   const whispers = hasFeature('collaboration') ? new WhisperService(fileSystem, references) : undefined;
-  const communityStatus = hasFeature('collaboration') ? new CommunityStatusService(fileSystem, enterpriseProfile?.mode === 'public' ? { communityRoot: 'PublicCommunity/Local' } : {}) : undefined;
-  const agentDirectory = new AgentDirectoryService(fileSystem, scopeAuth,
-    ...(enterpriseProfile?.mode === 'public' ? [{ communityRoot: 'PublicCommunity/Local', publicMode: true }] : []));
-  const federation = options.publicFederation && hasFeature('collaboration') ? new EnterpriseFederationAdapter({ vaultPath: resolvedVaultPath, social: social!, directory: agentDirectory, config: options.publicFederation, pathFilter }) : undefined;
+  const communityStatus = hasFeature('collaboration') ? new CommunityStatusService(fileSystem) : undefined;
+  const agentDirectory = new AgentDirectoryService(fileSystem, scopeAuth);
   const audit = new AuditService(resolvedVaultPath);
   const agentTasks = needsTaskRecords ? new AgentTaskService(fileSystem, references, scopeAuth, scopeAccess) : undefined;
   const communityFeatures = needsPersonalStorage ? new CommunityFeaturesService(fileSystem, scopeAccess, scopeAuth, reputation, resolvedVaultPath, notifications, hasFeature('collaboration') ? fileCatalog : undefined) : undefined;
@@ -1122,7 +1106,6 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         ...getEvolutionTools(),
         ...getFidelityTools(),
         ...getSocialTools(),
-        ...(federation ? getEnterpriseFederationTools() : []),
         ...getLayeredMemoryTools(),
         ...getCommunityParticipationTools(),
         ...getChatTools(),
@@ -1229,7 +1212,6 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
           inputSchema: {
             type: "object",
             properties: {
-              department: { type: "string", enum: ["default"], description: guidanceText('guid-17ae46e033421422', "Restrict navigation to the current administrator-verified default department using protected document policy. This never grants access; omit for ordinary company-wide navigation.") },
               filters: { type: "object", description: guidanceText('guid-6c6012de673b180a', "Frontmatter filters, including dot notation for nested properties, e.g. {\"status\": \"active\", \"project\": \"alpha\"}") },
               pathPrefix: { type: "string", description: guidanceText('guid-c27dd20a75e3f799', "Restrict results to a vault subtree, e.g. Projects/2026") },
               sortBy: { type: "string", description: guidanceText('guid-bb398a2d64650d6a', "path (default) or a frontmatter property, including nested dot notation") },
@@ -1478,14 +1460,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
     // Keep the optional client-vector input visible in the endpoint contract.
     // The default path still embeds on demand in the server, so clients do not
     // need any local model or setup unless they explicitly want to offload it.
-    const unavailable = new Set(enterpriseProfile ? [
-      ...getWhisperTools().map(tool => tool.name),
-      ...(enterpriseProfile.mode === 'public' ? [
-        ...getChatTools(), ...getNotificationTools(), ...getAgentTaskTools(),
-        ...getCommunityFeatureTools(), ...getReputationTools(),
-      ].map(tool => tool.name) : []),
-    ] : []);
-    return buildInternalTools().filter(tool => !unavailable.has(tool.name) && featureToolAllowed(tool.name)).map(tool => {
+    return buildInternalTools().filter(tool => featureToolAllowed(tool.name)).map(tool => {
       if (SCOPE_AUTH_TOOL_NAMES.has(tool.name)) return tool;
       const schema = tool.inputSchema;
       // Normalize once without mutating shared tool-module schema constants.
@@ -1590,16 +1565,11 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
       }
       if (toolName === 'logout_scope') {
         await audit.record({ tool: toolName, args: rawArgs, outcome: 'attempt' });
-        return jsonResult(await scopeAuth.endSession(rawArgs.accessToken), rawArgs.prettyPrint as boolean);
+        return jsonResult(scopeAuth.logout(rawArgs.accessToken), rawArgs.prettyPrint as boolean);
       }
       if (toolName === 'whoami_scope') {
         await audit.record({ tool: toolName, args: rawArgs, outcome: 'attempt' });
         const identity = scopeAuth.whoami(rawArgs.accessToken);
-        if ('enterprise' in identity && identity.enterprise) return jsonResult({ ...identity,
-          runtimeKind: identity.enterprise.mode === 'public' ? 'external' : 'internal',
-          defaultScope: identity.enterprise.mode === 'public' ? 'global' : 'community',
-          allowedScopes: scopeAccess.scopeRoots(identity).map(item => ({ scope: item.kind, root: scopeAccess.toPublicPath(item.root) })),
-        }, rawArgs.prettyPrint as boolean);
         return jsonResult(identity, rawArgs.prettyPrint as boolean);
       }
       if (toolName === 'change_scope_password') {
@@ -1622,7 +1592,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         if (JSON.stringify(scopeAuth.authenticate(rawArgs.accessToken)) !== principalSnapshot) throw guidanceError(new Error('Authenticated authority changed; retry with current authorization'), 'guid-5391aec645e7f720');
         assertDocumentFresh();
       };
-      const documentSessionKey = principal ? `${principal.enterprise?.runtimeId ?? ''}\0${principal.accountId}` : undefined;
+      const documentSessionKey = principal?.accountId;
       const observeDocument = (root: string) => {
         if (!documentSessionKey) throw guidanceError(new Error('Protected document requires an authenticated execution'), 'guid-c0c811f86d3356c5');
         let sources = documentSessionSources.get(documentSessionKey);
@@ -1666,9 +1636,6 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
       if (ownerActivity && !(reviewedSourceAccess && toolName === 'resolve_skill')) ownerOperation = await ownerActivityRuntime.begin(ownerActivity,
         ownerActionForEndpointTool(ownerRegistrationName, MUTATING_TOOLS.has(toolName), rawArgs.op), ownerRequestPaths(toolName, trimmedArgs), principal);
       await audit.record({ tool: toolName, args: rawArgs, ...(principal && { principal }), outcome: 'attempt' });
-      if (principal?.enterprise?.mode === 'public' && toolName === 'publish_blog_post' && trimmedArgs.status === 'draft') {
-        throw guidanceError(new Error('Keep drafts in this agent\'s private memory; publish to the public community only when ready'), 'guid-8584387a03eae818');
-      }
       const canAccessPath = (path: string) => scopeAccess.canAccessPhysicalPath(path, principal);
       const assertNoticeActorFresh = () => {
         if (principal && JSON.stringify(scopeAuth.authenticate(rawArgs.accessToken)) !== JSON.stringify(principal)) throw guidanceError(new Error('Notice authentication changed; login again'), 'guid-0ec4f10ba14b2487');
@@ -1686,18 +1653,11 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
       };
       assertImmutableSourceBoundary(toolName, trimmedArgs, scopeAccess);
       assertManagedCommunityBoundary(toolName, trimmedArgs);
-      const publicCommunityWriter = new Set(['publish_blog_post', 'delete_blog_post', 'comment_on_blog_post', 'edit_blog_comment', 'delete_blog_comment', 'update_agent_profile', 'update_community_status', 'moderate_content', 'toggle_reaction', 'accept_blog_comment', 'unaccept_blog_comment', 'public_federation_retry']).has(toolName);
-      const toolResponse = await withEnterpriseStorageContext({ access: scopeAccess, ...(principal && { principal }), publicCommunityWriter,
+      const toolResponse = await withEnterpriseStorageContext({ access: scopeAccess, ...(principal && { principal }),
         assertFresh: () => { assertStorageFresh(); ownerOperation?.assertFresh(); }, observe: observeDocument, inherit: inheritDocument,
         ...(ownerOperation && { canAccessPath: ownerOperation.canAccessPath, canTraversePath: ownerOperation.canTraversePath,
           beforeWrite: ownerOperation.beforeWrite }) }, async () => {
-      const communityReceipt = (value: Record<string, unknown>) => jsonResult({ ...value,
-        ...(principal?.enterprise?.mode === 'public' && !federation && { federation: { status: 'disabled' } }),
-      }, trimmedArgs.prettyPrint);
-      if (federation && new Set(['publish_blog_post', 'delete_blog_post', 'comment_on_blog_post', 'edit_blog_comment', 'delete_blog_comment', 'update_agent_profile', 'get_agent_profile', 'list_agent_profiles', 'list_blog_posts', 'read_blog_post', 'list_blog_comments', 'public_federation_pull', 'public_federation_retry', 'public_federation_get', 'public_federation_list']).has(toolName)) {
-        const { accessToken: _token, password: _password, invitationToken: _invitation, principal: _claimedPrincipal, ...publicArgs } = trimmedArgs;
-        return jsonResult(await federation.dispatch(toolName, publicArgs, principal), trimmedArgs.prettyPrint);
-      }
+      const communityReceipt = (value: Record<string, unknown>) => jsonResult(value, trimmedArgs.prettyPrint);
       if (Object.hasOwn(DOCUMENT_TOOL_ENDPOINTS, toolName)) {
         // This service owns scope URI resolution. trimPaths has already expanded
         // legacy adapter paths and must not feed private physical paths back in.
@@ -1779,12 +1739,6 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
             } }), false);
         }
         case "get_scope_context": {
-          if (principal?.enterprise) return jsonResult({
-            identity: scopeAuth.whoami(rawArgs.accessToken),
-            defaultNavigation: scopeAccess.defaultNavigation(principal),
-            defaultScope: principal.enterprise.mode === 'company' ? 'community' : 'global',
-            scopes: scopeAccess.scopeRoots(principal).map(item => ({ scope: item.kind, root: scopeAccess.toPublicPath(item.root) })),
-          }, trimmedArgs.prettyPrint);
           return jsonResult(collaboration.getScopeContext(principal?.modelId, principal?.agentId, undefined, scopeAccess.getCommandCenterId()), trimmedArgs.prettyPrint);
         }
 
@@ -1792,14 +1746,6 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
           const notice = await notices.priority({ topic: 'onboarding', maxChars: trimmedArgs.maxChars }, principal);
           assertNoticeActorFresh();
           if (notice) return jsonResult(notice, false);
-          if (principal?.enterprise) return jsonResult({
-            identity: { actorId: principal.actorId, authorLabel: principal.authorLabel, sessionId: principal.sessionId, sessionGeneration: principal.sessionGeneration },
-            instanceMode: principal.enterprise.mode,
-            defaultNavigation: scopeAccess.defaultNavigation(principal),
-            defaultScope: principal.enterprise.mode === 'company' ? 'community' : 'global',
-            allowedScopes: scopeAccess.scopeRoots(principal).map(item => ({ scope: item.kind, uri: scopeAccess.toPublicPath(item.root) })),
-            primaryAction: { tool: 'get_agent_pulse', arguments: { maxChars: 4000 }, reason: guidanceText('guid-a1e278b3dad7ed62', 'Continue as this persistent agent within the current approved instance.') },
-          }, trimmedArgs.prettyPrint);
           return jsonResult(await llmWiki.orient(principal, trimmedArgs.maxChars), trimmedArgs.prettyPrint);
         }
 
@@ -1856,13 +1802,6 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
             const notice = await notices.priority({ topic: trimmedArgs.noticeTopic ?? 'onboarding', knownRevisions: trimmedArgs.knownNoticeRevisions, maxChars: trimmedArgs.maxChars }, principal);
             assertNoticeActorFresh();
             if (notice) return jsonResult(notice, false);
-          }
-          if (principal?.enterprise && hasFeature('collaboration') && hasFeature('personal-memory')) {
-            return jsonResult({ identity: { actorId: principal.actorId, authorLabel: principal.authorLabel, sessionId: principal.sessionId, generation: principal.sessionGeneration },
-              defaultNavigation: scopeAccess.defaultNavigation(principal),
-              defaultScope: principal.enterprise.mode === 'company' ? 'community' : 'global',
-              primaryAction: { tool: 'call_endpoint', arguments: { endpointId: 'memory.brief', arguments: { scope: 'personal', maxChars: 1800 } }, reason: guidanceText('guid-3ae748a5a17853b5', 'Resume this persistent agent using its own memory before selecting shared work.') },
-            }, trimmedArgs.prettyPrint);
           }
           const packet = await agentPulse.get({
             ...(principal && { principal }),
@@ -1940,13 +1879,11 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         }
 
         case "handoff_agent_scope": {
-          if (principal?.enterprise) return jsonResult(await scopeAuth.handoffEnterpriseSession(rawArgs.accessToken, trimmedArgs), trimmedArgs.prettyPrint);
           await assertCanManageAgent(fileSystem, principal, trimmedArgs.agentId);
           return jsonResult(await collaboration.handoffAgentScope(trimmedArgs), trimmedArgs.prettyPrint);
         }
 
         case "resume_agent_scope": {
-          if (principal?.enterprise) return jsonResult(await scopeAuth.handoffEnterpriseSession(rawArgs.accessToken, { agentId: trimmedArgs.agentId, toSessionId: trimmedArgs.newSessionId, expectedGeneration: trimmedArgs.expectedGeneration }), trimmedArgs.prettyPrint);
           await assertCanManageAgent(fileSystem, principal, trimmedArgs.agentId);
           return jsonResult(await collaboration.resumeAgentScope(trimmedArgs), trimmedArgs.prettyPrint);
         }
@@ -3384,14 +3321,6 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         }
 
         case "query_notes": {
-          if (trimmedArgs.department !== undefined && trimmedArgs.department !== 'default') throw guidanceError(new Error('department must be default or omitted'), 'guid-aafd6a5d31d54fa8');
-          const department = trimmedArgs.department === 'default' ? scopeAccess.defaultDepartment(principal) : undefined;
-          if (trimmedArgs.department === 'default' && !department) throw guidanceError(new Error('No administrator-verified default department is available'), 'guid-7e94b392cdd6d92c');
-          const cursorContext = department ? createHash('sha256').update(JSON.stringify({
-            principal, department, policy: scopeAccess.documentPolicyFingerprint(), filters: trimmedArgs.filters ?? {},
-            pathPrefix: trimmedArgs.pathPrefix ?? '', sortBy: trimmedArgs.sortBy ?? 'path', sortOrder: trimmedArgs.sortOrder ?? 'asc',
-          })).digest('hex') : undefined;
-          const canQueryPath = department ? (path: string) => scopeAccess.isInDefaultDepartment(path, principal, false) : canAccessPath;
           const requestedLimit = trimmedArgs.limit === undefined ? 100 : Number(trimmedArgs.limit);
           if (!Number.isInteger(requestedLimit) || requestedLimit < 1) {
             throw guidanceError(new Error('limit must be a positive integer'), 'guid-14abe8b02cfc3624');
@@ -3403,11 +3332,9 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
             sortOrder: trimmedArgs.sortOrder,
             limit: Math.min(requestedLimit, 500),
             after: trimmedArgs.after,
-            ...(cursorContext && { cursorContext }),
-            freshMetadata: Boolean(department),
             includeContent: trimmedArgs.includeContent,
             includeTotal: trimmedArgs.includeTotal,
-          }, normalizedResponseBudget(trimmedArgs.maxChars), canQueryPath, note => !isModerationHidden(note.frontmatter), trimmedArgs.prettyPrint === true);
+          }, normalizedResponseBudget(trimmedArgs.maxChars), canAccessPath, note => !isModerationHidden(note.frontmatter), trimmedArgs.prettyPrint === true);
           return {
             content: [{ type: "text", text: result.text }],
             ...(result.isError && { isError: true }),

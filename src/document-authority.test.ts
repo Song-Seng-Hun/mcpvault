@@ -44,26 +44,6 @@ test('derivative chains inherit confidentiality and cannot be referenced into a 
   expect(access.canReferenceFrom('Knowledge.md', 'Original.pdf')).toBe(true);
 });
 
-test('company and department membership come from authenticated identity, not display labels', () => {
-  const rules = [{ path: 'Engineering.md', realmId: 'acme', departmentIds: ['engineering'] }];
-  const access = policy(rules);
-  const employee = { ...actor, enterprise: { mode: 'company', realmId: 'acme', runtimeId: 'r', sharedMemoryEnabled: false, departmentIds: ['engineering'] } } as ScopePrincipal;
-  expect(access.canAccessPhysicalPath('Engineering.md', actor)).toBe(false);
-  expect(access.canAccessPhysicalPath('Engineering.md', { ...actor, departmentId: 'engineering' } as any)).toBe(false);
-  expect(access.canAccessPhysicalPath('Engineering.md', employee)).toBe(true);
-  expect(access.canAccessPhysicalPath('Engineering.md', { ...employee, enterprise: { ...employee.enterprise!, departmentIds: ['sales'] } } as any)).toBe(false);
-});
-
-test('interdepartment room admission does not grant source department document access', () => {
-  const access = policy([
-    { path: 'Room.md', realmId: 'acme', accountIds: ['alice', 'bob'] },
-    { path: 'Engineering.md', realmId: 'acme', departmentIds: ['engineering'] },
-  ]);
-  const sales = { ...actor, enterprise: { mode: 'company', realmId: 'acme', runtimeId: 'r', sharedMemoryEnabled: false, departmentIds: ['sales'] } } as ScopePrincipal;
-  expect(access.canAccessPhysicalPath('Room.md', sales)).toBe(true);
-  expect(access.canAccessPhysicalPath('Engineering.md', sales)).toBe(false);
-});
-
 test('mixing sources intersects restrictions rather than widening the audience', () => {
   const access = policy([
     { path: 'A.md', accountIds: ['alice', 'bob'] }, { path: 'B.md', accountIds: ['bob', 'carol'] },

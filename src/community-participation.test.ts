@@ -5,7 +5,6 @@ import { join } from 'node:path';
 import { FileSystemService } from './filesystem.js';
 import { ScopeAccessPolicy } from './scope-access.js';
 import type { ScopePrincipal } from './scope-auth.js';
-import { withEnterpriseStorageContext } from './enterprise-storage-context.js';
 import { CommunityParticipationService, participationPath, aggregateParticipationOwnerUsage } from './community-participation.js';
 
 let vault: string, fs: FileSystemService, service: CommunityParticipationService;
@@ -65,32 +64,6 @@ test('pulse includes a host-projected economy candidate without changing free/re
  expect(JSON.stringify(pulse)).toContain('quest.market');expect(JSON.stringify(pulse)).not.toContain('claim');
 });
 
-test('host-only owner aggregation enforces two initialized enterprise aliases without exposing peer participation',async()=>{
- const enterprise={mode:'company' as const,realmId:'acme',runtimeId:'internal',sharedMemoryEnabled:true};
- const access=new ScopeAccessPolicy({commandCenterId:'acme',enterprise:{mode:'company',realmId:'acme'}});
- const own={...principal,accountId:'owner-one',userId:'owner-family',commandCenterId:'acme',enterprise};
- const peer={...own,accountId:'owner-two',agentId:'peer-worker'};
- const independent={...own,accountId:'independent',userId:'independent-family',agentId:'other-worker'};
- expect(access.canAccessPhysicalPath(participationPath(own),own)).toBe(true);
- expect(access.canAccessPhysicalPath(participationPath(peer),own)).toBe(false);
- const invoke=<T>(p:ScopePrincipal,operation:()=>Promise<T>)=>withEnterpriseStorageContext({access,principal:p,assertFresh(){}},operation);
- const s=new CommunityParticipationService(fs,{access,now:()=>now,ownerUsage:async p=>{
-   return aggregateParticipationOwnerUsage(fs,p,p.accountId==='independent'?[]:[own,peer],now);
- }});
- for(const p of [own,peer,independent])await invoke(p,()=>s.settings({principal:p,op:'update',expectedRevision:'missing',requestId:'enable-owner',settings:{enabled:true,allowedTopics:['science'],allowedActions:['explore']}}));
- let peerState=await invoke(peer,()=>s.settings({principal:peer}));
- peerState=await invoke(peer,()=>s.settings({principal:peer,op:'update',expectedRevision:peerState.revision,requestId:'peer-private-goal',goals:[{id:'peer-secret',question:'private goal',nextCondition:'never'}]}));
- for(let i=0;i<6;i++) {
-   const p=i%2?peer:own;let current=await invoke(p,()=>s.settings({principal:p}));
-   current=await invoke(p,()=>s.record({principal:p,op:'start',requestId:`owner-${i}`,expectedRevision:current.revision,action:'explore'}));
-   const finished=await invoke(p,()=>s.record({principal:p,op:'skip',requestId:`idle-${i}`,expectedRevision:current.revision,runId:current.activeRun!.id}));
-   if(p===own)expect(JSON.stringify(finished)).not.toContain('peer-secret');
-   else expect(JSON.stringify(finished)).toContain('peer-secret');
-   now+=31*60000;
- }
- await expect(invoke(peer,async()=>s.record({principal:peer,op:'start',requestId:'alias-seventh',expectedRevision:(await s.settings({principal:peer})).revision,action:'explore'}))).rejects.toThrow(/owner.*budget/i);
- expect((await invoke(independent,async()=>s.record({principal:independent,op:'start',requestId:'other-owner',expectedRevision:(await s.settings({principal:independent})).revision,action:'explore'}))).daily.runs).toBe(1);
-});
 test('completion verifies the exact current public result and an uncertain run cannot be silently abandoned', async () => {
   let state = await enable(); state = await service.record({ principal, op: 'start', requestId: 'run', expectedRevision: state.revision, action: 'respond' });
   await expect(service.record({ principal, op: 'finish', requestId: 'bad', expectedRevision: state.revision, runId: state.activeRun!.id, result: { path: 'Community/Comments/p/no.md', revision: '0'.repeat(64) } })).rejects.toThrow();

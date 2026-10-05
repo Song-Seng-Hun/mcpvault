@@ -48,7 +48,8 @@ export function connectEvolutionRuntime(config: EvolutionRuntimeConfig, services
     const current = (await auth.listPrincipals({ fresh: true })).find(a => a.accountId === p.accountId);
     if (!current || hash(identity(current)) !== hash(identity(p)) || await moderation.isBanned(p.accountId, p.userId, { fresh: true })) return unavailable();
     sessionChecks.get(p)?.();
-    return hash([identity(current), p.enterprise ?? null, access.documentPolicyFingerprint()]);
+    // The null slot formerly held the enterprise realm; keeping it preserves existing fingerprints.
+    return hash([identity(current), null, access.documentPolicyFingerprint()]);
   };
   const evidence = new EvolutionRuntimeEvidence({ storage: config.storage, authorize });
   const budget = new EvolutionBudget(config.storage, async accountId => {
@@ -149,8 +150,8 @@ export function connectEvolutionRuntime(config: EvolutionRuntimeConfig, services
   const review = new EvolutionDirectReview(config.storage, {
     actor: operationActor,
     login: async (accountId, password) => { if (services.readOnly) return unavailable(); const result = await auth.login({ accountId, password });
-      try { await actor(result.accessToken, true); return result.accessToken; } catch { await auth.endSession(result.accessToken); return unavailable(); } },
-    logout: token => auth.endSession(token),
+      try { await actor(result.accessToken, true); return result.accessToken; } catch { auth.logout(result.accessToken); return unavailable(); } },
+    logout: async token => auth.logout(token),
     record: async (token, request) => {
       const a = await actor(token, true), eventToken = await host.captureFeedback(token, request.feedback, 'human', request.id);
       return service.execute('feedback', { op: 'record', feedback: request.feedback, eventToken, requestId: request.id, expectedRevision: 'missing' }, a.principal, a.assert);

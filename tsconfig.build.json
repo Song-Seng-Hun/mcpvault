@@ -8,11 +8,7 @@
   },
   "include": [
     "server.ts",
-    "global-sync-server.ts",
-    "enterprise-server.ts",
-    "enterprise-admin.ts",
     "guidance-host.ts",
-    "public-federation-server.ts",
     "src/**/*"
   ],
   "exclude": [

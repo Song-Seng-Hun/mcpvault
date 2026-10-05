@@ -6,7 +6,7 @@ export interface MemoryReuse { mode?: 'full' | 'if_retained'; knownReads?: strin
 export class MemoryExposure {
   private receipts = new Map<string, { actor: string; basis: string; context?: string }>();
   private contexts = new Map<string, string>();
-  private actor(p?: ScopePrincipal) { return p?.sessionId ? hash([p.accountId, p.agentId, p.modelId, p.sessionId, p.sessionGeneration, p.enterprise, p.capabilities]) : undefined; }
+  private actor(p?: ScopePrincipal) { return p?.sessionId ? hash([p.accountId, p.agentId, p.modelId, p.sessionId, p.sessionGeneration, undefined, p.capabilities]) : undefined; }
   confirm(p: ScopePrincipal, receipt: string, context: string) {
     const actor = this.actor(p), record = this.receipts.get(receipt);
     if (!actor || !record || record.actor !== actor || !/^[a-zA-Z0-9._-]{1,100}$/.test(context)) throw Error('Memory retention receipt unavailable');

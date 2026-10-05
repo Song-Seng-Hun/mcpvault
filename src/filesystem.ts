@@ -685,7 +685,7 @@ export class FileSystemService {
 
   private async withSkillLockFile<T>(skillId: string, operation: () => Promise<T>): Promise<T> {
     const lockDirectoryRelative = '.mcpvault/skill-locks';
-    assertEnterpriseStorageAccess(lockDirectoryRelative, true);
+    assertEnterpriseStorageAccess(lockDirectoryRelative);
     const vaultRoot = realpathSync(this.vaultPath);
     if (resolve(vaultRoot) !== resolve(this.vaultPath) || lstatSync(this.vaultPath).isSymbolicLink()) {
       throw guidanceError(new Error('Skill transaction vault containment could not be verified.'), 'guid-82cf6483992998eb');
@@ -879,7 +879,7 @@ export class FileSystemService {
     assertSkillEvolutionMutationBoundary(relativePathToVault);
     assertResourceBundleMutationBoundary(relativePathToVault);
     this.assertNoticeMutation(relativePathToVault);
-    assertEnterpriseStorageAccess(relativePathToVault, true);
+    assertEnterpriseStorageAccess(relativePathToVault);
     // Guard the canonical vault-relative destination for every service write,
     // including absolute input paths and indirectly rewritten backlinks. This
     // is legacy-only: immutable source ingestion still needs filesystem writes.
@@ -908,7 +908,7 @@ export class FileSystemService {
     await prepareDocumentWrite(physicalPath);
     await beforeDispatch?.();
     assertOriginalMutation(physicalPath, typeof options === 'object' && options !== null && 'flag' in options && options.flag === 'wx');
-    assertEnterpriseStorageAccess(physicalPath, true);
+    assertEnterpriseStorageAccess(physicalPath);
     assertSkillEvolutionMutationBoundary(physicalPath);
     this.assertNoticeMutation(physicalPath);
     assertCurrent?.();
@@ -927,8 +927,8 @@ export class FileSystemService {
     assertOriginalMutation(sourcePath);
     assertOriginalMutation(targetPath);
     await prepareDocumentWrite(targetPath);
-    assertEnterpriseStorageAccess(sourcePath, true);
-    assertEnterpriseStorageAccess(targetPath, true);
+    assertEnterpriseStorageAccess(sourcePath);
+    assertEnterpriseStorageAccess(targetPath);
     assertSkillEvolutionMutationBoundary(sourcePath);
     assertSkillEvolutionMutationBoundary(targetPath);
     this.assertNoticeMutation(sourcePath);

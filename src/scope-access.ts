@@ -54,19 +54,16 @@ export class ScopeAccessPolicy {
   private readonly documentAuthority: () => DocumentAuthority | undefined;
   private readonly localInferenceAllowed: DocumentAuthorityOptions['localInferenceAllowed'];
   private readonly commandCenterId: string;
-  private readonly enterprise: { mode: 'public' | 'company'; realmId: string } | undefined;
 
-  constructor(options: { commandCenterId?: string; enterprise?: { mode: 'public' | 'company'; realmId: string } } & DocumentAuthorityOptions = {}) {
+  constructor(options: { commandCenterId?: string } & DocumentAuthorityOptions = {}) {
     const configured = options.commandCenterId || process.env.MCPVAULT_COMMAND_CENTER_ID || 'local';
     if (!/^[a-z0-9][a-z0-9._-]{0,63}$/i.test(configured)) throw guidanceError(new Error('commandCenterId must be a lowercase scope id'), 'guid-4ca281d9c34ac799');
     this.commandCenterId = configured.trim().toLowerCase();
-    this.enterprise = options.enterprise;
     this.documentAuthority = documentAuthorityReader(options);
     this.localInferenceAllowed = options.localInferenceAllowed;
   }
 
   getCommandCenterId(): string { return this.commandCenterId; }
-  getEnterpriseProfile() { return this.enterprise; }
   hasDocumentPolicy(): boolean { return this.documentAuthority() !== undefined; }
   documentPolicyFingerprint(): string { return this.documentAuthority()?.fingerprint ?? 'none'; }
   /** Dependency-scoped invalidation only, not proof of present read or execution authority. */
@@ -75,25 +72,6 @@ export class ScopeAccessPolicy {
     const authority = this.documentAuthority();
     return createHash('sha256').update(JSON.stringify(paths.map(path => [path,
       authority?.effectiveConstraints(path) ?? []]))).digest('hex');
-  }
-  /** Navigation only; the principal must originate from current host authentication. */
-  defaultDepartment(principal?: ScopePrincipal): string | undefined {
-    const verified = principal?.enterprise;
-    return this.enterprise?.mode === 'company' && this.enterprisePrincipalAllowed(principal)
-      && verified?.defaultDepartmentId && verified.departmentIds?.includes(verified.defaultDepartmentId)
-      ? verified.defaultDepartmentId : undefined;
-  }
-  defaultNavigation(principal?: ScopePrincipal) {
-    const departmentId = this.defaultDepartment(principal);
-    return departmentId ? { departmentId, basis: 'administrator_verified', action: {
-      endpointId: 'mcp.query_notes', arguments: { department: 'default', limit: 12, includeContent: false, includeTotal: false, maxChars: 4000 },
-    } } : undefined;
-  }
-  isInDefaultDepartment(path: string, principal?: ScopePrincipal, recordSource = true): boolean {
-    const department = this.defaultDepartment(principal);
-    if (!department || !this.canAccessPhysicalPath(path, principal, recordSource)) return false;
-    return this.documentAuthority()?.effectiveConstraints(path).some(rule =>
-      rule.realmId === principal!.enterprise!.realmId && rule.departmentIds?.includes(department)) === true;
   }
   isConfidentialDocument(path: string): boolean {
     const context = activeDocumentStorageContext();
@@ -121,19 +99,7 @@ export class ScopeAccessPolicy {
     }
     return true;
   }
-  getCommunityRoot(): string { return this.enterprise?.mode === 'public' ? 'PublicCommunity' : COMMUNITY_ROOT; }
-
-  private enterprisePrincipalAllowed(principal?: ScopePrincipal): boolean {
-    return !this.enterprise || Boolean(principal?.enterprise
-      && principal.enterprise.realmId === this.enterprise.realmId
-      && principal.enterprise.mode === this.enterprise.mode
-      && principal.commandCenterId === this.commandCenterId && principal.userId && principal.agentId);
-  }
-
-  userMemoryRoot(principal?: ScopePrincipal): string | undefined {
-    return this.enterprise && this.enterprisePrincipalAllowed(principal) && principal?.enterprise?.sharedMemoryEnabled
-      ? `_scopes/users/${principal.userId}/SharedMemory` : undefined;
-  }
+  getCommunityRoot(): string { return COMMUNITY_ROOT; }
 
   isLegacyDiscussionPath(path: string, includeAncestors = false): boolean {
     return isLegacyDiscussionPath(path, includeAncestors);
@@ -153,11 +119,7 @@ export class ScopeAccessPolicy {
     if (documentContext?.canAccessPath?.(path) === false && documentContext.canTraversePath?.(path) !== true) return false;
     if (documentContext && !documentContext.access.canReadProtectedDocument(path, documentContext.principal, recordSource)) return false;
     if (!this.canReadProtectedDocument(path, principal, recordSource)) return false;
-    if (!this.enterprisePrincipalAllowed(principal)) return false;
-    // Reject aliases before classification; callers normally pass canonical paths.
-    if (this.enterprise && /(?:^|\/)(?:\.{1,2}|[^/]*[. ])(?:\/|$)/.test(path.replace(/\\/g, '/'))) return false;
     const normalized = normalizePhysicalPath(path);
-    if (this.enterprise?.mode === 'public' && this.isCommunityPath(normalized)) return false;
     const checkpoint = modelCheckpoint(path);
     if (checkpoint) {
       if (!principal || checkpoint.legacy || principal.modelId !== checkpoint.modelId) return false;
@@ -172,13 +134,9 @@ export class ScopeAccessPolicy {
       // User data is deliberately host-local.  A matching userId is useful
       // for family attribution and moderation, but it is not a capability to
       // read the server operator's private files through MCP.
-      if (owner.kind === 'user') {
-        const root = this.userMemoryRoot(principal)?.toLowerCase();
-        return Boolean(root && owner.id === principal.userId
-          && (normalized.toLowerCase() === root || normalized.toLowerCase().startsWith(`${root}/`)));
-      }
+      if (owner.kind === 'user') return false;
       return owner.kind === 'model'
-        ? !this.enterprise && principal.modelId === owner.id
+        ? principal.modelId === owner.id
         : owner.kind === 'agent'
           ? principal.agentId === owner.id
           : false;
@@ -198,16 +156,14 @@ export class ScopeAccessPolicy {
       if (parsed.kind !== 'global' && principal?.commandCenterId && principal.commandCenterId !== this.commandCenterId) {
         throw guidanceError(new Error('Access denied: this identity belongs to another command center'), 'guid-76aed71db34ad3ea');
       }
-      if (parsed.kind === 'user' && !this.enterprise) throw guidanceError(new Error('User scope is host-only and is not available through MCP; use the server host\'s local Obsidian/filesystem access.'), 'guid-14f1321fb9fd1f6b');
+      if (parsed.kind === 'user') throw guidanceError(new Error('User scope is host-only and is not available through MCP; use the server host\'s local Obsidian/filesystem access.'), 'guid-14f1321fb9fd1f6b');
       if (parsed.kind === 'model' && principal?.modelId !== parsed.id) {
         throw guidanceError(new Error(`Access denied: model scope '${parsed.id}' is private`), 'guid-e86ecd7742fca045');
       }
       if (parsed.kind === 'agent' && principal?.agentId !== parsed.id) {
         throw guidanceError(new Error(`Access denied: agent scope '${parsed.id}' is private`), 'guid-e37fa78085e218bc');
       }
-      const physical = expandScopePath(raw);
-      const expanded = parsed.kind === 'community' && this.enterprise?.mode === 'public'
-        ? physical.replace(/^Community(?=\/|$)/, 'PublicCommunity') : physical;
+      const expanded = expandScopePath(raw);
       if (parsed.kind === 'global' && this.isPrivateServicePath(expanded)) {
         throw guidanceError(new Error('Private and service paths are not addressable through the global scope'), 'guid-6a8a2febbf81a85f');
       }
@@ -216,7 +172,6 @@ export class ScopeAccessPolicy {
     }
 
     const normalized = normalizePhysicalPath(raw);
-    if (this.enterprise && !this.canAccessPhysicalPath(normalized, principal)) throw guidanceError(new Error('Access denied: this path is unavailable in the current enterprise realm'), 'guid-72b3279bd0003606');
     if (modelCheckpoint(raw) || this.isPrivateServicePath(posix.normalize(normalized))) {
       throw guidanceError(new Error('Access denied: direct private paths require an authorized scope:// URI'), 'guid-ab3ab07cda368052');
     }
@@ -250,18 +205,6 @@ export class ScopeAccessPolicy {
     const documentContext = activeDocumentStorageContext();
     if (documentContext && documentContext.access.documentAuthority()?.canFlow(containerPath, referencedPath) === false) return false;
     if (this.documentAuthority()?.canFlow(containerPath, referencedPath) === false) return false;
-    if (this.enterprise) {
-      const containerPrivate = privateOwner(containerPath);
-      const referencePrivate = privateOwner(referencedPath);
-      if (!containerPrivate && referencePrivate) return false;
-      if (this.isCommunityPath(referencedPath) && !containerPrivate && !this.isCommunityPath(containerPath)) return false;
-      if (containerPrivate?.kind === 'user') {
-        const root = `_scopes/users/${containerPrivate.id}/sharedmemory`;
-        const container = normalizePhysicalPath(containerPath).toLowerCase();
-        const reference = normalizePhysicalPath(referencedPath).toLowerCase();
-        return container.startsWith(`${root}/`) && (!referencePrivate || reference.startsWith(`${root}/`));
-      }
-    }
     const checkpoint = modelCheckpoint(referencedPath);
     if (checkpoint) {
       const containerCheckpoint = modelCheckpoint(containerPath);
@@ -295,12 +238,9 @@ export class ScopeAccessPolicy {
   }
 
   scopeRoots(principal?: ScopePrincipal): Array<{ kind: 'agent' | 'model' | 'user' | 'community' | 'global'; root: string }> {
-    if (!this.enterprisePrincipalAllowed(principal)) return [];
-    const userRoot = this.userMemoryRoot(principal);
     return [
       ...(principal?.agentId ? [{ kind: 'agent' as const, root: `_scopes/agents/${principal.agentId}` }] : []),
-      ...(userRoot ? [{ kind: 'user' as const, root: userRoot }] : []),
-      ...(!this.enterprise && principal?.modelId ? [{ kind: 'model' as const, root: `_scopes/models/${principal.modelId}` }] : []),
+      ...(principal?.modelId ? [{ kind: 'model' as const, root: `_scopes/models/${principal.modelId}` }] : []),
       { kind: 'community' as const, root: this.getCommunityRoot() },
       { kind: 'global' as const, root: '' },
     ];

@@ -4,14 +4,13 @@ import type { ScopePrincipal } from './scope-auth.js';
 import { inspectCompilationPolicy, validateCompilationConfig } from './compilation-policy.js';
 
 const actor: ScopePrincipal = { accountId: 'worker', modelId: 'test', role: 'agent', agentId: 'worker', userId: 'owner',
-  commandCenterId: 'local', capabilities: ['write', 'publish'], enterprise: { mode: 'company', realmId: 'company', runtimeId: 'internal',
-    sharedMemoryEnabled: false, departmentIds: ['engineering', 'legal'] } };
+  commandCenterId: 'local', capabilities: ['write', 'publish'] };
 const config = () => ({ version: 1, enabled: true, accountId: 'worker', projects: [{ id: 'project', ruleVersion: 'v1',
   sources: [{ path: 'Knowledge/A.md', classification: 'resolved', mode: 'synthesis_allowed' }],
   outputPaths: ['Knowledge/B.md'], runtimeIds: ['internal'], operations: ['index', 'synthesize', 'embed', 'vision', 'convert'] }] });
 const runtime = () => ({ id: 'internal', revision: 'verified-1', local: true, operations: ['index', 'synthesize', 'embed', 'vision', 'convert'] as const });
-const access = (allowed = true) => new ScopeAccessPolicy({ enterprise: { mode: 'company', realmId: 'company' },
-  documentRules: () => [{ path: 'Knowledge/A.md', confidential: true, realmId: 'company', departmentIds: ['engineering'] }],
+const access = (allowed = true) => new ScopeAccessPolicy({
+  documentRules: () => [{ path: 'Knowledge/A.md', confidential: true, accountIds: ['worker'] }],
   localInferenceAllowed: () => allowed });
 function check(overrides: Record<string, unknown> = {}) {
   return inspectCompilationPolicy({ config: validateCompilationConfig(config()), projectId: 'project',
@@ -104,8 +103,8 @@ test.each(['synthesize', 'embed', 'vision', 'convert'])('no suitable verified ru
   expect(check({ operation, runtime: { ...runtime(), operations: ['index'] } })).toMatchObject({ status: 'waiting_runtime' });
 });
 
-test('read authority is independent of host execution allowance and cannot leak hidden paths or department names', () => {
-  for (const principal of [undefined, { ...actor, enterprise: { ...actor.enterprise!, departmentIds: ['legal'] } }, { ...actor, accountId: 'admin' }]) {
+test('read authority is independent of host execution allowance and cannot leak hidden paths or account names', () => {
+  for (const principal of [undefined, { ...actor, accountId: 'admin' }]) {
     const result = check({ principal });
     expect(result.status).not.toBe('ready');
     expect(JSON.stringify(result)).not.toMatch(/Knowledge|engineering|confidential|company/);
@@ -118,7 +117,7 @@ test('policy/runtime/rule change fingerprints invalidate work without relying on
   expect(check({ runtime: { ...runtime(), revision: 'verified-2' } }).fingerprint).not.toBe(ready.fingerprint);
   const value = config(); value.projects[0]!.ruleVersion = 'v2';
   expect(check({ config: validateCompilationConfig(value) }).fingerprint).not.toBe(ready.fingerprint);
-  const membership = { ...actor, enterprise: { ...actor.enterprise!, departmentIds: ['engineering'] } };
+  const membership = { ...actor, capabilities: [...actor.capabilities!, 'task' as const] };
   expect(check({ principal: membership }).fingerprint).not.toBe(ready.fingerprint);
 });
 

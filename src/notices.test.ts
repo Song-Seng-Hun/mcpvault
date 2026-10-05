@@ -172,18 +172,6 @@ test('authority revoked during final preparation never commits a notice', async 
   expect((await fs.readNote('Guides/Welcome.md')).revision).toBe(current.revision);
 });
 
-test('shared enterprise guidance may receive feedback, but personal guidance may not', async () => {
-  const { vault, configPath } = await fixture();
-  const registry = new NoticeRegistry(vault, configPath);
-  const access = new ScopeAccessPolicy({ commandCenterId: 'office', enterprise: { mode: 'company', realmId: 'office' } });
-  const fs = new FileSystemService(vault);
-  const service = new NoticeService(registry, fs, access, new ReferenceService(fs, access));
-  const principal = { accountId: 'editor', modelId: 'codex', agentId: 'editor', userId: 'host', commandCenterId: 'office', role: 'agent' as const, enterprise: { mode: 'company' as const, realmId: 'office', runtimeId: 'local', sharedMemoryEnabled: false } };
-  const revision = (await fs.readNote('Guides/Welcome.md')).revision;
-  expect(await service.feedback('welcome', revision, principal)).toMatchObject({ noticeId: 'welcome' });
-  await expect(service.feedback('welcome', revision)).rejects.toThrow(/unavailable/);
-});
-
 test('unregistering a notice at final dispatch invalidates an in-flight editor grant', async () => {
   const { vault, configPath, policy } = await fixture();
   const registry = new NoticeRegistry(vault, configPath);

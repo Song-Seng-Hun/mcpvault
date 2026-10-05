@@ -156,7 +156,7 @@ const paged = () => loadHostWorkStorage(config, vault, { namespace: 'compilation
 
 test('cancelled request releases only its owned host lease without permitting another record write', async () => {
   const store = await paged(), id = recordId('cancelled'); let current = true;
-  const access = { hasDocumentPolicy: () => true, getEnterpriseProfile: () => undefined } as any;
+  const access = { hasDocumentPolicy: () => true } as any;
   await withEnterpriseStorageContext({ access, assertFresh: () => { if (!current) throw Error('request cancelled'); } }, async () => {
     const writer = await store.acquire(); writers.push(writer);
     await store.records!.read(id); const saved = await store.records!.write(id, { kept: true }, 'missing');
@@ -171,7 +171,7 @@ test('cancelled request releases only its owned host lease without permitting an
 
 test('cleanup cannot shed a document boundary inherited by storage construction', async () => {
   let current = true;
-  const access = { hasDocumentPolicy: () => true, getEnterpriseProfile: () => undefined } as any;
+  const access = { hasDocumentPolicy: () => true } as any;
   await withEnterpriseStorageContext({ access, assertFresh: () => { if (!current) throw Error('owner revoked'); } }, async () => {
     const store = await paged(), writer = await store.acquire(); writers.push(writer); current = false;
     await expect(writer.close()).rejects.toThrow(/owner revoked/);
@@ -181,7 +181,7 @@ test('cleanup cannot shed a document boundary inherited by storage construction'
 
 test('cancelled cleanup preserves a replaced marker even when its bytes match', async () => {
   const store = await paged(), marker = join(hostRoot, `compilation-${identity}.writer.lock`); let current = true;
-  const access = { hasDocumentPolicy: () => true, getEnterpriseProfile: () => undefined } as any;
+  const access = { hasDocumentPolicy: () => true } as any;
   let replacement = '';
   await withEnterpriseStorageContext({ access, assertFresh: () => { if (!current) throw Error('request cancelled'); } }, async () => {
     const writer = await store.acquire(); writers.push(writer); replacement = await readFile(marker, 'utf8');

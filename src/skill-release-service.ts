@@ -49,7 +49,7 @@ export class ReviewedSkillService {
     // current session, capabilities, source access and registry generation.
     const scopeKey=fingerprint({accountId:principal.accountId,modelId:principal.modelId,
       agentId:principal.agentId,userId:principal.userId,commandCenterId:principal.commandCenterId,
-      role:principal.role,capabilities:principal.capabilities,enterprise:principal.enterprise});
+      role:principal.role,capabilities:principal.capabilities});
     return {principal,scopeKey,revalidate,assertFresh};
   }
 

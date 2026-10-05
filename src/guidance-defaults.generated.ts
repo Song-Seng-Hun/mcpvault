@@ -27,7 +27,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1217
+        "line": 1200
       }
     ]
   },
@@ -91,26 +91,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/git-history.ts",
         "line": 431
-      }
-    ]
-  },
-  {
-    "id": "guid-006f7acac47c0e81",
-    "kind": "error",
-    "template": "Enterprise runtime is disabled: {arg0}",
-    "parts": [
-      "Enterprise runtime is disabled: ",
-      ""
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-registry.ts",
-        "line": 455
-      },
-      {
-        "file": "src/enterprise-registry.ts",
-        "line": 729
       }
     ]
   },
@@ -325,7 +305,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/layered-memory.ts",
-        "line": 333
+        "line": 332
       }
     ]
   },
@@ -371,21 +351,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/llm-wiki.ts",
         "line": 7337
-      }
-    ]
-  },
-  {
-    "id": "guid-01c8d4c598af46b4",
-    "kind": "error",
-    "template": "federation intent identity mismatch",
-    "parts": [
-      "federation intent identity mismatch"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-federation.ts",
-        "line": 773
       }
     ]
   },
@@ -553,7 +518,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3800
+        "line": 3727
       }
     ]
   },
@@ -833,7 +798,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 967
+        "line": 951
       }
     ]
   },
@@ -998,21 +963,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-044da821311fdef1",
-    "kind": "error",
-    "template": "Invite identity is predetermined; self-assigned identity is not allowed",
-    "parts": [
-      "Invite identity is predetermined; self-assigned identity is not allowed"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-registry.ts",
-        "line": 622
-      }
-    ]
-  },
-  {
     "id": "guid-048f9f50b304484d",
     "kind": "error",
     "template": "Combined knowledgeSynthesis, knowledgeApplications and knowledgeInvestigation may reference at most eight distinct related notes, including prose links. Reuse shared inputs or link a separate existing observation; do not drop revision guards.",
@@ -1148,21 +1098,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-051b31a1527a1f2f",
-    "kind": "error",
-    "template": "unsupported public record type",
-    "parts": [
-      "unsupported public record type"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/public-federation.ts",
-        "line": 377
-      }
-    ]
-  },
-  {
     "id": "guid-0527175e0a296da7",
     "kind": "error",
     "template": "A note cannot use itself as a MOC entry point",
@@ -1189,7 +1124,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 575
+        "line": 436
       }
     ]
   },
@@ -1219,7 +1154,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1402
+        "line": 1384
       }
     ]
   },
@@ -1265,21 +1200,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/notice-tools.ts",
         "line": 16
-      }
-    ]
-  },
-  {
-    "id": "guid-05db64321958a5a2",
-    "kind": "error",
-    "template": "a canonical public actor ID is required",
-    "parts": [
-      "a canonical public actor ID is required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-federation.ts",
-        "line": 142
       }
     ]
   },
@@ -1344,21 +1264,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-063b4205ef9befcf",
-    "kind": "error",
-    "template": "authenticated actor must be published before social records",
-    "parts": [
-      "authenticated actor must be published before social records"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/public-federation.ts",
-        "line": 570
-      }
-    ]
-  },
-  {
     "id": "guid-0641c293472980f3",
     "kind": "prose",
     "template": "Query exact YAML values (arrays match contained values), excluding inaccessible/hidden rows before pagination. Bounded pages deliver a contiguous prefix; nextCursor belongs to the last delivered row. Metadata is advisory. Omitted Properties/body are marked explicitly with a revision-guarded nextAction: follow it, never treat omission as empty content. Attempted body reads reject the whole page on revision drift. Budget errors deliver no rows: merge retryArguments into the same query.",
@@ -1369,22 +1274,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1228
-      }
-    ]
-  },
-  {
-    "id": "guid-064486309d207056",
-    "kind": "error",
-    "template": "content is required for an upsert",
-    "parts": [
-      "content is required for an upsert"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 679
+        "line": 1211
       }
     ]
   },
@@ -1435,21 +1325,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-06857e36dec188b5",
-    "kind": "error",
-    "template": "Unknown enterprise account",
-    "parts": [
-      "Unknown enterprise account"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-registry.ts",
-        "line": 704
-      }
-    ]
-  },
-  {
     "id": "guid-068c0b439401db4c",
     "kind": "prose",
     "template": "Preview one coherent retirement or reactivation of a visible knowledge note. It checks legal preservation, scope-safe reference impact, replacement lineage, and exact revisions, then returns an atomic notes.change_set without writing, moving, deleting, or committing.",
@@ -1492,7 +1367,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 585
+        "line": 446
       }
     ]
   },
@@ -1523,21 +1398,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/community-feature-tools.ts",
         "line": 19
-      }
-    ]
-  },
-  {
-    "id": "guid-06b095738000d3a9",
-    "kind": "prose",
-    "template": "Read a bounded list of visible public federation objects. The whole response includes sync freshness; unavailable or partial means cached results may lack current changes. Continue with nextCursor as after. Never infer current absence or moderation from an incomplete sync.",
-    "parts": [
-      "Read a bounded list of visible public federation objects. The whole response includes sync freshness; unavailable or partial means cached results may lack current changes. Continue with nextCursor as after. Never infer current absence or moderation from an incomplete sync."
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-federation-tools.ts",
-        "line": 10
       }
     ]
   },
@@ -1583,21 +1443,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/skill-library.ts",
         "line": 163
-      }
-    ]
-  },
-  {
-    "id": "guid-06d24577581ed3c2",
-    "kind": "error",
-    "template": "Enterprise invite was already used",
-    "parts": [
-      "Enterprise invite was already used"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-registry.ts",
-        "line": 624
       }
     ]
   },
@@ -1672,7 +1517,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/layered-memory.ts",
-        "line": 340
+        "line": 339
       }
     ]
   },
@@ -1733,36 +1578,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/wiki-moc-regions.ts",
         "line": 53
-      }
-    ]
-  },
-  {
-    "id": "guid-074b2d1e4bf2f3d4",
-    "kind": "error",
-    "template": "Global Sync process lock is invalid; refusing to remove it automatically",
-    "parts": [
-      "Global Sync process lock is invalid; refusing to remove it automatically"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 464
-      }
-    ]
-  },
-  {
-    "id": "guid-074c7eccaf58259a",
-    "kind": "prose",
-    "template": "Enterprise affiliation claim, checked against administrator-verified membership. Does not add departments or change the verified default navigation department.",
-    "parts": [
-      "Enterprise affiliation claim, checked against administrator-verified membership. Does not add departments or change the verified default navigation department."
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/scope-auth-tools.ts",
-        "line": 30
       }
     ]
   },
@@ -1918,7 +1733,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 768
+        "line": 593
       }
     ]
   },
@@ -1965,7 +1780,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2978
+        "line": 2915
       }
     ]
   },
@@ -2049,21 +1864,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-08ae94ac48cb2ead",
-    "kind": "error",
-    "template": "post has no known public federation revision",
-    "parts": [
-      "post has no known public federation revision"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-federation.ts",
-        "line": 448
-      }
-    ]
-  },
-  {
     "id": "guid-08c67460ba61d170",
     "kind": "error",
     "template": "Maintenance host approval unavailable",
@@ -2089,7 +1889,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 989
+        "line": 973
       }
     ]
   },
@@ -2104,7 +1904,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/endpoint-registry.ts",
-        "line": 778
+        "line": 774
       }
     ]
   },
@@ -2216,25 +2016,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/filesystem.ts",
         "line": 841
-      }
-    ]
-  },
-  {
-    "id": "guid-09916e6dfb668052",
-    "kind": "error",
-    "template": "idempotency key was already used with a different payload",
-    "parts": [
-      "idempotency key was already used with a different payload"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/public-federation.ts",
-        "line": 560
-      },
-      {
-        "file": "src/public-federation.ts",
-        "line": 652
       }
     ]
   },
@@ -2393,37 +2174,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-0a3bef85c2e19f5a",
-    "kind": "error",
-    "template": "maxChars cannot fit the federation response; increase the response budget",
-    "parts": [
-      "maxChars cannot fit the federation response; increase the response budget"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-federation.ts",
-        "line": 109
-      },
-      {
-        "file": "src/enterprise-federation.ts",
-        "line": 125
-      },
-      {
-        "file": "src/enterprise-federation.ts",
-        "line": 659
-      },
-      {
-        "file": "src/enterprise-federation.ts",
-        "line": 824
-      },
-      {
-        "file": "src/enterprise-federation.ts",
-        "line": 830
-      }
-    ]
-  },
-  {
     "id": "guid-0a48df9b0578f639",
     "kind": "error",
     "template": "The primary and additional MOC paths must be distinct",
@@ -2464,11 +2214,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1817
+        "line": 1763
       },
       {
         "file": "src/createServer.ts",
-        "line": 1819
+        "line": 1765
       }
     ]
   },
@@ -2498,7 +2248,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/social.ts",
-        "line": 436
+        "line": 432
       }
     ]
   },
@@ -2551,7 +2301,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/layered-memory.ts",
-        "line": 81
+        "line": 80
       },
       {
         "file": "src/memory-contract.ts",
@@ -2571,21 +2321,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/mcp-note-response.ts",
         "line": 243
-      }
-    ]
-  },
-  {
-    "id": "guid-0ab6244a003a3452",
-    "kind": "error",
-    "template": "expectedRevision is invalid",
-    "parts": [
-      "expectedRevision is invalid"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/public-federation.ts",
-        "line": 314
       }
     ]
   },
@@ -2651,36 +2386,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/organization.ts",
         "line": 331
-      }
-    ]
-  },
-  {
-    "id": "guid-0ad49738f4b26286",
-    "kind": "error",
-    "template": "a write credential is required for this operation",
-    "parts": [
-      "a write credential is required for this operation"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/public-federation-http.ts",
-        "line": 87
-      }
-    ]
-  },
-  {
-    "id": "guid-0ad4e7dc35f92d37",
-    "kind": "error",
-    "template": "Public federation baseUrl must use HTTPS except on loopback",
-    "parts": [
-      "Public federation baseUrl must use HTTPS except on loopback"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-server.ts",
-        "line": 202
       }
     ]
   },
@@ -3101,21 +2806,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-0c26336350882215",
-    "kind": "prose",
-    "template": "Remote tombstone failed identity, chain, or signature validation.",
-    "parts": [
-      "Remote tombstone failed identity, chain, or signature validation."
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 1157
-      }
-    ]
-  },
-  {
     "id": "guid-0c282d962aac80e3",
     "kind": "prose",
     "template": "# {{title}}\n\n## Source\n\n## Key points\n- \n\n## Interpretation\n\n## Derived notes\n- [[ ]]\n",
@@ -3156,7 +2846,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 157
+        "line": 137
       }
     ]
   },
@@ -3211,10 +2901,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/continuity.ts",
         "line": 29
-      },
-      {
-        "file": "src/enterprise-federation.ts",
-        "line": 69
       },
       {
         "file": "src/record-tools.ts",
@@ -3321,21 +3007,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-0cdd8fbf390013db",
-    "kind": "error",
-    "template": "public federation list cursor is outside the current snapshot",
-    "parts": [
-      "public federation list cursor is outside the current snapshot"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/public-federation-replica.ts",
-        "line": 579
-      }
-    ]
-  },
-  {
     "id": "guid-0ce2f2a922fd4faa",
     "kind": "error",
     "template": "Host record size limit exceeded; preserve existing history",
@@ -3361,7 +3032,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1500
+        "line": 1475
       }
     ]
   },
@@ -3591,22 +3262,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3624
-      }
-    ]
-  },
-  {
-    "id": "guid-0dc975174262caf3",
-    "kind": "error",
-    "template": "maxTotalContentBytes must be a positive safe integer",
-    "parts": [
-      "maxTotalContentBytes must be a positive safe integer"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 354
+        "line": 3551
       }
     ]
   },
@@ -3651,22 +3307,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1377
-      }
-    ]
-  },
-  {
-    "id": "guid-0e2f9272ed0b00b7",
-    "kind": "error",
-    "template": "idempotencyKey was already used for a different proposal",
-    "parts": [
-      "idempotencyKey was already used for a different proposal"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 687
+        "line": 1359
       }
     ]
   },
@@ -3771,22 +3412,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 871
-      }
-    ]
-  },
-  {
-    "id": "guid-0e9308f4746e5ead",
-    "kind": "error",
-    "template": "credential state has an unsupported format",
-    "parts": [
-      "credential state has an unsupported format"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 318
+        "line": 855
       }
     ]
   },
@@ -3801,7 +3427,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/social.ts",
-        "line": 544
+        "line": 540
       }
     ]
   },
@@ -3816,11 +3442,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1674
+        "line": 1641
       },
       {
         "file": "src/createServer.ts",
-        "line": 2674
+        "line": 2611
       }
     ]
   },
@@ -3945,7 +3571,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 960
+        "line": 944
       }
     ]
   },
@@ -4374,7 +4000,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3064
+        "line": 3001
       }
     ]
   },
@@ -4465,7 +4091,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 441
+        "line": 433
       }
     ]
   },
@@ -4485,21 +4111,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-11bc6b224e0da208",
-    "kind": "error",
-    "template": "TLS certificate is not a valid X.509 certificate",
-    "parts": [
-      "TLS certificate is not a valid X.509 certificate"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-server.ts",
-        "line": 264
-      }
-    ]
-  },
-  {
     "id": "guid-11e05b3662aced30",
     "kind": "error",
     "template": "Approved research account cannot be a moderator",
@@ -4510,7 +4121,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 429
+        "line": 378
       }
     ]
   },
@@ -4545,21 +4156,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-11f710a3f13d26b2",
-    "kind": "error",
-    "template": "moderator authority is required",
-    "parts": [
-      "moderator authority is required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/public-federation.ts",
-        "line": 626
-      }
-    ]
-  },
-  {
     "id": "guid-11fc9bcefc934892",
     "kind": "error",
     "template": "maxChars is too small to preserve the trail endpoint paths; increase the read budget.",
@@ -4571,21 +4167,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/llm-wiki.ts",
         "line": 3623
-      }
-    ]
-  },
-  {
-    "id": "guid-1200bd663a1a3c7d",
-    "kind": "error",
-    "template": "enterprise federation intent is invalid",
-    "parts": [
-      "enterprise federation intent is invalid"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-federation.ts",
-        "line": 158
       }
     ]
   },
@@ -4680,36 +4261,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-12d3f8649a8afdf3",
-    "kind": "error",
-    "template": "Enterprise registry lock is corrupt; refusing to remove it automatically",
-    "parts": [
-      "Enterprise registry lock is corrupt; refusing to remove it automatically"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-registry.ts",
-        "line": 407
-      }
-    ]
-  },
-  {
-    "id": "guid-12e2ead8cdd1ac54",
-    "kind": "error",
-    "template": "Vault is already bound to a different enterprise instance",
-    "parts": [
-      "Vault is already bound to a different enterprise instance"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-vault-marker.ts",
-        "line": 29
-      }
-    ]
-  },
-  {
     "id": "guid-130e67bbd0dace98",
     "kind": "prose",
     "template": "wiki.property_contract hostBundle derives optional host forms/templates. wiki.preflight normalizeFormatting previews revision-safe mechanical changes; never refresh evidence or summary hashes just to silence lint.",
@@ -4742,21 +4293,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-132b5c07cd77c919",
-    "kind": "error",
-    "template": "reviewer credential not found",
-    "parts": [
-      "reviewer credential not found"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 1531
-      }
-    ]
-  },
-  {
     "id": "guid-132d0c2459a9efb5",
     "kind": "error",
     "template": "unsupported public discovery snapshot",
@@ -4767,19 +4303,19 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/notifications.ts",
-        "line": 196
+        "line": 195
       },
       {
         "file": "src/notifications.ts",
-        "line": 204
+        "line": 203
       },
       {
         "file": "src/notifications.ts",
-        "line": 232
+        "line": 231
       },
       {
         "file": "src/notifications.ts",
-        "line": 236
+        "line": 235
       }
     ]
   },
@@ -4811,21 +4347,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/social-tools.ts",
         "line": 71
-      }
-    ]
-  },
-  {
-    "id": "guid-1332cc581d0793c2",
-    "kind": "error",
-    "template": "Public Federation client requires HTTPS for non-loopback URLs",
-    "parts": [
-      "Public Federation client requires HTTPS for non-loopback URLs"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/public-federation-http.ts",
-        "line": 79
       }
     ]
   },
@@ -4886,21 +4407,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/document-chapter-format.ts",
         "line": 67
-      }
-    ]
-  },
-  {
-    "id": "guid-13525993d3b358a5",
-    "kind": "error",
-    "template": "public federation record Markdown is invalid",
-    "parts": [
-      "public federation record Markdown is invalid"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/public-federation.ts",
-        "line": 392
       }
     ]
   },
@@ -5163,7 +4669,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1373
+        "line": 1355
       }
     ]
   },
@@ -5186,15 +4692,15 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       },
       {
         "file": "src/createServer.ts",
-        "line": 3340
+        "line": 3277
       },
       {
         "file": "src/createServer.ts",
-        "line": 3397
+        "line": 3326
       },
       {
         "file": "src/createServer.ts",
-        "line": 3459
+        "line": 3386
       },
       {
         "file": "src/endpoint-registry.ts",
@@ -5222,7 +4728,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       },
       {
         "file": "src/notifications.ts",
-        "line": 116
+        "line": 115
       },
       {
         "file": "src/obsidian-search.ts",
@@ -5257,11 +4763,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/social.ts",
-        "line": 267
+        "line": 263
       },
       {
         "file": "src/social.ts",
-        "line": 324
+        "line": 320
       }
     ]
   },
@@ -5296,21 +4802,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-14f0345c872c9367",
-    "kind": "error",
-    "template": "Session handoff is not authorized",
-    "parts": [
-      "Session handoff is not authorized"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/scope-auth.ts",
-        "line": 708
-      }
-    ]
-  },
-  {
     "id": "guid-14f1321fb9fd1f6b",
     "kind": "error",
     "template": "User scope is host-only and is not available through MCP; use the server host's local Obsidian/filesystem access.",
@@ -5321,7 +4812,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-access.ts",
-        "line": 201
+        "line": 159
       }
     ]
   },
@@ -5410,22 +4901,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-1548b66ee82a824b",
-    "kind": "error",
-    "template": "an update field does not apply to a {arg0} object",
-    "parts": [
-      "an update field does not apply to a ",
-      " object"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/public-federation.ts",
-        "line": 593
-      }
-    ]
-  },
-  {
     "id": "guid-155215a0794ef720",
     "kind": "error",
     "template": "Compilation queue requires host review before adding work",
@@ -5437,21 +4912,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/compilation-service.ts",
         "line": 333
-      }
-    ]
-  },
-  {
-    "id": "guid-1564888b702e54a0",
-    "kind": "error",
-    "template": "public federation outbox record is invalid",
-    "parts": [
-      "public federation outbox record is invalid"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/public-federation-replica.ts",
-        "line": 204
       }
     ]
   },
@@ -5549,21 +5009,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-15eb73725eb7f881",
-    "kind": "error",
-    "template": "actorId is not owned by the authenticated origin and agent",
-    "parts": [
-      "actorId is not owned by the authenticated origin and agent"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/public-federation.ts",
-        "line": 322
-      }
-    ]
-  },
-  {
     "id": "guid-15fb27dae9b23f27",
     "kind": "error",
     "template": "Mention is ambiguous or unavailable; use an exact actor ID from the visible directory",
@@ -5635,21 +5080,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/work-responsibility.ts",
         "line": 36
-      }
-    ]
-  },
-  {
-    "id": "guid-163804fffdee6477",
-    "kind": "error",
-    "template": "Global Sync proposal rate limiter is at capacity",
-    "parts": [
-      "Global Sync proposal rate limiter is at capacity"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 650
       }
     ]
   },
@@ -5740,21 +5170,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/work-service.ts",
         "line": 450
-      }
-    ]
-  },
-  {
-    "id": "guid-16c2d15a8aec8dc8",
-    "kind": "error",
-    "template": "Federation projection unavailable",
-    "parts": [
-      "Federation projection unavailable"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/public-federation-replica.ts",
-        "line": 264
       }
     ]
   },
@@ -5879,7 +5294,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1094
+        "line": 1078
       }
     ]
   },
@@ -5894,7 +5309,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1465
+        "line": 1447
       }
     ]
   },
@@ -5970,21 +5385,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/work-service.ts",
         "line": 1023
-      }
-    ]
-  },
-  {
-    "id": "guid-17ae46e033421422",
-    "kind": "prose",
-    "template": "Restrict navigation to the current administrator-verified default department using protected document policy. This never grants access; omit for ordinary company-wide navigation.",
-    "parts": [
-      "Restrict navigation to the current administrator-verified default department using protected document policy. This never grants access; omit for ordinary company-wide navigation."
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/createServer.ts",
-        "line": 1232
       }
     ]
   },
@@ -6088,14 +5488,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "binding": "call",
     "sources": [
       {
-        "file": "src/enterprise-registry.ts",
-        "line": 759
-      },
-      {
-        "file": "src/enterprise-registry.ts",
-        "line": 789
-      },
-      {
         "file": "src/scopes.ts",
         "line": 114
       }
@@ -6143,21 +5535,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/moderation.ts",
         "line": 204
-      }
-    ]
-  },
-  {
-    "id": "guid-180a4cd292ec7156",
-    "kind": "error",
-    "template": "Global Sync proposal history quota exceeded",
-    "parts": [
-      "Global Sync proposal history quota exceeded"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 635
       }
     ]
   },
@@ -6338,7 +5715,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1580
+        "line": 1555
       }
     ]
   },
@@ -6404,21 +5781,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-1913f728c9f36b89",
-    "kind": "error",
-    "template": "binding is required",
-    "parts": [
-      "binding is required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-registry.ts",
-        "line": 197
-      }
-    ]
-  },
-  {
     "id": "guid-19195f8cf3341e3b",
     "kind": "prose",
     "template": "A deterministic Obsidian-native spatial projection. File nodes contain no copied note bodies; Markdown, links, revisions, and Git remain authoritative.",
@@ -6445,21 +5807,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/reputation-tools.ts",
         "line": 5
-      }
-    ]
-  },
-  {
-    "id": "guid-194f59451bdcf4e3",
-    "kind": "error",
-    "template": "Research OAuth sessions are unavailable in enterprise mode",
-    "parts": [
-      "Research OAuth sessions are unavailable in enterprise mode"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/scope-auth.ts",
-        "line": 407
       }
     ]
   },
@@ -6494,7 +5841,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1155
+        "line": 1138
       }
     ]
   },
@@ -6544,21 +5891,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-19a94626a2dacd11",
-    "kind": "error",
-    "template": "Global _sources snapshots are immutable; ingest a new source path instead of updating or tombstoning an approved snapshot",
-    "parts": [
-      "Global _sources snapshots are immutable; ingest a new source path instead of updating or tombstoning an approved snapshot"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 698
-      }
-    ]
-  },
-  {
     "id": "guid-19ac652e91422a91",
     "kind": "error",
     "template": "invalid derivation revision",
@@ -6600,26 +5932,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/work-service.ts",
         "line": 340
-      }
-    ]
-  },
-  {
-    "id": "guid-19d5bcdd536f1787",
-    "kind": "error",
-    "template": "no public federation credential is configured for agent {arg0}",
-    "parts": [
-      "no public federation credential is configured for agent ",
-      ""
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-federation.ts",
-        "line": 324
-      },
-      {
-        "file": "src/enterprise-federation.ts",
-        "line": 334
       }
     ]
   },
@@ -6666,14 +5978,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/community-participation.ts",
         "line": 60
-      },
-      {
-        "file": "src/enterprise-registry.ts",
-        "line": 230
-      },
-      {
-        "file": "src/global-sync.ts",
-        "line": 336
       }
     ]
   },
@@ -6704,7 +6008,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/social.ts",
-        "line": 240
+        "line": 236
       }
     ]
   },
@@ -6719,23 +6023,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2130
-      }
-    ]
-  },
-  {
-    "id": "guid-1a201ad7225de12d",
-    "kind": "error",
-    "template": "{arg0} is invalid",
-    "parts": [
-      "",
-      " is invalid"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 296
+        "line": 2067
       }
     ]
   },
@@ -6920,7 +6208,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3017
+        "line": 2954
       }
     ]
   },
@@ -6997,7 +6285,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 961
+        "line": 945
       }
     ]
   },
@@ -7050,7 +6338,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/social.ts",
-        "line": 842
+        "line": 838
       }
     ]
   },
@@ -7216,7 +6504,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1113
+        "line": 1097
       }
     ]
   },
@@ -7445,21 +6733,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-1db43b70916b0f44",
-    "kind": "error",
-    "template": "Global Sync pending proposal quota exceeded",
-    "parts": [
-      "Global Sync pending proposal quota exceeded"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 638
-      }
-    ]
-  },
-  {
     "id": "guid-1db866eb6c05257d",
     "kind": "error",
     "template": "status must be one of: {arg0}",
@@ -7487,7 +6760,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3820
+        "line": 3747
       }
     ]
   },
@@ -7629,22 +6902,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-1e574f530ce3f359",
-    "kind": "error",
-    "template": "{arg0} must be a Markdown or text document",
-    "parts": [
-      "",
-      " must be a Markdown or text document"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 215
-      }
-    ]
-  },
-  {
     "id": "guid-1e58dff2e2da1563",
     "kind": "error",
     "template": "Skill basis or evidence revision changed; read and evaluate again",
@@ -7735,21 +6992,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-1e85a887213bdc41",
-    "kind": "error",
-    "template": "Request certificate is not registered",
-    "parts": [
-      "Request certificate is not registered"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-registry.ts",
-        "line": 728
-      }
-    ]
-  },
-  {
     "id": "guid-1e87f17f43241691",
     "kind": "error",
     "template": "Topic outside allowed participation scope",
@@ -7761,36 +7003,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/community-participation.ts",
         "line": 293
-      }
-    ]
-  },
-  {
-    "id": "guid-1e9b9ba5aaebb011",
-    "kind": "error",
-    "template": "Previously registered account or agent identifiers cannot be reassigned",
-    "parts": [
-      "Previously registered account or agent identifiers cannot be reassigned"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-registry.ts",
-        "line": 584
-      }
-    ]
-  },
-  {
-    "id": "guid-1e9d83a350a9b3b0",
-    "kind": "error",
-    "template": "Request certificate does not match the assigned runtime",
-    "parts": [
-      "Request certificate does not match the assigned runtime"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-registry.ts",
-        "line": 456
       }
     ]
   },
@@ -7952,7 +7164,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/social.ts",
-        "line": 437
+        "line": 433
       }
     ]
   },
@@ -7997,7 +7209,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1056
+        "line": 1040
       }
     ]
   },
@@ -8042,7 +7254,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3336
+        "line": 3273
       },
       {
         "file": "src/filesystem.ts",
@@ -8136,22 +7348,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1196
-      }
-    ]
-  },
-  {
-    "id": "guid-1f7b4f27f90f4c2c",
-    "kind": "error",
-    "template": "Unable to acquire Global Sync process lock",
-    "parts": [
-      "Unable to acquire Global Sync process lock"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 470
+        "line": 1179
       }
     ]
   },
@@ -8181,7 +7378,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1882
+        "line": 1821
       }
     ]
   },
@@ -8196,22 +7393,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/social.ts",
-        "line": 860
-      }
-    ]
-  },
-  {
-    "id": "guid-1fe156a6c6a676b1",
-    "kind": "error",
-    "template": "idempotency key is already queued with a different payload",
-    "parts": [
-      "idempotency key is already queued with a different payload"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/public-federation-replica.ts",
-        "line": 395
+        "line": 856
       }
     ]
   },
@@ -8513,38 +7695,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-20e86a6fdd5901a1",
-    "kind": "error",
-    "template": "{arg0} capability is required",
-    "parts": [
-      "",
-      " capability is required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-federation.ts",
-        "line": 321
-      }
-    ]
-  },
-  {
-    "id": "guid-20f74f0535d1dbf2",
-    "kind": "error",
-    "template": "{arg0} must be outside the Vault and all protected service directories",
-    "parts": [
-      "",
-      " must be outside the Vault and all protected service directories"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-registry.ts",
-        "line": 153
-      }
-    ]
-  },
-  {
     "id": "guid-210150e5056d5c16",
     "kind": "prose",
     "template": "Add optional bounded semantic candidates to neighbor discovery (default: true)",
@@ -8682,7 +7832,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       },
       {
         "file": "src/social.ts",
-        "line": 445
+        "line": 441
       }
     ]
   },
@@ -8712,22 +7862,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 711
-      }
-    ]
-  },
-  {
-    "id": "guid-21a44ff2903e8001",
-    "kind": "error",
-    "template": "Global import response exceeds its bound",
-    "parts": [
-      "Global import response exceeds its bound"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 983
+        "line": 698
       }
     ]
   },
@@ -8833,27 +7968,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 579
-      }
-    ]
-  },
-  {
-    "id": "guid-221c5078b30c3465",
-    "kind": "error",
-    "template": "public record exceeds {arg0} bytes",
-    "parts": [
-      "public record exceeds ",
-      " bytes"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/public-federation.ts",
-        "line": 613
-      },
-      {
-        "file": "src/public-federation.ts",
-        "line": 670
+        "line": 440
       }
     ]
   },
@@ -8903,7 +8018,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2986
+        "line": 2923
       }
     ]
   },
@@ -8995,21 +8110,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/organization.ts",
         "line": 265
-      }
-    ]
-  },
-  {
-    "id": "guid-226d60cc86ea1ee5",
-    "kind": "prose",
-    "template": "Remote manifest failed protocol or signature validation.",
-    "parts": [
-      "Remote manifest failed protocol or signature validation."
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 1101
       }
     ]
   },
@@ -9145,7 +8245,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/social.ts",
-        "line": 478
+        "line": 474
       }
     ]
   },
@@ -9160,22 +8260,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 985
-      }
-    ]
-  },
-  {
-    "id": "guid-22fa77d70746cec9",
-    "kind": "error",
-    "template": "Public federation actor configuration is invalid",
-    "parts": [
-      "Public federation actor configuration is invalid"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-server.ts",
-        "line": 211
+        "line": 969
       }
     ]
   },
@@ -9374,7 +8459,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 430
+        "line": 422
       }
     ]
   },
@@ -9389,7 +8474,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1452
+        "line": 1434
       }
     ]
   },
@@ -9525,7 +8610,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3811
+        "line": 3738
       }
     ]
   },
@@ -9590,26 +8675,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-24cda5fd35e474f5",
-    "kind": "error",
-    "template": "proposal is already {arg0}",
-    "parts": [
-      "proposal is already ",
-      ""
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 773
-      },
-      {
-        "file": "src/global-sync.ts",
-        "line": 811
-      }
-    ]
-  },
-  {
     "id": "guid-24d05fb3e5112c38",
     "kind": "error",
     "template": "Capture path already exists: {arg0}; choose a new path or read its revision first.",
@@ -9651,7 +8716,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1630
+        "line": 1600
       }
     ]
   },
@@ -9731,22 +8796,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-256a71d2ccfca7be",
-    "kind": "error",
-    "template": "An enterprise server already owns this Vault (process {arg0})",
-    "parts": [
-      "An enterprise server already owns this Vault (process ",
-      ")"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-server.ts",
-        "line": 165
-      }
-    ]
-  },
-  {
     "id": "guid-2579fb5e891bbbb5",
     "kind": "prose",
     "template": "Move cancelled: confirmation paths do not match. For safety, oldPath must equal confirmOldPath and newPath must equal confirmNewPath.",
@@ -9774,21 +8823,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/knowledge-application-model.ts",
         "line": 122
-      }
-    ]
-  },
-  {
-    "id": "guid-259e7e4be2592911",
-    "kind": "error",
-    "template": "Registration identity must match the administrator invitation binding",
-    "parts": [
-      "Registration identity must match the administrator invitation binding"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/scope-auth.ts",
-        "line": 488
       }
     ]
   },
@@ -9842,21 +8876,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-25f8d475da1070f1",
-    "kind": "error",
-    "template": "Global Sync event log is missing; refusing to trust the state snapshot",
-    "parts": [
-      "Global Sync event log is missing; refusing to trust the state snapshot"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 565
-      }
-    ]
-  },
-  {
     "id": "guid-25fd97a6ce88dff3",
     "kind": "error",
     "template": "Invalid backlink inspection budget",
@@ -9868,25 +8887,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/vault-graph.ts",
         "line": 256
-      }
-    ]
-  },
-  {
-    "id": "guid-25ff516f7ff453f6",
-    "kind": "error",
-    "template": "idempotency state references a missing event",
-    "parts": [
-      "idempotency state references a missing event"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/public-federation.ts",
-        "line": 562
-      },
-      {
-        "file": "src/public-federation.ts",
-        "line": 654
       }
     ]
   },
@@ -10012,7 +9012,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2982
+        "line": 2919
       }
     ]
   },
@@ -10076,7 +9076,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/notifications.ts",
-        "line": 245
+        "line": 244
       }
     ]
   },
@@ -10092,7 +9092,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3354
+        "line": 3291
       },
       {
         "file": "src/filesystem.ts",
@@ -10322,21 +9322,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-270d48ae1cad1dc7",
-    "kind": "error",
-    "template": "Global Sync signing key must be Ed25519",
-    "parts": [
-      "Global Sync signing key must be Ed25519"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 518
-      }
-    ]
-  },
-  {
     "id": "guid-273b6cd330b57edd",
     "kind": "prose",
     "template": "Must be true to create the vault .git repository",
@@ -10347,7 +9332,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1262
+        "line": 1244
       }
     ]
   },
@@ -10443,22 +9428,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-27a1f5c939c7a8b2",
-    "kind": "error",
-    "template": "{arg0} must be a non-negative safe integer",
-    "parts": [
-      "",
-      " must be a non-negative safe integer"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-registry.ts",
-        "line": 193
-      }
-    ]
-  },
-  {
     "id": "guid-27a23b6c2e345129",
     "kind": "error",
     "template": "Project guard requires WorkService",
@@ -10493,21 +9462,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-27bac9ad399820d0",
-    "kind": "error",
-    "template": "outbox identity or ordering is invalid",
-    "parts": [
-      "outbox identity or ordering is invalid"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/public-federation-replica.ts",
-        "line": 356
-      }
-    ]
-  },
-  {
     "id": "guid-27c139de639ac99d",
     "kind": "error",
     "template": "Memory authentication changed; login again before reading",
@@ -10518,7 +9472,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1829
+        "line": 1775
       }
     ]
   },
@@ -10578,7 +9532,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/enterprise-vault-marker.ts",
-        "line": 17
+        "line": 16
       }
     ]
   },
@@ -10627,7 +9581,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 840
+        "line": 824
       }
     ]
   },
@@ -10642,7 +9596,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/social.ts",
-        "line": 270
+        "line": 266
       }
     ]
   },
@@ -10762,7 +9716,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1061
+        "line": 1045
       }
     ]
   },
@@ -10778,15 +9732,15 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/social.ts",
-        "line": 761
+        "line": 757
       },
       {
         "file": "src/social.ts",
-        "line": 841
+        "line": 837
       },
       {
         "file": "src/social.ts",
-        "line": 859
+        "line": 855
       }
     ]
   },
@@ -10801,7 +9755,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1047
+        "line": 1031
       }
     ]
   },
@@ -10930,22 +9884,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-29865da17ae351e5",
-    "kind": "error",
-    "template": "{arg0}.expiresAt is invalid",
-    "parts": [
-      "",
-      ".expiresAt is invalid"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 300
-      }
-    ]
-  },
-  {
     "id": "guid-299b757826101a70",
     "kind": "error",
     "template": "Reply target was not readable: {arg0}",
@@ -10961,7 +9899,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       },
       {
         "file": "src/social.ts",
-        "line": 983
+        "line": 979
       }
     ]
   },
@@ -10992,21 +9930,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/work-staffing.ts",
         "line": 347
-      }
-    ]
-  },
-  {
-    "id": "guid-29b742adbcb94906",
-    "kind": "error",
-    "template": "feed cursor is beyond the current public federation sequence",
-    "parts": [
-      "feed cursor is beyond the current public federation sequence"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/public-federation.ts",
-        "line": 682
       }
     ]
   },
@@ -11111,7 +10034,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1319
+        "line": 1301
       }
     ]
   },
@@ -11126,7 +10049,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1030
+        "line": 1014
       }
     ]
   },
@@ -11146,47 +10069,17 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-2a43f3b178dc4d87",
-    "kind": "error",
-    "template": "profile vaultPath must match the configured Vault",
-    "parts": [
-      "profile vaultPath must match the configured Vault"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-registry.ts",
-        "line": 468
-      }
-    ]
-  },
-  {
     "id": "guid-2a47f6b4bdcd8f7a",
     "kind": "error",
-    "template": "This Vault requires its matching enterprise registry; legacy, REST and stdio startup cannot open it as a public Vault",
+    "template": "This Vault is bound to an enterprise instance, which this server no longer supports; it cannot be opened as a public Vault",
     "parts": [
-      "This Vault requires its matching enterprise registry; legacy, REST and stdio startup cannot open it as a public Vault"
+      "This Vault is bound to an enterprise instance, which this server no longer supports; it cannot be opened as a public Vault"
     ],
     "binding": "call",
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 561
-      }
-    ]
-  },
-  {
-    "id": "guid-2a55c9c7eeeec3be",
-    "kind": "error",
-    "template": "TLS private key is invalid or does not match the server certificate",
-    "parts": [
-      "TLS private key is invalid or does not match the server certificate"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-server.ts",
-        "line": 272
+        "line": 551
       }
     ]
   },
@@ -11373,21 +10266,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-2ba21a8f88c5bcc3",
-    "kind": "error",
-    "template": "Employee account capacity reached",
-    "parts": [
-      "Employee account capacity reached"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/scope-auth.ts",
-        "line": 508
-      }
-    ]
-  },
-  {
     "id": "guid-2baccfe9e2d2dd78",
     "kind": "prose",
     "template": "Check visible Wiki sources, evidence, integrity hashes, Properties and links from a revision-checked known-source snapshot. Hidden notes do not contribute owner findings or collisions. A changed snapshot must be retried; this is not an atomic global census. Whole JSON respects maxChars; compact output keeps error priority, exact path/revision and nextAction but may omit detail. Follow nextAction before revision-safe repair. If retry.reuseOriginalArguments is true, repeat original arguments with retry.overrides. Counts retain the internal scan totals even when displayed issues are truncated; advisory diagnostics do not certify source truth.",
@@ -11414,36 +10292,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/maintenance-host.ts",
         "line": 29
-      }
-    ]
-  },
-  {
-    "id": "guid-2bd5f236d56ef72f",
-    "kind": "error",
-    "template": "target public object is tombstoned",
-    "parts": [
-      "target public object is tombstoned"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/public-federation.ts",
-        "line": 583
-      }
-    ]
-  },
-  {
-    "id": "guid-2bd7b875156d94ee",
-    "kind": "error",
-    "template": "Access denied: enterprise resource unavailable",
-    "parts": [
-      "Access denied: enterprise resource unavailable"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-storage-context.ts",
-        "line": 120
       }
     ]
   },
@@ -11541,45 +10389,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-2c2a854e1845203b",
-    "kind": "error",
-    "template": "Public Federation record quota exceeded",
-    "parts": [
-      "Public Federation record quota exceeded"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/public-federation.ts",
-        "line": 565
-      },
-      {
-        "file": "src/public-federation.ts",
-        "line": 658
-      }
-    ]
-  },
-  {
-    "id": "guid-2c32d468cf9355bd",
-    "kind": "error",
-    "template": "unsupported transport field: {arg0}",
-    "parts": [
-      "unsupported transport field: ",
-      ""
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/public-federation-http.ts",
-        "line": 213
-      },
-      {
-        "file": "src/public-federation-http.ts",
-        "line": 220
-      }
-    ]
-  },
-  {
     "id": "guid-2c3b313db2e1b84c",
     "kind": "prose",
     "template": "Host cadence defaults to four hours, six starts/account/UTC day, one initiation/day, one public contribution/run and five minutes/run. Pause, busy work, usage and active hours take precedence. Installation starts no scheduler. Notify people only for shared completion, error or required input; research, help, creation and finite play are all valid participation.",
@@ -11670,23 +10479,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-access.ts",
-        "line": 196
-      }
-    ]
-  },
-  {
-    "id": "guid-2ce2dec3f3d41a3d",
-    "kind": "error",
-    "template": "Public Federation storage is already in use by process {arg0}",
-    "parts": [
-      "Public Federation storage is already in use by process ",
-      ""
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/public-federation.ts",
-        "line": 208
+        "line": 154
       }
     ]
   },
@@ -11928,23 +10721,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/layered-memory.ts",
-        "line": 83
-      }
-    ]
-  },
-  {
-    "id": "guid-2e550a2ac3b1c100",
-    "kind": "error",
-    "template": "{arg0} must be a lowercase opaque identifier",
-    "parts": [
-      "",
-      " must be a lowercase opaque identifier"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/public-federation.ts",
-        "line": 264
+        "line": 82
       }
     ]
   },
@@ -11974,22 +10751,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 449
-      }
-    ]
-  },
-  {
-    "id": "guid-2e7ada5bbee2ee82",
-    "kind": "error",
-    "template": "authToken and reviewerToken must be different",
-    "parts": [
-      "authToken and reviewerToken must be different"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 1361
+        "line": 441
       }
     ]
   },
@@ -12080,11 +10842,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/notifications.ts",
-        "line": 224
+        "line": 223
       },
       {
         "file": "src/notifications.ts",
-        "line": 266
+        "line": 265
       }
     ]
   },
@@ -12100,36 +10862,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/work-service.ts",
         "line": 394
-      }
-    ]
-  },
-  {
-    "id": "guid-2ee24fa850bba9fc",
-    "kind": "error",
-    "template": "Public federation configuration is forbidden for a company enterprise instance",
-    "parts": [
-      "Public federation configuration is forbidden for a company enterprise instance"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-server.ts",
-        "line": 337
-      }
-    ]
-  },
-  {
-    "id": "guid-2eee09652f7b1223",
-    "kind": "error",
-    "template": "Enterprise marker directory cannot be a symbolic link or junction",
-    "parts": [
-      "Enterprise marker directory cannot be a symbolic link or junction"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-vault-marker.ts",
-        "line": 34
       }
     ]
   },
@@ -12160,21 +10892,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/resource-bundle.ts",
         "line": 45
-      }
-    ]
-  },
-  {
-    "id": "guid-2ef65809cfe9cfe7",
-    "kind": "error",
-    "template": "host is required",
-    "parts": [
-      "host is required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-server.ts",
-        "line": 307
       }
     ]
   },
@@ -12405,21 +11122,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-302c099cfe3221b1",
-    "kind": "error",
-    "template": "Protected documents cannot be exported to public Global",
-    "parts": [
-      "Protected documents cannot be exported to public Global"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 1239
-      }
-    ]
-  },
-  {
     "id": "guid-3041e550c20bee6f",
     "kind": "error",
     "template": "Derived source unavailable",
@@ -12491,21 +11193,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/skill-evolution-store.ts",
         "line": 149
-      }
-    ]
-  },
-  {
-    "id": "guid-308e8cf09c94c200",
-    "kind": "error",
-    "template": "Agent owner mapping is ambiguous",
-    "parts": [
-      "Agent owner mapping is ambiguous"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-migration.ts",
-        "line": 26
       }
     ]
   },
@@ -12612,7 +11299,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1236
+        "line": 1218
       }
     ]
   },
@@ -12657,7 +11344,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/enterprise-vault-marker.ts",
-        "line": 21
+        "line": 20
       }
     ]
   },
@@ -12704,21 +11391,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/llm-wiki-tools.ts",
         "line": 221
-      }
-    ]
-  },
-  {
-    "id": "guid-3185d1e9f1ff052d",
-    "kind": "error",
-    "template": "Global import pages must be from 1 through 10",
-    "parts": [
-      "Global import pages must be from 1 through 10"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 1182
       }
     ]
   },
@@ -12866,7 +11538,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 163
+        "line": 143
       }
     ]
   },
@@ -13019,7 +11691,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 907
+        "line": 891
       }
     ]
   },
@@ -13319,21 +11991,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-33e9f1270b28d10b",
-    "kind": "error",
-    "template": "token must be unique across active credentials",
-    "parts": [
-      "token must be unique across active credentials"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 1493
-      }
-    ]
-  },
-  {
     "id": "guid-33f5ee830b4dbe77",
     "kind": "error",
     "template": "parentPath must be omitted when operation is clear",
@@ -13422,7 +12079,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3229
+        "line": 3166
       }
     ]
   },
@@ -13440,21 +12097,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/filesystem.ts",
         "line": 59
-      }
-    ]
-  },
-  {
-    "id": "guid-345faf608cb98273",
-    "kind": "error",
-    "template": "readToken must differ from every publishing, review and administrator credential",
-    "parts": [
-      "readToken must differ from every publishing, review and administrator credential"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 1560
       }
     ]
   },
@@ -13722,22 +12364,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-35d4c7a1b8129f69",
-    "kind": "error",
-    "template": "{arg0} must be a future ISO timestamp",
-    "parts": [
-      "",
-      " must be a future ISO timestamp"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 338
-      }
-    ]
-  },
-  {
     "id": "guid-35e0fa696588e7ab",
     "kind": "error",
     "template": "Owner activity authority changed; retry with current consent",
@@ -13779,22 +12405,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/social.ts",
-        "line": 350
-      }
-    ]
-  },
-  {
-    "id": "guid-360be1c52bc41fed",
-    "kind": "prose",
-    "template": "Remote revision failed identity or content-hash validation.",
-    "parts": [
-      "Remote revision failed identity or content-hash validation."
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 1138
+        "line": 346
       }
     ]
   },
@@ -14065,21 +12676,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-378be9f74c7846f8",
-    "kind": "error",
-    "template": "provenance.evidenceRevisions must be an object",
-    "parts": [
-      "provenance.evidenceRevisions must be an object"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 247
-      }
-    ]
-  },
-  {
     "id": "guid-378c20f54d125d4d",
     "kind": "error",
     "template": "MOC region exceeds 100 links; narrow its folder or split the MOC",
@@ -14136,21 +12732,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/llm-wiki-tools.ts",
         "line": 231
-      }
-    ]
-  },
-  {
-    "id": "guid-37b27e276fe71750",
-    "kind": "error",
-    "template": "Global import response body is missing",
-    "parts": [
-      "Global import response body is missing"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 977
       }
     ]
   },
@@ -14308,21 +12889,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-3850497fe1418077",
-    "kind": "error",
-    "template": "Global Sync total content quota exceeded",
-    "parts": [
-      "Global Sync total content quota exceeded"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 636
-      }
-    ]
-  },
-  {
     "id": "guid-3882b887da7997a7",
     "kind": "prose",
     "template": "Synthesize only after reading the returned revisions. Preserve disagreement, cite immutable evidence, link derived_from inputs, and keep every source note as independent Markdown/Git history.",
@@ -14334,25 +12900,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/llm-wiki.ts",
         "line": 14901
-      }
-    ]
-  },
-  {
-    "id": "guid-38836baf1b50bcdc",
-    "kind": "error",
-    "template": "reviewerId must be a lowercase identifier",
-    "parts": [
-      "reviewerId must be a lowercase identifier"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 1378
-      },
-      {
-        "file": "src/global-sync.ts",
-        "line": 1492
       }
     ]
   },
@@ -14397,11 +12944,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/social.ts",
-        "line": 843
+        "line": 839
       },
       {
         "file": "src/social.ts",
-        "line": 861
+        "line": 857
       }
     ]
   },
@@ -14432,21 +12979,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/llm-wiki.ts",
         "line": 8255
-      }
-    ]
-  },
-  {
-    "id": "guid-390e2f9a2bdd2596",
-    "kind": "error",
-    "template": "enterprise federation intent queue exceeds its bounded recovery limit",
-    "parts": [
-      "enterprise federation intent queue exceeds its bounded recovery limit"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-federation.ts",
-        "line": 765
       }
     ]
   },
@@ -14541,21 +13073,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/capability-graph.ts",
         "line": 44
-      }
-    ]
-  },
-  {
-    "id": "guid-39b9d71fda08bfb6",
-    "kind": "error",
-    "template": "provenance must be an object",
-    "parts": [
-      "provenance must be an object"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 235
       }
     ]
   },
@@ -14757,21 +13274,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-3ae748a5a17853b5",
-    "kind": "prose",
-    "template": "Resume this persistent agent using its own memory before selecting shared work.",
-    "parts": [
-      "Resume this persistent agent using its own memory before selecting shared work."
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/createServer.ts",
-        "line": 1864
-      }
-    ]
-  },
-  {
     "id": "guid-3ae9fe66cfac62ed",
     "kind": "error",
     "template": "MOC hierarchy exceeds the 20000-note planning bound",
@@ -14939,22 +13441,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3496
-      }
-    ]
-  },
-  {
-    "id": "guid-3ba0b1a806d118bc",
-    "kind": "error",
-    "template": "Company agents cannot write public Global material; use the administrator export workflow",
-    "parts": [
-      "Company agents cannot write public Global material; use the administrator export workflow"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-storage-context.ts",
-        "line": 127
+        "line": 3423
       }
     ]
   },
@@ -15051,11 +13538,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1450
+        "line": 1432
       },
       {
         "file": "src/createServer.ts",
-        "line": 1468
+        "line": 1450
       }
     ]
   },
@@ -15146,7 +13633,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3813
+        "line": 3740
       }
     ]
   },
@@ -15215,21 +13702,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-3c704b2154864c90",
-    "kind": "prose",
-    "template": "Legacy User files stay host-private. Re-enroll employees and runtimes, verify ownership, and explicitly review any copy into newly approved memory. Never infer owners from model names.",
-    "parts": [
-      "Legacy User files stay host-private. Re-enroll employees and runtimes, verify ownership, and explicitly review any copy into newly approved memory. Never infer owners from model names."
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-migration.ts",
-        "line": 57
-      }
-    ]
-  },
-  {
     "id": "guid-3c78007eb1818314",
     "kind": "error",
     "template": "Not a chat message: {arg0}",
@@ -15290,7 +13762,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth-tools.ts",
-        "line": 33
+        "line": 32
       }
     ]
   },
@@ -15400,15 +13872,15 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 777
+        "line": 761
       },
       {
         "file": "src/createServer.ts",
-        "line": 784
+        "line": 768
       },
       {
         "file": "src/createServer.ts",
-        "line": 1684
+        "line": 1651
       }
     ]
   },
@@ -15423,7 +13895,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 987
+        "line": 971
       }
     ]
   },
@@ -15438,37 +13910,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 185
-      }
-    ]
-  },
-  {
-    "id": "guid-3d69bafd3c1a76e7",
-    "kind": "error",
-    "template": "missing content hash",
-    "parts": [
-      "missing content hash"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 860
-      }
-    ]
-  },
-  {
-    "id": "guid-3d7e596aa314f350",
-    "kind": "error",
-    "template": "Public mode permits external runtimes only",
-    "parts": [
-      "Public mode permits external runtimes only"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-registry.ts",
-        "line": 446
+        "line": 182
       }
     ]
   },
@@ -15484,21 +13926,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/work-groups.ts",
         "line": 41
-      }
-    ]
-  },
-  {
-    "id": "guid-3dbe89140dcde411",
-    "kind": "error",
-    "template": "departmentIds is required",
-    "parts": [
-      "departmentIds is required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-registry.ts",
-        "line": 513
       }
     ]
   },
@@ -15529,21 +13956,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/review-dashboard-packet.ts",
         "line": 81
-      }
-    ]
-  },
-  {
-    "id": "guid-3e228eb9c9363db6",
-    "kind": "error",
-    "template": "enterprise federation state is invalid",
-    "parts": [
-      "enterprise federation state is invalid"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-federation.ts",
-        "line": 294
       }
     ]
   },
@@ -15650,7 +14062,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 428
+        "line": 420
       }
     ]
   },
@@ -15726,7 +14138,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 409
+        "line": 358
       }
     ]
   },
@@ -15863,7 +14275,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1775
+        "line": 1735
       }
     ]
   },
@@ -15916,7 +14328,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1239
+        "line": 1221
       }
     ]
   },
@@ -15931,7 +14343,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1655
+        "line": 1625
       }
     ]
   },
@@ -16046,7 +14458,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2552
+        "line": 2489
       }
     ]
   },
@@ -16061,7 +14473,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3358
+        "line": 3295
       },
       {
         "file": "src/filesystem.ts",
@@ -16095,22 +14507,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-access.ts",
-        "line": 192
-      }
-    ]
-  },
-  {
-    "id": "guid-412eab1c897c6890",
-    "kind": "error",
-    "template": "Enterprise registry is missing or corrupt",
-    "parts": [
-      "Enterprise registry is missing or corrupt"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-server.ts",
-        "line": 314
+        "line": 150
       }
     ]
   },
@@ -16200,7 +14597,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1549
+        "line": 1524
       }
     ]
   },
@@ -16265,7 +14662,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 654
+        "line": 514
       }
     ]
   },
@@ -16350,21 +14747,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/document-resource.ts",
         "line": 66
-      }
-    ]
-  },
-  {
-    "id": "guid-4231a9a8270846eb",
-    "kind": "prose",
-    "template": "Required to replace a different active session of the same persistent agent.",
-    "parts": [
-      "Required to replace a different active session of the same persistent agent."
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/scope-auth-tools.ts",
-        "line": 48
       }
     ]
   },
@@ -16549,21 +14931,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-42d5ee05edabc78b",
-    "kind": "error",
-    "template": "signature mismatch",
-    "parts": [
-      "signature mismatch"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 854
-      }
-    ]
-  },
-  {
     "id": "guid-42e5e87655d24120",
     "kind": "error",
     "template": "Required upstream context is unavailable",
@@ -16654,21 +15021,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-433c347861bd3681",
-    "kind": "error",
-    "template": "credential state contains duplicate active credentials",
-    "parts": [
-      "credential state contains duplicate active credentials"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 1423
-      }
-    ]
-  },
-  {
     "id": "guid-4359efceb29154d2",
     "kind": "error",
     "template": "Unknown endpointId. Call search_capabilities first and use an exact endpointId.",
@@ -16679,7 +15031,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1545
+        "line": 1520
       }
     ]
   },
@@ -16709,7 +15061,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 552
+        "line": 544
       }
     ]
   },
@@ -16724,7 +15076,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 184
+        "line": 164
       }
     ]
   },
@@ -16844,7 +15196,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1101
+        "line": 1085
       }
     ]
   },
@@ -16859,7 +15211,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 931
+        "line": 915
       }
     ]
   },
@@ -16950,21 +15302,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/json-canvas.ts",
         "line": 261
-      }
-    ]
-  },
-  {
-    "id": "guid-44d2781bb39e3c5d",
-    "kind": "error",
-    "template": "Enterprise binding belongs to a different realm",
-    "parts": [
-      "Enterprise binding belongs to a different realm"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-registry.ts",
-        "line": 736
       }
     ]
   },
@@ -17272,7 +15609,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1156
+        "line": 1139
       }
     ]
   },
@@ -17303,7 +15640,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 498
+        "line": 490
       }
     ]
   },
@@ -17379,7 +15716,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-access.ts",
-        "line": 111
+        "line": 89
       }
     ]
   },
@@ -17394,7 +15731,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 920
+        "line": 904
       }
     ]
   },
@@ -17576,15 +15913,15 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1288
+        "line": 1270
       },
       {
         "file": "src/createServer.ts",
-        "line": 1301
+        "line": 1283
       },
       {
         "file": "src/createServer.ts",
-        "line": 1315
+        "line": 1297
       }
     ]
   },
@@ -17739,21 +16076,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-480202c7a519fbbe",
-    "kind": "error",
-    "template": "Account capacity or agent identity conflict",
-    "parts": [
-      "Account capacity or agent identity conflict"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/scope-auth.ts",
-        "line": 507
-      }
-    ]
-  },
-  {
     "id": "guid-4803a46631dccc83",
     "kind": "error",
     "template": "Invalid compilation validation receipt",
@@ -17855,21 +16177,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/skill-evolution-host.ts",
         "line": 45
-      }
-    ]
-  },
-  {
-    "id": "guid-48744e01a6f6e592",
-    "kind": "error",
-    "template": "Public Federation response exceeds its size limit",
-    "parts": [
-      "Public Federation response exceeds its size limit"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/public-federation-http.ts",
-        "line": 103
       }
     ]
   },
@@ -18036,21 +16343,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-48fc18bcfb4caeee",
-    "kind": "error",
-    "template": "Public Federation hub is closed",
-    "parts": [
-      "Public Federation hub is closed"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/public-federation.ts",
-        "line": 466
-      }
-    ]
-  },
-  {
     "id": "guid-490eee1a6364809b",
     "kind": "prose",
     "template": "last-writer-wins deletion",
@@ -18166,7 +16458,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1044
+        "line": 1028
       }
     ]
   },
@@ -18256,7 +16548,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 924
+        "line": 908
       }
     ]
   },
@@ -18271,7 +16563,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1150
+        "line": 1133
       }
     ]
   },
@@ -18286,115 +16578,115 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 842
+        "line": 826
       },
       {
         "file": "src/createServer.ts",
-        "line": 895
+        "line": 879
       },
       {
         "file": "src/createServer.ts",
-        "line": 935
+        "line": 919
       },
       {
         "file": "src/createServer.ts",
-        "line": 948
+        "line": 932
       },
       {
         "file": "src/createServer.ts",
-        "line": 1049
+        "line": 1033
       },
       {
         "file": "src/createServer.ts",
-        "line": 1075
+        "line": 1059
       },
       {
         "file": "src/createServer.ts",
-        "line": 1087
+        "line": 1071
       },
       {
         "file": "src/createServer.ts",
-        "line": 1114
+        "line": 1098
       },
       {
         "file": "src/createServer.ts",
-        "line": 1159
+        "line": 1142
       },
       {
         "file": "src/createServer.ts",
-        "line": 1172
+        "line": 1155
       },
       {
         "file": "src/createServer.ts",
-        "line": 1184
+        "line": 1167
       },
       {
         "file": "src/createServer.ts",
-        "line": 1192
+        "line": 1175
       },
       {
         "file": "src/createServer.ts",
-        "line": 1206
+        "line": 1189
       },
       {
         "file": "src/createServer.ts",
-        "line": 1221
+        "line": 1204
       },
       {
         "file": "src/createServer.ts",
-        "line": 1242
+        "line": 1224
       },
       {
         "file": "src/createServer.ts",
-        "line": 1252
+        "line": 1234
       },
       {
         "file": "src/createServer.ts",
-        "line": 1277
+        "line": 1259
       },
       {
         "file": "src/createServer.ts",
-        "line": 1290
+        "line": 1272
       },
       {
         "file": "src/createServer.ts",
-        "line": 1304
+        "line": 1286
       },
       {
         "file": "src/createServer.ts",
-        "line": 1320
+        "line": 1302
       },
       {
         "file": "src/createServer.ts",
-        "line": 1348
+        "line": 1330
       },
       {
         "file": "src/createServer.ts",
-        "line": 1363
+        "line": 1345
       },
       {
         "file": "src/createServer.ts",
-        "line": 1392
+        "line": 1374
       },
       {
         "file": "src/createServer.ts",
-        "line": 1406
+        "line": 1388
       },
       {
         "file": "src/createServer.ts",
-        "line": 1421
+        "line": 1403
       },
       {
         "file": "src/createServer.ts",
-        "line": 1437
+        "line": 1419
       },
       {
         "file": "src/createServer.ts",
-        "line": 1453
+        "line": 1435
       },
       {
         "file": "src/createServer.ts",
-        "line": 1470
+        "line": 1452
       }
     ]
   },
@@ -18439,7 +16731,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2658
+        "line": 2595
       }
     ]
   },
@@ -18469,7 +16761,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 567
+        "line": 428
       }
     ]
   },
@@ -18625,11 +16917,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/social.ts",
-        "line": 884
+        "line": 880
       },
       {
         "file": "src/social.ts",
-        "line": 914
+        "line": 910
       }
     ]
   },
@@ -18660,7 +16952,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 582
+        "line": 443
       }
     ]
   },
@@ -18707,21 +16999,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/question-packet.ts",
         "line": 40
-      }
-    ]
-  },
-  {
-    "id": "guid-4ab68878e9295fea",
-    "kind": "prose",
-    "template": "Retry the authenticated persistent agent's durable public outbox. Pending and rejected records are never reported as synchronized.",
-    "parts": [
-      "Retry the authenticated persistent agent's durable public outbox. Pending and rejected records are never reported as synchronized."
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-federation-tools.ts",
-        "line": 8
       }
     ]
   },
@@ -18782,7 +17059,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2134
+        "line": 2071
       }
     ]
   },
@@ -18975,7 +17252,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 449
+        "line": 441
       }
     ]
   },
@@ -19139,21 +17416,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-4c553b97a2dde7c2",
-    "kind": "error",
-    "template": "limit must be 1-500",
-    "parts": [
-      "limit must be 1-500"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-migration.ts",
-        "line": 21
-      }
-    ]
-  },
-  {
     "id": "guid-4c5d0cbb537ee28d",
     "kind": "error",
     "template": "Login is required to react",
@@ -19240,7 +17502,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-access.ts",
-        "line": 61
+        "line": 60
       }
     ]
   },
@@ -19275,21 +17537,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-4ce64c4185a7eb63",
-    "kind": "error",
-    "template": "provenance.organizationFingerprint must be a 64-character SHA-256 hex fingerprint",
-    "parts": [
-      "provenance.organizationFingerprint must be a 64-character SHA-256 hex fingerprint"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 261
-      }
-    ]
-  },
-  {
     "id": "guid-4cf44c89978181b6",
     "kind": "error",
     "template": "This operation requires an additional selected host feature",
@@ -19300,7 +17547,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 539
+        "line": 531
       }
     ]
   },
@@ -19347,7 +17594,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 159
+        "line": 139
       }
     ]
   },
@@ -19423,11 +17670,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1844
+        "line": 1790
       },
       {
         "file": "src/createServer.ts",
-        "line": 1846
+        "line": 1792
       }
     ]
   },
@@ -19622,7 +17869,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/layered-memory.ts",
-        "line": 96
+        "line": 95
       }
     ]
   },
@@ -19683,7 +17930,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 642
+        "line": 502
       }
     ]
   },
@@ -19745,7 +17992,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1275
+        "line": 1257
       }
     ]
   },
@@ -19869,7 +18116,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 449
+        "line": 441
       }
     ]
   },
@@ -20005,7 +18252,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1218
+        "line": 1201
       }
     ]
   },
@@ -20107,11 +18354,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       },
       {
         "file": "src/social.ts",
-        "line": 559
+        "line": 555
       },
       {
         "file": "src/social.ts",
-        "line": 829
+        "line": 825
       }
     ]
   },
@@ -20141,7 +18388,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1875
+        "line": 1814
       }
     ]
   },
@@ -20221,49 +18468,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-50b11807feb66974",
-    "kind": "error",
-    "template": "corrupt enterprise registry",
-    "parts": [
-      "corrupt enterprise registry"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-registry.ts",
-        "line": 252
-      },
-      {
-        "file": "src/enterprise-registry.ts",
-        "line": 254
-      },
-      {
-        "file": "src/enterprise-registry.ts",
-        "line": 270
-      },
-      {
-        "file": "src/enterprise-registry.ts",
-        "line": 332
-      },
-      {
-        "file": "src/enterprise-registry.ts",
-        "line": 368
-      },
-      {
-        "file": "src/enterprise-registry.ts",
-        "line": 640
-      },
-      {
-        "file": "src/enterprise-registry.ts",
-        "line": 662
-      },
-      {
-        "file": "src/enterprise-registry.ts",
-        "line": 668
-      }
-    ]
-  },
-  {
     "id": "guid-50f2812534d27332",
     "kind": "prose",
     "template": "Token from login_scope; returns only this account's telemetry",
@@ -20274,7 +18478,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1003
+        "line": 987
       }
     ]
   },
@@ -20455,7 +18659,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3289
+        "line": 3226
       }
     ]
   },
@@ -20569,21 +18773,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-51964939d6a2e743",
-    "kind": "error",
-    "template": "adminToken must differ from other credentials",
-    "parts": [
-      "adminToken must differ from other credentials"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 1371
-      }
-    ]
-  },
-  {
     "id": "guid-51a17b845592078f",
     "kind": "error",
     "template": "maxChars is too small for the participation pulse envelope",
@@ -20634,36 +18823,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-51c972f6c1f44fe5",
-    "kind": "prose",
-    "template": "Import one bounded page of verified public community activities from the configured Hub. Local hiding and origin tombstones remain distinct.",
-    "parts": [
-      "Import one bounded page of verified public community activities from the configured Hub. Local hiding and origin tombstones remain distinct."
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-federation-tools.ts",
-        "line": 7
-      }
-    ]
-  },
-  {
-    "id": "guid-51d8404bd95ef884",
-    "kind": "error",
-    "template": "Verified federation feed changed during application",
-    "parts": [
-      "Verified federation feed changed during application"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/public-federation-replica.ts",
-        "line": 612
-      }
-    ]
-  },
-  {
     "id": "guid-51eac98742436119",
     "kind": "prose",
     "template": "Typed Obsidian link arrays: supports, contradicts, supersedes, derived_from, depends_on, implements, blocked_by, answers_questions, tests, related, same_as, version_of, refines",
@@ -20704,7 +18863,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1658
+        "line": 1628
       }
     ]
   },
@@ -20724,21 +18883,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-521edb0025572c7f",
-    "kind": "error",
-    "template": "certFingerprint must be a 64-character SHA-256 fingerprint",
-    "parts": [
-      "certFingerprint must be a 64-character SHA-256 fingerprint"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-registry.ts",
-        "line": 159
-      }
-    ]
-  },
-  {
     "id": "guid-5233d0df573ed4a6",
     "kind": "prose",
     "template": "Compare the bounded contributions before proposing the answer.",
@@ -20750,21 +18894,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/community-participation-activities.ts",
         "line": 50
-      }
-    ]
-  },
-  {
-    "id": "guid-526494c833cd7ec7",
-    "kind": "error",
-    "template": "update requires a public field",
-    "parts": [
-      "update requires a public field"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/public-federation.ts",
-        "line": 368
       }
     ]
   },
@@ -20794,7 +18923,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 838
+        "line": 822
       }
     ]
   },
@@ -20888,7 +19017,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1017
+        "line": 1001
       }
     ]
   },
@@ -20934,7 +19063,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1662
+        "line": 1632
       }
     ]
   },
@@ -20979,7 +19108,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1622
+        "line": 1592
       }
     ]
   },
@@ -21025,21 +19154,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/knowledge-investigation-model.ts",
         "line": 50
-      }
-    ]
-  },
-  {
-    "id": "guid-53b9e5829391b125",
-    "kind": "error",
-    "template": "Global import requires HTTPS or loopback HTTP without URL credentials",
-    "parts": [
-      "Global import requires HTTPS or loopback HTTP without URL credentials"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 969
       }
     ]
   },
@@ -21100,7 +19214,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 971
+        "line": 955
       }
     ]
   },
@@ -21347,21 +19461,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-5556b7edea4ff75d",
-    "kind": "error",
-    "template": "Invite secret file must not be the enterprise registry or its lock",
-    "parts": [
-      "Invite secret file must not be the enterprise registry or its lock"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-registry.ts",
-        "line": 578
-      }
-    ]
-  },
-  {
     "id": "guid-555be4e6988f5283",
     "kind": "error",
     "template": "{arg0}[{arg1}] must be an object",
@@ -21405,7 +19504,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 414
+        "line": 363
       }
     ]
   },
@@ -21526,22 +19625,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1158
-      }
-    ]
-  },
-  {
-    "id": "guid-55fb28553f1f051c",
-    "kind": "error",
-    "template": "projection changed",
-    "parts": [
-      "projection changed"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/public-federation-replica.ts",
-        "line": 560
+        "line": 1141
       }
     ]
   },
@@ -21586,11 +19670,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1016
+        "line": 1000
       },
       {
         "file": "src/createServer.ts",
-        "line": 1033
+        "line": 1017
       }
     ]
   },
@@ -21725,7 +19809,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1451
+        "line": 1433
       }
     ]
   },
@@ -21756,21 +19840,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/wiki-policy.ts",
         "line": 182
-      }
-    ]
-  },
-  {
-    "id": "guid-5684d8bebbaf600d",
-    "kind": "error",
-    "template": "Enterprise authentication requires an explicit host-private account store",
-    "parts": [
-      "Enterprise authentication requires an explicit host-private account store"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/scope-auth.ts",
-        "line": 221
       }
     ]
   },
@@ -21865,21 +19934,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-56d63a4c2f891a79",
-    "kind": "prose",
-    "template": "public federation projection",
-    "parts": [
-      "public federation projection"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/public-federation-replica.ts",
-        "line": 559
-      }
-    ]
-  },
-  {
     "id": "guid-56df015c43eecba9",
     "kind": "prose",
     "template": "Body digest for projection freshness",
@@ -21906,21 +19960,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/wiki-policy.ts",
         "line": 134
-      }
-    ]
-  },
-  {
-    "id": "guid-571a728ef2780d41",
-    "kind": "error",
-    "template": "Global import configuration is allowed only for a company enterprise instance",
-    "parts": [
-      "Global import configuration is allowed only for a company enterprise instance"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-server.ts",
-        "line": 342
       }
     ]
   },
@@ -22004,7 +20043,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/notifications.ts",
-        "line": 164
+        "line": 163
       }
     ]
   },
@@ -22020,22 +20059,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/social-tools.ts",
         "line": 85
-      }
-    ]
-  },
-  {
-    "id": "guid-577e119b6df7aebc",
-    "kind": "error",
-    "template": "Enterprise employee is disabled: {arg0}",
-    "parts": [
-      "Enterprise employee is disabled: ",
-      ""
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-registry.ts",
-        "line": 452
       }
     ]
   },
@@ -22075,21 +20098,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/llm-wiki.ts",
         "line": 12840
-      }
-    ]
-  },
-  {
-    "id": "guid-57970225d28c73f8",
-    "kind": "error",
-    "template": "mode must be public or company",
-    "parts": [
-      "mode must be public or company"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-registry.ts",
-        "line": 467
       }
     ]
   },
@@ -22260,7 +20268,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3258
+        "line": 3195
       }
     ]
   },
@@ -22320,7 +20328,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1032
+        "line": 1016
       }
     ]
   },
@@ -22605,36 +20613,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-592f2b080b57effe",
-    "kind": "error",
-    "template": "Enterprise server lock is corrupt; refusing to remove it automatically",
-    "parts": [
-      "Enterprise server lock is corrupt; refusing to remove it automatically"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-server.ts",
-        "line": 116
-      }
-    ]
-  },
-  {
-    "id": "guid-5933be44d9f3a2ed",
-    "kind": "error",
-    "template": "enterprise federation intent exceeds its size limit",
-    "parts": [
-      "enterprise federation intent exceeds its size limit"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-federation.ts",
-        "line": 156
-      }
-    ]
-  },
-  {
     "id": "guid-593a6dea3dcc3fd3",
     "kind": "prose",
     "template": "List bounded source snapshots with citation metadata, capture-time trust level, reason, integrity, and evidence usage. Trust is advisory metadata; an intact hash and inspectable provenance remain required.",
@@ -22660,7 +20638,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 923
+        "line": 907
       }
     ]
   },
@@ -22954,21 +20932,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-5b05b94e1cbd131e",
-    "kind": "error",
-    "template": "Enterprise registry has no valid Vault path",
-    "parts": [
-      "Enterprise registry has no valid Vault path"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-server.ts",
-        "line": 317
-      }
-    ]
-  },
-  {
     "id": "guid-5b0deb6ef62123a4",
     "kind": "prose",
     "template": "Advisory Zettelkasten link-context health. It helps agents make graph edges meaningful without requiring every link to become a paragraph.",
@@ -23074,21 +21037,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-5b55bae8ba50b098",
-    "kind": "error",
-    "template": "Global import configuration must contain only baseUrl, readToken, and trustedPublicKey",
-    "parts": [
-      "Global import configuration must contain only baseUrl, readToken, and trustedPublicKey"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-server.ts",
-        "line": 242
-      }
-    ]
-  },
-  {
     "id": "guid-5b6062eb6ccfb850",
     "kind": "prose",
     "template": "Stable lowercase login name",
@@ -23144,7 +21092,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1645
+        "line": 1615
       }
     ]
   },
@@ -23236,7 +21184,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 929
+        "line": 913
       }
     ]
   },
@@ -23377,21 +21325,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-5c37b8b89d0b2e5c",
-    "kind": "error",
-    "template": "Enterprise registry lock is invalid; refusing to remove it automatically",
-    "parts": [
-      "Enterprise registry lock is invalid; refusing to remove it automatically"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-registry.ts",
-        "line": 410
-      }
-    ]
-  },
-  {
     "id": "guid-5c407b03f9282f43",
     "kind": "prose",
     "template": "Endpoint/intent, or exact endpointId# followed by a JSON Pointer",
@@ -23402,7 +21335,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 443
+        "line": 435
       }
     ]
   },
@@ -23538,7 +21471,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 761
+        "line": 586
       }
     ]
   },
@@ -23568,7 +21501,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 906
+        "line": 890
       }
     ]
   },
@@ -23618,26 +21551,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-5dbe501335607196",
-    "kind": "error",
-    "template": "Global document exceeds {arg0} bytes",
-    "parts": [
-      "Global document exceeds ",
-      " bytes"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 627
-      },
-      {
-        "file": "src/global-sync.ts",
-        "line": 681
-      }
-    ]
-  },
-  {
     "id": "guid-5dd9494b4b88fae9",
     "kind": "prose",
     "template": "An active legal hold blocks retirement.",
@@ -23679,7 +21592,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 766
+        "line": 591
       }
     ]
   },
@@ -23726,26 +21639,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/filesystem.ts",
         "line": 1489
-      }
-    ]
-  },
-  {
-    "id": "guid-5e267e1e9c837924",
-    "kind": "error",
-    "template": "{arg0} contains unsupported control characters",
-    "parts": [
-      "",
-      " contains unsupported control characters"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 222
-      },
-      {
-        "file": "src/public-federation.ts",
-        "line": 271
       }
     ]
   },
@@ -23888,28 +21781,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/endpoint-registry.ts",
-        "line": 759
-      }
-    ]
-  },
-  {
-    "id": "guid-5f13e1a416a5feaf",
-    "kind": "error",
-    "template": "revision conflict: expected {arg0}, current {arg1}",
-    "parts": [
-      "revision conflict: expected ",
-      ", current ",
-      ""
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/public-federation.ts",
-        "line": 579
-      },
-      {
-        "file": "src/public-federation.ts",
-        "line": 584
+        "line": 755
       }
     ]
   },
@@ -23954,22 +21826,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/enterprise-storage-context.ts",
-        "line": 116
-      }
-    ]
-  },
-  {
-    "id": "guid-5f4a5e11e78cd9ca",
-    "kind": "error",
-    "template": "upsert revision has no content hash",
-    "parts": [
-      "upsert revision has no content hash"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 754
+        "line": 111
       }
     ]
   },
@@ -24018,7 +21875,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1269
+        "line": 1251
       }
     ]
   },
@@ -24104,21 +21961,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-5f93565525a5edfd",
-    "kind": "prose",
-    "template": "Enterprise execution session ID.",
-    "parts": [
-      "Enterprise execution session ID."
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/scope-auth-tools.ts",
-        "line": 47
-      }
-    ]
-  },
-  {
     "id": "guid-5fa1120c58291289",
     "kind": "error",
     "template": "Invalid document revision",
@@ -24134,37 +21976,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/document-resource.ts",
         "line": 225
-      }
-    ]
-  },
-  {
-    "id": "guid-5fa3568695bfd16a",
-    "kind": "error",
-    "template": "An active session holds this agent; explicit handoff expectedGeneration={arg0} is required",
-    "parts": [
-      "An active session holds this agent; explicit handoff expectedGeneration=",
-      " is required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/scope-auth.ts",
-        "line": 463
-      }
-    ]
-  },
-  {
-    "id": "guid-5fd94ae7c0bcddf6",
-    "kind": "error",
-    "template": "sharedMemoryEnabled must be boolean",
-    "parts": [
-      "sharedMemoryEnabled must be boolean"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-registry.ts",
-        "line": 495
       }
     ]
   },
@@ -24210,27 +22021,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/continuity.ts",
         "line": 497
-      }
-    ]
-  },
-  {
-    "id": "guid-600d6a2929171008",
-    "kind": "error",
-    "template": "{arg0} is required and must be at most {arg1} characters",
-    "parts": [
-      "",
-      " is required and must be at most ",
-      " characters"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 221
-      },
-      {
-        "file": "src/public-federation.ts",
-        "line": 270
       }
     ]
   },
@@ -24335,7 +22125,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1018
+        "line": 1002
       }
     ]
   },
@@ -24395,7 +22185,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1303
+        "line": 1285
       }
     ]
   },
@@ -24535,21 +22325,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-61d8ab6465ec2995",
-    "kind": "error",
-    "template": "Global document escaped vault root",
-    "parts": [
-      "Global document escaped vault root"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 1077
-      }
-    ]
-  },
-  {
     "id": "guid-61f814cce07c0b9a",
     "kind": "prose",
     "template": "Enter once, establish a recoverable identity when safe, and perform one useful action.",
@@ -24575,7 +22350,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 386
+        "line": 344
       }
     ]
   },
@@ -24659,26 +22434,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-622ae60cd2274500",
-    "kind": "error",
-    "template": "{arg0} must be an explicit absolute path",
-    "parts": [
-      "",
-      " must be an explicit absolute path"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-registry.ts",
-        "line": 151
-      },
-      {
-        "file": "src/enterprise-server.ts",
-        "line": 87
-      }
-    ]
-  },
-  {
     "id": "guid-622c267e62cf3190",
     "kind": "error",
     "template": "This note is hidden by moderation ({arg0}). Treat its prior content as untrusted data.",
@@ -24690,7 +22445,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3835
+        "line": 3762
       }
     ]
   },
@@ -24779,23 +22534,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-62a6867d518c2c23",
-    "kind": "error",
-    "template": "{arg0} contains unsupported field: {arg1}",
-    "parts": [
-      "",
-      " contains unsupported field: ",
-      ""
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-federation.ts",
-        "line": 82
-      }
-    ]
-  },
-  {
     "id": "guid-62a6c12cf7f750c5",
     "kind": "prose",
     "template": "Why the project exists",
@@ -24836,7 +22574,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2133
+        "line": 2070
       },
       {
         "file": "src/question-packet.ts",
@@ -24890,52 +22628,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-631ce1bc2304f93c",
-    "kind": "error",
-    "template": "Federation destination unavailable",
-    "parts": [
-      "Federation destination unavailable"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-federation.ts",
-        "line": 218
-      },
-      {
-        "file": "src/enterprise-federation.ts",
-        "line": 224
-      },
-      {
-        "file": "src/enterprise-federation.ts",
-        "line": 246
-      },
-      {
-        "file": "src/enterprise-federation.ts",
-        "line": 285
-      }
-    ]
-  },
-  {
-    "id": "guid-631f25a28d47a721",
-    "kind": "error",
-    "template": "Enterprise account binding does not match the registered identity",
-    "parts": [
-      "Enterprise account binding does not match the registered identity"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-registry.ts",
-        "line": 718
-      },
-      {
-        "file": "src/enterprise-registry.ts",
-        "line": 739
-      }
-    ]
-  },
-  {
     "id": "guid-633af36952aca02f",
     "kind": "error",
     "template": "{arg0} line numbers must be a paired positive integer range",
@@ -24963,37 +22655,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/filesystem.ts",
         "line": 1310
-      }
-    ]
-  },
-  {
-    "id": "guid-63507b893e3d6cfc",
-    "kind": "error",
-    "template": "{arg0} must be outside the Vault and service checkout",
-    "parts": [
-      "",
-      " must be outside the Vault and service checkout"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-server.ts",
-        "line": 102
-      }
-    ]
-  },
-  {
-    "id": "guid-6366dc3ea6666144",
-    "kind": "error",
-    "template": "Enterprise runtime no longer exists",
-    "parts": [
-      "Enterprise runtime no longer exists"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-registry.ts",
-        "line": 664
       }
     ]
   },
@@ -25132,22 +22793,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/llm-wiki-tools.ts",
         "line": 453
-      }
-    ]
-  },
-  {
-    "id": "guid-645e5acaa22f03ef",
-    "kind": "error",
-    "template": "invalid public federation event chain at sequence {arg0}",
-    "parts": [
-      "invalid public federation event chain at sequence ",
-      ""
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/public-federation.ts",
-        "line": 484
       }
     ]
   },
@@ -25313,7 +22958,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 869
+        "line": 853
       }
     ]
   },
@@ -25556,7 +23201,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/endpoint-registry.ts",
-        "line": 726
+        "line": 722
       }
     ]
   },
@@ -25605,7 +23250,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 908
+        "line": 892
       }
     ]
   },
@@ -25620,7 +23265,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 839
+        "line": 823
       }
     ]
   },
@@ -25665,27 +23310,8 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "binding": "call",
     "sources": [
       {
-        "file": "src/global-sync.ts",
-        "line": 1325
-      },
-      {
         "file": "src/http-request-utils.ts",
         "line": 13
-      }
-    ]
-  },
-  {
-    "id": "guid-6683a0a54ca59d5d",
-    "kind": "error",
-    "template": "expectedGeneration must be a non-negative safe integer",
-    "parts": [
-      "expectedGeneration must be a non-negative safe integer"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-registry.ts",
-        "line": 760
       }
     ]
   },
@@ -25700,7 +23326,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 691
+        "line": 549
       }
     ]
   },
@@ -25916,22 +23542,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-679c967dfc12b624",
-    "kind": "error",
-    "template": "provenance.evidenceRevisions must bind approved Global evidence: {arg0}",
-    "parts": [
-      "provenance.evidenceRevisions must bind approved Global evidence: ",
-      ""
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 705
-      }
-    ]
-  },
-  {
     "id": "guid-67b957628a0539ab",
     "kind": "error",
     "template": "Current write permission is required for MOC management",
@@ -26070,15 +23680,15 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
   {
     "id": "guid-68463003c8e6b2da",
     "kind": "error",
-    "template": "Account type must match the personal or enterprise host authority",
+    "template": "Account type must match the personal host authority",
     "parts": [
-      "Account type must match the personal or enterprise host authority"
+      "Account type must match the personal host authority"
     ],
     "binding": "call",
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 542
+        "line": 405
       }
     ]
   },
@@ -26125,25 +23735,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/filesystem.ts",
         "line": 893
-      }
-    ]
-  },
-  {
-    "id": "guid-686f18a23d499b8a",
-    "kind": "error",
-    "template": "Invalid or used enterprise invite",
-    "parts": [
-      "Invalid or used enterprise invite"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-registry.ts",
-        "line": 620
-      },
-      {
-        "file": "src/enterprise-registry.ts",
-        "line": 634
       }
     ]
   },
@@ -26612,7 +24203,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-access.ts",
-        "line": 212
+        "line": 168
       }
     ]
   },
@@ -26717,7 +24308,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3628
+        "line": 3555
       }
     ]
   },
@@ -26763,22 +24354,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/social.ts",
-        "line": 456
-      }
-    ]
-  },
-  {
-    "id": "guid-6b4a59465ff40a82",
-    "kind": "error",
-    "template": "Unable to acquire enterprise registry lock",
-    "parts": [
-      "Unable to acquire enterprise registry lock"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-registry.ts",
-        "line": 416
+        "line": 452
       }
     ]
   },
@@ -26793,7 +24369,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1015
+        "line": 999
       }
     ]
   },
@@ -26824,21 +24400,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/community-public-retry.ts",
         "line": 179
-      }
-    ]
-  },
-  {
-    "id": "guid-6b903b8e2b1902f5",
-    "kind": "error",
-    "template": "Global Sync proposal rate limit exceeded for origin",
-    "parts": [
-      "Global Sync proposal rate limit exceeded for origin"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 654
       }
     ]
   },
@@ -26965,21 +24526,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-6bebc6f6619d2973",
-    "kind": "error",
-    "template": "Public federation credentials require an explicit public enterprise instance",
-    "parts": [
-      "Public federation credentials require an explicit public enterprise instance"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/createServer.ts",
-        "line": 563
-      }
-    ]
-  },
-  {
     "id": "guid-6bf09d17dbbaeb91",
     "kind": "error",
     "template": "limit must be an integer between 1 and 500",
@@ -27009,7 +24555,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1183
+        "line": 1166
       }
     ]
   },
@@ -27024,11 +24570,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3650
+        "line": 3577
       },
       {
         "file": "src/createServer.ts",
-        "line": 3653
+        "line": 3580
       }
     ]
   },
@@ -27108,21 +24654,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-6c483f4ad377b173",
-    "kind": "error",
-    "template": "comment parent IDs are invalid",
-    "parts": [
-      "comment parent IDs are invalid"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/public-federation.ts",
-        "line": 353
-      }
-    ]
-  },
-  {
     "id": "guid-6c6012de673b180a",
     "kind": "prose",
     "template": "Frontmatter filters, including dot notation for nested properties, e.g. {\"status\": \"active\", \"project\": \"alpha\"}",
@@ -27133,7 +24664,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1233
+        "line": 1215
       }
     ]
   },
@@ -27164,21 +24695,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/llm-wiki-tools.ts",
         "line": 853
-      }
-    ]
-  },
-  {
-    "id": "guid-6cb3d848338c51ec",
-    "kind": "error",
-    "template": "Enterprise federation state unavailable",
-    "parts": [
-      "Enterprise federation state unavailable"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-federation.ts",
-        "line": 297
       }
     ]
   },
@@ -27285,7 +24801,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1680
+        "line": 1647
       }
     ]
   },
@@ -27315,15 +24831,15 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3374
+        "line": 3311
       },
       {
         "file": "src/createServer.ts",
-        "line": 3376
+        "line": 3313
       },
       {
         "file": "src/createServer.ts",
-        "line": 3380
+        "line": 3317
       }
     ]
   },
@@ -27449,21 +24965,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/filesystem.ts",
         "line": 985
-      }
-    ]
-  },
-  {
-    "id": "guid-6dc20fb62c37201f",
-    "kind": "error",
-    "template": "Enterprise binding mode does not match this command center",
-    "parts": [
-      "Enterprise binding mode does not match this command center"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-registry.ts",
-        "line": 737
       }
     ]
   },
@@ -27759,25 +25260,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-6f0501785e6489b8",
-    "kind": "error",
-    "template": "This Global replica is read-only",
-    "parts": [
-      "This Global replica is read-only"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 1224
-      },
-      {
-        "file": "src/global-sync.ts",
-        "line": 1233
-      }
-    ]
-  },
-  {
     "id": "guid-6f18cfc09262bf64",
     "kind": "error",
     "template": "Skill transaction lock containment could not be verified.",
@@ -27878,7 +25360,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 837
+        "line": 821
       }
     ]
   },
@@ -27968,7 +25450,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/notifications.ts",
-        "line": 999
+        "line": 998
       }
     ]
   },
@@ -28045,7 +25527,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth-tools.ts",
-        "line": 35
+        "line": 34
       }
     ]
   },
@@ -28371,22 +25853,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-70e1ceab6fe878a3",
-    "kind": "error",
-    "template": "{arg0} must identify a Global document or immutable _sources snapshot, not private or service state",
-    "parts": [
-      "",
-      " must identify a Global document or immutable _sources snapshot, not private or service state"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 214
-      }
-    ]
-  },
-  {
     "id": "guid-71154b9ffb6b1864",
     "kind": "error",
     "template": "Work guidance is unavailable; retry after current authorization and work state can be verified.",
@@ -28477,21 +25943,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/chat-tools.ts",
         "line": 22
-      }
-    ]
-  },
-  {
-    "id": "guid-71a076b24ddc8030",
-    "kind": "error",
-    "template": "Public federation configuration is not valid JSON",
-    "parts": [
-      "Public federation configuration is not valid JSON"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-server.ts",
-        "line": 227
       }
     ]
   },
@@ -28600,7 +26051,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2150
+        "line": 2087
       }
     ]
   },
@@ -28620,21 +26071,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-724040c02452f3fc",
-    "kind": "error",
-    "template": "enterprise federation intent fields are invalid",
-    "parts": [
-      "enterprise federation intent fields are invalid"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-federation.ts",
-        "line": 164
-      }
-    ]
-  },
-  {
     "id": "guid-724e69325898fd7d",
     "kind": "error",
     "template": "Investigation may reference at most eight distinct related notes, including prose links",
@@ -28646,21 +26082,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/knowledge-investigation.ts",
         "line": 56
-      }
-    ]
-  },
-  {
-    "id": "guid-72562d6c40c54a58",
-    "kind": "error",
-    "template": "Federation object changed or unavailable; reread its window",
-    "parts": [
-      "Federation object changed or unavailable; reread its window"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/public-federation-replica.ts",
-        "line": 555
       }
     ]
   },
@@ -28735,7 +26156,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/layered-memory.ts",
-        "line": 126
+        "line": 125
       }
     ]
   },
@@ -28750,7 +26171,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-access.ts",
-        "line": 214
+        "line": 170
       }
     ]
   },
@@ -28784,7 +26205,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1444
+        "line": 1426
       }
     ]
   },
@@ -28816,21 +26237,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/filesystem.ts",
         "line": 1491
-      }
-    ]
-  },
-  {
-    "id": "guid-72b3279bd0003606",
-    "kind": "error",
-    "template": "Access denied: this path is unavailable in the current enterprise realm",
-    "parts": [
-      "Access denied: this path is unavailable in the current enterprise realm"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/scope-access.ts",
-        "line": 219
       }
     ]
   },
@@ -28875,7 +26281,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1200
+        "line": 1183
       }
     ]
   },
@@ -28890,7 +26296,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 551
+        "line": 543
       },
       {
         "file": "src/pathfilter.ts",
@@ -29231,21 +26637,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-742da69b81417d06",
-    "kind": "error",
-    "template": "Enterprise invite is assigned to a different runtime",
-    "parts": [
-      "Enterprise invite is assigned to a different runtime"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-registry.ts",
-        "line": 628
-      }
-    ]
-  },
-  {
     "id": "guid-742e675d8785d46a",
     "kind": "error",
     "template": "Artifact path must be visible public",
@@ -29471,21 +26862,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-752e4be12a1b78f1",
-    "kind": "error",
-    "template": "Enterprise registry is not initialized",
-    "parts": [
-      "Enterprise registry is not initialized"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-registry.ts",
-        "line": 363
-      }
-    ]
-  },
-  {
     "id": "guid-7562fc2a32bcab6a",
     "kind": "error",
     "template": "Ambiguous {arg0} section; use the outline and repair duplicate headings before resolving the issue.",
@@ -29498,21 +26874,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/llm-wiki.ts",
         "line": 16664
-      }
-    ]
-  },
-  {
-    "id": "guid-7571c6963333e20b",
-    "kind": "error",
-    "template": "Enterprise authentication is required; use the administrator invitation or log in",
-    "parts": [
-      "Enterprise authentication is required; use the administrator invitation or log in"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/scope-auth.ts",
-        "line": 381
       }
     ]
   },
@@ -29604,21 +26965,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/whisper.ts",
         "line": 25
-      }
-    ]
-  },
-  {
-    "id": "guid-75ba010aa0dabdfb",
-    "kind": "error",
-    "template": "public federation comment view changed during listing",
-    "parts": [
-      "public federation comment view changed during listing"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-federation.ts",
-        "line": 624
       }
     ]
   },
@@ -29801,7 +27147,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-access.ts",
-        "line": 199
+        "line": 157
       }
     ]
   },
@@ -29866,21 +27212,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-76d92532b8cdb041",
-    "kind": "error",
-    "template": "an authenticated public enterprise agent is required",
-    "parts": [
-      "an authenticated public enterprise agent is required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-federation.ts",
-        "line": 320
-      }
-    ]
-  },
-  {
     "id": "guid-76db0472d3aaea0f",
     "kind": "error",
     "template": "Document cache cannot use symbolic links or junctions",
@@ -29922,22 +27253,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/wiki-policy.ts",
         "line": 216
-      }
-    ]
-  },
-  {
-    "id": "guid-76f303e2b093def0",
-    "kind": "error",
-    "template": "{arg0} must identify a file",
-    "parts": [
-      "",
-      " must identify a file"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-server.ts",
-        "line": 99
       }
     ]
   },
@@ -30027,7 +27342,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 799
+        "line": 624
       }
     ]
   },
@@ -30182,36 +27497,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/organization-queue-packet.ts",
         "line": 40
-      }
-    ]
-  },
-  {
-    "id": "guid-78579220d78c905f",
-    "kind": "prose",
-    "template": "Local document has unsubmitted changes; remote tombstone was not applied.",
-    "parts": [
-      "Local document has unsubmitted changes; remote tombstone was not applied."
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 1162
-      }
-    ]
-  },
-  {
-    "id": "guid-7867dcc3c79b8470",
-    "kind": "error",
-    "template": "Enterprise realm and commandCenterId must match",
-    "parts": [
-      "Enterprise realm and commandCenterId must match"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/createServer.ts",
-        "line": 564
       }
     ]
   },
@@ -30400,21 +27685,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-797d2745d5c3837a",
-    "kind": "error",
-    "template": "moderation action must be hide or restore",
-    "parts": [
-      "moderation action must be hide or restore"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/public-federation.ts",
-        "line": 632
-      }
-    ]
-  },
-  {
     "id": "guid-7999bdf7a733abae",
     "kind": "error",
     "template": "input.path must be exact",
@@ -30590,7 +27860,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1170
+        "line": 1153
       }
     ]
   },
@@ -30882,7 +28152,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1302
+        "line": 1284
       }
     ]
   },
@@ -30937,25 +28207,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-7c4ad3cbf894d11d",
-    "kind": "error",
-    "template": "Enterprise server lock is invalid; refusing to remove it automatically",
-    "parts": [
-      "Enterprise server lock is invalid; refusing to remove it automatically"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-server.ts",
-        "line": 109
-      },
-      {
-        "file": "src/enterprise-server.ts",
-        "line": 126
-      }
-    ]
-  },
-  {
     "id": "guid-7c4b0c93e6bbf3e8",
     "kind": "error",
     "template": "Maximum 32 managed MOC regions",
@@ -30986,22 +28237,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-7c7566fa40431867",
-    "kind": "error",
-    "template": "{arg0} contains a private or instance-local reference",
-    "parts": [
-      "",
-      " contains a private or instance-local reference"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/public-federation.ts",
-        "line": 303
-      }
-    ]
-  },
-  {
     "id": "guid-7c7b5ef7be85b983",
     "kind": "error",
     "template": "Resource target cannot use junctions or symbolic links",
@@ -31028,21 +28263,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/collaboration-tools.ts",
         "line": 45
-      }
-    ]
-  },
-  {
-    "id": "guid-7c8241a19283d418",
-    "kind": "error",
-    "template": "Global _sources snapshots cannot be tombstoned",
-    "parts": [
-      "Global _sources snapshots cannot be tombstoned"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 699
       }
     ]
   },
@@ -31137,22 +28357,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-7c8fcae7e81444ac",
-    "kind": "error",
-    "template": "Global import HTTP {arg0}",
-    "parts": [
-      "Global import HTTP ",
-      ""
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 975
-      }
-    ]
-  },
-  {
     "id": "guid-7cb98a1501abe904",
     "kind": "error",
     "template": "Compilation requires a stable requestId",
@@ -31198,21 +28402,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-7d10adb3a7a4d5e3",
-    "kind": "error",
-    "template": "public federation post view changed during listing",
-    "parts": [
-      "public federation post view changed during listing"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-federation.ts",
-        "line": 605
-      }
-    ]
-  },
-  {
     "id": "guid-7d1704b9408cd20a",
     "kind": "prose",
     "template": "The new string to insert in place of oldString",
@@ -31223,7 +28412,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 870
+        "line": 854
       }
     ]
   },
@@ -31553,7 +28742,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 435
+        "line": 427
       }
     ]
   },
@@ -31598,7 +28787,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2977
+        "line": 2914
       }
     ]
   },
@@ -31628,7 +28817,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1495
+        "line": 1470
       }
     ]
   },
@@ -31650,36 +28839,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/whisper.ts",
         "line": 27
-      }
-    ]
-  },
-  {
-    "id": "guid-7e92e5c81a4724e9",
-    "kind": "error",
-    "template": "local hide target does not exist",
-    "parts": [
-      "local hide target does not exist"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/public-federation-replica.ts",
-        "line": 641
-      }
-    ]
-  },
-  {
-    "id": "guid-7e94b392cdd6d92c",
-    "kind": "error",
-    "template": "No administrator-verified default department is available",
-    "parts": [
-      "No administrator-verified default department is available"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/createServer.ts",
-        "line": 3389
       }
     ]
   },
@@ -31755,26 +28914,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1108
-      }
-    ]
-  },
-  {
-    "id": "guid-7f0746d8bbd1a793",
-    "kind": "error",
-    "template": "remote public comment is unavailable or belongs to another actor",
-    "parts": [
-      "remote public comment is unavailable or belongs to another actor"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-federation.ts",
-        "line": 518
-      },
-      {
-        "file": "src/enterprise-federation.ts",
-        "line": 534
+        "line": 1092
       }
     ]
   },
@@ -31963,21 +29103,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-804b1a93df31110a",
-    "kind": "error",
-    "template": "enterprise registry belongs to a different Vault",
-    "parts": [
-      "enterprise registry belongs to a different Vault"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-registry.ts",
-        "line": 258
-      }
-    ]
-  },
-  {
     "id": "guid-804b7813782a984d",
     "kind": "error",
     "template": "Snapshot write unavailable",
@@ -32024,21 +29149,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-80752c4c469dbd5a",
-    "kind": "error",
-    "template": "Enterprise invite belongs to a different realm",
-    "parts": [
-      "Enterprise invite belongs to a different realm"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-registry.ts",
-        "line": 626
-      }
-    ]
-  },
-  {
     "id": "guid-80abe4a48a907287",
     "kind": "prose",
     "template": "Stop watching a public post, series, author, or tag.",
@@ -32054,23 +29164,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-80da8ff98d7f8ddc",
-    "kind": "error",
-    "template": "{arg0} must be a non-empty string of at most {arg1} characters",
-    "parts": [
-      "",
-      " must be a non-empty string of at most ",
-      " characters"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-registry.ts",
-        "line": 166
-      }
-    ]
-  },
-  {
     "id": "guid-80de7596b58b621c",
     "kind": "error",
     "template": "This draft is private to its author",
@@ -32081,11 +29174,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/social.ts",
-        "line": 735
+        "line": 731
       },
       {
         "file": "src/social.ts",
-        "line": 757
+        "line": 753
       }
     ]
   },
@@ -32115,23 +29208,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 560
-      }
-    ]
-  },
-  {
-    "id": "guid-8100a56fcfc01a79",
-    "kind": "error",
-    "template": "Global Sync storage is already in use by process {arg0}",
-    "parts": [
-      "Global Sync storage is already in use by process ",
-      ""
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 466
+        "line": 421
       }
     ]
   },
@@ -32225,7 +29302,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 856
+        "line": 840
       }
     ]
   },
@@ -32430,21 +29507,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-81f53b1b9e52229a",
-    "kind": "error",
-    "template": "request body must be an object",
-    "parts": [
-      "request body must be an object"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/public-federation-http.ts",
-        "line": 50
-      }
-    ]
-  },
-  {
     "id": "guid-81f9a33e38ef7d9a",
     "kind": "error",
     "template": "maxChars too small for the pinned link action; repeat with 12000",
@@ -32500,7 +29562,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3225
+        "line": 3162
       }
     ]
   },
@@ -32689,7 +29751,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1216
+        "line": 1199
       }
     ]
   },
@@ -32779,7 +29841,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 930
+        "line": 914
       }
     ]
   },
@@ -32795,36 +29857,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/work-review.ts",
         "line": 53
-      }
-    ]
-  },
-  {
-    "id": "guid-837a1e889d6a6a51",
-    "kind": "error",
-    "template": "authenticated actor does not own the target object",
-    "parts": [
-      "authenticated actor does not own the target object"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/public-federation.ts",
-        "line": 582
-      }
-    ]
-  },
-  {
-    "id": "guid-837e32002ad814b8",
-    "kind": "error",
-    "template": "local hide reason is required and bounded",
-    "parts": [
-      "local hide reason is required and bounded"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/public-federation-replica.ts",
-        "line": 643
       }
     ]
   },
@@ -32904,22 +29936,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-83d4413e35245de5",
-    "kind": "error",
-    "template": "provenance.evidenceRevisions.{arg0} must be a Hub revision ID",
-    "parts": [
-      "provenance.evidenceRevisions.",
-      " must be a Hub revision ID"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 254
-      }
-    ]
-  },
-  {
     "id": "guid-841c8f142f5dcac2",
     "kind": "error",
     "template": "Unknown organization property contract: {arg0}",
@@ -32976,7 +29992,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 972
+        "line": 956
       }
     ]
   },
@@ -33201,7 +30217,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1318
+        "line": 1300
       }
     ]
   },
@@ -33217,21 +30233,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/llm-wiki-tools.ts",
         "line": 115
-      }
-    ]
-  },
-  {
-    "id": "guid-852ad1ae20b64785",
-    "kind": "error",
-    "template": "An authenticated runtime client certificate is required",
-    "parts": [
-      "An authenticated runtime client certificate is required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/scope-auth.ts",
-        "line": 443
       }
     ]
   },
@@ -33297,21 +30298,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-8584387a03eae818",
-    "kind": "error",
-    "template": "Keep drafts in this agent's private memory; publish to the public community only when ready",
-    "parts": [
-      "Keep drafts in this agent's private memory; publish to the public community only when ready"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/createServer.ts",
-        "line": 1670
-      }
-    ]
-  },
-  {
     "id": "guid-85a675d6f739522a",
     "kind": "error",
     "template": "mTLS required mode requires TLS with a CA",
@@ -33367,7 +30353,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 986
+        "line": 970
       }
     ]
   },
@@ -33397,7 +30383,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1031
+        "line": 1015
       }
     ]
   },
@@ -33516,21 +30502,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-86665d30dfbde3b7",
-    "kind": "error",
-    "template": "An administrator invitation is required",
-    "parts": [
-      "An administrator invitation is required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/scope-auth.ts",
-        "line": 480
-      }
-    ]
-  },
-  {
     "id": "guid-86679885716a67f8",
     "kind": "prose",
     "template": "This fast health pass checks each MOC direct body order using both note-level depends_on and valid cross-note dependsOnClaims edges. Actual dependencyCycles are separated from valid downstream notes blockedByCycles. Repair cycle edges first. Redundant prerequisite edges are low-severity review candidates, never automatic deletions. External-only prerequisites are informational, not maintenance debt. Call wiki.learning_path for bounded nested expansion and a stable recommended order; neither view rewrites Markdown.",
@@ -33571,7 +30542,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/social.ts",
-        "line": 549
+        "line": 545
       }
     ]
   },
@@ -33601,11 +30572,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1362
+        "line": 1344
       },
       {
         "file": "src/createServer.ts",
-        "line": 1375
+        "line": 1357
       }
     ]
   },
@@ -33734,7 +30705,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth-tools.ts",
-        "line": 70
+        "line": 64
       }
     ]
   },
@@ -33840,7 +30811,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/notifications.ts",
-        "line": 1042
+        "line": 1041
       }
     ]
   },
@@ -33946,7 +30917,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/social.ts",
-        "line": 454
+        "line": 450
       }
     ]
   },
@@ -33978,7 +30949,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3488
+        "line": 3415
       }
     ]
   },
@@ -34241,22 +31212,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/layered-memory.ts",
-        "line": 116
-      }
-    ]
-  },
-  {
-    "id": "guid-894dd12aebba8368",
-    "kind": "error",
-    "template": "parentRevision is unknown or belongs to another document",
-    "parts": [
-      "parentRevision is unknown or belongs to another document"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 675
+        "line": 115
       }
     ]
   },
@@ -34457,25 +31413,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-89f3ea8879df891b",
-    "kind": "error",
-    "template": "proposal not found",
-    "parts": [
-      "proposal not found"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 772
-      },
-      {
-        "file": "src/global-sync.ts",
-        "line": 810
-      }
-    ]
-  },
-  {
     "id": "guid-8a0231ca0d05dee7",
     "kind": "prose",
     "template": "Stable lowercase agent identity",
@@ -34626,28 +31563,28 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1390
+        "line": 1372
       },
       {
         "file": "src/createServer.ts",
-        "line": 1404
+        "line": 1386
       },
       {
         "file": "src/createServer.ts",
-        "line": 1419
+        "line": 1401
       },
       {
         "file": "src/createServer.ts",
-        "line": 1435
+        "line": 1417
       }
     ]
   },
   {
     "id": "guid-8aa1dd76fe8ef938",
     "kind": "prose",
-    "template": "Personal or enterprise use; must match this host. This selection never creates company authority.",
+    "template": "Personal use; must match this host. This selection never creates company authority.",
     "parts": [
-      "Personal or enterprise use; must match this host. This selection never creates company authority."
+      "Personal use; must match this host. This selection never creates company authority."
     ],
     "binding": "call",
     "sources": [
@@ -34702,21 +31639,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/chat-tools.ts",
         "line": 47
-      }
-    ]
-  },
-  {
-    "id": "guid-8ae8416426ff14da",
-    "kind": "error",
-    "template": "defaultDepartmentId must be a valid ID in departmentIds",
-    "parts": [
-      "defaultDepartmentId must be a valid ID in departmentIds"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-registry.ts",
-        "line": 185
       }
     ]
   },
@@ -34778,22 +31700,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/wiki-policy.ts",
         "line": 275
-      }
-    ]
-  },
-  {
-    "id": "guid-8b9571302dbfe05b",
-    "kind": "error",
-    "template": "public record contains unsupported or private field: {arg0}",
-    "parts": [
-      "public record contains unsupported or private field: ",
-      ""
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/public-federation.ts",
-        "line": 310
       }
     ]
   },
@@ -34928,7 +31834,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1062
+        "line": 1046
       }
     ]
   },
@@ -35144,21 +32050,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-8d050893320611a6",
-    "kind": "error",
-    "template": "Global import configuration is not valid JSON",
-    "parts": [
-      "Global import configuration is not valid JSON"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-server.ts",
-        "line": 254
-      }
-    ]
-  },
-  {
     "id": "guid-8d09cecad3951a1e",
     "kind": "error",
     "template": "confirmRevision must exactly match revision",
@@ -35169,7 +32060,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3485
+        "line": 3412
       }
     ]
   },
@@ -35345,21 +32236,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-8e2081033c1e689c",
-    "kind": "prose",
-    "template": "Remote manifest sequence is not strictly increasing.",
-    "parts": [
-      "Remote manifest sequence is not strictly increasing."
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 1111
-      }
-    ]
-  },
-  {
     "id": "guid-8e566fd825871188",
     "kind": "prose",
     "template": "For feedback: concise reproduction steps or observed behavior",
@@ -35385,7 +32261,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2990
+        "line": 2927
       }
     ]
   },
@@ -35496,21 +32372,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-8f19008ca29bb70e",
-    "kind": "error",
-    "template": "Account or agent binding conflicts with this registration",
-    "parts": [
-      "Account or agent binding conflicts with this registration"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-registry.ts",
-        "line": 672
-      }
-    ]
-  },
-  {
     "id": "guid-8f38e464301e0c61",
     "kind": "prose",
     "template": "The successor had no reverse supersedes edge; reactivation will still remove the stale replaced_by pointer.",
@@ -35551,7 +32412,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 430
+        "line": 422
       }
     ]
   },
@@ -35567,21 +32428,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/work-groups.ts",
         "line": 57
-      }
-    ]
-  },
-  {
-    "id": "guid-8f6e68342fd88fa5",
-    "kind": "error",
-    "template": "Migration inventory refuses linked scope roots",
-    "parts": [
-      "Migration inventory refuses linked scope roots"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-migration.ts",
-        "line": 35
       }
     ]
   },
@@ -35768,21 +32614,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-904f66094e7c6011",
-    "kind": "error",
-    "template": "bridge idempotency key is already used by another payload",
-    "parts": [
-      "bridge idempotency key is already used by another payload"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-federation.ts",
-        "line": 364
-      }
-    ]
-  },
-  {
     "id": "guid-9055cd67bbecf932",
     "kind": "error",
     "template": "expectedRevision is required; use 'missing' for a new room",
@@ -35858,21 +32689,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-90c65b97972bf61a",
-    "kind": "error",
-    "template": "Invite runtime must exist and be active",
-    "parts": [
-      "Invite runtime must exist and be active"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-registry.ts",
-        "line": 589
-      }
-    ]
-  },
-  {
     "id": "guid-90dea4ca45cb27b2",
     "kind": "error",
     "template": "leftPath and rightPath are required",
@@ -35928,7 +32744,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 447
+        "line": 439
       }
     ]
   },
@@ -36055,21 +32871,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-917d691d90a47da9",
-    "kind": "error",
-    "template": "public federation publish acknowledgement validation failed",
-    "parts": [
-      "public federation publish acknowledgement validation failed"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/public-federation-replica.ts",
-        "line": 367
-      }
-    ]
-  },
-  {
     "id": "guid-9181560b7c66cc23",
     "kind": "prose",
     "template": "copying one concept into several folders",
@@ -36111,7 +32912,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3611
+        "line": 3538
       }
     ]
   },
@@ -36219,21 +33020,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/continuity-understanding-model.ts",
         "line": 54
-      }
-    ]
-  },
-  {
-    "id": "guid-923455edfe152d14",
-    "kind": "error",
-    "template": "public federation profile view changed during listing",
-    "parts": [
-      "public federation profile view changed during listing"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-federation.ts",
-        "line": 686
       }
     ]
   },
@@ -36473,7 +33259,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/social.ts",
-        "line": 800
+        "line": 796
       }
     ]
   },
@@ -36597,7 +33383,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 362
+        "line": 323
       }
     ]
   },
@@ -36710,21 +33496,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-949a9367d730b28f",
-    "kind": "error",
-    "template": "operation must be upsert or tombstone",
-    "parts": [
-      "operation must be upsert or tombstone"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 667
-      }
-    ]
-  },
-  {
     "id": "guid-94d9dcafc53f2687",
     "kind": "error",
     "template": "Canvas edge labels must be bounded text",
@@ -36765,22 +33536,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1342
-      }
-    ]
-  },
-  {
-    "id": "guid-94f925e74cea084a",
-    "kind": "error",
-    "template": "maxChars must be an integer from 1 to 20000",
-    "parts": [
-      "maxChars must be an integer from 1 to 20000"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-federation.ts",
-        "line": 96
+        "line": 1324
       }
     ]
   },
@@ -36811,7 +33567,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 841
+        "line": 825
       }
     ]
   },
@@ -36846,21 +33602,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-9547ed46542e6dac",
-    "kind": "error",
-    "template": "Managed public community writes require a dedicated community operation",
-    "parts": [
-      "Managed public community writes require a dedicated community operation"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-storage-context.ts",
-        "line": 122
-      }
-    ]
-  },
-  {
     "id": "guid-954826d37bda9bb4",
     "kind": "prose",
     "template": "Move blocked: {arg0} ambiguous reference{arg1} may point to the source note. Disambiguate {arg2}{arg3} before retrying updateLinks=true.",
@@ -36890,7 +33631,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 155
+        "line": 135
       }
     ]
   },
@@ -36941,21 +33682,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-95ae73e56a42b58d",
-    "kind": "prose",
-    "template": "Local document changed after its last synchronized revision.",
-    "parts": [
-      "Local document changed after its last synchronized revision."
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 1128
-      }
-    ]
-  },
-  {
     "id": "guid-95b66b165911313c",
     "kind": "error",
     "template": "Synthesis may reference at most eight distinct related notes, including prose links",
@@ -36967,21 +33693,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/knowledge-synthesis.ts",
         "line": 72
-      }
-    ]
-  },
-  {
-    "id": "guid-95bd571f6b93b603",
-    "kind": "error",
-    "template": "Unable to acquire the enterprise server Vault lock",
-    "parts": [
-      "Unable to acquire the enterprise server Vault lock"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-server.ts",
-        "line": 174
       }
     ]
   },
@@ -37042,7 +33753,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth-tools.ts",
-        "line": 34
+        "line": 33
       }
     ]
   },
@@ -37162,7 +33873,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-access.ts",
-        "line": 227
+        "line": 182
       }
     ]
   },
@@ -37226,21 +33937,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/filesystem.ts",
         "line": 1846
-      }
-    ]
-  },
-  {
-    "id": "guid-96fac806a238b3ca",
-    "kind": "error",
-    "template": "Global Sync client requires HTTPS for non-loopback URLs",
-    "parts": [
-      "Global Sync client requires HTTPS for non-loopback URLs"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 904
       }
     ]
   },
@@ -37365,7 +34061,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3360
+        "line": 3297
       },
       {
         "file": "src/filesystem.ts",
@@ -37479,21 +34175,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-97ff5ba4b1458912",
-    "kind": "error",
-    "template": "Public Federation process lock is corrupt; refusing to remove it automatically",
-    "parts": [
-      "Public Federation process lock is corrupt; refusing to remove it automatically"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/public-federation.ts",
-        "line": 201
-      }
-    ]
-  },
-  {
     "id": "guid-9803b443cf51a77c",
     "kind": "error",
     "template": "Task changed during inspection; read the note again.",
@@ -37598,7 +34279,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 933
+        "line": 917
       }
     ]
   },
@@ -37658,7 +34339,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 934
+        "line": 918
       }
     ]
   },
@@ -37688,7 +34369,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1317
+        "line": 1299
       }
     ]
   },
@@ -37734,27 +34415,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/maintenance-derived.ts",
         "line": 48
-      }
-    ]
-  },
-  {
-    "id": "guid-996bbf0dfd95077a",
-    "kind": "error",
-    "template": "Stale session generation: expected {arg0}, current {arg1}",
-    "parts": [
-      "Stale session generation: expected ",
-      ", current ",
-      ""
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-registry.ts",
-        "line": 767
-      },
-      {
-        "file": "src/enterprise-registry.ts",
-        "line": 793
       }
     ]
   },
@@ -37830,22 +34490,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/community-public-retry.ts",
         "line": 148
-      }
-    ]
-  },
-  {
-    "id": "guid-99f740aa8ceb9943",
-    "kind": "error",
-    "template": "content validation failed for {arg0}",
-    "parts": [
-      "content validation failed for ",
-      ""
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 756
       }
     ]
   },
@@ -37971,22 +34615,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-9a50440a831b60cd",
-    "kind": "error",
-    "template": "revision signature mismatch for {arg0}",
-    "parts": [
-      "revision signature mismatch for ",
-      ""
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 752
-      }
-    ]
-  },
-  {
     "id": "guid-9a6de64e902330b0",
     "kind": "error",
     "template": "aroundAuthorityId must be at most 200 characters",
@@ -38029,23 +34657,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/references.ts",
         "line": 40
-      }
-    ]
-  },
-  {
-    "id": "guid-9aadc427a1eadda1",
-    "kind": "error",
-    "template": "Stale department revision: expected {arg0}, current {arg1}",
-    "parts": [
-      "Stale department revision: expected ",
-      ", current ",
-      ""
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-registry.ts",
-        "line": 522
       }
     ]
   },
@@ -38110,7 +34721,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/social.ts",
-        "line": 762
+        "line": 758
       }
     ]
   },
@@ -38185,22 +34796,22 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1241
+        "line": 1223
       }
     ]
   },
   {
     "id": "guid-9b66e9b92c671fb2",
     "kind": "error",
-    "template": "User shared memory requires an explicitly provisioned enterprise employee",
+    "template": "User shared memory is unavailable on this host",
     "parts": [
-      "User shared memory requires an explicitly provisioned enterprise employee"
+      "User shared memory is unavailable on this host"
     ],
     "binding": "call",
     "sources": [
       {
         "file": "src/layered-memory.ts",
-        "line": 79
+        "line": 78
       }
     ]
   },
@@ -38290,7 +34901,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth-tools.ts",
-        "line": 32
+        "line": 31
       }
     ]
   },
@@ -38320,7 +34931,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 981
+        "line": 965
       }
     ]
   },
@@ -38451,21 +35062,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-9d25cf5225975607",
-    "kind": "error",
-    "template": "reviewer tokens must be unique",
-    "parts": [
-      "reviewer tokens must be unique"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 1382
-      }
-    ]
-  },
-  {
     "id": "guid-9d2f8216a50e151d",
     "kind": "error",
     "template": "Authenticated actor changed",
@@ -38476,7 +35072,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1679
+        "line": 1646
       }
     ]
   },
@@ -38566,26 +35162,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/social.ts",
-        "line": 781
+        "line": 777
       },
       {
         "file": "src/social.ts",
-        "line": 799
-      }
-    ]
-  },
-  {
-    "id": "guid-9d5492a2e4a1dace",
-    "kind": "error",
-    "template": "Invalid content hash",
-    "parts": [
-      "Invalid content hash"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 621
+        "line": 795
       }
     ]
   },
@@ -38615,11 +35196,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 800
+        "line": 784
       },
       {
         "file": "src/createServer.ts",
-        "line": 2899
+        "line": 2836
       },
       {
         "file": "src/skill-release-card.ts",
@@ -38796,22 +35377,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-9e884c4b2aa47849",
-    "kind": "error",
-    "template": "{arg0} objectId is not owned by the authenticated actor",
-    "parts": [
-      "",
-      " objectId is not owned by the authenticated actor"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/public-federation.ts",
-        "line": 297
-      }
-    ]
-  },
-  {
     "id": "guid-9e8a7e4caecfc920",
     "kind": "error",
     "template": "Expression profile unavailable",
@@ -38846,21 +35411,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/wiki-policy.ts",
         "line": 222
-      }
-    ]
-  },
-  {
-    "id": "guid-9eaa6dc5f595e6fc",
-    "kind": "error",
-    "template": "runtime kind must be internal or external",
-    "parts": [
-      "runtime kind must be internal or external"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-registry.ts",
-        "line": 546
       }
     ]
   },
@@ -38951,7 +35501,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/enterprise-vault-marker.ts",
-        "line": 12
+        "line": 11
       }
     ]
   },
@@ -39027,22 +35577,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/llm-wiki.ts",
         "line": 234
-      }
-    ]
-  },
-  {
-    "id": "guid-9fe647794231a39a",
-    "kind": "error",
-    "template": "invalid event chain at sequence {arg0}",
-    "parts": [
-      "invalid event chain at sequence ",
-      ""
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 559
       }
     ]
   },
@@ -39154,23 +35688,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-a0d463f5f4bec0f9",
-    "kind": "error",
-    "template": "{arg0} capacity reached ({arg1})",
-    "parts": [
-      "",
-      " capacity reached (",
-      ")"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-registry.ts",
-        "line": 248
-      }
-    ]
-  },
-  {
     "id": "guid-a0ec1e8c762998af",
     "kind": "error",
     "template": "Repository locators must not contain credentials or query tokens",
@@ -39182,21 +35699,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/work-service.ts",
         "line": 355
-      }
-    ]
-  },
-  {
-    "id": "guid-a0f5b846cdfb6fb3",
-    "kind": "error",
-    "template": "revision conflict: new public object requires expectedRevision 0",
-    "parts": [
-      "revision conflict: new public object requires expectedRevision 0"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/public-federation.ts",
-        "line": 576
       }
     ]
   },
@@ -39275,7 +35777,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1202
+        "line": 1185
       }
     ]
   },
@@ -39305,26 +35807,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1274
-      }
-    ]
-  },
-  {
-    "id": "guid-a1b211fe48b40a17",
-    "kind": "error",
-    "template": "expiresAt must be in the future",
-    "parts": [
-      "expiresAt must be in the future"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-registry.ts",
-        "line": 574
-      },
-      {
-        "file": "src/enterprise-registry.ts",
-        "line": 762
+        "line": 1256
       }
     ]
   },
@@ -39340,21 +35823,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/community-status-tools.ts",
         "line": 13
-      }
-    ]
-  },
-  {
-    "id": "guid-a1e278b3dad7ed62",
-    "kind": "prose",
-    "template": "Continue as this persistent agent within the current approved instance.",
-    "parts": [
-      "Continue as this persistent agent within the current approved instance."
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/createServer.ts",
-        "line": 1801
       }
     ]
   },
@@ -39384,22 +35852,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1010
-      }
-    ]
-  },
-  {
-    "id": "guid-a21007e4a4f02f61",
-    "kind": "error",
-    "template": "Invalid enterprise marker profile",
-    "parts": [
-      "Invalid enterprise marker profile"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-vault-marker.ts",
-        "line": 26
+        "line": 994
       }
     ]
   },
@@ -39565,30 +36018,15 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/layered-memory.ts",
-        "line": 247
+        "line": 246
       },
       {
         "file": "src/layered-memory.ts",
-        "line": 268
+        "line": 267
       },
       {
         "file": "src/layered-memory.ts",
-        "line": 329
-      }
-    ]
-  },
-  {
-    "id": "guid-a2b809aaf2b368c4",
-    "kind": "error",
-    "template": "moderation target does not exist",
-    "parts": [
-      "moderation target does not exist"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/public-federation.ts",
-        "line": 631
+        "line": 328
       }
     ]
   },
@@ -39694,7 +36132,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1496
+        "line": 1471
       }
     ]
   },
@@ -39709,7 +36147,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1433
+        "line": 1415
       }
     ]
   },
@@ -39739,7 +36177,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/social.ts",
-        "line": 483
+        "line": 479
       }
     ]
   },
@@ -39817,7 +36255,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 588
+        "line": 449
       }
     ]
   },
@@ -39961,21 +36399,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-a3d7c1a8f30f3c47",
-    "kind": "error",
-    "template": "token is required",
-    "parts": [
-      "token is required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 1488
-      }
-    ]
-  },
-  {
     "id": "guid-a3df60a3158209f9",
     "kind": "prose",
     "template": "Token from login_scope. Required to create rooms or send messages.",
@@ -40017,21 +36440,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/llm-wiki.ts",
         "line": 10475
-      }
-    ]
-  },
-  {
-    "id": "guid-a430320c01788f07",
-    "kind": "error",
-    "template": "port must be 0 through 65535",
-    "parts": [
-      "port must be 0 through 65535"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-server.ts",
-        "line": 308
       }
     ]
   },
@@ -40303,7 +36711,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1240
+        "line": 1222
       }
     ]
   },
@@ -40454,7 +36862,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 893
+        "line": 877
       }
     ]
   },
@@ -40484,7 +36892,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 657
+        "line": 517
       }
     ]
   },
@@ -40565,21 +36973,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/skill-evolution.ts",
         "line": 449
-      }
-    ]
-  },
-  {
-    "id": "guid-a6cf589688c92b94",
-    "kind": "error",
-    "template": "request body must be valid JSON",
-    "parts": [
-      "request body must be valid JSON"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/public-federation-http.ts",
-        "line": 49
       }
     ]
   },
@@ -40880,7 +37273,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1416
+        "line": 1398
       }
     ]
   },
@@ -40926,21 +37319,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/continuity.ts",
         "line": 163
-      }
-    ]
-  },
-  {
-    "id": "guid-a81a450688951826",
-    "kind": "prose",
-    "template": "Original author deleted the post.",
-    "parts": [
-      "Original author deleted the post."
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-federation.ts",
-        "line": 449
       }
     ]
   },
@@ -41138,7 +37516,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/layered-memory.ts",
-        "line": 306
+        "line": 305
       }
     ]
   },
@@ -41214,7 +37592,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/social.ts",
-        "line": 269
+        "line": 265
       }
     ]
   },
@@ -41259,7 +37637,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 854
+        "line": 838
       }
     ]
   },
@@ -41274,7 +37652,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3063
+        "line": 3000
       }
     ]
   },
@@ -41387,21 +37765,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-aa444b5dba2c0e38",
-    "kind": "error",
-    "template": "moderation input must be an object",
-    "parts": [
-      "moderation input must be an object"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/public-federation.ts",
-        "line": 627
-      }
-    ]
-  },
-  {
     "id": "guid-aa474dc3d389578e",
     "kind": "error",
     "template": "wiki_view must be a mapping",
@@ -41427,7 +37790,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1327
+        "line": 1309
       }
     ]
   },
@@ -41553,7 +37916,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 864
+        "line": 848
       }
     ]
   },
@@ -41649,21 +38012,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-aafd6a5d31d54fa8",
-    "kind": "error",
-    "template": "department must be default or omitted",
-    "parts": [
-      "department must be default or omitted"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/createServer.ts",
-        "line": 3387
-      }
-    ]
-  },
-  {
     "id": "guid-ab10cde3174fe499",
     "kind": "error",
     "template": "Invalid memory scope",
@@ -41749,7 +38097,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-access.ts",
-        "line": 221
+        "line": 176
       }
     ]
   },
@@ -41780,21 +38128,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/llm-wiki.ts",
         "line": 7639
-      }
-    ]
-  },
-  {
-    "id": "guid-ab8c844cc79b3994",
-    "kind": "error",
-    "template": "Public federation configuration is invalid",
-    "parts": [
-      "Public federation configuration is invalid"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-server.ts",
-        "line": 198
       }
     ]
   },
@@ -41930,7 +38263,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth-tools.ts",
-        "line": 31
+        "line": 30
       }
     ]
   },
@@ -42077,7 +38410,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 926
+        "line": 910
       }
     ]
   },
@@ -42138,7 +38471,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 857
+        "line": 841
       }
     ]
   },
@@ -42214,21 +38547,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/skill-library.ts",
         "line": 55
-      }
-    ]
-  },
-  {
-    "id": "guid-acec98e1fd226793",
-    "kind": "error",
-    "template": "actor already exists",
-    "parts": [
-      "actor already exists"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/public-federation.ts",
-        "line": 568
       }
     ]
   },
@@ -42393,7 +38711,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1238
+        "line": 1220
       }
     ]
   },
@@ -42508,7 +38826,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       },
       {
         "file": "src/social.ts",
-        "line": 806
+        "line": 802
       }
     ]
   },
@@ -42737,7 +39055,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1417
+        "line": 1399
       }
     ]
   },
@@ -42837,21 +39155,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-aff3d819c0ffb419",
-    "kind": "error",
-    "template": "reviewer has already approved this proposal",
-    "parts": [
-      "reviewer has already approved this proposal"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 775
-      }
-    ]
-  },
-  {
     "id": "guid-b018a2523e14a2c0",
     "kind": "prose",
     "template": "Exact visible parent; required for set and omitted for clear",
@@ -42877,7 +39180,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 892
+        "line": 876
       }
     ]
   },
@@ -42892,7 +39195,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 878
+        "line": 862
       }
     ]
   },
@@ -42907,7 +39210,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1191
+        "line": 1174
       }
     ]
   },
@@ -43014,38 +39317,23 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1721
+        "line": 1681
       },
       {
         "file": "src/createServer.ts",
-        "line": 1725
+        "line": 1685
       },
       {
         "file": "src/createServer.ts",
-        "line": 1729
+        "line": 1689
       },
       {
         "file": "src/createServer.ts",
-        "line": 1733
+        "line": 1693
       },
       {
         "file": "src/createServer.ts",
-        "line": 3622
-      }
-    ]
-  },
-  {
-    "id": "guid-b09d9d1fd19de99b",
-    "kind": "error",
-    "template": "storageNamespace must be an opaque identifier",
-    "parts": [
-      "storageNamespace must be an opaque identifier"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/public-federation-replica.ts",
-        "line": 235
+        "line": 3549
       }
     ]
   },
@@ -43240,7 +39528,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1284
+        "line": 1266
       }
     ]
   },
@@ -43329,21 +39617,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/llm-wiki.ts",
         "line": 11820
-      }
-    ]
-  },
-  {
-    "id": "guid-b1eeb3145e2817c8",
-    "kind": "error",
-    "template": "Enterprise registry is too large; refusing to write it",
-    "parts": [
-      "Enterprise registry is too large; refusing to write it"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-registry.ts",
-        "line": 374
       }
     ]
   },
@@ -43464,7 +39737,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1082
+        "line": 1066
       }
     ]
   },
@@ -43749,22 +40022,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-b3545e8027ee3b60",
-    "kind": "error",
-    "template": "unsupported enterprise federation operation: {arg0}",
-    "parts": [
-      "unsupported enterprise federation operation: ",
-      ""
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-federation.ts",
-        "line": 856
-      }
-    ]
-  },
-  {
     "id": "guid-b36bfd1c0cc731ff",
     "kind": "error",
     "template": "property must be a string of 1 to 128 characters",
@@ -43775,7 +40032,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2976
+        "line": 2913
       }
     ]
   },
@@ -43791,21 +40048,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/llm-wiki.ts",
         "line": 11561
-      }
-    ]
-  },
-  {
-    "id": "guid-b3947584d5a1489e",
-    "kind": "prose",
-    "template": "Remote manifest cursor does not match its final entry.",
-    "parts": [
-      "Remote manifest cursor does not match its final entry."
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 1104
       }
     ]
   },
@@ -43850,7 +40092,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 955
+        "line": 939
       }
     ]
   },
@@ -43866,22 +40108,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/organization.ts",
         "line": 295
-      }
-    ]
-  },
-  {
-    "id": "guid-b40dc13336c35638",
-    "kind": "error",
-    "template": "{arg0} must be a safe relative path",
-    "parts": [
-      "",
-      " must be a safe relative path"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 211
       }
     ]
   },
@@ -43911,11 +40137,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1014
+        "line": 998
       },
       {
         "file": "src/createServer.ts",
-        "line": 1169
+        "line": 1152
       }
     ]
   },
@@ -44230,22 +40456,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-b5794b1794a318a8",
-    "kind": "error",
-    "template": "Enterprise runtime already exists: {arg0}",
-    "parts": [
-      "Enterprise runtime already exists: ",
-      ""
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-registry.ts",
-        "line": 551
-      }
-    ]
-  },
-  {
     "id": "guid-b57fc9f797889a1a",
     "kind": "error",
     "template": "evidence[{arg0}].quoteHash requires startLine and endLine",
@@ -44273,21 +40483,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/organization.ts",
         "line": 246
-      }
-    ]
-  },
-  {
-    "id": "guid-b5ad143b529b15cb",
-    "kind": "error",
-    "template": "Account or agent is already bound",
-    "parts": [
-      "Account or agent is already bound"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-registry.ts",
-        "line": 583
       }
     ]
   },
@@ -44332,7 +40527,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/layered-memory.ts",
-        "line": 341
+        "line": 340
       }
     ]
   },
@@ -44396,7 +40591,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/layered-memory.ts",
-        "line": 118
+        "line": 117
       }
     ]
   },
@@ -44411,7 +40606,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 763
+        "line": 588
       }
     ]
   },
@@ -44457,22 +40652,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1070
-      }
-    ]
-  },
-  {
-    "id": "guid-b68188dcd9ff0d99",
-    "kind": "error",
-    "template": "Company mode permits internal runtimes only",
-    "parts": [
-      "Company mode permits internal runtimes only"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-registry.ts",
-        "line": 445
+        "line": 1054
       }
     ]
   },
@@ -44532,7 +40712,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/layered-memory.ts",
-        "line": 80
+        "line": 79
       }
     ]
   },
@@ -44639,7 +40819,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1165
+        "line": 1148
       }
     ]
   },
@@ -45000,7 +41180,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/layered-memory.ts",
-        "line": 84
+        "line": 83
       }
     ]
   },
@@ -45075,7 +41255,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1258
+        "line": 1240
       }
     ]
   },
@@ -45092,21 +41272,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/llm-wiki.ts",
         "line": 2234
-      }
-    ]
-  },
-  {
-    "id": "guid-b896bcd94bbb2a17",
-    "kind": "error",
-    "template": "revision not found",
-    "parts": [
-      "revision not found"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 751
       }
     ]
   },
@@ -45198,7 +41363,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3222
+        "line": 3159
       }
     ]
   },
@@ -45244,22 +41409,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/social.ts",
-        "line": 399
-      }
-    ]
-  },
-  {
-    "id": "guid-b9590dbc3af48e8b",
-    "kind": "error",
-    "template": "Department claim requires administrator-verified membership",
-    "parts": [
-      "Department claim requires administrator-verified membership"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/scope-auth.ts",
-        "line": 493
+        "line": 395
       }
     ]
   },
@@ -45274,7 +41424,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1029
+        "line": 1013
       }
     ]
   },
@@ -45442,22 +41592,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/expression-profile.ts",
         "line": 59
-      }
-    ]
-  },
-  {
-    "id": "guid-ba47d1cf86bbe1a8",
-    "kind": "error",
-    "template": "Global evidence revision changed before proposal submission: {arg0}",
-    "parts": [
-      "Global evidence revision changed before proposal submission: ",
-      ""
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 706
       }
     ]
   },
@@ -45665,21 +41799,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-bb2ad9ac925fc9bb",
-    "kind": "error",
-    "template": "Public Federation process lock is invalid; refusing to remove it automatically",
-    "parts": [
-      "Public Federation process lock is invalid; refusing to remove it automatically"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/public-federation.ts",
-        "line": 205
-      }
-    ]
-  },
-  {
     "id": "guid-bb37db8ee3892af1",
     "kind": "error",
     "template": "Filesystem mutation cannot mutate immutable LLM Wiki sources; ingest a new original instead",
@@ -45705,7 +41824,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1235
+        "line": 1217
       }
     ]
   },
@@ -45750,7 +41869,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 922
+        "line": 906
       }
     ]
   },
@@ -45914,7 +42033,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 925
+        "line": 909
       }
     ]
   },
@@ -45945,7 +42064,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/social.ts",
-        "line": 468
+        "line": 464
       }
     ]
   },
@@ -46005,22 +42124,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/layered-memory.ts",
-        "line": 215
-      }
-    ]
-  },
-  {
-    "id": "guid-bcebacbf89ad3ce5",
-    "kind": "error",
-    "template": "Public federation actor capacity exceeded",
-    "parts": [
-      "Public federation actor capacity exceeded"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-server.ts",
-        "line": 205
+        "line": 214
       }
     ]
   },
@@ -46050,7 +42154,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 909
+        "line": 893
       }
     ]
   },
@@ -46066,40 +42170,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/skill-passport.ts",
         "line": 9
-      }
-    ]
-  },
-  {
-    "id": "guid-bd808ae65ce63381",
-    "kind": "error",
-    "template": "baseUrl must use http or https",
-    "parts": [
-      "baseUrl must use http or https"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 902
-      },
-      {
-        "file": "src/public-federation-http.ts",
-        "line": 78
-      }
-    ]
-  },
-  {
-    "id": "guid-bdaf1fb04e268780",
-    "kind": "error",
-    "template": "Invalid account type",
-    "parts": [
-      "Invalid account type"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/scope-auth.ts",
-        "line": 540
       }
     ]
   },
@@ -46134,21 +42204,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-be0d346d3b8dd399",
-    "kind": "error",
-    "template": "at least one public federation credential is required",
-    "parts": [
-      "at least one public federation credential is required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/public-federation-http.ts",
-        "line": 191
-      }
-    ]
-  },
-  {
     "id": "guid-be0e9027010d9b39",
     "kind": "prose",
     "template": "Revision history is already initialized.",
@@ -46175,21 +42230,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/organization.ts",
         "line": 316
-      }
-    ]
-  },
-  {
-    "id": "guid-be25f8d316ce74c5",
-    "kind": "prose",
-    "template": "Explicit generation CAS when handing off an existing writer.",
-    "parts": [
-      "Explicit generation CAS when handing off an existing writer."
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/scope-auth-tools.ts",
-        "line": 38
       }
     ]
   },
@@ -46267,7 +42307,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 431
+        "line": 380
       }
     ]
   },
@@ -46297,7 +42337,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3829
+        "line": 3756
       }
     ]
   },
@@ -46312,7 +42352,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1237
+        "line": 1219
       }
     ]
   },
@@ -46454,25 +42494,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-bf0740e31eb60494",
-    "kind": "error",
-    "template": "kind must be proposer, reviewer, or admin",
-    "parts": [
-      "kind must be proposer, reviewer, or admin"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 1487
-      },
-      {
-        "file": "src/global-sync.ts",
-        "line": 1535
-      }
-    ]
-  },
-  {
     "id": "guid-bf29459c7869575b",
     "kind": "error",
     "template": "expectedRevision is required; read the post first",
@@ -46487,7 +42508,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       },
       {
         "file": "src/social.ts",
-        "line": 571
+        "line": 567
       }
     ]
   },
@@ -46554,21 +42575,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-bf3bf9c17e94b12c",
-    "kind": "error",
-    "template": "Public Global export refuses canonical aliases",
-    "parts": [
-      "Public Global export refuses canonical aliases"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 1246
-      }
-    ]
-  },
-  {
     "id": "guid-bf3cb5d93bd69043",
     "kind": "error",
     "template": "Topic context unavailable or changed; re-read the MOC and retry.",
@@ -46609,7 +42615,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 880
+        "line": 864
       }
     ]
   },
@@ -46703,22 +42709,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth-tools.ts",
-        "line": 44
-      }
-    ]
-  },
-  {
-    "id": "guid-bfe0ad87424f415c",
-    "kind": "error",
-    "template": "baseUrl must not contain credentials, query, or fragment",
-    "parts": [
-      "baseUrl must not contain credentials, query, or fragment"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/public-federation-http.ts",
-        "line": 80
+        "line": 40
       }
     ]
   },
@@ -46734,21 +42725,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/wiki-policy.ts",
         "line": 263
-      }
-    ]
-  },
-  {
-    "id": "guid-c0075d6c5e08e0ec",
-    "kind": "error",
-    "template": "TLS private key does not match the server certificate",
-    "parts": [
-      "TLS private key does not match the server certificate"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-server.ts",
-        "line": 268
       }
     ]
   },
@@ -46869,7 +42845,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1627
+        "line": 1597
       }
     ]
   },
@@ -46884,11 +42860,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/enterprise-storage-context.ts",
-        "line": 99
+        "line": 94
       },
       {
         "file": "src/enterprise-storage-context.ts",
-        "line": 113
+        "line": 108
       }
     ]
   },
@@ -46965,21 +42941,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/llm-wiki-tools.ts",
         "line": 952
-      }
-    ]
-  },
-  {
-    "id": "guid-c114a811f3229f7a",
-    "kind": "error",
-    "template": "No administrator-approved account binding",
-    "parts": [
-      "No administrator-approved account binding"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/scope-auth.ts",
-        "line": 452
       }
     ]
   },
@@ -47094,21 +43055,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-c16ef7c1cf342c85",
-    "kind": "error",
-    "template": "organizationFingerprint must be a 64-character SHA-256 hex fingerprint",
-    "parts": [
-      "organizationFingerprint must be a 64-character SHA-256 hex fingerprint"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 1054
-      }
-    ]
-  },
-  {
     "id": "guid-c1719f2b1bee9816",
     "kind": "error",
     "template": "Only the group owner may configure or archive it",
@@ -47135,21 +43081,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/wiki-policy.ts",
         "line": 284
-      }
-    ]
-  },
-  {
-    "id": "guid-c17bd8cf504ec0b2",
-    "kind": "error",
-    "template": "Request certificate is already registered to another runtime",
-    "parts": [
-      "Request certificate is already registered to another runtime"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-registry.ts",
-        "line": 552
       }
     ]
   },
@@ -47305,11 +43236,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1361
+        "line": 1343
       },
       {
         "file": "src/createServer.ts",
-        "line": 1374
+        "line": 1356
       }
     ]
   },
@@ -47474,11 +43405,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1201
+        "line": 1184
       },
       {
         "file": "src/createServer.ts",
-        "line": 1234
+        "line": 1216
       }
     ]
   },
@@ -47494,21 +43425,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/llm-wiki.ts",
         "line": 6821
-      }
-    ]
-  },
-  {
-    "id": "guid-c2b680c89157e5da",
-    "kind": "error",
-    "template": "Migration scope escapes the Vault",
-    "parts": [
-      "Migration scope escapes the Vault"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-migration.ts",
-        "line": 38
       }
     ]
   },
@@ -47652,7 +43568,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 157
+        "line": 154
       }
     ]
   },
@@ -47827,7 +43743,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/social.ts",
-        "line": 984
+        "line": 980
       }
     ]
   },
@@ -47872,7 +43788,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth-tools.ts",
-        "line": 63
+        "line": 57
       }
     ]
   },
@@ -47948,7 +43864,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/social.ts",
-        "line": 398
+        "line": 394
       }
     ]
   },
@@ -48013,7 +43929,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 216
+        "line": 195
       }
     ]
   },
@@ -48091,7 +44007,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 182
+        "line": 162
       }
     ]
   },
@@ -48239,7 +44155,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 803
+        "line": 628
       }
     ]
   },
@@ -48396,21 +44312,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-c67f639cc069dcfb",
-    "kind": "error",
-    "template": "enterprise federation intent timestamp is invalid",
-    "parts": [
-      "enterprise federation intent timestamp is invalid"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-federation.ts",
-        "line": 169
-      }
-    ]
-  },
-  {
     "id": "guid-c686f350d0b05b35",
     "kind": "prose",
     "template": "Decide from the listed task locators: reopen genuinely unfinished work, complete or remove an obsolete checkbox through a revision-safe edit, or move a real follow-up into an explicit actionable note or review_open_items. Nothing is changed automatically.",
@@ -48487,21 +44388,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-c6b8a5e2a736c52d",
-    "kind": "error",
-    "template": "Global Sync process lock is corrupt; refusing to remove it automatically",
-    "parts": [
-      "Global Sync process lock is corrupt; refusing to remove it automatically"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 462
-      }
-    ]
-  },
-  {
     "id": "guid-c6eb0834eb63576c",
     "kind": "prose",
     "template": "Error: {arg0} is disabled because MCPVault is running in read-only mode. Restart without --read-only to enable vault mutations.",
@@ -48513,7 +44399,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1526
+        "line": 1501
       }
     ]
   },
@@ -48537,21 +44423,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-c70921b5014d543b",
-    "kind": "error",
-    "template": "registryPath and vaultPath are required",
-    "parts": [
-      "registryPath and vaultPath are required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-registry.ts",
-        "line": 345
-      }
-    ]
-  },
-  {
     "id": "guid-c70ba933e73f8135",
     "kind": "error",
     "template": "decision rules must permit changing judgment",
@@ -48563,25 +44434,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/knowledge-investigation-model.ts",
         "line": 112
-      }
-    ]
-  },
-  {
-    "id": "guid-c72305fb508bfebb",
-    "kind": "error",
-    "template": "public federation outbox quota exceeded",
-    "parts": [
-      "public federation outbox quota exceeded"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/public-federation-replica.ts",
-        "line": 348
-      },
-      {
-        "file": "src/public-federation-replica.ts",
-        "line": 398
       }
     ]
   },
@@ -48626,27 +44478,27 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 894
+        "line": 878
       },
       {
         "file": "src/createServer.ts",
-        "line": 1391
+        "line": 1373
       },
       {
         "file": "src/createServer.ts",
-        "line": 1405
+        "line": 1387
       },
       {
         "file": "src/createServer.ts",
-        "line": 1420
+        "line": 1402
       },
       {
         "file": "src/createServer.ts",
-        "line": 1436
+        "line": 1418
       },
       {
         "file": "src/createServer.ts",
-        "line": 1469
+        "line": 1451
       }
     ]
   },
@@ -48781,7 +44633,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 389
+        "line": 347
       }
     ]
   },
@@ -48811,7 +44663,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1157
+        "line": 1140
       }
     ]
   },
@@ -49060,21 +44912,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-c8f326c32c5095da",
-    "kind": "prose",
-    "template": "Remote revision organization fingerprint is missing or incompatible.",
-    "parts": [
-      "Remote revision organization fingerprint is missing or incompatible."
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 1115
-      }
-    ]
-  },
-  {
     "id": "guid-c90bf04787c862e3",
     "kind": "error",
     "template": "Skill recovery gate ownership changed.",
@@ -49100,7 +44937,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 901
+        "line": 885
       }
     ]
   },
@@ -49115,7 +44952,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1048
+        "line": 1032
       }
     ]
   },
@@ -49214,7 +45051,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/layered-memory.ts",
-        "line": 225
+        "line": 224
       }
     ]
   },
@@ -49336,7 +45173,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1212
+        "line": 1195
       }
     ]
   },
@@ -49356,21 +45193,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-ca12e78c9f350eff",
-    "kind": "error",
-    "template": "Select one explicit host feature configuration",
-    "parts": [
-      "Select one explicit host feature configuration"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-server.ts",
-        "line": 323
-      }
-    ]
-  },
-  {
     "id": "guid-ca1d8ca48b43d1b0",
     "kind": "prose",
     "template": "Path to the target note relative to vault root",
@@ -49381,7 +45203,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1432
+        "line": 1414
       }
     ]
   },
@@ -49426,7 +45248,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 872
+        "line": 856
       }
     ]
   },
@@ -49486,7 +45308,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1642
+        "line": 1612
       }
     ]
   },
@@ -49502,21 +45324,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/work-staffing.ts",
         "line": 308
-      }
-    ]
-  },
-  {
-    "id": "guid-ca6e7668da318029",
-    "kind": "error",
-    "template": "draft and archived posts are local only and cannot enter public federation",
-    "parts": [
-      "draft and archived posts are local only and cannot enter public federation"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-federation.ts",
-        "line": 424
       }
     ]
   },
@@ -49592,7 +45399,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3848
+        "line": 3775
       }
     ]
   },
@@ -49699,7 +45506,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1273
+        "line": 1255
       }
     ]
   },
@@ -49774,7 +45581,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 887
+        "line": 871
       }
     ]
   },
@@ -49818,10 +45625,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "binding": "call",
     "sources": [
       {
-        "file": "src/global-sync.ts",
-        "line": 1330
-      },
-      {
         "file": "src/rest-api.ts",
         "line": 128
       }
@@ -49839,21 +45642,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/skill-evolution-store.ts",
         "line": 70
-      }
-    ]
-  },
-  {
-    "id": "guid-cbb7d6f4c80d8549",
-    "kind": "error",
-    "template": "Global Sync hub is closed",
-    "parts": [
-      "Global Sync hub is closed"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 532
       }
     ]
   },
@@ -50146,7 +45934,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/endpoint-registry.ts",
-        "line": 636
+        "line": 632
       }
     ]
   },
@@ -50176,7 +45964,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-access.ts",
-        "line": 74
+        "line": 71
       }
     ]
   },
@@ -50267,7 +46055,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1357
+        "line": 1339
       }
     ]
   },
@@ -50380,7 +46168,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1046
+        "line": 1030
       }
     ]
   },
@@ -50445,21 +46233,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-ce3c6be69ef2378d",
-    "kind": "error",
-    "template": "Public mode cannot grant company departments",
-    "parts": [
-      "Public mode cannot grant company departments"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-registry.ts",
-        "line": 499
-      }
-    ]
-  },
-  {
     "id": "guid-ce3f106212aee9b5",
     "kind": "error",
     "template": "Staffing task membership or generation changed during host assessment; retry",
@@ -50501,7 +46274,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1311
+        "line": 1293
       }
     ]
   },
@@ -50611,30 +46384,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-cee936246b89d804",
-    "kind": "error",
-    "template": "Unknown enterprise runtime: {arg0}",
-    "parts": [
-      "Unknown enterprise runtime: ",
-      ""
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-registry.ts",
-        "line": 454
-      },
-      {
-        "file": "src/enterprise-registry.ts",
-        "line": 564
-      },
-      {
-        "file": "src/enterprise-registry.ts",
-        "line": 720
-      }
-    ]
-  },
-  {
     "id": "guid-cf01bbc9f2254190",
     "kind": "error",
     "template": "pendingEdit.expectedRevision is required and must be 200 characters or fewer",
@@ -50739,7 +46488,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 874
+        "line": 858
       }
     ]
   },
@@ -50830,7 +46579,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1220
+        "line": 1203
       }
     ]
   },
@@ -51195,86 +46944,35 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 836
+        "line": 820
       },
       {
         "file": "src/createServer.ts",
-        "line": 853
+        "line": 837
       },
       {
         "file": "src/createServer.ts",
-        "line": 868
+        "line": 852
       },
       {
         "file": "src/createServer.ts",
-        "line": 905
+        "line": 889
       },
       {
         "file": "src/createServer.ts",
-        "line": 1086
+        "line": 1070
       },
       {
         "file": "src/createServer.ts",
-        "line": 1098
+        "line": 1082
       },
       {
         "file": "src/createServer.ts",
-        "line": 1448
+        "line": 1430
       },
       {
         "file": "src/createServer.ts",
-        "line": 1464
-      }
-    ]
-  },
-  {
-    "id": "guid-d106f85ab416354d",
-    "kind": "error",
-    "template": "Session does not hold the current enterprise writer lease",
-    "parts": [
-      "Session does not hold the current enterprise writer lease"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-registry.ts",
-        "line": 782
-      },
-      {
-        "file": "src/enterprise-registry.ts",
-        "line": 794
-      }
-    ]
-  },
-  {
-    "id": "guid-d1121a2956add89b",
-    "kind": "error",
-    "template": "Public federation configuration is too large",
-    "parts": [
-      "Public federation configuration is too large"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-server.ts",
-        "line": 221
-      }
-    ]
-  },
-  {
-    "id": "guid-d119bcf4d3711f50",
-    "kind": "error",
-    "template": "restore conflict: expected {arg0}, current {arg1}",
-    "parts": [
-      "restore conflict: expected ",
-      ", current ",
-      ""
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 825
+        "line": 1446
       }
     ]
   },
@@ -51329,15 +47027,15 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1881
+        "line": 1820
       },
       {
         "file": "src/createServer.ts",
-        "line": 1886
+        "line": 1825
       },
       {
         "file": "src/createServer.ts",
-        "line": 1887
+        "line": 1826
       }
     ]
   },
@@ -51523,7 +47221,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 891
+        "line": 875
       }
     ]
   },
@@ -51538,7 +47236,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1171
+        "line": 1154
       }
     ]
   },
@@ -51569,7 +47267,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3582
+        "line": 3509
       }
     ]
   },
@@ -51585,21 +47283,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/authoring-assist.ts",
         "line": 13
-      }
-    ]
-  },
-  {
-    "id": "guid-d2545601f400e22b",
-    "kind": "error",
-    "template": "An active invite already exists for this account or agent",
-    "parts": [
-      "An active invite already exists for this account or agent"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-registry.ts",
-        "line": 585
       }
     ]
   },
@@ -51631,22 +47314,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/mcp-http.ts",
         "line": 206
-      }
-    ]
-  },
-  {
-    "id": "guid-d28f2d52be263dff",
-    "kind": "error",
-    "template": "Enterprise employee already exists: {arg0}",
-    "parts": [
-      "Enterprise employee already exists: ",
-      ""
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-registry.ts",
-        "line": 501
       }
     ]
   },
@@ -51707,21 +47374,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/memory-contract.ts",
         "line": 25
-      }
-    ]
-  },
-  {
-    "id": "guid-d2c943df00c4ae99",
-    "kind": "error",
-    "template": "credential state contains an invalid reviewer id",
-    "parts": [
-      "credential state contains an invalid reviewer id"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 321
       }
     ]
   },
@@ -51814,22 +47466,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3606
-      }
-    ]
-  },
-  {
-    "id": "guid-d3314f7f947d3c19",
-    "kind": "error",
-    "template": "target revision object failed content validation",
-    "parts": [
-      "target revision object failed content validation"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 823
+        "line": 3533
       }
     ]
   },
@@ -51893,7 +47530,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 988
+        "line": 972
       }
     ]
   },
@@ -51938,7 +47575,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 855
+        "line": 839
       }
     ]
   },
@@ -51968,7 +47605,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/social.ts",
-        "line": 379
+        "line": 375
       }
     ]
   },
@@ -52166,7 +47803,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1040
+        "line": 1024
       }
     ]
   },
@@ -52182,21 +47819,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/llm-wiki.ts",
         "line": 4636
-      }
-    ]
-  },
-  {
-    "id": "guid-d4eabd7a104091a9",
-    "kind": "error",
-    "template": "Global import page size must be from 1 through 200",
-    "parts": [
-      "Global import page size must be from 1 through 200"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 1183
       }
     ]
   },
@@ -52489,7 +48111,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/enterprise-vault-marker.ts",
-        "line": 14
+        "line": 13
       }
     ]
   },
@@ -52521,7 +48143,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3822
+        "line": 3749
       }
     ]
   },
@@ -52537,25 +48159,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/filesystem.ts",
         "line": 301
-      }
-    ]
-  },
-  {
-    "id": "guid-d6055bf1aadd9850",
-    "kind": "error",
-    "template": "Enterprise mentions require an exact @actor:realm:agent ID; model names do not select a persistent agent",
-    "parts": [
-      "Enterprise mentions require an exact @actor:realm:agent ID; model names do not select a persistent agent"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-federation.ts",
-        "line": 89
-      },
-      {
-        "file": "src/social.ts",
-        "line": 226
       }
     ]
   },
@@ -52695,22 +48298,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1205
-      }
-    ]
-  },
-  {
-    "id": "guid-d6b2cb1e22eeedae",
-    "kind": "error",
-    "template": "Public Federation HTTP requires TLS on non-loopback hosts",
-    "parts": [
-      "Public Federation HTTP requires TLS on non-loopback hosts"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/public-federation-http.ts",
-        "line": 186
+        "line": 1188
       }
     ]
   },
@@ -52740,7 +48328,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1449
+        "line": 1431
       }
     ]
   },
@@ -52890,7 +48478,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 932
+        "line": 916
       }
     ]
   },
@@ -52974,21 +48562,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-d7e0077033558c37",
-    "kind": "prose",
-    "template": "Enterprise only: administrator-issued one-use invitation recovered from the host secret store.",
-    "parts": [
-      "Enterprise only: administrator-issued one-use invitation recovered from the host secret store."
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/scope-auth-tools.ts",
-        "line": 36
-      }
-    ]
-  },
-  {
     "id": "guid-d8045b43d6d47fd0",
     "kind": "error",
     "template": "Shared skill text contains private scope or sensitive material; keep it private",
@@ -53014,22 +48587,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1575
-      }
-    ]
-  },
-  {
-    "id": "guid-d837747f3f39a8c2",
-    "kind": "error",
-    "template": "public actor ID is invalid",
-    "parts": [
-      "public actor ID is invalid"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/public-federation-replica.ts",
-        "line": 156
+        "line": 1550
       }
     ]
   },
@@ -53060,22 +48618,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/operation-contracts.ts",
         "line": 62
-      }
-    ]
-  },
-  {
-    "id": "guid-d85ea43e34c2fbf8",
-    "kind": "error",
-    "template": "Unknown enterprise registration: {arg0}",
-    "parts": [
-      "Unknown enterprise registration: ",
-      ""
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-registry.ts",
-        "line": 660
       }
     ]
   },
@@ -53151,22 +48693,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 947
-      }
-    ]
-  },
-  {
-    "id": "guid-d8e9967c80dd93d3",
-    "kind": "error",
-    "template": "Invalid registration credentials",
-    "parts": [
-      "Invalid registration credentials"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/scope-auth.ts",
-        "line": 503
+        "line": 931
       }
     ]
   },
@@ -53211,7 +48738,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1025
+        "line": 1009
       }
     ]
   },
@@ -53226,7 +48753,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 348
+        "line": 309
       }
     ]
   },
@@ -53256,7 +48783,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1154
+        "line": 1137
       }
     ]
   },
@@ -53286,7 +48813,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 879
+        "line": 863
       }
     ]
   },
@@ -53301,7 +48828,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/layered-memory.ts",
-        "line": 261
+        "line": 260
       }
     ]
   },
@@ -53347,7 +48874,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1388
+        "line": 1370
       }
     ]
   },
@@ -53503,21 +49030,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-da5dd57649554246",
-    "kind": "error",
-    "template": "idempotencyKey is required and contains only letters, numbers, dot, underscore, colon, or hyphen",
-    "parts": [
-      "idempotencyKey is required and contains only letters, numbers, dot, underscore, colon, or hyphen"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/public-federation-replica.ts",
-        "line": 388
-      }
-    ]
-  },
-  {
     "id": "guid-da6ba1001ad7adf6",
     "kind": "prose",
     "template": "Deprecated compatibility read; use notes.resolve_link. Still picks the first authorized match (root first, then path order) and ignores fragments. Returns a bounded preview, current revision and exact continuation when truncated; does not promise the complete body. Supports Obsidian brackets, aliases, table escapes and qualified paths.",
@@ -53528,7 +49040,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1335
+        "line": 1317
       }
     ]
   },
@@ -53543,7 +49055,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/social.ts",
-        "line": 322
+        "line": 318
       }
     ]
   },
@@ -53689,21 +49201,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-daef418f49200d8b",
-    "kind": "error",
-    "template": "departmentIds must contain at most 32 unique opaque lowercase IDs of 1-64 characters",
-    "parts": [
-      "departmentIds must contain at most 32 unique opaque lowercase IDs of 1-64 characters"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-registry.ts",
-        "line": 179
-      }
-    ]
-  },
-  {
     "id": "guid-dafe335c2208255f",
     "kind": "prose",
     "template": "Optional argumentative job of this claim",
@@ -53789,7 +49286,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 832
+        "line": 816
       }
     ]
   },
@@ -54040,21 +49537,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-dc19a1c902cd4f38",
-    "kind": "error",
-    "template": "remote public comment revision conflict",
-    "parts": [
-      "remote public comment revision conflict"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-federation.ts",
-        "line": 519
-      }
-    ]
-  },
-  {
     "id": "guid-dc1dbd7e445523b3",
     "kind": "error",
     "template": "Duplicate configuration id",
@@ -54156,7 +49638,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1460
+        "line": 1442
       }
     ]
   },
@@ -54187,7 +49669,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 773
+        "line": 598
       }
     ]
   },
@@ -54297,19 +49779,19 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1389
+        "line": 1371
       },
       {
         "file": "src/createServer.ts",
-        "line": 1403
+        "line": 1385
       },
       {
         "file": "src/createServer.ts",
-        "line": 1418
+        "line": 1400
       },
       {
         "file": "src/createServer.ts",
-        "line": 1434
+        "line": 1416
       }
     ]
   },
@@ -54421,21 +49903,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-de1766001aa94a40",
-    "kind": "error",
-    "template": "Department claims require an enterprise host",
-    "parts": [
-      "Department claims require an enterprise host"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/scope-auth.ts",
-        "line": 544
-      }
-    ]
-  },
-  {
     "id": "guid-de4b63ed723c8e4b",
     "kind": "error",
     "template": "researchTrail.path must be a safe note path or scope URI of 500 characters or fewer",
@@ -54491,7 +49958,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1063
+        "line": 1047
       }
     ]
   },
@@ -54614,39 +50081,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 968
-      }
-    ]
-  },
-  {
-    "id": "guid-def0242b8c4b1da4",
-    "kind": "error",
-    "template": "authToken is too long",
-    "parts": [
-      "authToken is too long"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/public-federation-http.ts",
-        "line": 83
-      }
-    ]
-  },
-  {
-    "id": "guid-df09bbabd6aee122",
-    "kind": "error",
-    "template": "Enterprise registry realm '{arg0}' does not match configured realm '{arg1}'",
-    "parts": [
-      "Enterprise registry realm '",
-      "' does not match configured realm '",
-      "'"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-server.ts",
-        "line": 320
+        "line": 952
       }
     ]
   },
@@ -54676,7 +50111,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/layered-memory.ts",
-        "line": 100
+        "line": 99
       }
     ]
   },
@@ -54706,7 +50141,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3428
+        "line": 3355
       }
     ]
   },
@@ -54721,11 +50156,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/notifications.ts",
-        "line": 217
+        "line": 216
       },
       {
         "file": "src/notifications.ts",
-        "line": 260
+        "line": 259
       }
     ]
   },
@@ -54786,22 +50221,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/continuity-tools.ts",
         "line": 30
-      }
-    ]
-  },
-  {
-    "id": "guid-df9e42196176091e",
-    "kind": "error",
-    "template": "Global evidence must be approved before dependent knowledge: {arg0}",
-    "parts": [
-      "Global evidence must be approved before dependent knowledge: ",
-      ""
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 703
       }
     ]
   },
@@ -54911,21 +50330,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-e015998ea9868a88",
-    "kind": "prose",
-    "template": "Read one verified public federation object by its permanent ID. sync reports caught_up, partial or unavailable with a verified cursor. Offline or invalid-feed results use the last complete verified cache, without a current deletion/moderation guarantee. found=false with absence=unverified is not authoritative absence.",
-    "parts": [
-      "Read one verified public federation object by its permanent ID. sync reports caught_up, partial or unavailable with a verified cursor. Offline or invalid-feed results use the last complete verified cache, without a current deletion/moderation guarantee. found=false with absence=unverified is not authoritative absence."
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-federation-tools.ts",
-        "line": 9
-      }
-    ]
-  },
-  {
     "id": "guid-e051f066f8b1e6eb",
     "kind": "error",
     "template": "Obsidian CLI search failed. Make sure Obsidian is running and CLI is enabled: {arg0}",
@@ -55021,21 +50425,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-e09ffebab930ca56",
-    "kind": "error",
-    "template": "public record must be an object",
-    "parts": [
-      "public record must be an object"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/public-federation.ts",
-        "line": 319
-      }
-    ]
-  },
-  {
     "id": "guid-e0c89987328dcb1c",
     "kind": "error",
     "template": "Source lineage changed or is unavailable",
@@ -55059,21 +50448,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/llm-wiki.ts",
         "line": 14386
-      }
-    ]
-  },
-  {
-    "id": "guid-e0ca904616a8250d",
-    "kind": "error",
-    "template": "Account is already bound to a different registration",
-    "parts": [
-      "Account is already bound to a different registration"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/scope-auth.ts",
-        "line": 501
       }
     ]
   },
@@ -55133,7 +50507,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 916
+        "line": 900
       }
     ]
   },
@@ -55193,7 +50567,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 928
+        "line": 912
       }
     ]
   },
@@ -55301,7 +50675,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/social.ts",
-        "line": 1091
+        "line": 1087
       }
     ]
   },
@@ -55347,21 +50721,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/work-service.ts",
         "line": 486
-      }
-    ]
-  },
-  {
-    "id": "guid-e1c1565cd9274a03",
-    "kind": "error",
-    "template": "reviewer tokens must differ from authToken",
-    "parts": [
-      "reviewer tokens must differ from authToken"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 1380
       }
     ]
   },
@@ -55588,7 +50947,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1289
+        "line": 1271
       }
     ]
   },
@@ -55633,7 +50992,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1099
+        "line": 1083
       }
     ]
   },
@@ -55694,22 +51053,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1633
-      }
-    ]
-  },
-  {
-    "id": "guid-e322a859a315fba2",
-    "kind": "error",
-    "template": "Enterprise invite mode does not match this command center",
-    "parts": [
-      "Enterprise invite mode does not match this command center"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-registry.ts",
-        "line": 627
+        "line": 1603
       }
     ]
   },
@@ -55754,7 +51098,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/social.ts",
-        "line": 348
+        "line": 344
       }
     ]
   },
@@ -55770,7 +51114,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-access.ts",
-        "line": 206
+        "line": 164
       }
     ]
   },
@@ -55800,7 +51144,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/social.ts",
-        "line": 464
+        "line": 460
       }
     ]
   },
@@ -56056,23 +51400,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-e4cffd5efec94ec6",
-    "kind": "error",
-    "template": "moderation revision conflict: expected {arg0}, current {arg1}",
-    "parts": [
-      "moderation revision conflict: expected ",
-      ", current ",
-      ""
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/public-federation.ts",
-        "line": 657
-      }
-    ]
-  },
-  {
     "id": "guid-e4ed438274558d70",
     "kind": "prose",
     "template": "Make a cross-domain bridge explicit, inspectable, and falsifiable.",
@@ -56084,21 +51411,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/research-templates.ts",
         "line": 107
-      }
-    ]
-  },
-  {
-    "id": "guid-e4f97aded2ce88ef",
-    "kind": "error",
-    "template": "Unable to acquire Public Federation process lock",
-    "parts": [
-      "Unable to acquire Public Federation process lock"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/public-federation.ts",
-        "line": 212
       }
     ]
   },
@@ -56188,7 +51500,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/social.ts",
-        "line": 461
+        "line": 457
       }
     ]
   },
@@ -56218,7 +51530,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1467
+        "line": 1449
       }
     ]
   },
@@ -56273,22 +51585,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-e58edaa6e0e42736",
-    "kind": "error",
-    "template": "{arg0}.digest is invalid",
-    "parts": [
-      "",
-      ".digest is invalid"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 298
-      }
-    ]
-  },
-  {
     "id": "guid-e5a07abfc6bd10c3",
     "kind": "error",
     "template": "expectedRevision is required for continuation exports",
@@ -56334,7 +51630,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1563
+        "line": 1538
       }
     ]
   },
@@ -56350,21 +51646,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/llm-wiki-tools.ts",
         "line": 196
-      }
-    ]
-  },
-  {
-    "id": "guid-e5d25c871c517b8a",
-    "kind": "error",
-    "template": "local Global document does not exist",
-    "parts": [
-      "local Global document does not exist"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 1223
       }
     ]
   },
@@ -56409,7 +51690,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 942
+        "line": 926
       }
     ]
   },
@@ -56444,36 +51725,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/social-tools.ts",
         "line": 8
-      }
-    ]
-  },
-  {
-    "id": "guid-e6a817109a1f4d8b",
-    "kind": "error",
-    "template": "public federation replica state is invalid",
-    "parts": [
-      "public federation replica state is invalid"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/public-federation-replica.ts",
-        "line": 310
-      }
-    ]
-  },
-  {
-    "id": "guid-e6b911629a6e89ec",
-    "kind": "prose",
-    "template": "Immutable original cannot be replaced or removed; capture a new source path.",
-    "parts": [
-      "Immutable original cannot be replaced or removed; capture a new source path."
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 1123
       }
     ]
   },
@@ -56518,7 +51769,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1219
+        "line": 1202
       }
     ]
   },
@@ -56533,7 +51784,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1571
+        "line": 1546
       }
     ]
   },
@@ -56593,27 +51844,27 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/notifications.ts",
-        "line": 140
+        "line": 139
       },
       {
         "file": "src/notifications.ts",
-        "line": 144
+        "line": 143
       },
       {
         "file": "src/notifications.ts",
-        "line": 209
+        "line": 208
       },
       {
         "file": "src/notifications.ts",
-        "line": 215
+        "line": 214
       },
       {
         "file": "src/notifications.ts",
-        "line": 250
+        "line": 249
       },
       {
         "file": "src/notifications.ts",
-        "line": 258
+        "line": 257
       }
     ]
   },
@@ -56643,22 +51894,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/social.ts",
-        "line": 570
-      }
-    ]
-  },
-  {
-    "id": "guid-e7cc434be06a087b",
-    "kind": "error",
-    "template": "Global import configuration is too large",
-    "parts": [
-      "Global import configuration is too large"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-server.ts",
-        "line": 249
+        "line": 566
       }
     ]
   },
@@ -56673,7 +51909,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1297
+        "line": 1279
       }
     ]
   },
@@ -56895,7 +52131,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-access.ts",
-        "line": 203
+        "line": 161
       }
     ]
   },
@@ -57073,7 +52309,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3267
+        "line": 3204
       }
     ]
   },
@@ -57088,7 +52324,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1100
+        "line": 1084
       }
     ]
   },
@@ -57163,7 +52399,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2829
+        "line": 2766
       }
     ]
   },
@@ -57525,7 +52761,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3109
+        "line": 3046
       }
     ]
   },
@@ -57690,7 +52926,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 849
+        "line": 833
       }
     ]
   },
@@ -57796,7 +53032,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1060
+        "line": 1044
       }
     ]
   },
@@ -57827,21 +53063,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/community-public-retry.ts",
         "line": 186
-      }
-    ]
-  },
-  {
-    "id": "guid-ec7af937a354e440",
-    "kind": "error",
-    "template": "Global Sync HTTP requires TLS when binding to a non-loopback host",
-    "parts": [
-      "Global Sync HTTP requires TLS when binding to a non-loopback host"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 1448
       }
     ]
   },
@@ -58005,7 +53226,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth-tools.ts",
-        "line": 53
+        "line": 47
       }
     ]
   },
@@ -58067,21 +53288,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/skill-evolution-recovery.ts",
         "line": 173
-      }
-    ]
-  },
-  {
-    "id": "guid-ed5aa3995994cf5c",
-    "kind": "error",
-    "template": "Enterprise registry is too large; refusing to read it",
-    "parts": [
-      "Enterprise registry is too large; refusing to read it"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-registry.ts",
-        "line": 366
       }
     ]
   },
@@ -58190,7 +53396,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       },
       {
         "file": "src/social.ts",
-        "line": 435
+        "line": 431
       }
     ]
   },
@@ -58318,7 +53524,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/social.ts",
-        "line": 592
+        "line": 588
       }
     ]
   },
@@ -58333,7 +53539,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 921
+        "line": 905
       }
     ]
   },
@@ -58383,21 +53589,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/skill-evolution.ts",
         "line": 329
-      }
-    ]
-  },
-  {
-    "id": "guid-ee215caa04f013e1",
-    "kind": "prose",
-    "template": "Original author deleted the comment.",
-    "parts": [
-      "Original author deleted the comment."
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-federation.ts",
-        "line": 522
       }
     ]
   },
@@ -58710,21 +53901,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-ef6f19e5c4fd484a",
-    "kind": "error",
-    "template": "Invite employee must exist and be active",
-    "parts": [
-      "Invite employee must exist and be active"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-registry.ts",
-        "line": 588
-      }
-    ]
-  },
-  {
     "id": "guid-ef73aca7d5b65911",
     "kind": "prose",
     "template": "This queue is for active recall and research prioritization. It does not decide truth, rewrite notes, or replace evidence review.",
@@ -58736,21 +53912,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/llm-wiki.ts",
         "line": 3264
-      }
-    ]
-  },
-  {
-    "id": "guid-ef742f0ca3c79d48",
-    "kind": "error",
-    "template": "departmentRevision capacity reached",
-    "parts": [
-      "departmentRevision capacity reached"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-registry.ts",
-        "line": 523
       }
     ]
   },
@@ -59102,21 +54263,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-f1001d835f6c7bb0",
-    "kind": "error",
-    "template": "reviewerToken is required for this operation",
-    "parts": [
-      "reviewerToken is required for this operation"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 914
-      }
-    ]
-  },
-  {
     "id": "guid-f1093dcc14d56132",
     "kind": "prose",
     "template": "The proposed MOC branch contains an ancestor edge that crosses a scope privacy boundary.",
@@ -59217,22 +54363,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3537
-      }
-    ]
-  },
-  {
-    "id": "guid-f13d0425ab26876a",
-    "kind": "error",
-    "template": "Federation replay authority unavailable",
-    "parts": [
-      "Federation replay authority unavailable"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-federation.ts",
-        "line": 798
+        "line": 3464
       }
     ]
   },
@@ -59277,7 +54408,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 946
+        "line": 930
       }
     ]
   },
@@ -59567,7 +54698,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/layered-memory.ts",
-        "line": 339
+        "line": 338
       }
     ]
   },
@@ -59613,7 +54744,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 792
+        "line": 776
       }
     ]
   },
@@ -59710,21 +54841,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-f31839ea30cc3105",
-    "kind": "error",
-    "template": "targetRevisionId must identify an existing upsert of this document",
-    "parts": [
-      "targetRevisionId must identify an existing upsert of this document"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 821
-      }
-    ]
-  },
-  {
     "id": "guid-f322f95ad91242d5",
     "kind": "error",
     "template": "Choose one evolution runtime connection",
@@ -59735,7 +54851,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 696
+        "line": 683
       }
     ]
   },
@@ -59825,7 +54941,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/layered-memory.ts",
-        "line": 335
+        "line": 334
       }
     ]
   },
@@ -59887,7 +55003,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1179
+        "line": 1162
       }
     ]
   },
@@ -59948,7 +55064,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1204
+        "line": 1187
       }
     ]
   },
@@ -60028,21 +55144,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-f468167527ea01be",
-    "kind": "error",
-    "template": "Department updates require company mode",
-    "parts": [
-      "Department updates require company mode"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-registry.ts",
-        "line": 518
-      }
-    ]
-  },
-  {
     "id": "guid-f469de1b55185f0c",
     "kind": "error",
     "template": "toProperty must be one simple top-level Property name",
@@ -60113,7 +55214,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3482
+        "line": 3409
       }
     ]
   },
@@ -60144,21 +55245,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/skill-evolution-store.ts",
         "line": 209
-      }
-    ]
-  },
-  {
-    "id": "guid-f4afc63250acff34",
-    "kind": "prose",
-    "template": "Local document has unsubmitted changes; remote content was not applied.",
-    "parts": [
-      "Local document has unsubmitted changes; remote content was not applied."
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 1143
       }
     ]
   },
@@ -60285,21 +55371,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-f4fe95d172025147",
-    "kind": "error",
-    "template": "enterprise federation intent identity is invalid",
-    "parts": [
-      "enterprise federation intent identity is invalid"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-federation.ts",
-        "line": 166
-      }
-    ]
-  },
-  {
     "id": "guid-f5081099abc8aed5",
     "kind": "error",
     "template": "MOC preview fingerprint or revision changed",
@@ -60325,7 +55396,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1376
+        "line": 1358
       }
     ]
   },
@@ -60345,21 +55416,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-f524e3f5e7a51ae7",
-    "kind": "error",
-    "template": "target public object does not exist",
-    "parts": [
-      "target public object does not exist"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/public-federation.ts",
-        "line": 581
-      }
-    ]
-  },
-  {
     "id": "guid-f5265232a75acb1e",
     "kind": "prose",
     "template": "Optional revision author email; must be paired with authorName. Defaults to Git configuration.",
@@ -60370,7 +55426,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1276
+        "line": 1258
       }
     ]
   },
@@ -60415,11 +55471,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 683
+        "line": 541
       },
       {
         "file": "src/scope-auth.ts",
-        "line": 792
+        "line": 617
       }
     ]
   },
@@ -60435,21 +55491,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/llm-wiki-tools.ts",
         "line": 681
-      }
-    ]
-  },
-  {
-    "id": "guid-f5ad58550b9dba89",
-    "kind": "error",
-    "template": "Verified federation cache unavailable",
-    "parts": [
-      "Verified federation cache unavailable"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-federation.ts",
-        "line": 558
       }
     ]
   },
@@ -60524,7 +55565,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1112
+        "line": 1096
       }
     ]
   },
@@ -60554,7 +55595,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-access.ts",
-        "line": 225
+        "line": 180
       }
     ]
   },
@@ -60680,36 +55721,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-f6d2c26865fb5574",
-    "kind": "error",
-    "template": "TLS CA is not a valid X.509 certificate",
-    "parts": [
-      "TLS CA is not a valid X.509 certificate"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-server.ts",
-        "line": 277
-      }
-    ]
-  },
-  {
-    "id": "guid-f6ded6094e327fe8",
-    "kind": "error",
-    "template": "Enterprise account store must be outside the Vault and protected service directories",
-    "parts": [
-      "Enterprise account store must be outside the Vault and protected service directories"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/scope-auth.ts",
-        "line": 233
-      }
-    ]
-  },
-  {
     "id": "guid-f6fc982b45d3dd0d",
     "kind": "error",
     "template": "Review must first be explicitly requested",
@@ -60769,7 +55780,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1576
+        "line": 1551
       }
     ]
   },
@@ -60844,7 +55855,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 997
+        "line": 981
       }
     ]
   },
@@ -60859,7 +55870,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2885
+        "line": 2822
       }
     ]
   },
@@ -60874,7 +55885,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1074
+        "line": 1058
       }
     ]
   },
@@ -60935,21 +55946,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/compilation-service.ts",
         "line": 315
-      }
-    ]
-  },
-  {
-    "id": "guid-f7fd75c97fbaf7ef",
-    "kind": "error",
-    "template": "request body exceeds the public federation limit",
-    "parts": [
-      "request body exceeds the public federation limit"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/public-federation-http.ts",
-        "line": 45
       }
     ]
   },
@@ -61029,21 +56025,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-f863721fba805398",
-    "kind": "error",
-    "template": "Enterprise account store must use an absolute path",
-    "parts": [
-      "Enterprise account store must use an absolute path"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/scope-auth.ts",
-        "line": 223
-      }
-    ]
-  },
-  {
     "id": "guid-f87851b5f70d74de",
     "kind": "error",
     "template": "understanding may reference at most 8 distinct paths",
@@ -61059,21 +56040,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-f88acc469d998779",
-    "kind": "error",
-    "template": "Federation source unavailable",
-    "parts": [
-      "Federation source unavailable"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-federation.ts",
-        "line": 252
-      }
-    ]
-  },
-  {
     "id": "guid-f8902c34a15fc23c",
     "kind": "prose",
     "template": "Schema prose was omitted to fit maxChars; field names, constraints, and required arguments remain callable.",
@@ -61084,7 +56050,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/endpoint-registry.ts",
-        "line": 611
+        "line": 607
       }
     ]
   },
@@ -61099,7 +56065,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1203
+        "line": 1186
       }
     ]
   },
@@ -61164,7 +56130,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/layered-memory.ts",
-        "line": 202
+        "line": 201
       }
     ]
   },
@@ -61211,21 +56177,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/continuity.ts",
         "line": 184
-      }
-    ]
-  },
-  {
-    "id": "guid-f91bd143284a4fa9",
-    "kind": "prose",
-    "template": "Enterprise only: this execution session, distinct from the persistent agentId.",
-    "parts": [
-      "Enterprise only: this execution session, distinct from the persistent agentId."
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/scope-auth-tools.ts",
-        "line": 37
       }
     ]
   },
@@ -61456,29 +56407,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-fa172a62ac0530bc",
-    "kind": "error",
-    "template": "idempotencyKey contains unsupported characters",
-    "parts": [
-      "idempotencyKey contains unsupported characters"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 229
-      },
-      {
-        "file": "src/public-federation.ts",
-        "line": 554
-      },
-      {
-        "file": "src/public-federation.ts",
-        "line": 636
-      }
-    ]
-  },
-  {
     "id": "guid-fa180292c88ebaa2",
     "kind": "error",
     "template": "Work group membership is malformed",
@@ -61508,7 +56436,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1248
+        "line": 1230
       }
     ]
   },
@@ -61539,21 +56467,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/skill-evolution.ts",
         "line": 294
-      }
-    ]
-  },
-  {
-    "id": "guid-fa2d71041d844605",
-    "kind": "error",
-    "template": "comment has no known public federation revision",
-    "parts": [
-      "comment has no known public federation revision"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-federation.ts",
-        "line": 514
       }
     ]
   },
@@ -61615,30 +56528,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/organization.ts",
         "line": 209
-      }
-    ]
-  },
-  {
-    "id": "guid-fa77b46d6e0bca27",
-    "kind": "error",
-    "template": "Unknown enterprise employee: {arg0}",
-    "parts": [
-      "Unknown enterprise employee: ",
-      ""
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-registry.ts",
-        "line": 451
-      },
-      {
-        "file": "src/enterprise-registry.ts",
-        "line": 520
-      },
-      {
-        "file": "src/enterprise-registry.ts",
-        "line": 536
       }
     ]
   },
@@ -61725,22 +56614,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1466
-      }
-    ]
-  },
-  {
-    "id": "guid-fab0beae11fae37c",
-    "kind": "error",
-    "template": "Enterprise registry is already initialized with a different profile",
-    "parts": [
-      "Enterprise registry is already initialized with a different profile"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-registry.ts",
-        "line": 476
+        "line": 1448
       }
     ]
   },
@@ -61859,11 +56733,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/social.ts",
-        "line": 442
+        "line": 438
       },
       {
         "file": "src/social.ts",
-        "line": 542
+        "line": 538
       }
     ]
   },
@@ -61894,7 +56768,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 927
+        "line": 911
       }
     ]
   },
@@ -62007,22 +56881,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1369
-      }
-    ]
-  },
-  {
-    "id": "guid-fbdd70adbce5447f",
-    "kind": "error",
-    "template": "remote public post is unavailable",
-    "parts": [
-      "remote public post is unavailable"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-federation.ts",
-        "line": 473
+        "line": 1351
       }
     ]
   },
@@ -62143,22 +57002,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/llm-wiki.ts",
         "line": 7171
-      }
-    ]
-  },
-  {
-    "id": "guid-fc627ab67082f784",
-    "kind": "error",
-    "template": "provenance.evidenceRevisions must contain at most {arg0} entries",
-    "parts": [
-      "provenance.evidenceRevisions must contain at most ",
-      " entries"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 249
       }
     ]
   },
@@ -62303,21 +57146,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-fd140080076d6966",
-    "kind": "error",
-    "template": "Public Federation signing key must be Ed25519",
-    "parts": [
-      "Public Federation signing key must be Ed25519"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/public-federation.ts",
-        "line": 453
-      }
-    ]
-  },
-  {
     "id": "guid-fd4e660df21e2a44",
     "kind": "prose",
     "template": "Run a saved wiki_view YAML definition using the existing scoped metadata index. Only selected columns, no bodies or scripts. Replay nextAction with the definition revision; cursor pages are not an atomic vault snapshot.",
@@ -62343,7 +57171,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth-tools.ts",
-        "line": 58
+        "line": 52
       }
     ]
   },
@@ -62398,36 +57226,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-fd84656ae9994e4d",
-    "kind": "error",
-    "template": "hubId must be a lowercase identifier",
-    "parts": [
-      "hubId must be a lowercase identifier"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 516
-      }
-    ]
-  },
-  {
-    "id": "guid-fd8bcfd3fba4c84f",
-    "kind": "error",
-    "template": "Global Sync pending content quota exceeded",
-    "parts": [
-      "Global Sync pending content quota exceeded"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 640
-      }
-    ]
-  },
-  {
     "id": "guid-fdaefa5cd8d6564d",
     "kind": "error",
     "template": "expectedSnapshot must be a lowercase SHA-256 fingerprint",
@@ -62477,21 +57275,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/community-status-tools.ts",
         "line": 21
-      }
-    ]
-  },
-  {
-    "id": "guid-fe0497a7e2475b13",
-    "kind": "error",
-    "template": "Enterprise invite expired",
-    "parts": [
-      "Enterprise invite expired"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/enterprise-registry.ts",
-        "line": 625
       }
     ]
   },
@@ -62551,7 +57334,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/layered-memory.ts",
-        "line": 217
+        "line": 216
       }
     ]
   },
@@ -62586,21 +57369,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/references.ts",
         "line": 49
-      }
-    ]
-  },
-  {
-    "id": "guid-fe6d6e936d06034e",
-    "kind": "error",
-    "template": "Federation projection changed or unavailable; retry synchronization before reading",
-    "parts": [
-      "Federation projection changed or unavailable; retry synchronization before reading"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/public-federation-replica.ts",
-        "line": 562
       }
     ]
   },
@@ -62720,7 +57488,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 555
+        "line": 416
       }
     ]
   },
@@ -62735,15 +57503,15 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/scope-auth.ts",
-        "line": 260
+        "line": 221
       },
       {
         "file": "src/scope-auth.ts",
-        "line": 262
+        "line": 223
       },
       {
         "file": "src/scope-auth.ts",
-        "line": 267
+        "line": 228
       }
     ]
   },
@@ -62837,7 +57605,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1045
+        "line": 1029
       }
     ]
   },
@@ -62852,7 +57620,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1316
+        "line": 1298
       }
     ]
   },
@@ -62932,22 +57700,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-ffcfd5ee0bda1db1",
-    "kind": "error",
-    "template": "provenance.{arg0} must be an array",
-    "parts": [
-      "provenance.",
-      " must be an array"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/global-sync.ts",
-        "line": 239
-      }
-    ]
-  },
-  {
     "id": "guid-ffe6f98d9d4f224a",
     "kind": "prose",
     "template": "Root order is unsafe while the MOC hierarchy has missing, ambiguous, self-referential, or cyclic parents.",
@@ -62973,7 +57725,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 873
+        "line": 857
       }
     ]
   },

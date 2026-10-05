@@ -6,8 +6,6 @@ import { createServer, getServerRuntime, type CreateServerOptions } from './crea
 import { OwnerActivityPolicy, type OwnerActivityConfig } from './owner-activity.js';
 import { HOST_FEATURE_IDS_V1 } from './host-features.js';
 import { startRestApi } from './rest-api.js';
-import { EnterpriseRegistry } from './enterprise-registry.js';
-import { withEnterpriseRequestContext } from './enterprise-request-context.js';
 
 const cleanup: Array<() => Promise<unknown>> = [];
 afterEach(async () => { vi.useRealTimers(); for (const close of cleanup.splice(0).reverse()) await close(); });
@@ -335,31 +333,4 @@ test('pulse revalidates its bound owner grant after optional reads and before em
   const response = await runtime.dispatchTool('get_agent_pulse', { accessToken, hostBusy: true, maxChars: 12000 });
   expect(response.isError).toBe(true);
   expect(JSON.stringify(response)).not.toMatch(/Allowed title|Secret title/);
-});
-
-test('enterprise pulse never bypasses owner consent to browse community posts', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'owner-enterprise-pulse-')); cleanup.push(() => rm(root, { recursive: true, force: true }));
-  const vault = join(root, 'vault'); await mkdir(join(vault, 'Community', 'Posts'), { recursive: true });
-  await writeFile(join(vault, 'Community', 'Posts', 'secret.md'), post('Enterprise secret title', 'enterprise secret body'));
-  const registryPath = join(root, 'private', 'registry.json');
-  const registry = new EnterpriseRegistry({ registryPath, vaultPath: vault });
-  await registry.initialize({ mode: 'company', realmId: 'enterprise', vaultPath: vault });
-  await registry.createEmployee({ userId: 'employee', sharedMemoryEnabled: true });
-  const certFingerprint = 'e'.repeat(64);
-  await registry.registerRuntime({ runtimeId: 'runtime', kind: 'internal', certFingerprint });
-  const binding = { accountId: 'enterpriseaccount', agentId: 'agent', modelId: 'model', userId: 'employee', runtimeId: 'runtime', role: 'employee' };
-  const secretFile = join(root, 'private', 'invite.txt');
-  await registry.createInvite({ binding, expiresAt: new Date(Date.now() + 60_000).toISOString(), secretFile });
-  const invitationToken = (await readFile(secretFile, 'utf8')).trim();
-  const server = createServer(vault, { enterpriseRegistryPath: registryPath,
-    features: { version: 1, selected: ['wiki-core', 'personal-memory', 'collaboration'] } });
-  cleanup.push(() => server.close()); const runtime = getServerRuntime(server)!;
-  const invoke = <T>(operation: () => T) => withEnterpriseRequestContext({ transport: 'http', certFingerprint }, operation);
-  const registration = await invoke(() => runtime.dispatchTool('register_scope_account', {
-    ...binding, password: 'test-password-at-least-12', invitationToken, sessionId: 'session',
-  }));
-  const accessToken = JSON.parse(registration.content[0].text).accessToken;
-  const response = await invoke(() => runtime.dispatchTool('get_agent_pulse', { accessToken, hostBusy: true, maxChars: 12000 }));
-  expect(response.isError).not.toBe(true);
-  expect(response.content[0].text).not.toMatch(/Enterprise secret title|enterprise secret body/);
 });

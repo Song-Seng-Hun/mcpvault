@@ -33,7 +33,7 @@ const budget = (value?: number) => {
 const actor = (p?: ScopePrincipal) => p ? {
   accountId: p.accountId, modelId: p.modelId, agentId: p.agentId, userId: p.userId,
   commandCenterId: p.commandCenterId, role: p.role, sessionId: p.sessionId,
-  generation: p.sessionGeneration, enterprise: p.enterprise,
+  generation: p.sessionGeneration,
 } : null;
 const rangeRequest = (input: DocumentRangeRequest): DocumentRangeRequest => {
   if (!input || typeof input !== 'object' || Array.isArray(input)) throw guidanceError(new Error('Invalid document range'), 'guid-b823edb9533582c6');

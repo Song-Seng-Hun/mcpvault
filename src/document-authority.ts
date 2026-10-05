@@ -138,8 +138,8 @@ export class DocumentAuthority {
     return constraints.every(rule => {
       if (rule.publicationHold && !allowsStagedPublication(rule.publicationHold, path)) return false;
       if (rule.confidential && (!principal || localInferenceAllowed?.(principal) !== true)) return false;
-      if (rule.realmId && (principal?.enterprise?.mode !== 'company' || principal.enterprise.realmId !== rule.realmId)) return false;
-      if (rule.departmentIds && !rule.departmentIds.some(department => principal?.enterprise?.departmentIds?.includes(department))) return false;
+      // Realm/department rules required enterprise principals, which no longer exist: fail closed.
+      if (rule.realmId || rule.departmentIds) return false;
       return !rule.accountIds || Boolean(principal && rule.accountIds.includes(principal.accountId));
     });
   }

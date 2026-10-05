@@ -77,7 +77,7 @@ test.each([false,true])('hidden original, inaccessible reference or absent appro
 });
 test.each([false,true])('logout during resource read invalidates the response (source access=%s)',async sourceAccess=>{
   const f=await fixture(false,sourceAccess),original=f.host.readBlob;
-  f.host.readBlob=async h=>{const b=await original(h);await f.auth.endSession(f.session.accessToken);return b;};
+  f.host.readBlob=async h=>{const b=await original(h);f.auth.logout(f.session.accessToken);return b;};
   await expect(f.read()).rejects.toThrow('Reviewed skill unavailable');
 });
 
@@ -118,6 +118,6 @@ test('discovery revalidates retained cards after async work and again at actual 
   let fence:any;
   const result=await f.service.discover({query:'Review',...f.session},value=>{fence=value;});
   expect(result.cards).toHaveLength(1);expect(fence).toBeDefined();
-  await f.auth.endSession(f.session.accessToken);
+  f.auth.logout(f.session.accessToken);
   expect(()=>fence.assertFresh()).toThrow();await expect(fence.revalidate()).rejects.toThrow();
 });
