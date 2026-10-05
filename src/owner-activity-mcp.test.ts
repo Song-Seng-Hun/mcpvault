@@ -94,7 +94,7 @@ test('every optional activity is gated before an unavailable provider or store',
   cleanup.push(() => server.close()); const runtime = getServerRuntime(server)!;
   for (const [endpointId, arguments_] of [
     ['community.posts', {}],
-    ['roleplay.world', { op: 'read' }], ['skill.resolve', { skillId: 'example' }],
+    ['skill.resolve', { skillId: 'example' }],
   ] as const) {
     const response = await runtime.dispatchTool('call_endpoint', { endpointId, arguments: arguments_ });
     expect(response.isError, endpointId).toBe(true);

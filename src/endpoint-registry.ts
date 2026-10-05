@@ -3,7 +3,6 @@ import type { Tool } from '@modelcontextprotocol/server';
 import type { ScopeCapability } from './scope-auth.js';
 import { boundSearchResults } from './search-limits.js';
 import { projectGuidance } from './guidance-runtime.js';
-import { STORY_OPERATIONS } from './story-tools.js';
 import { operationAvailability, operationReadAlias } from './operation-contracts.js';
 export { operationReadAlias };
 import { DOCUMENT_TOOL_ENDPOINTS } from './document-tools.js';
@@ -37,8 +36,6 @@ export interface EndpointAvailabilityContext {
   capabilities: Set<ScopeCapability>;
   authenticated: boolean;
   principalKey?: string;
-  roleplayConfigured?: boolean;
-  roleplayWritesConfigured?: boolean;
   ownerActivity?: {
     policyFingerprint: string;
     executionBindingGeneration: string;
@@ -47,18 +44,13 @@ export interface EndpointAvailabilityContext {
   };
 }
 
-const OPTIONAL_ACTIVITIES = new Set<Activity>(['collaboration',
-  'roleplay', 'skill-evolution']);
+const OPTIONAL_ACTIVITIES = new Set<Activity>(['collaboration', 'skill-evolution']);
 export function ownerActivityForEndpointTool(toolName: string): Activity | undefined {
   const feature = hostFeatureForTool(toolName);
   return feature && OPTIONAL_ACTIVITIES.has(feature as Activity) ? feature as Activity : undefined;
 }
 const OWNER_OPERATION_ACTIONS: Readonly<Record<string, Readonly<Record<string, OwnerActivityAction>>>> = {
   manage_skill_candidate: { list: 'discover', read: 'read' },
-  manage_roleplay_evolution: { list: 'discover', read: 'read' },
-  manage_story_artifact: { list: 'discover', read: 'read' },
-  manage_story_review: { list: 'discover', read: 'read' },
-  manage_story_session: { list: 'discover', read: 'read' },
 };
 export function ownerActionForEndpointTool(toolName: string, mutating: boolean, op?: unknown): OwnerActivityAction {
   const explicitOperation = typeof op === 'string' ? OWNER_OPERATION_ACTIONS[toolName]?.[op] : undefined;
@@ -133,13 +125,7 @@ const EXPLICIT_IDS: Record<string, string> = {
   check_reusable_configuration: 'configuration.check',
   preview_learning_configuration: 'configuration.learning_preview',
   list_guidance_catalog: 'guidance.catalog',
-  manage_roleplay_world: 'roleplay.world', manage_roleplay_character: 'roleplay.character', manage_roleplay_scene: 'roleplay.scene',
-  manage_roleplay_computer: 'roleplay.computer',
   list_notices: 'notice.list', read_notice: 'notice.read', preview_notice: 'notice.preview', revise_notice: 'notice.revise',
-  read_roleplay_context: 'roleplay.context', submit_roleplay_action: 'roleplay.action', resolve_roleplay_action: 'roleplay.resolve',
-  read_roleplay_history: 'roleplay.history', correct_roleplay_turn: 'roleplay.correct',
-  manage_roleplay_evolution: 'roleplay.evolution',
-  manage_roleplay_trpg: 'roleplay.trpg',
   public_federation_pull: 'federation.pull',
   public_federation_retry: 'federation.retry',
   public_federation_get: 'federation.get',
@@ -423,8 +409,6 @@ const EXPLICIT_ROUTES: Record<string, { method: 'GET' | 'POST'; url: string }> =
 };
 
 const ENDPOINT_ALIASES: Record<string, string[]> = {
-  manage_roleplay_world: ['world', 'worldview', 'register', '세계관', '세계', '등록', '허구'],
-  manage_roleplay_computer: ['world', 'worldview', 'computer', 'environment', 'hardware', 'software', 'specs', 'PC', 'NAS', 'register', 'session', '컴퓨터', '세계관', '환경', '등록', '사양', '실행', '대상'],
   search_notes: ['search', 'search notes', 'knowledge search', '지식 검색', '검색'],
   read_work_review_context: ['work review', 'task review', '작업 검토', '업무 검토'],
   manage_community_participation: ['participation', 'community goals', 'pause', 'heartbeat'],
@@ -538,15 +522,11 @@ const ENDPOINT_ALIASES: Record<string, string[]> = {
 };
 
 export function endpointIdForTool(toolName: string): string {
-  const story = Object.entries(STORY_OPERATIONS).find(([, spec]) => spec.tool === toolName);
-  if (story) return `story.${story[0]}`;
   return EXPLICIT_IDS[toolName] || `mcp.${toolName}`;
 }
 
 function routeFor(tool: Tool, mutating: boolean): { method: 'GET' | 'POST'; url: string } {
   if (Object.hasOwn(DOCUMENT_TOOL_ENDPOINTS, tool.name)) return { method: 'GET', url: `/api/endpoint/${endpointIdForTool(tool.name)}` };
-  // The generic executor has no path-bound projectId for a body to override.
-  if (Object.values(STORY_OPERATIONS).some(spec => spec.tool === tool.name)) return { method: mutating ? 'POST' : 'GET', url: `/api/endpoint/${endpointIdForTool(tool.name)}` };
   const explicit = EXPLICIT_ROUTES[tool.name];
   if (explicit) return mutating && explicit.method !== 'POST' ? { ...explicit, method: 'POST' } : explicit;
   return { method: mutating ? 'POST' : 'GET', url: `/api/mcp/${tool.name}` };
@@ -735,14 +715,11 @@ export class EndpointRegistry {
       .map(item => {
         const missing = item.requires.filter(required => !context.capabilities.has(required as ScopeCapability));
         const skillDisabled = context.skillEvolutionEnabled === false && item.endpointId.startsWith('skill.') && item.endpointId !== 'skill.resolve';
-        const roleplayMissing = context.roleplayConfigured === false && item.endpointId.startsWith('roleplay.') && item.endpointId !== 'roleplay.computer';
-        const hostMissing = roleplayMissing;
-        const roleplaySetupMissing = context.roleplayWritesConfigured === false && item.endpointId.startsWith('roleplay.') && item.endpointId !== 'roleplay.computer' && item.mutating;
-        const disabled = context.readOnly && item.mutating || skillDisabled || hostMissing || roleplaySetupMissing;
+        const disabled = context.readOnly && item.mutating || skillDisabled;
         const reviewedRead = context.reviewedSourceAccess === true && item.endpointId === 'skill.resolve';
         const parentAvailable = !disabled && (!reviewedRead || context.authenticated) && (item.requires.length === 0 || context.authenticated && missing.length === 0 || item.endpointId === 'auth.register' || item.endpointId === 'auth.login');
         const parentState = disabled ? 'disabled' as const : parentAvailable ? 'ready' as const : 'locked' as const;
-        const parentReason = hostMissing ? 'host configuration is missing' : roleplaySetupMissing ? 'host administrator configuration is missing' : skillDisabled ? 'skill evolution is disabled by the host' : disabled ? 'server is read-only' : !context.authenticated && (item.requires.length > 0 || reviewedRead) && item.endpointId !== 'auth.register' && item.endpointId !== 'auth.login' ? 'authentication required' : missing.length > 0 ? `capability required: ${missing.join(', ')}` : undefined;
+        const parentReason = skillDisabled ? 'skill evolution is disabled by the host' : disabled ? 'server is read-only' : !context.authenticated && (item.requires.length > 0 || reviewedRead) && item.endpointId !== 'auth.register' && item.endpointId !== 'auth.login' ? 'authentication required' : missing.length > 0 ? `capability required: ${missing.join(', ')}` : undefined;
         const activity = ownerActivityForEndpointTool(item.toolName);
         const consent = (action: OwnerActivityAction) => !activity || reviewedRead || context.ownerActivity?.eligibility[activity]?.[action] === true;
         const ownerProject = <T extends { available: boolean; state: 'ready' | 'locked' | 'disabled'; reason?: string }>(value: T, action: OwnerActivityAction): T =>

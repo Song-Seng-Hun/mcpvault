@@ -12,8 +12,6 @@ import { queryWindow } from './paged-query.js';
 import type { ReputationService } from './reputation.js';
 import { readNotesInBatches } from './batch-read.js';
 import { attachPublicCreateRequest, preparePublicCreateRequest, runPublicCreate } from './community-public-retry.js';
-import { ROLEPLAY_ROOT, roleplayTurnPath } from './roleplay-store.js';
-import { roleplayHash } from './roleplay-model.js';
 
 const ROOM_ROOT = 'Community/ChatRooms';
 const MESSAGE_ROOT = 'Community/ChatMessages';
@@ -22,18 +20,12 @@ const ROOM_STATUSES = new Set(['open', 'archived']);
 const now = () => new Date().toISOString();
 const roomPath = (roomId: string) => `${ROOM_ROOT}/${normalizeScopeId(roomId, 'roomId')}.md`;
 const messagesRoot = (roomId: string) => `${MESSAGE_ROOT}/${normalizeScopeId(roomId, 'roomId')}`;
-const messagePath = (roomId: string, messageId: string) => {
-  const id = normalizeScopeId(messageId, 'messageId');
-  const turn = /^roleplay-turn-([1-9][0-9]{0,4})$/.exec(id);
-  return turn ? roleplayTurnPath(Number(turn[1])) : `${messagesRoot(roomId)}/${id}.md`;
-};
+const messagePath = (roomId: string, messageId: string) => `${messagesRoot(roomId)}/${normalizeScopeId(messageId, 'messageId')}.md`;
 
-/** Shared reply validation for ordinary chat and pre-roleplay room history. */
-export async function readChatReplyTarget(fileSystem: FileSystemService, roomId: string, messageId: string, options: { canAccessPath?: (path: string) => boolean; ordinaryOnly?: boolean } = {}) {
+async function readChatReplyTarget(fileSystem: FileSystemService, roomId: string, messageId: string) {
   const path = messagePath(roomId, messageId);
-  if ((options.ordinaryOnly && path.startsWith(`${ROLEPLAY_ROOT}/`)) || (options.canAccessPath && !options.canAccessPath(path))) throw guidanceError(new Error('Reply target is unavailable'), 'guid-ae6a4bae0abacc55');
   const note = await fileSystem.readNote(path);
-  if (note.frontmatter.mcpvault_type !== 'chat_message' || note.frontmatter.room_id !== roomId || note.frontmatter.message_id !== messageId || isModerationHidden(note.frontmatter) || (options.ordinaryOnly && note.frontmatter.roleplay_committed)) throw guidanceError(new Error('Reply target is unavailable'), 'guid-ae6a4bae0abacc55');
+  if (note.frontmatter.mcpvault_type !== 'chat_message' || note.frontmatter.room_id !== roomId || note.frontmatter.message_id !== messageId || isModerationHidden(note.frontmatter)) throw guidanceError(new Error('Reply target is unavailable'), 'guid-ae6a4bae0abacc55');
   return { path, note };
 }
 
@@ -43,17 +35,7 @@ function requireParticipant(principal?: ScopePrincipal): ScopePrincipal {
 }
 
 export class ChatService {
-  constructor(private readonly fileSystem: FileSystemService, private readonly references: ReferenceService, private readonly reputation: ReputationService,
-    private readonly verifiedRoleplay?: () => Promise<Array<{ path: string; revision: string; content: string; frontmatter: Record<string, any> }>>) {}
-
-  private async verifiedTurns() { return new Map((await this.verifiedRoleplay?.() ?? []).map(record => [record.path, record])); }
-  private verifiedMessage<T extends { path: string; content: string; revision: string; frontmatter: Record<string, any> }>(note: T, turns: Awaited<ReturnType<ChatService['verifiedTurns']>>) {
-    if (!note.path.startsWith(`${ROLEPLAY_ROOT}/`) && !note.frontmatter.roleplay_committed) return note;
-    const verified = turns.get(note.path);
-    if (!verified || verified.revision !== note.revision) throw guidanceError(new Error('Roleplay turn verification failed; refresh or request host repair'), 'guid-47dd1b20df94bbba');
-    // The validated store record contains full canonical Markdown; chat projects only its parsed body.
-    return { ...note, content: note.content.trimEnd() };
-  }
+  constructor(private readonly fileSystem: FileSystemService, private readonly references: ReferenceService, private readonly reputation: ReputationService) {}
 
   async createRoom(params: { principal?: ScopePrincipal; roomId: string; title: string; description?: string; expectedRevision: string }) {
     const principal = requireParticipant(params.principal);
@@ -121,7 +103,6 @@ export class ChatService {
     const content = shortMessage(params.content);
     const replyTo = params.replyTo ? normalizeScopeId(params.replyTo, 'replyTo') : undefined;
     const requestedMessageId = params.messageId ? normalizeScopeId(params.messageId, 'messageId') : undefined;
-    if (requestedMessageId?.startsWith('roleplay-')) throw guidanceError(new Error('Roleplay message IDs are reserved for committed world turns'), 'guid-ea906c4c1993b31d');
     const request = preparePublicCreateRequest({
       principal, requestId: params.requestId, action: 'chat.message', generatedPrefix: 'message',
       ...(requestedMessageId && { requestedTargetId: requestedMessageId }),
@@ -136,8 +117,6 @@ export class ChatService {
       revalidate: async () => {
         const room = await this.readRoom(roomId);
         if (room.note.frontmatter.status !== 'open') throw guidanceError(new Error('Cannot send a message to an archived room'), 'guid-5b1a660e8cd5f1b7');
-        const roleplayHistory = await this.fileSystem.queryNotes({ pathPrefix: ROLEPLAY_ROOT, filters: { room_id: roomId, roleplay_committed: true }, limit: 1, includeContent: false, includeTotal: false }, path => path.startsWith(`${ROLEPLAY_ROOT}/`));
-        if (roleplayHistory.notes.length) throw guidanceError(new Error('This room has roleplay history; use the active world service or ask the host to recover it. Ordinary chat cannot bypass world processing.'), 'guid-ee1a4653e99d6531');
         guards = [{ path: room.path, expectedRevision: room.note.revision }];
         if (replyTo) {
           const { path: parentPath, note: parent } = await readChatReplyTarget(this.fileSystem, roomId, replyTo);
@@ -211,8 +190,6 @@ export class ChatService {
   }
 
   async readRoomWithMessages(params: { principal?: ScopePrincipal; roomId: string; limit?: number; afterMessageId?: string; contextBefore?: number; maxChars?: number; includeThreadContext?: boolean }) {
-    const verifiedTurns = await this.verifiedTurns();
-    const turnFingerprint = roleplayHash([...verifiedTurns].map(([path, record]) => [path, record.revision]));
     const roomId = normalizeScopeId(params.roomId, 'roomId');
     const room = await this.readRoom(roomId);
     const limit = windowNumber(params.limit, 20, 100);
@@ -272,7 +249,7 @@ export class ChatService {
         if (selected.length >= selectedLimit) break;
         const raw = fullByPath.get(note.path);
         if (!raw) continue;
-        const full = this.verifiedMessage(raw, verifiedTurns);
+        const full = raw;
         const contentLength = Array.from(full.content).length;
         if (selected.length > 0 && usedChars + contentLength > maxChars) {
           stop = true;
@@ -296,14 +273,12 @@ export class ChatService {
         .filter((path): path is string => Boolean(path))))
         .filter(path => !selectedByPath.has(path));
     const parentByPath = new Map(selectedByPath);
-    for (const [path, parent] of await readNotesInBatches(this.fileSystem, parentPaths)) parentByPath.set(path, this.verifiedMessage(parent, verifiedTurns));
+    for (const [path, parent] of await readNotesInBatches(this.fileSystem, parentPaths)) parentByPath.set(path, parent);
     const messageReputations = await this.reputation.getMany([
       ...selected.map(({ note }) => String(note.frontmatter.author || '')),
       ...Array.from(parentByPath.values()).map(note => String(note.frontmatter.author || '')),
     ]);
     const viewerReputation = params.principal ? await this.reputation.getForPrincipal(params.principal) : undefined;
-    const finalTurns = await this.verifiedTurns();
-    if (roleplayHash([...finalTurns].map(([path, record]) => [path, record.revision])) !== turnFingerprint) throw guidanceError(new Error('Roleplay history changed; refresh this room'), 'guid-a9f10cf94dbe92fb');
     return {
       room: { path: room.path, fm: room.note.frontmatter, content: room.note.content, revision: room.note.revision },
       ...(viewerReputation && { viewerLevel: viewerReputation.level, viewerXp: viewerReputation.xp, viewerLevelLabel: viewerReputation.label }),
@@ -313,7 +288,6 @@ export class ChatService {
         roomId: note.frontmatter.room_id,
         author: note.frontmatter.author,
         authorRole: note.frontmatter.author_role,
-        ...(note.frontmatter.roleplay_committed && { fictionDomain: 'roleplay', characterId: note.frontmatter.character_id, committedTurn: true }),
         replyTo: note.frontmatter.reply_to,
         createdAt: note.frontmatter.created_at,
         content,
@@ -337,23 +311,17 @@ export class ChatService {
 
   /** Read one message directly so context-oriented callers do not need to scan a timeline. */
   async getMessage(params: { roomId: string; messageId: string; includeReferences?: boolean }) {
-    const verifiedTurns = await this.verifiedTurns();
     const roomId = normalizeScopeId(params.roomId, 'roomId');
     const messageId = normalizeScopeId(params.messageId, 'messageId');
     await this.readRoom(roomId);
     const path = messagePath(roomId, messageId);
-    const note = this.verifiedMessage({ ...await this.fileSystem.readNote(path), path }, verifiedTurns);
+    const note = { ...await this.fileSystem.readNote(path), path };
     if (note.frontmatter.mcpvault_type !== 'chat_message' || note.frontmatter.room_id !== roomId) throw guidanceError(new Error(`Not a chat message in this room: ${messageId}`), 'guid-e2f9d4211e38a467');
     if (isModerationHidden(note.frontmatter)) throw guidanceError(new Error('This chat message is unavailable because it was hidden by moderation'), 'guid-6416c9de5e93c6e3');
     const authorReputation = (await this.reputation.getMany([String(note.frontmatter.author || '')])).get(String(note.frontmatter.author || '').toLowerCase());
-    if (note.frontmatter.roleplay_committed) {
-      const final = (await this.verifiedTurns()).get(path);
-      if (!final || final.revision !== note.revision) throw guidanceError(new Error('Roleplay turn changed; host repair required'), 'guid-1e46a9e1d525c04c');
-    }
-    const { roleplay_event: _managedEvent, ...publicMetadata } = note.frontmatter;
     return {
       path,
-      fm: publicMetadata,
+      fm: note.frontmatter,
       messageId,
       roomId,
       content: note.content,

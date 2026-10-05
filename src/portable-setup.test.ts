@@ -308,14 +308,4 @@ describe('portable existing host scripts', () => {
     const result = await exec(process.execPath, [join(repository, 'scripts/obsidian-host-plugins.mjs'), '--action', 'status', '--target', f.vault, '--confirm-target', f.vault]);
     expect(JSON.parse(result.stdout).action).toBe('status');
   });
-  test('roleplay host resolves built modules relative to its script from an unrelated cwd', async () => {
-    const f = await fixture(); const scripts = join(f.program, 'scripts'); await mkdir(scripts);
-    await writeFile(join(scripts, 'roleplay-host.mjs'), await readFile(join(repository, 'scripts/roleplay-host.mjs')));
-    await mkdir(join(f.program, 'dist/src'), { recursive: true });
-    await writeFile(join(f.program, 'package.json'), '{"type":"module"}');
-    await writeFile(join(f.program, 'dist/src/roleplay-host.js'), 'export async function loadRoleplayHostConfig(){return {fixture:true}}');
-    await writeFile(join(f.program, 'dist/src/roleplay-recovery.js'), 'export async function inspectRoleplayRecovery(o){return o}; export function recoverRoleplayWriter(){throw Error("never recover")}');
-    const result = await exec(process.execPath, [join(scripts, 'roleplay-host.mjs'), 'inspect', f.vault, join(f.state, 'fixture.json')], { cwd: f.root });
-    expect(JSON.parse(result.stdout)).toEqual({ fixture: true });
-  });
 });

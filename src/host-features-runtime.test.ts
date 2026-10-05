@@ -69,7 +69,7 @@ test('explicit current feature snapshot preserves all current endpoints without 
   const { runtime } = await fixture({ features: { version: 1, selected: [...HOST_FEATURE_IDS_V1] } });
   expect(runtime.endpointRegistry.resolve('documents.read')).toBeDefined();
   expect(runtime.endpointRegistry.resolve('community.post')).toBeDefined();
-  const response = await runtime.dispatchTool('call_endpoint', { endpointId: 'roleplay.world', arguments: { op: 'read' } });
+  const response = await runtime.dispatchTool('call_endpoint', { endpointId: 'community.posts', arguments: {} });
   expect(response.isError).toBe(true);
   expect(response.content[0].text).toMatch(/owner|consent|authority/i);
 });

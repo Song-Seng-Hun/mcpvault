@@ -11,7 +11,7 @@ function api(): typeof import('./host-features.js') {
 }
 const ids = [
   'wiki-core', 'document-search', 'personal-memory', 'work-management', 'collaboration',
-  'roleplay', 'skill-evolution',
+  'skill-evolution',
 ] as const;
 const config = (...selected: string[]) => ({ version: 1, selected });
 
@@ -45,14 +45,14 @@ test('work management does not imply collaboration, economy, or model execution'
 
 test('selection is detached and frozen; disabling and re-enabling preserves the prior configuration', () => {
   const f = api();
-  const input = config('roleplay', 'wiki-core', 'personal-memory');
+  const input = config('work-management', 'wiki-core', 'personal-memory');
   const before = structuredClone(input);
   const enabled = f.parseHostFeatureConfig(input);
   const fingerprint = f.hostFeatureConfigFingerprint(enabled);
   const disabled = f.parseHostFeatureConfig(config('wiki-core'));
-  expect(f.hostFeatureEligibility(disabled, 'manage_roleplay_world').eligible).toBe(false);
+  expect(f.hostFeatureEligibility(disabled, 'read_work_board').eligible).toBe(false);
   const restored = f.parseHostFeatureConfig(before);
-  expect(f.hostFeatureEligibility(restored, 'manage_roleplay_world').eligible).toBe(true);
+  expect(f.hostFeatureEligibility(restored, 'read_work_board').eligible).toBe(true);
   expect(f.hostFeatureConfigFingerprint(restored)).toBe(fingerprint);
   expect(input).toEqual(before);
   input.selected.push('skill-evolution');
@@ -121,7 +121,7 @@ const representatives = [
   ['wiki-core', 'get_wiki_canvas_view'], ['document-search', 'search_documents'],
   ['personal-memory', 'memory_recall'], ['work-management', 'read_work_board'],
   ['collaboration', 'publish_blog_post'],
-  ['roleplay', 'manage_story_project'], ['skill-evolution', 'promote_skill'],
+  ['skill-evolution', 'promote_skill'],
 ] as const;
 test.each(representatives)('maps %s to its exact internal tool %s independently of caller permission', (feature, tool) => {
   const f = api();

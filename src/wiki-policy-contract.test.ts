@@ -30,15 +30,6 @@ describe('get_wiki_policy contract', () => {
     expect(action.endpointId).toBe('wiki.policy');
     expect((getWikiPolicyTopic(action.arguments.topic, action.arguments.maxChars, action.arguments)).body).toBe(chapter.body);
   });
-  test('creative work guidance is opt-in and routes only through the nine story endpoints', () => {
-    expect([...WIKI_POLICY_TOPICS]).toContain('story');
-    const policy = getWikiPolicyTopic('story', 12000);
-    expect(getRoutes(policy)).toEqual(['story.project', 'story.artifact', 'story.sequence', 'story.context', 'story.review', 'story.adopt', 'story.session', 'story.export', 'story.visual']);
-    expect(JSON.stringify(policy)).toMatch(/host/i);
-    expect(JSON.stringify(policy)).toMatch(/revision/i);
-    expect(JSON.stringify(policy)).toMatch(/visual_model/);
-    expect(JSON.stringify(policy)).toMatch(/Unicode/);
-  });
   test('all public topics are bounded at minimum, mid, and maximum budgets', () => {
     for (const topic of WIKI_POLICY_TOPICS) {
       const responses = POLICY_BUDGETS.map(maxChars => getWikiPolicyTopic(topic, maxChars));

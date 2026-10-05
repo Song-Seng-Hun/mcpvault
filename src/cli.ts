@@ -11,7 +11,6 @@ export interface ParsedCliArgs {
   mcpHttpHost?: string;
   mcpHttpTlsCert?: string;
   mcpHttpTlsKey?: string;
-  roleplayConfig?: string;
   skillEvolutionConfig?: string;
   reviewedSkillsConfig?: string;
   featuresConfig?: string;
@@ -40,7 +39,6 @@ export function parseCliArgs(args: string[]): ParsedCliArgs {
   let mcpHttpTlsCert: string | undefined;
   let mcpHttpTlsKey: string | undefined;
   let stdio: false | undefined;
-  let roleplayConfig: string | undefined;
   let skillEvolutionConfig: string | undefined;
   let reviewedSkillsConfig: string | undefined;
   let featuresConfig: string | undefined;
@@ -99,11 +97,6 @@ export function parseCliArgs(args: string[]): ParsedCliArgs {
       const value = arg === '--skill-evolution-config' ? args[++index] : arg.slice('--skill-evolution-config='.length);
       if (!value || !value.trim() || value.startsWith('--') || skillEvolutionConfig !== undefined) throw guidanceError(new Error('--skill-evolution-config requires one host configuration file'), 'guid-f1b0524458043f1b');
       skillEvolutionConfig = value; continue;
-    }
-    if (arg === '--roleplay-config' || arg.startsWith('--roleplay-config=')) {
-      const value = arg === '--roleplay-config' ? args[++index] : arg.slice('--roleplay-config='.length);
-      if (!value || value.startsWith('--') || roleplayConfig !== undefined) throw guidanceError(new Error('--roleplay-config requires one host configuration file'), 'guid-b7dd3ed6ef7f8115');
-      roleplayConfig = value; continue;
     }
 
 
@@ -230,7 +223,6 @@ export function parseCliArgs(args: string[]): ParsedCliArgs {
     ...(mcpHttpHost !== undefined && { mcpHttpHost }),
     ...(mcpHttpTlsCert !== undefined && { mcpHttpTlsCert }),
     ...(mcpHttpTlsKey !== undefined && { mcpHttpTlsKey }),
-    ...(roleplayConfig !== undefined && { roleplayConfig }),
     ...(skillEvolutionConfig !== undefined && { skillEvolutionConfig }),
     ...(reviewedSkillsConfig !== undefined && { reviewedSkillsConfig }),
     ...(featuresConfig !== undefined && { featuresConfig }),

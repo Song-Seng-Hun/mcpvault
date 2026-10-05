@@ -1,5 +1,4 @@
 import { guidanceError, guidanceText } from './guidance-runtime.js';
-import { storyWorkResults } from './story-session.js';
 import { WorkReviewEngine, ReviewBudgetError, changeContext, reviewPolicy, effectiveReviewPolicy, reviewPacketItems, type HostExecutionVerifier, type ContextReader } from './work-review.js';
 import { recommendStaffing, type WorkExecutionProfile, type WorkStaffingInput } from './work-staffing.js';
 import { responsibility, resourceKeys as declaredResourceKeys, assignmentShape } from './work-responsibility.js';
@@ -87,16 +86,6 @@ export class WorkService {
     if (!this.auth.hasCapability(current, 'task') || !this.auth.hasCapability(principal, 'task')) throw guidanceError(new Error('Task capability is required'), 'guid-008719aaf7771662');
     await this.options.assertActor?.(current);
     return current;
-  }
-
-  /** Server-owned adapter, not an agent-supplied authority or task field. */
-  async authorizeWorkshopProject(principal:ScopePrincipal,projectId:string,owner:boolean,delegate?:string,grantor?:string):Promise<Guard> {
-    const actor=await this.actor(principal),project=await this.projectNote(projectId);
-    this.member(project.frontmatter,actor);
-    if(owner && project.frontmatter.owner_account_id!==actor.accountId)throw guidanceError(new Error('Only project owner may delegate workshop outputs'), 'guid-f1578dffb82a0681');
-    if(grantor && project.frontmatter.owner_account_id!==grantor)throw guidanceError(new Error('Project delegation owner changed'), 'guid-be9a21cff63aaffb');
-    if(delegate && (!project.frontmatter.participants.includes(delegate)||(await this.auth.listPrincipals()).every(p=>p.accountId!==delegate)))throw guidanceError(new Error('Delegate must be an existing project participant'), 'guid-e13d406715358578');
-    return {path:projectPath(projectId),expectedRevision:project.revision};
   }
 
   private async visible(path: string, maxBytes = MAX_NOTE_CONTENT_BYTES): Promise<ParsedNote> {
@@ -997,7 +986,6 @@ export class WorkService {
         requesterAccountId: fm.requester_account_id, generation: fm.claim_generation, workKind: fm.work_kind },
       ...(this.blocker(fm) ? [{ kind: 'blocker', text: this.blocker(fm) }] : []),
       ...nextActions,
-      ...await storyWorkResults(this.fileSystem, id, fm.project_id, path => this.visible(this.publicPath(path)), path => this.access.canAccessPhysicalPath(path)),
       ...String(project.frontmatter.goal || '').match(/.{1,400}/gs)?.map(text => ({ kind: 'goal', text })) || [],
       ...(project.frontmatter.allowed_work || []).map((text: string) => ({ kind: 'allowedWork', text })),
       { kind: 'authority', text: guidanceText('guid-f23e84610cfaea5b', 'Task participation grants no external execution authority.') },

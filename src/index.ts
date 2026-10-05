@@ -10,8 +10,6 @@ export { EvolutionOpportunity, evolutionSessionBridge } from './evolution/opport
 export type { EvolutionOptions, EvolutionAdapter, Cycle } from './evolution/model.js';
 export type { EvolutionSession } from './evolution/opportunity.js';
 export { wikiEvolutionAdapter } from './evolution/wiki-adapter.js';
-export { computerEvolutionAdapter } from './evolution/computer-adapter.js';
-export { fictionEvolutionAdapter } from './evolution/fiction-adapter.js';
 export { skillEvolutionAdapter, reviewedDeliveryReader } from './evolution/skill-adapter.js';
 export type { SkillEvolutionDelivery } from './evolution/skill-adapter.js';
 export { loadSkillEvolutionHostConfig } from './skill-evolution-host.js';

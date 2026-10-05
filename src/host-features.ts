@@ -6,7 +6,7 @@ import { validateCapabilitySelection, type CapabilityNode } from './capability-g
 /** Explicit v1 snapshot. Adding a future feature must not expand saved selections. */
 export const HOST_FEATURE_IDS_V1 = Object.freeze([
   'wiki-core', 'document-search', 'personal-memory', 'work-management', 'collaboration',
-  'roleplay', 'skill-evolution',
+  'skill-evolution',
 ] as const);
 export type HostFeatureId = typeof HOST_FEATURE_IDS_V1[number];
 export interface HostFeatureConfig {
@@ -69,7 +69,6 @@ export function hostFeatureConfigFingerprint(input: unknown): string {
  * This snapshot comes from createServer's inventory and its tool factories.
  * Keep auth, safety, ordinary note task metadata, Canvas and MOC continuity in
  * core. Dedicated work boards/claims are optional; social XP is collaboration.
- * Story tools belong to roleplay.
  *
  * Resolve dynamic IDs/REST routes through the existing registry first and pass
  * its trusted descriptor.toolName. Do not use an untrusted caller-supplied name
@@ -142,14 +141,6 @@ const toolsByFeature: Record<HostFeatureId, readonly string[]> = {
     'accept_blog_comment', 'delete_guestbook_entry', 'list_author_activity', 'list_blog_series', 'list_guestbook',
     'list_popular_posts', 'list_reactions', 'list_watched_targets', 'toggle_reaction', 'unaccept_blog_comment',
     'unwatch_target', 'watch_target', 'write_guestbook_entry',
-  ],
-  roleplay: [
-    'manage_roleplay_computer',
-    'manage_roleplay_world', 'manage_roleplay_character', 'manage_roleplay_scene', 'read_roleplay_context',
-    'submit_roleplay_action', 'resolve_roleplay_action', 'read_roleplay_history', 'correct_roleplay_turn',
-    'manage_roleplay_evolution', 'manage_roleplay_trpg',
-    'manage_story_project', 'manage_story_artifact', 'manage_story_sequence', 'read_story_context',
-    'manage_story_review', 'adopt_story_artifact', 'manage_story_session', 'manage_story_export', 'manage_story_visual',
   ],
   'skill-evolution': ['resolve_skill', 'record_skill_experience', 'manage_skill_candidate', 'evaluate_skill', 'promote_skill', 'rollback_skill'],
 };

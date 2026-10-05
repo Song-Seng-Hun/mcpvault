@@ -86,25 +86,18 @@ import { SkillEvolutionService, type SkillEvolutionHost } from './skill-evolutio
 import { getSkillEvolutionTools, SKILL_MUTATING_TOOLS } from './skill-evolution-tools.js';
 import { operationReadAlias } from './operation-contracts.js';
 import { WorkGroupService } from './work-groups.js';
-import { getRoleplayTools, ROLEPLAY_MUTATING_TOOLS } from './roleplay-tools.js';
-import { ComputerWorldService } from './computer-worlds.js';
-import { getStoryTools, STORY_MUTATING_TOOLS, storyEndpointForTool, assertStoryOperation } from './story-tools.js';
 import { getDocumentTools, DOCUMENT_TOOL_ENDPOINTS, dispatchDocumentTool } from './document-tools.js';
 import { DocumentResourceReader } from './document-resource.js';
 import { DocumentIndex } from './document-index.js';
 import { configuredPdfProvider } from './document-pdf-host.js';
 import { DocumentService } from './document-service.js';
 import { DocumentSearch } from './document-search.js';
-import { StoryService } from './story-service.js';
 import { getNoticeTools } from './notice-tools.js';
 import { NoticeRegistry, NoticeService } from './notices.js';
 import { GuidanceCatalog } from './guidance-catalog.js';
 import type { GuidanceDefinition } from './guidance-catalog.js';
 import { GUIDANCE_DEFINITIONS } from './guidance-defaults.generated.js';
 import { withGuidance, projectGuidance, guidanceText, renderGuidanceError } from './guidance-runtime.js';
-import { RoleplayService } from './roleplay-service.js';
-import type { RoleplayStore } from './roleplay-store.js';
-import { roleplayRevision } from './roleplay-model.js';
 import { WorkService } from './work-service.js';
 import { ReviewedSkillService, type ReviewedSkillInspector } from './skill-release-service.js';
 import type { ReviewedSkillHost, ReviewedSkillDeliveryFence } from './skill-release-reader.js';
@@ -286,8 +279,6 @@ export interface CreateServerOptions extends DocumentAuthorityOptions {
   /** Host-private notice registration/delegation file, reloaded before operations. */
   noticeConfigPath?: string;
   guidanceDefinitions?: readonly GuidanceDefinition[];
-  /** Host-provisioned single world; no caller or Vault note can enable this. */
-  roleplay?: RoleplayStore;
   /** Opt-in host-private enterprise registry. Never inferred from Vault content. */
   enterpriseRegistryPath?: string;
   publicFederation?: PublicFederationHostConfig;
@@ -308,7 +299,6 @@ export interface CreateServerOptions extends DocumentAuthorityOptions {
 const MUTATING_TOOLS = new Set([
   'manage_evolution_feedback', 'manage_evolution_cycle', 'get_evolution_context',
   'manage_wiki_compilation',
-  ...STORY_MUTATING_TOOLS,
   ...SKILL_MUTATING_TOOLS,
   ...ENTERPRISE_FEDERATION_MUTATING_TOOLS,
   "write_note",
@@ -336,7 +326,6 @@ const MUTATING_TOOLS = new Set([
   ...NOTIFICATION_MUTATING_TOOLS,
   ...AGENT_TASK_MUTATING_TOOLS,
   ...WORK_MUTATING_TOOLS,
-  ...ROLEPLAY_MUTATING_TOOLS,
   'revise_notice',
   ...PARTICIPATION_MUTATING_TOOLS,
   ...COMMUNITY_FEATURE_MUTATING_TOOLS,
@@ -407,18 +396,10 @@ const CAPABILITY_FOR_TOOL: Partial<Record<string, ScopeCapability>> = {
   record_community_participation: "profile",
   create_agent_task: "task",
   manage_work_project: 'task',
-  manage_story_project: 'task', manage_story_artifact: 'task', manage_story_sequence: 'task',
-  manage_story_review: 'task', adopt_story_artifact: 'task', manage_story_session: 'task', manage_story_export: 'task',
-  manage_story_visual: 'task',
   record_skill_experience: 'write', manage_skill_candidate: 'write', evaluate_skill: 'write', promote_skill: 'write', rollback_skill: 'write',
   preview_skill_promotion: 'write', preview_skill_rollback: 'write',
   manage_work_group: 'task',
-  manage_roleplay_world: 'chat', manage_roleplay_character: 'chat', manage_roleplay_scene: 'chat',
-  manage_roleplay_computer: 'write',
   revise_notice: 'write', preview_notice: 'write',
-  submit_roleplay_action: 'chat', resolve_roleplay_action: 'chat', correct_roleplay_turn: 'chat',
-  manage_roleplay_evolution: 'chat', preview_roleplay_evolution: 'chat',
-  manage_roleplay_trpg: 'chat', preview_roleplay_trpg: 'chat',
   claim_work_task: 'task',
   handoff_work_task: 'task',
   review_work_task: 'task',
@@ -523,8 +504,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
   const features = parseHostFeatureConfig(options.features ?? DEFAULT_HOST_FEATURE_CONFIG);
   const selectedFeatures = new Set(features.selected);
   const ownerActivityRuntime = new OwnerActivityRuntime(options.ownerActivity);
-  const catalogActivities: readonly Activity[] = ['collaboration',
-    'roleplay', 'skill-evolution'];
+  const catalogActivities: readonly Activity[] = ['collaboration', 'skill-evolution'];
   const catalogActions: readonly OwnerActivityAction[] = ['discover', 'read', 'claim', 'execute'];
   const ownerCatalogSnapshot = (principal?: ScopePrincipal): NonNullable<EndpointAvailabilityContext['ownerActivity']> => {
     if (!options.ownerActivity) return { policyFingerprint: 'absent', executionBindingGeneration: 'absent', eligibility: {} };
@@ -547,10 +527,9 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
     return ownerCatalogSnapshot(principal);
   };
   const hasFeature = (feature: HostFeatureId) => selectedFeatures.has(feature);
-  // Shared task records support selected story workflows without exposing
-  // the optional work board. Journal/saved-item methods likewise share storage
-  // helpers with social methods, but need no social indexes or subscriptions.
-  const needsTaskRecords = ['work-management', 'roleplay'].some(id => selectedFeatures.has(id as HostFeatureId));
+  // Journal/saved-item methods share storage helpers with social methods,
+  // but need no social indexes or subscriptions.
+  const needsTaskRecords = hasFeature('work-management');
   const needsPersonalStorage = hasFeature('personal-memory') || hasFeature('collaboration');
   const featureToolAllowed = (tool: string) => {
     const feature = hostFeatureForTool(tool);
@@ -757,7 +736,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
     noticeFeedback: (id, revision, principal) => notices.feedback(id, revision, principal),
     noticeFeedbackReview: (id, path, revision, principal) => notices.feedbackReview(id, path, revision, principal),
   }) : undefined;
-  const chat = hasFeature('collaboration') ? new ChatService(fileSystem, references, reputation!, options.roleplay ? async () => (await options.roleplay!.read()).records : undefined) : undefined;
+  const chat = hasFeature('collaboration') ? new ChatService(fileSystem, references, reputation!) : undefined;
   const whispers = hasFeature('collaboration') ? new WhisperService(fileSystem, references) : undefined;
   const communityStatus = hasFeature('collaboration') ? new CommunityStatusService(fileSystem, enterpriseProfile?.mode === 'public' ? { communityRoot: 'PublicCommunity/Local' } : {}) : undefined;
   const agentDirectory = new AgentDirectoryService(fileSystem, scopeAuth,
@@ -1147,8 +1126,6 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         ...getLayeredMemoryTools(),
         ...getCommunityParticipationTools(),
         ...getChatTools(),
-        ...getRoleplayTools(),
-        ...getStoryTools(),
         ...getDocumentTools(),
         ...getNoticeTools(),
         ...getReferenceTools(),
@@ -1504,7 +1481,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
     const unavailable = new Set(enterpriseProfile ? [
       ...getWhisperTools().map(tool => tool.name),
       ...(enterpriseProfile.mode === 'public' ? [
-        ...getChatTools(), ...getRoleplayTools(), ...getNotificationTools(), ...getAgentTaskTools(),
+        ...getChatTools(), ...getNotificationTools(), ...getAgentTaskTools(),
         ...getCommunityFeatureTools(), ...getReputationTools(),
       ].map(tool => tool.name) : []),
     ] : []);
@@ -1726,25 +1703,6 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         // legacy adapter paths and must not feed private physical paths back in.
         return jsonResult(await dispatchDocumentTool(toolName, rawArgs, principal, requiredService(documents), requiredService(documentSearch)), false);
       }
-      const storyEndpoint = storyEndpointForTool(toolName);
-      if (storyEndpoint) {
-        assertStoryOperation(storyEndpoint, trimmedArgs.op);
-        const storyArgs = { ...trimmedArgs };
-        // REST query parameters are strings. Normalize only bounded read
-        // controls; operation names and all mutation inputs retain their types.
-        if (!STORY_MUTATING_TOOLS.has(toolName)) {
-          for (const key of ['maxChars', 'limit']) {
-            if (typeof storyArgs[key] === 'string' && /^\d{1,5}$/.test(storyArgs[key])) storyArgs[key] = Number(storyArgs[key]);
-          }
-        }
-        const service = new StoryService(fileSystem, scopeAccess, references, scopeAuth, requiredService(work), requiredService(agentTasks), {
-          readOnly, gitHistory, assertActor: async () => { await revalidateActor(); },
-          readRoleplayTurn: (source, actor) => new RoleplayService(fileSystem, scopeAccess, references, options.roleplay,
-            { assertActor: async () => { await revalidateActor(); } }).storyTurn(source, actor),
-          changed: path => queueReadModelChange(path, 'upsert'),
-        });
-        return jsonResult(await service.execute(storyEndpoint, storyArgs, principal), false);
-      }
       const withCompilationReview = async (result: Record<string, any>, maxChars: number, allJobs = false, prettyPrint = false) => {
         if (!options.compilation?.host || !principal) return result;
         const retryArgs = Object.fromEntries((allJobs ? ['limit', 'grouped'] : ['query', 'path', 'expectedRevision', 'includeSemantic', 'retrievalMode', 'graphDepth', 'intent'])
@@ -1851,7 +1809,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
             undefined,
             trimmedArgs.limit,
             trimmedArgs.maxChars,
-            { readOnly, reviewedSourceAccess, skillEvolutionEnabled: Boolean(skillEvolution?.enabled), authenticated: Boolean(principal), capabilities: new Set(principal?.capabilities || []), principalKey: JSON.stringify(principal), roleplayConfigured: Boolean(options.roleplay), roleplayWritesConfigured: Boolean(options.roleplay?.options.policy.administrators.length), ownerActivity: ownerState },
+            { readOnly, reviewedSourceAccess, skillEvolutionEnabled: Boolean(skillEvolution?.enabled), authenticated: Boolean(principal), capabilities: new Set(principal?.capabilities || []), principalKey: JSON.stringify(principal), ownerActivity: ownerState },
             true,
             { compact: true, cursor: trimmedArgs.cursor },
           );
@@ -1878,7 +1836,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
             trimmedArgs.query,
             trimmedArgs.limit,
             trimmedArgs.maxChars,
-            { readOnly, reviewedSourceAccess, skillEvolutionEnabled: Boolean(skillEvolution?.enabled), authenticated: Boolean(principal), capabilities: new Set(principal?.capabilities || []), roleplayConfigured: Boolean(options.roleplay), roleplayWritesConfigured: Boolean(options.roleplay?.options.policy.administrators.length), ownerActivity: ownerState },
+            { readOnly, reviewedSourceAccess, skillEvolutionEnabled: Boolean(skillEvolution?.enabled), authenticated: Boolean(principal), capabilities: new Set(principal?.capabilities || []), ownerActivity: ownerState },
             false,
             { cursor: trimmedArgs.cursor },
           );
@@ -2820,12 +2778,6 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         }
 
         case "send_chat_message": {
-          if (options.roleplay && (await options.roleplay.snapshot()).scenes[trimmedArgs.roomId]) {
-            const service = new RoleplayService(fileSystem, scopeAccess, references, options.roleplay, { assertActor: async () => { await revalidateActor(); }, changed: path => queueReadModelChange(path, 'upsert') });
-            const state = await options.roleplay.snapshot();
-            const receipt = await service.execute('action', { ...trimmedArgs, op: 'ooc', expectedRevision: trimmedArgs.expectedRevision ?? roleplayRevision(state) }, principal);
-            return jsonResult({ ...receipt, messageId: `roleplay-${receipt.id}`, roomId: trimmedArgs.roomId, note: guidanceText('guid-9e806e522f13c7ef', 'Out-of-character chat only. Use roleplay.action with character/generation for in-character actions.') }, false);
-          }
           return jsonResult(await requiredService(chat).sendMessage({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
         }
 
@@ -2928,30 +2880,6 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
             } }) }), trimmedArgs.prettyPrint);
         }
 
-        case 'manage_roleplay_computer': case 'read_roleplay_computer': {
-          const service = new ComputerWorldService(fileSystem, scopeAccess, {
-            readOnly, assertActor: async () => { await revalidateActor(); },
-            changed: path => queueReadModelChange(path, 'upsert'),
-          });
-          return jsonResult(await service.execute(trimmedArgs, principal), false);
-        }
-        case 'manage_roleplay_world': case 'read_roleplay_world':
-        case 'manage_roleplay_character': case 'read_roleplay_character':
-        case 'manage_roleplay_scene': case 'read_roleplay_scene':
-        case 'read_roleplay_context': case 'read_roleplay_history':
-        case 'submit_roleplay_action': case 'resolve_roleplay_action':
-        case 'manage_roleplay_evolution': case 'read_roleplay_evolution': case 'preview_roleplay_evolution':
-        case 'manage_roleplay_trpg': case 'read_roleplay_trpg': case 'preview_roleplay_trpg':
-        case 'correct_roleplay_turn': case 'preview_roleplay_correction': {
-          const endpoints: Record<string, string> = { manage_roleplay_world: 'world', read_roleplay_world: 'world', manage_roleplay_character: 'character', read_roleplay_character: 'character', manage_roleplay_scene: 'scene', read_roleplay_scene: 'scene', read_roleplay_context: 'context', read_roleplay_history: 'history', submit_roleplay_action: 'action', resolve_roleplay_action: 'resolve', correct_roleplay_turn: 'correct', preview_roleplay_correction: 'correct' };
-          Object.assign(endpoints, { manage_roleplay_evolution: 'evolution', read_roleplay_evolution: 'evolution', preview_roleplay_evolution: 'evolution' });
-          Object.assign(endpoints, { manage_roleplay_trpg: 'trpg', read_roleplay_trpg: 'trpg', preview_roleplay_trpg: 'trpg' });
-          const service = new RoleplayService(fileSystem, scopeAccess, references, options.roleplay, {
-            assertActor: async () => { await revalidateActor(); }, retrieval,
-            changed: path => queueReadModelChange(path, 'upsert'),
-          });
-          return jsonResult(await service.execute(endpoints[toolName]!, trimmedArgs, principal), false);
-        }
         case "get_wiki_topic_packet": {
           const result = await llmWiki.topicPacket(principal, trimmedArgs);
           if (JSON.stringify(await scopeAuth.authenticate(rawArgs.accessToken)) !== JSON.stringify(principal)) throw guidanceError(new Error('Authentication changed; retry topic request'), 'guid-f7cbf440ff304bd3');

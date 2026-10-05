@@ -7,9 +7,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import trash from 'trash';
 import { FrontmatterHandler } from './frontmatter.js';
 import { PathFilter } from './pathfilter.js';
-import { assertRoleplayMutationBoundary } from './roleplay-boundary.js';
 import { assertSkillEvolutionMutationBoundary } from './skill-evolution-boundary.js';
-import { assertStoryMutationBoundary } from './story-boundary.js';
 import { assertResourceBundleMutationBoundary } from './resource-bundle.js';
 import { assertOriginalMutation, isOriginalPath } from './original-boundary.js';
 import { generateObsidianUri } from './uri.js';
@@ -878,9 +876,7 @@ export class FileSystemService {
     const fullPath = this.resolvePath(relativePath);
     const relativePathToVault = relative(this.vaultPath, fullPath).replace(/\\/g, '/');
     assertOriginalMutation(relativePathToVault, exclusiveOriginalCreation);
-    assertRoleplayMutationBoundary(relativePathToVault);
     assertSkillEvolutionMutationBoundary(relativePathToVault);
-    assertStoryMutationBoundary(relativePathToVault);
     assertResourceBundleMutationBoundary(relativePathToVault);
     this.assertNoticeMutation(relativePathToVault);
     assertEnterpriseStorageAccess(relativePathToVault, true);
@@ -913,7 +909,6 @@ export class FileSystemService {
     await beforeDispatch?.();
     assertOriginalMutation(physicalPath, typeof options === 'object' && options !== null && 'flag' in options && options.flag === 'wx');
     assertEnterpriseStorageAccess(physicalPath, true);
-    assertStoryMutationBoundary(physicalPath);
     assertSkillEvolutionMutationBoundary(physicalPath);
     this.assertNoticeMutation(physicalPath);
     assertCurrent?.();
@@ -922,7 +917,6 @@ export class FileSystemService {
   private async removeProtectedFile(path: string) {
     const physicalPath = relative(this.vaultPath, path).replace(/\\/g, '/');
     assertOriginalMutation(physicalPath);
-    assertStoryMutationBoundary(physicalPath);
     assertSkillEvolutionMutationBoundary(physicalPath);
     this.assertNoticeMutation(physicalPath);
     return unlink(path);
@@ -935,8 +929,6 @@ export class FileSystemService {
     await prepareDocumentWrite(targetPath);
     assertEnterpriseStorageAccess(sourcePath, true);
     assertEnterpriseStorageAccess(targetPath, true);
-    assertStoryMutationBoundary(sourcePath);
-    assertStoryMutationBoundary(targetPath);
     assertSkillEvolutionMutationBoundary(sourcePath);
     assertSkillEvolutionMutationBoundary(targetPath);
     this.assertNoticeMutation(sourcePath);
@@ -957,58 +949,6 @@ export class FileSystemService {
    * a revision is not an access grant or a fresh moderation classification. */
   async readNoteRevision(path: string, maxBytes?: number): Promise<string> {
     return this.withNoteRead(path, fullPath => this.vaultIo.readUtf8Revision(fullPath, maxBytes));
-  }
-
-  /** Raw image fingerprint only; callers must separately enforce source scope.
-   * Do not broaden Markdown parsing or follow aliases into another scope. */
-  async readStoryImageRevision(path: string, maxBytes = 8 * 1024 * 1024): Promise<string | undefined> {
-    path = this.normalizePath(path);
-    if (!/\.(?:png|jpe?g|webp|gif)$/i.test(path)) throw guidanceError(new Error('Unsupported story image extension'), 'guid-a266a4677e9e7e10');
-    return this.readStoryBinaryRevision(path, maxBytes);
-  }
-
-  /** Managed output hashes use original bytes, including malformed UTF-8. */
-  async readStoryOutputRevision(path: string, maxBytes = 8 * 1024 * 1024): Promise<string | undefined> {
-    path = this.normalizePath(path);
-    if (!/^Community\/Stories\/[a-z0-9][a-z0-9-]{0,63}\/Exports\/[^/]+\.(?:canvas|fountain|output\.md)$/i.test(path)
-      || !this.pathFilter.isAllowed(path)) throw guidanceError(new Error('Invalid managed story output path'), 'guid-a3a17abad794a52c');
-    return this.readStoryBinaryRevision(path, maxBytes);
-  }
-
-  private async readStoryBinaryRevision(path: string, maxBytes: number): Promise<string | undefined> {
-    if (!Number.isSafeInteger(maxBytes) || maxBytes < 1 || maxBytes > 8 * 1024 * 1024) throw guidanceError(new Error('Invalid story image byte limit'), 'guid-071f863f15bc9bbc');
-    if (!this.pathFilter.isAllowedForListing(path)) throw guidanceError(new Error('Story image path is restricted'), 'guid-98660a88b15662d1');
-    const fullPath = this.resolvePath(path);
-    const lexical = relative(this.vaultPath, fullPath).replace(/\\/g, '/');
-    assertEnterpriseStorageAccess(lexical);
-    let handle: Awaited<ReturnType<typeof open>> | undefined;
-    try {
-      const canonical = relative(this.vaultPath, realpathSync(fullPath)).replace(/\\/g, '/');
-      if (canonical.toLowerCase() !== lexical.toLowerCase()) throw guidanceError(new Error('Story image canonical alias is not permitted'), 'guid-5faaf9b7b21c6248');
-      assertEnterpriseStorageAccess(canonical);
-      handle = await open(fullPath, 'r');
-      const before = await handle.stat();
-      if (!before.isFile()) throw guidanceError(new Error('Story image must be a regular file'), 'guid-866e58472ddea6f7');
-      if (before.size > maxBytes) throw guidanceError(new Error('Story image exceeds byte budget'), 'guid-d399378dd9215453');
-      const hash = createHash('sha256'); let size = 0;
-      for (;;) {
-        const buffer = Buffer.allocUnsafe(Math.min(64 * 1024, maxBytes - size + 1));
-        const { bytesRead } = await handle.read(buffer, 0, buffer.length, null);
-        if (!bytesRead) break;
-        size += bytesRead;
-        if (size > maxBytes) throw guidanceError(new Error('Story image exceeds byte budget'), 'guid-d399378dd9215453');
-        hash.update(buffer.subarray(0, bytesRead));
-      }
-      const after = await handle.stat();
-      if (before.size !== after.size || before.mtimeMs !== after.mtimeMs || before.ctimeMs !== after.ctimeMs) throw guidanceError(new Error('Story image changed during read'), 'guid-f9ad5110f3ed629b');
-      assertEnterpriseStorageAccess(canonical);
-      const currentPath = relative(this.vaultPath, realpathSync(fullPath)).replace(/\\/g, '/');
-      if (currentPath.toLowerCase() !== canonical.toLowerCase()) throw guidanceError(new Error('Story image canonical path changed'), 'guid-1a5516a0e9d90e67');
-      return hash.digest('hex');
-    } catch (error) {
-      if (!handle && error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') return undefined;
-      throw error;
-    } finally { await handle?.close(); }
   }
 
   private async withNoteRead<T>(path: string, read: (fullPath: string) => Promise<T>): Promise<T> {
@@ -1070,9 +1010,7 @@ export class FileSystemService {
     }
     if (!exists) throw guidanceError(new Error(`Revision conflict for ${path}: expected ${expectedRevision}, but the note is missing`), 'guid-8adc796d5fab8d28');
     // A guard needs the exact content hash, not a parsed body/Properties copy.
-    const current = /^Community\/Stories\/[a-z0-9][a-z0-9-]{0,63}\/Exports\/[^/]+(?:\.output\.md|\.fountain|\.canvas)$/i.test(path)
-      ? await this.readStoryOutputRevision(path, maxBytes)
-      : await this.readNoteRevision(path, maxBytes);
+    const current = await this.readNoteRevision(path, maxBytes);
     if (current !== expectedRevision) {
       throw guidanceError(new Error(`Revision conflict for ${path}: expected ${expectedRevision}, current ${current}. Read the note again before changing it.`), 'guid-b2b68521ae3b9387');
     }

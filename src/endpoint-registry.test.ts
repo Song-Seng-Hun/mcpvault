@@ -67,8 +67,6 @@ const changedContexts: Array<[string, Partial<EndpointAvailabilityContext>]> = [
   ['principal', { principalKey: 'different-principal' }],
   ['capabilities', { capabilities: new Set(['write']) }],
   ['skill configuration', { skillEvolutionEnabled: false }],
-  ['roleplay configuration', { roleplayConfigured: false }],
-  ['roleplay write configuration', { roleplayWritesConfigured: false }],
 ];
 test.each(changedContexts)('a warm catalog rejects a cursor after changing %s', (_name, change) => {
   const registry = new EndpointRegistry();
@@ -106,17 +104,17 @@ test('owner consent locks optional schemas and active-only listings exclude them
 
 test('owner consent never flips a parent lock or disabled mixed operation to ready', () => {
   const registry = new EndpointRegistry();
-  registry.setTools([{ ...tool('manage_roleplay_world'), inputSchema: { type: 'object', properties: { op: { enum: ['read', 'create'] } } } }],
-    { manage_roleplay_world: 'write' }, new Set(['manage_roleplay_world']));
-  const current = context({ readOnly: true, roleplayConfigured: true, ownerActivity: {
+  registry.setTools([{ ...tool('manage_skill_candidate'), inputSchema: { type: 'object', properties: { op: { enum: ['read', 'promote'] } } } }],
+    { manage_skill_candidate: 'write' }, new Set(['manage_skill_candidate']));
+  const current = context({ readOnly: true, ownerActivity: {
     policyFingerprint: 'a'.repeat(64), executionBindingGeneration: 'b'.repeat(32),
-    eligibility: { roleplay: { discover: true, read: true, claim: true, execute: true } },
+    eligibility: { 'skill-evolution': { discover: true, read: true, claim: true, execute: true } },
   } });
-  const endpoint = registry.list('roleplay.world', 1, 20000, current, false).endpoints[0]!;
+  const endpoint = registry.list('skill.candidate', 1, 20000, current, false).endpoints[0]!;
   expect(endpoint.operations?.read).toMatchObject({ available: true, state: 'ready' });
-  expect(endpoint.operations?.create).toMatchObject({ available: false, state: 'disabled' });
+  expect(endpoint.operations?.promote).toMatchObject({ available: false, state: 'disabled' });
   expect(endpoint).toMatchObject({ available: true, state: 'ready' });
-  expect(registry.list('roleplay.world', 1, 20000, current, true).endpoints.map(item => item.endpointId)).toEqual(['roleplay.world']);
+  expect(registry.list('skill.candidate', 1, 20000, current, true).endpoints.map(item => item.endpointId)).toEqual(['skill.candidate']);
 });
 
 test('unregistered raw operation labels cannot downgrade owner activity while registered claim aliases remain claims', () => {
@@ -128,27 +126,19 @@ test('unregistered raw operation labels cannot downgrade owner activity while re
 test('registered list operations require discover consent while their registered reads require read consent', () => {
   expect(ownerActionForEndpointTool('manage_skill_candidate', true, 'list')).toBe('discover');
   expect(ownerActionForEndpointTool('manage_skill_candidate', true, 'read')).toBe('read');
-  expect(ownerActionForEndpointTool('manage_roleplay_evolution', true, 'list')).toBe('discover');
-  expect(ownerActionForEndpointTool('manage_roleplay_evolution', true, 'read')).toBe('read');
 });
 
 test('owner consent cannot revive host-disabled operations projected from a mixed endpoint', () => {
   const registry = new EndpointRegistry();
   registry.setTools([
-    { ...tool('manage_roleplay_world'), inputSchema: { type: 'object', properties: { op: { enum: ['read', 'create'] } } } },
     { ...tool('manage_skill_candidate'), inputSchema: { type: 'object', properties: { op: { enum: ['read', 'promote'] } } } },
-  ], { manage_roleplay_world: 'chat', manage_skill_candidate: 'write' }, new Set(['manage_roleplay_world', 'manage_skill_candidate']));
+  ], { manage_skill_candidate: 'write' }, new Set(['manage_skill_candidate']));
   const ownerActivity = { policyFingerprint: 'a'.repeat(64), executionBindingGeneration: 'b'.repeat(32), eligibility: {
-    roleplay: { discover: true, read: true, claim: true, execute: true },
     'skill-evolution': { discover: true, read: true, claim: true, execute: true },
   } } as NonNullable<EndpointAvailabilityContext['ownerActivity']>;
-  const current = context({ authenticated: true, capabilities: new Set(['chat', 'write']), roleplayConfigured: false,
+  const current = context({ authenticated: true, capabilities: new Set(['write']),
     skillEvolutionEnabled: false, ownerActivity });
 
-  const roleplay = registry.list('roleplay.world', 1, 20000, current, false).endpoints[0]!;
-  expect(roleplay).toMatchObject({ available: false, state: 'disabled' });
-  expect(roleplay.operations!.read).toMatchObject({ available: false, state: 'disabled' });
-  expect(roleplay.operations!.create).toMatchObject({ available: false, state: 'disabled' });
   const skill = registry.list('skill.candidate', 1, 20000, current, false).endpoints[0]!;
   expect(skill).toMatchObject({ available: false, state: 'disabled' });
   expect(skill.operations!.read).toMatchObject({ available: false, state: 'disabled' });
@@ -158,16 +148,16 @@ test('owner consent cannot revive host-disabled operations projected from a mixe
 test('warm catalogs recompute host availability and mixed-operation read permissions', () => {
   const registry = new EndpointRegistry();
   registry.setTools([
-    tool('one'), tool('submit_roleplay_action'),
+    tool('one'), tool('promote_skill'),
     { ...tool('manage_work_group'), inputSchema: { type: 'object', properties: { op: { enum: ['read', 'join'] } } } },
-  ], { submit_roleplay_action: 'chat', manage_work_group: 'task' }, new Set(['submit_roleplay_action', 'manage_work_group']));
-  const current = context({ authenticated: true, capabilities: new Set(['chat', 'task']), roleplayConfigured: true, roleplayWritesConfigured: true });
+  ], { promote_skill: 'write', manage_work_group: 'task' }, new Set(['promote_skill', 'manage_work_group']));
+  const current = context({ authenticated: true, capabilities: new Set(['write', 'task']), skillEvolutionEnabled: true });
   const first = compact(registry, current);
-  current.roleplayWritesConfigured = false;
+  current.skillEvolutionEnabled = false;
   current.readOnly = true;
   current.authenticated = false;
   expect(() => compact(registry, current, first.nextCursor)).toThrow(/cursor/i);
-  const action = registry.list('roleplay.action', 1, 2000, current, false).endpoints[0]!;
+  const action = registry.list('skill.promote', 1, 2000, current, false).endpoints[0]!;
   expect(action).toMatchObject({ available: false, state: 'disabled' });
   const group = registry.list('work.group', 1, 2000, current, false).endpoints[0]!;
   expect(group.operations!.read).toMatchObject({ available: true, state: 'ready' });

@@ -14,8 +14,6 @@ import { assertPrivateAccountStore } from './src/account-store.js';
 import { loadAuth0Resource, type Auth0Resource } from './src/auth0-resource.js';
 import { startRestApi } from "./src/rest-api.js";
 import { startMcpHttpApi } from "./src/mcp-http.js";
-import { RoleplayStore } from './src/roleplay-store.js';
-import { loadRoleplayHostConfig } from './src/roleplay-host.js';
 import { loadSkillEvolutionHostConfig } from './src/skill-evolution-host.js';
 import { loadReviewedSkillsHost } from './src/skill-release-host.js';
 import { builtinVerbatimRuntime } from './src/compilation-local-runtime.js';
@@ -68,9 +66,6 @@ Options:
                   Block Community/Skills reads, discovery and mutations in this
                   process. Preserves files; no static audit grants an exception.
   --http[=PORT]   Also expose the optional localhost REST adapter (default 8787)
-  --roleplay-config FILE
-                  Opt-in shared fictional world with host-approved administrators.
-                  Trusted checkpoint outside Vault/source; existing rooms unchanged.
   --skill-evolution-config FILE
                   Opt-in experience and candidate recording with a private host key.
                   No automatic evaluation without host-registered skill profiles.
@@ -121,7 +116,7 @@ Examples:
 
 // Remove runtime options before joining trailing args, preserving support for
 // unquoted vault paths with spaces. When omitted, use the current directory.
-const { vaultPathArg, readOnly, accountStorePath, auth0Config, quarantineSkills, restPort, mcpHttpPort, mcpHttpHost, mcpHttpTlsCert, mcpHttpTlsKey, stdio, roleplayConfig, skillEvolutionConfig, reviewedSkillsConfig, featuresConfig, ownerActivityConfig, maintenanceConfig, compilationConfig, evolutionConfig } = parseCliArgs(cliArgs);
+const { vaultPathArg, readOnly, accountStorePath, auth0Config, quarantineSkills, restPort, mcpHttpPort, mcpHttpHost, mcpHttpTlsCert, mcpHttpTlsKey, stdio, skillEvolutionConfig, reviewedSkillsConfig, featuresConfig, ownerActivityConfig, maintenanceConfig, compilationConfig, evolutionConfig } = parseCliArgs(cliArgs);
 const vaultPath = resolve(vaultPathArg || process.cwd());
 const featurePath = featuresConfig ?? process.env.MCPVAULT_FEATURE_CONFIG;
 const ownerConsentPath = ownerActivityConfig ?? process.env.MCPVAULT_OWNER_ACTIVITY_CONFIG;
@@ -135,7 +130,6 @@ if (mcpHttpPort === undefined && (mcpHttpHost || mcpHttpTlsCert || mcpHttpTlsKey
 }
 
 let mcpServer!:ReturnType<typeof createServer>;
-let roleplay: RoleplayStore | undefined;
 let reviewedHost: Awaited<ReturnType<typeof loadReviewedSkillsHost>> | undefined;
 let auth0: Auth0Resource | undefined;
 try {
@@ -151,8 +145,7 @@ try {
   const compilationHost = compilationConfig ? await loadCompilationHostConfig(resolve(compilationConfig), vaultPath) : undefined;
   const evolutionStorage = evolutionConfig ? await loadEvolutionStorage(resolve(evolutionConfig), vaultPath) : undefined;
   const skillEvolution = features.selected.includes('skill-evolution') && skillEvolutionConfig ? await loadSkillEvolutionHostConfig(resolve(skillEvolutionConfig), vaultPath) : undefined;
-  if (features.selected.includes('roleplay') && roleplayConfig) roleplay = await RoleplayStore.open(await loadRoleplayHostConfig(resolve(roleplayConfig), vaultPath));
-  mcpServer=createServer(vaultPath, { version: VERSION, readOnly, ...(accountStorePath !== undefined && { accountStorePath }), ...(quarantineSkills && { quarantineSkills }), features, ...(roleplay && { roleplay }), ...(skillEvolution && { skillEvolution }),
+  mcpServer=createServer(vaultPath, { version: VERSION, readOnly, ...(accountStorePath !== undefined && { accountStorePath }), ...(quarantineSkills && { quarantineSkills }), features, ...(skillEvolution && { skillEvolution }),
     ...(evolutionStorage && { evolutionRuntime: { storage: evolutionStorage } }),
     ...(reviewedHost && { reviewedSkills: reviewedHost.reviewedSkills }),
     ...(maintenance && { maintenance }),
@@ -171,12 +164,11 @@ try {
   }
 } catch(error){
   try { if (typeof mcpServer !== 'undefined') await mcpServer.close(); }
-  finally { reviewedHost?.close(); await roleplay?.close(); }
+  finally { reviewedHost?.close(); }
   throw error;
 }
 const lifecycle = createServerLifecycle(mcpServer);
 if (reviewedHost) lifecycle.add(reviewedHost);
-if (roleplay) lifecycle.add(roleplay);
 const ownsNetwork = mcpHttpPort !== undefined || restPort !== undefined || reviewedHost?.listener !== undefined;
 let isShuttingDown = false;
 

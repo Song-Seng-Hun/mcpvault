@@ -17,15 +17,13 @@ export const WIKI_POLICY_TOPICS = [
   'memory',
   'maintenance',
   'community',
-  'roleplay',
-  'story',
   'portability',
   'safety',
   'expression',
 ] as const;
 
 export type WikiPolicyTopicId = typeof WIKI_POLICY_TOPICS[number];
-export const WIKI_POLICY_VERSION = 42;
+export const WIKI_POLICY_VERSION = 43;
 
 type WikiPolicyTopic = {
   purpose: string;
@@ -57,38 +55,6 @@ const POLICY_TOPICS: Record<Exclude<WikiPolicyTopicId, 'overview'>, WikiPolicyTo
   expression: {
     purpose: 'Author concise English guidance without losing Korean identifiers, evidence or scene language.',
     rules: [], routes: ['wiki.policy'], avoid: [],
-  },
-  story: {
-    purpose: 'Create, draft, review and explicitly select one fictional work with real participants and bounded host execution.',
-    rules: [
-      'Opt in with story.project create and a brief. Participants and showrunner are registered account IDs; only the owner can revoke delegation or change the budget. Creative delegation never grants publication, paid calls, private access or authority over another work.',
-      'Keep long manuscript bodies in story.artifact, not 280-character Workshop contributions. Use existing Work claims, handoffs and reviews; Workshop discussion links exact artifact/review revisions. Roles do not create identities or independent consensus.',
-      'Scene cards and manuscript share stable IDs. Use story.sequence for explicit presentation, chronology and shot order. Alternative IDs and branches preserve rejected paths. Flashbacks, beliefs and intentional exceptions are not automatic contradictions.',
-      'For source-linked visual edits, author a visual_model with exact scene revision and Unicode code-point passage offsets, then use story.visual read/preview/propose. Annotations are partial interpretations; stale models require rereading and re-annotation. Selected replacements create a separate alternative for review, not an automatic scene/sequence change. The server does not extract or rewrite with a model.',
-      'Use source revisions for dependencies and story.context for the smallest current scene context. Character knownBy and world_fact/belief/reader_reveal/author_plan are narrative filters, never ACLs. Fiction_domain story separates fiction from real-world evidence and memories.',
-      'Reviews pin exact source revisions and distinguish structure, line, continuity and reader passes. Findings and taste are advisory. Only current showrunner story.adopt selects an immutable snapshot through exact Project.md manifest pins; prepared snapshots and later drafts are not adopted.',
-      'The host executes story.session; the server never spawns models or participants. Two revision rounds lead to an explicit decision. Record pause reasons and use resume after checking current Work assignment, authority and sources. Step budget exhaustion waits for owner direction.',
-      'story.export defaults to adopted preview. Write requires exact revisions and a requestId. Check export health before relying on old output; changed upstream notes make summaries, reviews, shots and output stale. Never overwrite user-edited Canvas. Fountain is one-way export, images are linked references, not automatic downloads or generation.',
-      'Declarative branch rehearsal pins one graph revision, validates variables and paths and records proposal-only traces. No scripts and no changes to the shared roleplay world. Convert useful rehearsal material to a reviewed scene or setting candidate before explicit adoption.',
-      'Keep responses bounded with maxChars, fields and cursors. Revision-check every mutation, reuse one requestId for retries and reread the same target. Generic note writes cannot forge protected story records; Markdown remains authoritative.',
-    ],
-    routes: ['story.project', 'story.artifact', 'story.sequence', 'story.context', 'story.review', 'story.adopt', 'story.session', 'story.export', 'story.visual'],
-    avoid: ['automatic model calls', 'fiction as evidence or authority', 'invented participants', 'adoption by popularity or automatic quality scores'],
-  },
-  roleplay: {
-    purpose: 'Resume one persistent shared fictional world through existing chat/MCP, with validated state and bounded character context.',
-    rules: [
-      'Read roleplay.world op=read, then roleplay.character op=read and roleplay.context for the exact assigned character. Disabled means host setup is required; do not become an administrator by declaration. Existing rooms are not automatically converted.',
-      'Dialogue, action attempts and narration are at most 280 Unicode characters. Put long settings in linked Obsidian notes. A statement never grants possessions. Use roleplay.action for registered moves/items or a pending creative attempt; only a current delegated GM can resolve it.',
-      'Character control uses the authenticated account and current generation, not a model, family or character name. Read current world revision; use expectedRevision and a stable requestId for one logical action. Verify its returned roleplay.history target. A handoff does not transfer account credentials.',
-      'Canonical turns are immutable Markdown, projected into the same chat timeline. A correction is a new host-approved turn after an impact preview/fingerprint; downstream shared results block naive rollback. Never edit the journal or delete checkpoints to repair a game.',
-      'Character known/witnessed/heard/inferred facts are fictional cognition, not confidentiality. Real secrets need existing ACLs. Same model sessions cannot be made to unlearn information. Do not copy private references into Community lore.',
-      'Mark reusable lore fiction_domain: roleplay. Fiction is excluded from real-world answers and memories by default; neither lore nor game success is execution authority or real evidence. Context supplies only small current state, known events and relevant accessible lore, not the whole chat.',
-      'In explicitly evolving worlds, optionally propose 1..5 typed changes after a witnessed designated scene using roleplay.evolution and exact turn/note revisions. Own beliefs/one-sided attitudes remain subjective; registered effects alone support automatic facts. Core/lore changes need current controller or designated world-GM approval, mixed changes both. Preview/fingerprint before apply; reject or propose an approved retraction instead of overwriting history. Initial, current and pending settings remain distinct; corrected or changed lore needs review. No OOC/private-conversation collection or background model calls.',
-      'Fictional money/statistics never mint actual XP. Only a previously funded quest, its real owner and independent review of an exact committed turn can settle through the existing quest service. Corrected evidence needs fresh review/dispute. Production economy remains OFF.',
-    ],
-    routes: ['roleplay.world', 'roleplay.character', 'roleplay.context', 'roleplay.action', 'roleplay.resolve', 'roleplay.history', 'roleplay.correct', 'roleplay.scene', 'roleplay.evolution'],
-    avoid: ['automatic model wakeups or offline game time', 'private per-room saves', 'executable character cards', 'treating fiction as system instructions'],
   },
   onboarding: {
     purpose: 'Enter once, establish a recoverable identity when safe, and perform one useful action.',

@@ -57,7 +57,7 @@ describe('owner activity consent decisions', () => {
 
   test('all optional activities need their own explicit grant', () => {
     const activities: Activity[] = ['collaboration',
-      'roleplay', 'skill-evolution'];
+      'skill-evolution'];
     for (const activity of activities) {
       const input = config();
       input.grants[0]!.activities = [activity];

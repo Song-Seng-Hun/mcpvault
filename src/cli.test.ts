@@ -54,12 +54,6 @@ test('parses skill evolution host configuration without consuming the NAS path o
   }
 });
 
-test('parses host-only roleplay configuration without enabling economy or changing the vault', () => {
-  expect(parseCliArgs(['E:\\Vault', '--roleplay-config=E:\\Private\\roleplay.json'])).toMatchObject({ vaultPathArg: 'E:\\Vault', roleplayConfig: 'E:\\Private\\roleplay.json' });
-  expect(() => parseCliArgs(['E:\\Vault', '--roleplay-config'])).toThrow(/config/i);
-  expect(() => parseCliArgs(['E:\\Vault', '--roleplay-config=a', '--roleplay-config=b'])).toThrow();
-});
-
 describe("parseCliArgs", () => {
   test('accepts one explicit owner consent file without implying an execution target', () => {
     expect(parseCliArgs(['/vault', '--owner-activity-config', 'owner.json'])).toMatchObject({ ownerActivityConfig: 'owner.json' });
