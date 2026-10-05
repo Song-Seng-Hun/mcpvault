@@ -79,7 +79,7 @@ function unitPulseService(options: {
       reviewPacket: options.reviewPacket,
       synthesisCandidates: options.synthesisCandidates || (async () => ({ items: [], total: 0, truncated: false })),
     } as any,
-    undefined, undefined, undefined, undefined,
+    undefined, undefined, undefined,
     // Routing tests explicitly admit optional activity; production defaults
     // remain fail-closed and are separately exercised without this fixture.
     async () => options.ownerConsent === false ? undefined : ({

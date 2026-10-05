@@ -22,7 +22,6 @@ function fixture(values: Record<string, unknown> = {}, failures: string[] = [], 
     { getForPrincipal: read('reputation', { level: 0, xp: 0, label: 'Newcomer' }) } as any,
     { reviewQueue: read('reviewQueue', { items: [], total: 0 }), inbox: read('inbox', { items: [], total: 0 }),
       readModelGeneration: () => 0, reviewPacket: read('maintenance', {}), synthesisCandidates: read('synthesis', { items: [] }) } as any,
-    { listWorkshops: read('workshops', { workshops: [], total: 0 }), listIdeas: read('ideas', { ideas: [], total: 0 }) } as any,
     { pulse: read('work', { coverage: 'loaded' }) } as any,
     undefined,
     { nextAction: read('skills', undefined) } as any,
@@ -37,13 +36,13 @@ test('without owner consent, scheduling never reads optional activity backends',
   const f = fixture({}, [], false);
   const value = await f.service.get({ principal, skillId: 'safe-edit' });
   expect(value.nextAction.tool).toBe('wiki.home');
-  for (const source of ['notifications', 'posts', 'rooms', 'reputation', 'workshops', 'ideas', 'skills']) {
+  for (const source of ['notifications', 'posts', 'rooms', 'reputation', 'skills']) {
     expect(f.calls).not.toContain(source);
   }
 });
 
 test('checkpoint reads only continuity, even if every lower-priority backend fails', async () => {
-  const f = fixture({ continuity: { exists: true } }, ['work', 'tasks', 'notifications', 'posts', 'rooms', 'reputation', 'reviewQueue', 'inbox', 'maintenance', 'workshops', 'ideas', 'skills']);
+  const f = fixture({ continuity: { exists: true } }, ['work', 'tasks', 'notifications', 'posts', 'rooms', 'reputation', 'reviewQueue', 'inbox', 'maintenance', 'skills']);
   const value = await f.service.get({ principal, skillId: 'safe-edit' });
   expect(value.nextAction).toMatchObject({ tool: 'continuity.resume' });
   expect(f.calls).toEqual(['continuity']);
@@ -92,7 +91,7 @@ test('notification selection skips maintenance, posts, rooms, ideas and reputati
 });
 
 test('optional failures have fixed coverage reasons, not false empty counts or private errors', async () => {
-  const f = fixture({}, ['notifications', 'reviewQueue', 'inbox', 'posts', 'skills', 'maintenance', 'workshops', 'ideas', 'rooms', 'reputation']);
+  const f = fixture({}, ['notifications', 'reviewQueue', 'inbox', 'posts', 'skills', 'maintenance', 'rooms', 'reputation']);
   const value = await f.service.get({ principal, skillId: 'safe-edit' });
   expect(value.nextAction).toMatchObject({ tool: 'community.posts' });
   expect(value.coverage).toMatchObject({ notifications: { state: 'unavailable', reason: 'read_failed' }, rooms: { state: 'unavailable', reason: 'read_failed' } });
@@ -102,14 +101,9 @@ test('optional failures have fixed coverage reasons, not false empty counts or p
   expect(JSON.stringify(value.nextAction)).not.toMatch(/No unread activity|No .*waiting/);
 });
 
-test('review wins before Inbox, and a workshop wins before ideas and rooms', async () => {
+test('review wins before Inbox', async () => {
   const review = fixture({ reviewQueue: { items: [{ path: 'Knowledge/Due.md' }], total: 1 } });
   expect((await review.service.get({ principal })).nextAction).toMatchObject({ target: 'Knowledge/Due.md' });
   expect(review.calls).not.toContain('inbox');
   expect(review.calls).not.toContain('posts');
-  const workshop = fixture({ workshops: { workshops: [{ workshopId: 'open' }], total: 1 } });
-  expect((await workshop.service.get({ principal })).nextAction).toMatchObject({ target: 'open' });
-  expect(workshop.calls).not.toContain('ideas');
-  expect(workshop.calls).not.toContain('rooms');
-  expect(workshop.calls).not.toContain('reputation');
 });

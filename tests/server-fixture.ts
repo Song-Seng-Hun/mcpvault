@@ -5,7 +5,7 @@ import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
 export { getServerRuntime } from '../src/createServer.js';
 export type { CreateServerOptions, ServerRuntime } from '../src/createServer.js';
 
-const activities: Activity[] = ['collaboration', 'ideation-research',
+const activities: Activity[] = ['collaboration',
   'roleplay', 'skill-evolution'];
 const fixtureOwnerPolicy = new OwnerActivityPolicy({ version: 1, owners: { 'fixture-account': 'fixture-owner' }, grants: [{
   id: 'fixture-all-current', ownerId: 'fixture-owner', accountIds: ['fixture-account'], activities,

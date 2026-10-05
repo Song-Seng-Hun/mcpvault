@@ -81,7 +81,7 @@ test('idle fallback Pulse still loads real Markdown-derived reputation', async (
     { listRooms: async () => ({ rooms: [], total: 0 }) } as any,
     { listAssignedOpen: async () => ({ tasks: [], total: 0, statusCounts: {} }) } as any,
     { read: async () => ({ exists: false }) } as any, reputation,
-    undefined, undefined, undefined, undefined, undefined,
+    undefined, undefined, undefined, undefined,
     // This positive aggregation case has explicit optional-activity admission.
     async () => ({ run: async <T>(reader: () => Promise<T>) => reader(),
       revalidate: async () => {}, assertFresh: () => {} }),

@@ -6,7 +6,6 @@ import { TaskReanchorError } from './task-reanchoring.js';
 import { createHash } from 'node:crypto';
 import { DEFAULT_HOST_FEATURE_CONFIG, parseHostFeatureConfig, hostFeatureForTool, type HostFeatureConfig, type HostFeatureId } from './host-features.js';
 import { Server, type Tool } from "@modelcontextprotocol/server";
-import { workshopDecisionContext, workshopTaskDescription } from './workshop-output.js';
 import { FileSystemService, MAX_NOTE_CONTENT_BYTES } from "./filesystem.js";
 import { projectNoteOutline, projectNoteLineWindow } from './note-projections.js';
 import { packTaskPage } from './task-page.js';
@@ -21,8 +20,6 @@ import { LayeredMemoryService } from './layered-memory.js';
 import { getLayeredMemoryTools } from './layered-memory-tools.js';
 import { CommunityParticipationService } from './community-participation.js';
 import { getCommunityParticipationTools, PARTICIPATION_MUTATING_TOOLS } from './community-participation-tools.js';
-import { ResearchBridgeService } from './research-bridge.js';
-import { getResearchBridgeTools } from './research-bridge-tools.js';
 import { QuestionPacketService } from './question-packet.js';
 import { SourceComparisonService } from './source-comparison.js';
 import { SourceChangeService } from './source-change.js';
@@ -139,9 +136,6 @@ import { VaultFileCatalog, type VaultCatalogChange } from "./vault-catalog.js";
 import { VaultGraphIndex } from "./vault-graph.js";
 import type { CatalogOrder, TemporalValidityState } from "./organization.js";
 import { VaultIoCoordinator } from "./vault-io.js";
-import { IdeationService } from "./ideation.js";
-import { IDEATION_MUTATING_TOOLS, getIdeationTools } from "./ideation-tools.js";
-import { IndependentResearchService } from './independent-research.js';
 import { getWikiPolicyTopic, MCPVAULT_SERVER_INSTRUCTIONS } from './wiki-policy.js';
 import { RECORDING_MCP_TOOLS, RECORDING_TOOL_NAMES, routeRecordingTool } from './record-tools.js';
 
@@ -349,7 +343,6 @@ const MUTATING_TOOLS = new Set([
   ...CONTINUITY_MUTATING_TOOLS,
   ...MODERATION_MUTATING_TOOLS,
   ...REPUTATION_MUTATING_TOOLS,
-  ...IDEATION_MUTATING_TOOLS,
   "update_task",
 ]);
 
@@ -438,18 +431,6 @@ const CAPABILITY_FOR_TOOL: Partial<Record<string, ScopeCapability>> = {
   create_agent_scope: "profile",
   handoff_agent_scope: "profile",
   resume_agent_scope: "profile",
-  create_idea: "publish",
-  branch_idea: "publish",
-  update_idea_status: "status",
-  contribute_idea: "comment",
-  evaluate_idea: "comment",
-  create_workshop: "publish",
-  update_workshop_facilitation: 'publish',
-  read_workshop_research: 'publish',
-  update_workshop_research: 'publish',
-  contribute_workshop: "comment",
-  update_workshop_phase: "status",
-  synthesize_workshop: "publish",
 };
 
 const FIXED_MCP_TOOL_NAMES = new Set([
@@ -542,7 +523,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
   const features = parseHostFeatureConfig(options.features ?? DEFAULT_HOST_FEATURE_CONFIG);
   const selectedFeatures = new Set(features.selected);
   const ownerActivityRuntime = new OwnerActivityRuntime(options.ownerActivity);
-  const catalogActivities: readonly Activity[] = ['collaboration', 'ideation-research',
+  const catalogActivities: readonly Activity[] = ['collaboration',
     'roleplay', 'skill-evolution'];
   const catalogActions: readonly OwnerActivityAction[] = ['discover', 'read', 'claim', 'execute'];
   const ownerCatalogSnapshot = (principal?: ScopePrincipal): NonNullable<EndpointAvailabilityContext['ownerActivity']> => {
@@ -718,7 +699,6 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
   if (referenceCacheDir) referenceImpactIndex = new ReferenceImpactIndex(fileSystem, referenceCacheDir, fileCatalog,
     path => documentPolicyReady && pathFilter.isAllowed(path) && scopeAccess.canReadProtectedDocument(path));
   const layeredMemory = hasFeature('personal-memory') ? new LayeredMemoryService(fileSystem, retrieval, scopeAccess, memoryIndex) : undefined;
-  const researchBridge = hasFeature('ideation-research') ? new ResearchBridgeService(fileSystem, scopeAccess, retrieval) : undefined;
   const questionPacket = new QuestionPacketService(fileSystem, scopeAccess, retrieval);
   const sourceComparison = new SourceComparisonService(fileSystem, scopeAccess, retrieval);
   const fidelity = new FidelityService(fileSystem, scopeAccess);
@@ -785,11 +765,6 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
   const federation = options.publicFederation && hasFeature('collaboration') ? new EnterpriseFederationAdapter({ vaultPath: resolvedVaultPath, social: social!, directory: agentDirectory, config: options.publicFederation, pathFilter }) : undefined;
   const audit = new AuditService(resolvedVaultPath);
   const agentTasks = needsTaskRecords ? new AgentTaskService(fileSystem, references, scopeAuth, scopeAccess) : undefined;
-  const ideation = hasFeature('ideation-research') ? new IdeationService(fileSystem, references) : undefined;
-  const independentResearch = hasFeature('ideation-research') ? new IndependentResearchService(fileSystem, references, scopeAccess, async accountId => {
-    const actor = (await scopeAuth.listPrincipals()).find(p => p.accountId === accountId);
-    return Boolean(actor && scopeAuth.hasCapability(actor, 'publish') && !await moderation.isBanned(actor.accountId, actor.userId));
-  }) : undefined;
   const communityFeatures = needsPersonalStorage ? new CommunityFeaturesService(fileSystem, scopeAccess, scopeAuth, reputation, resolvedVaultPath, notifications, hasFeature('collaboration') ? fileCatalog : undefined) : undefined;
   communityFeaturesCache = communityFeatures;
   // The lexical, metadata, graph, and semantic indexes subscribe to the
@@ -848,33 +823,8 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
     }) : undefined;
   if (reviewedSkills) retrieval.attachReviewedProcedures(reviewedSkills);
   const reviewedSourceAccess = Boolean(reviewedSkills && options.reviewedSkills?.authorization);
-  ideation?.attachOutputAdapter({
-    assertReadable:async(principal,path,container)=>{
-      try {
-        const paths=await references.validateAndNormalize([path],container,principal);
-        if(paths.length!==1||paths[0]!==path||!scopeAccess.canAccessPhysicalPath(path,principal))throw Error();
-      }catch{throw guidanceError(Error('Output or basis unavailable'), 'guid-619a9c57010ef0a6');}
-    },
-    verifyTaskOrigin:(note,input,receipt)=>requiredService(work).verifyWorkshopTaskOrigin(note,input,receipt),
-    authorizeProject:(principal,projectId,owner,delegate,grantor)=>requiredService(work).authorizeWorkshopProject(principal,projectId,owner,delegate,grantor),
-    assertAccess:async(principal,input)=>{
-      const current=(await scopeAuth.listPrincipals()).find(p=>p.accountId===principal.accountId);
-      const capability=input.type==='decision'?'publish':'task';
-      if(!current||!scopeAuth.hasCapability(current,capability)||!scopeAuth.hasCapability(principal,capability)||await moderation.isBanned(current.accountId,current.userId))throw guidanceError(new Error('Current output capability is required'), 'guid-daa1f5f1eefaa650');
-    },
-    create:async(input,guards,receipt,principal,projectId,assertAccess)=>{
-      await assertAccess();
-      if(input.type==='task') return requiredService(work).createWorkshopTask({principal,projectId,taskId:input.path.split('/').at(-1)!.replace(/\.md$/,''),title:input.title,
-        description:workshopTaskDescription(input,receipt.workshopPath),completionCriteria:input.completionCriteria,
-        workKind:input.kind as 'general',references:[receipt.workshopPath,...input.evidencePaths],expectedRevision:'missing',requestId:`output-${receipt.payloadFingerprint}`},guards,receipt,assertAccess);
-      const context=workshopDecisionContext(input);
-      return llmWiki.publishDecisionRecord({principal,path:input.path,title:input.title,context,decision:input.decision!,alternatives:input.alternatives,consequences:input.consequences,
-        evidencePaths:input.evidencePaths,references:[receipt.workshopPath,...input.evidencePaths],author:principal.agentId||principal.modelId,status:'accepted',expectedRevision:'missing'},
-        {revisionGuards:guards,workshopOutput:receipt,assertOutputAccess:assertAccess});
-    },
-  });
   const agentPulse = new AgentPulseService(notifications, hasFeature('collaboration') ? social : undefined, chat,
-    hasFeature('work-management') ? agentTasks : undefined, continuity, reputation, llmWiki, ideation,
+    hasFeature('work-management') ? agentTasks : undefined, continuity, reputation, llmWiki,
     hasFeature('work-management') ? work : undefined, participation, skillEvolution,
     async (activity, principal) => {
       const operation = await ownerActivityRuntime.begin(activity, 'discover', undefined, principal);
@@ -1196,7 +1146,6 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         ...(federation ? getEnterpriseFederationTools() : []),
         ...getLayeredMemoryTools(),
         ...getCommunityParticipationTools(),
-        ...getResearchBridgeTools(),
         ...getChatTools(),
         ...getRoleplayTools(),
         ...getStoryTools(),
@@ -1219,7 +1168,6 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         ...getContinuityTools(),
         ...getModerationTools(),
         ...getReputationTools(),
-        ...getIdeationTools(),
         {
           name: "list_all_tags",
           description: guidanceText('guid-499e41ddd96b2247', "Discover caller-visible, non-hidden tags in bounded {tags,total,returned,offset,snapshotFingerprint,truncated,nextAction} pages. Counts are occurrences, not distinct notes. Combines Properties and body Unicode/nested tags; ignores fenced/inline examples and escaped hashes. Sorted by count then ordinal tag. Follow nextAction, retaining authentication locally; changed tag views require restart. Exact labels are never clipped. Advisory derived view, not an atomic source inventory."),
@@ -1557,7 +1505,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
       ...getWhisperTools().map(tool => tool.name),
       ...(enterpriseProfile.mode === 'public' ? [
         ...getChatTools(), ...getRoleplayTools(), ...getNotificationTools(), ...getAgentTaskTools(),
-        ...getCommunityFeatureTools(), ...getReputationTools(), ...getIdeationTools(),
+        ...getCommunityFeatureTools(), ...getReputationTools(),
       ].map(tool => tool.name) : []),
     ] : []);
     return buildInternalTools().filter(tool => !unavailable.has(tool.name) && featureToolAllowed(tool.name)).map(tool => {
@@ -1753,8 +1701,6 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
           const current = scopeAuth.authenticate(rawArgs.accessToken);
           if (!current || !principal || current.accountId !== principal.accountId || current.sessionGeneration !== principal.sessionGeneration) throw guidanceError(new Error('Authenticated actor changed'), 'guid-9d2f8216a50e151d');
           if (requiredCapability && !scopeAuth.hasCapability(current, requiredCapability)) throw guidanceError(new Error('Capability was revoked'), 'guid-6d25fb70d1e43dcc');
-          if (toolName === 'update_workshop_facilitation' && trimmedArgs.operation === 'execute_output'
-            && !scopeAuth.hasCapability(current, trimmedArgs.payload?.type === 'decision' ? 'publish' : 'task')) throw guidanceError(new Error('Output capability was revoked'), 'guid-8aff3dc331726721');
           return current;
         };
         const current = authenticateActor();
@@ -1972,11 +1918,6 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
           return jsonResult(packet, trimmedArgs.purpose === 'community' ? false : trimmedArgs.prettyPrint);
         }
 
-        case 'get_wiki_bridge_candidates': {
-          const packet = await requiredService(researchBridge).candidates({ ...trimmedArgs, principal } as any);
-          if (principal && JSON.stringify(scopeAuth.authenticate(rawArgs.accessToken)) !== JSON.stringify(principal)) throw guidanceError(new Error('Research authentication changed; login again before reading'), 'guid-134b283bd26baf39');
-          return jsonResult(packet, false);
-        }
         case 'read_community_participation':
         case 'manage_community_participation': {
           const packet = await requiredService(participation).settings({ ...trimmedArgs, principal, ...(toolName === 'read_community_participation' && { op: 'read' }), authorize: () => { if (!principal || JSON.stringify(scopeAuth.authenticate(rawArgs.accessToken)) !== JSON.stringify(principal)) throw guidanceError(new Error('Participation authentication changed'), 'guid-d130c9cb9e9dbb37'); } });
@@ -3098,67 +3039,6 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
             knowledgeDispositionReason: trimmedArgs.knowledgeDispositionReason,
             expectedRevision: trimmedArgs.expectedRevision,
           }), trimmedArgs.prettyPrint);
-        }
-
-        case "create_idea": {
-          return jsonResult(await requiredService(ideation).createIdea({ ...(principal && { principal }), ideaId: trimmedArgs.ideaId, title: trimmedArgs.title, seed: trimmedArgs.seed, problem: trimmedArgs.problem, constraints: trimmedArgs.constraints, successCriteria: trimmedArgs.successCriteria, references: trimmedArgs.references, workshopId: trimmedArgs.workshopId, expectedRevision: trimmedArgs.expectedRevision, requestId: trimmedArgs.requestId }), trimmedArgs.prettyPrint);
-        }
-
-        case "list_ideas": {
-          return jsonResult(await requiredService(ideation).listIdeas({ status: trimmedArgs.status, workshopId: trimmedArgs.workshopId, limit: trimmedArgs.limit, maxChars: trimmedArgs.maxChars }), trimmedArgs.prettyPrint);
-        }
-
-        case "read_idea": {
-          return jsonResult(await requiredService(ideation).readIdea({ ideaId: trimmedArgs.ideaId, limit: trimmedArgs.limit, maxChars: trimmedArgs.maxChars, includeContent: trimmedArgs.includeContent }), trimmedArgs.prettyPrint);
-        }
-
-        case "branch_idea": {
-          return jsonResult(await requiredService(ideation).branchIdea({ ...(principal && { principal }), parentIdeaId: trimmedArgs.parentIdeaId, ideaId: trimmedArgs.ideaId, title: trimmedArgs.title, seed: trimmedArgs.seed, references: trimmedArgs.references, expectedParentRevision: trimmedArgs.expectedParentRevision, requestId: trimmedArgs.requestId }), trimmedArgs.prettyPrint);
-        }
-
-        case "update_idea_status": {
-          return jsonResult(await requiredService(ideation).updateIdeaStatus({ ...(principal && { principal }), ideaId: trimmedArgs.ideaId, status: trimmedArgs.status, reason: trimmedArgs.reason, expectedRevision: trimmedArgs.expectedRevision }), trimmedArgs.prettyPrint);
-        }
-
-        case "contribute_idea": {
-          return jsonResult(await requiredService(ideation).contributeIdea({ ...(principal && { principal }), ideaId: trimmedArgs.ideaId, kind: trimmedArgs.kind, content: trimmedArgs.content, references: trimmedArgs.references, replyTo: trimmedArgs.replyTo, requestId: trimmedArgs.requestId }), trimmedArgs.prettyPrint);
-        }
-
-        case "evaluate_idea": {
-          return jsonResult(await requiredService(ideation).evaluateIdea({ ...(principal && { principal }), ideaId: trimmedArgs.ideaId, novelty: trimmedArgs.novelty, usefulness: trimmedArgs.usefulness, feasibility: trimmedArgs.feasibility, risk: trimmedArgs.risk, evidenceQuality: trimmedArgs.evidenceQuality, rationale: trimmedArgs.rationale, references: trimmedArgs.references, expectedRevision: trimmedArgs.expectedRevision, expectedIdeaRevision: trimmedArgs.expectedIdeaRevision }), trimmedArgs.prettyPrint);
-        }
-
-        case "create_workshop": {
-          return jsonResult(await requiredService(ideation).createWorkshop({ ...(principal && { principal }), workshopId: trimmedArgs.workshopId, title: trimmedArgs.title, prompt: trimmedArgs.prompt, agenda: trimmedArgs.agenda, ideaIds: trimmedArgs.ideaIds, timeboxMinutes: trimmedArgs.timeboxMinutes, maxContributionsPerAgent: trimmedArgs.maxContributionsPerAgent, references: trimmedArgs.references, requestId: trimmedArgs.requestId, facilitation: trimmedArgs.facilitation, revalidateActor, ...(trimmedArgs.researchWork && { researchWork: trimmedArgs.researchWork }) }), trimmedArgs.prettyPrint);
-        }
-        case 'list_workshop_methods':
-          return jsonResult(requiredService(ideation).getWorkshopMethods({ methodId: trimmedArgs.methodId, stepId:trimmedArgs.stepId, cursor: trimmedArgs.cursor, maxChars: trimmedArgs.maxChars }), false);
-        case 'read_workshop_research':
-          return jsonResult(await requiredService(independentResearch).read({ ...trimmedArgs, principal, revalidateActor }), false);
-        case 'update_workshop_research':
-          return jsonResult(await requiredService(independentResearch).update({ ...trimmedArgs, principal, revalidateActor }), false);
-        case 'read_workshop_facilitation':
-          return jsonResult(await requiredService(ideation).readWorkshopFacilitation({ ...(principal && { principal }), workshopId: trimmedArgs.workshopId, cursor: trimmedArgs.cursor, limit: trimmedArgs.limit, maxChars: trimmedArgs.maxChars }), false);
-        case 'update_workshop_facilitation':
-          return jsonResult(await requiredService(ideation).updateWorkshopFacilitation({ ...(principal && { principal }), workshopId: trimmedArgs.workshopId, expectedRevision: trimmedArgs.expectedRevision, requestId: trimmedArgs.requestId, operation: trimmedArgs.operation, payload: trimmedArgs.payload, stepId: trimmedArgs.stepId, structured: trimmedArgs.structured, content: trimmedArgs.content, kind: trimmedArgs.kind, references: trimmedArgs.references, revalidateActor }), trimmedArgs.prettyPrint);
-        case "list_workshops": {
-          return jsonResult(await requiredService(ideation).listWorkshops({ phase: trimmedArgs.phase, status: trimmedArgs.status, limit: trimmedArgs.limit, maxChars: trimmedArgs.maxChars }), trimmedArgs.prettyPrint);
-        }
-
-        case "read_workshop": {
-          return jsonResult(await requiredService(ideation).readWorkshop({ workshopId: trimmedArgs.workshopId, limit: trimmedArgs.limit, maxChars: trimmedArgs.maxChars, includeContent: trimmedArgs.includeContent }), trimmedArgs.prettyPrint);
-        }
-
-        case "contribute_workshop": {
-          return jsonResult(await requiredService(ideation).contributeWorkshop({ ...(principal && { principal }), workshopId: trimmedArgs.workshopId, kind: trimmedArgs.kind, content: trimmedArgs.content, ideaId: trimmedArgs.ideaId, expectedPhase: trimmedArgs.expectedPhase, references: trimmedArgs.references, requestId: trimmedArgs.requestId, expectedRevision: trimmedArgs.expectedRevision, stepId: trimmedArgs.stepId, structured: trimmedArgs.structured, revalidateActor }), trimmedArgs.prettyPrint);
-        }
-
-        case "update_workshop_phase": {
-          return jsonResult(await requiredService(ideation).updateWorkshopPhase({ ...(principal && { principal }), workshopId: trimmedArgs.workshopId, phase: trimmedArgs.phase, reason: trimmedArgs.reason, expectedRevision: trimmedArgs.expectedRevision }), trimmedArgs.prettyPrint);
-        }
-
-        case "synthesize_workshop": {
-          return jsonResult(await requiredService(ideation).synthesizeWorkshop({ ...(principal && { principal }), workshopId: trimmedArgs.workshopId, synthesis: trimmedArgs.synthesis, references: trimmedArgs.references, expectedRevision: trimmedArgs.expectedRevision }), trimmedArgs.prettyPrint);
         }
 
         case "read_note": {

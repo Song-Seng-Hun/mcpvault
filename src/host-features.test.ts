@@ -11,7 +11,7 @@ function api(): typeof import('./host-features.js') {
 }
 const ids = [
   'wiki-core', 'document-search', 'personal-memory', 'work-management', 'collaboration',
-  'ideation-research', 'roleplay', 'skill-evolution',
+  'roleplay', 'skill-evolution',
 ] as const;
 const config = (...selected: string[]) => ({ version: 1, selected });
 
@@ -120,7 +120,7 @@ test('accepts data-only null-prototype records without modifying them', () => {
 const representatives = [
   ['wiki-core', 'get_wiki_canvas_view'], ['document-search', 'search_documents'],
   ['personal-memory', 'memory_recall'], ['work-management', 'read_work_board'],
-  ['collaboration', 'publish_blog_post'], ['ideation-research', 'get_wiki_bridge_candidates'],
+  ['collaboration', 'publish_blog_post'],
   ['roleplay', 'manage_story_project'], ['skill-evolution', 'promote_skill'],
 ] as const;
 test.each(representatives)('maps %s to its exact internal tool %s independently of caller permission', (feature, tool) => {

@@ -779,7 +779,7 @@ export function getLlmWikiTools(): Tool[] {
       description: guidanceText('guid-90776feeb80d0ddd', 'Preview one visible note as a bounded Obsidian JSON Canvas 1.0 spatial map without copying note bodies. MOCs preserve authored order, nesting, and prerequisite edges; ordinary notes place direct links/backlinks closest, shared provenance/context next, and optional semantic/temporal discoveries farthest away. The result is a disposable navigation projection with exact source revisions, not evidence or an access boundary.'),
       inputSchema: { type: 'object', properties: {
         path: { type: 'string', description: guidanceText('guid-edf84b11ab0b1721', 'Visible Markdown/text root note') },
-          mode: { type: 'string', enum: ['auto', 'moc', 'neighborhood', 'workshop'], default: 'auto', description: guidanceText('guid-3200eb9f4a2a2203', 'auto uses MOC layout for note_kind=moc and neighborhood layout otherwise; workshop requires mcpvault_type=workshop and projects submitted mapNodes/mapEdges only') },
+          mode: { type: 'string', enum: ['auto', 'moc', 'neighborhood'], default: 'auto', description: guidanceText('guid-3200eb9f4a2a2203', 'auto uses MOC layout for note_kind=moc and neighborhood layout otherwise') },
         maxDepth: { type: 'integer', minimum: 0, maximum: 6, default: 2, description: guidanceText('guid-20765f5fa2fd5fb6', 'Nested MOC depth in moc mode') },
         includeSemantic: { type: 'boolean', default: false, description: guidanceText('guid-65e104485abd704e', 'Add optional semantic discovery only in neighborhood mode; lexical links and scope rules remain authoritative') },
         limit: { type: 'integer', minimum: 1, maximum: 50, default: 24, description: guidanceText('guid-ac73254022e14cbb', 'Maximum file nodes including the root') },
@@ -792,7 +792,7 @@ export function getLlmWikiTools(): Tool[] {
       description: guidanceText('guid-a36cdaafee4b1bfd', 'Regenerate and save one validated scope-local Views/*.canvas file. Replay the preview exportAction unchanged: its settings and expectedSnapshotFingerprint reject child/graph drift. Re-preview on conflict, do not remove the guard. Direct export without a fingerprint deliberately derives a fresh map. Requires the output revision, optionally guards the root, and rechecks included sources before writing. Never copies note bodies or changes authoritative Markdown.'),
       inputSchema: { type: 'object', properties: {
         path: { type: 'string', description: guidanceText('guid-edf84b11ab0b1721', 'Visible Markdown/text root note') },
-          mode: { type: 'string', enum: ['auto', 'moc', 'neighborhood', 'workshop'], default: 'auto' },
+          mode: { type: 'string', enum: ['auto', 'moc', 'neighborhood'], default: 'auto' },
         maxDepth: { type: 'integer', minimum: 0, maximum: 6, default: 2 },
         includeSemantic: { type: 'boolean', default: false },
         limit: { type: 'integer', minimum: 1, maximum: 50, default: 24 },

@@ -10,7 +10,7 @@ function pulseWith(action: Record<string, unknown>) {
     { listAssignedOpen: async () => ({ tasks: [], total: 0, statusCounts: {} }) } as any,
     { read: async () => ({ exists: false }) } as any,
     { getForPrincipal: async () => ({ level: 0, xp: 0, label: 'new' }) } as any,
-    undefined, undefined,
+    undefined,
     { pulse: async () => ({ nextAction: action, reason: 'A peer needs artifact review.', summary: { pendingReviews: 1 } }) } as any,
   );
 }

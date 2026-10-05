@@ -40,7 +40,7 @@ describe('progressive Wiki policy', () => {
   });
 
   test('teaches bounded authority shelves and distinct relation strengths progressively', () => {
-    expect(WIKI_POLICY_VERSION).toBe(41);
+    expect(WIKI_POLICY_VERSION).toBe(42);
     const retrieval = getWikiPolicyTopic('retrieval', 2000);
     const knowledge = getWikiPolicyTopic('knowledge', 2000);
     expect(retrieval.routes).toEqual(expect.arrayContaining(['wiki.authority_map']));
@@ -169,15 +169,12 @@ describe('progressive Wiki policy', () => {
     expect(() => getWikiPolicyTopic('everything', 1200)).toThrow(/Unknown policy topic/);
   });
 
-  test('exposes bounded memory, maintenance, and ideation guidance without duplicating workflows', () => {
+  test('exposes bounded memory and maintenance guidance without duplicating workflows', () => {
     expect(getWikiPolicyTopic('memory', 1600)).toMatchObject({
       routes: expect.arrayContaining(['wiki.recall_queue', 'continuity.save']),
     });
     expect(getWikiPolicyTopic('maintenance', 1600)).toMatchObject({
       routes: expect.arrayContaining(['wiki.review_packet', 'wiki.exception_board']),
-    });
-    expect(getWikiPolicyTopic('ideation', 1600)).toMatchObject({
-      routes: expect.arrayContaining(['idea.create', 'workshop.create', 'wiki.synthesis_candidates']),
     });
     for (const topic of WIKI_POLICY_TOPICS) {
       expect(JSON.stringify(getWikiPolicyTopic(topic, 512)).length, topic).toBeLessThanOrEqual(512);

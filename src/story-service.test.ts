@@ -8,7 +8,6 @@ import { ScopeAuthService, type ScopePrincipal } from './scope-auth.js';
 import { ReferenceService } from './references.js';
 import { AgentTaskService } from './agent-tasks.js';
 import { WorkService } from './work-service.js';
-import { IdeationService } from './ideation.js';
 import { RoleplayService } from './roleplay-service.js';
 import { RoleplayStore } from './roleplay-store.js';
 import { roleplayRevision } from './roleplay-model.js';
@@ -536,82 +535,3 @@ test('session waiting reasons reject private references without changing the ses
     expectedRevision: s.revision, expectedProjectRevision: p.revision, requestId: 'private-pause' })).rejects.toThrow(/reference|scope|private|public/i);
   expect((await f.fs.readNote(s.path)).revision).toBe(s.revision);
 });
-
-test('complete creative workflow keeps Workshop discussion, two edits, selected media and upstream refresh connected', async () => {
-  const f = await fixture(); await f.project();
-  const ideas = [];
-  for (const id of ['idea-a', 'idea-b']) ideas.push(await f.put(id, {}, { kind: 'alternative', branchId: id, content: id === 'idea-a' ? 'A librarian loses one memory per book.' : 'Books remember their missing authors.' }));
-  const outline = await f.put('outline', {}, { kind: 'outline', content: 'Arrival: a blank return slip. Search: a borrowed memory. Revelation: choose who remembers.' });
-  const discussion = new IdeationService(f.fs, f.refs);
-  const workshop = await discussion.createWorkshop({ principal: f.actors.owner, workshopId: 'story-direction', title: 'Story direction', prompt: 'Choose a premise inside the existing brief.', references: ideas.map(i => i.path) });
-  const comment = await discussion.contributeWorkshop({ principal: f.actors.writer, workshopId: 'story-direction', kind: 'idea',
-    content: `Develop the librarian premise; retain the other alternative. Source revision ${ideas[0].revision}.`, references: [ideas[0].path], expectedRevision: workshop.revision, requestId: 'direction-note' });
-  expect(comment).toBeDefined();
-  const sceneIds = ['arrival', 'search', 'revelation'];
-  const scenes: Record<string, any> = {};
-  for (const id of sceneIds) scenes[id] = await f.put(id, { purpose: `Deliver ${id}`, blocks: [
-    { type: 'heading', text: '도서관 - 밤' }, { type: 'action', text: '반납함에서 이름 없는 책을 꺼낸다.' },
-    { type: 'character', text: '아이리스' }, { type: 'dialogue', text: '이 이름은 내가 기억할게.' },
-  ] }, { content: `${id}\n${'그녀는 빈 대출증에 남은 손자국을 따라 기억을 되짚었다. '.repeat(80)}`, sources: [{ artifactId: 'outline', revision: outline.revision }] });
-  await f.execute('sequence', { op: 'update', projectId: 'novel', presentation: sceneIds, chronology: ['search', 'arrival', 'revelation'], expectedRevision: (await f.current()).revision, requestId: 'e2e-order' });
-  let session = await f.execute('session', { op: 'start', projectId: 'novel', sessionId: 'e2e-room', artifactId: 'arrival', writerAccountId: 'writer', editorAccountId: 'owner',
-    expectedRevision: 'missing', expectedProjectRevision: (await f.current()).revision, requestId: 'e2e-start' });
-  const advance = async (op: string, extra: Record<string, unknown>, principal = f.actors.owner) => {
-    session = await f.execute('session', { op, projectId: 'novel', sessionId: 'e2e-room', expectedRevision: session.revision,
-      expectedProjectRevision: (await f.current()).revision, requestId: `e2e-${op}-${session.revision.slice(0, 24)}`, ...extra }, principal);
-  };
-  for (let round = 0; round < 3; round++) {
-    await advance('submit', { sourceRevision: scenes.arrival.revision }, f.actors.writer);
-    const review = await f.execute('review', { op: 'create', projectId: 'novel', artifactId: 'arrival', reviewId: `e2e-review-${round}`, pass: round === 0 ? 'structure' : 'line',
-      sourceRevision: scenes.arrival.revision, content: round === 0 ? 'Tie the return slip to the later choice.' : 'Keep the voice specific; remove explanatory repetition.',
-      findings: [{ classification: 'intentional_exception', text: 'The flashback order is intentional, not a continuity error.' }],
-      expectedRevision: 'missing', expectedProjectRevision: (await f.current()).revision, requestId: `e2e-review-${round}` });
-    await advance('review', { sourceRevision: scenes.arrival.revision, reviewId: `e2e-review-${round}`, decision: round < 2 ? 'changes_requested' : 'ready' });
-    expect(review.revision).toBeTruthy();
-    if (round < 2) scenes.arrival = await f.put('arrival', (await f.fs.readNote(scenes.arrival.path)).frontmatter.data,
-      { op: 'update', expectedRevision: scenes.arrival.revision, content: `Revision ${round + 1}: the handprint belongs to her forgotten sister.\n${'빈 이름 칸을 손끝으로 가렸다. '.repeat(80)}` });
-  }
-  expect(session.revisionRound).toBe(2);
-  const select = async (id: string, suffix: string, reviewIds: string[] = []) => f.execute('adopt', { projectId: 'novel', artifactId: id, sourceRevision: scenes[id].revision,
-    reviewIds, reason: 'Select the exact reviewed manuscript revision.', expectedRevision: 'missing', expectedProjectRevision: (await f.current()).revision, requestId: `e2e-adopt-${id}-${suffix}` });
-  for (const id of sceneIds) await select(id, 'first', id === 'arrival' ? ['e2e-review-2'] : []);
-  await advance('decide', { sourceRevision: scenes.arrival.revision, decision: 'adopt', reason: 'The selected snapshot preserves both revision rounds.' });
-  expect(session.stage).toBe('completed');
-  await mkdir(join(f.root, 'Images'), { recursive: true });
-  await writeFile(join(f.root, 'Images/library.png'), Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j7gAAAABJRU5ErkJggg==', 'base64'));
-  let shot = await f.put('opening-shot', { sourceSceneId: 'arrival', sourceSceneRevision: scenes.arrival.revision, order: 0, camera: 'Close-up', action: 'Hide the empty name.', durationSeconds: 4, images: [{ path: 'Images/library.png' }] }, { kind: 'shot' });
-  scenes['opening-shot'] = shot; await select('opening-shot', 'first');
-  await f.execute('sequence', { op: 'update', projectId: 'novel', presentation: sceneIds, chronology: ['search', 'arrival', 'revelation'], shots: ['opening-shot'], expectedRevision: (await f.current()).revision, requestId: 'e2e-shots' });
-  const outputs: Record<string, any> = {};
-  for (const format of ['markdown', 'fountain', 'storyboard', 'canvas']) {
-    outputs[format] = await f.execute('export', { op: 'write', projectId: 'novel', format, exportId: `e2e-${format}`, expectedRevision: 'missing',
-      expectedProjectRevision: (await f.current()).revision, requestId: `e2e-export-${format}` });
-    expect((await f.execute('export', { op: 'health', projectId: 'novel', exportId: `e2e-${format}` })).stale).toBe(false);
-  }
-  expect(await readFile(join(f.root, outputs.fountain.outputPath), 'utf8')).toContain('@아이리스');
-  const canvas = JSON.parse(await readFile(join(f.root, outputs.canvas.outputPath), 'utf8'));
-  expect(canvas.nodes.every((n: any) => n.type === 'file')).toBe(true);
-  const graph = await f.put('choice-path', { graph: { revision: 'definition', startNodeId: 'start', variables: [], nodes: [
-    { id: 'start', choices: [{ id: 'keep', label: 'Keep the memory', targetId: 'end' }, { id: 'return', label: 'Return the memory', targetId: 'end' }] }, { id: 'end', end: true, choices: [] },
-  ] } }, { kind: 'branch_graph', sources: [{ artifactId: 'arrival', revision: scenes.arrival.revision }] });
-  const rehearsal = await f.execute('session', { op: 'rehearse', projectId: 'novel', sessionId: 'e2e-path', artifactId: 'choice-path', sourceRevision: graph.revision, choiceIds: ['keep'],
-    expectedRevision: 'missing', expectedProjectRevision: (await f.current()).revision, requestId: 'e2e-path' });
-  expect(rehearsal.result.ended).toBe(true); expect(rehearsal.proposalOnly).toBe(true);
-  const summary = await f.put('memory-summary', {}, { kind: 'summary', sources: [{ artifactId: 'arrival', revision: scenes.arrival.revision }] });
-  scenes.arrival = await f.put('arrival', (await f.fs.readNote(scenes.arrival.path)).frontmatter.data, { op: 'update', expectedRevision: scenes.arrival.revision, content: 'Upstream revision: the forgotten name belongs to the narrator.' });
-  for (const artifactId of ['opening-shot', 'memory-summary', 'choice-path']) expect((await f.execute('artifact', { projectId: 'novel', artifactId })).stale).toBe(true);
-  for (const format of Object.keys(outputs)) expect((await f.execute('export', { op: 'health', projectId: 'novel', exportId: `e2e-${format}` })).stale).toBe(true);
-  expect((await f.fs.readNote(summary.path)).revision).toBe(summary.revision);
-  await select('arrival', 'refreshed');
-  const shotData = (await f.fs.readNote(shot.path)).frontmatter.data;
-  shot = await f.put('opening-shot', { ...shotData, sourceSceneRevision: scenes.arrival.revision }, { op: 'update', expectedRevision: shot.revision, sources: [{ artifactId: 'arrival', revision: scenes.arrival.revision }] });
-  scenes['opening-shot'] = shot; await select('opening-shot', 'refreshed');
-  for (const format of Object.keys(outputs)) {
-    const refreshed = await f.execute('export', { op: 'write', projectId: 'novel', format, exportId: `e2e-${format}`, expectedRevision: outputs[format].revision,
-      expectedProjectRevision: (await f.current()).revision, requestId: `e2e-refresh-${format}` });
-    expect((await f.execute('export', { op: 'health', projectId: 'novel', exportId: `e2e-${format}` })).stale).toBe(false);
-    expect(refreshed.revision).not.toBe(outputs[format].revision);
-  }
-  expect(await f.fs.noteExists('Community/Roleplay/World.md')).toBe(false);
-  expect((await f.fs.readNote(ideas[1].path)).content).toContain('missing authors');
-}, 60000);

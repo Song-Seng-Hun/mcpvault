@@ -54,7 +54,6 @@ export class WorkService {
   private readonly reviewEngine: WorkReviewEngine;
   private readonly access = new ScopeAccessPolicy();
   private readonly intents = new WeakMap<object, Intent>();
-  private readonly workshopCreates = new WeakMap<object, { guards:Guard[]; receipt:import('./workshop-output.js').WorkshopOutputReceipt; assertAccess:()=>Promise<void> }>();
   constructor(
     private readonly fileSystem: FileSystemService,
     private readonly references: ReferenceService,
@@ -98,18 +97,6 @@ export class WorkService {
     if(grantor && project.frontmatter.owner_account_id!==grantor)throw guidanceError(new Error('Project delegation owner changed'), 'guid-be9a21cff63aaffb');
     if(delegate && (!project.frontmatter.participants.includes(delegate)||(await this.auth.listPrincipals()).every(p=>p.accountId!==delegate)))throw guidanceError(new Error('Delegate must be an existing project participant'), 'guid-e13d406715358578');
     return {path:projectPath(projectId),expectedRevision:project.revision};
-  }
-
-  async createWorkshopTask(params:Parameters<AgentTaskService['create']>[0],guards:Guard[],receipt:import('./workshop-output.js').WorkshopOutputReceipt,assertAccess:()=>Promise<void>) {
-    this.workshopCreates.set(params,{guards:structuredClone(guards),receipt:structuredClone(receipt),assertAccess});
-    return this.tasks.create(params);
-  }
-
-  verifyWorkshopTaskOrigin(note:ParsedNote,input:import('./workshop-output.js').WorkshopOutputInput,origin:import('./workshop-output.js').WorkshopOutputReceipt):void {
-    const id=input.path.split('/').at(-1)!.replace(/\.md$/,'');
-    const receipt=(Array.isArray(note.frontmatter.work_receipts)?note.frontmatter.work_receipts:[]).find((r:Properties)=>
-      r.action==='task.create'&&r.target===id&&r.actor===origin.actor&&r.requestId===`output-${origin.payloadFingerprint}`);
-    if(note.frontmatter.mcpvault_type!=='agent_task'||note.frontmatter.task_id!==id||!receipt||!this.receiptMatches(note,receipt))throw guidanceError(Error('Output creation receipt integrity unavailable or changed'), 'guid-292508792e33ca97');
   }
 
   private async visible(path: string, maxBytes = MAX_NOTE_CONTENT_BYTES): Promise<ParsedNote> {
@@ -442,7 +429,6 @@ export class WorkService {
 
   private async runTask(action: 'create' | 'update', params: any, proceed: (context?: AgentTaskWriteContext, parameters?: any) => Promise<any>): Promise<any> {
     const intent = this.intents.get(params); this.intents.delete(params);
-    const workshopCreate=this.workshopCreates.get(params);this.workshopCreates.delete(params);
     params = { ...params };
     return coordinate(async () => {
       const prior = action === 'update' ? await this.visible(taskPath(params.taskId)) : undefined;
@@ -514,7 +500,7 @@ export class WorkService {
       // completion check. Validating a raw value then persisting a normalized
       // one would let alternate casing bypass those checks.
       if (params.status !== undefined) fm.status = taskStatus(params.status, taskStatus(fm.status));
-      const guards: Guard[] = [{ path: projectPath(projectId), expectedRevision: project.revision },...(workshopCreate?.guards||[])];
+      const guards: Guard[] = [{ path: projectPath(projectId), expectedRevision: project.revision }];
       if (params.discussionSlug !== undefined && fm.discussion_slug) {
         const discussion = await this.communityTarget('post', fm.discussion_slug);
         guards.push({ path: discussion.path, expectedRevision: discussion.note.revision });
@@ -592,21 +578,14 @@ export class WorkService {
           if (combined.some(g => unique.find(u => u.path.toLowerCase() === g.path.toLowerCase())?.expectedRevision !== g.expectedRevision)) throw guidanceError(new Error('Related revision changed during work mutation'), 'guid-cdb273014178bb3a');
           // The existing filesystem supports nine locked related revisions.
           // Fail closed rather than drop guards from a larger mutation.
-          if (unique.length > (workshopCreate || fm.work_review_contract === 2 ?128:9)) throw guidanceError(new Error('Work mutation exceeds related revision guard budget; split the dependency/artifact change'), 'guid-fd006d893a9a3fc2');
+          if (unique.length > (fm.work_review_contract === 2 ? 128 : 9)) throw guidanceError(new Error('Work mutation exceeds related revision guard budget; split the dependency/artifact change'), 'guid-fd006d893a9a3fc2');
           result = { success: true, taskId: id, path: write.path, status: fm.status, generation: fm.claim_generation,
             claimGeneration: fm.claim_generation, ...(fm.assignee_account_id && { assigneeAccountId: fm.assignee_account_id }),
             artifactFingerprint: reviewBasis(fm), requestId: request.requestId,
             nextAction: { endpoint: 'work.packet', args: { taskId: id } } };
           this.addReceipt(write.frontmatter!, write.content, request, result, prior);
-          if(workshopCreate) {
-            write.frontmatter!.workshop_output=workshopCreate.receipt;
-            write.frontmatter!.workshop_output_content_sha256=fingerprint(write.content);
-            // Include the trusted marker in the existing retry-state digest.
-            const stored=write.frontmatter!.work_receipts.at(-1);
-            stored.state=this.receiptState(write.frontmatter!,write.content);
-          }
           const receipt = await this.fileSystem.writeNoteWithRevisionGuardsAndReceipt(write, unique, {
-            ...(workshopCreate ? { maxGuards: 128, assertAccess: workshopCreate.assertAccess } : fm.work_review_contract === 2 ? { maxGuards: 128 } : {}),
+            ...(fm.work_review_contract === 2 ? { maxGuards: 128 } : {}),
             ...(fm.work_review_contract === 2 && { maxBytes: MAX_NOTE_CONTENT_BYTES }),
           });
           result = { ...result, revision: receipt.revision };

@@ -6,7 +6,7 @@ import { validateCapabilitySelection, type CapabilityNode } from './capability-g
 /** Explicit v1 snapshot. Adding a future feature must not expand saved selections. */
 export const HOST_FEATURE_IDS_V1 = Object.freeze([
   'wiki-core', 'document-search', 'personal-memory', 'work-management', 'collaboration',
-  'ideation-research', 'roleplay', 'skill-evolution',
+  'roleplay', 'skill-evolution',
 ] as const);
 export type HostFeatureId = typeof HOST_FEATURE_IDS_V1[number];
 export interface HostFeatureConfig {
@@ -142,12 +142,6 @@ const toolsByFeature: Record<HostFeatureId, readonly string[]> = {
     'accept_blog_comment', 'delete_guestbook_entry', 'list_author_activity', 'list_blog_series', 'list_guestbook',
     'list_popular_posts', 'list_reactions', 'list_watched_targets', 'toggle_reaction', 'unaccept_blog_comment',
     'unwatch_target', 'watch_target', 'write_guestbook_entry',
-  ],
-  'ideation-research': [
-    'get_wiki_bridge_candidates', 'branch_idea', 'contribute_idea', 'contribute_workshop', 'create_idea',
-    'create_workshop', 'evaluate_idea', 'list_ideas', 'list_workshop_methods', 'list_workshops', 'read_idea',
-    'read_workshop', 'read_workshop_facilitation', 'synthesize_workshop', 'update_idea_status',
-    'update_workshop_facilitation', 'update_workshop_phase', 'read_workshop_research', 'update_workshop_research',
   ],
   roleplay: [
     'manage_roleplay_computer',

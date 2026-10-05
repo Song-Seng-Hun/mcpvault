@@ -93,7 +93,7 @@ test('every optional activity is gated before an unavailable provider or store',
   const server = createServer(root, { features: { version: 1, selected: [...HOST_FEATURE_IDS_V1] } });
   cleanup.push(() => server.close()); const runtime = getServerRuntime(server)!;
   for (const [endpointId, arguments_] of [
-    ['community.posts', {}], ['idea.list', {}],
+    ['community.posts', {}],
     ['roleplay.world', { op: 'read' }], ['skill.resolve', { skillId: 'example' }],
   ] as const) {
     const response = await runtime.dispatchTool('call_endpoint', { endpointId, arguments: arguments_ });
@@ -315,7 +315,7 @@ test('pulse with no owner consent does not browse or recommend optional activity
   const pulse = JSON.parse(text);
   expect(text).not.toMatch(/Allowed title|Secret title/i);
   expect(pulse.nextAction.tool).toBe('wiki.home');
-  for (const source of ['notifications', 'posts', 'skills', 'workshops', 'ideas', 'rooms', 'reputation']) {
+  for (const source of ['notifications', 'posts', 'skills', 'rooms', 'reputation']) {
     expect(pulse.coverage[source].state).toBe('skipped');
   }
 });

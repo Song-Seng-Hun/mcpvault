@@ -265,7 +265,7 @@ test("broad capability queries retain all matching endpoints", async () => {
   const { server, client } = await connectMcpClient(testVaultPath, { version: '1.0.0' }, 'broad-capability-discovery-test');
   try {
     const expectations = [
-      ["status", ["idea.status", "community.status"]],
+      ["status", ["community.status"]],
       ["comment", ["community.comment", "community.comments"]],
       ["post", ["community.post", "community.posts", "community.post_read"]],
     ] as const;
