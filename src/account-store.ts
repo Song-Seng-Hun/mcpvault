@@ -1,7 +1,7 @@
+import { canonicalHostPath, validateHostStorage } from './host-storage.js';
 import { guidanceError } from './guidance-runtime.js';
 import { lstat } from 'node:fs/promises';
 import { dirname } from 'node:path';
-import { canonicalRoleplayPath, validateRoleplayStorage } from './roleplay-storage-host.js';
 import { assertHostPrivateStorage } from './skill-evolution-host.js';
 import { checkWindowsPrivateAcl } from './windows-private-acl.js';
 
@@ -10,8 +10,8 @@ import { checkWindowsPrivateAcl } from './windows-private-acl.js';
 export async function assertPrivateAccountStore(vaultPath: string, path: string): Promise<void> {
   try {
     const directory = dirname(path);
-    await validateRoleplayStorage({ vaultPath, hostPath: directory });
-    await canonicalRoleplayPath(path, true, true);
+    await validateHostStorage({ vaultPath, hostPath: directory });
+    await canonicalHostPath(path, true, true);
     if ((await lstat(path)).nlink !== 1) throw guidanceError(new Error('linked file'), 'guid-9d32d5dde50a813a');
     if (process.platform === 'win32') await checkWindowsPrivateAcl([directory, path], true);
     else await assertHostPrivateStorage([directory, path]);

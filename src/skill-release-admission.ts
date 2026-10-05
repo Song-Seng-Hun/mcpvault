@@ -1,8 +1,8 @@
+import { validateHostStorage, canonicalHostPath } from './host-storage.js';
 import { guidanceError } from './guidance-runtime.js';
 import {createHash,randomUUID} from 'node:crypto';
 import {constants,openSync,closeSync,writeFileSync,fsyncSync,fstatSync,lstatSync,readSync,realpathSync,renameSync,unlinkSync,type BigIntStats} from 'node:fs';
 import {join,dirname,parse} from 'node:path';
-import {validateRoleplayStorage,canonicalRoleplayPath} from './roleplay-storage-host.js';
 import {assertHostPrivateStorage} from './skill-evolution-host.js';
 import {parseSkillReleaseManifest} from './skill-release-manifest.js';
 import {verifySkillReleaseEvidence} from './skill-release-evidence.js';
@@ -45,8 +45,8 @@ export async function admitReviewedSkill(options:ReviewedSkillAdmissionOptions,i
   try{
     const r=request(input),authorization=await options.authorize(r);
     authorization.assertFresh();
-    const {hostPath}=await validateRoleplayStorage(options),directories=[hostPath,...['entries','blobs','receipts'].map(n=>join(hostPath,n))];
-    for(const p of directories)await canonicalRoleplayPath(p,true);
+    const {hostPath}=await validateHostStorage(options),directories=[hostPath,...['entries','blobs','receipts'].map(n=>join(hostPath,n))];
+    for(const p of directories)await canonicalHostPath(p,true);
     await assertHostPrivateStorage(directories);
     const bindings=new Map(directories.map(p=>[p,identity(lstatSync(p,{bigint:true}))]));
     const fence=()=>{

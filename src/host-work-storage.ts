@@ -1,12 +1,11 @@
+import { canonicalHostPath, validateHostStorage, readHostFile, removeHostFile, writeHostFileAtomic } from './host-storage.js';
 import { guidanceError } from './guidance-runtime.js';
 import { AsyncResource } from 'node:async_hooks';
 import { createHash, randomUUID } from 'node:crypto';
 import { lstatSync, type BigIntStats } from 'node:fs';
 import { lstat, open, type FileHandle } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import { canonicalRoleplayPath, validateRoleplayStorage } from './roleplay-storage-host.js';
 import { assertHostPrivateStorage } from './skill-evolution-host.js';
-import { readFederationFile, removeFederationFile, writeFederationFileAtomic } from './public-federation-storage.js';
 
 const HOST_WORK_NAMESPACES = ['maintenance', 'compilation', 'codex-hooks', 'codex-checkpoints', 'evolution'] as const;
 export type HostWorkNamespace = typeof HOST_WORK_NAMESPACES[number];
@@ -57,8 +56,8 @@ export async function loadHostWorkStorage<T extends { enabled: boolean }>(
   if (!Number.isSafeInteger(maxStateBytes) || maxStateBytes < 1) throw guidanceError(new Error('Host work storage state size limit is invalid'), 'guid-1130e7a06f2ced9e');
   if (maxRecordBytes !== undefined && (!Number.isSafeInteger(maxRecordBytes) || maxRecordBytes < 1 || maxRecordBytes > 4 * 1024 * 1024)) throw guidanceError(new Error('Host record size limit is invalid'), 'guid-4f266ef7757529ad');
   if (typeof validate !== 'function') throw guidanceError(new Error('Host work storage validator is invalid'), 'guid-2c2345389dd2b683');
-  const canonical = await canonicalRoleplayPath(path, true, true);
-  const { vaultPath, hostPath } = await validateRoleplayStorage({ vaultPath: expectedVault, hostPath: dirname(canonical) });
+  const canonical = await canonicalHostPath(path, true, true);
+  const { vaultPath, hostPath } = await validateHostStorage({ vaultPath: expectedVault, hostPath: dirname(canonical) });
   const identity = hash(vaultPath.toLowerCase());
   const managed = (name: string) => join(hostPath, `${name}-${identity}`);
   const statePath = managed(namespace) + '.json';
@@ -73,18 +72,18 @@ export async function loadHostWorkStorage<T extends { enabled: boolean }>(
   let stateRevision: PrivateSnapshot | undefined;
   const privateFile = async (target: string, optional = false) => {
     try {
-      await canonicalRoleplayPath(target, true, true);
+      await canonicalHostPath(target, true, true);
       if ((await lstat(target)).nlink !== 1) throw guidanceError(new Error(`${label} host files cannot be shared hard links`), 'guid-e82eb2b4c8829662');
       await assertHostPrivateStorage([hostPath, target]);
     } catch (error) { if (!optional || !missing(error)) throw error; }
   };
   const refresh = async () => {
-    if (await canonicalRoleplayPath(hostPath, true) !== hostPath) throw guidanceError(new Error(`${label} host binding changed`), 'guid-d64ef3f4369d464b');
+    if (await canonicalHostPath(hostPath, true) !== hostPath) throw guidanceError(new Error(`${label} host binding changed`), 'guid-d64ef3f4369d464b');
     await privateFile(canonical);
-    const raw = JSON.parse(await readFederationFile(hostPath, canonical, { maxBytes: 128 * 1024 }));
+    const raw = JSON.parse(await readHostFile(hostPath, canonical, { maxBytes: 128 * 1024 }));
     await privateFile(canonical);
     if (!raw || typeof raw !== 'object' || Array.isArray(raw) || typeof raw.vaultPath !== 'string'
-      || await canonicalRoleplayPath(raw.vaultPath, false) !== vaultPath) throw guidanceError(new Error(`${label} configuration belongs to another Vault`), 'guid-1b069753c6e35f90');
+      || await canonicalHostPath(raw.vaultPath, false) !== vaultPath) throw guidanceError(new Error(`${label} configuration belongs to another Vault`), 'guid-1b069753c6e35f90');
     const { vaultPath: _vault, ...definition } = raw;
     return validate(definition);
   };
@@ -100,7 +99,7 @@ export async function loadHostWorkStorage<T extends { enabled: boolean }>(
     await privateFile(target, optional);
     const before = fileIdentity(target, optional);
     let raw: string | undefined;
-    if (before !== undefined) raw = await readFederationFile(hostPath, target, { maxBytes });
+    if (before !== undefined) raw = await readHostFile(hostPath, target, { maxBytes });
     await privateFile(target, optional);
     const after = fileIdentity(target, optional);
     if (!sameSnapshot(before, after)) throw guidanceError(new Error(`${label} host file binding or contents changed while reading`), 'guid-65d7d785b2a6c9d7');
@@ -141,7 +140,7 @@ export async function loadHostWorkStorage<T extends { enabled: boolean }>(
         if (expectedRevision !== expected.revision) throw guidanceError(new Error('Host record revision changed; reread it'), 'guid-42083a96a5852b2e');
         if (typeof content !== 'string' || Buffer.byteLength(content) > maxRecordBytes) throw guidanceError(new Error('Host record size limit exceeded; preserve existing history'), 'guid-0ce2f2a922fd4faa');
         await writer.assertHeld(); await assertCurrent?.();
-        await writeFederationFileAtomic(hostPath, target, content, { maxBytes: maxRecordBytes, beforeCommit: async () => {
+        await writeHostFileAtomic(hostPath, target, content, { maxBytes: maxRecordBytes, beforeCommit: async () => {
           await writer.assertHeld();
           const current = await readPrivateSnapshot(target, maxRecordBytes, true);
           if (current.revision !== expected.revision || !sameSnapshot(current.identity, expected.identity)) throw guidanceError(new Error('Host record changed; preserve it for review'), 'guid-150989fe3bbf1009');
@@ -171,7 +170,7 @@ export async function loadHostWorkStorage<T extends { enabled: boolean }>(
       const writer = active, expected = stateRevision;
       const content = JSON.stringify(value);
       if (typeof content !== 'string' || Buffer.byteLength(content) > maxStateBytes) throw guidanceError(new Error(`${label} receipt storage is full; preserve existing history for host review`), 'guid-f28baa93fa383279');
-      await writeFederationFileAtomic(hostPath, statePath, content, { maxBytes: maxStateBytes, beforeCommit: async () => {
+      await writeHostFileAtomic(hostPath, statePath, content, { maxBytes: maxStateBytes, beforeCommit: async () => {
         await writer.assertHeld();
         const current = await readRawState();
         if (current.revision !== expected.revision || !sameSnapshot(current.identity, expected.identity)) throw guidanceError(new Error(`${label} host history changed; preserve it for review`), 'guid-07e07f0748a8c792');
@@ -206,7 +205,7 @@ export async function loadHostWorkStorage<T extends { enabled: boolean }>(
         close: () => closing ??= closeInOwnerContext(async () => {
           try {
             await ownership(); await handle.close(); closed = true;
-            await removeFederationFile(hostPath, lockPath, ownership);
+            await removeHostFile(hostPath, lockPath, ownership);
           } finally {
             if (!closed) { await handle.close(); closed = true; }
             if (active === writer) active = undefined;

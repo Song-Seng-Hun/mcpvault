@@ -475,7 +475,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-host.ts",
-        "line": 17
+        "line": 16
       }
     ]
   },
@@ -595,7 +595,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/enterprise-federation.ts",
-        "line": 772
+        "line": 773
       }
     ]
   },
@@ -702,7 +702,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/host-work-storage.ts",
-        "line": 182
+        "line": 181
       }
     ]
   },
@@ -1315,16 +1315,16 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "binding": "call",
     "sources": [
       {
-        "file": "src/public-federation-storage.ts",
-        "line": 77
-      },
-      {
-        "file": "src/public-federation-storage.ts",
-        "line": 104
-      },
-      {
-        "file": "src/public-federation-storage.ts",
+        "file": "src/host-storage.ts",
         "line": 113
+      },
+      {
+        "file": "src/host-storage.ts",
+        "line": 140
+      },
+      {
+        "file": "src/host-storage.ts",
+        "line": 149
       }
     ]
   },
@@ -1734,7 +1734,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/enterprise-federation.ts",
-        "line": 141
+        "line": 142
       }
     ]
   },
@@ -2413,7 +2413,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-storage-host.ts",
-        "line": 76
+        "line": 39
       }
     ]
   },
@@ -2459,11 +2459,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/host-work-storage.ts",
-        "line": 177
+        "line": 176
       },
       {
         "file": "src/host-work-storage.ts",
-        "line": 179
+        "line": 178
       }
     ]
   },
@@ -2799,7 +2799,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/enterprise-federation.ts",
-        "line": 447
+        "line": 448
       }
     ]
   },
@@ -2829,7 +2829,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/explanation-host.ts",
-        "line": 30
+        "line": 29
       }
     ]
   },
@@ -3283,23 +3283,23 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/enterprise-federation.ts",
-        "line": 108
+        "line": 109
       },
       {
         "file": "src/enterprise-federation.ts",
-        "line": 124
+        "line": 125
       },
       {
         "file": "src/enterprise-federation.ts",
-        "line": 658
+        "line": 659
       },
       {
         "file": "src/enterprise-federation.ts",
-        "line": 823
+        "line": 824
       },
       {
         "file": "src/enterprise-federation.ts",
-        "line": 829
+        "line": 830
       }
     ]
   },
@@ -4261,7 +4261,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       },
       {
         "file": "src/enterprise-federation.ts",
-        "line": 68
+        "line": 69
       },
       {
         "file": "src/ideation.ts",
@@ -4429,7 +4429,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/public-federation-replica.ts",
-        "line": 578
+        "line": 579
       }
     ]
   },
@@ -4444,7 +4444,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/host-work-storage.ts",
-        "line": 142
+        "line": 141
       }
     ]
   },
@@ -5449,12 +5449,12 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "binding": "call",
     "sources": [
       {
-        "file": "src/public-federation-storage.ts",
-        "line": 75
+        "file": "src/host-storage.ts",
+        "line": 111
       },
       {
-        "file": "src/public-federation-storage.ts",
-        "line": 116
+        "file": "src/host-storage.ts",
+        "line": 152
       }
     ]
   },
@@ -5849,7 +5849,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/host-work-storage.ts",
-        "line": 57
+        "line": 56
       }
     ]
   },
@@ -6229,7 +6229,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/enterprise-federation.ts",
-        "line": 157
+        "line": 158
       }
     ]
   },
@@ -6273,7 +6273,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "binding": "call",
     "sources": [
       {
-        "file": "src/roleplay-storage-host.ts",
+        "file": "src/host-storage.ts",
         "line": 22
       }
     ]
@@ -7384,11 +7384,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/host-work-storage.ts",
-        "line": 147
+        "line": 146
       },
       {
         "file": "src/host-work-storage.ts",
-        "line": 149
+        "line": 148
       }
     ]
   },
@@ -7494,7 +7494,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/public-federation-replica.ts",
-        "line": 203
+        "line": 204
       }
     ]
   },
@@ -7647,7 +7647,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/owner-activity-mtls.ts",
-        "line": 12
+        "line": 11
       }
     ]
   },
@@ -7877,7 +7877,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/public-federation-replica.ts",
-        "line": 263
+        "line": 264
       }
     ]
   },
@@ -8906,11 +8906,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/enterprise-federation.ts",
-        "line": 323
+        "line": 324
       },
       {
         "file": "src/enterprise-federation.ts",
-        "line": 333
+        "line": 334
       }
     ]
   },
@@ -9331,7 +9331,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/host-work-storage.ts",
-        "line": 87
+        "line": 86
       }
     ]
   },
@@ -11086,7 +11086,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/public-federation-replica.ts",
-        "line": 394
+        "line": 395
       }
     ]
   },
@@ -11192,7 +11192,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "binding": "call",
     "sources": [
       {
-        "file": "src/roleplay-storage-host.ts",
+        "file": "src/host-storage.ts",
         "line": 33
       }
     ]
@@ -11478,7 +11478,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/enterprise-federation.ts",
-        "line": 320
+        "line": 321
       }
     ]
   },
@@ -13936,8 +13936,8 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "binding": "call",
     "sources": [
       {
-        "file": "src/public-federation-storage.ts",
-        "line": 205
+        "file": "src/host-storage.ts",
+        "line": 241
       }
     ]
   },
@@ -14002,7 +14002,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/public-federation-replica.ts",
-        "line": 355
+        "line": 356
       }
     ]
   },
@@ -14559,7 +14559,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-host.ts",
-        "line": 16
+        "line": 15
       }
     ]
   },
@@ -15306,7 +15306,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/host-work-storage.ts",
-        "line": 59
+        "line": 58
       }
     ]
   },
@@ -15975,7 +15975,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/explanation-host.ts",
-        "line": 35
+        "line": 34
       }
     ]
   },
@@ -17217,7 +17217,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/explanation-host.ts",
-        "line": 52
+        "line": 51
       }
     ]
   },
@@ -18096,8 +18096,8 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "binding": "call",
     "sources": [
       {
-        "file": "src/public-federation-storage.ts",
-        "line": 63
+        "file": "src/host-storage.ts",
+        "line": 99
       }
     ]
   },
@@ -19258,7 +19258,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/enterprise-federation.ts",
-        "line": 764
+        "line": 765
       }
     ]
   },
@@ -20635,7 +20635,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/explanation-host.ts",
-        "line": 19
+        "line": 18
       }
     ]
   },
@@ -20845,7 +20845,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/enterprise-federation.ts",
-        "line": 293
+        "line": 294
       }
     ]
   },
@@ -21953,7 +21953,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/host-work-storage.ts",
-        "line": 141
+        "line": 140
       }
     ]
   },
@@ -23335,7 +23335,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/explanation-host.ts",
-        "line": 49
+        "line": 48
       }
     ]
   },
@@ -23885,8 +23885,8 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "binding": "call",
     "sources": [
       {
-        "file": "src/public-federation-storage.ts",
-        "line": 24
+        "file": "src/host-storage.ts",
+        "line": 65
       }
     ]
   },
@@ -25543,8 +25543,8 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "binding": "call",
     "sources": [
       {
-        "file": "src/public-federation-storage.ts",
-        "line": 85
+        "file": "src/host-storage.ts",
+        "line": 121
       }
     ]
   },
@@ -26548,7 +26548,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/host-work-storage.ts",
-        "line": 58
+        "line": 57
       }
     ]
   },
@@ -27664,7 +27664,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/public-federation-replica.ts",
-        "line": 611
+        "line": 612
       }
     ]
   },
@@ -28168,7 +28168,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-storage-host.ts",
-        "line": 84
+        "line": 47
       }
     ]
   },
@@ -28288,7 +28288,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/explanation-host.ts",
-        "line": 57
+        "line": 56
       }
     ]
   },
@@ -28364,8 +28364,8 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "binding": "call",
     "sources": [
       {
-        "file": "src/public-federation-storage.ts",
-        "line": 31
+        "file": "src/host-storage.ts",
+        "line": 72
       }
     ]
   },
@@ -28942,7 +28942,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/public-federation-replica.ts",
-        "line": 559
+        "line": 560
       }
     ]
   },
@@ -29366,7 +29366,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/public-federation-replica.ts",
-        "line": 558
+        "line": 559
       }
     ]
   },
@@ -29555,15 +29555,15 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/explanation-host.ts",
-        "line": 21
+        "line": 20
       },
       {
         "file": "src/explanation-host.ts",
-        "line": 25
+        "line": 24
       },
       {
         "file": "src/explanation-host.ts",
-        "line": 27
+        "line": 26
       }
     ]
   },
@@ -30295,7 +30295,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/enterprise-federation.ts",
-        "line": 155
+        "line": 156
       }
     ]
   },
@@ -32718,8 +32718,8 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "binding": "call",
     "sources": [
       {
-        "file": "src/public-federation-storage.ts",
-        "line": 93
+        "file": "src/host-storage.ts",
+        "line": 129
       }
     ]
   },
@@ -33344,7 +33344,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/enterprise-federation.ts",
-        "line": 81
+        "line": 82
       }
     ]
   },
@@ -33468,19 +33468,19 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/enterprise-federation.ts",
-        "line": 217
+        "line": 218
       },
       {
         "file": "src/enterprise-federation.ts",
-        "line": 223
+        "line": 224
       },
       {
         "file": "src/enterprise-federation.ts",
-        "line": 245
+        "line": 246
       },
       {
         "file": "src/enterprise-federation.ts",
-        "line": 284
+        "line": 285
       }
     ]
   },
@@ -33699,7 +33699,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/host-work-storage.ts",
-        "line": 71
+        "line": 70
       }
     ]
   },
@@ -34146,7 +34146,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/host-work-storage.ts",
-        "line": 106
+        "line": 105
       }
     ]
   },
@@ -34667,7 +34667,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/host-work-storage.ts",
-        "line": 140
+        "line": 139
       }
     ]
   },
@@ -35733,7 +35733,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-host.ts",
-        "line": 14
+        "line": 13
       }
     ]
   },
@@ -36404,7 +36404,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/enterprise-federation.ts",
-        "line": 296
+        "line": 297
       }
     ]
   },
@@ -36744,7 +36744,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/economy-storage.ts",
-        "line": 29
+        "line": 28
       }
     ]
   },
@@ -38344,8 +38344,8 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "binding": "call",
     "sources": [
       {
-        "file": "src/public-federation-storage.ts",
-        "line": 91
+        "file": "src/host-storage.ts",
+        "line": 127
       }
     ]
   },
@@ -38360,7 +38360,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/enterprise-federation.ts",
-        "line": 163
+        "line": 164
       }
     ]
   },
@@ -38421,7 +38421,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/public-federation-replica.ts",
-        "line": 554
+        "line": 555
       }
     ]
   },
@@ -38564,11 +38564,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/explanation-host.ts",
-        "line": 15
+        "line": 14
       },
       {
         "file": "src/explanation-host.ts",
-        "line": 17
+        "line": 16
       }
     ]
   },
@@ -39683,7 +39683,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/enterprise-federation.ts",
-        "line": 623
+        "line": 624
       }
     ]
   },
@@ -40063,7 +40063,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/enterprise-federation.ts",
-        "line": 319
+        "line": 320
       }
     ]
   },
@@ -40184,7 +40184,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/owner-activity-host.ts",
-        "line": 26
+        "line": 25
       }
     ]
   },
@@ -41111,7 +41111,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "binding": "call",
     "sources": [
       {
-        "file": "src/roleplay-storage-host.ts",
+        "file": "src/host-storage.ts",
         "line": 30
       }
     ]
@@ -42144,7 +42144,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/enterprise-federation.ts",
-        "line": 604
+        "line": 605
       }
     ]
   },
@@ -42251,7 +42251,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/host-work-storage.ts",
-        "line": 186
+        "line": 185
       }
     ]
   },
@@ -42327,7 +42327,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/host-work-storage.ts",
-        "line": 203
+        "line": 202
       }
     ]
   },
@@ -42705,7 +42705,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/public-federation-replica.ts",
-        "line": 640
+        "line": 641
       }
     ]
   },
@@ -42826,11 +42826,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/enterprise-federation.ts",
-        "line": 517
+        "line": 518
       },
       {
         "file": "src/enterprise-federation.ts",
-        "line": 533
+        "line": 534
       }
     ]
   },
@@ -44155,7 +44155,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/public-federation-replica.ts",
-        "line": 642
+        "line": 643
       }
     ]
   },
@@ -47765,7 +47765,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/host-work-storage.ts",
-        "line": 94
+        "line": 93
       }
     ]
   },
@@ -47960,7 +47960,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-host.ts",
-        "line": 13
+        "line": 12
       }
     ]
   },
@@ -48157,7 +48157,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/enterprise-federation.ts",
-        "line": 363
+        "line": 364
       }
     ]
   },
@@ -48600,7 +48600,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/public-federation-replica.ts",
-        "line": 366
+        "line": 367
       }
     ]
   },
@@ -48791,7 +48791,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/enterprise-federation.ts",
-        "line": 685
+        "line": 686
       }
     ]
   },
@@ -48926,7 +48926,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/skill-release-host.ts",
-        "line": 15
+        "line": 14
       }
     ]
   },
@@ -49504,7 +49504,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/enterprise-federation.ts",
-        "line": 95
+        "line": 96
       }
     ]
   },
@@ -49659,7 +49659,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-storage-host.ts",
-        "line": 70
+        "line": 33
       }
     ]
   },
@@ -51307,7 +51307,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/economy-storage.ts",
-        "line": 58
+        "line": 57
       }
     ]
   },
@@ -51338,8 +51338,8 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "binding": "call",
     "sources": [
       {
-        "file": "src/public-federation-storage.ts",
-        "line": 78
+        "file": "src/host-storage.ts",
+        "line": 114
       }
     ]
   },
@@ -51864,7 +51864,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/host-work-storage.ts",
-        "line": 170
+        "line": 169
       }
     ]
   },
@@ -53586,7 +53586,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/host-work-storage.ts",
-        "line": 118
+        "line": 117
       }
     ]
   },
@@ -55524,7 +55524,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/enterprise-federation.ts",
-        "line": 448
+        "line": 449
       }
     ]
   },
@@ -56205,7 +56205,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/host-work-storage.ts",
-        "line": 198
+        "line": 197
       }
     ]
   },
@@ -58205,7 +58205,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/public-federation-replica.ts",
-        "line": 234
+        "line": 235
       }
     ]
   },
@@ -59176,7 +59176,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/enterprise-federation.ts",
-        "line": 855
+        "line": 856
       }
     ]
   },
@@ -59225,7 +59225,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/explanation-host.ts",
-        "line": 66
+        "line": 65
       }
     ]
   },
@@ -60159,7 +60159,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-host.ts",
-        "line": 18
+        "line": 17
       }
     ]
   },
@@ -60576,7 +60576,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "binding": "call",
     "sources": [
       {
-        "file": "src/roleplay-storage-host.ts",
+        "file": "src/host-storage.ts",
         "line": 21
       }
     ]
@@ -61725,7 +61725,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/explanation-host.ts",
-        "line": 38
+        "line": 37
       }
     ]
   },
@@ -63144,7 +63144,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-host.ts",
-        "line": 10
+        "line": 9
       }
     ]
   },
@@ -63393,8 +63393,8 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "binding": "call",
     "sources": [
       {
-        "file": "src/public-federation-storage.ts",
-        "line": 50
+        "file": "src/host-storage.ts",
+        "line": 86
       }
     ]
   },
@@ -63734,7 +63734,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "binding": "call",
     "sources": [
       {
-        "file": "src/roleplay-storage-host.ts",
+        "file": "src/host-storage.ts",
         "line": 29
       }
     ]
@@ -63885,7 +63885,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/roleplay-storage-host.ts",
-        "line": 74
+        "line": 37
       }
     ]
   },
@@ -64268,7 +64268,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/host-work-storage.ts",
-        "line": 152
+        "line": 151
       }
     ]
   },
@@ -65142,7 +65142,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/enterprise-federation.ts",
-        "line": 168
+        "line": 169
       }
     ]
   },
@@ -65359,11 +65359,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/public-federation-replica.ts",
-        "line": 347
+        "line": 348
       },
       {
         "file": "src/public-federation-replica.ts",
-        "line": 397
+        "line": 398
       }
     ]
   },
@@ -65788,7 +65788,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/explanation-host.ts",
-        "line": 59
+        "line": 58
       }
     ]
   },
@@ -66153,16 +66153,16 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "binding": "call",
     "sources": [
       {
-        "file": "src/public-federation-storage.ts",
-        "line": 131
+        "file": "src/host-storage.ts",
+        "line": 167
       },
       {
-        "file": "src/public-federation-storage.ts",
-        "line": 140
+        "file": "src/host-storage.ts",
+        "line": 176
       },
       {
-        "file": "src/public-federation-storage.ts",
-        "line": 175
+        "file": "src/host-storage.ts",
+        "line": 211
       }
     ]
   },
@@ -66593,7 +66593,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/enterprise-federation.ts",
-        "line": 423
+        "line": 424
       }
     ]
   },
@@ -68353,7 +68353,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/host-work-storage.ts",
-        "line": 190
+        "line": 189
       }
     ]
   },
@@ -70443,16 +70443,16 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "binding": "call",
     "sources": [
       {
-        "file": "src/public-federation-storage.ts",
-        "line": 73
+        "file": "src/host-storage.ts",
+        "line": 109
       },
       {
-        "file": "src/public-federation-storage.ts",
-        "line": 103
+        "file": "src/host-storage.ts",
+        "line": 139
       },
       {
-        "file": "src/public-federation-storage.ts",
-        "line": 112
+        "file": "src/host-storage.ts",
+        "line": 148
       }
     ]
   },
@@ -70608,7 +70608,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/enterprise-federation.ts",
-        "line": 88
+        "line": 89
       },
       {
         "file": "src/social.ts",
@@ -70677,7 +70677,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/host-work-storage.ts",
-        "line": 82
+        "line": 81
       }
     ]
   },
@@ -71208,7 +71208,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/public-federation-replica.ts",
-        "line": 155
+        "line": 156
       }
     ]
   },
@@ -71830,7 +71830,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/public-federation-replica.ts",
-        "line": 387
+        "line": 388
       }
     ]
   },
@@ -72491,7 +72491,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/enterprise-federation.ts",
-        "line": 518
+        "line": 519
       }
     ]
   },
@@ -75223,7 +75223,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/explanation-host.ts",
-        "line": 34
+        "line": 33
       }
     ]
   },
@@ -75935,7 +75935,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/public-federation-replica.ts",
-        "line": 309
+        "line": 310
       }
     ]
   },
@@ -76386,11 +76386,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/host-work-storage.ts",
-        "line": 77
+        "line": 76
       },
       {
         "file": "src/host-work-storage.ts",
-        "line": 95
+        "line": 94
       }
     ]
   },
@@ -76419,8 +76419,8 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "binding": "call",
     "sources": [
       {
-        "file": "src/public-federation-storage.ts",
-        "line": 89
+        "file": "src/host-storage.ts",
+        "line": 125
       }
     ]
   },
@@ -78539,7 +78539,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/enterprise-federation.ts",
-        "line": 521
+        "line": 522
       }
     ]
   },
@@ -79569,7 +79569,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/enterprise-federation.ts",
-        "line": 797
+        "line": 798
       }
     ]
   },
@@ -79950,7 +79950,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/host-work-storage.ts",
-        "line": 173
+        "line": 172
       }
     ]
   },
@@ -80889,7 +80889,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/enterprise-federation.ts",
-        "line": 165
+        "line": 166
       }
     ]
   },
@@ -81088,7 +81088,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/enterprise-federation.ts",
-        "line": 557
+        "line": 558
       }
     ]
   },
@@ -81907,7 +81907,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/enterprise-federation.ts",
-        "line": 251
+        "line": 252
       }
     ]
   },
@@ -82605,7 +82605,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/enterprise-federation.ts",
-        "line": 513
+        "line": 514
       }
     ]
   },
@@ -82635,7 +82635,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/host-work-storage.ts",
-        "line": 43
+        "line": 42
       }
     ]
   },
@@ -83198,7 +83198,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/enterprise-federation.ts",
-        "line": 472
+        "line": 473
       }
     ]
   },
@@ -83458,7 +83458,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/economy-storage.ts",
-        "line": 14
+        "line": 13
       }
     ]
   },
@@ -83897,7 +83897,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/public-federation-replica.ts",
-        "line": 561
+        "line": 562
       }
     ]
   },
@@ -84002,7 +84002,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "binding": "call",
     "sources": [
       {
-        "file": "src/roleplay-storage-host.ts",
+        "file": "src/host-storage.ts",
         "line": 44
       }
     ]

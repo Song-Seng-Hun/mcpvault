@@ -1,10 +1,9 @@
+import { readHostFile, ensureHostDirectory, canonicalHostPath, pathInside, validateHostStorage } from './host-storage.js';
 import { guidanceError } from './guidance-runtime.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { hostname, platform } from 'node:os';
 import { lstat, open, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
-import { readFederationFile, ensureFederationDirectory } from './public-federation-storage.js';
-import { canonicalRoleplayPath, roleplayInside, validateRoleplayStorage } from './roleplay-storage-host.js';
 
 export interface EconomyStoragePaths { vaultPath: string; hostPath: string; ledgerPath?: string }
 const missing = (e: unknown) => Boolean(e && typeof e === 'object' && 'code' in e && e.code === 'ENOENT');
@@ -23,16 +22,16 @@ export async function assertLegacyEconomyStorage(options: EconomyStoragePaths): 
  * The journal and checkpoint are disjoint local directories; neither is a Wiki
  * replica. NAS contains only an admission marker, never a local-storage attestation. */
 export async function validateEconomyStoragePaths(options: EconomyStoragePaths): Promise<Required<EconomyStoragePaths>> {
-  const { vaultPath, hostPath } = await validateRoleplayStorage(options);
-  const ledgerPath = await canonicalRoleplayPath(options.ledgerPath!, true);
-  await validateRoleplayStorage({ vaultPath, hostPath: ledgerPath });
-  if (roleplayInside(hostPath, ledgerPath) || roleplayInside(ledgerPath, hostPath)) throw guidanceError(new Error('Economy journal and checkpoint require separate non-overlapping directories'), 'guid-6d8642c6b0efb148');
+  const { vaultPath, hostPath } = await validateHostStorage(options);
+  const ledgerPath = await canonicalHostPath(options.ledgerPath!, true);
+  await validateHostStorage({ vaultPath, hostPath: ledgerPath });
+  if (pathInside(hostPath, ledgerPath) || pathInside(ledgerPath, hostPath)) throw guidanceError(new Error('Economy journal and checkpoint require separate non-overlapping directories'), 'guid-6d8642c6b0efb148');
   return { vaultPath, hostPath, ledgerPath };
 }
 async function readOptional(root: string, path: string): Promise<string | undefined> {
   try {
     if ((await lstat(path)).isSymbolicLink()) fail();
-    return await readFederationFile(root, path, { maxBytes: 8192 });
+    return await readHostFile(root, path, { maxBytes: 8192 });
   } catch (e) { if (missing(e)) return; throw e; }
 }
 async function createExclusive(path: string, text: string): Promise<void> {
@@ -63,12 +62,12 @@ export async function bindEconomyStorage(options: EconomyStoragePaths, initializ
     const binding: Binding = { version: 1, id: randomUUID(), vault: paths.vaultPath, ledger: paths.ledgerPath, host: paths.hostPath, machine };
     // Block unconfigured Work before any private binding can become durable.
     // Even an interrupted initialization now requires explicit recovery.
-    await ensureFederationDirectory(paths.vaultPath, markerRoot);
+    await ensureHostDirectory(paths.vaultPath, markerRoot);
     privateText = JSON.stringify(binding);
     await createExclusive(privatePath, privateText);
     if ((await readdir(markerRoot)).length) fail();
     markerText = JSON.stringify({ version: 1, binding: hash(binding) });
-    await ensureFederationDirectory(paths.ledgerPath, physicalMarkerRoot);
+    await ensureHostDirectory(paths.ledgerPath, physicalMarkerRoot);
     await createExclusive(physicalMarkerPath, markerText);
     physicalMarker = markerText;
     await createExclusive(markerPath, markerText);

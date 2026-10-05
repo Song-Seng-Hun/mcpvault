@@ -1,8 +1,9 @@
+import { ensureHostDirectory, readHostFile, writeHostFileAtomic, removeHostFile } from './host-storage.js';
 import { guidanceError, guidanceText } from './guidance-runtime.js';
 import { createHash } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import { readdir } from 'node:fs/promises';
-import { federationStorageName, ensureFederationDirectory, readFederationFile, writeFederationFileAtomic, removeFederationFile } from './public-federation-storage.js';
+import { federationStorageName } from './public-federation-storage.js';
 import { join, resolve, relative } from 'node:path';
 import type { AgentDirectoryService } from './agent-directory.js';
 import type { ScopeCapability, ScopePrincipal } from './scope-auth.js';
@@ -229,7 +230,7 @@ export class EnterpriseFederationAdapter {
   private async readBounded(path: string, maxBytes: number, label: string): Promise<string> {
     const logical = this.logicalPublicPath(path);
     if (logical) this.assertPublicPath(logical);
-    const result = await readFederationFile(this.vaultPath, path, { maxBytes, label, ...(logical && { ownerPath: logical }) });
+    const result = await readHostFile(this.vaultPath, path, { maxBytes, label, ...(logical && { ownerPath: logical }) });
     if (logical) this.assertPublicPath(logical);
     return result;
   }
@@ -237,7 +238,7 @@ export class EnterpriseFederationAdapter {
   private async writeAtomic(path: string, content: string): Promise<void> {
     const logical = this.logicalPublicPath(path);
     if (logical) await this.preparePublicWrite(path);
-    return writeFederationFileAtomic(this.vaultPath, path, content, { maxBytes: 2 * 1024 * 1024,
+    return writeHostFileAtomic(this.vaultPath, path, content, { maxBytes: 2 * 1024 * 1024,
       ...(logical && { ownerPath: logical, beforeCommit: () => this.preparePublicWrite(path) }) });
   }
 
@@ -380,7 +381,7 @@ export class EnterpriseFederationAdapter {
     await this.save();
     // Retain the source/destination provenance until delivery. A raw outbox
     // entry alone is not permission for a later, differently scoped request.
-    if (result.status === 'published') await removeFederationFile(this.vaultPath, path);
+    if (result.status === 'published') await removeHostFile(this.vaultPath, path);
     return result;
   }
 
@@ -756,7 +757,7 @@ export class EnterpriseFederationAdapter {
   private async retry(principalInput: ScopePrincipal | undefined): Promise<unknown> {
     const { principal, identity, actorId } = this.authenticated(principalInput, 'publish');
     const root = join(this.intentsRoot, federationStorageName(actorId));
-    await ensureFederationDirectory(this.vaultPath, root);
+    await ensureHostDirectory(this.vaultPath, root);
     const names = await readdir(root).catch(error => {
       if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') return [] as string[];
       throw error;

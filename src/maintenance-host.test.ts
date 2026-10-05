@@ -6,7 +6,7 @@ import { mkdtemp, mkdir, realpath, writeFile, readFile, rm, chmod, readdir, rena
 import { tmpdir, userInfo } from 'node:os';
 import { join } from 'node:path';
 import { loadMaintenanceHostConfig, MAX_MAINTENANCE_STATE_BYTES, validateMaintenanceConfig } from './maintenance-host.js';
-import * as storage from './public-federation-storage.js';
+import * as storage from './host-storage.js';
 
 const valid = () => ({ version: 1, enabled: true, accountId: 'operator', paths: ['Knowledge/A.md', 'Views/A.canvas'], operations: ['cache_refresh'] });
 test('configuration needs explicit paths and only fixed non-model operations', () => {
@@ -52,8 +52,8 @@ async function stateFixture() {
 // Interpose only to schedule a real filesystem mutation at the atomic helper's
 // commit boundary. The actual temporary IO, host fence and rename still run.
 function beforeStateCommit(change: () => Promise<void>) {
-  const write = storage.writeFederationFileAtomic;
-  vi.spyOn(storage, 'writeFederationFileAtomic').mockImplementation((directory, target, content, options) =>
+  const write = storage.writeHostFileAtomic;
+  vi.spyOn(storage, 'writeHostFileAtomic').mockImplementation((directory, target, content, options) =>
     write(directory, target, content, { ...options, beforeCommit: async () => {
       if (target === stateFile) await change();
       await options.beforeCommit?.();
@@ -203,9 +203,9 @@ test('state CAS rejects same-byte file replacement after its successful read', a
 
 test('state read rejects same-byte replacement while reading instead of approving its revision', async () => {
   const { host, bytes } = await stateFixture();
-  const read = storage.readFederationFile;
+  const read = storage.readHostFile;
   let replaced = false;
-  vi.spyOn(storage, 'readFederationFile').mockImplementation(async (directory, target, options) => {
+  vi.spyOn(storage, 'readHostFile').mockImplementation(async (directory, target, options) => {
     const content = await read(directory, target, options);
     if (target === stateFile && !replaced) {
       await replaceFile(stateFile, content);
@@ -317,9 +317,9 @@ test('same-byte lock replacement before close is preserved as foreign ownership'
 test('close preserves a same-byte foreign lock replaced after the first ownership check', async () => {
   const { lease } = await stateFixture();
   const marker = await readFile(lockFile, 'utf8');
-  const remove = storage.removeFederationFile;
+  const remove = storage.removeHostFile;
   let replaced = false;
-  vi.spyOn(storage, 'removeFederationFile').mockImplementation(async (directory, target, beforeRemove) => {
+  vi.spyOn(storage, 'removeHostFile').mockImplementation(async (directory, target, beforeRemove) => {
     if (target === lockFile && !replaced) {
       await replaceFile(lockFile, marker);
       replaced = true;

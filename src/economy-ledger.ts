@@ -1,3 +1,4 @@
+import { ensureHostDirectory, readHostFile, removeHostFile, writeHostFileAtomic } from './host-storage.js';
 import { guidanceError } from './guidance-runtime.js';
 import { randomUUID } from 'node:crypto';
 import { AsyncLocalStorage } from 'node:async_hooks';
@@ -6,7 +7,6 @@ import { basename, dirname, isAbsolute, join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { FrontmatterHandler } from './frontmatter.js';
 import { assertLegacyEconomyStorage, bindEconomyStorage } from './economy-storage.js';
-import { ensureFederationDirectory, readFederationFile, removeFederationFile, writeFederationFileAtomic } from './public-federation-storage.js';
 import { prepareOwnerActivityStorageWrite, activeDocumentStorageContext } from './enterprise-storage-context.js';
 import { applyEconomyCommand, economyRevision, initialEconomy, validateEconomyPolicy,
   type EconomyCommand, type EconomyPolicy, type EconomyReceipt, type EconomyState, type BenchmarkAwardProof } from './economy-model.js';
@@ -104,7 +104,7 @@ export class EconomyLedger {
     if (inside(vault,host) || inside(source,host)) throw guidanceError(new Error('Trusted economy checkpoint must be outside Vault and source repository'), 'guid-feb0ffba71279ca7');
     const ledger=new EconomyLedger({...options,policy:structuredClone(options.policy)},vault,host);
     ledger.assertStorageBinding = binding?.assertBinding;
-    await ensureFederationDirectory(vault,ledger.journal);
+    await ensureHostDirectory(vault,ledger.journal);
     await ledger.assertNoRecovery();
     try { ledger.lock=await open(ledger.lockPath,'wx',0o600); }
     catch { throw guidanceError(new Error('Economy writer already exists or its crash lock needs host recovery'), 'guid-961d4180509c0d08'); }
@@ -127,7 +127,7 @@ export class EconomyLedger {
   private async assertLock(checkRecovery=true): Promise<void> {
     if(this.closed || !this.lock) throw guidanceError(new Error('Economy writer closed'), 'guid-a1020ffc45b796ef');
     if(checkRecovery) { await this.assertStorageBinding?.(); await this.assertNoRecovery(); }
-    const value=JSON.parse(await readFederationFile(this.vault,this.lockPath,{maxBytes:1024}));
+    const value=JSON.parse(await readHostFile(this.vault,this.lockPath,{maxBytes:1024}));
     if(value.nonce!==this.nonce || value.pid!==process.pid || value.vault!==this.vault) throw guidanceError(new Error('Economy writer fencing failed'), 'guid-ec7e635eef6f86f6');
     const held=await this.lock.stat(), current=await lstat(this.lockPath);
     if(current.isSymbolicLink() || held.ino!==current.ino || held.dev!==current.dev) throw guidanceError(new Error('Economy writer fencing failed'), 'guid-ec7e635eef6f86f6');
@@ -151,7 +151,7 @@ export class EconomyLedger {
   }
   private async checkpoint(): Promise<Checkpoint> {
     try {
-      const value=JSON.parse(await readFederationFile(this.host,this.checkpointPath,{maxBytes:2048}));
+      const value=JSON.parse(await readHostFile(this.host,this.checkpointPath,{maxBytes:2048}));
       if(value.version!==1 || value.vault!==this.vault || !Number.isSafeInteger(value.sequence) || value.sequence<0 || !/^[a-f0-9]{64}$/.test(value.hash)
         || (value.pending && (value.pending.sequence!==value.sequence+1 || !/^[a-f0-9]{64}$/.test(value.pending.hash)
           || (value.pending.ownerGuarded !== undefined && value.pending.ownerGuarded !== true)))) throw guidanceError(new Error('Invalid checkpoint'), 'guid-f8e4ad93ddce8f50');
@@ -160,7 +160,7 @@ export class EconomyLedger {
   }
   private async saveCheckpoint(cp:Checkpoint): Promise<void> {
     await this.assertLock();
-    await writeFederationFileAtomic(this.host,this.checkpointPath,JSON.stringify(cp),{maxBytes:2048,beforeCommit:()=>this.assertLock()});
+    await writeHostFileAtomic(this.host,this.checkpointPath,JSON.stringify(cp),{maxBytes:2048,beforeCommit:()=>this.assertLock()});
   }
   private cancelPrepared(checkpoint: Checkpoint, pendingHash: string): Promise<void> {
     return this.runHostCleanup(async () => {
@@ -176,8 +176,8 @@ export class EconomyLedger {
       if (current.sequence !== checkpoint.sequence || current.hash !== checkpoint.hash
         || current.pending?.hash !== pendingHash || current.pending.sequence !== checkpoint.sequence + 1) throw guidanceError(new Error('Economy pending intent changed'), 'guid-c9cb884ae0a5f0b6');
       const restored: Checkpoint = { version: 1, vault: this.vault, sequence: checkpoint.sequence, hash: checkpoint.hash };
-      await writeFederationFileAtomic(this.host, this.checkpointPath, JSON.stringify(restored), { maxBytes: 2048, beforeCommit: fence });
-      await removeFederationFile(this.host, this.preparedPath, fence);
+      await writeHostFileAtomic(this.host, this.checkpointPath, JSON.stringify(restored), { maxBytes: 2048, beforeCommit: fence });
+      await removeHostFile(this.host, this.preparedPath, fence);
     });
   }
   private async replay(onEvent?:(event:Event,state:EconomyState)=>void): Promise<{state:EconomyState; checkpoint:Checkpoint;bytes:number}> {
@@ -191,7 +191,7 @@ export class EconomyLedger {
       cp = await this.checkpoint();
     }
     if(cp.pending && names.length===cp.sequence) {
-      const prepared=await readFederationFile(this.host,this.preparedPath,{maxBytes:MAX_EVENT});
+      const prepared=await readHostFile(this.host,this.preparedPath,{maxBytes:MAX_EVENT});
       const event=this.frontmatter.parse(prepared).frontmatter as Event;
       const {hash,...unsigned}=event;
       if(hash!==cp.pending.hash||economyRevision(unsigned)!==hash||event.sequence!==cp.pending.sequence||event.previous!==cp.hash)throw guidanceError(new Error('Prepared economy intent differs from trusted checkpoint; recovery stopped'), 'guid-e33acec5bcb166c4');
@@ -199,14 +199,14 @@ export class EconomyLedger {
       await this.assertLock();
       try {await lstat(join(this.journal,name));throw guidanceError(new Error('Pending economy sequence already exists; recovery stopped'), 'guid-5e3792d9d2fea1c2');}
       catch(e){if(!missing(e))throw e;}
-      await writeFederationFileAtomic(this.vault,join(this.journal,name),prepared,{maxBytes:MAX_EVENT,ownerPath:this.journalOwnerPath(name),beforeCommit:()=>this.assertLock()});
+      await writeHostFileAtomic(this.vault,join(this.journal,name),prepared,{maxBytes:MAX_EVENT,ownerPath:this.journalOwnerPath(name),beforeCommit:()=>this.assertLock()});
       names=assertContiguousEconomyJournalNames([...names,name]);
     }
     if(names.length!==cp.sequence+(cp.pending?1:0)) throw guidanceError(new Error('Economy checkpoint/rollback mismatch; settlement stopped'), 'guid-5e21018a1a808f0c');
     let state=initialEconomy(), previous=ZERO, bytes=0;
     for(let i=0;i<names.length;i++) {
       if(names[i]!==`${String(i+1).padStart(10,'0')}.md`) throw guidanceError(new Error('Economy journal sequence gap or fork'), 'guid-253e5358c4d35bfa');
-      const text=await readFederationFile(this.vault,join(this.journal,names[i]!),{maxBytes:MAX_EVENT,ownerPath:this.journalOwnerPath(names[i]!)}); bytes+=Buffer.byteLength(text);
+      const text=await readHostFile(this.vault,join(this.journal,names[i]!),{maxBytes:MAX_EVENT,ownerPath:this.journalOwnerPath(names[i]!)}); bytes+=Buffer.byteLength(text);
       if(bytes>32*1024*1024) throw guidanceError(new Error('Economy replay byte budget exceeded; host maintenance required'), 'guid-38e0dc5dce364623');
       const event=this.frontmatter.parse(text).frontmatter as Event;
       const {hash,...unsigned}=event;
@@ -290,11 +290,11 @@ export class EconomyLedger {
       await prepareOwnerActivityStorageWrite(ownerPath);
       // A host-private prepare marker is durable BEFORE changing authoritative
       // Markdown. After a crash, only this exact event may complete the checkpoint.
-      await writeFederationFileAtomic(this.host,this.preparedPath,text,{maxBytes:MAX_EVENT});
+      await writeHostFileAtomic(this.host,this.preparedPath,text,{maxBytes:MAX_EVENT});
       await this.saveCheckpoint({...checkpoint,pending:{sequence:event.sequence,hash:event.hash,
         ...(activeDocumentStorageContext() ? { ownerGuarded: true as const } : {})}});
       try {
-        await writeFederationFileAtomic(this.vault,path,text,{maxBytes:MAX_EVENT,ownerPath,beforeCommit:()=>this.assertLock()});
+        await writeHostFileAtomic(this.vault,path,text,{maxBytes:MAX_EVENT,ownerPath,beforeCommit:()=>this.assertLock()});
       } catch (error) {
         // Owner denial before the atomic rename must not leave a replayable
         // pending intent. If the journal exists, preserve crash recovery state;

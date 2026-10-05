@@ -1,7 +1,7 @@
 #!/usr/bin/env node
+import { readHostFile } from './src/host-storage.js';
 import { realpath } from 'node:fs/promises';
 import { dirname } from 'node:path';
-import { readFederationFile } from './src/public-federation-storage.js';
 import { EconomyLedger } from './src/economy-ledger.js';
 import { loadEconomyHostConfig, probeEconomyStorage, inspectEconomyRecovery, recoverEconomyWriter, validateOperatorAdjudication } from './src/economy-host.js';
 import { assertEconomyConservation, economyRevision,economyRetry, type EconomyCommand, type EconomyState } from './src/economy-model.js';
@@ -16,13 +16,13 @@ if(!operation||operation==='--help') {
 }
 if(!configPath)throw new Error('Private host config path required');
 const actualConfig=await realpath(configPath);
-const initial=JSON.parse(await readFederationFile(dirname(actualConfig),actualConfig,{maxBytes:32768}));
+const initial=JSON.parse(await readHostFile(dirname(actualConfig),actualConfig,{maxBytes:32768}));
 const config=await loadEconomyHostConfig(actualConfig,initial.vaultPath);
 if(operation==='inspect') {console.log(JSON.stringify(await inspectEconomyRecovery(config)));process.exit(0);}
 const probes=[];
 for(const path of [config.ledgerPath ?? config.vaultPath,config.hostPath])probes.push(await probeEconomyStorage(path));
 if(operation==='doctor'){console.log(JSON.stringify({enabled:config.policy.enabled,probes,powerLossGuarantee:false}));process.exit(0);}
-const command=commandPath?JSON.parse(await readFederationFile(dirname(await realpath(commandPath)),await realpath(commandPath),{maxBytes:8192})):undefined;
+const command=commandPath?JSON.parse(await readHostFile(dirname(await realpath(commandPath)),await realpath(commandPath),{maxBytes:8192})):undefined;
 if(operation==='recover') {
   if(!command)throw new Error('Recovery approval JSON required');
   console.log(JSON.stringify(await recoverEconomyWriter(config,command)));process.exit(0);

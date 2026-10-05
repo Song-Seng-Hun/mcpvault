@@ -1,3 +1,4 @@
+import { readHostFile, writeHostFileAtomic, ensureHostDirectory } from './host-storage.js';
 import { guidanceError } from './guidance-runtime.js';
 import { lstat, realpath, open, readdir, rename, unlink, statfs, link } from 'node:fs/promises';
 import { execFile } from 'node:child_process';
@@ -5,7 +6,6 @@ import { promisify } from 'node:util';
 import { randomUUID } from 'node:crypto';
 import { dirname, isAbsolute, join, relative, sep,basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { readFederationFile, writeFederationFileAtomic, ensureFederationDirectory } from './public-federation-storage.js';
 import { economyRevision, validateEconomyPolicy, type EconomyCommand, type EconomyPolicy, type EconomyState } from './economy-model.js';
 import { assertContiguousEconomyJournalNames } from './economy-ledger.js';
 import type { FileSystemService } from './filesystem.js';
@@ -15,7 +15,7 @@ import { assertLegacyEconomyStorage, bindEconomyStorage, validateEconomyStorageP
 const inside=(base:string,path:string)=>{const r=relative(base,path);return !r||(!r.startsWith(`..${sep}`)&&r!=='..'&&!isAbsolute(r));};
 const missing=(e:unknown)=>Boolean(e&&typeof e==='object'&&'code'in e&&e.code==='ENOENT');
 async function optional(root:string,path:string,maxBytes:number):Promise<string|undefined>{
-  try{return await readFederationFile(root,path,{maxBytes});}catch(e){if(missing(e))return undefined;throw e;}
+  try{return await readHostFile(root,path,{maxBytes});}catch(e){if(missing(e))return undefined;throw e;}
 }
 export interface EconomyHostConfig { version:1; vaultPath:string; hostPath:string; ledgerPath?:string; policy:EconomyPolicy }
 
@@ -30,7 +30,7 @@ async function releaseRecoveryGate(path:string,gate:RecoveryGate):Promise<void>{
 }
 async function assertRecoveryGate(path:string,gate:RecoveryGate):Promise<void>{
   const stat=await lstat(path);if(stat.isSymbolicLink())throw guidanceError(new Error('Recovery lock symlink refused'), 'guid-2204c0ef15898d33');
-  const current=JSON.parse(await readFederationFile(dirname(path),path,{maxBytes:1024})) as RecoveryGate;
+  const current=JSON.parse(await readHostFile(dirname(path),path,{maxBytes:1024})) as RecoveryGate;
   if(current.nonce!==gate.nonce||current.pid!==gate.pid||current.vault!==gate.vault)throw guidanceError(new Error('Recovery lock fencing failed'), 'guid-5c758dcf9f6b5e82');
 }
 /** Publish a complete gate with an atomic hard-link, so a killed recovery never
@@ -57,7 +57,7 @@ export async function loadEconomyHostConfig(configPath:string,expectedVault:stri
   const moduleRoot=basename(compiledRoot)==='dist'?dirname(compiledRoot):compiledRoot;
   const source=moduleRoot.endsWith(`${sep}dist`)?dirname(moduleRoot):moduleRoot;
   if(inside(vault,actualConfig)||inside(source,actualConfig))throw guidanceError(new Error('Economy config must be private, outside Vault and source'), 'guid-b5d3635a1bb10ce3');
-  const raw=JSON.parse(await readFederationFile(root,actualConfig,{maxBytes:32768}));
+  const raw=JSON.parse(await readHostFile(root,actualConfig,{maxBytes:32768}));
   if(!raw||raw.version!==1||Object.keys(raw).some(k=>!['version','vaultPath','hostPath','ledgerPath','policy'].includes(k)))throw guidanceError(new Error('Invalid host economy configuration'), 'guid-fb1b25c7414d31b7');
   if(typeof raw.vaultPath!=='string'||typeof raw.hostPath!=='string'||!isAbsolute(raw.vaultPath)||!isAbsolute(raw.hostPath))throw guidanceError(new Error('Invalid vault/host path'), 'guid-231b0a938277f5a3');
   const configuredVault=await realpath(raw.vaultPath),host=await realpath(raw.hostPath);
@@ -100,7 +100,7 @@ export async function probeEconomyStorage(directory:string):Promise<{path:string
     catch(e){if(e&&typeof e==='object'&&'code'in e&&e.code==='EEXIST')exclusive=true;else throw e;}
     if(!exclusive)throw guidanceError(new Error('Exclusive creation probe failed'), 'guid-d77b2fd6dca3af09');
     await handle.close();handle=undefined;await rename(from,to);
-    if(await readFederationFile(path,to,{maxBytes:256})!==name)throw guidanceError(new Error('Atomic rename probe failed'), 'guid-383a12515f2b8b0c');
+    if(await readHostFile(path,to,{maxBytes:256})!==name)throw guidanceError(new Error('Atomic rename probe failed'), 'guid-383a12515f2b8b0c');
     return {path,filesystem,probe:'exclusive-create-sync-rename'};
   } finally {
     await handle?.close();
@@ -140,7 +140,7 @@ export async function recoverEconomyWriter(options:EconomyStoragePaths,approval:
   const binding = options.ledgerPath === undefined ? undefined : await bindEconomyStorage(options);
   const vault=await realpath(binding?.ledgerPath ?? options.vaultPath),host=await realpath(options.hostPath);
   const gatePath=join(vault,'.mcpvault-economy','recovery.lock');
-  await ensureFederationDirectory(vault,dirname(gatePath));
+  await ensureHostDirectory(vault,dirname(gatePath));
   const gate=await acquireRecoveryGate(vault,gatePath);
   try {
     const state=await inspectEconomyRecovery(options);
@@ -152,7 +152,7 @@ export async function recoverEconomyWriter(options:EconomyStoragePaths,approval:
     // Preserve the exact old lock and approval as host audit evidence. No
     // journal/checkpoint mutation, lock timeout, or PID-reuse override exists.
     const auditName=`economy-recovery-${randomUUID()}.json`;
-    await writeFederationFileAtomic(host,join(host,auditName),JSON.stringify({version:1,at:new Date().toISOString(),reason:approval.reason,inspection:state}),{maxBytes:8192});
+    await writeHostFileAtomic(host,join(host,auditName),JSON.stringify({version:1,at:new Date().toISOString(),reason:approval.reason,inspection:state}),{maxBytes:8192});
     const target=join(vault,'.mcpvault-economy','writer.lock');
     // A second recoverer cannot take this gate automatically. Reassert our
     // nonce immediately before the irreversible writer-lock unlink anyway.

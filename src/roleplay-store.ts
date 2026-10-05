@@ -1,13 +1,13 @@
+import { validateHostStorage, ensureHostDirectory, readHostFile, writeHostFileAtomic } from './host-storage.js';
 import { guidanceError } from './guidance-runtime.js';
 import { randomUUID, randomInt, createHash } from 'node:crypto';
 import { trpgRollCount } from './roleplay-trpg.js';
 import { lstat, open, readdir, unlink, type FileHandle } from 'node:fs/promises';
 import { basename, join } from 'node:path';
-import { roleplayHostIdentity, validateRoleplayStorage } from './roleplay-storage-host.js';
+import { roleplayHostIdentity } from './roleplay-storage-host.js';
 import { FrontmatterHandler } from './frontmatter.js';
 import { PathFilter } from './pathfilter.js';
 import { extractMentions } from './social.js';
-import { ensureFederationDirectory, readFederationFile, writeFederationFileAtomic } from './public-federation-storage.js';
 import { applyRoleplayCommand, initialRoleplay, roleplayHash, type RoleplayCommand, type RoleplayPolicy, type RoleplayReceipt, type RoleplayState } from './roleplay-model.js';
 
 export const ROLEPLAY_ROOT = 'Community/Roleplay/Turns';
@@ -57,12 +57,12 @@ export class RoleplayStore {
   private get preparedPath(): string { return this.checkpointPath.replace('.checkpoint.json', '.prepared.md'); }
 
   static async open(options: RoleplayStoreOptions): Promise<RoleplayStore> {
-    const { vaultPath, hostPath } = await validateRoleplayStorage(options);
+    const { vaultPath, hostPath } = await validateHostStorage(options);
     if (!Array.isArray(options.policy.administrators) || options.policy.administrators.length > 20) throw guidanceError(new Error('Explicit host administrators array required'), 'guid-f83ee70da08f1adb');
     const hostId = (await roleplayHostIdentity(hostPath, true))!;
     const store = new RoleplayStore({ vaultPath, hostPath, policy: structuredClone(options.policy) }, hostId);
-    await ensureFederationDirectory(vaultPath, join(vaultPath, ROLEPLAY_ROOT));
-    await ensureFederationDirectory(vaultPath, join(vaultPath, '.mcpvault-roleplay'));
+    await ensureHostDirectory(vaultPath, join(vaultPath, ROLEPLAY_ROOT));
+    await ensureHostDirectory(vaultPath, join(vaultPath, '.mcpvault-roleplay'));
     await store.assertNoRecovery();
     try { store.lock = await open(store.lockPath, 'wx', 0o600); }
     catch { throw guidanceError(new Error('Roleplay writer already exists or crash lock needs explicit host recovery'), 'guid-2e39a35b0d753bdc'); }
@@ -85,9 +85,9 @@ export class RoleplayStore {
   }
   private async assertWriter(checkRecovery = true): Promise<void> {
     if (!this.lock) throw guidanceError(new Error('Roleplay writer is closed'), 'guid-c35f7bcfd1ae8506');
-    await validateRoleplayStorage(this.options);
+    await validateHostStorage(this.options);
     if (checkRecovery) await this.assertNoRecovery();
-    const current = JSON.parse(await readFederationFile(this.options.vaultPath, this.lockPath, { maxBytes: 2048 }));
+    const current = JSON.parse(await readHostFile(this.options.vaultPath, this.lockPath, { maxBytes: 2048 }));
     const held = await this.lock.stat(), disk = await lstat(this.lockPath);
     // SMB file IDs may collide or differ between handle/path queries. Ownership
     // is the durable nonce/PID/Vault/host tuple under cooperative host fencing.
@@ -105,7 +105,7 @@ export class RoleplayStore {
   }
   close(): Promise<void> { return this.closing ??= this.queue.then(() => this.release()); }
   private async saveCheckpoint(cp: Checkpoint): Promise<void> {
-    await this.assertWriter(); await writeFederationFileAtomic(this.options.hostPath, this.checkpointPath, JSON.stringify(cp), { maxBytes: 2048 });
+    await this.assertWriter(); await writeHostFileAtomic(this.options.hostPath, this.checkpointPath, JSON.stringify(cp), { maxBytes: 2048 });
   }
   private encode(event: Event): string {
     const r = event.receipt;
@@ -114,10 +114,10 @@ export class RoleplayStore {
       mentions: extractMentions(r.content), references: [], ...(event.command.data.replyTo && { reply_to: event.command.data.replyTo }), roleplay_event: event }, `${r.content}\n`);
   }
   private async replay(): Promise<Replay> {
-    const cp = JSON.parse(await readFederationFile(this.options.hostPath, this.checkpointPath, { maxBytes: 2048 })) as Checkpoint;
+    const cp = JSON.parse(await readHostFile(this.options.hostPath, this.checkpointPath, { maxBytes: 2048 })) as Checkpoint;
     if (cp.version !== 1 || cp.vault !== this.options.vaultPath || !Number.isSafeInteger(cp.sequence) || cp.sequence < 0 || cp.sequence > 10000 || !/^[a-f0-9]{64}$/.test(cp.hash)) throw guidanceError(new Error('Roleplay checkpoint invalid; host repair required'), 'guid-5b9f82430fb8c51a');
     const dir = join(this.options.vaultPath, ROLEPLAY_ROOT);
-    await ensureFederationDirectory(this.options.vaultPath, dir);
+    await ensureHostDirectory(this.options.vaultPath, dir);
     let names = await canonicalTurnNames(dir);
     // Check before replay can finish a pending intent or update its checkpoint.
     if (!this.options.policy.administrators.length && (cp.sequence !== 0 || cp.pending || names.length)) throw guidanceError(new Error('Explicit host administrators required for an initialized roleplay journal'), 'guid-e2747762923e4582');
@@ -127,7 +127,7 @@ export class RoleplayStore {
     for (let i = 0; i < names.length; i++) {
       const path = roleplayTurnPath(i + 1);
       if (names[i] !== basename(path) || !new PathFilter().isAllowed(path)) throw guidanceError(new Error('Roleplay record path integrity failure'), 'guid-7d08ac8ebe3c8f67');
-      const text = await readFederationFile(this.options.vaultPath, path, { maxBytes: MAX_BYTES });
+      const text = await readHostFile(this.options.vaultPath, path, { maxBytes: MAX_BYTES });
       texts.push(text);
       const cached = this.verified?.records[i];
       if (cached && cached.revision !== revision(text)) throw guidanceError(new Error('Roleplay record tampered; host repair required'), 'guid-dd796f5ee3b41059');
@@ -137,12 +137,12 @@ export class RoleplayStore {
       if (cp.pending.sequence !== cp.sequence + 1 || !/^[a-f0-9]{64}$/.test(cp.pending.hash)) throw guidanceError(new Error('Invalid pending roleplay checkpoint'), 'guid-744365638887a240');
       const path = roleplayTurnPath(cp.pending.sequence), name = basename(path);
       if (!names.includes(name)) {
-        const text = await readFederationFile(this.options.hostPath, this.preparedPath, { maxBytes: MAX_BYTES });
+        const text = await readHostFile(this.options.hostPath, this.preparedPath, { maxBytes: MAX_BYTES });
         const event = this.fm.parse(text).frontmatter.roleplay_event as Event;
         if (event?.hash !== cp.pending.hash || event.sequence !== cp.pending.sequence) throw guidanceError(new Error('Prepared turn integrity failure; host repair required'), 'guid-0f5dea998152a464');
         assertRoleplayReplayAdmission(existingBytes, Buffer.byteLength(text));
         await this.assertWriter();
-        await writeFederationFileAtomic(this.options.vaultPath, path, text, { maxBytes: MAX_BYTES });
+        await writeHostFileAtomic(this.options.vaultPath, path, text, { maxBytes: MAX_BYTES });
         names = [...names, name].sort();
         texts.push(text);
       }
@@ -175,7 +175,7 @@ export class RoleplayStore {
     // it an intent; never discard its dice and roll again on a caller retry.
     if (!cp.pending && (!this.verified || this.preparedUncertain)) {
       let prepared: string | undefined;
-      try { prepared = await readFederationFile(this.options.hostPath, this.preparedPath, { maxBytes: MAX_BYTES }); }
+      try { prepared = await readHostFile(this.options.hostPath, this.preparedPath, { maxBytes: MAX_BYTES }); }
       catch (error) { if (!missing(error)) throw error; }
       if (prepared) {
         const event = this.fm.parse(prepared).frontmatter.roleplay_event as Event;
@@ -235,9 +235,9 @@ export class RoleplayStore {
       if (Buffer.byteLength(text) > MAX_BYTES) throw guidanceError(new Error('Roleplay turn exceeds storage budget'), 'guid-8bfb189437191955');
       assertRoleplayReplayAdmission(bytes, Buffer.byteLength(text));
       this.preparedUncertain = true;
-      await writeFederationFileAtomic(this.options.hostPath, this.preparedPath, text, { maxBytes: MAX_BYTES });
+      await writeHostFileAtomic(this.options.hostPath, this.preparedPath, text, { maxBytes: MAX_BYTES });
       await this.saveCheckpoint({ ...checkpoint, pending: { sequence: event.sequence, hash: event.hash } });
-      await writeFederationFileAtomic(this.options.vaultPath, path, text, { maxBytes: MAX_BYTES });
+      await writeHostFileAtomic(this.options.vaultPath, path, text, { maxBytes: MAX_BYTES });
       await this.saveCheckpoint({ version: 1, vault: checkpoint.vault, sequence: event.sequence, hash: event.hash });
       this.preparedUncertain = false;
       return { ...applied.receipt, path, noteRevision: revision(text) };

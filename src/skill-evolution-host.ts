@@ -1,9 +1,9 @@
+import { readHostFile } from './host-storage.js';
 import { guidanceError } from './guidance-runtime.js';
 import { checkWindowsPrivateAcl } from './windows-private-acl.js';
 import { dirname, isAbsolute, relative, sep, join } from 'node:path';
 import { lstat, realpath } from 'node:fs/promises';
 import { hostSourceRoots } from './host-source-roots.js';
-import { readFederationFile } from './public-federation-storage.js';
 import { profileFingerprint, type SkillEvaluationProfile } from './skill-evaluation.js';
 import type { SkillEvolutionHost } from './skill-evolution.js';
 import { createTrustedSkillEvaluationProfiles } from './skill-evaluation-profiles.js';
@@ -32,7 +32,7 @@ export async function loadSkillEvolutionHostConfig(configPath: string, expectedV
   if (inside(vault, directory) || (await hostSourceRoots(import.meta.url)).some(source => inside(source, directory))) throw guidanceError(new Error('Skill evolution configuration must be outside Vault/source in private storage'), 'guid-21c04b7267006371');
   await assertHostPrivateStorage([directory, configPath]);
   let raw: any;
-  try { raw = JSON.parse(await readFederationFile(directory, configPath, { maxBytes: 8192 })); }
+  try { raw = JSON.parse(await readHostFile(directory, configPath, { maxBytes: 8192 })); }
   catch { throw guidanceError(new Error('Invalid or unavailable skill evolution configuration'), 'guid-9eb630366d07760c'); }
   if (!raw || raw.version !== 1 || typeof raw.enabled !== 'boolean'
     || Object.keys(raw).some(k => !['version', 'vaultPath', 'enabled', 'attestationKeyFile', 'approverAccounts', 'profileIds'].includes(k))) throw guidanceError(new Error('Invalid skill evolution configuration'), 'guid-4d4fe90e090414b6');
@@ -50,7 +50,7 @@ export async function loadSkillEvolutionHostConfig(configPath: string, expectedV
   let key: string;
   try {
     await assertHostPrivateStorage([directory, configPath, keyPath]);
-    key = (await readFederationFile(directory, keyPath, { maxBytes: 512 })).trim();
+    key = (await readHostFile(directory, keyPath, { maxBytes: 512 })).trim();
   } catch { throw guidanceError(new Error('Skill evolution key storage is unavailable or not private'), 'guid-46ec4feb2d119755'); }
   if (key.length < 32 || key.length > 256 || /\s/.test(key)) throw guidanceError(new Error('Invalid skill evolution attestation key'), 'guid-507c8d8e99459b41');
   return { enabled: raw.enabled, attestationKey: key, approverAccounts: [...new Set<string>(raw.approverAccounts)], profiles };

@@ -1,9 +1,9 @@
+import { canonicalHostPath, validateHostStorage, ensureHostDirectory, readHostFile, writeHostFileAtomic } from './host-storage.js';
 import { guidanceError } from './guidance-runtime.js';
 import { randomUUID } from 'node:crypto';
 import { lstat, open, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
-import { assertRoleplayRecoveryHost, canonicalRoleplayPath, roleplayHostIdentity, validateRoleplayStorage } from './roleplay-storage-host.js';
-import { ensureFederationDirectory, readFederationFile, writeFederationFileAtomic } from './public-federation-storage.js';
+import { assertRoleplayRecoveryHost, roleplayHostIdentity } from './roleplay-storage-host.js';
 import { roleplayHash } from './roleplay-model.js';
 import { ROLEPLAY_ROOT, canonicalTurnNames, type RoleplayStoreOptions } from './roleplay-store.js';
 
@@ -14,7 +14,7 @@ const missing = (e: unknown) => Boolean(e && typeof e === 'object' && 'code' in 
 const hash = (value: string) => /^[a-f0-9]{64}$/.test(value);
 
 async function optional(root: string, path: string, maxBytes: number): Promise<string | undefined> {
-  try { return await readFederationFile(root, path, { maxBytes }); }
+  try { return await readHostFile(root, path, { maxBytes }); }
   catch (e) { if (missing(e)) return undefined; throw e; }
 }
 
@@ -40,7 +40,7 @@ const deadProcess = async (pid: number): Promise<boolean> => {
 
 async function assertRecoveryGate(path: string, gate: RecoveryGate): Promise<void> {
   const stat = await lstat(path); if (stat.isSymbolicLink()) throw guidanceError(new Error('Recovery gate symlink refused'), 'guid-6620a5ef4d23d6c1');
-  const current = JSON.parse(await readFederationFile(gate.vault, path, { maxBytes: 1024 })) as RecoveryGate;
+  const current = JSON.parse(await readHostFile(gate.vault, path, { maxBytes: 1024 })) as RecoveryGate;
   if (current.nonce !== gate.nonce || current.pid !== gate.pid || current.vault !== gate.vault || current.hostId !== gate.hostId) throw guidanceError(new Error('Recovery gate fencing failed'), 'guid-825d58bdd58a63fc');
 }
 
@@ -63,7 +63,7 @@ async function acquireRecoveryGate(vault: string, path: string, hostId: string |
 }
 
 export async function inspectRoleplayRecovery(options: Pick<RoleplayStoreOptions, 'vaultPath' | 'hostPath'>) {
-  const { vaultPath: vault, hostPath: host } = await validateRoleplayStorage(options);
+  const { vaultPath: vault, hostPath: host } = await validateHostStorage(options);
   const hostId = await roleplayHostIdentity(host);
   const root = join(vault, '.mcpvault-roleplay');
   const lockPath = join(root, 'writer.lock');
@@ -71,7 +71,7 @@ export async function inspectRoleplayRecovery(options: Pick<RoleplayStoreOptions
   const checkpointPath = join(host, `roleplay-${roleplayHash(vault.toLowerCase())}.checkpoint.json`);
   const checkpoint = await optional(host, checkpointPath, 2048);
   // Validate existing turn ancestors without creating directories during inspection.
-  await canonicalRoleplayPath(join(vault, ROLEPLAY_ROOT), false);
+  await canonicalHostPath(join(vault, ROLEPLAY_ROOT), false);
   const names = canonicalNames(await canonicalTurnNames(join(vault, ROLEPLAY_ROOT)));
   const parsed = checkpoint ? parseCheckpoint(checkpoint, vault) : undefined;
   if (parsed && (names.length < parsed.sequence || names.length > parsed.sequence + (parsed.pending ? 1 : 0))) throw guidanceError(new Error('Roleplay checkpoint/turn mismatch; manual forensic recovery required'), 'guid-d3b3b88ce391e6e8');
@@ -86,9 +86,9 @@ export async function inspectRoleplayRecovery(options: Pick<RoleplayStoreOptions
 export async function recoverRoleplayWriter(options: Pick<RoleplayStoreOptions, 'vaultPath' | 'hostPath'>, approval: { expectedFingerprint: string; reason: string }) {
   if (typeof approval.expectedFingerprint !== 'string' || !hash(approval.expectedFingerprint)) throw guidanceError(new Error('Exact recovery inspection fingerprint required'), 'guid-798227549940799b');
   if (typeof approval.reason !== 'string' || !approval.reason.trim() || approval.reason.length > 1000) throw guidanceError(new Error('Bounded recovery reason required'), 'guid-106f5b3332b978f7');
-  const { vaultPath: vault, hostPath: host } = await validateRoleplayStorage(options);
+  const { vaultPath: vault, hostPath: host } = await validateHostStorage(options);
   const root = join(vault, '.mcpvault-roleplay'), gatePath = join(root, 'recovery.lock'), writerPath = join(root, 'writer.lock');
-  await ensureFederationDirectory(vault, root);
+  await ensureHostDirectory(vault, root);
   const gate = await acquireRecoveryGate(vault, gatePath, await roleplayHostIdentity(host));
   try {
     const inspection = await inspectRoleplayRecovery({ vaultPath: vault, hostPath: host });
@@ -99,7 +99,7 @@ export async function recoverRoleplayWriter(options: Pick<RoleplayStoreOptions, 
     if (!await deadProcess(writer.pid)) throw guidanceError(new Error('Writer PID is live/running; it will not be stopped or unlocked'), 'guid-ff0e84ea3584327e');
     if ((await inspectRoleplayRecovery({ vaultPath: vault, hostPath: host })).fingerprint !== inspection.fingerprint) throw guidanceError(new Error('Writer changed during recovery'), 'guid-c63746521df7a0e4');
     const auditName = `roleplay-recovery-${randomUUID()}.json`;
-    await writeFederationFileAtomic(host, join(host, auditName), JSON.stringify({ version: 1, at: new Date().toISOString(), reason: approval.reason, writerLock: writer, writerLockText: inspection.lockText, inspection }), { maxBytes: 8192 });
+    await writeHostFileAtomic(host, join(host, auditName), JSON.stringify({ version: 1, at: new Date().toISOString(), reason: approval.reason, writerLock: writer, writerLockText: inspection.lockText, inspection }), { maxBytes: 8192 });
     // Recheck after the durable off-Vault backup/audit, immediately before the only deletion.
     if ((await inspectRoleplayRecovery({ vaultPath: vault, hostPath: host })).fingerprint !== inspection.fingerprint) throw guidanceError(new Error('Writer changed during recovery'), 'guid-c63746521df7a0e4');
     await assertRecoveryGate(gatePath, gate);

@@ -1,9 +1,10 @@
+import { ensureHostDirectory, readHostFile, writeHostFileAtomic, removeHostFile } from './host-storage.js';
 import { guidanceText } from './guidance-runtime.js';
 import { guidanceError } from './guidance-runtime.js';
 import { activeDocumentStorageContext, assertEnterpriseStorageFresh, canReadEnterpriseStoragePath, prepareOwnerActivityStorageWrite } from './enterprise-storage-context.js';
 import { createHash } from 'node:crypto';
 import { readdir } from 'node:fs/promises';
-import { federationStorageName, ensureFederationDirectory, readFederationFile, writeFederationFileAtomic, removeFederationFile } from './public-federation-storage.js';
+import { federationStorageName } from './public-federation-storage.js';
 import { join, resolve, relative } from 'node:path';
 import { PathFilter } from './pathfilter.js';
 import {
@@ -276,21 +277,21 @@ export class PublicFederationReplica {
   private async read(path: string): Promise<string> {
     this.assertProjection(path);
     const ownerPath = this.logicalProjection(path);
-    const result = await readFederationFile(this.vaultPath, path, { maxBytes: 64 * 1024 * 1024, ...(ownerPath && { ownerPath }) });
+    const result = await readHostFile(this.vaultPath, path, { maxBytes: 64 * 1024 * 1024, ...(ownerPath && { ownerPath }) });
     this.assertProjection(path); return result;
   }
 
   private writeAtomic(path: string, content: string): Promise<void> {
     this.assertProjection(path);
     const ownerPath = this.logicalProjection(path);
-    return writeFederationFileAtomic(this.vaultPath, path, content, { maxBytes: 64 * 1024 * 1024,
+    return writeHostFileAtomic(this.vaultPath, path, content, { maxBytes: 64 * 1024 * 1024,
       ...(ownerPath && { ownerPath, beforeCommit: async () => this.assertProjection(path) }) });
   }
 
   private async removeProjection(path: string): Promise<void> {
     const logical = this.logicalProjection(path);
     if (!logical || !this.projectionAllowed(logical, false)) return;
-    await removeFederationFile(this.vaultPath, path, async () => {
+    await removeHostFile(this.vaultPath, path, async () => {
       await prepareOwnerActivityStorageWrite(logical); this.assertProjection(path);
     });
   }
@@ -342,7 +343,7 @@ export class PublicFederationReplica {
   }
 
   private async queued(): Promise<Array<{ path: string; entry: OutboxEntry; bytes: number }>> {
-    await ensureFederationDirectory(this.vaultPath, this.outboxRoot);
+    await ensureHostDirectory(this.vaultPath, this.outboxRoot);
     const names = (await readdir(this.outboxRoot)).filter(name => name.endsWith('.md')).sort();
     if (names.length > this.maxOutboxRecords) throw guidanceError(new Error('public federation outbox quota exceeded'), 'guid-c72305fb508bfebb');
     const rows = [];
@@ -372,14 +373,14 @@ export class PublicFederationReplica {
     const event = await this.client.publish(entry.input, entry.idempotencyKey);
     this.assertAcknowledgement(event, entry);
     if (this.manageLocalProjection) await this.writeAtomic(this.localPath(entry.input), markdownForLocal(entry.input, 'published'));
-    await removeFederationFile(this.vaultPath, path);
+    await removeHostFile(this.vaultPath, path);
     return event;
   }
 
   private async reject(entry: OutboxEntry, path: string, error: unknown): Promise<void> {
     const reason = error instanceof Error ? error.message.slice(0, 500) : 'publication rejected';
     await this.writeAtomic(join(this.rejectedRoot, `${sha256(entry.idempotencyKey)}.md`), outboxMarkdown(entry) + `\nRejection: ${JSON.stringify(reason)}\n`);
-    await removeFederationFile(this.vaultPath, path);
+    await removeHostFile(this.vaultPath, path);
   }
 
   async publish(input: PublicPublishInput, idempotencyKey: string, authorize?: () => Promise<void>): Promise<PublicReplicaPublishResult> {
@@ -555,7 +556,7 @@ export class PublicFederationReplica {
       const content = markdownForImported(objectId, object, 'active');
       const path = `PublicCommunity/Imported/${actorOrigin(object.base.actorId)}/${importedCategory(object)}/${federationStorageName(objectId)}.md`;
       try {
-        const persisted = await readFederationFile(this.vaultPath, join(this.vaultPath, path), { maxBytes: 128 * 1024, ownerPath: path, label: guidanceText('guid-56d63a4c2f891a79', 'public federation projection') });
+        const persisted = await readHostFile(this.vaultPath, join(this.vaultPath, path), { maxBytes: 128 * 1024, ownerPath: path, label: guidanceText('guid-56d63a4c2f891a79', 'public federation projection') });
         if (persisted !== content) throw guidanceError(new Error('projection changed'), 'guid-55fb28553f1f051c');
         this.assertProjection(join(this.vaultPath, path));
       } catch { throw guidanceError(new Error('Federation projection changed or unavailable; retry synchronization before reading'), 'guid-fe6d6e936d06034e'); }

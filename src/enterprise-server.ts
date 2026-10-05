@@ -1,10 +1,10 @@
+import { ensureHostDirectory } from './host-storage.js';
 import { guidanceError } from './guidance-runtime.js';
 import { createPrivateKey, randomBytes, X509Certificate } from 'node:crypto';
 import { open, readFile, realpath, stat, unlink } from 'node:fs/promises';
 import type { FileHandle } from 'node:fs/promises';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { ensureFederationDirectory } from './public-federation-storage.js';
 import { createServer } from './createServer.js';
 import { loadHostFeatureConfig } from './host-feature-config.js';
 import { loadOwnerActivityHostConfig } from './owner-activity-host.js';
@@ -132,7 +132,7 @@ async function acquireVaultLock(vaultPath: string): Promise<() => Promise<void>>
   const canonicalVaultPath = await realpath(vaultPath);
   const directory = join(canonicalVaultPath, '.mcpvault');
   const path = join(directory, 'enterprise-server.lock');
-  await ensureFederationDirectory(canonicalVaultPath, directory);
+  await ensureHostDirectory(canonicalVaultPath, directory);
 
   let lock: VaultLock | undefined;
   for (let attempt = 0; attempt < 4 && !lock; attempt += 1) {

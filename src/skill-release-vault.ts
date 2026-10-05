@@ -1,8 +1,8 @@
+import { canonicalHostPath } from './host-storage.js';
 import { guidanceError } from './guidance-runtime.js';
 import {createHash} from 'node:crypto';
 import {constants,openSync,closeSync,fstatSync,lstatSync,readSync,realpathSync,type Stats} from 'node:fs';
 import {join,parse} from 'node:path';
-import {canonicalRoleplayPath} from './roleplay-storage-host.js';
 import {parseReviewedSkillRegistration,type ReviewedSkillRegistration} from './skill-release-store.js';
 import {verifySkillReleaseEvidence} from './skill-release-evidence.js';
 import type {ReviewedSkillHost,ReviewedSkillEntry} from './skill-release-reader.js';
@@ -26,7 +26,7 @@ const stamp=(s:Stats)=>`${s.dev}:${s.ino}:${s.size}:${s.mtimeMs}:${s.ctimeMs}:${
 export async function openVaultReviewedSkills(options:{vaultPath:string;registryHash:string;
   sourceFingerprint:(name:string)=>Promise<string|null>}):Promise<ReviewedSkillHost>{
   if(!sha(options.registryHash))return fail();
-  const vault=await canonicalRoleplayPath(options.vaultPath,false);
+  const vault=await canonicalHostPath(options.vaultPath,false);
   const metadata=join(vault,VAULT_SKILL_REVIEWS),registryPath=join(metadata,'registry.json');
   const read=(path:string,max:number)=>{
     let current=parse(path).root;

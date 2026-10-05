@@ -1,8 +1,7 @@
+import { canonicalHostPath, pathInside, validateHostStorage, readHostFile } from './host-storage.js';
 import { guidanceError } from './guidance-runtime.js';
 import { dirname, isAbsolute } from 'node:path';
-import { canonicalRoleplayPath, roleplayInside, validateRoleplayStorage } from './roleplay-storage-host.js';
 import { assertHostPrivateStorage } from './skill-evolution-host.js';
-import { readFederationFile } from './public-federation-storage.js';
 import { fingerprint, textField } from './work-model.js';
 import { normalizeScopeId } from './scopes.js';
 import { validateExplanationSources, type ExplanationSourceConfig } from './explanation-service.js';
@@ -47,16 +46,16 @@ export async function loadExplanationHostConfig(configPath: string, expectedVaul
   enabled: boolean; sources: ExplanationSourceConfig[]; executionProfiles: () => Promise<WorkExecutionProfile[]>;
 }> {
   if (!isAbsolute(configPath) || !isAbsolute(expectedVault)) throw guidanceError(Error('Absolute explanation host configuration and Vault required'), 'guid-466884b8e4e321ff');
-  const path = await canonicalRoleplayPath(configPath, true, true);
-  const { vaultPath, hostPath } = await validateRoleplayStorage({ vaultPath: expectedVault, hostPath: dirname(path) });
-  if (!roleplayInside(hostPath, path)) throw guidanceError(Error('Explanation configuration must be host private'), 'guid-325f3e23cf6f8966');
+  const path = await canonicalHostPath(configPath, true, true);
+  const { vaultPath, hostPath } = await validateHostStorage({ vaultPath: expectedVault, hostPath: dirname(path) });
+  if (!pathInside(hostPath, path)) throw guidanceError(Error('Explanation configuration must be host private'), 'guid-325f3e23cf6f8966');
   const read = async () => {
     await assertHostPrivateStorage([hostPath, path]);
     let raw: Record<string, unknown>;
-    try { raw = JSON.parse(await readFederationFile(hostPath, path, { maxBytes: 128_000 })); }
+    try { raw = JSON.parse(await readHostFile(hostPath, path, { maxBytes: 128_000 })); }
     catch { throw guidanceError(Error('Explanation configuration unavailable or malformed'), 'guid-53d091ebd2bc4991'); }
     if (!raw || typeof raw !== 'object' || Array.isArray(raw) || typeof raw.vaultPath !== 'string'
-      || await canonicalRoleplayPath(raw.vaultPath, false) !== vaultPath) throw guidanceError(Error('Explanation configuration belongs to another Vault'), 'guid-c833e7c3baa6f4e5');
+      || await canonicalHostPath(raw.vaultPath, false) !== vaultPath) throw guidanceError(Error('Explanation configuration belongs to another Vault'), 'guid-c833e7c3baa6f4e5');
     const { vaultPath: _vault, ...definition } = raw;
     return validateExplanationHostConfig(definition);
   };

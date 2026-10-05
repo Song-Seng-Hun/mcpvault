@@ -4,7 +4,8 @@ import { basename, dirname, isAbsolute, join, relative, sep } from 'node:path';
 import { tmpdir } from 'node:os';
 import { PublicFederationHub } from './public-federation.js';
 import { PublicFederationReplica } from './public-federation-replica.js';
-import * as storage from './public-federation-storage.js';
+import * as storage from './host-storage.js';
+import { federationStorageName } from './public-federation-storage.js';
 
 const faults = vi.hoisted(() => ({ renameTarget: '' }));
 vi.mock('node:fs/promises', async importOriginal => {
@@ -18,7 +19,7 @@ vi.mock('node:fs/promises', async importOriginal => {
 let root: string, vault: string, hub: PublicFederationHub, replica: PublicFederationReplica;
 const identity = { origin: 'remote', agentId: 'author' }, actorId = 'actor:remote:author';
 const post = 'post:remote:author:note', comment = 'comment:remote:author:reply';
-const location = (category: string, id: string) => join(vault, 'PublicCommunity/Imported/remote', category, `${storage.federationStorageName(id)}.md`);
+const location = (category: string, id: string) => join(vault, 'PublicCommunity/Imported/remote', category, `${federationStorageName(id)}.md`);
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'mcpvault-reconcile-')); vault = join(root, 'vault'); await mkdir(vault);
   hub = new PublicFederationHub(join(root, 'hub'));
@@ -46,7 +47,7 @@ function writes() {
 }
 
 test('identical pulls perform zero imported writes and never unlink the existing target', async () => {
-  await seed(); const log = writes(), removals = vi.spyOn(storage, 'removeFederationFile');
+  await seed(); const log = writes(), removals = vi.spyOn(storage, 'removeHostFile');
   const before = await readFile(location('Posts', post), 'utf8');
   const result = await replica.pull(100);
   expect(result.applied).toEqual([]); expect(log.imported()).toEqual([]);
@@ -126,8 +127,8 @@ test.each(['hide', 'tombstone'] as const)('all affected public copies disappear 
 
 test('a denied projection read is not treated as a missing file or overwritten', async () => {
   await seed(); const before = await readFile(location('Posts', post), 'utf8');
-  const read = storage.readFederationFile;
-  vi.spyOn(storage, 'readFederationFile').mockImplementation(async (...args) => {
+  const read = storage.readHostFile;
+  vi.spyOn(storage, 'readHostFile').mockImplementation(async (...args) => {
     if (args[1] === location('Posts', post)) throw Object.assign(Error('fixture denied'), { code: 'EACCES' });
     return read(...args);
   });

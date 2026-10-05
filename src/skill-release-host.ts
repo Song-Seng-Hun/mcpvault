@@ -1,9 +1,8 @@
+import { canonicalHostPath, validateHostStorage, readHostFile } from './host-storage.js';
 import { guidanceError } from './guidance-runtime.js';
 import {dirname,parse,join} from 'node:path';
 import {lstatSync,realpathSync} from 'node:fs';
-import {canonicalRoleplayPath,validateRoleplayStorage} from './roleplay-storage-host.js';
 import {assertHostPrivateStorage} from './skill-evolution-host.js';
-import {readFederationFile} from './public-federation-storage.js';
 import {OwnerActivityPolicy} from './owner-activity.js';
 import type {OwnerActivityRuntimeOptions} from './owner-activity-runtime.js';
 import {loadOwnerMtlsBindings} from './owner-activity-mtls.js';
@@ -40,10 +39,10 @@ export async function loadReviewedSkillsHost(path:string,expectedVault:string){
   let source:ReturnType<typeof createSkillSourceInspector>|undefined;
   try{
     const readPrivate=async(p:string,max:number)=>{
-      const canonical=await canonicalRoleplayPath(p,true,true);
-      await validateRoleplayStorage({hostPath:dirname(canonical),vaultPath:expectedVault});
+      const canonical=await canonicalHostPath(p,true,true);
+      await validateHostStorage({hostPath:dirname(canonical),vaultPath:expectedVault});
       await assertHostPrivateStorage([dirname(canonical),canonical]);const before=stamp(canonical,max);
-      const text=await readFederationFile(dirname(canonical),canonical,{maxBytes:max});
+      const text=await readHostFile(dirname(canonical),canonical,{maxBytes:max});
       await assertHostPrivateStorage([dirname(canonical),canonical]);if(stamp(canonical,max)!==before)return fail();
       return {path:canonical,text,stamp:before,max};
     };
@@ -60,9 +59,9 @@ export async function loadReviewedSkillsHost(path:string,expectedVault:string){
       if(!Number.isFinite(expiresAt)||new Date(expiresAt).toISOString()!==raw.expiresAt||remaining<=0||remaining>900_000)return fail();
       deadline=performance.now()+remaining;
     }
-    if(raw.version!==(vaultMode?4:sourceAccess?3:accountMode?2:1)||typeof raw.vaultPath!=='string'||await canonicalRoleplayPath(raw.vaultPath,false)!==await canonicalRoleplayPath(expectedVault,false))return fail();
-    const {hostPath,vaultPath}=vaultMode?{hostPath:undefined,vaultPath:await canonicalRoleplayPath(expectedVault,false)}
-      :await validateRoleplayStorage({hostPath:raw.hostPath,vaultPath:expectedVault});
+    if(raw.version!==(vaultMode?4:sourceAccess?3:accountMode?2:1)||typeof raw.vaultPath!=='string'||await canonicalHostPath(raw.vaultPath,false)!==await canonicalHostPath(expectedVault,false))return fail();
+    const {hostPath,vaultPath}=vaultMode?{hostPath:undefined,vaultPath:await canonicalHostPath(expectedVault,false)}
+      :await validateHostStorage({hostPath:raw.hostPath,vaultPath:expectedVault});
     if(sourceAccess){
       let closed=false;
       const assertFresh=()=>{
@@ -95,7 +94,7 @@ export async function loadReviewedSkillsHost(path:string,expectedVault:string){
         tls:{cert:cert.text,key:key.text,ca:ca.text,requestCert:true,rejectUnauthorized:true}};
     }
     let closed=false,ready=false,policyStamp:string|undefined;
-    const ownerPolicyPath=await canonicalRoleplayPath(raw.ownerPolicyPath,true,true);
+    const ownerPolicyPath=await canonicalHostPath(raw.ownerPolicyPath,true,true);
     let policy=new OwnerActivityPolicy({version:1,owners:{},grants:[]});
     const assertPins=()=>{
       if(Date.now()>=expiresAt||performance.now()>=deadline){closed=true;ready=false;source?.close();}
@@ -109,7 +108,7 @@ export async function loadReviewedSkillsHost(path:string,expectedVault:string){
           assertPins();
           for(const pin of pins)await assertHostPrivateStorage([dirname(pin.path),pin.path]);
           const owner=await readPrivate(ownerPolicyPath,262144),data=record(JSON.parse(owner.text),['version','vaultPath','owners','grants']);
-          if(typeof data.vaultPath!=='string'||await canonicalRoleplayPath(data.vaultPath,false)!==vaultPath)return fail();
+          if(typeof data.vaultPath!=='string'||await canonicalHostPath(data.vaultPath,false)!==vaultPath)return fail();
           const next=new OwnerActivityPolicy({version:data.version,owners:data.owners,grants:data.grants});
           if(data.grants.some((g:any)=>g.activities.some((v:string)=>v!=='skill-evolution')||g.actions.some((v:string)=>v!=='read'&&v!=='discover')
             ||g.dataPrefixes.some((v:string)=>v!=='Community/Skills'&&!v.startsWith('Community/Skills/'))

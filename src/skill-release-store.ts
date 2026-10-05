@@ -1,9 +1,9 @@
+import { canonicalHostPath, validateHostStorage } from './host-storage.js';
 import { guidanceError } from './guidance-runtime.js';
 import {createHash,randomUUID} from 'node:crypto';
 import {constants,openSync,closeSync,fstatSync,lstatSync,readSync,realpathSync,type BigIntStats, type Dir} from 'node:fs';
 import {opendir} from 'node:fs/promises';
 import {join,parse} from 'node:path';
-import {canonicalRoleplayPath,validateRoleplayStorage} from './roleplay-storage-host.js';
 import {assertHostPrivateStorage} from './skill-evolution-host.js';
 import {verifySkillReleaseEvidence} from './skill-release-evidence.js';
 import type {ReviewedSkillHost} from './skill-release-reader.js';
@@ -34,9 +34,9 @@ export function parseReviewedSkillRegistration(bytes:Buffer,skillId:string):Revi
 export async function openReviewedSkillStore(options:{hostPath:string;vaultPath:string;
   sourceFingerprint:(sourceName:string)=>Promise<string|null>}):Promise<ReviewedSkillHost>{
   try{
-    const {hostPath}=await validateRoleplayStorage(options);
+    const {hostPath}=await validateHostStorage(options);
     const directories=[hostPath,join(hostPath,'entries'),join(hostPath,'blobs')];
-    for(const p of directories)await canonicalRoleplayPath(p,true);
+    for(const p of directories)await canonicalHostPath(p,true);
     await assertHostPrivateStorage(directories);
     const bindings=new Map(directories.map(p=>[p,identity(lstatSync(p,{bigint:true}))]));
     const leases=new WeakMap<object,{path:string;stamp:string;generation:string}>();
@@ -67,7 +67,7 @@ export async function openReviewedSkillStore(options:{hostPath:string;vaultPath:
       }finally{closeSync(fd);}
     };
     const checked=async(path:string,max:number)=>{
-      assertDirectories();await canonicalRoleplayPath(path,true,true);
+      assertDirectories();await canonicalHostPath(path,true,true);
       await assertHostPrivateStorage([...directories,path]);return read(path,max);
     };
     const load=async(skillId:string)=>{

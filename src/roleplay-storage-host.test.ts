@@ -1,3 +1,4 @@
+import { canonicalHostPath } from './host-storage.js';
 import { afterEach, expect, it, vi } from 'vitest';
 import { mkdtemp, mkdir, readFile, rm, writeFile, symlink, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -5,7 +6,7 @@ import { join } from 'node:path';
 import { RoleplayStore } from './roleplay-store.js';
 import { inspectRoleplayRecovery, recoverRoleplayWriter } from './roleplay-recovery.js';
 import { loadRoleplayHostConfig } from './roleplay-host.js';
-import { ROLEPLAY_HOST_IDENTITY_FILE, canonicalRoleplayPath } from './roleplay-storage-host.js';
+import { ROLEPLAY_HOST_IDENTITY_FILE } from './roleplay-storage-host.js';
 
 // Only this synthetic UNC prefix is redirected to a local fixture. No NAS I/O.
 const virtual = vi.hoisted(() => ({ unc: '\\\\roleplay-test.invalid\\share', local: '', noLinks: false, unstableIds: false, gateFailure: false }));
@@ -130,8 +131,8 @@ it('validates config and Vault junction ancestors and refuses lexical device ali
   await symlink(f.hostPath, hostAlias, process.platform === 'win32' ? 'junction' : 'dir');
   await writeFile(join(f.hostPath, 'config.json'), JSON.stringify({ version: 1, vaultPath: f.vaultPath, hostPath: f.hostPath, administrators: [] }));
   await expect(loadRoleplayHostConfig(join(hostAlias, 'config.json'), f.vaultPath)).rejects.toThrow(/junction|symbolic/i);
-  await expect(canonicalRoleplayPath('\\\\?\\C:\\never-access', true)).rejects.toThrow(/canonical|absolute/i);
-  await expect(canonicalRoleplayPath(`${f.hostPath}${process.platform === 'win32' ? '\\' : '/'}..`, true)).rejects.toThrow(/canonical/i);
+  await expect(canonicalHostPath('\\\\?\\C:\\never-access', true)).rejects.toThrow(/canonical|absolute/i);
+  await expect(canonicalHostPath(`${f.hostPath}${process.platform === 'win32' ? '\\' : '/'}..`, true)).rejects.toThrow(/canonical/i);
 });
 
 it('refuses junction roots for both store and recovery before canonicalization hides them', async () => {

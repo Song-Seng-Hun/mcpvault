@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { canonicalHostPath } from './src/host-storage.js';
 
 import { serveStdio, StdioServerTransport } from "@modelcontextprotocol/server/stdio";
 import { createServer, getServerRuntime } from "./src/createServer.js";
@@ -19,7 +20,6 @@ import { RoleplayStore } from './src/roleplay-store.js';
 import { loadRoleplayHostConfig } from './src/roleplay-host.js';
 import { loadSkillEvolutionHostConfig } from './src/skill-evolution-host.js';
 import { loadReviewedSkillsHost } from './src/skill-release-host.js';
-import { canonicalRoleplayPath } from './src/roleplay-storage-host.js';
 import { loadExplanationHostConfig } from './src/explanation-host.js';
 import { loadBenchmarkHostConfig } from './src/benchmark-host.js';
 import type { BenchmarkService } from './src/benchmark-service.js';
@@ -175,7 +175,7 @@ try {
   if (auth0Config !== undefined) auth0 = await loadAuth0Resource(vaultPath, auth0Config);
   if (reviewedSkillsConfig) {
     reviewedHost = await loadReviewedSkillsHost(resolve(reviewedSkillsConfig), vaultPath);
-    if (ownerConsentPath && reviewedHost.ownerPolicyPath && await canonicalRoleplayPath(resolve(ownerConsentPath), true, true) !== reviewedHost.ownerPolicyPath) {
+    if (ownerConsentPath && reviewedHost.ownerPolicyPath && await canonicalHostPath(resolve(ownerConsentPath), true, true) !== reviewedHost.ownerPolicyPath) {
       throw new Error('Reviewed skills refuse conflicting owner consent configurations');
     }
   }

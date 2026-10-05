@@ -1,8 +1,8 @@
+import { readHostFile } from './host-storage.js';
 import { guidanceError } from './guidance-runtime.js';
 import {createHmac,timingSafeEqual} from 'node:crypto';
 import {realpath} from 'node:fs/promises';
 import {dirname,isAbsolute,join,relative,sep} from 'node:path';
-import {readFederationFile} from './public-federation-storage.js';
 import {assertHostPrivateStorage} from './skill-evolution-host.js';
 import {hostSourceRoots} from './host-source-roots.js';
 import {benchmarkFingerprint,benchmarkId,benchmarkObject,validateBenchmarkDefinition,type BenchmarkDefinition,type BenchmarkProfile} from './benchmark-model.js';
@@ -61,16 +61,16 @@ export async function loadBenchmarkHostConfig(configPath:string,expectedVault:st
   const config=await realpath(configPath),vault=await realpath(expectedVault);
   const sourceRoots=await hostSourceRoots(import.meta.url);
   if(configPath!==config||inside(vault,config)||sourceRoots.some(source=>inside(source,config)))throw Error();
-  const initialConfig=await readFederationFile(dirname(config),config,{maxBytes:512*1024});
+  const initialConfig=await readHostFile(dirname(config),config,{maxBytes:512*1024});
   const parsed=validateBenchmarkHostConfig(JSON.parse(initialConfig));
   const host=await realpath(parsed.hostPath);
   if(await realpath(parsed.vaultPath)!==vault||parsed.hostPath!==host||inside(vault,host)||sourceRoots.some(source=>inside(source,host))||!inside(host,config)||/^\\\\|^\/\//.test(host))throw Error();
   const keyPath=join(host,parsed.integrityKeyFile),answerPath=parsed.answerFile?join(host,parsed.answerFile):undefined;
   const privatePaths=[host,config,keyPath,...(answerPath?[answerPath]:[])];
   await assertHostPrivateStorage(privatePaths);
-  const initialKey=await readFederationFile(host,keyPath,{maxBytes:300}),keyText=initialKey.trim();
+  const initialKey=await readHostFile(host,keyPath,{maxBytes:300}),keyText=initialKey.trim();
   if(!/^[a-f0-9]{64,256}$/i.test(keyText)||keyText.length%2)throw Error();
-  const initialAnswers=answerPath?await readFederationFile(host,answerPath,{maxBytes:2*1024*1024}):'{}';
+  const initialAnswers=answerPath?await readHostFile(host,answerPath,{maxBytes:2*1024*1024}):'{}';
   const answers:unknown=JSON.parse(initialAnswers);
   if(!answers||typeof answers!=='object'||Array.isArray(answers)||Object.keys(answers).length>100)throw Error();
   for(const [id,value]of Object.entries(answers)){benchmarkId(id);if(typeof value!=='string'||value.length>12000)throw Error();}
@@ -80,7 +80,7 @@ export async function loadBenchmarkHostConfig(configPath:string,expectedVault:st
    try {
     if(invalidated||await realpath(configPath)!==config||await realpath(parsed.hostPath)!==host||await realpath(expectedVault)!==vault)throw Error();
     await assertHostPrivateStorage(privatePaths);
-    const [currentConfig,currentKey,currentAnswers]=await Promise.all([readFederationFile(host,config,{maxBytes:512*1024}),readFederationFile(host,keyPath,{maxBytes:300}),answerPath?readFederationFile(host,answerPath,{maxBytes:2*1024*1024}):Promise.resolve('{}')]);
+    const [currentConfig,currentKey,currentAnswers]=await Promise.all([readHostFile(host,config,{maxBytes:512*1024}),readHostFile(host,keyPath,{maxBytes:300}),answerPath?readHostFile(host,answerPath,{maxBytes:2*1024*1024}):Promise.resolve('{}')]);
     if(currentConfig!==initialConfig||currentKey!==initialKey||currentAnswers!==initialAnswers)throw Error();
    }catch{invalidated=true;throw guidanceError(Error('Benchmark host configuration changed or unavailable; verified restart required'), 'guid-14ae396d64012180');}
   };

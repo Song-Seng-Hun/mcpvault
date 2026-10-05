@@ -1,3 +1,4 @@
+import { ensureHostDirectory, readHostFile, writeHostFileAtomic } from './host-storage.js';
 import { guidanceError } from './guidance-runtime.js';
 import {
   createHash,
@@ -11,7 +12,6 @@ import {
 } from 'node:crypto';
 import { mkdir, open, readFile, readdir, unlink, type FileHandle } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
-import { ensureFederationDirectory, readFederationFile, writeFederationFileAtomic } from './public-federation-storage.js';
 
 export const PUBLIC_FEDERATION_PROTOCOL = 'mcpvault-public-federation/v1' as const;
 const MAX_RECORD_BYTES = 64 * 1024;
@@ -471,14 +471,14 @@ export class PublicFederationHub {
 
   private async load(): Promise<void> {
     await mkdir(this.root, { recursive: true, mode: 0o700 });
-    await ensureFederationDirectory(this.root, this.recordsRoot);
+    await ensureHostDirectory(this.root, this.recordsRoot);
     this.processLock = await acquireProcessLock(this.processLockPath);
     try {
-      await ensureFederationDirectory(this.root, this.recordsRoot);
+      await ensureHostDirectory(this.root, this.recordsRoot);
       const names = (await readdir(this.recordsRoot)).filter(name => /^\d{12}\.md$/.test(name)).sort();
       let previousHash = '';
       for (const name of names) {
-        const event = parseEventMarkdown(await readFederationFile(this.root, join(this.recordsRoot, name), { maxBytes: 128 * 1024 }));
+        const event = parseEventMarkdown(await readHostFile(this.root, join(this.recordsRoot, name), { maxBytes: 128 * 1024 }));
         const unsigned = unsignedEvent(event);
         if (event.sequence !== this.events.length + 1 || event.previousHash !== previousHash || event.eventHash !== sha256(canonical(unsigned)) || !verifyValue(unsigned, event.signature, createPublicKey(this.signingPublicKey))) {
           throw guidanceError(new Error(`invalid public federation event chain at sequence ${event.sequence}`), 'guid-645e5acaa22f03ef');
@@ -612,7 +612,7 @@ export class PublicFederationHub {
       const serialized = eventMarkdown(event);
       if (Buffer.byteLength(serialized, 'utf8') > MAX_RECORD_BYTES) throw guidanceError(new Error(`public record exceeds ${MAX_RECORD_BYTES} bytes`), 'guid-221c5078b30c3465');
       const path = join(this.recordsRoot, `${String(event.sequence).padStart(12, '0')}.md`);
-      await writeFederationFileAtomic(this.root, path, serialized, { maxBytes: 128 * 1024 });
+      await writeHostFileAtomic(this.root, path, serialized, { maxBytes: 128 * 1024 });
       this.apply(event);
       this.events.push(event);
       this.idempotency.set(scopedKey, { payloadHash, eventId: event.eventId });
@@ -668,7 +668,7 @@ export class PublicFederationHub {
       const event: PublicFederationEvent = { ...unsigned, eventHash: sha256(canonical(unsigned)), signature: signValue(unsigned, this.signingPrivateKey) };
       const serialized = eventMarkdown(event);
       if (Buffer.byteLength(serialized, 'utf8') > MAX_RECORD_BYTES) throw guidanceError(new Error(`public record exceeds ${MAX_RECORD_BYTES} bytes`), 'guid-221c5078b30c3465');
-      await writeFederationFileAtomic(this.root, join(this.recordsRoot, `${String(event.sequence).padStart(12, '0')}.md`), serialized, { maxBytes: 128 * 1024 });
+      await writeHostFileAtomic(this.root, join(this.recordsRoot, `${String(event.sequence).padStart(12, '0')}.md`), serialized, { maxBytes: 128 * 1024 });
       this.apply(event);
       this.events.push(event);
       this.idempotency.set(scopedKey, { payloadHash, eventId: event.eventId });

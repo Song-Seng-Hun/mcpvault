@@ -1,10 +1,10 @@
+import { readHostFile } from './host-storage.js';
 import { guidanceError } from './guidance-runtime.js';
 import {randomUUID} from 'node:crypto';
 import {lstat,open,realpath,unlink,type FileHandle} from 'node:fs/promises';
 import {isAbsolute,join,relative,sep} from 'node:path';
 import {assertHostPrivateStorage} from './skill-evolution-host.js';
 import {hostSourceRoots} from './host-source-roots.js';
-import {readFederationFile} from './public-federation-storage.js';
 import {benchmarkFingerprint} from './benchmark-model.js';
 import type {LoadedBenchmarkHostConfig} from './benchmark-host.js';
 
@@ -27,7 +27,7 @@ export async function acquireBenchmarkWriter(config:LoadedBenchmarkHostConfig):P
  let closed=false,closing:Promise<void>|undefined;
  const ownership=async()=>{
   const held=await handle.stat(),current=await lstat(path);
-  const value=JSON.parse(await readFederationFile(host,path,{maxBytes:2048}));
+  const value=JSON.parse(await readHostFile(host,path,{maxBytes:2048}));
   if(current.isSymbolicLink()||held.ino!==current.ino||held.dev!==current.dev||value.version!==1||value.vault!==vault||value.pid!==process.pid||value.nonce!==nonce)throw guidanceError(Error('Benchmark writer ownership changed; lock was not removed'), 'guid-1153d76103722a48');
  };
  return {
@@ -37,7 +37,7 @@ export async function acquireBenchmarkWriter(config:LoadedBenchmarkHostConfig):P
     try{await ownership();await handle.close();closed=true;
      // Re-read after closing the handle (required for unlink on Windows). A
      // replacement marker is never removed merely because this process exits.
-     const current=JSON.parse(await readFederationFile(host,path,{maxBytes:2048}));
+     const current=JSON.parse(await readHostFile(host,path,{maxBytes:2048}));
      if(current.nonce!==nonce||current.pid!==process.pid||current.vault!==vault)throw guidanceError(Error('Benchmark writer ownership changed; lock was not removed'), 'guid-1153d76103722a48');
      await unlink(path);
     }catch{if(!closed){await handle.close();closed=true;}throw guidanceError(Error('Benchmark writer ownership changed or unavailable; lock was not removed'), 'guid-4e3cbd5b3496144e');}
