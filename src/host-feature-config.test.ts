@@ -22,7 +22,7 @@ test('bounded verified host selection is loaded once and cannot be expanded by m
   const { vault, file } = await fixture(); vi.spyOn(privacy, 'assertHostPrivateStorage').mockResolvedValue();
   await writeFile(file, JSON.stringify({ version: 1, selected: ['wiki-core', 'document-search'] }));
   const config = await load(file, vault);
-  await writeFile(file, JSON.stringify({ version: 1, selected: ['wiki-core', 'economy'] }));
+  await writeFile(file, JSON.stringify({ version: 1, selected: ['wiki-core', 'work-management'] }));
   expect(config.selected).toEqual(['document-search', 'wiki-core']); expect(Object.isFrozen(config.selected)).toBe(true);
 });
 test('unverified host storage and Vault/source configuration are not feature authorities', async () => {

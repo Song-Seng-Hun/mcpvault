@@ -57,13 +57,13 @@ describe('owner activity consent decisions', () => {
 
   test('all optional activities need their own explicit grant', () => {
     const activities: Activity[] = ['collaboration', 'ideation-research', 'explanation-translation',
-      'benchmarks', 'economy', 'roleplay', 'skill-evolution'];
+      'roleplay', 'skill-evolution'];
     for (const activity of activities) {
       const input = config();
       input.grants[0]!.activities = [activity];
       const policy = new OwnerActivityPolicy(input);
       expect(policy.decision(request({ activity }))).toEqual(granted);
-      const other = activity === 'economy' ? 'collaboration' : 'economy';
+      const other = activity === 'skill-evolution' ? 'collaboration' : 'skill-evolution';
       expect(policy.decision(request({ activity: other }))).toEqual(denied('consent_required'));
     }
   });
@@ -177,7 +177,7 @@ describe('bounded, immutable owner activity configuration', () => {
   test('mutable caller input is deeply snapshotted, fingerprinted and not frozen by side effect', () => {
     const input = config(), policy = new OwnerActivityPolicy(input), fingerprint = policy.fingerprint;
     input.owners.account1 = 'owner2';
-    input.grants[0]!.accountIds[0] = 'account2'; input.grants[0]!.activities[0] = 'economy';
+    input.grants[0]!.accountIds[0] = 'account2'; input.grants[0]!.activities[0] = 'skill-evolution';
     input.grants[0]!.actions[0] = 'execute'; input.grants[0]!.dataPrefixes[0] = '.';
     input.grants[0]!.executionTargets[0] = 'runtime2'; input.grants[0]!.revoked = true;
     expect(policy.decision(request())).toEqual(granted);
@@ -186,7 +186,7 @@ describe('bounded, immutable owner activity configuration', () => {
   });
 
   test('SHA256 canonical fingerprint is insensitive to object/list order and changes on revocation', () => {
-    const input = config(); input.grants[0]!.activities.push('economy');
+    const input = config(); input.grants[0]!.activities.push('skill-evolution');
     const policy = new OwnerActivityPolicy(input);
     const canonical = { version: 1, owners: { account1: 'owner1', account2: 'owner2' },
       grants: [{ ...input.grants[0]!, actions: ['claim', 'discover', 'execute', 'read'], revoked: false }] };

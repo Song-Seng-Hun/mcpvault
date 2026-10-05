@@ -252,9 +252,8 @@ export class AgentPulseService {
     private readonly skills?: { nextAction(params: { principal: ScopePrincipal; skillId: string }): Promise<{ endpointId: string; arguments: Record<string, unknown> } | undefined> },
     private readonly engagement?: {
       explanation?: (principal: ScopePrincipal) => Promise<{ endpointId: string; arguments: Record<string, unknown>; reason: string } | undefined>;
-      benchmark?: (principal: ScopePrincipal) => Promise<{ endpointId: string; arguments: Record<string, unknown>; reason: string } | undefined>;
     },
-    private readonly ownerActivity?: (activity: 'collaboration' | 'ideation-research' | 'explanation-translation' | 'benchmarks' | 'skill-evolution', principal: ScopePrincipal) => Promise<{
+    private readonly ownerActivity?: (activity: 'collaboration' | 'ideation-research' | 'explanation-translation' | 'skill-evolution', principal: ScopePrincipal) => Promise<{
       run<T>(reader: () => Promise<T>): Promise<T>;
       revalidate(): Promise<void>;
       assertFresh(): void;
@@ -362,16 +361,16 @@ export class AgentPulseService {
     // Their pulse may continue to permitted reads, but must never probe Work
     // or legacy tasks and misreport the expected denial as backend failure.
     const canReadTasks = !principal.capabilities || principal.capabilities.includes('task');
-    const lease = async (activity: 'collaboration' | 'ideation-research' | 'explanation-translation' | 'benchmarks' | 'skill-evolution', configured: boolean) => {
+    const lease = async (activity: 'collaboration' | 'ideation-research' | 'explanation-translation' | 'skill-evolution', configured: boolean) => {
       if (!configured) return undefined;
       try { return await this.ownerActivity?.(activity, principal); } catch { return undefined; }
     };
-    const [collaborationLease, ideationLease, explanationLease, benchmarkLease, skillLease] = await Promise.all([
+    const [collaborationLease, ideationLease, explanationLease, skillLease] = await Promise.all([
       lease('collaboration', Boolean(this.notifications || this.social || this.chat || this.reputation)),
       lease('ideation-research', Boolean(this.ideation)), lease('explanation-translation', Boolean(this.engagement?.explanation)),
-      lease('benchmarks', Boolean(this.engagement?.benchmark)), lease('skill-evolution', Boolean(this.skills)),
+      lease('skill-evolution', Boolean(this.skills)),
     ]);
-    const ownerLeases = [collaborationLease, ideationLease, explanationLease, benchmarkLease, skillLease];
+    const ownerLeases = [collaborationLease, ideationLease, explanationLease, skillLease];
     retainOwnerValidator?.({
       revalidate: async () => { await Promise.all(ownerLeases.filter((item): item is NonNullable<typeof item> => Boolean(item)).map(item => item.revalidate())); },
       assertFresh: () => { for (const ownerLease of ownerLeases) ownerLease?.assertFresh(); },
@@ -380,7 +379,7 @@ export class AgentPulseService {
     const ownerRead = <T>(ownerLease: { run<V>(reader: () => Promise<V>): Promise<V> } | undefined, reader?: () => Promise<T>) =>
       ownerLease && reader ? () => ownerLease.run(reader) : undefined;
     const actor = identity(principal);
-    const sources = ['continuity', 'work', 'tasks', 'notifications', 'explanations', 'benchmarks', 'reviewQueue', 'inbox', 'posts', 'skills', 'maintenance', 'workshops', 'ideas', 'rooms', 'reputation'] as const;
+    const sources = ['continuity', 'work', 'tasks', 'notifications', 'explanations', 'reviewQueue', 'inbox', 'posts', 'skills', 'maintenance', 'workshops', 'ideas', 'rooms', 'reputation'] as const;
     type Source = typeof sources[number];
     const coverage = Object.fromEntries(sources.map(source => [source, { state: 'skipped' }])) as Record<Source, {
       state: 'loaded' | 'skipped' | 'unavailable'; reason?: 'not_configured' | 'read_failed';
@@ -430,8 +429,6 @@ export class AgentPulseService {
     selected ||= Boolean(postSummary?.feedbackPosts?.length || postSummary?.forumPosts?.length);
     const skillAction = await read('skills', !selected && !params.hostBusy && Boolean(params.skillId) && Boolean(skillLease), ownerRead(skillLease, this.skills && (() => this.skills!.nextAction({ principal, skillId: params.skillId! }))));
     selected ||= Boolean(skillAction);
-    const benchmark = await read('benchmarks', !selected && !params.hostBusy && Boolean(benchmarkLease), ownerRead(benchmarkLease, this.engagement?.benchmark && (() => this.engagement!.benchmark!(principal))));
-    selected ||= Boolean(benchmark);
     const idleWikiPlan = await read('maintenance', !selected, this.llmWiki && (() => this.idleWikiPlanFor(principal)));
     selected ||= Boolean(idleWikiPlan);
     const workshops = await read('workshops', !selected && ideationEligible, ownerRead(ideationLease, this.ideation && (() => this.ideation!.listWorkshops({ status: 'open', limit: Math.min(limit, 5), maxChars: Math.min(maxChars, 2500) }))));
@@ -519,9 +516,6 @@ export class AgentPulseService {
     } else if (skillAction) {
       nextAction = { tool: skillAction.endpointId, arguments: skillAction.arguments };
       reason = 'One candidate for the skill relevant to this session is available. Read its exact revision; do not start a background model or exceed the current task scope.';
-    } else if (benchmark) {
-      nextAction = { tool: benchmark.endpointId, arguments: benchmark.arguments };
-      reason = benchmark.reason;
     } else if (idleWikiPlan) {
       nextAction = {
         tool: idleWikiPlan.inspect.endpointId,

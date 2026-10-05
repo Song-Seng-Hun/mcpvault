@@ -10,7 +10,7 @@ test('website command selects the existing Bun application', () => {
   expect(existsSync(root('website-shibumi/package.json'))).toBe(true);
 });
 
-test.each(['economy-simulation', 'question-corpus'])('%s remains an evaluation fixture outside production sources', name => {
+test.each(['question-corpus'])('%s remains an evaluation fixture outside production sources', name => {
   expect(existsSync(root(`src/${name}.ts`))).toBe(false);
   expect(existsSync(root(`tests/fixtures/${name}.ts`))).toBe(true);
   const build = JSON.parse(readFileSync(root('tsconfig.build.json'), 'utf8'));

@@ -8,7 +8,6 @@ import { operationAvailability, operationReadAlias } from './operation-contracts
 export { operationReadAlias };
 import { DOCUMENT_TOOL_ENDPOINTS } from './document-tools.js';
 import { EXPLANATION_ENDPOINTS } from './explanation-tools.js';
-import { BENCHMARK_TOOL_ENDPOINTS } from './benchmark-tools.js';
 import { createHash } from 'node:crypto';
 import { jsonPointerNode, pageJsonRead, type JsonReadPage as DescriptorPage } from './json-read-page.js';
 import { hostFeatureForTool } from './host-features.js';
@@ -41,9 +40,7 @@ export interface EndpointAvailabilityContext {
   principalKey?: string;
   roleplayConfigured?: boolean;
   roleplayWritesConfigured?: boolean;
-  economyConfigured?: boolean;
   explanationsConfigured?: boolean;
-  benchmarksConfigured?: boolean;
   ownerActivity?: {
     policyFingerprint: string;
     executionBindingGeneration: string;
@@ -53,7 +50,7 @@ export interface EndpointAvailabilityContext {
 }
 
 const OPTIONAL_ACTIVITIES = new Set<Activity>(['collaboration', 'ideation-research', 'explanation-translation',
-  'benchmarks', 'economy', 'roleplay', 'skill-evolution']);
+  'roleplay', 'skill-evolution']);
 export function ownerActivityForEndpointTool(toolName: string): Activity | undefined {
   const feature = hostFeatureForTool(toolName);
   return feature && OPTIONAL_ACTIVITIES.has(feature as Activity) ? feature as Activity : undefined;
@@ -64,7 +61,6 @@ const OWNER_OPERATION_ACTIONS: Readonly<Record<string, Readonly<Record<string, O
   manage_story_artifact: { list: 'discover', read: 'read' },
   manage_story_review: { list: 'discover', read: 'read' },
   manage_story_session: { list: 'discover', read: 'read' },
-  manage_quest_contract: { claim: 'claim' },
 };
 export function ownerActionForEndpointTool(toolName: string, mutating: boolean, op?: unknown): OwnerActivityAction {
   const explicitOperation = typeof op === 'string' ? OWNER_OPERATION_ACTIONS[toolName]?.[op] : undefined;
@@ -137,7 +133,6 @@ function endpointScore(endpoint: EndpointDescriptor, terms: string[]): number {
 const EXPLICIT_IDS: Record<string, string> = {
   ...DOCUMENT_TOOL_ENDPOINTS,
   ...EXPLANATION_ENDPOINTS,
-  ...BENCHMARK_TOOL_ENDPOINTS,
   check_reusable_configuration: 'configuration.check',
   preview_learning_configuration: 'configuration.learning_preview',
   list_guidance_catalog: 'guidance.catalog',
@@ -298,8 +293,6 @@ const EXPLICIT_IDS: Record<string, string> = {
   read_workshop_research: 'workshop.research',
   update_workshop_research: 'workshop.research_update',
   update_workshop_facilitation: 'workshop.facilitation_update',
-  read_economy_wallet: 'economy.wallet', read_quest_market: 'quest.market',
-  manage_quest_contract: 'quest.contract', review_quest_contract: 'quest.review',
   list_workshops: 'workshop.list',
   read_workshop: 'workshop.read',
   contribute_workshop: 'workshop.contribute',
@@ -463,10 +456,6 @@ const EXPLICIT_ROUTES: Record<string, { method: 'GET' | 'POST'; url: string }> =
   read_workshop_research: { method: 'GET', url: '/api/workshops/{workshopId}/research/{roundId}' },
   update_workshop_research: { method: 'POST', url: '/api/workshops/{workshopId}/research/{roundId}' },
   update_workshop_facilitation: { method: 'POST', url: '/api/workshops/{workshopId}/facilitation' },
-  read_economy_wallet: { method: 'GET', url: '/api/economy/wallet' },
-  read_quest_market: { method: 'GET', url: '/api/quests' },
-  manage_quest_contract: { method: 'POST', url: '/api/quests/contract' },
-  review_quest_contract: { method: 'POST', url: '/api/quests/review' },
   list_workshops: { method: 'GET', url: '/api/workshops' },
   read_workshop: { method: 'GET', url: '/api/workshops/{workshopId}' },
   contribute_workshop: { method: 'POST', url: '/api/workshops/{workshopId}/contributions' },
@@ -601,10 +590,6 @@ const ENDPOINT_ALIASES: Record<string, string[]> = {
   read_workshop_research: ['independent research', 'embargo', 'blind', 'ArcticSwarm', '독립 조사', '연구 격리'],
   update_workshop_research: ['independent research', 'submit', 'disclose', 'challenge', '독립 조사', '근거 공개'],
   update_workshop_facilitation: ['workshop', 'facilitation', 'advance', 'pause', 'resume', 'handoff'],
-  read_economy_wallet: ['economy', 'wallet', 'xp', 'escrow', '지갑'],
-  read_quest_market: ['quest', 'market', 'bounty', '퀘스트', '외주'],
-  manage_quest_contract: ['quest', 'contract', 'fund', 'claim', 'submit', 'escrow'],
-  review_quest_contract: ['quest', 'review', 'payment', 'dispute'],
   list_workshops: ['workshop', 'meeting', 'agenda', 'phase'],
   read_workshop: ['workshop', 'meeting', 'agenda', 'phase', 'contributions'],
   contribute_workshop: ['workshop', 'meeting', 'critique', 'counterexample', 'synthesis'],
@@ -811,9 +796,7 @@ export class EndpointRegistry {
         const missing = item.requires.filter(required => !context.capabilities.has(required as ScopeCapability));
         const skillDisabled = context.skillEvolutionEnabled === false && item.endpointId.startsWith('skill.') && item.endpointId !== 'skill.resolve';
         const roleplayMissing = context.roleplayConfigured === false && item.endpointId.startsWith('roleplay.') && item.endpointId !== 'roleplay.computer';
-        const economyMissing = context.economyConfigured === false && /^(economy|quest)\./.test(item.endpointId);
-        const hostMissing = roleplayMissing || economyMissing || context.explanationsConfigured === false && item.endpointId.startsWith('explanations.')
-          || context.benchmarksConfigured === false && item.endpointId.startsWith('benchmark.');
+        const hostMissing = roleplayMissing || context.explanationsConfigured === false && item.endpointId.startsWith('explanations.');
         const roleplaySetupMissing = context.roleplayWritesConfigured === false && item.endpointId.startsWith('roleplay.') && item.endpointId !== 'roleplay.computer' && item.mutating;
         const disabled = context.readOnly && item.mutating || skillDisabled || hostMissing || roleplaySetupMissing;
         const reviewedRead = context.reviewedSourceAccess === true && item.endpointId === 'skill.resolve';

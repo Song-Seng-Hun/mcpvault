@@ -6,7 +6,7 @@ import { validateCapabilitySelection, type CapabilityNode } from './capability-g
 /** Explicit v1 snapshot. Adding a future feature must not expand saved selections. */
 export const HOST_FEATURE_IDS_V1 = Object.freeze([
   'wiki-core', 'document-search', 'personal-memory', 'work-management', 'collaboration',
-  'ideation-research', 'explanation-translation', 'benchmarks', 'economy', 'roleplay', 'skill-evolution',
+  'ideation-research', 'explanation-translation', 'roleplay', 'skill-evolution',
 ] as const);
 export type HostFeatureId = typeof HOST_FEATURE_IDS_V1[number];
 export interface HostFeatureConfig {
@@ -68,8 +68,8 @@ export function hostFeatureConfigFingerprint(input: unknown): string {
 /** Reviewed internal registration names, never namespace-prefix grants.
  * This snapshot comes from createServer's inventory and its tool factories.
  * Keep auth, safety, ordinary note task metadata, Canvas and MOC continuity in
- * core. Dedicated work boards/claims are optional; social XP is collaboration,
- * whereas wallets/quests are economy. Story tools belong to roleplay.
+ * core. Dedicated work boards/claims are optional; social XP is collaboration.
+ * Story tools belong to roleplay.
  *
  * Resolve dynamic IDs/REST routes through the existing registry first and pass
  * its trusted descriptor.toolName. Do not use an untrusted caller-supplied name
@@ -152,8 +152,6 @@ const toolsByFeature: Record<HostFeatureId, readonly string[]> = {
   'explanation-translation': [
     'list_explanations', 'read_explanation', 'claim_explanation', 'release_explanation', 'submit_explanation', 'review_explanation',
   ],
-  benchmarks: ['list_benchmarks', 'read_benchmark', 'submit_benchmark', 'review_benchmark', 'finalize_benchmark'],
-  economy: ['read_economy_wallet', 'read_quest_market', 'manage_quest_contract', 'review_quest_contract'],
   roleplay: [
     'manage_roleplay_computer',
     'manage_roleplay_world', 'manage_roleplay_character', 'manage_roleplay_scene', 'read_roleplay_context',

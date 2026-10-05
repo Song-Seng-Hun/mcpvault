@@ -114,7 +114,7 @@ test('representative Korean and English intent queries rank the primary operatio
 
 test('unconfigured optional execution stays disabled and the status probe reports no configured world', async () => {
   const { call } = await fixture();
-  for (const id of ['roleplay.action', 'roleplay.character', 'quest.contract', 'economy.wallet']) {
+  for (const id of ['roleplay.action', 'roleplay.character']) {
     const endpoint = (await call('search_capabilities', { query: id, maxChars: 20000 })).endpoints[0];
     expect(endpoint.state, id).toBe('disabled'); expect(endpoint.reason).toMatch(/host.*config/i);
   }

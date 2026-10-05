@@ -69,9 +69,7 @@ const changedContexts: Array<[string, Partial<EndpointAvailabilityContext>]> = [
   ['skill configuration', { skillEvolutionEnabled: false }],
   ['roleplay configuration', { roleplayConfigured: false }],
   ['roleplay write configuration', { roleplayWritesConfigured: false }],
-  ['economy configuration', { economyConfigured: false }],
   ['explanations configuration', { explanationsConfigured: false }],
-  ['benchmarks configuration', { benchmarksConfigured: false }],
 ];
 test.each(changedContexts)('a warm catalog rejects a cursor after changing %s', (_name, change) => {
   const registry = new EndpointRegistry();
@@ -125,7 +123,6 @@ test('owner consent never flips a parent lock or disabled mixed operation to rea
 test('unregistered raw operation labels cannot downgrade owner activity while registered claim aliases remain claims', () => {
   expect(ownerActionForEndpointTool('publish_blog_post', true, 'list')).toBe('execute');
   expect(ownerActionForEndpointTool('publish_blog_post', true, 'search')).toBe('execute');
-  expect(ownerActionForEndpointTool('manage_quest_contract', true, 'claim')).toBe('claim');
   expect(ownerActionForEndpointTool('claim_work_task', true, 'release')).toBe('claim');
 });
 

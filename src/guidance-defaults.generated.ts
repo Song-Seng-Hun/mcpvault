@@ -42,7 +42,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1380
+        "line": 1318
       }
     ]
   },
@@ -125,21 +125,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-005700cc391673ed",
-    "kind": "error",
-    "template": "Benchmark submission deadline not reached",
-    "parts": [
-      "Benchmark submission deadline not reached"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-service.ts",
-        "line": 241
-      }
-    ]
-  },
-  {
     "id": "guid-006e6a045050c034",
     "kind": "prose",
     "template": "Optional funded quest binding; actual funding and authorization are server-validated.",
@@ -185,22 +170,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 92
-      }
-    ]
-  },
-  {
-    "id": "guid-008b7f34aedd8eb3",
-    "kind": "error",
-    "template": "Trusted benchmark authority required",
-    "parts": [
-      "Trusted benchmark authority required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-model.ts",
-        "line": 168
+        "line": 88
       }
     ]
   },
@@ -330,21 +300,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-00f51008079ff095",
-    "kind": "error",
-    "template": "Benchmark result revision conflict",
-    "parts": [
-      "Benchmark result revision conflict"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-service.ts",
-        "line": 357
-      }
-    ]
-  },
-  {
     "id": "guid-00f830f5c7c47901",
     "kind": "error",
     "template": "Account must be an explicitly configured project participant",
@@ -355,7 +310,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 149
+        "line": 145
       }
     ]
   },
@@ -536,21 +491,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/notice-tools.ts",
         "line": 18
-      }
-    ]
-  },
-  {
-    "id": "guid-017b04754ffb8abb",
-    "kind": "prose",
-    "template": "Current authenticated account token. Economic ownership requires separate host approval.",
-    "parts": [
-      "Current authenticated account token. Economic ownership requires separate host approval."
-    ],
-    "binding": "projection",
-    "sources": [
-      {
-        "file": "src/economy-tools.ts",
-        "line": 5
       }
     ]
   },
@@ -782,21 +722,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-022a51d58cec2204",
-    "kind": "error",
-    "template": "Only assigned review is available; host adjudication is separate",
-    "parts": [
-      "Only assigned review is available; host adjudication is separate"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-service.ts",
-        "line": 249
-      }
-    ]
-  },
-  {
     "id": "guid-0234b1536aa7ff7a",
     "kind": "error",
     "template": "{arg0} cannot directly mutate managed community content; use the dedicated community tool so identity, threading, and references remain valid",
@@ -808,7 +733,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 4166
+        "line": 4048
       }
     ]
   },
@@ -1109,21 +1034,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-03aa23e4697a7317",
-    "kind": "error",
-    "template": "Benchmark writer requires canonical local host-private storage",
-    "parts": [
-      "Benchmark writer requires canonical local host-private storage"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-runtime.ts",
-        "line": 20
-      }
-    ]
-  },
-  {
     "id": "guid-03b17d56576c13af",
     "kind": "prose",
     "template": "Top-level Obsidian Properties to set",
@@ -1134,7 +1044,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1123
+        "line": 1063
       }
     ]
   },
@@ -1291,21 +1201,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-043f855be2b5c35c",
-    "kind": "error",
-    "template": "Work source changed before paid claim",
-    "parts": [
-      "Work source changed before paid claim"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/createServer.ts",
-        "line": 3298
-      }
-    ]
-  },
-  {
     "id": "guid-044296553d9ce398",
     "kind": "error",
     "template": "Federation storage parent path is not a directory",
@@ -1355,21 +1250,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/enterprise-registry.ts",
         "line": 622
-      }
-    ]
-  },
-  {
-    "id": "guid-0453353c6f1a9814",
-    "kind": "error",
-    "template": "Benchmark approved profile or current account unavailable",
-    "parts": [
-      "Benchmark approved profile or current account unavailable"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-service.ts",
-        "line": 102
       }
     ]
   },
@@ -1549,7 +1429,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 685
+        "line": 674
       }
     ]
   },
@@ -1674,7 +1554,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1565
+        "line": 1503
       }
     ]
   },
@@ -1854,7 +1734,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1391
+        "line": 1329
       }
     ]
   },
@@ -1870,21 +1750,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/global-sync.ts",
         "line": 679
-      }
-    ]
-  },
-  {
-    "id": "guid-065e1d6d2cb75c19",
-    "kind": "error",
-    "template": "Same owner peer review not approved",
-    "parts": [
-      "Same owner peer review not approved"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-service.ts",
-        "line": 418
       }
     ]
   },
@@ -2057,21 +1922,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-0699e6101be7cddd",
-    "kind": "error",
-    "template": "Current task account required",
-    "parts": [
-      "Current task account required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-host-cli.ts",
-        "line": 93
-      }
-    ]
-  },
-  {
     "id": "guid-06a4eda22b6307fd",
     "kind": "prose",
     "template": "Mark one comment as the accepted answer for your post. Separate from likes and workflow status; stored in post frontmatter and Git history.",
@@ -2143,21 +1993,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/skill-library.ts",
         "line": 163
-      }
-    ]
-  },
-  {
-    "id": "guid-06cef6678f013808",
-    "kind": "error",
-    "template": "Contract expired",
-    "parts": [
-      "Contract expired"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-model.ts",
-        "line": 154
       }
     ]
   },
@@ -2248,21 +2083,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/layered-memory.ts",
         "line": 340
-      }
-    ]
-  },
-  {
-    "id": "guid-0715e71bf1f691a5",
-    "kind": "error",
-    "template": "Pending economy checkpoint mismatch",
-    "parts": [
-      "Pending economy checkpoint mismatch"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-ledger.ts",
-        "line": 225
       }
     ]
   },
@@ -2508,7 +2328,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/cli.ts",
-        "line": 91
+        "line": 87
       }
     ]
   },
@@ -2588,21 +2408,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-082223b3a823093e",
-    "kind": "error",
-    "template": "Resolution references unknown locked reviews",
-    "parts": [
-      "Resolution references unknown locked reviews"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-service.ts",
-        "line": 420
-      }
-    ]
-  },
-  {
     "id": "guid-082926dec9590b54",
     "kind": "error",
     "template": "conflicting revisions for the same path",
@@ -2614,21 +2419,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/continuity-understanding-model.ts",
         "line": 100
-      }
-    ]
-  },
-  {
-    "id": "guid-082deefa6c903eaa",
-    "kind": "error",
-    "template": "deadline",
-    "parts": [
-      "deadline"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-initiative.ts",
-        "line": 70
       }
     ]
   },
@@ -2660,7 +2450,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3337
+        "line": 3219
       }
     ]
   },
@@ -2844,7 +2634,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1145
+        "line": 1085
       }
     ]
   },
@@ -2859,7 +2649,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/endpoint-registry.ts",
-        "line": 878
+        "line": 861
       }
     ]
   },
@@ -3222,22 +3012,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 924
-      }
-    ]
-  },
-  {
-    "id": "guid-0a23bf2a5a8af914",
-    "kind": "error",
-    "template": "Mechanical criteria must be bounded literal: phrases",
-    "parts": [
-      "Mechanical criteria must be bounded literal: phrases"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/quest-verifier.ts",
-        "line": 9
+        "line": 904
       }
     ]
   },
@@ -3344,11 +3119,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2002
+        "line": 1940
       },
       {
         "file": "src/createServer.ts",
-        "line": 2004
+        "line": 1942
       }
     ]
   },
@@ -3402,21 +3177,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/llm-wiki.ts",
         "line": 8001
-      }
-    ]
-  },
-  {
-    "id": "guid-0a88b822fa272636",
-    "kind": "error",
-    "template": "Worker must have a distinct approved owner",
-    "parts": [
-      "Worker must have a distinct approved owner"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-model.ts",
-        "line": 153
       }
     ]
   },
@@ -3681,7 +3441,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/cli.ts",
-        "line": 241
+        "line": 226
       }
     ]
   },
@@ -3696,7 +3456,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 127
+        "line": 123
       }
     ]
   },
@@ -3763,21 +3523,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-0b1bddb83b217abf",
-    "kind": "error",
-    "template": "Approved new program and missing revision required",
-    "parts": [
-      "Approved new program and missing revision required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-model.ts",
-        "line": 195
-      }
-    ]
-  },
-  {
     "id": "guid-0b2ec45a26ed737e",
     "kind": "error",
     "template": "maxChars is too small for the group response envelope",
@@ -3820,21 +3565,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/json-canvas.ts",
         "line": 310
-      }
-    ]
-  },
-  {
-    "id": "guid-0b4fc994d1cfc705",
-    "kind": "error",
-    "template": "Only current worker may submit",
-    "parts": [
-      "Only current worker may submit"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-model.ts",
-        "line": 292
       }
     ]
   },
@@ -3999,7 +3729,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 443
+        "line": 439
       }
     ]
   },
@@ -4298,21 +4028,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-0c7729afabb4a5ea",
-    "kind": "prose",
-    "template": "Read status, a public definition, your sealed submission, anonymous peer entries, locked reviews, conflict references or results. Entries/reviews are bounded summaries; use entryId/reviewId and offset/nextOffset for literal detail chunks. Large definitions expose separate problem/rubric/sources fields. Objective answers are never disclosed. Source/profile changes invalidate projections. Same-owner model diversity is weaker independence.",
-    "parts": [
-      "Read status, a public definition, your sealed submission, anonymous peer entries, locked reviews, conflict references or results. Entries/reviews are bounded summaries; use entryId/reviewId and offset/nextOffset for literal detail chunks. Large definitions expose separate problem/rubric/sources fields. Objective answers are never disclosed. Source/profile changes invalidate projections. Same-owner model diversity is weaker independence."
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-tools.ts",
-        "line": 20
-      }
-    ]
-  },
-  {
     "id": "guid-0c876e8df497ee2e",
     "kind": "error",
     "template": "Mind-map edge references unknown prior node {arg0}",
@@ -4459,7 +4174,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1664
+        "line": 1602
       }
     ]
   },
@@ -4506,25 +4221,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/organization.ts",
         "line": 702
-      }
-    ]
-  },
-  {
-    "id": "guid-0d120fec6e9fdd94",
-    "kind": "error",
-    "template": "Benchmark was cancelled",
-    "parts": [
-      "Benchmark was cancelled"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-service.ts",
-        "line": 322
-      },
-      {
-        "file": "src/benchmark-service.ts",
-        "line": 426
       }
     ]
   },
@@ -4617,21 +4313,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/compilation-publication-adapter.ts",
         "line": 21
-      }
-    ]
-  },
-  {
-    "id": "guid-0d647ce478f52819",
-    "kind": "error",
-    "template": "Explicit project membership is required",
-    "parts": [
-      "Explicit project membership is required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-service.ts",
-        "line": 60
       }
     ]
   },
@@ -4743,25 +4424,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-0da8842b913cd5e9",
-    "kind": "error",
-    "template": "JSON key",
-    "parts": [
-      "JSON key"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-model.ts",
-        "line": 109
-      },
-      {
-        "file": "src/benchmark-model.ts",
-        "line": 109
-      }
-    ]
-  },
-  {
     "id": "guid-0db48ae5b5f3bab0",
     "kind": "prose",
     "template": "answers_questions targets must have note_kind: question.",
@@ -4777,21 +4439,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-0dbd8b8afb18051c",
-    "kind": "error",
-    "template": "Contract revision conflict",
-    "parts": [
-      "Contract revision conflict"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-model.ts",
-        "line": 241
-      }
-    ]
-  },
-  {
     "id": "guid-0dc2e17ffad26766",
     "kind": "error",
     "template": "Unknown endpoint",
@@ -4802,7 +4449,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3990
+        "line": 3872
       }
     ]
   },
@@ -4862,7 +4509,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1540
+        "line": 1478
       }
     ]
   },
@@ -5003,21 +4650,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-0e5f391f7f9b9c26",
-    "kind": "error",
-    "template": "Invalid benchmark participants",
-    "parts": [
-      "Invalid benchmark participants"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-model.ts",
-        "line": 99
-      }
-    ]
-  },
-  {
     "id": "guid-0e6d680195e34766",
     "kind": "prose",
     "template": "Before moving, use notes.move_preview, then notes.move with updateLinks only at its current revision. Preserve body/Property/self-links and relative Markdown outlinks. Disambiguate same-name targets; never guess.",
@@ -5073,7 +4705,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1027
+        "line": 967
       }
     ]
   },
@@ -5118,11 +4750,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1838
+        "line": 1776
       },
       {
         "file": "src/createServer.ts",
-        "line": 2875
+        "line": 2813
       }
     ]
   },
@@ -5146,21 +4778,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/explanation-service.ts",
         "line": 229
-      }
-    ]
-  },
-  {
-    "id": "guid-0ecb8d50185c29bc",
-    "kind": "error",
-    "template": "Paid claim recovery revision/state conflict",
-    "parts": [
-      "Paid claim recovery revision/state conflict"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-claim-recovery.ts",
-        "line": 13
       }
     ]
   },
@@ -5315,7 +4932,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1116
+        "line": 1056
       }
     ]
   },
@@ -5346,21 +4963,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/continuity-tools.ts",
         "line": 28
-      }
-    ]
-  },
-  {
-    "id": "guid-0fa7d2e10f7dd241",
-    "kind": "error",
-    "template": "An operational independent reviewer pool is required",
-    "parts": [
-      "An operational independent reviewer pool is required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-model.ts",
-        "line": 128
       }
     ]
   },
@@ -5406,21 +5008,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/document-tools.ts",
         "line": 62
-      }
-    ]
-  },
-  {
-    "id": "guid-0fce1d49dff4c93d",
-    "kind": "error",
-    "template": "Contract deadline must be in the future",
-    "parts": [
-      "Contract deadline must be in the future"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-model.ts",
-        "line": 130
       }
     ]
   },
@@ -5568,21 +5155,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-105f30db688ecafd",
-    "kind": "error",
-    "template": "Private host file basename required",
-    "parts": [
-      "Private host file basename required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-host.ts",
-        "line": 46
-      }
-    ]
-  },
-  {
     "id": "guid-105ff0d272117149",
     "kind": "error",
     "template": "Recover the pending delegated output before re-discussion",
@@ -5684,7 +5256,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 729
+        "line": 713
       }
     ]
   },
@@ -5699,7 +5271,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 1107
+        "line": 1058
       }
     ]
   },
@@ -5774,7 +5346,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/cli.ts",
-        "line": 81
+        "line": 77
       }
     ]
   },
@@ -5879,26 +5451,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3430
-      }
-    ]
-  },
-  {
-    "id": "guid-1153d76103722a48",
-    "kind": "error",
-    "template": "Benchmark writer ownership changed; lock was not removed",
-    "parts": [
-      "Benchmark writer ownership changed; lock was not removed"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-runtime.ts",
-        "line": 31
-      },
-      {
-        "file": "src/benchmark-runtime.ts",
-        "line": 41
+        "line": 3312
       }
     ]
   },
@@ -5994,21 +5547,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-118bf5e22a39f2e2",
-    "kind": "prose",
-    "template": "Current determinate grades, two comparable peer entries and independent reviews required",
-    "parts": [
-      "Current determinate grades, two comparable peer entries and independent reviews required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-service.ts",
-        "line": 428
-      }
-    ]
-  },
-  {
     "id": "guid-119718204a20e287",
     "kind": "error",
     "template": "Invalid skill record kind",
@@ -6034,7 +5572,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 505
+        "line": 486
       }
     ]
   },
@@ -6099,21 +5637,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-11c9fd67e71c3609",
-    "kind": "error",
-    "template": "Invalid Work binding",
-    "parts": [
-      "Invalid Work binding"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-model.ts",
-        "line": 285
-      }
-    ]
-  },
-  {
     "id": "guid-11d7ee007bf83ea7",
     "kind": "error",
     "template": "Only assigned writer may submit during draft/revise stage",
@@ -6154,7 +5677,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 385
+        "line": 381
       }
     ]
   },
@@ -6244,7 +5767,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 932
+        "line": 890
       }
     ]
   },
@@ -6605,7 +6128,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2066
+        "line": 2004
       }
     ]
   },
@@ -6651,36 +6174,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/independent-research.ts",
         "line": 259
-      }
-    ]
-  },
-  {
-    "id": "guid-135bff5ae5a30b68",
-    "kind": "error",
-    "template": "Economy checkpoint hash mismatch",
-    "parts": [
-      "Economy checkpoint hash mismatch"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-ledger.ts",
-        "line": 229
-      }
-    ]
-  },
-  {
-    "id": "guid-13accbd95f6477a3",
-    "kind": "prose",
-    "template": "Seal one literal final reward submission per persistent account/problem lineage before the declared deadline. Aliases, sessions and versions do not reset it. No code, commands, URLs or regex are executed. practice=true only acknowledges data without storing, grading or claiming a reward slot. Reread the same challenge after changes.",
-    "parts": [
-      "Seal one literal final reward submission per persistent account/problem lineage before the declared deadline. Aliases, sessions and versions do not reset it. No code, commands, URLs or regex are executed. practice=true only acknowledges data without storing, grading or claiming a reward slot. Reread the same challenge after changes."
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-tools.ts",
-        "line": 21
       }
     ]
   },
@@ -6929,21 +6422,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-1441233faac18aff",
-    "kind": "error",
-    "template": "Adjudication must identify the exact submitted basis",
-    "parts": [
-      "Adjudication must identify the exact submitted basis"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-host.ts",
-        "line": 128
-      }
-    ]
-  },
-  {
     "id": "guid-1449651f4704f639",
     "kind": "error",
     "template": "Maintenance current document authority unavailable",
@@ -7097,7 +6575,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1536
+        "line": 1474
       }
     ]
   },
@@ -7120,19 +6598,19 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       },
       {
         "file": "src/createServer.ts",
-        "line": 3706
+        "line": 3588
       },
       {
         "file": "src/createServer.ts",
-        "line": 3763
+        "line": 3645
       },
       {
         "file": "src/createServer.ts",
-        "line": 3825
+        "line": 3707
       },
       {
         "file": "src/endpoint-registry.ts",
-        "line": 113
+        "line": 109
       },
       {
         "file": "src/filesystem.ts",
@@ -7181,21 +6659,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-14ae396d64012180",
-    "kind": "error",
-    "template": "Benchmark host configuration changed or unavailable; verified restart required",
-    "parts": [
-      "Benchmark host configuration changed or unavailable; verified restart required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-host.ts",
-        "line": 85
-      }
-    ]
-  },
-  {
     "id": "guid-14af81eb04799901",
     "kind": "error",
     "template": "kind must be diary, log, or reflection",
@@ -7215,21 +6678,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-14dd55fd2d1259d6",
-    "kind": "error",
-    "template": "Recovery project membership unavailable",
-    "parts": [
-      "Recovery project membership unavailable"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-claim-recovery.ts",
-        "line": 24
-      }
-    ]
-  },
-  {
     "id": "guid-14de03fdca3ef66a",
     "kind": "error",
     "template": "revision is required",
@@ -7241,21 +6689,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/git-history.ts",
         "line": 297
-      }
-    ]
-  },
-  {
-    "id": "guid-14e4e4fa1a62e6ca",
-    "kind": "error",
-    "template": "Benchmark context changed during read",
-    "parts": [
-      "Benchmark context changed during read"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-service.ts",
-        "line": 237
       }
     ]
   },
@@ -7343,10 +6776,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ],
     "binding": "call",
     "sources": [
-      {
-        "file": "src/economy-host.ts",
-        "line": 147
-      },
       {
         "file": "src/roleplay-recovery.ts",
         "line": 95
@@ -7758,25 +7187,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-163a12295a1d8545",
-    "kind": "error",
-    "template": "Current authorized account required",
-    "parts": [
-      "Current authorized account required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/createServer.ts",
-        "line": 867
-      },
-      {
-        "file": "src/createServer.ts",
-        "line": 881
-      }
-    ]
-  },
-  {
     "id": "guid-163bb6638f127aab",
     "kind": "prose",
     "template": "Short human-readable condition or period in which the knowledge applies",
@@ -7862,7 +7272,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 480
+        "line": 475
       }
     ]
   },
@@ -7956,7 +7366,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 1127
+        "line": 1078
       }
     ]
   },
@@ -8018,7 +7428,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 394
+        "line": 390
       }
     ]
   },
@@ -8033,7 +7443,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1250
+        "line": 1190
       }
     ]
   },
@@ -8064,22 +7474,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1628
-      }
-    ]
-  },
-  {
-    "id": "guid-1760df2941aba35a",
-    "kind": "error",
-    "template": "Duplicate immutable benchmark version",
-    "parts": [
-      "Duplicate immutable benchmark version"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-service.ts",
-        "line": 48
+        "line": 1566
       }
     ]
   },
@@ -8170,7 +7565,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 1105
+        "line": 1056
       }
     ]
   },
@@ -8200,7 +7595,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1395
+        "line": 1333
       }
     ]
   },
@@ -8584,7 +7979,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1744
+        "line": 1682
       }
     ]
   },
@@ -8661,21 +8056,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/llm-wiki.ts",
         "line": 308
-      }
-    ]
-  },
-  {
-    "id": "guid-18ecf9505701551f",
-    "kind": "error",
-    "template": "JSON comma",
-    "parts": [
-      "JSON comma"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-model.ts",
-        "line": 109
       }
     ]
   },
@@ -8770,7 +8150,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1318
+        "line": 1256
       }
     ]
   },
@@ -8890,7 +8270,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 368
+        "line": 364
       }
     ]
   },
@@ -8984,21 +8364,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-1a13954061586bf2",
-    "kind": "error",
-    "template": "Economy requires verified local storage; network/unknown storage is refused",
-    "parts": [
-      "Economy requires verified local storage; network/unknown storage is refused"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-ledger.ts",
-        "line": 95
-      }
-    ]
-  },
-  {
     "id": "guid-1a17a7ee4affb8c6",
     "kind": "error",
     "template": "Journal entry not found: {arg0}",
@@ -9025,7 +8390,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2320
+        "line": 2258
       }
     ]
   },
@@ -9091,36 +8456,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/community-public-retry.ts",
         "line": 190
-      }
-    ]
-  },
-  {
-    "id": "guid-1a3fc132563809b4",
-    "kind": "error",
-    "template": "Unsupported benchmark host operation",
-    "parts": [
-      "Unsupported benchmark host operation"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-service.ts",
-        "line": 340
-      }
-    ]
-  },
-  {
-    "id": "guid-1a4d2d3a6c9a42f3",
-    "kind": "error",
-    "template": "Unmanaged Obsidian note will not be overwritten",
-    "parts": [
-      "Unmanaged Obsidian note will not be overwritten"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-service.ts",
-        "line": 344
       }
     ]
   },
@@ -9440,7 +8775,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3383
+        "line": 3265
       }
     ]
   },
@@ -9532,7 +8867,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1117
+        "line": 1057
       }
     ]
   },
@@ -9738,7 +9073,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 985
+        "line": 965
       }
     ]
   },
@@ -9754,21 +9089,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/knowledge-synthesis-model.ts",
         "line": 59
-      }
-    ]
-  },
-  {
-    "id": "guid-1c8d1af5c8ba19b5",
-    "kind": "error",
-    "template": "Bounded rubric required",
-    "parts": [
-      "Bounded rubric required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-model.ts",
-        "line": 45
       }
     ]
   },
@@ -9798,7 +9118,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1269
+        "line": 1209
       }
     ]
   },
@@ -10012,21 +9332,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-1d4b7400faef02a1",
-    "kind": "error",
-    "template": "Absolute economy configuration required",
-    "parts": [
-      "Absolute economy configuration required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-host-cli.ts",
-        "line": 42
-      }
-    ]
-  },
-  {
     "id": "guid-1d5616ff599660c3",
     "kind": "prose",
     "template": "Reverse lookup is derived from visible typed Properties; it does not grant access and does not replace the source frontmatter.",
@@ -10067,7 +9372,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 153
+        "line": 149
       }
     ]
   },
@@ -10174,7 +9479,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 4186
+        "line": 4068
       }
     ]
   },
@@ -10316,21 +9621,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-1e46c0e8d962bba1",
-    "kind": "error",
-    "template": "Roleplay reward requires a funded, claimed quest with an assigned independent reviewer and approved owners",
-    "parts": [
-      "Roleplay reward requires a funded, claimed quest with an assigned independent reviewer and approved owners"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/createServer.ts",
-        "line": 3116
-      }
-    ]
-  },
-  {
     "id": "guid-1e4d0f11a17dd569",
     "kind": "error",
     "template": "A migration must rename the Property or provide valueMap",
@@ -10433,25 +9723,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/organization.ts",
         "line": 445
-      }
-    ]
-  },
-  {
-    "id": "guid-1e74aaa7d6649083",
-    "kind": "error",
-    "template": "Host-approved economic owner is required",
-    "parts": [
-      "Host-approved economic owner is required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-model.ts",
-        "line": 172
-      },
-      {
-        "file": "src/economy-service.ts",
-        "line": 40
       }
     ]
   },
@@ -10793,7 +10064,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1212
+        "line": 1152
       }
     ]
   },
@@ -10838,7 +10109,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3702
+        "line": 3584
       },
       {
         "file": "src/filesystem.ts",
@@ -10932,7 +10203,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1359
+        "line": 1297
       }
     ]
   },
@@ -11001,36 +10272,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-1f9f9228cafaa893",
-    "kind": "error",
-    "template": "Normal close requires a durable decision; use reasoned human cancellation to abandon a benchmark",
-    "parts": [
-      "Normal close requires a durable decision; use reasoned human cancellation to abandon a benchmark"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-service.ts",
-        "line": 328
-      }
-    ]
-  },
-  {
-    "id": "guid-1fc239dcabb6675c",
-    "kind": "error",
-    "template": "Exact Work recovery binding required",
-    "parts": [
-      "Exact Work recovery binding required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-model.ts",
-        "line": 277
-      }
-    ]
-  },
-  {
     "id": "guid-1fcbc5cd5c24a84d",
     "kind": "error",
     "template": "Dependency graph exceeds the bounded validation window",
@@ -11041,7 +10282,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 408
+        "line": 404
       }
     ]
   },
@@ -11056,7 +10297,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2072
+        "line": 2010
       }
     ]
   },
@@ -11352,22 +10593,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       },
       {
         "file": "src/work-service.ts",
-        "line": 91
-      }
-    ]
-  },
-  {
-    "id": "guid-20c8d4a791cabc19",
-    "kind": "error",
-    "template": "New contract requires expectedRevision=missing and approved owner",
-    "parts": [
-      "New contract requires expectedRevision=missing and approved owner"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-model.ts",
-        "line": 231
+        "line": 87
       }
     ]
   },
@@ -11730,22 +10956,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 778
-      }
-    ]
-  },
-  {
-    "id": "guid-219603d7ae9e9b6b",
-    "kind": "error",
-    "template": "Invalid reward mode",
-    "parts": [
-      "Invalid reward mode"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-model.ts",
-        "line": 42
+        "line": 759
       }
     ]
   },
@@ -11855,21 +11066,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/llm-wiki-tools.ts",
         "line": 896
-      }
-    ]
-  },
-  {
-    "id": "guid-2204c0ef15898d33",
-    "kind": "error",
-    "template": "Recovery lock symlink refused",
-    "parts": [
-      "Recovery lock symlink refused"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-host.ts",
-        "line": 32
       }
     ]
   },
@@ -12000,7 +11196,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3345
+        "line": 3227
       }
     ]
   },
@@ -12332,7 +11528,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1141
+        "line": 1081
       }
     ]
   },
@@ -12383,21 +11579,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-231b0a938277f5a3",
-    "kind": "error",
-    "template": "Invalid vault/host path",
-    "parts": [
-      "Invalid vault/host path"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-host.ts",
-        "line": 62
-      }
-    ]
-  },
-  {
     "id": "guid-23351b8041a02d03",
     "kind": "error",
     "template": "Public {arg0} target is unavailable",
@@ -12409,7 +11590,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 144
+        "line": 140
       }
     ]
   },
@@ -12424,7 +11605,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 493
+        "line": 488
       }
     ]
   },
@@ -12595,7 +11776,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 494
+        "line": 475
       }
     ]
   },
@@ -12610,7 +11791,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1615
+        "line": 1553
       }
     ]
   },
@@ -12641,21 +11822,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/story-session.ts",
         "line": 133
-      }
-    ]
-  },
-  {
-    "id": "guid-23eeaa50fba8cfc3",
-    "kind": "error",
-    "template": "Invalid bounded benchmark pool",
-    "parts": [
-      "Invalid bounded benchmark pool"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-model.ts",
-        "line": 39
       }
     ]
   },
@@ -12776,7 +11942,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 4177
+        "line": 4059
       }
     ]
   },
@@ -12821,22 +11987,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 247
-      }
-    ]
-  },
-  {
-    "id": "guid-24909e36d7176bdf",
-    "kind": "error",
-    "template": "Unsupported benchmark read field",
-    "parts": [
-      "Unsupported benchmark read field"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-service.ts",
-        "line": 233
+        "line": 243
       }
     ]
   },
@@ -12977,7 +12128,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1794
+        "line": 1732
       }
     ]
   },
@@ -13027,25 +12178,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-253e5358c4d35bfa",
-    "kind": "error",
-    "template": "Economy journal sequence gap or fork",
-    "parts": [
-      "Economy journal sequence gap or fork"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-ledger.ts",
-        "line": 60
-      },
-      {
-        "file": "src/economy-ledger.ts",
-        "line": 208
-      }
-    ]
-  },
-  {
     "id": "guid-253f2d40f9d9fc4f",
     "kind": "error",
     "template": "Conflicting story source revision guards",
@@ -13075,7 +12207,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 302
+        "line": 298
       }
     ]
   },
@@ -13375,21 +12507,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-2626531590e33b5c",
-    "kind": "error",
-    "template": "Independent approved reviewer unavailable",
-    "parts": [
-      "Independent approved reviewer unavailable"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-model.ts",
-        "line": 157
-      }
-    ]
-  },
-  {
     "id": "guid-262914bbf2ddd747",
     "kind": "error",
     "template": "Result planRevision must identify the saved plan revision",
@@ -13451,7 +12568,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3341
+        "line": 3223
       }
     ]
   },
@@ -13546,7 +12663,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3720
+        "line": 3602
       },
       {
         "file": "src/filesystem.ts",
@@ -13756,7 +12873,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 508
+        "line": 503
       }
     ]
   },
@@ -13801,7 +12918,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1425
+        "line": 1363
       }
     ]
   },
@@ -14017,7 +13134,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2014
+        "line": 1952
       }
     ]
   },
@@ -14097,21 +13214,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-281ba3ec7b54784b",
-    "kind": "error",
-    "template": "Owner daily posting/spend budget reached",
-    "parts": [
-      "Owner daily posting/spend budget reached"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-model.ts",
-        "line": 264
-      }
-    ]
-  },
-  {
     "id": "guid-281c82a28caa2cf2",
     "kind": "error",
     "template": "Use an authorized private scope://agent or scope://model World catalog",
@@ -14171,7 +13273,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 996
+        "line": 936
       }
     ]
   },
@@ -14336,7 +13438,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1217
+        "line": 1157
       }
     ]
   },
@@ -14390,7 +13492,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1203
+        "line": 1143
       }
     ]
   },
@@ -14444,21 +13546,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-290766e03afa6364",
-    "kind": "error",
-    "template": "Aliases must bind one canonical persistent account profile",
-    "parts": [
-      "Aliases must bind one canonical persistent account profile"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-host.ts",
-        "line": 31
-      }
-    ]
-  },
-  {
     "id": "guid-291a0ea15ddc3033",
     "kind": "prose",
     "template": "Global is the cross-command-center knowledge layer. Community is public only inside this command center. User storage is host-only and not exposed through MCP; model and agent namespaces provide private agent access.",
@@ -14484,7 +13571,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 116
+        "line": 112
       }
     ]
   },
@@ -14499,7 +13586,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/agent-pulse.ts",
-        "line": 267
+        "line": 266
       }
     ]
   },
@@ -14721,21 +13808,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-29db3f93edc87555",
-    "kind": "error",
-    "template": "Benchmark response envelope exceeds maxChars",
-    "parts": [
-      "Benchmark response envelope exceeds maxChars"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-service.ts",
-        "line": 191
-      }
-    ]
-  },
-  {
     "id": "guid-29e33c1ed37171ee",
     "kind": "error",
     "template": "Workshop revision changed; reread before reconciliation",
@@ -14791,7 +13863,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1482
+        "line": 1420
       }
     ]
   },
@@ -14806,7 +13878,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1186
+        "line": 1126
       }
     ]
   },
@@ -14851,7 +13923,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 627
+        "line": 608
       }
     ]
   },
@@ -14993,21 +14065,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-2ac6b39ddec401fc",
-    "kind": "error",
-    "template": "Benchmark projection revision conflict",
-    "parts": [
-      "Benchmark projection revision conflict"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-service.ts",
-        "line": 347
-      }
-    ]
-  },
-  {
     "id": "guid-2ae3b82aec7e7316",
     "kind": "prose",
     "template": "Use wiki.canvas_view for an optional spatial projection of the authored MOC and dependency edges; use wiki.canvas_health before reusing an old managed export and regenerate it after source revisions change.",
@@ -15053,21 +14110,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-2b1bd5442c76700e",
-    "kind": "error",
-    "template": "Invalid bounded benchmark number",
-    "parts": [
-      "Invalid bounded benchmark number"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-model.ts",
-        "line": 28
-      }
-    ]
-  },
-  {
     "id": "guid-2b4ce983e80091b7",
     "kind": "error",
     "template": "World revision changed during projection",
@@ -15094,21 +14136,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/knowledge-investigation-model.ts",
         "line": 90
-      }
-    ]
-  },
-  {
-    "id": "guid-2b74c4c5d4e49020",
-    "kind": "error",
-    "template": "Game outcomes need funded independent subjective quest review",
-    "parts": [
-      "Game outcomes need funded independent subjective quest review"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/roleplay-quest.ts",
-        "line": 11
       }
     ]
   },
@@ -15405,7 +14432,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 690
+        "line": 679
       }
     ]
   },
@@ -15510,21 +14537,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-2d1d881607c25416",
-    "kind": "prose",
-    "template": "Find at most3 visible funded peer-work quests, or read one contract with its fixed criteria, fees, generation and current revision. Default4000/max12000 characters. Drafts are requester-only. XP never grants shell/model budget or forces peers to act. Host economy is OFF by default.",
-    "parts": [
-      "Find at most3 visible funded peer-work quests, or read one contract with its fixed criteria, fees, generation and current revision. Default4000/max12000 characters. Drafts are requester-only. XP never grants shell/model budget or forces peers to act. Host economy is OFF by default."
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-tools.ts",
-        "line": 11
-      }
-    ]
-  },
-  {
     "id": "guid-2d2383388c77154f",
     "kind": "error",
     "template": "Story result changed",
@@ -15566,7 +14578,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 643
+        "line": 632
       }
     ]
   },
@@ -15597,21 +14609,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/wiki-policy.ts",
         "line": 172
-      }
-    ]
-  },
-  {
-    "id": "guid-2d61343dfa11def0",
-    "kind": "error",
-    "template": "Verifier input budget exceeded; this is not a failed-work judgment",
-    "parts": [
-      "Verifier input budget exceeded; this is not a failed-work judgment"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/quest-verifier.ts",
-        "line": 13
       }
     ]
   },
@@ -15929,7 +14926,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 513
+        "line": 494
       }
     ]
   },
@@ -16074,21 +15071,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-2eded69c0989beef",
-    "kind": "error",
-    "template": "Economy already initialized or has pending journal data",
-    "parts": [
-      "Economy already initialized or has pending journal data"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-ledger.ts",
-        "line": 114
-      }
-    ]
-  },
-  {
     "id": "guid-2edfc9f4af791b1b",
     "kind": "error",
     "template": "Dependencies must be completed before starting or claiming work",
@@ -16099,7 +15081,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 422
+        "line": 418
       }
     ]
   },
@@ -16254,21 +15236,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-2f69c4d30d6e0419",
-    "kind": "error",
-    "template": "Invalid host-verified owners",
-    "parts": [
-      "Invalid host-verified owners"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-model.ts",
-        "line": 83
-      }
-    ]
-  },
-  {
     "id": "guid-2f6f4ded239f62a0",
     "kind": "prose",
     "template": "At most 8 exact {path,revision,block_id?} sources for whole-note memory; readers must be able to access every source.",
@@ -16390,21 +15357,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-2fcd158dac4841dd",
-    "kind": "error",
-    "template": "Economy postings or contract mismatch",
-    "parts": [
-      "Economy postings or contract mismatch"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-ledger.ts",
-        "line": 219
-      }
-    ]
-  },
-  {
     "id": "guid-2fd58aff8995cadb",
     "kind": "prose",
     "template": "Optional maximum estimated duration in minutes. Reads time_estimate_minutes, estimated_minutes, duration_minutes, or time_minutes.",
@@ -16430,7 +15382,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/cli.ts",
-        "line": 111
+        "line": 102
       }
     ]
   },
@@ -16585,21 +15537,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-3088de795374c765",
-    "kind": "prose",
-    "template": "paid_work_divergence",
-    "parts": [
-      "paid_work_divergence"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-service.ts",
-        "line": 118
-      }
-    ]
-  },
-  {
     "id": "guid-3089958226755015",
     "kind": "error",
     "template": "Skill journal attestation changed",
@@ -16676,21 +15613,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-3098cf994860ad68",
-    "kind": "error",
-    "template": "Explicit bounded cancellation reason required",
-    "parts": [
-      "Explicit bounded cancellation reason required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-host-cli.ts",
-        "line": 40
-      }
-    ]
-  },
-  {
     "id": "guid-309f2f6be138c3be",
     "kind": "error",
     "template": "workflowStatus must be one of: {arg0}",
@@ -16737,21 +15659,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-30d92b233b5372f8",
-    "kind": "error",
-    "template": "Program reward budget exhausted",
-    "parts": [
-      "Program reward budget exhausted"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-model.ts",
-        "line": 214
-      }
-    ]
-  },
-  {
     "id": "guid-30e1e4a3ea29d78e",
     "kind": "prose",
     "template": "Sort direction (default: asc)",
@@ -16762,7 +15669,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1399
+        "line": 1337
       }
     ]
   },
@@ -17238,36 +16145,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-32733e0a75c48b44",
-    "kind": "error",
-    "template": "Work binding/generation changed; settlement suspended for host reconciliation",
-    "parts": [
-      "Work binding/generation changed; settlement suspended for host reconciliation"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-service.ts",
-        "line": 269
-      }
-    ]
-  },
-  {
-    "id": "guid-3273516b308e0939",
-    "kind": "error",
-    "template": "Program closed or unavailable",
-    "parts": [
-      "Program closed or unavailable"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-model.ts",
-        "line": 201
-      }
-    ]
-  },
-  {
     "id": "guid-32969c22129455ba",
     "kind": "error",
     "template": "Invalid story projection field",
@@ -17308,7 +16185,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1063
+        "line": 1003
       }
     ]
   },
@@ -17467,7 +16344,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 680
+        "line": 669
       }
     ]
   },
@@ -17638,21 +16515,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-33eef48d399fb695",
-    "kind": "error",
-    "template": "Work bridge divergence; host reconciliation required",
-    "parts": [
-      "Work bridge divergence; host reconciliation required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/createServer.ts",
-        "line": 3295
-      }
-    ]
-  },
-  {
     "id": "guid-33f5ee830b4dbe77",
     "kind": "error",
     "template": "parentPath must be omitted when operation is clear",
@@ -17787,7 +16649,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3595
+        "line": 3477
       }
     ]
   },
@@ -18469,33 +17331,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-36eae6b77005b616",
-    "kind": "error",
-    "template": "requestId payload changed",
-    "parts": [
-      "requestId payload changed"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-service.ts",
-        "line": 114
-      },
-      {
-        "file": "src/benchmark-service.ts",
-        "line": 304
-      },
-      {
-        "file": "src/benchmark-service.ts",
-        "line": 319
-      },
-      {
-        "file": "src/benchmark-service.ts",
-        "line": 404
-      }
-    ]
-  },
-  {
     "id": "guid-36ed07dca44597a2",
     "kind": "prose",
     "template": "Make every load-bearing claim inspectable at the exact source revision and locator.",
@@ -18931,7 +17766,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 375
+        "line": 371
       }
     ]
   },
@@ -18966,21 +17801,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-3801f15dd1869f48",
-    "kind": "error",
-    "template": "Authenticated approved benchmark account required",
-    "parts": [
-      "Authenticated approved benchmark account required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-service.ts",
-        "line": 62
-      }
-    ]
-  },
-  {
     "id": "guid-383013abbb1a1c9d",
     "kind": "prose",
     "template": "Preserve this note and its history until an authorized human releases the hold",
@@ -18992,36 +17812,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/organization.ts",
         "line": 289
-      }
-    ]
-  },
-  {
-    "id": "guid-38380c683d25e219",
-    "kind": "error",
-    "template": "Benchmark projection unavailable; recheck revision and current authority",
-    "parts": [
-      "Benchmark projection unavailable; recheck revision and current authority"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-service.ts",
-        "line": 352
-      }
-    ]
-  },
-  {
-    "id": "guid-383a12515f2b8b0c",
-    "kind": "error",
-    "template": "Atomic rename probe failed",
-    "parts": [
-      "Atomic rename probe failed"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-host.ts",
-        "line": 103
       }
     ]
   },
@@ -19209,26 +17999,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 591
-      }
-    ]
-  },
-  {
-    "id": "guid-38e0dc5dce364623",
-    "kind": "error",
-    "template": "Economy replay byte budget exceeded; host maintenance required",
-    "parts": [
-      "Economy replay byte budget exceeded; host maintenance required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-ledger.ts",
-        "line": 52
-      },
-      {
-        "file": "src/economy-ledger.ts",
-        "line": 210
+        "line": 586
       }
     ]
   },
@@ -19308,21 +18079,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/maintenance-execution.ts",
         "line": 21
-      }
-    ]
-  },
-  {
-    "id": "guid-3953d384face7ff8",
-    "kind": "error",
-    "template": "Economy disabled by host",
-    "parts": [
-      "Economy disabled by host"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-host-cli.ts",
-        "line": 76
       }
     ]
   },
@@ -19524,21 +18280,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-39edd1c8184c1ae9",
-    "kind": "error",
-    "template": "Explicit absolute Vault and private configuration paths required",
-    "parts": [
-      "Explicit absolute Vault and private configuration paths required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-host-cli.ts",
-        "line": 19
-      }
-    ]
-  },
-  {
     "id": "guid-39f311502986bb11",
     "kind": "error",
     "template": "path is not an LLM Wiki issue",
@@ -19599,25 +18340,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-3a4d42df39ad5296",
-    "kind": "error",
-    "template": "Benchmark settlement requires every winner payment receipt",
-    "parts": [
-      "Benchmark settlement requires every winner payment receipt"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-service.ts",
-        "line": 279
-      },
-      {
-        "file": "src/benchmark-service.ts",
-        "line": 284
-      }
-    ]
-  },
-  {
     "id": "guid-3a7948fe34b84609",
     "kind": "error",
     "template": "Chronology must contain the same scene IDs as presentation",
@@ -19673,7 +18395,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 564
+        "line": 559
       }
     ]
   },
@@ -19724,21 +18446,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-3ae42a7be37f54f2",
-    "kind": "error",
-    "template": "Funding policy changed; create a new draft",
-    "parts": [
-      "Funding policy changed; create a new draft"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-model.ts",
-        "line": 260
-      }
-    ]
-  },
-  {
     "id": "guid-3ae748a5a17853b5",
     "kind": "prose",
     "template": "Resume this persistent agent using its own memory before selecting shared work.",
@@ -19749,7 +18456,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2049
+        "line": 1987
       }
     ]
   },
@@ -19829,21 +18536,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/llm-wiki.ts",
         "line": 14227
-      }
-    ]
-  },
-  {
-    "id": "guid-3b16b06812dd205d",
-    "kind": "error",
-    "template": "Task revision/ownership/assignment changed",
-    "parts": [
-      "Task revision/ownership/assignment changed"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-service.ts",
-        "line": 279
       }
     ]
   },
@@ -19981,7 +18673,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3862
+        "line": 3744
       }
     ]
   },
@@ -19997,21 +18689,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/wiki-policy.ts",
         "line": 68
-      }
-    ]
-  },
-  {
-    "id": "guid-3b9689fb5daac093",
-    "kind": "error",
-    "template": "Config and checkpoint require a private host directory outside Vault/source",
-    "parts": [
-      "Config and checkpoint require a private host directory outside Vault/source"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-host.ts",
-        "line": 65
       }
     ]
   },
@@ -20083,21 +18760,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-3bd8a842f6bdf30a",
-    "kind": "error",
-    "template": "Duplicate configured identity/version",
-    "parts": [
-      "Duplicate configured identity/version"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-host.ts",
-        "line": 39
-      }
-    ]
-  },
-  {
     "id": "guid-3be7759d949248d8",
     "kind": "error",
     "template": "Canonical Vault required",
@@ -20128,21 +18790,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-3bf4d34b6fab629a",
-    "kind": "error",
-    "template": "Artifact changed/hidden; payout held",
-    "parts": [
-      "Artifact changed/hidden; payout held"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-host.ts",
-        "line": 133
-      }
-    ]
-  },
-  {
     "id": "guid-3c1370a3c8fbcd4e",
     "kind": "prose",
     "template": "Optional source SHA-256 guard, automatically supplied by nextAction. Changed sources require a fresh read.",
@@ -20153,11 +18800,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1613
+        "line": 1551
       },
       {
         "file": "src/createServer.ts",
-        "line": 1631
+        "line": 1569
       }
     ]
   },
@@ -20238,21 +18885,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-3c38c00cbe6635d0",
-    "kind": "error",
-    "template": "Definition requires explicitly approved canonical accounts",
-    "parts": [
-      "Definition requires explicitly approved canonical accounts"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-host.ts",
-        "line": 43
-      }
-    ]
-  },
-  {
     "id": "guid-3c3bda55a6ad3814",
     "kind": "error",
     "template": "Invalid revision: {arg0}",
@@ -20294,7 +18926,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 4179
+        "line": 4061
       }
     ]
   },
@@ -20597,15 +19229,15 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 849
+        "line": 830
       },
       {
         "file": "src/createServer.ts",
-        "line": 871
+        "line": 837
       },
       {
         "file": "src/createServer.ts",
-        "line": 1850
+        "line": 1788
       }
     ]
   },
@@ -20620,7 +19252,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1143
+        "line": 1083
       }
     ]
   },
@@ -20650,7 +19282,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 210
+        "line": 201
       }
     ]
   },
@@ -20775,21 +19407,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-3dd7b847908dacd6",
-    "kind": "error",
-    "template": "JSON value",
-    "parts": [
-      "JSON value"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-model.ts",
-        "line": 112
-      }
-    ]
-  },
-  {
     "id": "guid-3e02e5726049a214",
     "kind": "error",
     "template": "Completion exceeds 128 revision guards; narrow this step without discarding its evidence",
@@ -20861,21 +19478,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/organization.ts",
         "line": 254
-      }
-    ]
-  },
-  {
-    "id": "guid-3e40bd247b504de9",
-    "kind": "error",
-    "template": "Benchmark immutable version already opened",
-    "parts": [
-      "Benchmark immutable version already opened"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-service.ts",
-        "line": 117
       }
     ]
   },
@@ -20997,7 +19599,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 492
+        "line": 473
       }
     ]
   },
@@ -21272,7 +19874,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1960
+        "line": 1898
       }
     ]
   },
@@ -21288,21 +19890,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/story-editorial.ts",
         "line": 44
-      }
-    ]
-  },
-  {
-    "id": "guid-3f8c2500031d758d",
-    "kind": "error",
-    "template": "Peer mode cannot use an objective grader",
-    "parts": [
-      "Peer mode cannot use an objective grader"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-model.ts",
-        "line": 56
       }
     ]
   },
@@ -21370,7 +19957,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1402
+        "line": 1340
       }
     ]
   },
@@ -21385,7 +19972,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1819
+        "line": 1757
       }
     ]
   },
@@ -21505,21 +20092,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-406f6e5b477288d0",
-    "kind": "error",
-    "template": "Benchmark record or source unavailable",
-    "parts": [
-      "Benchmark record or source unavailable"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-service.ts",
-        "line": 38
-      }
-    ]
-  },
-  {
     "id": "guid-4081a539d2e3380d",
     "kind": "error",
     "template": "Duplicate shot id.",
@@ -21535,21 +20107,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-4088a8b3474d9864",
-    "kind": "error",
-    "template": "Invalid benchmark identifier",
-    "parts": [
-      "Invalid benchmark identifier"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-model.ts",
-        "line": 23
-      }
-    ]
-  },
-  {
     "id": "guid-408ffbf31af2a8a6",
     "kind": "error",
     "template": "Invalid MOC management operation",
@@ -21560,7 +20117,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2753
+        "line": 2691
       }
     ]
   },
@@ -21575,41 +20132,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3724
+        "line": 3606
       },
       {
         "file": "src/filesystem.ts",
         "line": 3411
-      }
-    ]
-  },
-  {
-    "id": "guid-40c095b556944c63",
-    "kind": "error",
-    "template": "Economy journal transition mismatch",
-    "parts": [
-      "Economy journal transition mismatch"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-ledger.ts",
-        "line": 217
-      }
-    ]
-  },
-  {
-    "id": "guid-40f10ea885c6fdc1",
-    "kind": "error",
-    "template": "Enabled host policy requires explicit treasuryWeeklyBudget (pilot: 500)",
-    "parts": [
-      "Enabled host policy requires explicit treasuryWeeklyBudget (pilot: 500)"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-host.ts",
-        "line": 68
       }
     ]
   },
@@ -21719,21 +20246,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-418d6e7fa622ed19",
-    "kind": "error",
-    "template": "Economy event byte budget exceeded",
-    "parts": [
-      "Economy event byte budget exceeded"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-ledger.ts",
-        "line": 51
-      }
-    ]
-  },
-  {
     "id": "guid-418ee0f34dd7203f",
     "kind": "prose",
     "template": "Bounded source-revision document structure, extractive descriptions and reading-order links. Markdown, plain text/scripts; optional local PDF. Parent and cursor reads require expectedRevision. Children are read with parentId; no script execution.",
@@ -21789,7 +20301,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1713
+        "line": 1651
       }
     ]
   },
@@ -22325,21 +20837,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-430e382a4372ed28",
-    "kind": "error",
-    "template": "Contract state does not allow this operation",
-    "parts": [
-      "Contract state does not allow this operation"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-model.ts",
-        "line": 244
-      }
-    ]
-  },
-  {
     "id": "guid-4314fab0f4aeff54",
     "kind": "prose",
     "template": "For precise claims record heading, block, source revision, optional line range, and quote hash, then inspect current evidence before changing status.",
@@ -22385,21 +20882,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-433afcc2491880ec",
-    "kind": "error",
-    "template": "Human operators cannot be benchmark agent profiles",
-    "parts": [
-      "Human operators cannot be benchmark agent profiles"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-host.ts",
-        "line": 40
-      }
-    ]
-  },
-  {
     "id": "guid-433c347861bd3681",
     "kind": "error",
     "template": "credential state contains duplicate active credentials",
@@ -22440,7 +20922,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1709
+        "line": 1647
       }
     ]
   },
@@ -22485,7 +20967,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 618
+        "line": 599
       }
     ]
   },
@@ -22501,21 +20983,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/scope-auth.ts",
         "line": 184
-      }
-    ]
-  },
-  {
-    "id": "guid-4395dd75f39a3479",
-    "kind": "error",
-    "template": "Duplicate criterion",
-    "parts": [
-      "Duplicate criterion"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-model.ts",
-        "line": 47
       }
     ]
   },
@@ -22561,21 +21028,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/story-exports.ts",
         "line": 245
-      }
-    ]
-  },
-  {
-    "id": "guid-43c69bbc4794e61b",
-    "kind": "error",
-    "template": "Recovery reason required",
-    "parts": [
-      "Recovery reason required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-host.ts",
-        "line": 138
       }
     ]
   },
@@ -22741,7 +21193,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1257
+        "line": 1197
       }
     ]
   },
@@ -22756,7 +21208,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1087
+        "line": 1027
       }
     ]
   },
@@ -23229,7 +21681,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1319
+        "line": 1257
       }
     ]
   },
@@ -23260,7 +21712,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 562
+        "line": 543
       }
     ]
   },
@@ -23381,7 +21833,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1076
+        "line": 1016
       }
     ]
   },
@@ -23428,21 +21880,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/community-participation-tools.ts",
         "line": 10
-      }
-    ]
-  },
-  {
-    "id": "guid-46c55fe09e9643be",
-    "kind": "error",
-    "template": "Benchmark identity binding changed",
-    "parts": [
-      "Benchmark identity binding changed"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-service.ts",
-        "line": 104
       }
     ]
   },
@@ -23638,15 +22075,15 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1451
+        "line": 1389
       },
       {
         "file": "src/createServer.ts",
-        "line": 1464
+        "line": 1402
       },
       {
         "file": "src/createServer.ts",
-        "line": 1478
+        "line": 1416
       }
     ]
   },
@@ -23676,7 +22113,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/agent-pulse.ts",
-        "line": 269
+        "line": 268
       }
     ]
   },
@@ -23981,21 +22418,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-487a86103bd5daa5",
-    "kind": "error",
-    "template": "Economic owner binding changed; host recovery required",
-    "parts": [
-      "Economic owner binding changed; host recovery required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-model.ts",
-        "line": 242
-      }
-    ]
-  },
-  {
     "id": "guid-48844f46b5f07abc",
     "kind": "error",
     "template": "Workshop revision or visibility changed",
@@ -24233,21 +22655,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-48fa014012723970",
-    "kind": "error",
-    "template": "Deadline passed",
-    "parts": [
-      "Deadline passed"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-service.ts",
-        "line": 432
-      }
-    ]
-  },
-  {
     "id": "guid-48fc18bcfb4caeee",
     "kind": "error",
     "template": "Public Federation hub is closed",
@@ -24457,7 +22864,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1200
+        "line": 1140
       }
     ]
   },
@@ -24562,7 +22969,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1080
+        "line": 1020
       }
     ]
   },
@@ -24577,7 +22984,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1313
+        "line": 1251
       }
     ]
   },
@@ -24592,35 +22999,55 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 998
+        "line": 938
       },
       {
         "file": "src/createServer.ts",
-        "line": 1051
+        "line": 991
       },
       {
         "file": "src/createServer.ts",
-        "line": 1091
+        "line": 1031
       },
       {
         "file": "src/createServer.ts",
-        "line": 1104
+        "line": 1044
       },
       {
         "file": "src/createServer.ts",
-        "line": 1205
+        "line": 1145
       },
       {
         "file": "src/createServer.ts",
-        "line": 1231
+        "line": 1171
       },
       {
         "file": "src/createServer.ts",
-        "line": 1243
+        "line": 1183
       },
       {
         "file": "src/createServer.ts",
-        "line": 1270
+        "line": 1210
+      },
+      {
+        "file": "src/createServer.ts",
+        "line": 1260
+      },
+      {
+        "file": "src/createServer.ts",
+        "line": 1273
+      },
+      {
+        "file": "src/createServer.ts",
+        "line": 1285
+      },
+      {
+        "file": "src/createServer.ts",
+        "line": 1293
+      },
+      {
+        "file": "src/createServer.ts",
+        "line": 1307
       },
       {
         "file": "src/createServer.ts",
@@ -24628,23 +23055,19 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       },
       {
         "file": "src/createServer.ts",
-        "line": 1335
+        "line": 1343
       },
       {
         "file": "src/createServer.ts",
-        "line": 1347
+        "line": 1353
       },
       {
         "file": "src/createServer.ts",
-        "line": 1355
+        "line": 1378
       },
       {
         "file": "src/createServer.ts",
-        "line": 1369
-      },
-      {
-        "file": "src/createServer.ts",
-        "line": 1384
+        "line": 1391
       },
       {
         "file": "src/createServer.ts",
@@ -24652,55 +23075,39 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       },
       {
         "file": "src/createServer.ts",
-        "line": 1415
+        "line": 1421
       },
       {
         "file": "src/createServer.ts",
-        "line": 1440
+        "line": 1449
       },
       {
         "file": "src/createServer.ts",
-        "line": 1453
+        "line": 1464
       },
       {
         "file": "src/createServer.ts",
-        "line": 1467
+        "line": 1493
       },
       {
         "file": "src/createServer.ts",
-        "line": 1483
+        "line": 1507
       },
       {
         "file": "src/createServer.ts",
-        "line": 1511
+        "line": 1522
       },
       {
         "file": "src/createServer.ts",
-        "line": 1526
+        "line": 1538
       },
       {
         "file": "src/createServer.ts",
-        "line": 1555
+        "line": 1554
       },
       {
         "file": "src/createServer.ts",
-        "line": 1569
-      },
-      {
-        "file": "src/createServer.ts",
-        "line": 1584
-      },
-      {
-        "file": "src/createServer.ts",
-        "line": 1600
-      },
-      {
-        "file": "src/createServer.ts",
-        "line": 1616
-      },
-      {
-        "file": "src/createServer.ts",
-        "line": 1633
+        "line": 1571
       }
     ]
   },
@@ -24745,7 +23152,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2859
+        "line": 2797
       }
     ]
   },
@@ -24879,36 +23286,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/source-provenance-model.ts",
         "line": 39
-      }
-    ]
-  },
-  {
-    "id": "guid-4a1e4f69f81ff9fa",
-    "kind": "error",
-    "template": "JSON colon",
-    "parts": [
-      "JSON colon"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-model.ts",
-        "line": 109
-      }
-    ]
-  },
-  {
-    "id": "guid-4a27604075f44165",
-    "kind": "error",
-    "template": "Benchmark opening deadline passed",
-    "parts": [
-      "Benchmark opening deadline passed"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-service.ts",
-        "line": 116
       }
     ]
   },
@@ -25163,7 +23540,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2324
+        "line": 2262
       }
     ]
   },
@@ -25243,21 +23620,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-4b30b9f04cf92a1a",
-    "kind": "error",
-    "template": "Task is not ready to advertise",
-    "parts": [
-      "Task is not ready to advertise"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-service.ts",
-        "line": 280
-      }
-    ]
-  },
-  {
     "id": "guid-4b39cd422f5a051e",
     "kind": "error",
     "template": "maxChars cannot fit Work pulse coverage",
@@ -25268,7 +23630,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 1141
+        "line": 1092
       }
     ]
   },
@@ -25409,7 +23771,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 513
+        "line": 494
       }
     ]
   },
@@ -25425,36 +23787,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/chat-tools.ts",
         "line": 14
-      }
-    ]
-  },
-  {
-    "id": "guid-4b986c8b9b3880fd",
-    "kind": "error",
-    "template": "Artifact path and exact revision are required",
-    "parts": [
-      "Artifact path and exact revision are required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-model.ts",
-        "line": 110
-      }
-    ]
-  },
-  {
-    "id": "guid-4b9dbfe2bb8ac118",
-    "kind": "error",
-    "template": "Pilot permits at most ten verified owners",
-    "parts": [
-      "Pilot permits at most ten verified owners"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-model.ts",
-        "line": 86
       }
     ]
   },
@@ -25484,7 +23816,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/agent-pulse.ts",
-        "line": 349
+        "line": 348
       }
     ]
   },
@@ -25824,7 +24156,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 605
+        "line": 586
       }
     ]
   },
@@ -25996,11 +24328,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2029
+        "line": 1967
       },
       {
         "file": "src/createServer.ts",
-        "line": 2031
+        "line": 1969
       }
     ]
   },
@@ -26061,21 +24393,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/mcp-note-response.ts",
         "line": 90
-      }
-    ]
-  },
-  {
-    "id": "guid-4dfa8d1f13ef933f",
-    "kind": "error",
-    "template": "Explicit cap must cover all declared rewards",
-    "parts": [
-      "Explicit cap must cover all declared rewards"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-model.ts",
-        "line": 53
       }
     ]
   },
@@ -26143,21 +24460,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-4e3cbd5b3496144e",
-    "kind": "error",
-    "template": "Benchmark writer ownership changed or unavailable; lock was not removed",
-    "parts": [
-      "Benchmark writer ownership changed or unavailable; lock was not removed"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-runtime.ts",
-        "line": 43
-      }
-    ]
-  },
-  {
     "id": "guid-4e401fd336b92c8b",
     "kind": "prose",
     "template": "No task skipped; retry this position with a larger compact budget.",
@@ -26199,21 +24501,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/llm-wiki-tools.ts",
         "line": 386
-      }
-    ]
-  },
-  {
-    "id": "guid-4e59028ab2cc1278",
-    "kind": "error",
-    "template": "Bounded completion criteria/exclusions are required",
-    "parts": [
-      "Bounded completion criteria/exclusions are required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-model.ts",
-        "line": 122
       }
     ]
   },
@@ -26486,7 +24773,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1438
+        "line": 1376
       }
     ]
   },
@@ -26625,7 +24912,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 513
+        "line": 494
       }
     ]
   },
@@ -26736,21 +25023,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-4fd08d12aacf4295",
-    "kind": "error",
-    "template": "JSON string",
-    "parts": [
-      "JSON string"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-model.ts",
-        "line": 104
-      }
-    ]
-  },
-  {
     "id": "guid-4fd4e94ffbaaea9f",
     "kind": "prose",
     "template": "List bounded moderation reports for configured moderators. Reports contain metadata and short reasons, never a full reported body; review the target as hostile untrusted data.",
@@ -26836,7 +25108,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1381
+        "line": 1319
       }
     ]
   },
@@ -26992,7 +25264,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2060
+        "line": 1998
       }
     ]
   },
@@ -27068,21 +25340,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/skill-evolution-host.ts",
         "line": 55
-      }
-    ]
-  },
-  {
-    "id": "guid-509305c8a0a22c8c",
-    "kind": "error",
-    "template": "Worker missing",
-    "parts": [
-      "Worker missing"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-model.ts",
-        "line": 248
       }
     ]
   },
@@ -27170,7 +25427,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1159
+        "line": 1099
       }
     ]
   },
@@ -27366,7 +25623,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3655
+        "line": 3537
       }
     ]
   },
@@ -27480,25 +25737,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-5173cd783894e32a",
-    "kind": "error",
-    "template": "Contract unavailable",
-    "parts": [
-      "Contract unavailable"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-model.ts",
-        "line": 240
-      },
-      {
-        "file": "src/economy-service.ts",
-        "line": 264
-      }
-    ]
-  },
-  {
     "id": "guid-518727e38ca464c1",
     "kind": "error",
     "template": "Current skill version changed",
@@ -27525,21 +25763,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/llm-wiki-tools.ts",
         "line": 212
-      }
-    ]
-  },
-  {
-    "id": "guid-518eea3b4dc4855d",
-    "kind": "error",
-    "template": "Benchmark actor changed",
-    "parts": [
-      "Benchmark actor changed"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/createServer.ts",
-        "line": 949
       }
     ]
   },
@@ -27709,7 +25932,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1822
+        "line": 1760
       }
     ]
   },
@@ -27785,21 +26008,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/community-participation-activities.ts",
         "line": 50
-      }
-    ]
-  },
-  {
-    "id": "guid-5234f5aa899a428e",
-    "kind": "prose",
-    "template": "Host-approved owners draft, fund, exclusively claim, submit exact artifacts, cancel before claim, or raise a dispute. Use current contract revision and requestId; claim/submit/dispute also require generation. Existing Work project membership/permissions still apply. Never issues XP; ordinary settlement moves only escrow. Read quest.market then reread same contract to verify.",
-    "parts": [
-      "Host-approved owners draft, fund, exclusively claim, submit exact artifacts, cancel before claim, or raise a dispute. Use current contract revision and requestId; claim/submit/dispute also require generation. Existing Work project membership/permissions still apply. Never issues XP; ordinary settlement moves only escrow. Read quest.market then reread same contract to verify."
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-tools.ts",
-        "line": 12
       }
     ]
   },
@@ -27893,7 +26101,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 994
+        "line": 934
       }
     ]
   },
@@ -27913,21 +26121,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/document-structure.ts",
         "line": 112
-      }
-    ]
-  },
-  {
-    "id": "guid-52be862c10914dc3",
-    "kind": "error",
-    "template": "Benchmark response exceeds maxChars",
-    "parts": [
-      "Benchmark response exceeds maxChars"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-service.ts",
-        "line": 186
       }
     ]
   },
@@ -28017,7 +26210,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1173
+        "line": 1113
       }
     ]
   },
@@ -28063,7 +26256,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1826
+        "line": 1764
       }
     ]
   },
@@ -28098,21 +26291,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-5388aafc71ca2e20",
-    "kind": "error",
-    "template": "One to eight exact artifacts are required",
-    "parts": [
-      "One to eight exact artifacts are required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-model.ts",
-        "line": 108
-      }
-    ]
-  },
-  {
     "id": "guid-5391aec645e7f720",
     "kind": "error",
     "template": "Authenticated authority changed; retry with current authorization",
@@ -28123,7 +26301,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1786
+        "line": 1724
       }
     ]
   },
@@ -28169,21 +26347,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/roleplay-storage-host.ts",
         "line": 47
-      }
-    ]
-  },
-  {
-    "id": "guid-53a86667706a913f",
-    "kind": "error",
-    "template": "One to eight exact source references required",
-    "parts": [
-      "One to eight exact source references required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-model.ts",
-        "line": 35
       }
     ]
   },
@@ -28319,7 +26482,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1127
+        "line": 1067
       }
     ]
   },
@@ -28456,7 +26619,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 569
+        "line": 564
       }
     ]
   },
@@ -28657,21 +26820,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-5559ac4172ad829d",
-    "kind": "error",
-    "template": "JSON trailing",
-    "parts": [
-      "JSON trailing"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-model.ts",
-        "line": 116
-      }
-    ]
-  },
-  {
     "id": "guid-555be4e6988f5283",
     "kind": "error",
     "template": "{arg0}[{arg1}] must be an object",
@@ -28775,7 +26923,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 310
+        "line": 306
       }
     ]
   },
@@ -28842,21 +26990,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-55ba05422d327dfe",
-    "kind": "error",
-    "template": "Supply and reservations exceed approved cap",
-    "parts": [
-      "Supply and reservations exceed approved cap"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-model.ts",
-        "line": 219
-      }
-    ]
-  },
-  {
     "id": "guid-55baafbcf21af8fc",
     "kind": "error",
     "template": "Review requires exact change context evidence",
@@ -28882,22 +27015,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 659
-      }
-    ]
-  },
-  {
-    "id": "guid-55f6a74270924dd0",
-    "kind": "error",
-    "template": "Numeric exponent budget",
-    "parts": [
-      "Numeric exponent budget"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-model.ts",
-        "line": 86
+        "line": 648
       }
     ]
   },
@@ -28912,22 +27030,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1321
-      }
-    ]
-  },
-  {
-    "id": "guid-55f88f5698c22a5e",
-    "kind": "error",
-    "template": "Trusted benchmark authority is not configured",
-    "parts": [
-      "Trusted benchmark authority is not configured"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-ledger.ts",
-        "line": 267
+        "line": 1259
       }
     ]
   },
@@ -28987,11 +27090,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1172
+        "line": 1112
       },
       {
         "file": "src/createServer.ts",
-        "line": 1189
+        "line": 1129
       }
     ]
   },
@@ -29022,21 +27125,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/filesystem.ts",
         "line": 1585
-      }
-    ]
-  },
-  {
-    "id": "guid-563bc26eecbcbcbb",
-    "kind": "error",
-    "template": "Paid bridge only starts a claim",
-    "parts": [
-      "Paid bridge only starts a claim"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/work-service.ts",
-        "line": 725
       }
     ]
   },
@@ -29156,7 +27244,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1614
+        "line": 1552
       }
     ]
   },
@@ -29236,21 +27324,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-5686d83f10f44284",
-    "kind": "error",
-    "template": "Economy trusted checkpoint differs from journal",
-    "parts": [
-      "Economy trusted checkpoint differs from journal"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-ledger.ts",
-        "line": 222
-      }
-    ]
-  },
-  {
     "id": "guid-569103f851589f8b",
     "kind": "prose",
     "template": "LATCH-style browse order: path, title/alias, recent time, category, or MOC/project hierarchy",
@@ -29292,21 +27365,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/llm-wiki-tools.ts",
         "line": 695
-      }
-    ]
-  },
-  {
-    "id": "guid-56b5b1a0360fd489",
-    "kind": "error",
-    "template": "Treasury and reviewers require approved owners",
-    "parts": [
-      "Treasury and reviewers require approved owners"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-model.ts",
-        "line": 85
       }
     ]
   },
@@ -29709,22 +27767,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 291
-      }
-    ]
-  },
-  {
-    "id": "guid-57ee1ee12053015f",
-    "kind": "error",
-    "template": "Human host operator required",
-    "parts": [
-      "Human host operator required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-host.ts",
-        "line": 99
+        "line": 287
       }
     ]
   },
@@ -29801,7 +27844,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 910
+        "line": 890
       }
     ]
   },
@@ -29817,7 +27860,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/cli.ts",
-        "line": 186
+        "line": 171
       }
     ]
   },
@@ -29849,7 +27892,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3624
+        "line": 3506
       }
     ]
   },
@@ -29955,7 +27998,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1188
+        "line": 1128
       }
     ]
   },
@@ -30355,7 +28398,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1079
+        "line": 1019
       }
     ]
   },
@@ -30436,21 +28479,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-59c1e54ae1d4eae6",
-    "kind": "error",
-    "template": "Reviewer model verification changed",
-    "parts": [
-      "Reviewer model verification changed"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-service.ts",
-        "line": 106
-      }
-    ]
-  },
-  {
     "id": "guid-59c729af4bf0352b",
     "kind": "error",
     "template": "understanding exceeds 10000 JSON characters",
@@ -30492,21 +28520,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/wiki-views.ts",
         "line": 18
-      }
-    ]
-  },
-  {
-    "id": "guid-59d2bf4bbdc369f2",
-    "kind": "error",
-    "template": "Only explicitly selected outcome/scores fields can be shared",
-    "parts": [
-      "Only explicitly selected outcome/scores fields can be shared"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-service.ts",
-        "line": 361
       }
     ]
   },
@@ -30678,21 +28691,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-5a61f80b74eb665f",
-    "kind": "prose",
-    "template": "Lock one anonymous-entry review from a host-approved verified model family after submissions close. Self review is forbidden. Every ordered criterion requires a score, reason, exact configured source revisions, uncertainty and evidence disposition. Two distinct families and two comparable entries are necessary. Conflicts require an additional family review resolving all earlier review IDs.",
-    "parts": [
-      "Lock one anonymous-entry review from a host-approved verified model family after submissions close. Self review is forbidden. Every ordered criterion requires a score, reason, exact configured source revisions, uncertainty and evidence disposition. Two distinct families and two comparable entries are necessary. Conflicts require an additional family review resolving all earlier review IDs."
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-tools.ts",
-        "line": 22
-      }
-    ]
-  },
-  {
     "id": "guid-5a753ac02bac613c",
     "kind": "error",
     "template": "Export manifest changed after completion",
@@ -30770,21 +28768,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-5adffc6d08ead3e4",
-    "kind": "error",
-    "template": "Invalid posting",
-    "parts": [
-      "Invalid posting"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-model.ts",
-        "line": 179
-      }
-    ]
-  },
-  {
     "id": "guid-5ae513f3edc753f9",
     "kind": "error",
     "template": "Resource manifest cursor requires a bundle manifest target",
@@ -30812,21 +28795,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/filesystem.ts",
         "line": 2421
-      }
-    ]
-  },
-  {
-    "id": "guid-5aefa9e39a5f125c",
-    "kind": "error",
-    "template": "Collector owner attestation changed or unavailable",
-    "parts": [
-      "Collector owner attestation changed or unavailable"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-model.ts",
-        "line": 69
       }
     ]
   },
@@ -31056,21 +29024,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-5b74bee3890bfac8",
-    "kind": "prose",
-    "template": "Additional independent family review required",
-    "parts": [
-      "Additional independent family review required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-service.ts",
-        "line": 231
-      }
-    ]
-  },
-  {
     "id": "guid-5b79738a8c19104e",
     "kind": "error",
     "template": "Persist source classifications before creating protected derivatives",
@@ -31081,7 +29034,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1809
+        "line": 1747
       }
     ]
   },
@@ -31147,21 +29100,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-5bc9673c582fb149",
-    "kind": "error",
-    "template": "Benchmark decision changed during settlement",
-    "parts": [
-      "Benchmark decision changed during settlement"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-service.ts",
-        "line": 329
-      }
-    ]
-  },
-  {
     "id": "guid-5bd06777d5cc8a8a",
     "kind": "error",
     "template": "Fixed MCP tool schema cannot fit {arg0} bytes; reduce the code-owned schema.",
@@ -31203,22 +29141,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1085
-      }
-    ]
-  },
-  {
-    "id": "guid-5c002f40ee592bb2",
-    "kind": "error",
-    "template": "Invalid bounded benchmark configuration",
-    "parts": [
-      "Invalid bounded benchmark configuration"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-host.ts",
-        "line": 37
+        "line": 1025
       }
     ]
   },
@@ -31293,7 +29216,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 489
+        "line": 484
       }
     ]
   },
@@ -31374,21 +29297,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-5c3638983ac643ed",
-    "kind": "error",
-    "template": "Roleplay reward evidence requires a configured world and approved economy",
-    "parts": [
-      "Roleplay reward evidence requires a configured world and approved economy"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/roleplay-quest.ts",
-        "line": 7
-      }
-    ]
-  },
-  {
     "id": "guid-5c37b8b89d0b2e5c",
     "kind": "error",
     "template": "Enterprise registry lock is invalid; refusing to remove it automatically",
@@ -31414,7 +29322,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 507
+        "line": 488
       }
     ]
   },
@@ -31430,21 +29338,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/llm-wiki.ts",
         "line": 4649
-      }
-    ]
-  },
-  {
-    "id": "guid-5c758dcf9f6b5e82",
-    "kind": "error",
-    "template": "Recovery lock fencing failed",
-    "parts": [
-      "Recovery lock fencing failed"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-host.ts",
-        "line": 34
       }
     ]
   },
@@ -31604,21 +29497,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-5d256bca0104cb60",
-    "kind": "error",
-    "template": "Turn is not bound to this approved quest",
-    "parts": [
-      "Turn is not bound to this approved quest"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/roleplay-quest.ts",
-        "line": 14
-      }
-    ]
-  },
-  {
     "id": "guid-5d25b2ec92a12894",
     "kind": "error",
     "template": "Only an authenticated model owner can change agent capabilities",
@@ -31679,25 +29557,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-5d491f39cbfb9acb",
-    "kind": "error",
-    "template": "Blind peer entries unavailable",
-    "parts": [
-      "Blind peer entries unavailable"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-service.ts",
-        "line": 209
-      },
-      {
-        "file": "src/benchmark-service.ts",
-        "line": 222
-      }
-    ]
-  },
-  {
     "id": "guid-5d4f13f11315ff5e",
     "kind": "prose",
     "template": "invented participants",
@@ -31753,22 +29612,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1062
-      }
-    ]
-  },
-  {
-    "id": "guid-5d7ff3154bc514b9",
-    "kind": "error",
-    "template": "Work claim may have committed; refund suspended for host reconciliation",
-    "parts": [
-      "Work claim may have committed; refund suspended for host reconciliation"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-service.ts",
-        "line": 275
+        "line": 1002
       }
     ]
   },
@@ -31990,21 +29834,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-5e21018a1a808f0c",
-    "kind": "error",
-    "template": "Economy checkpoint/rollback mismatch; settlement stopped",
-    "parts": [
-      "Economy checkpoint/rollback mismatch; settlement stopped"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-ledger.ts",
-        "line": 205
-      }
-    ]
-  },
-  {
     "id": "guid-5e267e1e9c837924",
     "kind": "error",
     "template": "{arg0} contains unsupported control characters",
@@ -32055,21 +29884,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-5e3792d9d2fea1c2",
-    "kind": "error",
-    "template": "Pending economy sequence already exists; recovery stopped",
-    "parts": [
-      "Pending economy sequence already exists; recovery stopped"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-ledger.ts",
-        "line": 200
-      }
-    ]
-  },
-  {
     "id": "guid-5e41af4b378ca56c",
     "kind": "error",
     "template": "step must be an integer from 1 to 100000",
@@ -32099,7 +29913,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       },
       {
         "file": "src/work-service.ts",
-        "line": 360
+        "line": 356
       }
     ]
   },
@@ -32115,21 +29929,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/roleplay-tools.ts",
         "line": 114
-      }
-    ]
-  },
-  {
-    "id": "guid-5e6c7d88091330ca",
-    "kind": "error",
-    "template": "A completed decided benchmark result is required",
-    "parts": [
-      "A completed decided benchmark result is required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-service.ts",
-        "line": 359
       }
     ]
   },
@@ -32223,7 +30022,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/endpoint-registry.ts",
-        "line": 859
+        "line": 842
       }
     ]
   },
@@ -32309,21 +30108,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-5f5a3c10a7656317",
-    "kind": "error",
-    "template": "Unsupported economy operation",
-    "parts": [
-      "Unsupported economy operation"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-model.ts",
-        "line": 324
-      }
-    ]
-  },
-  {
     "id": "guid-5f65d7be5227f177",
     "kind": "error",
     "template": "Wiki changed during lint; retry the current snapshot",
@@ -32368,7 +30152,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1432
+        "line": 1370
       }
     ]
   },
@@ -32664,36 +30448,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-60530027273785c6",
-    "kind": "error",
-    "template": "Quest project unavailable",
-    "parts": [
-      "Quest project unavailable"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-service.ts",
-        "line": 59
-      }
-    ]
-  },
-  {
-    "id": "guid-606ffc92b50e6636",
-    "kind": "error",
-    "template": "Operation requires a separate host approval path",
-    "parts": [
-      "Operation requires a separate host approval path"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-service.ts",
-        "line": 245
-      }
-    ]
-  },
-  {
     "id": "guid-6078b1bbcdeb6873",
     "kind": "error",
     "template": "Change-set guard duplicates a target or another guard",
@@ -32749,22 +30503,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1174
-      }
-    ]
-  },
-  {
-    "id": "guid-60c360cb33db3914",
-    "kind": "error",
-    "template": "Economy ledger acquisition requires host initialization outside an agent request",
-    "parts": [
-      "Economy ledger acquisition requires host initialization outside an agent request"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-ledger.ts",
-        "line": 93
+        "line": 1114
       }
     ]
   },
@@ -32814,21 +30553,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-6124f4c9b478811a",
-    "kind": "error",
-    "template": "Recipient needs approved owner",
-    "parts": [
-      "Recipient needs approved owner"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-model.ts",
-        "line": 222
-      }
-    ]
-  },
-  {
     "id": "guid-613ce5f8e33f921a",
     "kind": "prose",
     "template": "Newer Git revision, tag, or ref (default: HEAD)",
@@ -32839,22 +30563,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1466
-      }
-    ]
-  },
-  {
-    "id": "guid-6142a1479af1f5a3",
-    "kind": "error",
-    "template": "Network storage cannot host economy",
-    "parts": [
-      "Network storage cannot host economy"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-host.ts",
-        "line": 76
+        "line": 1404
       }
     ]
   },
@@ -32993,7 +30702,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 905
+        "line": 863
       }
     ]
   },
@@ -33243,7 +30952,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 4201
+        "line": 4083
       }
     ]
   },
@@ -33404,7 +31113,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2323
+        "line": 2261
       },
       {
         "file": "src/question-packet.ts",
@@ -33438,7 +31147,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 1116
+        "line": 1067
       }
     ]
   },
@@ -33547,21 +31256,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/enterprise-server.ts",
         "line": 102
-      }
-    ]
-  },
-  {
-    "id": "guid-63546345ee1451eb",
-    "kind": "error",
-    "template": "Invalid benchmark account profiles",
-    "parts": [
-      "Invalid benchmark account profiles"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-host.ts",
-        "line": 24
       }
     ]
   },
@@ -33749,25 +31443,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-6449a9952864f5e7",
-    "kind": "error",
-    "template": "Approved issuance program differs",
-    "parts": [
-      "Approved issuance program differs"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-service.ts",
-        "line": 121
-      },
-      {
-        "file": "src/benchmark-service.ts",
-        "line": 123
-      }
-    ]
-  },
-  {
     "id": "guid-645e5acaa22f03ef",
     "kind": "error",
     "template": "invalid public federation event chain at sequence {arg0}",
@@ -33909,21 +31584,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-64b857a57bb41700",
-    "kind": "error",
-    "template": "Economy requires a fixed local NTFS/ReFS volume; removable/NAS/unknown volumes refused",
-    "parts": [
-      "Economy requires a fixed local NTFS/ReFS volume; removable/NAS/unknown volumes refused"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-host.ts",
-        "line": 85
-      }
-    ]
-  },
-  {
     "id": "guid-64bd8730ba0c4318",
     "kind": "error",
     "template": "Unknown declarative configuration field",
@@ -33979,7 +31639,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1025
+        "line": 965
       }
     ]
   },
@@ -34272,21 +31932,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-662b13d37f5cf3d1",
-    "kind": "error",
-    "template": "Economy storage binding changed",
-    "parts": [
-      "Economy storage binding changed"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-ledger.ts",
-        "line": 169
-      }
-    ]
-  },
-  {
     "id": "guid-663be2b98af80d39",
     "kind": "error",
     "template": "Current encounter turn required",
@@ -34302,21 +31947,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-664af21c0e8b7504",
-    "kind": "error",
-    "template": "Collector lineage account owner binding unavailable",
-    "parts": [
-      "Collector lineage account owner binding unavailable"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-model.ts",
-        "line": 74
-      }
-    ]
-  },
-  {
     "id": "guid-664ea33a123e5a04",
     "kind": "prose",
     "template": "owner consent required",
@@ -34327,7 +31957,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/endpoint-registry.ts",
-        "line": 826
+        "line": 809
       }
     ]
   },
@@ -34376,7 +32006,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1064
+        "line": 1004
       }
     ]
   },
@@ -34391,7 +32021,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 995
+        "line": 935
       }
     ]
   },
@@ -34993,21 +32623,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-684bc38128468faf",
-    "kind": "error",
-    "template": "Treasury weekly budget exceeded",
-    "parts": [
-      "Treasury weekly budget exceeded"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-operations.ts",
-        "line": 26
-      }
-    ]
-  },
-  {
     "id": "guid-685ce53acde90fe4",
     "kind": "error",
     "template": "Creation expectedRevision must be missing",
@@ -35160,21 +32775,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/llm-wiki.ts",
         "line": 6902
-      }
-    ]
-  },
-  {
-    "id": "guid-68f852f2b6594af5",
-    "kind": "error",
-    "template": "Paid task is controlled by quest.contract; free mutation would bypass escrow/claim rules",
-    "parts": [
-      "Paid task is controlled by quest.contract; free mutation would bypass escrow/claim rules"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-service.ts",
-        "line": 82
       }
     ]
   },
@@ -35643,7 +33243,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 474
+        "line": 469
       }
     ]
   },
@@ -35674,21 +33274,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/notices.ts",
         "line": 34
-      }
-    ]
-  },
-  {
-    "id": "guid-6ad4bbee23089c61",
-    "kind": "prose",
-    "template": "List bounded current host-opened opt-in benchmark challenges visible to this approved account. No enrollment, model calls or automatic participation. Challenges are separate from Quest escrow and reputation.",
-    "parts": [
-      "List bounded current host-opened opt-in benchmark challenges visible to this approved account. No enrollment, model calls or automatic participation. Challenges are separate from Quest escrow and reputation."
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-tools.ts",
-        "line": 19
       }
     ]
   },
@@ -35763,7 +33348,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3994
+        "line": 3876
       }
     ]
   },
@@ -35869,7 +33454,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1171
+        "line": 1111
       }
     ]
   },
@@ -35884,7 +33469,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 123
+        "line": 119
       }
     ]
   },
@@ -36066,7 +33651,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 629
+        "line": 610
       }
     ]
   },
@@ -36090,21 +33675,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-6bf6c708486cc43e",
-    "kind": "error",
-    "template": "Invalid benchmark program fields",
-    "parts": [
-      "Invalid benchmark program fields"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-model.ts",
-        "line": 96
-      }
-    ]
-  },
-  {
     "id": "guid-6bf8a6f03ceae2aa",
     "kind": "prose",
     "template": "Map of vault-relative or authorized scope:// note paths to revisions previously returned by read_note or search_notes(includeRevisions=true). Maximum 200 entries.",
@@ -36115,7 +33685,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1346
+        "line": 1284
       }
     ]
   },
@@ -36130,11 +33700,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 4016
+        "line": 3898
       },
       {
         "file": "src/createServer.ts",
-        "line": 4019
+        "line": 3901
       }
     ]
   },
@@ -36180,21 +33750,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/roleplay-store.ts",
         "line": 187
-      }
-    ]
-  },
-  {
-    "id": "guid-6c38064d6f638816",
-    "kind": "error",
-    "template": "Host operator approval required",
-    "parts": [
-      "Host operator approval required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-model.ts",
-        "line": 173
       }
     ]
   },
@@ -36299,7 +33854,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1396
+        "line": 1334
       }
     ]
   },
@@ -36360,21 +33915,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/llm-wiki-tools.ts",
         "line": 855
-      }
-    ]
-  },
-  {
-    "id": "guid-6cb2e6a11e643dd1",
-    "kind": "error",
-    "template": "Published economy intent cannot be cancelled",
-    "parts": [
-      "Published economy intent cannot be cancelled"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-ledger.ts",
-        "line": 172
       }
     ]
   },
@@ -36484,21 +34024,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-6cf3e34daf1444a8",
-    "kind": "error",
-    "template": "Invalid economy policy",
-    "parts": [
-      "Invalid economy policy"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-model.ts",
-        "line": 79
-      }
-    ]
-  },
-  {
     "id": "guid-6cf9835ae7ab7092",
     "kind": "error",
     "template": "capability must be one of: {arg0}",
@@ -36546,21 +34071,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-6d1694a08655af0a",
-    "kind": "error",
-    "template": "Program revision conflict",
-    "parts": [
-      "Program revision conflict"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-model.ts",
-        "line": 203
-      }
-    ]
-  },
-  {
     "id": "guid-6d18d4098f629d33",
     "kind": "prose",
     "template": "Finish a stage-0 item with high immediateUnlocks when priorities are otherwise equal. Repair an edge inside dependencyCycles before editing downstream items. Waiting, blocked, invalid, future-deferred, or missing-action workflow holds remain off the execution plan. Add a concrete next_action or next_actions entry before scheduling actionless work. Unresolved, ambiguous, cancelled, inactive, or non-work hard blockers require deliberate metadata review.",
@@ -36586,7 +34096,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1844
+        "line": 1782
       }
     ]
   },
@@ -36616,15 +34126,15 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3740
+        "line": 3622
       },
       {
         "file": "src/createServer.ts",
-        "line": 3742
+        "line": 3624
       },
       {
         "file": "src/createServer.ts",
-        "line": 3746
+        "line": 3628
       }
     ]
   },
@@ -36674,21 +34184,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-6d4829026e573168",
-    "kind": "error",
-    "template": "Operator attention overdue; new subjective contracts are suspended. Existing escrow is unchanged.",
-    "parts": [
-      "Operator attention overdue; new subjective contracts are suspended. Existing escrow is unchanged."
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-operations.ts",
-        "line": 18
-      }
-    ]
-  },
-  {
     "id": "guid-6d673a241b7aa571",
     "kind": "prose",
     "template": "Only declared visible work is checked. This is not a completeness, expertise or safety certificate.",
@@ -36699,22 +34194,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 845
-      }
-    ]
-  },
-  {
-    "id": "guid-6d7527ea88bd53a6",
-    "kind": "error",
-    "template": "Host account approval required",
-    "parts": [
-      "Host account approval required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-host.ts",
-        "line": 28
+        "line": 829
       }
     ]
   },
@@ -36730,21 +34210,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/wiki-policy.ts",
         "line": 132
-      }
-    ]
-  },
-  {
-    "id": "guid-6d8642c6b0efb148",
-    "kind": "error",
-    "template": "Economy journal and checkpoint require separate non-overlapping directories",
-    "parts": [
-      "Economy journal and checkpoint require separate non-overlapping directories"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-storage.ts",
-        "line": 28
       }
     ]
   },
@@ -37318,7 +34783,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 993
+        "line": 933
       }
     ]
   },
@@ -37395,36 +34860,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/work-review.ts",
         "line": 214
-      }
-    ]
-  },
-  {
-    "id": "guid-6f788df0a40f2d23",
-    "kind": "error",
-    "template": "Program close deadline not reached",
-    "parts": [
-      "Program close deadline not reached"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-model.ts",
-        "line": 204
-      }
-    ]
-  },
-  {
-    "id": "guid-6f9031ebb46854e1",
-    "kind": "error",
-    "template": "Invalid benchmark source path",
-    "parts": [
-      "Invalid benchmark source path"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-model.ts",
-        "line": 31
       }
     ]
   },
@@ -37717,21 +35152,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-705ad09fba4c0d87",
-    "kind": "error",
-    "template": "Account already awarded once for lineage",
-    "parts": [
-      "Account already awarded once for lineage"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-model.ts",
-        "line": 213
-      }
-    ]
-  },
-  {
     "id": "guid-705f049baba276fe",
     "kind": "error",
     "template": "The source note is unavailable because moderation has hidden it",
@@ -37988,7 +35408,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/agent-pulse.ts",
-        "line": 406
+        "line": 405
       }
     ]
   },
@@ -38079,21 +35499,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/roleplay-store.ts",
         "line": 185
-      }
-    ]
-  },
-  {
-    "id": "guid-716d9dfc0ad4ff24",
-    "kind": "error",
-    "template": "Economy storage refuses canonical network paths",
-    "parts": [
-      "Economy storage refuses canonical network paths"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-ledger.ts",
-        "line": 103
       }
     ]
   },
@@ -38315,7 +35720,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2340
+        "line": 2278
       }
     ]
   },
@@ -38583,7 +35988,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1607
+        "line": 1545
       }
     ]
   },
@@ -38644,7 +36049,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 784
+        "line": 768
       }
     ]
   },
@@ -38674,7 +36079,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1363
+        "line": 1301
       }
     ]
   },
@@ -38689,7 +36094,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 617
+        "line": 598
       },
       {
         "file": "src/pathfilter.ts",
@@ -38811,10 +36216,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ],
     "binding": "call",
     "sources": [
-      {
-        "file": "src/economy-host.ts",
-        "line": 25
-      },
       {
         "file": "src/roleplay-recovery.ts",
         "line": 38
@@ -39126,7 +36527,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 370
+        "line": 366
       }
     ]
   },
@@ -39311,21 +36712,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-74c7e6fb31305c66",
-    "kind": "error",
-    "template": "Benchmark writer marker incomplete; explicit offline maintenance required",
-    "parts": [
-      "Benchmark writer marker incomplete; explicit offline maintenance required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-runtime.ts",
-        "line": 26
-      }
-    ]
-  },
-  {
     "id": "guid-74d1a2a7384e5b2b",
     "kind": "error",
     "template": "Invalid fact basis",
@@ -39396,7 +36782,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 694
+        "line": 683
       }
     ]
   },
@@ -39612,21 +36998,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-759eedf911b2dc8b",
-    "kind": "error",
-    "template": "Invalid benchmark configuration",
-    "parts": [
-      "Invalid benchmark configuration"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-service.ts",
-        "line": 46
-      }
-    ]
-  },
-  {
     "id": "guid-75a0711b69b9bdc4",
     "kind": "prose",
     "template": "Add a public Markdown comment to a published community post. Help the discussion compound: agree with a reason, challenge a claim respectfully, add a reference, or ask the next precise question. Each comment is its own file, so concurrent commenters do not overwrite one another. Content is limited to 280 Unicode characters; use replyTo for a threaded reply.",
@@ -39715,11 +37086,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/cli.ts",
-        "line": 193
+        "line": 178
       },
       {
         "file": "src/cli.ts",
-        "line": 201
+        "line": 186
       }
     ]
   },
@@ -39795,21 +37166,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/organization.ts",
         "line": 408
-      }
-    ]
-  },
-  {
-    "id": "guid-75fe077722c5d193",
-    "kind": "error",
-    "template": "Quest requires an existing project-backed task",
-    "parts": [
-      "Quest requires an existing project-backed task"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-service.ts",
-        "line": 56
       }
     ]
   },
@@ -40244,7 +37600,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 999
+        "line": 979
       }
     ]
   },
@@ -40336,21 +37692,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/llm-wiki-tools.ts",
         "line": 115
-      }
-    ]
-  },
-  {
-    "id": "guid-77896f1b100b2241",
-    "kind": "error",
-    "template": "Benchmark feature is not configured by the host",
-    "parts": [
-      "Benchmark feature is not configured by the host"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/createServer.ts",
-        "line": 3139
       }
     ]
   },
@@ -40460,52 +37801,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-78172f22c4bb493d",
-    "kind": "error",
-    "template": "Invalid explicit host benchmark configuration",
-    "parts": [
-      "Invalid explicit host benchmark configuration"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-host.ts",
-        "line": 36
-      }
-    ]
-  },
-  {
-    "id": "guid-78286fde3852bdad",
-    "kind": "error",
-    "template": "Invalid {arg0}: use its canonical lowercase identifier",
-    "parts": [
-      "Invalid ",
-      ": use its canonical lowercase identifier"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-model.ts",
-        "line": 65
-      }
-    ]
-  },
-  {
-    "id": "guid-78328b0019933dc8",
-    "kind": "error",
-    "template": "Host option value required",
-    "parts": [
-      "Host option value required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-host-cli.ts",
-        "line": 26
-      }
-    ]
-  },
-  {
     "id": "guid-783a3c2b9f69d6f1",
     "kind": "prose",
     "template": "Used by wiki.next_actions to match the current execution capacity",
@@ -40595,7 +37890,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 630
+        "line": 611
       }
     ]
   },
@@ -40816,21 +38111,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-79305386cfdaf323",
-    "kind": "error",
-    "template": "Invalid practice flag",
-    "parts": [
-      "Invalid practice flag"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-service.ts",
-        "line": 408
-      }
-    ]
-  },
-  {
     "id": "guid-79382d52880542e3",
     "kind": "error",
     "template": "Saved target was not found: {arg0}",
@@ -40858,21 +38138,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/vault-graph.ts",
         "line": 854
-      }
-    ]
-  },
-  {
-    "id": "guid-7952113ef86336f4",
-    "kind": "prose",
-    "template": "Optional blind peer review is pending after the submission deadline; no model is invoked",
-    "parts": [
-      "Optional blind peer review is pending after the submission deadline; no model is invoked"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-service.ts",
-        "line": 448
       }
     ]
   },
@@ -40978,36 +38243,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/llm-wiki.ts",
         "line": 11441
-      }
-    ]
-  },
-  {
-    "id": "guid-79ab65b5064fb27a",
-    "kind": "error",
-    "template": "Economy storage requires absolute local paths",
-    "parts": [
-      "Economy storage requires absolute local paths"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-ledger.ts",
-        "line": 99
-      }
-    ]
-  },
-  {
-    "id": "guid-79b96b44539f977d",
-    "kind": "error",
-    "template": "Authenticated account changed",
-    "parts": [
-      "Authenticated account changed"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-service.ts",
-        "line": 63
       }
     ]
   },
@@ -41172,7 +38407,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1333
+        "line": 1271
       }
     ]
   },
@@ -41422,21 +38657,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-7af3cddc985d0df9",
-    "kind": "error",
-    "template": "Private integrity key must contain 32..128 bytes",
-    "parts": [
-      "Private integrity key must contain 32..128 bytes"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-host.ts",
-        "line": 51
-      }
-    ]
-  },
-  {
     "id": "guid-7af70b534d73999c",
     "kind": "error",
     "template": "Document parser unavailable for this binary format; original bytes remain available through resources.export",
@@ -41609,21 +38829,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-7b81f4efc6b92ad0",
-    "kind": "error",
-    "template": "Host claim recovery command required",
-    "parts": [
-      "Host claim recovery command required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-claim-recovery.ts",
-        "line": 11
-      }
-    ]
-  },
-  {
     "id": "guid-7b8a2d2a189e48b3",
     "kind": "error",
     "template": "maxContributionsPerAgent must be an integer",
@@ -41679,7 +38884,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1465
+        "line": 1403
       }
     ]
   },
@@ -42089,36 +39294,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-7d0afde4165ae481",
-    "kind": "error",
-    "template": "Invalid calendar timestamp",
-    "parts": [
-      "Invalid calendar timestamp"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-model.ts",
-        "line": 75
-      }
-    ]
-  },
-  {
-    "id": "guid-7d0c2d935f7f4754",
-    "kind": "error",
-    "template": "Collector owner cannot participate or review this problem lineage",
-    "parts": [
-      "Collector owner cannot participate or review this problem lineage"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-model.ts",
-        "line": 76
-      }
-    ]
-  },
-  {
     "id": "guid-7d0c33d56e86a0bb",
     "kind": "error",
     "template": "Output content changed; inspect it before further action",
@@ -42159,7 +39334,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1026
+        "line": 966
       }
     ]
   },
@@ -42296,7 +39471,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/cli.ts",
-        "line": 62
+        "line": 58
       }
     ]
   },
@@ -42534,7 +39709,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 499
+        "line": 480
       }
     ]
   },
@@ -42579,7 +39754,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3336
+        "line": 3218
       }
     ]
   },
@@ -42629,21 +39804,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-7e77ba244896e090",
-    "kind": "error",
-    "template": "Work claim divergence: reconcile exact claim before payout",
-    "parts": [
-      "Work claim divergence: reconcile exact claim before payout"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-host.ts",
-        "line": 130
-      }
-    ]
-  },
-  {
     "id": "guid-7e7845b77114c506",
     "kind": "prose",
     "template": "Optional server-issued task ID from evolution.context begin. Not a host-session assertion.",
@@ -42654,7 +39814,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1659
+        "line": 1597
       }
     ]
   },
@@ -42720,7 +39880,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3755
+        "line": 3637
       }
     ]
   },
@@ -42811,7 +39971,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1264
+        "line": 1204
       }
     ]
   },
@@ -43255,21 +40415,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-80f667efd0f9c62d",
-    "kind": "error",
-    "template": "Approved challenge participant required",
-    "parts": [
-      "Approved challenge participant required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-service.ts",
-        "line": 409
-      }
-    ]
-  },
-  {
     "id": "guid-8100a56fcfc01a79",
     "kind": "error",
     "template": "Global Sync storage is already in use by process {arg0}",
@@ -43390,7 +40535,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1012
+        "line": 952
       }
     ]
   },
@@ -43470,21 +40615,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-816fccb3fdd50ba8",
-    "kind": "prose",
-    "template": "After deadline, finalize current deterministic objective grades or qualified peer rankings. Grader failure/conflicting evidence remains held. Only a host-approved reserved issuance program can pay through trusted current adjudication; this operation cannot issue arbitrary XP or increase caps. Retry a persisted decision after interrupted payment with the same challenge.",
-    "parts": [
-      "After deadline, finalize current deterministic objective grades or qualified peer rankings. Grader failure/conflicting evidence remains held. Only a host-approved reserved issuance program can pay through trusted current adjudication; this operation cannot issue arbitrary XP or increase caps. Retry a persisted decision after interrupted payment with the same challenge."
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-tools.ts",
-        "line": 23
-      }
-    ]
-  },
-  {
     "id": "guid-8171371e41608907",
     "kind": "error",
     "template": "Invalid chapter source ranges",
@@ -43511,21 +40641,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/context.ts",
         "line": 60
-      }
-    ]
-  },
-  {
-    "id": "guid-8186e49ed22a9306",
-    "kind": "error",
-    "template": "Review is already locked",
-    "parts": [
-      "Review is already locked"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-service.ts",
-        "line": 419
       }
     ]
   },
@@ -43725,7 +40840,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3591
+        "line": 3473
       }
     ]
   },
@@ -43832,7 +40947,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3124
+        "line": 3055
       }
     ]
   },
@@ -43877,7 +40992,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 961
+        "line": 941
       }
     ]
   },
@@ -43930,7 +41045,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 185
+        "line": 181
       }
     ]
   },
@@ -43980,21 +41095,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-82fa48ac5adc97c5",
-    "kind": "error",
-    "template": "XP must be a bounded nonnegative integer",
-    "parts": [
-      "XP must be a bounded nonnegative integer"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-model.ts",
-        "line": 69
-      }
-    ]
-  },
-  {
     "id": "guid-8306e622f41231d1",
     "kind": "error",
     "template": "maxChars is too small to preserve the complete lifecycle-transition plan; increase maxChars",
@@ -44020,7 +41120,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1379
+        "line": 1317
       }
     ]
   },
@@ -44065,7 +41165,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 644
+        "line": 633
       }
     ]
   },
@@ -44110,7 +41210,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1086
+        "line": 1026
       }
     ]
   },
@@ -44402,21 +41502,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-8441bc5889f2e306",
-    "kind": "error",
-    "template": "Invalid source revision",
-    "parts": [
-      "Invalid source revision"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-model.ts",
-        "line": 36
-      }
-    ]
-  },
-  {
     "id": "guid-84483b77e34f6e54",
     "kind": "prose",
     "template": "Exact fingerprint returned by a dry run; required when dryRun=false",
@@ -44427,7 +41512,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1128
+        "line": 1068
       }
     ]
   },
@@ -44507,21 +41592,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-8480d80fb8a3eae5",
-    "kind": "prose",
-    "template": "Only the assigned host-approved independent-owner reviewer can review a fixed submission basis. Include a real visible review artifact and exact revision. Approval is tied to current artifacts; corrections/disputes preserve escrow. Fixed review fee is not proportional to approval. Operator adjudication and issuance are NOT available here.",
-    "parts": [
-      "Only the assigned host-approved independent-owner reviewer can review a fixed submission basis. Include a real visible review artifact and exact revision. Approval is tied to current artifacts; corrections/disputes preserve escrow. Fixed review fee is not proportional to approval. Operator adjudication and issuance are NOT available here."
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-tools.ts",
-        "line": 13
-      }
-    ]
-  },
-  {
     "id": "guid-8485b50cbfe43ffb",
     "kind": "error",
     "template": "Facilitation step is incomplete: {arg0}",
@@ -44594,29 +41664,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/document-bundle-plan.ts",
         "line": 19
-      }
-    ]
-  },
-  {
-    "id": "guid-84a14277563138e2",
-    "kind": "error",
-    "template": "Approved ledger unavailable",
-    "parts": [
-      "Approved ledger unavailable"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-service.ts",
-        "line": 270
-      },
-      {
-        "file": "src/benchmark-service.ts",
-        "line": 306
-      },
-      {
-        "file": "src/benchmark-service.ts",
-        "line": 331
       }
     ]
   },
@@ -44781,7 +41828,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1481
+        "line": 1419
       }
     ]
   },
@@ -44887,7 +41934,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1834
+        "line": 1772
       }
     ]
   },
@@ -44962,7 +42009,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1142
+        "line": 1082
       }
     ]
   },
@@ -44992,7 +42039,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1187
+        "line": 1127
       }
     ]
   },
@@ -45190,21 +42237,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-86a827f19059f071",
-    "kind": "error",
-    "template": "One sealed final submission per persistent account and lineage",
-    "parts": [
-      "One sealed final submission per persistent account and lineage"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-service.ts",
-        "line": 412
-      }
-    ]
-  },
-  {
     "id": "guid-86aa0f8a9434bbd9",
     "kind": "error",
     "template": "requestId cannot be used to update a community post",
@@ -45245,11 +42277,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1525
+        "line": 1463
       },
       {
         "file": "src/createServer.ts",
-        "line": 1538
+        "line": 1476
       }
     ]
   },
@@ -45265,21 +42297,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/memory-contract.ts",
         "line": 103
-      }
-    ]
-  },
-  {
-    "id": "guid-86f1428f4b55a9c0",
-    "kind": "error",
-    "template": "JSON unterminated",
-    "parts": [
-      "JSON unterminated"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-model.ts",
-        "line": 110
       }
     ]
   },
@@ -45355,7 +42372,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 277
+        "line": 273
       }
     ]
   },
@@ -45394,21 +42411,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/scope-auth-tools.ts",
         "line": 70
-      }
-    ]
-  },
-  {
-    "id": "guid-872e353ae50583b9",
-    "kind": "error",
-    "template": "Cancellation already finalized with a different reason",
-    "parts": [
-      "Cancellation already finalized with a different reason"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-service.ts",
-        "line": 309
       }
     ]
   },
@@ -45712,7 +42714,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3854
+        "line": 3736
       }
     ]
   },
@@ -45781,21 +42783,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-884b87db18b05cf9",
-    "kind": "error",
-    "template": "Submission basis changed",
-    "parts": [
-      "Submission basis changed"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-model.ts",
-        "line": 303
-      }
-    ]
-  },
-  {
     "id": "guid-8874a5524c617b92",
     "kind": "error",
     "template": "Task already uses review contract 2; migration cannot erase existing requirements",
@@ -45806,7 +42793,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 488
+        "line": 483
       }
     ]
   },
@@ -45837,21 +42824,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/organization.ts",
         "line": 256
-      }
-    ]
-  },
-  {
-    "id": "guid-888ccad9a2d333ce",
-    "kind": "error",
-    "template": "Economy journal integrity failed",
-    "parts": [
-      "Economy journal integrity failed"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-ledger.ts",
-        "line": 213
       }
     ]
   },
@@ -45943,22 +42915,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 638
-      }
-    ]
-  },
-  {
-    "id": "guid-88bac2dd0ec5651e",
-    "kind": "error",
-    "template": "Benchmarks disabled by host",
-    "parts": [
-      "Benchmarks disabled by host"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-host-cli.ts",
-        "line": 67
+        "line": 627
       }
     ]
   },
@@ -46209,21 +43166,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/work-staffing.ts",
         "line": 334
-      }
-    ]
-  },
-  {
-    "id": "guid-89850daa27c2090f",
-    "kind": "error",
-    "template": "Adjudication changed during validation",
-    "parts": [
-      "Adjudication changed during validation"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-service.ts",
-        "line": 267
       }
     ]
   },
@@ -46609,19 +43551,19 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1553
+        "line": 1491
       },
       {
         "file": "src/createServer.ts",
-        "line": 1567
+        "line": 1505
       },
       {
         "file": "src/createServer.ts",
-        "line": 1582
+        "line": 1520
       },
       {
         "file": "src/createServer.ts",
-        "line": 1598
+        "line": 1536
       }
     ]
   },
@@ -46729,7 +43671,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/cli.ts",
-        "line": 165
+        "line": 150
       }
     ]
   },
@@ -46759,7 +43701,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1846
+        "line": 1784
       }
     ]
   },
@@ -46806,21 +43748,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/wiki-policy.ts",
         "line": 323
-      }
-    ]
-  },
-  {
-    "id": "guid-8b877c6e379f143e",
-    "kind": "error",
-    "template": "Exact projection revision or missing required",
-    "parts": [
-      "Exact projection revision or missing required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-host-cli.ts",
-        "line": 32
       }
     ]
   },
@@ -47035,7 +43962,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1218
+        "line": 1158
       }
     ]
   },
@@ -47066,21 +43993,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/organization.ts",
         "line": 197
-      }
-    ]
-  },
-  {
-    "id": "guid-8c1b15ba3f056f63",
-    "kind": "error",
-    "template": "Contract participant required",
-    "parts": [
-      "Contract participant required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-model.ts",
-        "line": 317
       }
     ]
   },
@@ -47202,21 +44114,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/work-responsibility.ts",
         "line": 18
-      }
-    ]
-  },
-  {
-    "id": "guid-8c73acae929ddffe",
-    "kind": "error",
-    "template": "Verifier no longer passes; payout held",
-    "parts": [
-      "Verifier no longer passes; payout held"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-service.ts",
-        "line": 313
       }
     ]
   },
@@ -47367,7 +44264,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3851
+        "line": 3733
       }
     ]
   },
@@ -47442,7 +44339,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/cli.ts",
-        "line": 72
+        "line": 68
       }
     ]
   },
@@ -47459,21 +44356,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/workshop-facilitation.ts",
         "line": 449
-      }
-    ]
-  },
-  {
-    "id": "guid-8d4a078c61c2d4fa",
-    "kind": "error",
-    "template": "Contract terms are required",
-    "parts": [
-      "Contract terms are required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-model.ts",
-        "line": 117
       }
     ]
   },
@@ -47497,21 +44379,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-8d70ca22053887b3",
-    "kind": "error",
-    "template": "Benchmark maintenance requires a matching enterprise host adapter; legacy fallback is forbidden",
-    "parts": [
-      "Benchmark maintenance requires a matching enterprise host adapter; legacy fallback is forbidden"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-host-cli.ts",
-        "line": 65
-      }
-    ]
-  },
-  {
     "id": "guid-8d71079813a57166",
     "kind": "prose",
     "template": "Next evidence review time",
@@ -47523,21 +44390,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/organization.ts",
         "line": 268
-      }
-    ]
-  },
-  {
-    "id": "guid-8db0b7dab4c8fc0a",
-    "kind": "error",
-    "template": "Economy checkpoint unavailable or not initialized; explicit host initialization/recovery required",
-    "parts": [
-      "Economy checkpoint unavailable or not initialized; explicit host initialization/recovery required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-ledger.ts",
-        "line": 159
       }
     ]
   },
@@ -47659,7 +44511,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3349
+        "line": 3231
       }
     ]
   },
@@ -47800,21 +44652,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-8f3b1456bec1194c",
-    "kind": "error",
-    "template": "Explicit --shareable true approval required",
-    "parts": [
-      "Explicit --shareable true approval required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-host-cli.ts",
-        "line": 35
-      }
-    ]
-  },
-  {
     "id": "guid-8f472b42b2ddeb02",
     "kind": "error",
     "template": "Managed facilitation steps must match the current versioned catalogue",
@@ -47826,21 +44663,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/workshop-facilitation.ts",
         "line": 230
-      }
-    ]
-  },
-  {
-    "id": "guid-8f47c0e2ec2a17a8",
-    "kind": "error",
-    "template": "Benchmark is not opened by a human operator",
-    "parts": [
-      "Benchmark is not opened by a human operator"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-service.ts",
-        "line": 74
       }
     ]
   },
@@ -47870,7 +44692,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 494
+        "line": 475
       }
     ]
   },
@@ -47976,21 +44798,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/llm-wiki-tools.ts",
         "line": 375
-      }
-    ]
-  },
-  {
-    "id": "guid-8fa47807447c851a",
-    "kind": "error",
-    "template": "Result field approval is only for evidence",
-    "parts": [
-      "Result field approval is only for evidence"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-host-cli.ts",
-        "line": 39
       }
     ]
   },
@@ -48267,21 +45074,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-9089c12df7ff619d",
-    "kind": "error",
-    "template": "Claim must have actually started before the original deadline",
-    "parts": [
-      "Claim must have actually started before the original deadline"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-claim-recovery.ts",
-        "line": 22
-      }
-    ]
-  },
-  {
     "id": "guid-908ae86679e4fab1",
     "kind": "prose",
     "template": "Case-insensitive exact match against one subject_terms value",
@@ -48342,21 +45134,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-90e0e1a6bd2c445f",
-    "kind": "error",
-    "template": "Link budget exceeded",
-    "parts": [
-      "Link budget exceeded"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-initiative.ts",
-        "line": 79
-      }
-    ]
-  },
-  {
     "id": "guid-90e147a47abe726b",
     "kind": "error",
     "template": "invalid derivation fields",
@@ -48397,7 +45174,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 511
+        "line": 492
       }
     ]
   },
@@ -48575,21 +45352,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-916856268fb8df33",
-    "kind": "error",
-    "template": "Collector account cannot participate or review this problem lineage",
-    "parts": [
-      "Collector account cannot participate or review this problem lineage"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-model.ts",
-        "line": 75
-      }
-    ]
-  },
-  {
     "id": "guid-917d691d90a47da9",
     "kind": "error",
     "template": "public federation publish acknowledgement validation failed",
@@ -48646,7 +45408,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3977
+        "line": 3859
       }
     ]
   },
@@ -49047,21 +45809,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/wiki-policy.ts",
         "line": 145
-      }
-    ]
-  },
-  {
-    "id": "guid-931c555c4dec8454",
-    "kind": "error",
-    "template": "Game evidence corrected; fresh review or existing dispute process required",
-    "parts": [
-      "Game evidence corrected; fresh review or existing dispute process required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/roleplay-quest.ts",
-        "line": 16
       }
     ]
   },
@@ -49474,22 +46221,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1505
-      }
-    ]
-  },
-  {
-    "id": "guid-94e963cdfaa25446",
-    "kind": "error",
-    "template": "Existing economy requires host configuration/recovery before Work mutations",
-    "parts": [
-      "Existing economy requires host configuration/recovery before Work mutations"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-ledger.ts",
-        "line": 48
+        "line": 1443
       }
     ]
   },
@@ -49565,7 +46297,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 997
+        "line": 937
       }
     ]
   },
@@ -49800,21 +46532,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-95f7f6523a92d9fd",
-    "kind": "error",
-    "template": "Late submission needs operator attention; escrow remains held",
-    "parts": [
-      "Late submission needs operator attention; escrow remains held"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-model.ts",
-        "line": 293
-      }
-    ]
-  },
-  {
     "id": "guid-95f9f3823b7d1166",
     "kind": "error",
     "template": "{arg0} must be exact",
@@ -49876,21 +46593,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-961d4180509c0d08",
-    "kind": "error",
-    "template": "Economy writer already exists or its crash lock needs host recovery",
-    "parts": [
-      "Economy writer already exists or its crash lock needs host recovery"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-ledger.ts",
-        "line": 110
-      }
-    ]
-  },
-  {
     "id": "guid-96297c0fce7725c9",
     "kind": "prose",
     "template": "Complete ordered exact target-note set; pass [] to clear the Property",
@@ -49947,21 +46649,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/skill-evolution-store.ts",
         "line": 195
-      }
-    ]
-  },
-  {
-    "id": "guid-9657b6b6dd4e9d0a",
-    "kind": "error",
-    "template": "Explicit exact revision and bounded request ID required",
-    "parts": [
-      "Explicit exact revision and bounded request ID required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-host-cli.ts",
-        "line": 31
       }
     ]
   },
@@ -50041,21 +46728,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/llm-wiki-tools.ts",
         "line": 358
-      }
-    ]
-  },
-  {
-    "id": "guid-96a8ef96c6d867e5",
-    "kind": "error",
-    "template": "Unknown answers require peer mode",
-    "parts": [
-      "Unknown answers require peer mode"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-model.ts",
-        "line": 43
       }
     ]
   },
@@ -50183,21 +46855,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-970c09b1781711d3",
-    "kind": "error",
-    "template": "One to eight fixed artifacts required",
-    "parts": [
-      "One to eight fixed artifacts required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-service.ts",
-        "line": 64
-      }
-    ]
-  },
-  {
     "id": "guid-971791377499fe58",
     "kind": "error",
     "template": "maxChars is too small for the exact retry action; increase maxChars",
@@ -50240,10 +46897,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/document-service.ts",
         "line": 75
-      },
-      {
-        "file": "src/economy-model.ts",
-        "line": 63
       },
       {
         "file": "src/roleplay-kernel.ts",
@@ -50353,7 +47006,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3726
+        "line": 3608
       },
       {
         "file": "src/filesystem.ts",
@@ -50537,7 +47190,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 387
+        "line": 383
       }
     ]
   },
@@ -50646,7 +47299,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1089
+        "line": 1029
       }
     ]
   },
@@ -50751,7 +47404,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1090
+        "line": 1030
       }
     ]
   },
@@ -50781,7 +47434,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1480
+        "line": 1418
       }
     ]
   },
@@ -50832,37 +47485,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-99262a989a3c3643",
-    "kind": "error",
-    "template": "--economy-config requires a private host file path",
-    "parts": [
-      "--economy-config requires a private host file path"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/cli.ts",
-        "line": 127
-      }
-    ]
-  },
-  {
-    "id": "guid-992947c3a5312363",
-    "kind": "prose",
-    "template": "Trusted verifier {arg0} passed exact contracted literals; not truth or quality approval",
-    "parts": [
-      "Trusted verifier ",
-      " passed exact contracted literals; not truth or quality approval"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-service.ts",
-        "line": 311
-      }
-    ]
-  },
-  {
     "id": "guid-9947d8f286c8748a",
     "kind": "error",
     "template": "Managed Canvas reference unavailable",
@@ -50889,21 +47511,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/roleplay-model.ts",
         "line": 42
-      }
-    ]
-  },
-  {
-    "id": "guid-995f5902f8e68b8e",
-    "kind": "error",
-    "template": "Review must cite exact configured source revisions",
-    "parts": [
-      "Review must cite exact configured source revisions"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-service.ts",
-        "line": 421
       }
     ]
   },
@@ -50969,7 +47576,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 654
+        "line": 643
       }
     ]
   },
@@ -51297,21 +47904,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-9aa544766a680b4b",
-    "kind": "error",
-    "template": "Existing economy requires explicit storage migration",
-    "parts": [
-      "Existing economy requires explicit storage migration"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-storage.ts",
-        "line": 57
-      }
-    ]
-  },
-  {
     "id": "guid-9aadc427a1eadda1",
     "kind": "error",
     "template": "Stale department revision: expected {arg0}, current {arg1}",
@@ -51424,21 +48016,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-9b0d0d52e1047c73",
-    "kind": "error",
-    "template": "Economy journal limit reached; host maintenance required",
-    "parts": [
-      "Economy journal limit reached; host maintenance required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-ledger.ts",
-        "line": 58
-      }
-    ]
-  },
-  {
     "id": "guid-9b17a9948edc9063",
     "kind": "prose",
     "template": "Increase maxChars to receive the bounded claim argument map.",
@@ -51450,21 +48027,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/llm-wiki.ts",
         "line": 11906
-      }
-    ]
-  },
-  {
-    "id": "guid-9b2090aaa487edde",
-    "kind": "error",
-    "template": "Benchmark writer is closed",
-    "parts": [
-      "Benchmark writer is closed"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-runtime.ts",
-        "line": 34
       }
     ]
   },
@@ -51553,10 +48115,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "binding": "call",
     "sources": [
       {
-        "file": "src/economy-host.ts",
-        "line": 149
-      },
-      {
         "file": "src/roleplay-recovery.ts",
         "line": 97
       }
@@ -51573,7 +48131,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1404
+        "line": 1342
       }
     ]
   },
@@ -51740,7 +48298,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1137
+        "line": 1077
       }
     ]
   },
@@ -51884,21 +48442,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-9cf92a0faae29aa3",
-    "kind": "error",
-    "template": "Unknown trusted verifier version",
-    "parts": [
-      "Unknown trusted verifier version"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/quest-verifier.ts",
-        "line": 8
-      }
-    ]
-  },
-  {
     "id": "guid-9cfe4e1339b981bc",
     "kind": "error",
     "template": "Managed workshop has too many related revision guards; reduce the step without dropping evidence",
@@ -51973,7 +48516,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1843
+        "line": 1781
       }
     ]
   },
@@ -52102,21 +48645,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-9d5f35413073ec77",
-    "kind": "error",
-    "template": "Benchmark settlement program unavailable or changed",
-    "parts": [
-      "Benchmark settlement program unavailable or changed"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-service.ts",
-        "line": 278
-      }
-    ]
-  },
-  {
     "id": "guid-9d8a6a59874a478f",
     "kind": "error",
     "template": "Output integrity verification unavailable",
@@ -52157,11 +48685,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 895
+        "line": 853
       },
       {
         "file": "src/createServer.ts",
-        "line": 3156
+        "line": 3079
       },
       {
         "file": "src/skill-release-card.ts",
@@ -52369,21 +48897,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-9e7750ccca1796cd",
-    "kind": "error",
-    "template": "Unknown Windows volume",
-    "parts": [
-      "Unknown Windows volume"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-host.ts",
-        "line": 80
-      }
-    ]
-  },
-  {
     "id": "guid-9e806e522f13c7ef",
     "kind": "prose",
     "template": "Out-of-character chat only. Use roleplay.action with character/generation for in-character actions.",
@@ -52394,7 +48907,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2986
+        "line": 2924
       }
     ]
   },
@@ -52851,21 +49364,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-a04ffa120d56beeb",
-    "kind": "error",
-    "template": "Two host-verified reviewer model families required",
-    "parts": [
-      "Two host-verified reviewer model families required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-host.ts",
-        "line": 44
-      }
-    ]
-  },
-  {
     "id": "guid-a05504b6ff984966",
     "kind": "prose",
     "template": "allowDanglingReferences requires expectedRevision from a fresh read of the note.",
@@ -52941,21 +49439,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-a085d216b3513911",
-    "kind": "error",
-    "template": "--economy-config may be supplied only once",
-    "parts": [
-      "--economy-config may be supplied only once"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/cli.ts",
-        "line": 128
-      }
-    ]
-  },
-  {
     "id": "guid-a09cec84b5c5669c",
     "kind": "prose",
     "template": "Reviewer identity",
@@ -52982,21 +49465,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/independent-research.ts",
         "line": 175
-      }
-    ]
-  },
-  {
-    "id": "guid-a0a53a5025a03623",
-    "kind": "error",
-    "template": "Current adjudication service unavailable",
-    "parts": [
-      "Current adjudication service unavailable"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-host-cli.ts",
-        "line": 80
       }
     ]
   },
@@ -53058,7 +49526,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 383
+        "line": 379
       }
     ]
   },
@@ -53088,26 +49556,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/cli.ts",
-        "line": 208
+        "line": 193
       },
       {
         "file": "src/cli.ts",
-        "line": 216
-      }
-    ]
-  },
-  {
-    "id": "guid-a1020ffc45b796ef",
-    "kind": "error",
-    "template": "Economy writer closed",
-    "parts": [
-      "Economy writer closed"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-ledger.ts",
-        "line": 128
+        "line": 201
       }
     ]
   },
@@ -53201,7 +49654,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1365
+        "line": 1303
       }
     ]
   },
@@ -53231,7 +49684,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1437
+        "line": 1375
       }
     ]
   },
@@ -53295,7 +49748,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1986
+        "line": 1924
       }
     ]
   },
@@ -53325,7 +49778,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1166
+        "line": 1106
       }
     ]
   },
@@ -53496,22 +49949,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/filesystem.ts",
         "line": 1202
-      }
-    ]
-  },
-  {
-    "id": "guid-a26177bbcfa63cf0",
-    "kind": "prose",
-    "template": "Exclusive paid claim {arg0}",
-    "parts": [
-      "Exclusive paid claim ",
-      ""
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/createServer.ts",
-        "line": 3299
       }
     ]
   },
@@ -53690,21 +50127,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-a2d340858f2a0513",
-    "kind": "error",
-    "template": "Agreed revision limit reached; request dispute review",
-    "parts": [
-      "Agreed revision limit reached; request dispute review"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-model.ts",
-        "line": 310
-      }
-    ]
-  },
-  {
     "id": "guid-a2dba8176d3c0688",
     "kind": "error",
     "template": "Only the registering account may manage this region",
@@ -53790,7 +50212,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1660
+        "line": 1598
       }
     ]
   },
@@ -53805,7 +50227,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1596
+        "line": 1534
       }
     ]
   },
@@ -53821,21 +50243,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/llm-wiki.ts",
         "line": 15717
-      }
-    ]
-  },
-  {
-    "id": "guid-a333b6b6d23da53a",
-    "kind": "prose",
-    "template": "Read only your spendable and escrow XP. Requires opt-in host-provisioned economy. Reputation/likes are separate and never converted to money; no wallet is published. Whole output defaults4000/max12000 characters.",
-    "parts": [
-      "Read only your spendable and escrow XP. Requires opt-in host-provisioned economy. Reputation/likes are separate and never converted to money; no wallet is published. Whole output defaults4000/max12000 characters."
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-tools.ts",
-        "line": 10
       }
     ]
   },
@@ -53865,7 +50272,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 285
+        "line": 281
       }
     ]
   },
@@ -54027,21 +50434,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-a389ff22a5f1cdce",
-    "kind": "error",
-    "template": "Invalid fixed numeric tolerance",
-    "parts": [
-      "Invalid fixed numeric tolerance"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-model.ts",
-        "line": 55
-      }
-    ]
-  },
-  {
     "id": "guid-a396ef87b4923456",
     "kind": "prose",
     "template": "Overview 8000 by default. Selected comparison 4000 by default and requires 2000–12000.",
@@ -54128,21 +50520,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/llm-wiki.ts",
         "line": 14666
-      }
-    ]
-  },
-  {
-    "id": "guid-a3d53a3b0e19ca10",
-    "kind": "error",
-    "template": "A precise UTC timestamp is required",
-    "parts": [
-      "A precise UTC timestamp is required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-model.ts",
-        "line": 73
       }
     ]
   },
@@ -54371,7 +50748,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/agent-pulse.ts",
-        "line": 354
+        "line": 353
       }
     ]
   },
@@ -54512,21 +50889,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-a523a479033088a7",
-    "kind": "error",
-    "template": "Benchmark settlement entry unavailable",
-    "parts": [
-      "Benchmark settlement entry unavailable"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-service.ts",
-        "line": 281
-      }
-    ]
-  },
-  {
     "id": "guid-a5313fa037c8aa3d",
     "kind": "prose",
     "template": "Archive via memory_state=archived (or a block record state) to omit it from normal memory reads; includeHistory=true explicitly retrieves historical records. This is not deletion, and Git/backups may retain deleted text. Recompute stale syntheses only after checking actual sources; similarity and same revision do not establish truth.",
@@ -54568,21 +50930,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/skill-evolution.ts",
         "line": 58
-      }
-    ]
-  },
-  {
-    "id": "guid-a537e12c48a2aac1",
-    "kind": "error",
-    "template": "Login is required for private XP wallet and contracts",
-    "parts": [
-      "Login is required for private XP wallet and contracts"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-service.ts",
-        "line": 37
       }
     ]
   },
@@ -54703,7 +51050,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1403
+        "line": 1341
       }
     ]
   },
@@ -54838,7 +51185,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/cli.ts",
-        "line": 86
+        "line": 82
       }
     ]
   },
@@ -54855,21 +51202,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/llm-wiki.ts",
         "line": 7147
-      }
-    ]
-  },
-  {
-    "id": "guid-a60149ffc33303fb",
-    "kind": "error",
-    "template": "Unsupported fixed grader",
-    "parts": [
-      "Unsupported fixed grader"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-model.ts",
-        "line": 55
       }
     ]
   },
@@ -54904,21 +51236,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-a6109f2e1dc424ff",
-    "kind": "error",
-    "template": "Absolute private config and vault paths required",
-    "parts": [
-      "Absolute private config and vault paths required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-host.ts",
-        "line": 54
-      }
-    ]
-  },
-  {
     "id": "guid-a6127b98c7c6e979",
     "kind": "prose",
     "template": "Workflow filter for comments",
@@ -54944,7 +51261,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1049
+        "line": 989
       }
     ]
   },
@@ -55174,7 +51491,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 461
+        "line": 456
       }
     ]
   },
@@ -55278,21 +51595,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-a7757ec6aa818d40",
-    "kind": "error",
-    "template": "Invalid bounded candidate link",
-    "parts": [
-      "Invalid bounded candidate link"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-initiative.ts",
-        "line": 32
-      }
-    ]
-  },
-  {
     "id": "guid-a7900400ce6fb967",
     "kind": "error",
     "template": "Host feature selection requires wiki-core",
@@ -55348,7 +51650,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 456
+        "line": 451
       }
     ]
   },
@@ -55449,22 +51751,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1579
-      }
-    ]
-  },
-  {
-    "id": "guid-a801d93a160ff0b5",
-    "kind": "error",
-    "template": "Terms required",
-    "parts": [
-      "Terms required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-service.ts",
-        "line": 261
+        "line": 1517
       }
     ]
   },
@@ -55570,21 +51857,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/ideation.ts",
         "line": 105
-      }
-    ]
-  },
-  {
-    "id": "guid-a892a46f106f8aee",
-    "kind": "error",
-    "template": "Contract expired before funding",
-    "parts": [
-      "Contract expired before funding"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-model.ts",
-        "line": 259
       }
     ]
   },
@@ -55721,10 +51993,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ],
     "binding": "call",
     "sources": [
-      {
-        "file": "src/economy-host.ts",
-        "line": 161
-      },
       {
         "file": "src/roleplay-recovery.ts",
         "line": 106
@@ -55916,21 +52184,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-a9655f12e38d9515",
-    "kind": "error",
-    "template": "Duplicate source reference",
-    "parts": [
-      "Duplicate source reference"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-model.ts",
-        "line": 37
-      }
-    ]
-  },
-  {
     "id": "guid-a972eab09e3482d4",
     "kind": "prose",
     "template": "Content of the note",
@@ -55941,7 +52194,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1010
+        "line": 950
       }
     ]
   },
@@ -55956,7 +52209,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3429
+        "line": 3311
       }
     ]
   },
@@ -56154,7 +52407,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1490
+        "line": 1428
       }
     ]
   },
@@ -56285,21 +52538,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-aaa241712c3887ca",
-    "kind": "error",
-    "template": "Peer mode requires approved reviewers",
-    "parts": [
-      "Peer mode requires approved reviewers"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-model.ts",
-        "line": 51
-      }
-    ]
-  },
-  {
     "id": "guid-aaa6725be26af11f",
     "kind": "prose",
     "template": "Efficiently update part of a note by replacing a specific string. This is more efficient than rewriting the entire note for small changes.",
@@ -56310,7 +52548,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1020
+        "line": 960
       }
     ]
   },
@@ -56326,21 +52564,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/roleplay-trpg.ts",
         "line": 200
-      }
-    ]
-  },
-  {
-    "id": "guid-aaafdc999a694500",
-    "kind": "error",
-    "template": "Immutable benchmark definition changed; configure a new version",
-    "parts": [
-      "Immutable benchmark definition changed; configure a new version"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-service.ts",
-        "line": 75
       }
     ]
   },
@@ -56466,21 +52689,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-aaeff44439b998c1",
-    "kind": "error",
-    "template": "Exact artifact revision is required",
-    "parts": [
-      "Exact artifact revision is required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-service.ts",
-        "line": 66
-      }
-    ]
-  },
-  {
     "id": "guid-aafd6a5d31d54fa8",
     "kind": "error",
     "template": "department must be default or omitted",
@@ -56491,7 +52699,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3753
+        "line": 3635
       }
     ]
   },
@@ -56902,21 +53110,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-ac3420a7017518a2",
-    "kind": "error",
-    "template": "Public link required",
-    "parts": [
-      "Public link required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-initiative.ts",
-        "line": 37
-      }
-    ]
-  },
-  {
     "id": "guid-ac4d93207036195c",
     "kind": "prose",
     "template": "Keep the recovered account token in the host private store, never in a note.",
@@ -57000,7 +53193,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1082
+        "line": 1022
       }
     ]
   },
@@ -57061,7 +53254,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1013
+        "line": 953
       }
     ]
   },
@@ -57256,7 +53449,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/cli.ts",
-        "line": 67
+        "line": 63
       }
     ]
   },
@@ -57340,21 +53533,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-adb11cc3fcb264ba",
-    "kind": "error",
-    "template": "Invalid benchmark fingerprint",
-    "parts": [
-      "Invalid benchmark fingerprint"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-model.ts",
-        "line": 98
-      }
-    ]
-  },
-  {
     "id": "guid-adbd9dcfe425dc92",
     "kind": "error",
     "template": "MOC pathPrefix must be a nonempty folder in the same public scope",
@@ -57380,7 +53558,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1401
+        "line": 1339
       }
     ]
   },
@@ -57827,21 +54005,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-af6a2cbe6ba01c9d",
-    "kind": "error",
-    "template": "Economy host recovery is in progress; writer admission suspended",
-    "parts": [
-      "Economy host recovery is in progress; writer admission suspended"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-ledger.ts",
-        "line": 125
-      }
-    ]
-  },
-  {
     "id": "guid-af967a09e392f7cf",
     "kind": "prose",
     "template": "Maximum outlink occurrences to return (default: 100, max: 500)",
@@ -57852,7 +54015,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1580
+        "line": 1518
       }
     ]
   },
@@ -57867,7 +54030,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 303
+        "line": 299
       }
     ]
   },
@@ -58007,7 +54170,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1048
+        "line": 988
       }
     ]
   },
@@ -58022,7 +54185,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1034
+        "line": 974
       }
     ]
   },
@@ -58037,7 +54200,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1354
+        "line": 1292
       }
     ]
   },
@@ -58159,23 +54322,23 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1906
+        "line": 1844
       },
       {
         "file": "src/createServer.ts",
-        "line": 1910
+        "line": 1848
       },
       {
         "file": "src/createServer.ts",
-        "line": 1914
+        "line": 1852
       },
       {
         "file": "src/createServer.ts",
-        "line": 1918
+        "line": 1856
       },
       {
         "file": "src/createServer.ts",
-        "line": 3988
+        "line": 3870
       }
     ]
   },
@@ -58225,21 +54388,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-b0efe331df4ba349",
-    "kind": "error",
-    "template": "Program deadline passed",
-    "parts": [
-      "Program deadline passed"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-model.ts",
-        "line": 197
-      }
-    ]
-  },
-  {
     "id": "guid-b0f64aafb4ae94de",
     "kind": "error",
     "template": "Roleplay world unavailable in this scope",
@@ -58285,21 +54433,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-b122520f6d0b698a",
-    "kind": "error",
-    "template": "Paid Work bridge is unavailable",
-    "parts": [
-      "Paid Work bridge is unavailable"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-service.ts",
-        "line": 295
-      }
-    ]
-  },
-  {
     "id": "guid-b123495741f8299a",
     "kind": "error",
     "template": "Unverified items or unresolved dissent require resolution or explicit host override",
@@ -58311,21 +54444,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/work-review.ts",
         "line": 232
-      }
-    ]
-  },
-  {
-    "id": "guid-b125f4e1ec400a7d",
-    "kind": "error",
-    "template": "Fiction is not real-work evidence; explicit approved game quest review is required",
-    "parts": [
-      "Fiction is not real-work evidence; explicit approved game quest review is required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-service.ts",
-        "line": 70
       }
     ]
   },
@@ -58506,7 +54624,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 457
+        "line": 452
       }
     ]
   },
@@ -58521,7 +54639,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1447
+        "line": 1385
       }
     ]
   },
@@ -58659,21 +54777,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-b20827703930ef73",
-    "kind": "error",
-    "template": "High-risk work cannot use automatic mechanical payment",
-    "parts": [
-      "High-risk work cannot use automatic mechanical payment"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-service.ts",
-        "line": 281
-      }
-    ]
-  },
-  {
     "id": "guid-b21159489ee9f62d",
     "kind": "error",
     "template": "Use chapterId or source ranges, not both",
@@ -58775,7 +54878,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1238
+        "line": 1178
       }
     ]
   },
@@ -58805,7 +54908,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 71
+        "line": 67
       }
     ]
   },
@@ -58993,21 +55096,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-b2c2201ea4ac8bb4",
-    "kind": "error",
-    "template": "Self review forbidden or entry unavailable",
-    "parts": [
-      "Self review forbidden or entry unavailable"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-service.ts",
-        "line": 417
-      }
-    ]
-  },
-  {
     "id": "guid-b2d2979d6ac0bc99",
     "kind": "prose",
     "template": "newString is required",
@@ -59191,7 +55279,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3335
+        "line": 3217
       }
     ]
   },
@@ -59315,22 +55403,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1111
-      }
-    ]
-  },
-  {
-    "id": "guid-b3d6052946fd715e",
-    "kind": "error",
-    "template": "Benchmark writer ownership changed or unavailable",
-    "parts": [
-      "Benchmark writer ownership changed or unavailable"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-runtime.ts",
-        "line": 34
+        "line": 1051
       }
     ]
   },
@@ -59406,11 +55479,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1170
+        "line": 1110
       },
       {
         "file": "src/createServer.ts",
-        "line": 1332
+        "line": 1270
       }
     ]
   },
@@ -59530,7 +55603,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 120
+        "line": 116
       }
     ]
   },
@@ -59610,21 +55683,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/ideation.ts",
         "line": 986
-      }
-    ]
-  },
-  {
-    "id": "guid-b50aaf0165ff150d",
-    "kind": "error",
-    "template": "Quest target unavailable",
-    "parts": [
-      "Quest target unavailable"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-service.ts",
-        "line": 138
       }
     ]
   },
@@ -59975,21 +56033,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-b5d3635a1bb10ce3",
-    "kind": "error",
-    "template": "Economy config must be private, outside Vault and source",
-    "parts": [
-      "Economy config must be private, outside Vault and source"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-host.ts",
-        "line": 59
-      }
-    ]
-  },
-  {
     "id": "guid-b5e3941a61f81d1f",
     "kind": "error",
     "template": "--read-only must be true or false",
@@ -60000,7 +56043,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/cli.ts",
-        "line": 146
+        "line": 131
       }
     ]
   },
@@ -60129,7 +56172,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1226
+        "line": 1166
       }
     ]
   },
@@ -60316,21 +56359,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-b6f3a2a8abebe38d",
-    "kind": "error",
-    "template": "Explicit approved wallet cap and ledger required",
-    "parts": [
-      "Explicit approved wallet cap and ledger required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-service.ts",
-        "line": 119
-      }
-    ]
-  },
-  {
     "id": "guid-b6f432bb9953f030",
     "kind": "prose",
     "template": "Preview a note move without writing. Reports bounded inbound and self body links, moved-note relative Markdown outlinks, link-bearing Properties, ambiguous same-name references, source existence, and destination collisions.",
@@ -60341,7 +56369,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1328
+        "line": 1266
       }
     ]
   },
@@ -60431,7 +56459,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 509
+        "line": 504
       }
     ]
   },
@@ -60692,21 +56720,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-b7d2ae655b21b713",
-    "kind": "error",
-    "template": "Trusted adjudication proof required",
-    "parts": [
-      "Trusted adjudication proof required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-ledger.ts",
-        "line": 269
-      }
-    ]
-  },
-  {
     "id": "guid-b7d90155b94128d3",
     "kind": "error",
     "template": "valueMap is limited to 100 entries and 32 KiB",
@@ -60732,7 +56745,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/cli.ts",
-        "line": 121
+        "line": 112
       }
     ]
   },
@@ -60822,7 +56835,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1421
+        "line": 1359
       }
     ]
   },
@@ -60890,21 +56903,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-b8b407a1a6aacf03",
-    "kind": "error",
-    "template": "Every criterion requires a review",
-    "parts": [
-      "Every criterion requires a review"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-model.ts",
-        "line": 134
-      }
-    ]
-  },
-  {
     "id": "guid-b8c2cb57d4eac44c",
     "kind": "prose",
     "template": "blocked_by is a hard gate; depends_on gates only when it resolves to unfinished actionable work, while non-work knowledge is informational.",
@@ -60930,7 +56928,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 530
+        "line": 525
       }
     ]
   },
@@ -60990,7 +56988,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3588
+        "line": 3470
       }
     ]
   },
@@ -61096,7 +57094,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1185
+        "line": 1125
       }
     ]
   },
@@ -61448,7 +57446,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 444
+        "line": 440
       }
     ]
   },
@@ -61513,21 +57511,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/skill-evolution-recovery.ts",
         "line": 47
-      }
-    ]
-  },
-  {
-    "id": "guid-baf7eb5f4b22bd6c",
-    "kind": "error",
-    "template": "Approved program terms fingerprint differs",
-    "parts": [
-      "Approved program terms fingerprint differs"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-model.ts",
-        "line": 196
       }
     ]
   },
@@ -61635,7 +57618,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1398
+        "line": 1336
       }
     ]
   },
@@ -61710,7 +57693,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1078
+        "line": 1018
       }
     ]
   },
@@ -61726,21 +57709,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/explanation-host.ts",
         "line": 37
-      }
-    ]
-  },
-  {
-    "id": "guid-bb625df8fd8ea2e9",
-    "kind": "error",
-    "template": "Paid contract marker conflict",
-    "parts": [
-      "Paid contract marker conflict"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/work-service.ts",
-        "line": 606
       }
     ]
   },
@@ -61909,21 +57877,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-bbf21f0ad3d16e2c",
-    "kind": "error",
-    "template": "Economy sequence already exists",
-    "parts": [
-      "Economy sequence already exists"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-ledger.ts",
-        "line": 287
-      }
-    ]
-  },
-  {
     "id": "guid-bc0102593fde3b0f",
     "kind": "prose",
     "template": "Maximum compact JSON characters returned (default: 4000)",
@@ -61934,7 +57887,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1081
+        "line": 1021
       }
     ]
   },
@@ -62176,7 +58129,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1065
+        "line": 1005
       }
     ]
   },
@@ -62286,21 +58239,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/independent-research.ts",
         "line": 240
-      }
-    ]
-  },
-  {
-    "id": "guid-bdf5076e78db6e33",
-    "kind": "error",
-    "template": "Invalid award proof fields",
-    "parts": [
-      "Invalid award proof fields"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-model.ts",
-        "line": 209
       }
     ]
   },
@@ -62468,7 +58406,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 316
+        "line": 312
       }
     ]
   },
@@ -62483,7 +58421,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 4195
+        "line": 4077
       }
     ]
   },
@@ -62498,7 +58436,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1400
+        "line": 1338
       }
     ]
   },
@@ -62513,22 +58451,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 102
-      }
-    ]
-  },
-  {
-    "id": "guid-bec290e31a5f11fd",
-    "kind": "error",
-    "template": "Duplicate artifact",
-    "parts": [
-      "Duplicate artifact"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-model.ts",
-        "line": 113
+        "line": 98
       }
     ]
   },
@@ -62855,7 +58778,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1036
+        "line": 976
       }
     ]
   },
@@ -63054,7 +58977,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 554
+        "line": 549
       }
     ]
   },
@@ -63070,21 +58993,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/agent-task-tools.ts",
         "line": 19
-      }
-    ]
-  },
-  {
-    "id": "guid-c03191651019cd8f",
-    "kind": "error",
-    "template": "Task revision is required",
-    "parts": [
-      "Task revision is required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-model.ts",
-        "line": 119
       }
     ]
   },
@@ -63205,7 +59113,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1791
+        "line": 1729
       }
     ]
   },
@@ -63395,21 +59303,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/host-storage.ts",
         "line": 86
-      }
-    ]
-  },
-  {
-    "id": "guid-c1523c772830e5c8",
-    "kind": "error",
-    "template": "Reward is below pilot minimum",
-    "parts": [
-      "Reward is below pilot minimum"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-model.ts",
-        "line": 126
       }
     ]
   },
@@ -63701,11 +59594,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1524
+        "line": 1462
       },
       {
         "file": "src/createServer.ts",
-        "line": 1537
+        "line": 1475
       }
     ]
   },
@@ -63770,21 +59663,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-c243358221a1a92c",
-    "kind": "error",
-    "template": "Economy writer closing or closed",
-    "parts": [
-      "Economy writer closing or closed"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-ledger.ts",
-        "line": 141
-      }
-    ]
-  },
-  {
     "id": "guid-c2449d02e562d648",
     "kind": "error",
     "template": "expectedRevision is required; read the target first",
@@ -63840,7 +59718,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 378
+        "line": 374
       }
     ]
   },
@@ -63915,11 +59793,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1364
+        "line": 1302
       },
       {
         "file": "src/createServer.ts",
-        "line": 1397
+        "line": 1335
       }
     ]
   },
@@ -64015,21 +59893,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-c30a0838eb426ea6",
-    "kind": "error",
-    "template": "Select outcome,scores fields explicitly",
-    "parts": [
-      "Select outcome,scores fields explicitly"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-host-cli.ts",
-        "line": 38
-      }
-    ]
-  },
-  {
     "id": "guid-c30f74baf8f2f3dd",
     "kind": "prose",
     "template": "Read the public profile and declared capabilities of an exact registered model or agent identity. Private journal and scope content is never included.",
@@ -64085,7 +59948,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/endpoint-registry.ts",
-        "line": 119
+        "line": 115
       },
       {
         "file": "src/search-limits.ts",
@@ -64139,7 +60002,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 182
+        "line": 173
       }
     ]
   },
@@ -64192,7 +60055,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 733
+        "line": 717
       }
     ]
   },
@@ -64314,21 +60177,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/llm-wiki.ts",
         "line": 16747
-      }
-    ]
-  },
-  {
-    "id": "guid-c3bb78533fac1bec",
-    "kind": "error",
-    "template": "Final submission deadline or phase closed",
-    "parts": [
-      "Final submission deadline or phase closed"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-service.ts",
-        "line": 411
       }
     ]
   },
@@ -64516,21 +60364,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/organization.ts",
         "line": 537
-      }
-    ]
-  },
-  {
-    "id": "guid-c49f86d7253f3ad8",
-    "kind": "error",
-    "template": "Duplicate host option",
-    "parts": [
-      "Duplicate host option"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-host-cli.ts",
-        "line": 25
       }
     ]
   },
@@ -65042,10 +60875,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "binding": "call",
     "sources": [
       {
-        "file": "src/economy-host.ts",
-        "line": 151
-      },
-      {
         "file": "src/roleplay-recovery.ts",
         "line": 100
       },
@@ -65295,7 +61124,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1690
+        "line": 1628
       }
     ]
   },
@@ -65413,21 +61242,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-c73e6ad39820a021",
-    "kind": "error",
-    "template": "Reserved issuance terms differ",
-    "parts": [
-      "Reserved issuance terms differ"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-service.ts",
-        "line": 266
-      }
-    ]
-  },
-  {
     "id": "guid-c73e9523423c0645",
     "kind": "error",
     "template": "Output unavailable; use cancel_output only when absent",
@@ -65468,27 +61282,27 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1050
+        "line": 990
       },
       {
         "file": "src/createServer.ts",
-        "line": 1554
+        "line": 1492
       },
       {
         "file": "src/createServer.ts",
-        "line": 1568
+        "line": 1506
       },
       {
         "file": "src/createServer.ts",
-        "line": 1583
+        "line": 1521
       },
       {
         "file": "src/createServer.ts",
-        "line": 1599
+        "line": 1537
       },
       {
         "file": "src/createServer.ts",
-        "line": 1632
+        "line": 1570
       }
     ]
   },
@@ -65668,7 +61482,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1320
+        "line": 1258
       }
     ]
   },
@@ -65733,21 +61547,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-c81583538cf5e180",
-    "kind": "error",
-    "template": "Payout requires fixed submitted artifacts",
-    "parts": [
-      "Payout requires fixed submitted artifacts"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-model.ts",
-        "line": 322
-      }
-    ]
-  },
-  {
     "id": "guid-c818d2b0230bcf42",
     "kind": "prose",
     "template": "Read-only MOC-membership preflight. It validates real visible MOCs and emits one canonical revision-stamped primary_moc/mocs replacement.",
@@ -65759,21 +61558,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/llm-wiki.ts",
         "line": 6846
-      }
-    ]
-  },
-  {
-    "id": "guid-c82d73eeba62dac4",
-    "kind": "error",
-    "template": "Verifier source changed or is unavailable",
-    "parts": [
-      "Verifier source changed or is unavailable"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/createServer.ts",
-        "line": 3280
       }
     ]
   },
@@ -65868,21 +61652,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-c872464fafdc915c",
-    "kind": "error",
-    "template": "Economy journal limit reached",
-    "parts": [
-      "Economy journal limit reached"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-ledger.ts",
-        "line": 281
-      }
-    ]
-  },
-  {
     "id": "guid-c8861af646ed865c",
     "kind": "error",
     "template": "fromSessionId does not hold this agent scope; current holder is {arg0}",
@@ -65936,38 +61705,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 154
-      }
-    ]
-  },
-  {
-    "id": "guid-c8b1f68aad910cf1",
-    "kind": "error",
-    "template": "Benchmark revision conflict",
-    "parts": [
-      "Benchmark revision conflict"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-service.ts",
-        "line": 115
-      },
-      {
-        "file": "src/benchmark-service.ts",
-        "line": 197
-      },
-      {
-        "file": "src/benchmark-service.ts",
-        "line": 305
-      },
-      {
-        "file": "src/benchmark-service.ts",
-        "line": 320
-      },
-      {
-        "file": "src/benchmark-service.ts",
-        "line": 405
+        "line": 150
       }
     ]
   },
@@ -66003,21 +61741,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/host-features.ts",
         "line": 35
-      }
-    ]
-  },
-  {
-    "id": "guid-c8dd0f4db659d8d0",
-    "kind": "error",
-    "template": "Benchmark private record budget reached",
-    "parts": [
-      "Benchmark private record budget reached"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-service.ts",
-        "line": 90
       }
     ]
   },
@@ -66068,21 +61791,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-c917835c95af7689",
-    "kind": "error",
-    "template": "Benchmark private record integrity unavailable",
-    "parts": [
-      "Benchmark private record integrity unavailable"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-service.ts",
-        "line": 86
-      }
-    ]
-  },
-  {
     "id": "guid-c91ae202eb862607",
     "kind": "prose",
     "template": "Delete a note after exact-path confirmation. Structural inbound body/Property references block deletion by default; preview them first and prefer archive/supersede/tombstone. A deliberate dangling-reference override also requires the current source revision.",
@@ -66093,7 +61801,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1057
+        "line": 997
       }
     ]
   },
@@ -66108,22 +61816,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1204
-      }
-    ]
-  },
-  {
-    "id": "guid-c9276caa5cccd5d5",
-    "kind": "error",
-    "template": "No trusted versioned verifier configured",
-    "parts": [
-      "No trusted versioned verifier configured"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-service.ts",
-        "line": 282
+        "line": 1144
       }
     ]
   },
@@ -66343,21 +62036,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-c9cb884ae0a5f0b6",
-    "kind": "error",
-    "template": "Economy pending intent changed",
-    "parts": [
-      "Economy pending intent changed"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-ledger.ts",
-        "line": 177
-      }
-    ]
-  },
-  {
     "id": "guid-c9e2100e3433ef17",
     "kind": "error",
     "template": "Invalid notice feedback decision",
@@ -66398,7 +62076,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1375
+        "line": 1313
       }
     ]
   },
@@ -66443,7 +62121,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1595
+        "line": 1533
       }
     ]
   },
@@ -66503,7 +62181,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1028
+        "line": 968
       }
     ]
   },
@@ -66518,7 +62196,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 502
+        "line": 497
       }
     ]
   },
@@ -66563,7 +62241,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1806
+        "line": 1744
       }
     ]
   },
@@ -66715,7 +62393,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 4214
+        "line": 4096
       }
     ]
   },
@@ -66837,7 +62515,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1436
+        "line": 1374
       }
     ]
   },
@@ -66912,7 +62590,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1043
+        "line": 983
       }
     ]
   },
@@ -66928,21 +62606,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/llm-wiki-tools.ts",
         "line": 281
-      }
-    ]
-  },
-  {
-    "id": "guid-cb6612056d7752c4",
-    "kind": "error",
-    "template": "Escrow insufficient",
-    "parts": [
-      "Escrow insufficient"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-model.ts",
-        "line": 251
       }
     ]
   },
@@ -67498,7 +63161,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/endpoint-registry.ts",
-        "line": 731
+        "line": 716
       }
     ]
   },
@@ -67578,36 +63241,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-ccf3c720ec8e6141",
-    "kind": "error",
-    "template": "Duplicate benchmark program",
-    "parts": [
-      "Duplicate benchmark program"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-model.ts",
-        "line": 97
-      }
-    ]
-  },
-  {
-    "id": "guid-cd031fb724370070",
-    "kind": "error",
-    "template": "Unsupported benchmark operation",
-    "parts": [
-      "Unsupported benchmark operation"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-service.ts",
-        "line": 387
-      }
-    ]
-  },
-  {
     "id": "guid-cd30b929619abcb0",
     "kind": "error",
     "template": "6-3-5 cycle must match the current method cycle",
@@ -67619,21 +63252,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/workshop-facilitation.ts",
         "line": 538
-      }
-    ]
-  },
-  {
-    "id": "guid-cd324b333413aebf",
-    "kind": "error",
-    "template": "Task management state unavailable; general mutations are blocked",
-    "parts": [
-      "Task management state unavailable; general mutations are blocked"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-service.ts",
-        "line": 81
       }
     ]
   },
@@ -67739,7 +63357,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1520
+        "line": 1458
       }
     ]
   },
@@ -67759,21 +63377,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-cdb1c2db3e92dee0",
-    "kind": "error",
-    "template": "Invalid verdict",
-    "parts": [
-      "Invalid verdict"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-model.ts",
-        "line": 305
-      }
-    ]
-  },
-  {
     "id": "guid-cdb273014178bb3a",
     "kind": "error",
     "template": "Related revision changed during work mutation",
@@ -67784,7 +63387,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 597
+        "line": 592
       }
     ]
   },
@@ -67867,7 +63470,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1202
+        "line": 1142
       }
     ]
   },
@@ -68002,7 +63605,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 972
+        "line": 952
       }
     ]
   },
@@ -68033,7 +63636,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1474
+        "line": 1412
       }
     ]
   },
@@ -68175,21 +63778,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/roleplay-tools.ts",
         "line": 175
-      }
-    ]
-  },
-  {
-    "id": "guid-cee4bc6711f7d4bc",
-    "kind": "error",
-    "template": "Treasury cannot allocate to itself",
-    "parts": [
-      "Treasury cannot allocate to itself"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-model.ts",
-        "line": 224
       }
     ]
   },
@@ -68337,7 +63925,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1030
+        "line": 970
       }
     ]
   },
@@ -68443,7 +64031,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1383
+        "line": 1321
       }
     ]
   },
@@ -68653,11 +64241,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 134
+        "line": 130
       },
       {
         "file": "src/work-service.ts",
-        "line": 289
+        "line": 285
       }
     ]
   },
@@ -68868,35 +64456,35 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 991
+        "line": 931
       },
       {
         "file": "src/createServer.ts",
-        "line": 1009
+        "line": 949
       },
       {
         "file": "src/createServer.ts",
-        "line": 1024
+        "line": 964
       },
       {
         "file": "src/createServer.ts",
-        "line": 1061
+        "line": 1001
       },
       {
         "file": "src/createServer.ts",
-        "line": 1242
+        "line": 1182
       },
       {
         "file": "src/createServer.ts",
-        "line": 1254
+        "line": 1194
       },
       {
         "file": "src/createServer.ts",
-        "line": 1611
+        "line": 1549
       },
       {
         "file": "src/createServer.ts",
-        "line": 1627
+        "line": 1565
       }
     ]
   },
@@ -69002,15 +64590,15 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 2071
+        "line": 2009
       },
       {
         "file": "src/createServer.ts",
-        "line": 2076
+        "line": 2014
       },
       {
         "file": "src/createServer.ts",
-        "line": 2077
+        "line": 2015
       }
     ]
   },
@@ -69107,25 +64695,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/chat-tools.ts",
         "line": 17
-      }
-    ]
-  },
-  {
-    "id": "guid-d182c7129828d67a",
-    "kind": "error",
-    "template": "Economy is disabled",
-    "parts": [
-      "Economy is disabled"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-model.ts",
-        "line": 162
-      },
-      {
-        "file": "src/economy-service.ts",
-        "line": 39
       }
     ]
   },
@@ -69245,7 +64814,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1047
+        "line": 987
       }
     ]
   },
@@ -69265,21 +64834,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-d202b5d771132d47",
-    "kind": "error",
-    "template": "Invalid contract kind",
-    "parts": [
-      "Invalid contract kind"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-model.ts",
-        "line": 127
-      }
-    ]
-  },
-  {
     "id": "guid-d203abc28b71227d",
     "kind": "prose",
     "template": "Shared maximum ambiguous references, body-link rewrites, and Property rewrites to return (default: 100, max: 200); blockers are returned first and totals/truncation remain explicit",
@@ -69290,7 +64844,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1334
+        "line": 1272
       }
     ]
   },
@@ -69321,7 +64875,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3948
+        "line": 3830
       }
     ]
   },
@@ -69570,21 +65124,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-d2e03534cf07cc60",
-    "kind": "error",
-    "template": "Benchmark update unavailable; recheck actor, revision and current sources",
-    "parts": [
-      "Benchmark update unavailable; recheck actor, revision and current sources"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-service.ts",
-        "line": 97
-      }
-    ]
-  },
-  {
     "id": "guid-d300e41662218d46",
     "kind": "error",
     "template": "Research closure state is malformed",
@@ -69596,21 +65135,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/independent-research.ts",
         "line": 105
-      }
-    ]
-  },
-  {
-    "id": "guid-d306b2ff7d1efa7e",
-    "kind": "error",
-    "template": "Canonical UTC deadline required",
-    "parts": [
-      "Canonical UTC deadline required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-model.ts",
-        "line": 44
       }
     ]
   },
@@ -69671,7 +65195,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3972
+        "line": 3854
       }
     ]
   },
@@ -69717,33 +65241,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/community-status-tools.ts",
         "line": 18
-      }
-    ]
-  },
-  {
-    "id": "guid-d3910f6b53c95fd4",
-    "kind": "error",
-    "template": "Quest source unavailable",
-    "parts": [
-      "Quest source unavailable"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-service.ts",
-        "line": 47
-      },
-      {
-        "file": "src/economy-service.ts",
-        "line": 52
-      },
-      {
-        "file": "src/economy-service.ts",
-        "line": 237
-      },
-      {
-        "file": "src/economy-service.ts",
-        "line": 240
       }
     ]
   },
@@ -69796,7 +65293,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1144
+        "line": 1084
       }
     ]
   },
@@ -69856,7 +65353,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1011
+        "line": 951
       }
     ]
   },
@@ -70099,7 +65596,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1196
+        "line": 1136
       }
     ]
   },
@@ -70220,21 +65717,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/organization.ts",
         "line": 273
-      }
-    ]
-  },
-  {
-    "id": "guid-d549eda839107522",
-    "kind": "error",
-    "template": "Invalid approved operator/reviewer pool",
-    "parts": [
-      "Invalid approved operator/reviewer pool"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-model.ts",
-        "line": 81
       }
     ]
   },
@@ -70563,7 +66045,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 4188
+        "line": 4070
       }
     ]
   },
@@ -70782,7 +66264,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1368
+        "line": 1306
       }
     ]
   },
@@ -70843,7 +66325,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1612
+        "line": 1550
       }
     ]
   },
@@ -70918,7 +66400,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 687
+        "line": 676
       }
     ]
   },
@@ -70968,21 +66450,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-d736b84efc34473b",
-    "kind": "error",
-    "template": "Unknown host option",
-    "parts": [
-      "Unknown host option"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-host-cli.ts",
-        "line": 24
-      }
-    ]
-  },
-  {
     "id": "guid-d7378518a1bb595e",
     "kind": "prose",
     "template": "retiring or reactivating through triage, review, or general publish",
@@ -71008,7 +66475,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1088
+        "line": 1028
       }
     ]
   },
@@ -71039,21 +66506,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/llm-wiki-tools.ts",
         "line": 578
-      }
-    ]
-  },
-  {
-    "id": "guid-d77b2fd6dca3af09",
-    "kind": "error",
-    "template": "Exclusive creation probe failed",
-    "parts": [
-      "Exclusive creation probe failed"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-host.ts",
-        "line": 101
       }
     ]
   },
@@ -71193,7 +66645,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1739
+        "line": 1677
       }
     ]
   },
@@ -71319,21 +66771,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-d897bfa180b1b4fa",
-    "kind": "error",
-    "template": "Verified capture required",
-    "parts": [
-      "Verified capture required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-initiative.ts",
-        "line": 91
-      }
-    ]
-  },
-  {
     "id": "guid-d89e57eee048d114",
     "kind": "error",
     "template": "Access denied for sourcePath or targetPath",
@@ -71390,7 +66827,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1103
+        "line": 1043
       }
     ]
   },
@@ -71440,21 +66877,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-d919e07a8a537f3d",
-    "kind": "error",
-    "template": "Reason is only for cancel",
-    "parts": [
-      "Reason is only for cancel"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-host-cli.ts",
-        "line": 41
-      }
-    ]
-  },
-  {
     "id": "guid-d923f5a87d6ef01c",
     "kind": "prose",
     "template": "Move or rename any file in the vault (binary-safe, file-only, requires confirmation)",
@@ -71465,7 +66887,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1181
+        "line": 1121
       }
     ]
   },
@@ -71510,7 +66932,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1317
+        "line": 1255
       }
     ]
   },
@@ -71525,7 +66947,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 679
+        "line": 668
       }
     ]
   },
@@ -71540,7 +66962,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1035
+        "line": 975
       }
     ]
   },
@@ -71601,7 +67023,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1551
+        "line": 1489
       }
     ]
   },
@@ -71616,7 +67038,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/cli.ts",
-        "line": 77
+        "line": 73
       }
     ]
   },
@@ -71647,36 +67069,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/llm-wiki-tools.ts",
         "line": 409
-      }
-    ]
-  },
-  {
-    "id": "guid-d9c63dcf4e0cbde3",
-    "kind": "error",
-    "template": "Benchmark writer lock exists or is unavailable; stop the owning runtime or perform explicit offline maintenance",
-    "parts": [
-      "Benchmark writer lock exists or is unavailable; stop the owning runtime or perform explicit offline maintenance"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-runtime.ts",
-        "line": 24
-      }
-    ]
-  },
-  {
-    "id": "guid-d9c6ec868f0c53b1",
-    "kind": "error",
-    "template": "Explicit human shareable approval required",
-    "parts": [
-      "Explicit human shareable approval required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-service.ts",
-        "line": 356
       }
     ]
   },
@@ -71739,7 +67131,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 288
+        "line": 284
       }
     ]
   },
@@ -71860,7 +67252,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1498
+        "line": 1436
       }
     ]
   },
@@ -71911,7 +67303,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       },
       {
         "file": "src/work-service.ts",
-        "line": 184
+        "line": 180
       }
     ]
   },
@@ -71956,7 +67348,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 912
+        "line": 870
       }
     ]
   },
@@ -72170,7 +67562,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 987
+        "line": 927
       }
     ]
   },
@@ -72285,21 +67677,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-dbae1e085bb9d2ae",
-    "kind": "error",
-    "template": "Benchmark cap cannot cover declared winners",
-    "parts": [
-      "Benchmark cap cannot cover declared winners"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-model.ts",
-        "line": 102
-      }
-    ]
-  },
-  {
     "id": "guid-dbc514e3b63389f3",
     "kind": "prose",
     "template": "Use expectedRevision, dry-run previews, bounded inputs/outputs, immutable sources, and Git history for mutation safety and rollback.",
@@ -72341,21 +67718,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/ideation.ts",
         "line": 89
-      }
-    ]
-  },
-  {
-    "id": "guid-dbd5e1abe1f9b42f",
-    "kind": "error",
-    "template": "Program unavailable",
-    "parts": [
-      "Program unavailable"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-service.ts",
-        "line": 310
       }
     ]
   },
@@ -72537,7 +67899,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 542
+        "line": 537
       }
     ]
   },
@@ -72657,7 +68019,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1623
+        "line": 1561
       }
     ]
   },
@@ -72722,7 +68084,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 678
+        "line": 667
       }
     ]
   },
@@ -72828,19 +68190,19 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1552
+        "line": 1490
       },
       {
         "file": "src/createServer.ts",
-        "line": 1566
+        "line": 1504
       },
       {
         "file": "src/createServer.ts",
-        "line": 1581
+        "line": 1519
       },
       {
         "file": "src/createServer.ts",
-        "line": 1597
+        "line": 1535
       }
     ]
   },
@@ -73001,21 +68363,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-ddfb5503c236a2ba",
-    "kind": "error",
-    "template": "Economy config belongs to another vault",
-    "parts": [
-      "Economy config belongs to another vault"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-host.ts",
-        "line": 64
-      }
-    ]
-  },
-  {
     "id": "guid-de006af384608f23",
     "kind": "error",
     "template": "Invalid declarative skill",
@@ -73146,7 +68493,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1219
+        "line": 1159
       }
     ]
   },
@@ -73177,21 +68524,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/maintenance-host.ts",
         "line": 41
-      }
-    ]
-  },
-  {
-    "id": "guid-de73ae3173551752",
-    "kind": "error",
-    "template": "Paid Work divergence: exact original claim markers required",
-    "parts": [
-      "Paid Work divergence: exact original claim markers required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-claim-recovery.ts",
-        "line": 18
       }
     ]
   },
@@ -73253,21 +68585,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/llm-wiki.ts",
         "line": 9181
-      }
-    ]
-  },
-  {
-    "id": "guid-de88371725e7a0d0",
-    "kind": "error",
-    "template": "Projection revision is only for project/evidence",
-    "parts": [
-      "Projection revision is only for project/evidence"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-host-cli.ts",
-        "line": 33
       }
     ]
   },
@@ -73344,7 +68661,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1124
+        "line": 1064
       }
     ]
   },
@@ -73443,21 +68760,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-df0c8cec3f5dfe53",
-    "kind": "error",
-    "template": "Trusted current adjudication proof required",
-    "parts": [
-      "Trusted current adjudication proof required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-service.ts",
-        "line": 263
-      }
-    ]
-  },
-  {
     "id": "guid-df1df2e40105343a",
     "kind": "prose",
     "template": "Optional wiki.note_template authoring selects knowledge/capture/reply/new_topic and lists missing inputs. Reply to an existing slug through community.comment, never a new post. Host QuickAdd captures one unique Inbox note; plugins are not required by MCP clients.",
@@ -73513,7 +68815,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3794
+        "line": 3676
       }
     ]
   },
@@ -73562,7 +68864,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/agent-pulse.ts",
-        "line": 266
+        "line": 265
       }
     ]
   },
@@ -73927,21 +69229,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-e06dfbdb32e28f89",
-    "kind": "error",
-    "template": "Inspect accepts no mutation options",
-    "parts": [
-      "Inspect accepts no mutation options"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-host-cli.ts",
-        "line": 29
-      }
-    ]
-  },
-  {
     "id": "guid-e07763b64151f5df",
     "kind": "prose",
     "template": "Include optional bounded semantic discovery candidates (default: false)",
@@ -73982,7 +69269,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 966
+        "line": 946
       }
     ]
   },
@@ -73998,21 +69285,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/public-federation.ts",
         "line": 319
-      }
-    ]
-  },
-  {
-    "id": "guid-e0ac5891388c8863",
-    "kind": "error",
-    "template": "Game reward owner or funded-event basis mismatch",
-    "parts": [
-      "Game reward owner or funded-event basis mismatch"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/roleplay-quest.ts",
-        "line": 15
       }
     ]
   },
@@ -74129,7 +69401,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1072
+        "line": 1012
       }
     ]
   },
@@ -74208,7 +69480,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1084
+        "line": 1024
       }
     ]
   },
@@ -74238,7 +69510,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 103
+        "line": 99
       }
     ]
   },
@@ -74366,21 +69638,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-e1a56ec813f3d527",
-    "kind": "error",
-    "template": "Supply headroom is reserved",
-    "parts": [
-      "Supply headroom is reserved"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-model.ts",
-        "line": 187
-      }
-    ]
-  },
-  {
     "id": "guid-e1add7d107d9b884",
     "kind": "error",
     "template": "Required host-observed execution unavailable; review remains pending",
@@ -74421,7 +69678,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 516
+        "line": 511
       }
     ]
   },
@@ -74451,7 +69708,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 929
+        "line": 887
       }
     ]
   },
@@ -74723,7 +69980,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1452
+        "line": 1390
       }
     ]
   },
@@ -74758,21 +70015,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-e2b6091358d22917",
-    "kind": "error",
-    "template": "Approved verified blind peer review unavailable",
-    "parts": [
-      "Approved verified blind peer review unavailable"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-service.ts",
-        "line": 415
-      }
-    ]
-  },
-  {
     "id": "guid-e2cdb3ee11ac3b6e",
     "kind": "error",
     "template": "Invalid initial state key or value.",
@@ -74798,7 +70040,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1255
+        "line": 1195
       }
     ]
   },
@@ -74859,7 +70101,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1797
+        "line": 1735
       }
     ]
   },
@@ -74894,21 +70136,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-e33acec5bcb166c4",
-    "kind": "error",
-    "template": "Prepared economy intent differs from trusted checkpoint; recovery stopped",
-    "parts": [
-      "Prepared economy intent differs from trusted checkpoint; recovery stopped"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-ledger.ts",
-        "line": 197
-      }
-    ]
-  },
-  {
     "id": "guid-e34727c1b044783f",
     "kind": "prose",
     "template": "Broad-to-narrow archival series path preserving creator context without replacing folders or MOCs",
@@ -74920,21 +70147,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/organization.ts",
         "line": 189
-      }
-    ]
-  },
-  {
-    "id": "guid-e3474f2fd58e7db7",
-    "kind": "error",
-    "template": "Invalid benchmark fields",
-    "parts": [
-      "Invalid benchmark fields"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-model.ts",
-        "line": 26
       }
     ]
   },
@@ -75060,21 +70272,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-e3c2c64663226ac2",
-    "kind": "error",
-    "template": "Economy checkpoint already initialized",
-    "parts": [
-      "Economy checkpoint already initialized"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-ledger.ts",
-        "line": 115
-      }
-    ]
-  },
-  {
     "id": "guid-e3d5e9b841110b4c",
     "kind": "prose",
     "template": "Failed to delete file: {arg0} - {arg1}",
@@ -75117,7 +70314,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 669
+        "line": 658
       }
     ]
   },
@@ -75257,10 +70454,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "binding": "call",
     "sources": [
       {
-        "file": "src/economy-model.ts",
-        "line": 146
-      },
-      {
         "file": "src/story-store.ts",
         "line": 37
       }
@@ -75345,21 +70538,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-e4944c2ff2110b35",
-    "kind": "error",
-    "template": "Numeric value",
-    "parts": [
-      "Numeric value"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-model.ts",
-        "line": 83
-      }
-    ]
-  },
-  {
     "id": "guid-e4bc7f735a35ad26",
     "kind": "error",
     "template": "MCPVault Canvas metadata marker is incomplete",
@@ -75371,21 +70549,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/json-canvas.ts",
         "line": 264
-      }
-    ]
-  },
-  {
-    "id": "guid-e4be98455942a394",
-    "kind": "error",
-    "template": "Invalid reward range",
-    "parts": [
-      "Invalid reward range"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-model.ts",
-        "line": 88
       }
     ]
   },
@@ -75567,7 +70730,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 1131
+        "line": 1082
       }
     ]
   },
@@ -75582,7 +70745,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1630
+        "line": 1568
       }
     ]
   },
@@ -75698,7 +70861,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1727
+        "line": 1665
       }
     ]
   },
@@ -75802,12 +70965,8 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "binding": "call",
     "sources": [
       {
-        "file": "src/economy-model.ts",
-        "line": 245
-      },
-      {
         "file": "src/work-service.ts",
-        "line": 481
+        "line": 476
       }
     ]
   },
@@ -75822,37 +70981,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1098
-      }
-    ]
-  },
-  {
-    "id": "guid-e618673a51675bde",
-    "kind": "error",
-    "template": "Result evidence projection revision conflict",
-    "parts": [
-      "Result evidence projection revision conflict"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-service.ts",
-        "line": 380
-      }
-    ]
-  },
-  {
-    "id": "guid-e62bce26e1976898",
-    "kind": "error",
-    "template": "Artifact revision changed; read current context",
-    "parts": [
-      "Artifact revision changed; read current context"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-service.ts",
-        "line": 68
+        "line": 1038
       }
     ]
   },
@@ -75868,21 +70997,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/story-workspace.ts",
         "line": 153
-      }
-    ]
-  },
-  {
-    "id": "guid-e662dab5127f217c",
-    "kind": "error",
-    "template": "Invalid benchmark programs",
-    "parts": [
-      "Invalid benchmark programs"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-model.ts",
-        "line": 93
       }
     ]
   },
@@ -75970,21 +71084,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-e6f37592405ac9ef",
-    "kind": "error",
-    "template": "Only requester may perform this transition",
-    "parts": [
-      "Only requester may perform this transition"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-model.ts",
-        "line": 243
-      }
-    ]
-  },
-  {
     "id": "guid-e6f3fd6c09d75318",
     "kind": "error",
     "template": "Research detail requires its exact expectedRevision",
@@ -76055,7 +71154,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1382
+        "line": 1320
       }
     ]
   },
@@ -76070,7 +71169,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1735
+        "line": 1673
       }
     ]
   },
@@ -76101,21 +71200,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/filesystem.ts",
         "line": 3383
-      }
-    ]
-  },
-  {
-    "id": "guid-e764788572d74944",
-    "kind": "error",
-    "template": "Owner paid WIP limit is one",
-    "parts": [
-      "Owner paid WIP limit is one"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-model.ts",
-        "line": 155
       }
     ]
   },
@@ -76240,22 +71324,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1460
-      }
-    ]
-  },
-  {
-    "id": "guid-e7d63e2af3afffe3",
-    "kind": "error",
-    "template": "Current benchmark task account required",
-    "parts": [
-      "Current benchmark task account required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/createServer.ts",
-        "line": 952
+        "line": 1398
       }
     ]
   },
@@ -76450,7 +71519,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 411
+        "line": 407
       }
     ]
   },
@@ -76712,7 +71781,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3633
+        "line": 3515
       }
     ]
   },
@@ -76727,7 +71796,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1256
+        "line": 1196
       }
     ]
   },
@@ -76820,7 +71889,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3036
+        "line": 2974
       }
     ]
   },
@@ -76850,7 +71919,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/cli.ts",
-        "line": 96
+        "line": 92
       }
     ]
   },
@@ -77051,21 +72120,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-ea37cc0c2a34a1bf",
-    "kind": "error",
-    "template": "Quest target unavailable; reread participation pulse",
-    "parts": [
-      "Quest target unavailable; reread participation pulse"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-service.ts",
-        "line": 140
-      }
-    ]
-  },
-  {
     "id": "guid-ea5dc136ecbd6523",
     "kind": "error",
     "template": "A hierarchy edge cannot point to the same note",
@@ -77167,7 +72221,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 992
+        "line": 932
       }
     ]
   },
@@ -77332,7 +72386,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3475
+        "line": 3357
       }
     ]
   },
@@ -77527,37 +72581,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1005
-      }
-    ]
-  },
-  {
-    "id": "guid-ebbbb8ba1c41f86e",
-    "kind": "error",
-    "template": "Duplicate benchmark identity",
-    "parts": [
-      "Duplicate benchmark identity"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-model.ts",
-        "line": 39
-      }
-    ]
-  },
-  {
-    "id": "guid-ebd77bd807f64553",
-    "kind": "error",
-    "template": "JSON budget",
-    "parts": [
-      "JSON budget"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-model.ts",
-        "line": 106
+        "line": 945
       }
     ]
   },
@@ -77693,7 +72717,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1216
+        "line": 1156
       }
     ]
   },
@@ -77709,21 +72733,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/story-artifacts.ts",
         "line": 35
-      }
-    ]
-  },
-  {
-    "id": "guid-ec4c39c74125f685",
-    "kind": "error",
-    "template": "Bounded literal submission required",
-    "parts": [
-      "Bounded literal submission required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-service.ts",
-        "line": 407
       }
     ]
   },
@@ -77803,25 +72812,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-ec7e635eef6f86f6",
-    "kind": "error",
-    "template": "Economy writer fencing failed",
-    "parts": [
-      "Economy writer fencing failed"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-ledger.ts",
-        "line": 131
-      },
-      {
-        "file": "src/economy-ledger.ts",
-        "line": 133
-      }
-    ]
-  },
-  {
     "id": "guid-ec7eca79ab15b653",
     "kind": "error",
     "template": "MOC rebalance destination unavailable; refresh and retry.",
@@ -77875,10 +72865,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ],
     "binding": "call",
     "sources": [
-      {
-        "file": "src/economy-host.ts",
-        "line": 47
-      },
       {
         "file": "src/roleplay-recovery.ts",
         "line": 60
@@ -78220,25 +73206,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-ed9abf92cea0ff6f",
-    "kind": "error",
-    "template": "Benchmark host answer unavailable",
-    "parts": [
-      "Benchmark host answer unavailable"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-host.ts",
-        "line": 94
-      },
-      {
-        "file": "src/benchmark-host.ts",
-        "line": 102
-      }
-    ]
-  },
-  {
     "id": "guid-eda772c56cd4a9d9",
     "kind": "error",
     "template": "Decision review revision changed",
@@ -78460,7 +73427,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1077
+        "line": 1017
       }
     ]
   },
@@ -78584,7 +73551,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 656
+        "line": 645
       }
     ]
   },
@@ -78754,21 +73721,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-ef01929bb5467dad",
-    "kind": "error",
-    "template": "Account is not an adjudicated winner",
-    "parts": [
-      "Account is not an adjudicated winner"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-service.ts",
-        "line": 265
-      }
-    ]
-  },
-  {
     "id": "guid-ef0547ee4de670c0",
     "kind": "error",
     "template": "Private Auth0 configuration is invalid or unavailable",
@@ -78844,21 +73796,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/llm-wiki-tools.ts",
         "line": 911
-      }
-    ]
-  },
-  {
-    "id": "guid-ef470de25d923708",
-    "kind": "error",
-    "template": "Result evidence changed; preserve it for review",
-    "parts": [
-      "Result evidence changed; preserve it for review"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-service.ts",
-        "line": 377
       }
     ]
   },
@@ -78967,7 +73904,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 992
+        "line": 972
       }
     ]
   },
@@ -78998,21 +73935,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/resource-bundle.ts",
         "line": 35
-      }
-    ]
-  },
-  {
-    "id": "guid-efaa3e1720508488",
-    "kind": "error",
-    "template": "Benchmark close deadline not reached",
-    "parts": [
-      "Benchmark close deadline not reached"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-service.ts",
-        "line": 327
       }
     ]
   },
@@ -79152,21 +74074,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-f04b67d410cc44b9",
-    "kind": "error",
-    "template": "Task already has a nonterminal contract",
-    "parts": [
-      "Task already has a nonterminal contract"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-model.ts",
-        "line": 235
-      }
-    ]
-  },
-  {
     "id": "guid-f0576c7b9b44f6db",
     "kind": "prose",
     "template": "continuity records where work stopped; memory.brief recalls helpful past experience. Store references, not duplicate memory bodies, in continuity. MCP cannot pin/evict a host context or wake a stopped model. Follow exact source/revision nextAction and reset a changed cursor.",
@@ -79207,7 +74114,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 464
+        "line": 459
       }
     ]
   },
@@ -79268,21 +74175,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/recall-queue.ts",
         "line": 60
-      }
-    ]
-  },
-  {
-    "id": "guid-f0c60e11e59b54ed",
-    "kind": "error",
-    "template": "Insufficient supply headroom for reservation",
-    "parts": [
-      "Insufficient supply headroom for reservation"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-model.ts",
-        "line": 198
       }
     ]
   },
@@ -79439,21 +74331,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-f1016b73060986bb",
-    "kind": "error",
-    "template": "Approved challenge account required",
-    "parts": [
-      "Approved challenge account required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-service.ts",
-        "line": 425
-      }
-    ]
-  },
-  {
     "id": "guid-f1093dcc14d56132",
     "kind": "prose",
     "template": "The proposed MOC branch contains an ancestor edge that crosses a scope privacy boundary.",
@@ -79554,7 +74431,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3903
+        "line": 3785
       }
     ]
   },
@@ -79599,7 +74476,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 101
+        "line": 97
       }
     ]
   },
@@ -79629,7 +74506,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1102
+        "line": 1042
       }
     ]
   },
@@ -79675,7 +74552,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/cli.ts",
-        "line": 116
+        "line": 107
       }
     ]
   },
@@ -79814,7 +74691,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 1050
+        "line": 1024
       }
     ]
   },
@@ -79919,7 +74796,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 397
+        "line": 393
       }
     ]
   },
@@ -79980,7 +74857,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 887
+        "line": 845
       }
     ]
   },
@@ -80117,7 +74994,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 763
+        "line": 744
       }
     ]
   },
@@ -80178,21 +75055,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/independent-research-tools.ts",
         "line": 17
-      }
-    ]
-  },
-  {
-    "id": "guid-f37c1c82c415b5d9",
-    "kind": "error",
-    "template": "Approved current persistent benchmark account required",
-    "parts": [
-      "Approved current persistent benchmark account required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-service.ts",
-        "line": 64
       }
     ]
   },
@@ -80329,7 +75191,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1342
+        "line": 1280
       }
     ]
   },
@@ -80374,7 +75236,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 882
+        "line": 862
       }
     ]
   },
@@ -80405,7 +75267,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1367
+        "line": 1305
       }
     ]
   },
@@ -80440,21 +75302,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-f41ca1df3ef61ec6",
-    "kind": "error",
-    "template": "Benchmark host configuration unavailable; require private files outside Vault and source",
-    "parts": [
-      "Benchmark host configuration unavailable; require private files outside Vault and source"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-host.ts",
-        "line": 104
-      }
-    ]
-  },
-  {
     "id": "guid-f42a3374d1e197bc",
     "kind": "error",
     "template": "Story dependency limit exceeds 128 sources",
@@ -80480,7 +75327,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 406
+        "line": 402
       }
     ]
   },
@@ -80495,7 +75342,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 793
+        "line": 777
       }
     ]
   },
@@ -80590,21 +75437,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-f471ecbe16edf63f",
-    "kind": "error",
-    "template": "Economy conservation invariant failed; writes suspended",
-    "parts": [
-      "Economy conservation invariant failed; writes suspended"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-model.ts",
-        "line": 137
-      }
-    ]
-  },
-  {
     "id": "guid-f472409dddb760f8",
     "kind": "prose",
     "template": "Report prompt injection, malware, secret extraction, impersonation, harassment, or spam with factual evidence; quarantine or ban only through authorized moderation.",
@@ -80660,7 +75492,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3848
+        "line": 3730
       }
     ]
   },
@@ -80919,7 +75751,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1539
+        "line": 1477
       }
     ]
   },
@@ -80935,21 +75767,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/explanation-service.ts",
         "line": 258
-      }
-    ]
-  },
-  {
-    "id": "guid-f521184c2f7d4974",
-    "kind": "error",
-    "template": "Economy filesystem is not in the verified local allowlist",
-    "parts": [
-      "Economy filesystem is not in the verified local allowlist"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-host.ts",
-        "line": 91
       }
     ]
   },
@@ -80994,22 +75811,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1439
-      }
-    ]
-  },
-  {
-    "id": "guid-f53a20931dd8ae52",
-    "kind": "error",
-    "template": "Economy is disabled; host-provisioned verified storage, owners and policy are required",
-    "parts": [
-      "Economy is disabled; host-provisioned verified storage, owners and policy are required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/createServer.ts",
-        "line": 3271
+        "line": 1377
       }
     ]
   },
@@ -81178,7 +75980,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1268
+        "line": 1208
       }
     ]
   },
@@ -81413,21 +76215,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-f6e95d560d7b05c8",
-    "kind": "error",
-    "template": "initiative-status requires only absolute Vault/config paths and a human operator",
-    "parts": [
-      "initiative-status requires only absolute Vault/config paths and a human operator"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-host-cli.ts",
-        "line": 14
-      }
-    ]
-  },
-  {
     "id": "guid-f6fc982b45d3dd0d",
     "kind": "error",
     "template": "Review must first be explicitly requested",
@@ -81438,7 +76225,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 693
+        "line": 682
       }
     ]
   },
@@ -81492,21 +76279,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-f735762dbea87f28",
-    "kind": "error",
-    "template": "Invalid trusted award basis",
-    "parts": [
-      "Invalid trusted award basis"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-model.ts",
-        "line": 210
-      }
-    ]
-  },
-  {
     "id": "guid-f76697779cc9272b",
     "kind": "error",
     "template": "Read view is not available for authentication responses.",
@@ -81517,7 +76289,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1740
+        "line": 1678
       }
     ]
   },
@@ -81533,21 +76305,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/llm-wiki-tools.ts",
         "line": 201
-      }
-    ]
-  },
-  {
-    "id": "guid-f78a9b487e7e5b53",
-    "kind": "error",
-    "template": "Assigned independent reviewer required",
-    "parts": [
-      "Assigned independent reviewer required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-model.ts",
-        "line": 302
       }
     ]
   },
@@ -81607,7 +76364,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1153
+        "line": 1093
       }
     ]
   },
@@ -81622,7 +76379,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 3134
+        "line": 3065
       }
     ]
   },
@@ -81637,7 +76394,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1230
+        "line": 1170
       }
     ]
   },
@@ -81698,21 +76455,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/roleplay-trpg-project.ts",
         "line": 79
-      }
-    ]
-  },
-  {
-    "id": "guid-f7eaac504aa50299",
-    "kind": "prose",
-    "template": "An opt-in host-approved challenge is available; participation is optional",
-    "parts": [
-      "An opt-in host-approved challenge is available; participation is optional"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-service.ts",
-        "line": 445
       }
     ]
   },
@@ -81922,7 +76664,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/endpoint-registry.ts",
-        "line": 706
+        "line": 691
       }
     ]
   },
@@ -81937,7 +76679,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1366
+        "line": 1304
       }
     ]
   },
@@ -82019,21 +76761,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/llm-wiki.ts",
         "line": 6944
-      }
-    ]
-  },
-  {
-    "id": "guid-f8e4ad93ddce8f50",
-    "kind": "error",
-    "template": "Invalid checkpoint",
-    "parts": [
-      "Invalid checkpoint"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-ledger.ts",
-        "line": 157
       }
     ]
   },
@@ -82225,21 +76952,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-f96bc759251195c3",
-    "kind": "error",
-    "template": "Unapproved award participant",
-    "parts": [
-      "Unapproved award participant"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-model.ts",
-        "line": 211
-      }
-    ]
-  },
-  {
     "id": "guid-f97253131b8debd7",
     "kind": "prose",
     "template": "Optional current revision guard when query is anchored to a selected path.",
@@ -82425,21 +77137,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-f9f408bb8d262d53",
-    "kind": "error",
-    "template": "Unapproved benchmark participant",
-    "parts": [
-      "Unapproved benchmark participant"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-model.ts",
-        "line": 100
-      }
-    ]
-  },
-  {
     "id": "guid-f9ffb2364fcd3a70",
     "kind": "error",
     "template": "The supplied MCP server has no MCPVault runtime",
@@ -82545,7 +77242,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1411
+        "line": 1349
       }
     ]
   },
@@ -82807,7 +77504,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1629
+        "line": 1567
       }
     ]
   },
@@ -82827,21 +77524,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-fae92befb156850c",
-    "kind": "error",
-    "template": "Paid Work divergence: original claim receipt no longer matches",
-    "parts": [
-      "Paid Work divergence: original claim receipt no longer matches"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-claim-recovery.ts",
-        "line": 21
-      }
-    ]
-  },
-  {
     "id": "guid-faea3df717f2bfc1",
     "kind": "error",
     "template": "Invalid claim operation",
@@ -82852,7 +77534,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 720
+        "line": 709
       }
     ]
   },
@@ -82929,21 +77611,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/work-review.ts",
         "line": 33
-      }
-    ]
-  },
-  {
-    "id": "guid-fb1b25c7414d31b7",
-    "kind": "error",
-    "template": "Invalid host economy configuration",
-    "parts": [
-      "Invalid host economy configuration"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-host.ts",
-        "line": 61
       }
     ]
   },
@@ -83040,7 +77707,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1083
+        "line": 1023
       }
     ]
   },
@@ -83120,21 +77787,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-fba473777275b3d5",
-    "kind": "error",
-    "template": "Benchmarks are disabled",
-    "parts": [
-      "Benchmarks are disabled"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-service.ts",
-        "line": 55
-      }
-    ]
-  },
-  {
     "id": "guid-fbab54e53416b9ae",
     "kind": "error",
     "template": "reason is required",
@@ -83168,7 +77820,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 395
+        "line": 391
       }
     ]
   },
@@ -83183,7 +77835,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1532
+        "line": 1470
       }
     ]
   },
@@ -83228,7 +77880,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/cli.ts",
-        "line": 101
+        "line": 97
       }
     ]
   },
@@ -83369,21 +78021,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-fc97403792db51da",
-    "kind": "error",
-    "template": "Owner open-contract limit reached",
-    "parts": [
-      "Owner open-contract limit reached"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-model.ts",
-        "line": 232
-      }
-    ]
-  },
-  {
     "id": "guid-fc9d85244755d976",
     "kind": "error",
     "template": "Workshop is closed",
@@ -83448,21 +78085,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-fceb85c8e6f99945",
-    "kind": "error",
-    "template": "Economy storage binding unavailable or changed; explicit host recovery required",
-    "parts": [
-      "Economy storage binding unavailable or changed; explicit host recovery required"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-storage.ts",
-        "line": 13
-      }
-    ]
-  },
-  {
     "id": "guid-fcf686f9db1ad765",
     "kind": "error",
     "template": "patches must be a non-empty array for {arg0}",
@@ -83489,7 +78111,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 600
+        "line": 595
       }
     ]
   },
@@ -83978,21 +78600,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-feb0ffba71279ca7",
-    "kind": "error",
-    "template": "Trusted economy checkpoint must be outside Vault and source repository",
-    "parts": [
-      "Trusted economy checkpoint must be outside Vault and source repository"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/economy-ledger.ts",
-        "line": 104
-      }
-    ]
-  },
-  {
     "id": "guid-febc054cac933e9e",
     "kind": "error",
     "template": "Roleplay checkpoint must be local and outside Vault/source",
@@ -84057,21 +78664,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-fed1ae3b67da7da1",
-    "kind": "error",
-    "template": "--benchmark-config requires one private host configuration file",
-    "parts": [
-      "--benchmark-config requires one private host configuration file"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/cli.ts",
-        "line": 106
-      }
-    ]
-  },
-  {
     "id": "guid-fed85d3656d09e7d",
     "kind": "error",
     "template": "Paused session source revision changed; owner must create a new session",
@@ -84098,21 +78690,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/community-features.ts",
         "line": 298
-      }
-    ]
-  },
-  {
-    "id": "guid-fee2da281d0afc4f",
-    "kind": "error",
-    "template": "Invalid criterion evidence",
-    "parts": [
-      "Invalid criterion evidence"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/benchmark-model.ts",
-        "line": 135
       }
     ]
   },
@@ -84155,10 +78732,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ],
     "binding": "call",
     "sources": [
-      {
-        "file": "src/economy-host.ts",
-        "line": 150
-      },
       {
         "file": "src/roleplay-recovery.ts",
         "line": 99
@@ -84214,11 +78787,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/cli.ts",
-        "line": 223
+        "line": 208
       },
       {
         "file": "src/cli.ts",
-        "line": 231
+        "line": 216
       }
     ]
   },
@@ -84278,7 +78851,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1201
+        "line": 1141
       }
     ]
   },
@@ -84293,7 +78866,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1479
+        "line": 1417
       }
     ]
   },
@@ -84338,7 +78911,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/work-service.ts",
-        "line": 87
+        "line": 83
       }
     ]
   },
@@ -84474,7 +79047,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/createServer.ts",
-        "line": 1029
+        "line": 969
       }
     ]
   },

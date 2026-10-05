@@ -8,7 +8,7 @@ import { createHash } from 'node:crypto';
  * room membership and locality labels are never sources of owner consent.
  */
 export type Activity = 'collaboration' | 'ideation-research' | 'explanation-translation'
-  | 'benchmarks' | 'economy' | 'roleplay' | 'skill-evolution';
+  | 'roleplay' | 'skill-evolution';
 export type OwnerActivityAction = 'discover' | 'read' | 'claim' | 'execute';
 export type OwnerActivityReason = 'granted' | 'owner_unknown' | 'consent_required'
   | 'expired' | 'revoked' | 'execution_target_mismatch' | 'data_scope_mismatch';
@@ -60,7 +60,7 @@ export interface OwnerActivityDecision {
 }
 
 const activities: readonly Activity[] = ['collaboration', 'ideation-research', 'explanation-translation',
-  'benchmarks', 'economy', 'roleplay', 'skill-evolution'];
+  'roleplay', 'skill-evolution'];
 const actions: readonly OwnerActivityAction[] = ['discover', 'read', 'claim', 'execute'];
 const invalid = () => guidanceError(new Error('Invalid owner activity policy'), 'guid-4bbe53fca7727ba4');
 const isId = (value: unknown): value is string => typeof value === 'string'

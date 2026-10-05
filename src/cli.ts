@@ -11,12 +11,10 @@ export interface ParsedCliArgs {
   mcpHttpHost?: string;
   mcpHttpTlsCert?: string;
   mcpHttpTlsKey?: string;
-  economyConfig?: string;
   roleplayConfig?: string;
   skillEvolutionConfig?: string;
   reviewedSkillsConfig?: string;
   explanationConfig?: string;
-  benchmarkConfig?: string;
   featuresConfig?: string;
   ownerActivityConfig?: string;
   maintenanceConfig?: string;
@@ -43,12 +41,10 @@ export function parseCliArgs(args: string[]): ParsedCliArgs {
   let mcpHttpTlsCert: string | undefined;
   let mcpHttpTlsKey: string | undefined;
   let stdio: false | undefined;
-  let economyConfig:string|undefined;
   let roleplayConfig: string | undefined;
   let skillEvolutionConfig: string | undefined;
   let reviewedSkillsConfig: string | undefined;
   let explanationConfig: string | undefined;
-  let benchmarkConfig: string | undefined;
   let featuresConfig: string | undefined;
   let ownerActivityConfig: string | undefined;
   let maintenanceConfig: string | undefined;
@@ -101,11 +97,6 @@ export function parseCliArgs(args: string[]): ParsedCliArgs {
       if (!value || !value.trim() || value.startsWith('--') || featuresConfig !== undefined) throw guidanceError(new Error('--features-config requires one host configuration file'), 'guid-fc0e1ded2f8c054c');
       featuresConfig = value; continue;
     }
-    if (arg === '--benchmark-config' || arg.startsWith('--benchmark-config=')) {
-      const value = arg === '--benchmark-config' ? args[++index] : arg.slice('--benchmark-config='.length);
-      if (!value || !value.trim() || value.startsWith('--') || benchmarkConfig !== undefined) throw guidanceError(Error('--benchmark-config requires one private host configuration file'), 'guid-fed1ae3b67da7da1');
-      benchmarkConfig = value; continue;
-    }
     if (arg === '--explanation-config' || arg.startsWith('--explanation-config=')) {
       const value = arg === '--explanation-config' ? args[++index] : arg.slice('--explanation-config='.length);
       if (!value || !value.trim() || value.startsWith('--') || explanationConfig !== undefined) throw guidanceError(Error('--explanation-config requires one private host configuration file'), 'guid-2fd6b72137024d82');
@@ -122,12 +113,6 @@ export function parseCliArgs(args: string[]): ParsedCliArgs {
       roleplayConfig = value; continue;
     }
 
-    if(arg==='--economy-config'||arg.startsWith('--economy-config=')) {
-      const value=arg==='--economy-config'?args[++index]:arg.slice('--economy-config='.length);
-      if(!value||value.startsWith('--'))throw guidanceError(new Error('--economy-config requires a private host file path'), 'guid-99262a989a3c3643');
-      if(economyConfig!==undefined)throw guidanceError(new Error('--economy-config may be supplied only once'), 'guid-a085d216b3513911');
-      economyConfig=value;continue;
-    }
 
     if (arg === "--read-only") {
       const next = args[index + 1]?.toLowerCase();
@@ -252,12 +237,10 @@ export function parseCliArgs(args: string[]): ParsedCliArgs {
     ...(mcpHttpHost !== undefined && { mcpHttpHost }),
     ...(mcpHttpTlsCert !== undefined && { mcpHttpTlsCert }),
     ...(mcpHttpTlsKey !== undefined && { mcpHttpTlsKey }),
-    ...(economyConfig!==undefined && {economyConfig}),
     ...(roleplayConfig !== undefined && { roleplayConfig }),
     ...(skillEvolutionConfig !== undefined && { skillEvolutionConfig }),
     ...(reviewedSkillsConfig !== undefined && { reviewedSkillsConfig }),
     ...(explanationConfig !== undefined && { explanationConfig }),
-    ...(benchmarkConfig !== undefined && { benchmarkConfig }),
     ...(featuresConfig !== undefined && { featuresConfig }),
     ...(ownerActivityConfig !== undefined && { ownerActivityConfig }),
     ...(maintenanceConfig !== undefined && { maintenanceConfig }),

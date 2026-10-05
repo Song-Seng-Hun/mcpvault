@@ -149,7 +149,7 @@ test('rejects malformed config, private ACL failure, broad action grants and non
     const f=await fixture();
     if(kind==='config'){(f.config.listener as any).host='0.0.0.0';await f.save();}
     else if(kind==='acl')acl.deny=true;
-    else {const g=f.policy.grants[0]!;if(kind==='action')g.actions.push('execute');else if(kind==='activity')g.activities.push('economy');else g.dataPrefixes=['.'];await f.savePolicy();}
+    else {const g=f.policy.grants[0]!;if(kind==='action')g.actions.push('execute');else if(kind==='activity')g.activities.push('collaboration');else g.dataPrefixes=['.'];await f.savePolicy();}
     await expect(f.load()).rejects.toThrow('Reviewed skill host unavailable');acl.deny=false;
   }
 });

@@ -156,7 +156,7 @@ test('OAuth scope policy stays within normal collaboration and expires with the 
   await resource.withResearchSession(authorization, principal, async () => {
     expect(owner.policy().decision(request).allowed).toBe(true);
     expect(owner.policy().decision({ ...request, paths: ['Private/secret.md'] }).allowed).toBe(false);
-    expect(owner.policy().decision({ ...request, activity: 'economy' }).allowed).toBe(false);
+    expect(owner.policy().decision({ ...request, activity: 'skill-evolution' }).allowed).toBe(false);
     const clock = vi.spyOn(Date, 'now').mockReturnValue(exp * 1000);
     try {
       expect(owner.execution(principal)).toBeUndefined();

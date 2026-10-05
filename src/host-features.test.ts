@@ -11,7 +11,7 @@ function api(): typeof import('./host-features.js') {
 }
 const ids = [
   'wiki-core', 'document-search', 'personal-memory', 'work-management', 'collaboration',
-  'ideation-research', 'explanation-translation', 'benchmarks', 'economy', 'roleplay', 'skill-evolution',
+  'ideation-research', 'explanation-translation', 'roleplay', 'skill-evolution',
 ] as const;
 const config = (...selected: string[]) => ({ version: 1, selected });
 
@@ -22,7 +22,7 @@ test('exports an explicit frozen v1 feature snapshot and core-only default', () 
   expect(f.DEFAULT_HOST_FEATURE_CONFIG).toEqual(config('wiki-core'));
   expect(Object.isFrozen(f.DEFAULT_HOST_FEATURE_CONFIG)).toBe(true);
   expect(Object.isFrozen(f.DEFAULT_HOST_FEATURE_CONFIG.selected)).toBe(true);
-  expect(f.parseHostFeatureConfig(config(...ids)).selected).toHaveLength(11);
+  expect(f.parseHostFeatureConfig(config(...ids)).selected).toHaveLength(9);
 });
 
 test.each(ids.slice(1))('%s can be selected independently with core and never silently enabled', id => {
@@ -55,17 +55,17 @@ test('selection is detached and frozen; disabling and re-enabling preserves the 
   expect(f.hostFeatureEligibility(restored, 'manage_roleplay_world').eligible).toBe(true);
   expect(f.hostFeatureConfigFingerprint(restored)).toBe(fingerprint);
   expect(input).toEqual(before);
-  input.selected.push('economy');
-  expect(enabled.selected).not.toContain('economy');
+  input.selected.push('skill-evolution');
+  expect(enabled.selected).not.toContain('skill-evolution');
   expect(Object.isFrozen(enabled)).toBe(true);
   expect(Object.isFrozen(enabled.selected)).toBe(true);
 });
 
 test('fingerprints are stable across object and selection ordering but change with selection', () => {
   const f = api();
-  const first = f.hostFeatureConfigFingerprint(config('wiki-core', 'work-management', 'benchmarks'));
+  const first = f.hostFeatureConfigFingerprint(config('wiki-core', 'work-management', 'skill-evolution'));
   expect(first).toMatch(/^[a-f0-9]{64}$/);
-  expect(f.hostFeatureConfigFingerprint({ selected: ['benchmarks', 'work-management', 'wiki-core'], version: 1 })).toBe(first);
+  expect(f.hostFeatureConfigFingerprint({ selected: ['skill-evolution', 'work-management', 'wiki-core'], version: 1 })).toBe(first);
   expect(f.hostFeatureConfigFingerprint(config('wiki-core'))).not.toBe(first);
 });
 
@@ -121,8 +121,8 @@ const representatives = [
   ['wiki-core', 'get_wiki_canvas_view'], ['document-search', 'search_documents'],
   ['personal-memory', 'memory_recall'], ['work-management', 'read_work_board'],
   ['collaboration', 'publish_blog_post'], ['ideation-research', 'get_wiki_bridge_candidates'],
-  ['explanation-translation', 'submit_explanation'], ['benchmarks', 'submit_benchmark'],
-  ['economy', 'manage_quest_contract'], ['roleplay', 'manage_story_project'], ['skill-evolution', 'promote_skill'],
+  ['explanation-translation', 'submit_explanation'],
+  ['roleplay', 'manage_story_project'], ['skill-evolution', 'promote_skill'],
 ] as const;
 test.each(representatives)('maps %s to its exact internal tool %s independently of caller permission', (feature, tool) => {
   const f = api();

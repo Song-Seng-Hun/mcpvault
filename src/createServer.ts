@@ -19,7 +19,7 @@ import { RetrievalService } from './retrieval-service.js';
 import { OBSERVED_ENDPOINTS } from './evolution/operations.js';
 import { LayeredMemoryService } from './layered-memory.js';
 import { getLayeredMemoryTools } from './layered-memory-tools.js';
-import { CommunityParticipationService, aggregateParticipationOwnerUsage } from './community-participation.js';
+import { CommunityParticipationService } from './community-participation.js';
 import { getCommunityParticipationTools, PARTICIPATION_MUTATING_TOOLS } from './community-participation-tools.js';
 import { ResearchBridgeService } from './research-bridge.js';
 import { getResearchBridgeTools } from './research-bridge-tools.js';
@@ -87,8 +87,6 @@ import { getWorkTools, WORK_MUTATING_TOOLS, WORK_TASK_PROPERTIES } from './work-
 import { getExplanationTools, EXPLANATION_MUTATING_TOOLS, EXPLANATION_ENDPOINTS } from './explanation-tools.js';
 import { ExplanationService } from './explanation-service.js';
 import { attachExplanationHint } from './explanation-hint.js';
-import { BenchmarkService, type BenchmarkOptions } from './benchmark-service.js';
-import { getBenchmarkTools, BENCHMARK_MUTATING_TOOLS, benchmarkOperation } from './benchmark-tools.js';
 import { checkReusableConfiguration, getConfigurationTools } from './configuration-tools.js';
 import { SkillEvolutionService, type SkillEvolutionHost } from './skill-evolution.js';
 import { getSkillEvolutionTools, SKILL_MUTATING_TOOLS } from './skill-evolution-tools.js';
@@ -113,7 +111,6 @@ import { withGuidance, projectGuidance, guidanceText, renderGuidanceError } from
 import { RoleplayService } from './roleplay-service.js';
 import type { RoleplayStore } from './roleplay-store.js';
 import { roleplayRevision } from './roleplay-model.js';
-import { validateRoleplayQuestArtifact } from './roleplay-quest.js';
 import { WorkService } from './work-service.js';
 import { ReviewedSkillService, type ReviewedSkillInspector } from './skill-release-service.js';
 import type { ReviewedSkillHost, ReviewedSkillDeliveryFence } from './skill-release-reader.js';
@@ -148,12 +145,6 @@ import { VaultIoCoordinator } from "./vault-io.js";
 import { IdeationService } from "./ideation.js";
 import { IDEATION_MUTATING_TOOLS, getIdeationTools } from "./ideation-tools.js";
 import { IndependentResearchService } from './independent-research.js';
-import { ECONOMY_MUTATING_TOOLS, getEconomyTools } from './economy-tools.js';
-import { EconomyService } from './economy-service.js';
-import { assertEconomyConfigured, type EconomyLedger } from './economy-ledger.js';
-import { fingerprint as workFingerprint } from './work-model.js';
-import type { EconomyPolicy } from './economy-model.js';
-import { validateMarkdownContract, verifyMarkdownContract } from './quest-verifier.js';
 import { getWikiPolicyTopic, MCPVAULT_SERVER_INSTRUCTIONS } from './wiki-policy.js';
 import { RECORDING_MCP_TOOLS, RECORDING_TOOL_NAMES, routeRecordingTool } from './record-tools.js';
 
@@ -280,10 +271,6 @@ export interface CreateServerOptions extends DocumentAuthorityOptions {
   features?: HostFeatureConfig;
   /** Explicit host-selected sources; no automatic Vault-wide translation. */
   explanations?: { sources: import('./explanation-service.js').ExplanationSourceConfig[] };
-  benchmarks?: Omit<BenchmarkOptions, 'assertActor' | 'accountAvailable' | 'ledger' | 'access' | 'pathFilter'> & {
-    /** Bind the existing ledger's trusted proof verifier; not an agent endpoint. */
-    bindAuthority?: (service: BenchmarkService) => void;
-  };
   /** Trusted host integrations only; never populated from API arguments or Vault notes. */
   workCollaboration?: Pick<import('./work-service.js').WorkServiceOptions, 'executionProfiles' | 'readReviewGitSource' | 'verifyReviewExecution' | 'deterministicCoverage'>;
   /** Trusted human-owner consent and independently verified execution identity. */
@@ -312,8 +299,6 @@ export interface CreateServerOptions extends DocumentAuthorityOptions {
   guidanceDefinitions?: readonly GuidanceDefinition[];
   /** Host-provisioned single world; no caller or Vault note can enable this. */
   roleplay?: RoleplayStore;
-  /** Host-provisioned ledger only. Never initialized or funded from MCP. */
-  economy?: { ledger: EconomyLedger; policy: EconomyPolicy };
   /** Opt-in host-private enterprise registry. Never inferred from Vault content. */
   enterpriseRegistryPath?: string;
   publicFederation?: PublicFederationHostConfig;
@@ -335,7 +320,6 @@ const MUTATING_TOOLS = new Set([
   'manage_evolution_feedback', 'manage_evolution_cycle', 'get_evolution_context',
   'manage_wiki_compilation',
   ...EXPLANATION_MUTATING_TOOLS,
-  ...BENCHMARK_MUTATING_TOOLS,
   ...STORY_MUTATING_TOOLS,
   ...SKILL_MUTATING_TOOLS,
   ...ENTERPRISE_FEDERATION_MUTATING_TOOLS,
@@ -372,7 +356,6 @@ const MUTATING_TOOLS = new Set([
   ...MODERATION_MUTATING_TOOLS,
   ...REPUTATION_MUTATING_TOOLS,
   ...IDEATION_MUTATING_TOOLS,
-  ...ECONOMY_MUTATING_TOOLS,
   "update_task",
 ]);
 
@@ -454,7 +437,6 @@ const CAPABILITY_FOR_TOOL: Partial<Record<string, ScopeCapability>> = {
   review_work_task: 'task',
   read_work_review_context: 'task', read_work_staffing: 'task',
   list_explanations: 'task', claim_explanation: 'task', release_explanation: 'task', submit_explanation: 'task', review_explanation: 'task',
-  list_benchmarks: 'task', read_benchmark: 'task', submit_benchmark: 'task', review_benchmark: 'task', finalize_benchmark: 'task',
   update_agent_task: "task",
   save_work_state: "journal",
   preview_learning_configuration: 'journal',
@@ -472,7 +454,6 @@ const CAPABILITY_FOR_TOOL: Partial<Record<string, ScopeCapability>> = {
   update_workshop_facilitation: 'publish',
   read_workshop_research: 'publish',
   update_workshop_research: 'publish',
-  manage_quest_contract: 'task', review_quest_contract: 'task',
   contribute_workshop: "comment",
   update_workshop_phase: "status",
   synthesize_workshop: "publish",
@@ -569,7 +550,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
   const selectedFeatures = new Set(features.selected);
   const ownerActivityRuntime = new OwnerActivityRuntime(options.ownerActivity);
   const catalogActivities: readonly Activity[] = ['collaboration', 'ideation-research', 'explanation-translation',
-    'benchmarks', 'economy', 'roleplay', 'skill-evolution'];
+    'roleplay', 'skill-evolution'];
   const catalogActions: readonly OwnerActivityAction[] = ['discover', 'read', 'claim', 'execute'];
   const ownerCatalogSnapshot = (principal?: ScopePrincipal): NonNullable<EndpointAvailabilityContext['ownerActivity']> => {
     if (!options.ownerActivity) return { policyFingerprint: 'absent', executionBindingGeneration: 'absent', eligibility: {} };
@@ -592,10 +573,10 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
     return ownerCatalogSnapshot(principal);
   };
   const hasFeature = (feature: HostFeatureId) => selectedFeatures.has(feature);
-  // Shared task records support selected story/quest workflows without exposing
+  // Shared task records support selected story workflows without exposing
   // the optional work board. Journal/saved-item methods likewise share storage
   // helpers with social methods, but need no social indexes or subscriptions.
-  const needsTaskRecords = ['work-management', 'roleplay', 'economy', 'explanation-translation'].some(id => selectedFeatures.has(id as HostFeatureId));
+  const needsTaskRecords = ['work-management', 'roleplay', 'explanation-translation'].some(id => selectedFeatures.has(id as HostFeatureId));
   const needsPersonalStorage = hasFeature('personal-memory') || hasFeature('collaboration');
   const featureToolAllowed = (tool: string) => {
     const feature = hostFeatureForTool(tool);
@@ -852,34 +833,11 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
   const work = needsTaskRecords ? new WorkService(fileSystem, references, scopeAuth, agentTasks!, {
     ...(options.workCollaboration?.deterministicCoverage && { deterministicCoverage: options.workCollaboration.deterministicCoverage }),
     ...options.workCollaboration,
-    assertTaskMutation: async taskId => {
-      await assertEconomyConfigured(resolvedVaultPath,Boolean(options.economy));
-      if (options.economy) await new EconomyService(fileSystem, options.economy.ledger, options.economy.policy, { assertActor: async () => {} }).assertFreeTaskMutation(taskId);
-    },
-    freeTaskMutations:async taskIds=>{
-      await assertEconomyConfigured(resolvedVaultPath,Boolean(options.economy));
-      return options.economy
-        ? new EconomyService(fileSystem,options.economy.ledger,options.economy.policy,{assertActor:async()=>{}}).freeTaskMutations(taskIds)
-        : Object.fromEntries(taskIds.map(id=>[id,{state:'allowed' as const,freeMutationBlocked:false}]));
-    },
-    ...(options.economy&&{paidProjection:async(taskIds:string[],principal?:ScopePrincipal)=>new EconomyService(fileSystem,options.economy!.ledger,options.economy!.policy,{
-      assertActor:async actor=>{
-        if(!(await scopeAuth.listPrincipals()).some(p=>p.accountId===actor.accountId)||await moderation.isBanned(actor.accountId,actor.userId))throw guidanceError(new Error('Current authorized account required'), 'guid-163a12295a1d8545');
-      },
-    }).workProjection(principal,taskIds)}),
     assertActor: async principal => {
       if (await moderation.isBanned(principal.accountId, principal.userId)) throw guidanceError(new Error('This account is suspended by moderation'), 'guid-3ce72ccf715bd653');
     },
   }) : undefined;
   const participation = hasFeature('collaboration') ? new CommunityParticipationService(fileSystem, { access: scopeAccess, ...(notifications && { notifications }),
-    ...(options.economy && {ownerUsage:async(principal:ScopePrincipal)=>{
-      const owners=options.economy!.policy.owners,owner=owners[principal.accountId];
-      if(!owner)return undefined; // Free community participation remains available.
-      const peers=(await scopeAuth.listPrincipals()).filter(p=>p.accountId!==principal.accountId&&owners[p.accountId]===owner);
-      return aggregateParticipationOwnerUsage(fileSystem,principal,peers,Date.now());
-    },...new EconomyService(fileSystem,options.economy.ledger,options.economy.policy,{assertActor:async actor=>{
-        if(!(await scopeAuth.listPrincipals()).some(p=>p.accountId===actor.accountId)||await moderation.isBanned(actor.accountId,actor.userId))throw guidanceError(new Error('Current authorized account required'), 'guid-163a12295a1d8545');
-      }}).participationOptions()}),
   }) : undefined;
   const skillEvolution = hasFeature('skill-evolution') ? new SkillEvolutionService(fileSystem, scopeAccess, scopeAuth, options.skillEvolution, {
     readOnly,
@@ -938,28 +896,10 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
     canTakeWork: async actor => !(await requiredService(agentTasks).listAssignedOpen({ assignee: actor.agentId || actor.modelId, limit: 1, maxChars: 1200 })).tasks.length,
   }) : undefined;
   const explanations = explanationService();
-  const benchmarkService = (validate?: () => Promise<ScopePrincipal>) => hasFeature('benchmarks') && options.benchmarks?.enabled ? new BenchmarkService(fileSystem, {
-    ...options.benchmarks, access: scopeAccess, pathFilter,
-    ...(options.economy && { ledger: options.economy.ledger }),
-    accountAvailable: async accountId => {
-      const current = (await scopeAuth.listPrincipals()).find(p => p.accountId === accountId);
-      return Boolean(current && scopeAuth.hasCapability(current, 'task') && !await moderation.isBanned(current.accountId, current.userId));
-    },
-    assertActor: async actor => {
-      if (validate && (await validate()).accountId !== actor.accountId) throw guidanceError(Error('Benchmark actor changed'), 'guid-518eea3b4dc4855d');
-      const current = (await scopeAuth.listPrincipals()).find(p => p.accountId === actor.accountId);
-      if (!current || current.agentId !== actor.agentId || current.modelId !== actor.modelId || !scopeAuth.hasCapability(current, 'task')
-        || await moderation.isBanned(current.accountId, current.userId)) throw guidanceError(Error('Current benchmark task account required'), 'guid-e7d63e2af3afffe3');
-      return current;
-    },
-  }) : undefined;
-  const benchmarks = benchmarkService();
-  if (benchmarks) options.benchmarks?.bindAuthority?.(benchmarks);
   const agentPulse = new AgentPulseService(notifications, hasFeature('collaboration') ? social : undefined, chat,
     hasFeature('work-management') ? agentTasks : undefined, continuity, reputation, llmWiki, ideation,
     hasFeature('work-management') ? work : undefined, participation, skillEvolution,
-    { ...(explanations && { explanation: (principal: ScopePrincipal) => explanations.nextAction(principal) }),
-      ...(benchmarks && { benchmark: (principal: ScopePrincipal) => benchmarks.pulse(principal) }) },
+    { ...(explanations && { explanation: (principal: ScopePrincipal) => explanations.nextAction(principal) }) },
     async (activity, principal) => {
       const operation = await ownerActivityRuntime.begin(activity, 'discover', undefined, principal);
       if (!operation.canAccessPath('.')) return undefined;
@@ -1296,7 +1236,6 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         ...getAgentTaskTools(),
         ...getWorkTools(),
         ...getExplanationTools(),
-        ...getBenchmarkTools(),
         ...getConfigurationTools(),
         ...getSkillEvolutionTools(),
         ...getCommunityFeatureTools(),
@@ -1307,7 +1246,6 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
         ...getModerationTools(),
         ...getReputationTools(),
         ...getIdeationTools(),
-        ...getEconomyTools(),
         {
           name: "list_all_tags",
           description: guidanceText('guid-499e41ddd96b2247', "Discover caller-visible, non-hidden tags in bounded {tags,total,returned,offset,snapshotFingerprint,truncated,nextAction} pages. Counts are occurrences, not distinct notes. Combines Properties and body Unicode/nested tags; ignores fenced/inline examples and escaped hashes. Sorted by count then ordinal tag. Follow nextAction, retaining authentication locally; changed tag views require restart. Exact labels are never clipped. Advisory derived view, not an atomic source inventory."),
@@ -1645,8 +1583,8 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
       ...getWhisperTools().map(tool => tool.name),
       ...(enterpriseProfile.mode === 'public' ? [
         ...getChatTools(), ...getRoleplayTools(), ...getNotificationTools(), ...getAgentTaskTools(),
-        ...getCommunityFeatureTools(), ...getReputationTools(), ...getIdeationTools(), ...getEconomyTools(),
-        ...getExplanationTools(), ...getBenchmarkTools(),
+        ...getCommunityFeatureTools(), ...getReputationTools(), ...getIdeationTools(),
+        ...getExplanationTools(),
       ].map(tool => tool.name) : []),
     ] : []);
     return buildInternalTools().filter(tool => !unavailable.has(tool.name) && featureToolAllowed(tool.name)).map(tool => {
@@ -1994,7 +1932,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
             undefined,
             trimmedArgs.limit,
             trimmedArgs.maxChars,
-            { readOnly, reviewedSourceAccess, skillEvolutionEnabled: Boolean(skillEvolution?.enabled), authenticated: Boolean(principal), capabilities: new Set(principal?.capabilities || []), principalKey: JSON.stringify(principal), roleplayConfigured: Boolean(options.roleplay), roleplayWritesConfigured: Boolean(options.roleplay?.options.policy.administrators.length), economyConfigured: Boolean(options.economy?.policy.enabled), explanationsConfigured: Boolean(explanations), benchmarksConfigured: Boolean(benchmarks), ownerActivity: ownerState },
+            { readOnly, reviewedSourceAccess, skillEvolutionEnabled: Boolean(skillEvolution?.enabled), authenticated: Boolean(principal), capabilities: new Set(principal?.capabilities || []), principalKey: JSON.stringify(principal), roleplayConfigured: Boolean(options.roleplay), roleplayWritesConfigured: Boolean(options.roleplay?.options.policy.administrators.length), explanationsConfigured: Boolean(explanations), ownerActivity: ownerState },
             true,
             { compact: true, cursor: trimmedArgs.cursor },
           );
@@ -2021,7 +1959,7 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
             trimmedArgs.query,
             trimmedArgs.limit,
             trimmedArgs.maxChars,
-            { readOnly, reviewedSourceAccess, skillEvolutionEnabled: Boolean(skillEvolution?.enabled), authenticated: Boolean(principal), capabilities: new Set(principal?.capabilities || []), roleplayConfigured: Boolean(options.roleplay), roleplayWritesConfigured: Boolean(options.roleplay?.options.policy.administrators.length), economyConfigured: Boolean(options.economy?.policy.enabled), explanationsConfigured: Boolean(explanations), benchmarksConfigured: Boolean(benchmarks), ownerActivity: ownerState },
+            { readOnly, reviewedSourceAccess, skillEvolutionEnabled: Boolean(skillEvolution?.enabled), authenticated: Boolean(principal), capabilities: new Set(principal?.capabilities || []), roleplayConfigured: Boolean(options.roleplay), roleplayWritesConfigured: Boolean(options.roleplay?.options.policy.administrators.length), explanationsConfigured: Boolean(explanations), ownerActivity: ownerState },
             false,
             { cursor: trimmedArgs.cursor },
           );
@@ -3108,13 +3046,6 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
           const service = new RoleplayService(fileSystem, scopeAccess, references, options.roleplay, {
             assertActor: async () => { await revalidateActor(); }, retrieval,
             changed: path => queueReadModelChange(path, 'upsert'),
-            ...(options.economy && { validateQuestBinding: async (questId: string) => {
-              const state = await options.economy!.ledger.snapshot(); const contract = state.contracts[questId];
-              const policy = options.economy!.policy;
-              if (!policy.enabled || !policy.subjectiveReview || !contract || contract.status !== 'claimed' || !contract.escrow || !contract.worker || !contract.workerOwner || !contract.reviewer || !contract.reviewerOwner
-                || !policy.reviewers.includes(contract.reviewer) || policy.owners[contract.worker] !== contract.workerOwner || policy.owners[contract.reviewer] !== contract.reviewerOwner
-                || contract.reviewerOwner === contract.workerOwner || contract.reviewerOwner === contract.requesterOwner || contract.terms.kind === 'mechanical') throw guidanceError(new Error('Roleplay reward requires a funded, claimed quest with an assigned independent reviewer and approved owners'), 'guid-1e46c0e8d962bba1');
-            } }),
           });
           return jsonResult(await service.execute(endpoints[toolName]!, trimmedArgs, principal), false);
         }
@@ -3133,14 +3064,6 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
           const result = await llmWiki.topicPacket(principal, trimmedArgs);
           if (JSON.stringify(await scopeAuth.authenticate(rawArgs.accessToken)) !== JSON.stringify(principal)) throw guidanceError(new Error('Authentication changed; retry topic request'), 'guid-f7cbf440ff304bd3');
           return jsonResult(result, trimmedArgs.prettyPrint);
-        }
-        case 'list_benchmarks': case 'read_benchmark': case 'submit_benchmark': case 'review_benchmark': case 'finalize_benchmark': {
-          const service = benchmarkService(principal ? revalidateActor : undefined);
-          if (!service) throw guidanceError(Error('Benchmark feature is not configured by the host'), 'guid-77896f1b100b2241');
-          // Never persist authentication tokens or transport-specific fields in receipts.
-          const params = Object.fromEntries(['challengeId', 'field', 'entryId', 'reviewId', 'offset', 'textLimit', 'expectedRevision', 'requestId', 'answer', 'practice', 'review', 'limit', 'maxChars', 'cursor']
-            .filter(key => rawArgs[key] !== undefined).map(key => [key, rawArgs[key]]));
-          return jsonResult(await service.execute(benchmarkOperation(toolName)!, params, principal), false);
         }
         case 'check_reusable_configuration': {
           const { accessToken: _token, ...params } = rawArgs;
@@ -3267,47 +3190,6 @@ export function createServer(vaultPath: string, options: CreateServerOptions = {
           return jsonResult(await requiredService(ideation).readWorkshopFacilitation({ ...(principal && { principal }), workshopId: trimmedArgs.workshopId, cursor: trimmedArgs.cursor, limit: trimmedArgs.limit, maxChars: trimmedArgs.maxChars }), false);
         case 'update_workshop_facilitation':
           return jsonResult(await requiredService(ideation).updateWorkshopFacilitation({ ...(principal && { principal }), workshopId: trimmedArgs.workshopId, expectedRevision: trimmedArgs.expectedRevision, requestId: trimmedArgs.requestId, operation: trimmedArgs.operation, payload: trimmedArgs.payload, stepId: trimmedArgs.stepId, structured: trimmedArgs.structured, content: trimmedArgs.content, kind: trimmedArgs.kind, references: trimmedArgs.references, revalidateActor }), trimmedArgs.prettyPrint);
-        case 'read_economy_wallet': case 'read_quest_market': case 'manage_quest_contract': case 'review_quest_contract': {
-          if (!options.economy) throw guidanceError(new Error('Economy is disabled; host-provisioned verified storage, owners and policy are required'), 'guid-f53a20931dd8ae52');
-          const economy = new EconomyService(fileSystem, options.economy.ledger, options.economy.policy, {
-            validateRoleplayArtifact: (artifact, contract) => validateRoleplayQuestArtifact(options.roleplay, artifact, contract, options.economy!.policy),
-            assertActor: async () => { await revalidateActor(); },
-            verify: async (contract, artifacts) => {
-              validateMarkdownContract(contract.terms.verifier, contract.terms.criteria);
-              const bodies: string[] = [];
-              for (const artifact of artifacts) {
-                const note = await fileSystem.readNote(artifact.path);
-                if (note.revision !== artifact.revision || !canAccessPath(artifact.path) || !scopeAccess.canAccessPhysicalPath(artifact.path)) throw guidanceError(new Error('Verifier source changed or is unavailable'), 'guid-c82d73eeba62dac4');
-                assertReadableNote(note.frontmatter); bodies.push(note.content);
-              }
-              return verifyMarkdownContract(contract.terms.verifier, contract.terms.criteria, bodies);
-            },
-            claimTask: async (actor, contract, requestId) => {
-              const path = `Community/Tasks/${contract.terms.taskId}.md`;
-              const task = await fileSystem.readNote(path);
-              const bridgeId = `quest-${workFingerprint({ contractId:contract.id, accountId:actor.accountId, requestId:requestId.trim() })}`;
-              if (task.frontmatter.assignee_account_id === actor.accountId) {
-                // Recover a response-lost bridge only from its exact current
-                // Work receipt, never from assignee equality alone.
-                const { work_receipts: receipts, ...state } = task.frontmatter;
-                const receipt = Array.isArray(receipts) && receipts.find((r: any) => r.actor===actor.accountId && r.requestId===bridgeId && r.action==='claim.start' && r.target===contract.terms.taskId);
-                if (!receipt || receipt.state!==workFingerprint({ state:JSON.stringify(state), content:task.content }) || receipt.result?.generation!==task.frontmatter.claim_generation || task.frontmatter.status!=='in_progress'
-                  || task.frontmatter.economy_contract_id!==contract.id || task.frontmatter.economy_claim_request_id!==bridgeId || task.frontmatter.economy_claim_generation!==task.frontmatter.claim_generation) throw guidanceError(new Error('Work bridge divergence; host reconciliation required'), 'guid-33eef48d399fb695');
-                return {revision:task.revision,generation:Number(task.frontmatter.claim_generation),requestId:bridgeId};
-              }
-              if(task.revision!==contract.terms.taskRevision)throw guidanceError(new Error('Work source changed before paid claim'), 'guid-043f855be2b5c35c');
-              const result = await requiredService(work).claimPaid({ op: 'start', taskId: contract.terms.taskId, principal: actor, expectedRevision: task.revision, expectedGeneration: Number(task.frontmatter.claim_generation || 0), requestId: bridgeId, reason: guidanceText('guid-a26177bbcfa63cf0', `Exclusive paid claim ${contract.id}`) },contract.id);
-              return {revision:String(result.revision),generation:Number(result.generation),requestId:bridgeId};
-            },
-          });
-          if (toolName === 'read_economy_wallet') return jsonResult(await economy.wallet(principal, trimmedArgs), false);
-          if (toolName === 'read_quest_market') return jsonResult(await economy.market(principal, trimmedArgs), false);
-          // Forward ONLY schema fields: never persist the access token/principal.
-          const fields = ['op','contractId','requestId','expectedRevision','expectedGeneration','reason','terms','artifacts','basis','verdict','reviewArtifact'];
-          const command = Object.fromEntries(fields.filter(key => trimmedArgs[key] !== undefined).map(key => [key, trimmedArgs[key]]));
-          return jsonResult(await (toolName === 'manage_quest_contract' ? economy.contract(principal, command as any) : economy.review(principal, command as any)), false);
-        }
-
         case "list_workshops": {
           return jsonResult(await requiredService(ideation).listWorkshops({ phase: trimmedArgs.phase, status: trimmedArgs.status, limit: trimmedArgs.limit, maxChars: trimmedArgs.maxChars }), trimmedArgs.prettyPrint);
         }

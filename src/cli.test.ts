@@ -44,12 +44,6 @@ test('feature selection config is an explicit single host file, independent of p
   for (const args of [['--features-config'], ['--features-config='], ['--features-config', '--read-only'], ['--features-config=a', '--features-config=b']]) expect(() => parseCliArgs(args)).toThrow(/features-config/);
 });
 
-test('benchmark opt-in config is explicit, single and independent of wallet enablement', () => {
-  expect(parseCliArgs(['Vault', '--benchmark-config=private.json'])).toEqual({ vaultPathArg: 'Vault', readOnly: false, benchmarkConfig: 'private.json' });
-  expect(parseCliArgs(['--benchmark-config', 'private.json', 'Vault']).vaultPathArg).toBe('Vault');
-  for (const args of [['--benchmark-config'], ['--benchmark-config='], ['--benchmark-config=a', '--benchmark-config=b']]) expect(() => parseCliArgs(args)).toThrow(/benchmark-config/);
-});
-
 test('parses explanation configuration without changing Vault or enabling economy', () => {
   expect(parseCliArgs(['Vault', '--explanation-config=private.json'])).toEqual({ vaultPathArg: 'Vault', readOnly: false, explanationConfig: 'private.json' });
   expect(parseCliArgs(['--explanation-config', 'private.json', 'Vault']).vaultPathArg).toBe('Vault');
@@ -68,15 +62,8 @@ test('parses skill evolution host configuration without consuming the NAS path o
 
 test('parses host-only roleplay configuration without enabling economy or changing the vault', () => {
   expect(parseCliArgs(['E:\\Vault', '--roleplay-config=E:\\Private\\roleplay.json'])).toMatchObject({ vaultPathArg: 'E:\\Vault', roleplayConfig: 'E:\\Private\\roleplay.json' });
-  expect(parseCliArgs(['E:\\Vault', '--roleplay-config', 'E:\\Private\\roleplay.json']).economyConfig).toBeUndefined();
   expect(() => parseCliArgs(['E:\\Vault', '--roleplay-config'])).toThrow(/config/i);
   expect(() => parseCliArgs(['E:\\Vault', '--roleplay-config=a', '--roleplay-config=b'])).toThrow();
-});
-
-test('parses private economy config separately from the vault path',()=>{
-  expect(parseCliArgs(['E:\\Vault','--economy-config=E:\\Private\\economy.json']).economyConfig).toBe('E:\\Private\\economy.json');
-  expect(parseCliArgs(['E:\\Vault','--economy-config','E:\\Private\\economy.json']).vaultPathArg).toBe('E:\\Vault');
-  expect(()=>parseCliArgs(['E:\\Vault','--economy-config'])).toThrow(/config/i);
 });
 
 describe("parseCliArgs", () => {
