@@ -941,7 +941,7 @@
     {
       "id": "readme-workflows",
       "path": "docs/getting-started/workflows.md",
-      "description": "Find source, collaboration, fiction, economy and skill documentation by purpose.",
+      "description": "Find source, synthesis, Obsidian, work, skill and notice documentation by purpose.",
       "useWhen": "Entering one specialized workflow, not every domain.",
       "skipWhen": "Outside this topic; optional examples never authorize execution.",
       "project": "MCPVault",
