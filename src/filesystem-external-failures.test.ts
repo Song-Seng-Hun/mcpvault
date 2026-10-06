@@ -1,5 +1,5 @@
 import { afterEach, expect, test, vi } from 'vitest';
-import { mkdtemp, readdir, readFile, rm, unlink, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, readFile, rm, unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ScopeAccessPolicy } from './scope-access.js';
@@ -110,6 +110,18 @@ test('a failed temporary-file cleanup keeps the copy failure as the reported err
   const [left] = (await files(vault)).filter(name => name.endsWith('.mcpvault-move'));
   expect(result.message).toContain(`A hidden temporary file (possibly an incomplete copy of the source) remains in the Vault root: ${left}. It is not a backup`);
   expect(await readFile(join(vault, 'Target.png'), 'utf8')).toBe('old target');
+});
+
+test('a leftover temporary file in a subfolder is named with its Vault-relative folder', async () => {
+  const { vault, fs } = await vaultWithTarget();
+  await mkdir(join(vault, 'Art', 'Images'), { recursive: true });
+  await writeFile(join(vault, 'Art', 'Images', 'Target.png'), 'old target');
+  Object.assign(host, { copyFails: true, cleanupFails: true });
+  const result = await fs.moveFile({ ...overwrite, newPath: 'Art/Images/Target.png', confirmNewPath: 'Art/Images/Target.png' });
+  expect(result).toMatchObject({ success: false, message: expect.stringMatching(/no space left/) });
+  const [left] = (await readdir(join(vault, 'Art', 'Images'))).filter(name => name.endsWith('.mcpvault-move'));
+  expect(result.message).toContain(`remains in Art/Images: ${left}. It is not a backup`);
+  expect(await readFile(join(vault, 'Art', 'Images', 'Target.png'), 'utf8')).toBe('old target');
 });
 
 test('a temporary name another writer already holds is refused and left in place', async () => {
