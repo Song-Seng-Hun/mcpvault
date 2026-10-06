@@ -62,6 +62,12 @@ function assertNoteContentSize(content: string, path: string): void {
   assertContextRulesContent(content);
 }
 
+/** Names the hidden temporary copy a failed cross-device move could not remove. */
+function leftoverNotice(error: unknown): string {
+  if (!(error instanceof Error && 'leftover' in error && typeof error.leftover === 'string')) return '';
+  return ` A hidden temporary copy of the source remains at ${error.leftover}; delete it once no move is running.`;
+}
+
 function getFrontmatterValue(frontmatter: Record<string, any>, key: string): { found: boolean; value?: unknown } {
   let current: unknown = frontmatter;
   for (const segment of key.split('.')) {
@@ -988,11 +994,12 @@ export class FileSystemService {
   }
   /** Removes our temporary copy after a failed cross-device move and returns the
    * failure to throw. The copy or rename failure stays the reported error; a
-   * cleanup failure becomes its cause. */
-  private async discardMoveTemporary(temporary: string, error: unknown): Promise<Error> {
+   * cleanup failure becomes its cause, and `leftover` names the hidden file
+   * (Vault-relative) so the caller can tell the user it remains. */
+  private async discardMoveTemporary(temporary: string, error: unknown): Promise<Error & { leftover?: string }> {
     const failure = error instanceof Error ? error : new Error(String(error));
     try { await rm(temporary, { force: true }); }
-    catch (cleanup) { Object.assign(failure, { cause: cleanup }); }
+    catch (cleanup) { Object.assign(failure, { cause: cleanup, leftover: relative(this.vaultPath, temporary).replace(/\\/g, '/') }); }
     return failure;
   }
   /** What an unfinished move_note rollback left at the destination, judged by
@@ -2548,7 +2555,7 @@ export class FileSystemService {
         success: false,
         oldPath,
         newPath,
-        message: guidanceText('guid-4c2b4de17c38f30e', `Failed to move file: ${error instanceof Error ? error.message : 'Unknown error'}`)
+        message: guidanceText('guid-4c2b4de17c38f30e', `Failed to move file: ${error instanceof Error ? error.message : 'Unknown error'}${leftoverNotice(error)}`)
       };
     }
   }

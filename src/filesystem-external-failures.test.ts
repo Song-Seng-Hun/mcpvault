@@ -105,6 +105,9 @@ test('a failed temporary-file cleanup keeps the copy failure as the reported err
   expect(result).toMatchObject({ success: false, message: expect.stringMatching(/no space left/) });
   expect(result.message).not.toMatch(/not permitted/);
   expect(result).not.toHaveProperty('partial');
+  // The temporary copy the cleanup could not remove is named, Vault-relative.
+  const [left] = (await files(vault)).filter(name => name.endsWith('.mcpvault-move'));
+  expect(result.message).toContain(`A hidden temporary copy of the source remains at ${left}`);
   expect(await readFile(join(vault, 'Target.png'), 'utf8')).toBe('old target');
 });
 
