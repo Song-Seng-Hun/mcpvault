@@ -1011,7 +1011,8 @@ export class FileSystemService {
    * source is still in place: its removal is the last step of a move. */
   private async unrestoredDestination(fullPath: string, path: string, previous: string | undefined, moved: string, cause: string): Promise<string | undefined> {
     let current: string | undefined;
-    try { current = await readFile(fullPath, 'utf-8'); }
+    // Bounded like any note read; a file over the limit counts as "could not be checked".
+    try { current = await this.vaultIo.readUtf8Bounded(fullPath, MAX_NOTE_CONTENT_BYTES); }
     catch (error) {
       if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) return `${path} could not be checked after the failed rollback (${cause})`;
     }
