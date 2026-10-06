@@ -7,6 +7,7 @@ import { FileSystemService } from './filesystem.js';
 import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { caseSensitiveFilesystem, hostGate } from '../tests/host-conditions.js';
 
 const principal: ScopePrincipal = { accountId: 'a', agentId: 'network', modelId: 'codex', userId: 'u', commandCenterId: 'acme', role: 'agent' };
 
@@ -132,7 +133,8 @@ test('an overwrite move whose source is revoked during the write barriers keeps 
   } finally { await rm(vault, { recursive: true, force: true }); }
 });
 
-test('an overwrite move that only changes the letter case keeps the file', async () => {
+// The old unlink removed the source itself only where a.png and A.png are one file.
+test.skipIf(Boolean(hostGate(caseSensitiveFilesystem(tmpdir()))))('an overwrite move that only changes the letter case keeps the file', async () => {
   const vault = await mkdtemp(join(tmpdir(), 'mcpvault-barrier-order-'));
   try {
     const fs = new FileSystemService(vault);

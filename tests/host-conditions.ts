@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 // Detected host conditions for tests that cannot run on every checkout. Each
@@ -20,6 +20,15 @@ export function missingLocalPackage(root: string, path: string): string | undefi
 /** The repository stores LF; core.autocrlf checked this file out with CRLF. */
 export function crlfCheckout(path: string): string | undefined {
   return readFileSync(path, 'utf8').includes('\r\n') ? `${path} is checked out with CRLF line endings` : undefined;
+}
+
+/** The test needs a filesystem where two names differing only in case are one file. */
+export function caseSensitiveFilesystem(dir: string): string | undefined {
+  const name = `mcpvault-case-probe-${process.pid}-${Date.now()}.tmp`;
+  writeFileSync(join(dir, name), '');
+  try {
+    return existsSync(join(dir, name.toUpperCase())) ? undefined : `${dir} is case-sensitive, so a case-only rename cannot collide with its own source`;
+  } finally { unlinkSync(join(dir, name)); }
 }
 
 /** Vitest cannot import a shebang module with CRLF endings in-process. */
