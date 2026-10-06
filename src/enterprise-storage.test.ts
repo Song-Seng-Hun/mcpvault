@@ -99,6 +99,35 @@ test('a write barrier that denies the target keeps the file a move would overwri
   } finally { await rm(vault, { recursive: true, force: true }); }
 });
 
+test('an overwrite move whose source is revoked at the target barrier keeps the old target bytes', async () => {
+  const vault = await mkdtemp(join(tmpdir(), 'mcpvault-barrier-order-'));
+  try {
+    const fs = new FileSystemService(vault);
+    await writeFile(join(vault, 'Source.png'), 'source');
+    await writeFile(join(vault, 'Target.png'), 'old target');
+    // The target stays admitted throughout; only the source is revoked, by the target's own barrier.
+    let revoked = false;
+    const context = { access: new ScopeAccessPolicy(), assertFresh() {}, beforeWrite: async () => { revoked = true; },
+      canAccessPath: (path: string) => !(revoked && path === 'Source.png') };
+    const move = { oldPath: 'Source.png', newPath: 'Target.png', confirmOldPath: 'Source.png', confirmNewPath: 'Target.png', overwrite: true };
+    expect(await withEnterpriseStorageContext(context, () => fs.moveFile(move))).toMatchObject({ success: false });
+    expect(await readFile(join(vault, 'Target.png'), 'utf8')).toBe('old target');
+    expect(await readFile(join(vault, 'Source.png'), 'utf8')).toBe('source');
+  } finally { await rm(vault, { recursive: true, force: true }); }
+});
+
+test('an overwrite move that only changes the letter case keeps the file', async () => {
+  const vault = await mkdtemp(join(tmpdir(), 'mcpvault-barrier-order-'));
+  try {
+    const fs = new FileSystemService(vault);
+    await writeFile(join(vault, 'a.png'), 'bytes');
+    const move = { oldPath: 'a.png', newPath: 'A.png', confirmOldPath: 'a.png', confirmNewPath: 'A.png', overwrite: true };
+    expect(await fs.moveFile(move)).toMatchObject({ success: true });
+    expect(await readdir(vault)).toEqual(['A.png']);
+    expect(await readFile(join(vault, 'A.png'), 'utf8')).toBe('bytes');
+  } finally { await rm(vault, { recursive: true, force: true }); }
+});
+
 test('a note move denied for its source reaches no write barrier for the destination', async () => {
   const vault = await mkdtemp(join(tmpdir(), 'mcpvault-barrier-order-'));
   try {
