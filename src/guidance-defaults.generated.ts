@@ -1471,7 +1471,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/cli.ts",
-        "line": 83
+        "line": 90
       }
     ]
   },
@@ -2179,7 +2179,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/cli.ts",
-        "line": 212
+        "line": 222
       }
     ]
   },
@@ -3505,7 +3505,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/cli.ts",
-        "line": 73
+        "line": 80
       }
     ]
   },
@@ -17912,7 +17912,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/cli.ts",
-        "line": 157
+        "line": 164
       }
     ]
   },
@@ -21311,6 +21311,23 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-69825747c6cad30b",
+    "kind": "error",
+    "template": "{arg0} belongs to the removed {arg1} feature; remove this option",
+    "parts": [
+      "",
+      " belongs to the removed ",
+      " feature; remove this option"
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/cli.ts",
+        "line": 215
+      }
+    ]
+  },
+  {
     "id": "guid-698f2185b802dc4c",
     "kind": "prose",
     "template": "treating a summary or relation as truth",
@@ -24012,11 +24029,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/cli.ts",
-        "line": 164
+        "line": 171
       },
       {
         "file": "src/cli.ts",
-        "line": 172
+        "line": 179
       }
     ]
   },
@@ -25347,7 +25364,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/cli.ts",
-        "line": 54
+        "line": 61
       }
     ]
   },
@@ -28141,7 +28158,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/cli.ts",
-        "line": 136
+        "line": 143
       }
     ]
   },
@@ -28593,7 +28610,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/cli.ts",
-        "line": 64
+        "line": 71
       }
     ]
   },
@@ -31863,11 +31880,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/cli.ts",
-        "line": 179
+        "line": 186
       },
       {
         "file": "src/cli.ts",
-        "line": 187
+        "line": 194
       }
     ]
   },
@@ -32830,7 +32847,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/cli.ts",
-        "line": 78
+        "line": 85
       }
     ]
   },
@@ -34529,7 +34546,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/cli.ts",
-        "line": 59
+        "line": 66
       }
     ]
   },
@@ -36219,7 +36236,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/cli.ts",
-        "line": 117
+        "line": 124
       }
     ]
   },
@@ -43806,7 +43823,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/cli.ts",
-        "line": 69
+        "line": 76
       }
     ]
   },
@@ -46911,7 +46928,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/cli.ts",
-        "line": 88
+        "line": 95
       }
     ]
   },
@@ -48777,7 +48794,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/cli.ts",
-        "line": 98
+        "line": 105
       }
     ]
   },
@@ -51067,7 +51084,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/cli.ts",
-        "line": 93
+        "line": 100
       }
     ]
   },
@@ -51652,11 +51669,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/cli.ts",
-        "line": 194
+        "line": 201
       },
       {
         "file": "src/cli.ts",
-        "line": 202
+        "line": 209
       }
     ]
   },

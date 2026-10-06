@@ -1,5 +1,12 @@
 import { guidanceError } from './guidance-runtime.js';
 import { isLoopbackHost } from './http-request-utils.js';
+
+/** Options of removed features. Unknown arguments join the Vault path, so these
+ * must fail loudly instead of silently pointing the server at another folder. */
+const REMOVED_FEATURE_FLAGS: Readonly<Record<string, string>> = {
+  '--roleplay-config': 'roleplay', '--economy-config': 'economy',
+  '--explanation-config': 'explanation-translation', '--benchmark-config': 'benchmarks',
+};
 export interface ParsedCliArgs {
   vaultPathArg: string;
   readOnly: boolean;
@@ -203,6 +210,9 @@ export function parseCliArgs(args: string[]): ParsedCliArgs {
       mcpHttpTlsKey = value;
       continue;
     }
+
+    const removedFlag = Object.keys(REMOVED_FEATURE_FLAGS).find(flag => arg === flag || arg.startsWith(`${flag}=`));
+    if (removedFlag) throw guidanceError(new Error(`${removedFlag} belongs to the removed ${REMOVED_FEATURE_FLAGS[removedFlag]} feature; remove this option`), 'guid-69825747c6cad30b');
 
     pathArgs.push(arg);
   }

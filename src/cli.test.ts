@@ -146,6 +146,15 @@ describe("parseCliArgs", () => {
     expect(() => parseCliArgs(["/vault", "--mcp-http-key"])).toThrow("--mcp-http-key requires a file path");
   });
 
+  test.each([
+    ['--roleplay-config', 'roleplay'], ['--economy-config', 'economy'],
+    ['--explanation-config', 'explanation-translation'], ['--benchmark-config', 'benchmarks'],
+  ])('%s names its removed feature instead of joining the Vault path', (flag, feature) => {
+    for (const args of [['/vault', flag, 'host.json'], ['/vault', `${flag}=host.json`]]) {
+      expect(() => parseCliArgs(args)).toThrow(`${flag} belongs to the removed ${feature} feature`);
+    }
+  });
+
   test("rejects invalid REST ports", () => {
     expect(() => parseCliArgs(["/vault", "--http=abc"])).toThrow("--http must be a numeric port");
   });
