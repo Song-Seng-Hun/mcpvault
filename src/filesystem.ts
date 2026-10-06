@@ -939,6 +939,8 @@ export class FileSystemService {
     const targetPath = relative(this.vaultPath, to).replace(/\\/g, '/');
     assertOriginalMutation(sourcePath);
     assertOriginalMutation(targetPath);
+    // The source leaves its path, so it passes the barrier too (no inheritance).
+    await prepareOwnerActivityStorageWrite(sourcePath);
     await prepareDocumentWrite(targetPath);
     this.assertMoveDispatch(sourcePath, targetPath);
     // Same rule as writeProtectedFile: folders only after the checks pass.
@@ -947,8 +949,8 @@ export class FileSystemService {
     return rename(from, to);
   }
   /** For a move whose rename failed with EXDEV; renameProtectedFile already ran
-   * the target barrier. The source barrier and every check run before a byte is
-   * copied. The copy lands in a temporary file beside the target and replaces
+   * both barriers. The source barrier runs again, with every check, before a
+   * byte is copied. The copy lands in a temporary file beside the target and replaces
    * it only by rename, so a denial or a failed copy leaves the target as it
    * was and no temporary file behind. Once the target is replaced nothing can
    * undo it: a source that cannot then be removed is returned, not thrown, so

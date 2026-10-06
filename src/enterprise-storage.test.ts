@@ -99,7 +99,23 @@ test('a write barrier that denies the target keeps the file a move would overwri
   } finally { await rm(vault, { recursive: true, force: true }); }
 });
 
-test('an overwrite move whose source is revoked at the target barrier keeps the old target bytes', async () => {
+test('a same-device move runs the write barrier for its source', async () => {
+  const vault = await mkdtemp(join(tmpdir(), 'mcpvault-barrier-order-'));
+  try {
+    const fs = new FileSystemService(vault);
+    await writeFile(join(vault, 'Source.png'), 'source');
+    await writeFile(join(vault, 'Target.png'), 'old target');
+    const context = { access: new ScopeAccessPolicy(), assertFresh() {},
+      beforeWrite: async (path: string) => { if (path === 'Source.png') throw new Error('barrier denied the source'); } };
+    const move = { oldPath: 'Source.png', newPath: 'Target.png', confirmOldPath: 'Source.png', confirmNewPath: 'Target.png', overwrite: true };
+    expect(await withEnterpriseStorageContext(context, () => fs.moveFile(move)))
+      .toMatchObject({ success: false, message: expect.stringMatching(/barrier denied the source/) });
+    expect(await readFile(join(vault, 'Target.png'), 'utf8')).toBe('old target');
+    expect(await readFile(join(vault, 'Source.png'), 'utf8')).toBe('source');
+  } finally { await rm(vault, { recursive: true, force: true }); }
+});
+
+test('an overwrite move whose source is revoked during the write barriers keeps the old target bytes', async () => {
   const vault = await mkdtemp(join(tmpdir(), 'mcpvault-barrier-order-'));
   try {
     const fs = new FileSystemService(vault);
