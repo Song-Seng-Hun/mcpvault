@@ -943,6 +943,7 @@ export class FileSystemService {
     this.assertMoveDispatch(sourcePath, targetPath);
     // Same rule as writeProtectedFile: folders only after the checks pass.
     if (createParent) { await mkdir(dirname(to), { recursive: true }); this.assertMoveDispatch(sourcePath, targetPath); }
+    // Replaces an existing file. Windows refuses a read-only one (EPERM), which fails closed.
     return rename(from, to);
   }
   /** For a move whose rename failed with EXDEV; renameProtectedFile already ran
@@ -2456,6 +2457,8 @@ export class FileSystemService {
             };
           }
           // No unlink: the rename below replaces the file only after its checks pass.
+          // On Windows a read-only target makes that rename fail with EPERM and
+          // stay unchanged; the attribute is deliberately left for the owner.
         } catch (error) {
           if (!(error instanceof Error) || !('code' in error) || error.code !== 'ENOENT') {
             throw error;

@@ -61,7 +61,7 @@ Text-aware move for markdown files. Reads source as UTF-8, writes to destination
 
 ## move_file
 
-Binary-safe move. Requires double confirmation: `confirmOldPath === oldPath` AND `confirmNewPath === newPath`. Rejects directories. Falls back to copy+unlink for cross-filesystem moves.
+Binary-safe move. Requires double confirmation: `confirmOldPath === oldPath` AND `confirmNewPath === newPath`. Rejects directories. With `overwrite: true` the target is replaced by rename, only after every check passes. On Windows a read-only target makes the move fail with EPERM and stays unchanged; clear the attribute yourself if the replacement is intended. Cross-filesystem moves copy to a temporary file beside the target, rename it over the target, then remove the source.
 
 **When to use which:**
 - Renaming/moving `.md` files, with or without Obsidian running → `move_note`, then explicitly repair and verify backlinks (see SKILL.md Safe Note Rename Workflow)
