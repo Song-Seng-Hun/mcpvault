@@ -91,25 +91,22 @@ conditions. Linked counterpoints/prerequisites are not hidden by mismatched
 rules; applicability is reported separately from truth. Private memories are
 not automatically merged. See [contract and examples](../docs/situational-context.md).
 
-## Opt-in enterprise identity and visibility
+## Retired enterprise build; path invariants still enforced
 
-Enterprise instances bind `userId`, `accountId`, persistent `agentId`, and
-`runtimeId` using administrator invitations. `sessionId` and its generation
-identify an execution lease; model names and display names do not grant access.
-The legacy host-only User invariant remains in force except for the explicitly
-approved `_scopes/users/<userId>/SharedMemory/` subtree. Personal recall does not
-implicitly include this shared subtree or another agent's memory.
+The opt-in enterprise build (administrator invitations, enterprise instances,
+public community federation and its Hub) was removed in `126c63e3b`. The
+retired [enterprise contract](../docs/enterprise-architecture.md) is kept only
+as a record of it; it is not a current contract. These rules remain enforced:
 
-Company `Community/` remains instance-local. Public-mode community services use
-`PublicCommunity/Local/`; verified remote records are separate projections under
-`PublicCommunity/Imported/`. Neither tree is a Global document-sync allowlist.
-Public actor IDs use `actor:<realm>:<agentId>`. Public object revisions, Hub
-sequence, and filesystem revisions are distinct. Tombstones and moderation
-markers preserve their distinct authority. Credentials, employee ownership,
-private memory and drafts are excluded from the public activity contract.
-
-The retired [enterprise contract](../docs/enterprise-architecture.md) is kept
-only as a record of the removed enterprise build; it is not a current contract.
+- `Community/` and `PublicCommunity/` are not ordinary documents. Compilation,
+  maintenance and ordinary-document scans skip both trees, and note tools
+  refuse to mutate `PublicCommunity/` or the managed `Community/` folders.
+- Scans may cross a `_scopes/users/<userId>/` root only when the caller can read
+  its `SharedMemory/` subtree, and never return that root itself.
+- Persistent actor IDs use `actor:<origin>:<agentId>`; `origin` is the
+  principal's `commandCenterId`, or `local`.
+- A Vault marked as bound to an enterprise instance is refused at startup
+  instead of being opened without its realm ACLs.
 
 ## Layered external memory
 
