@@ -224,9 +224,8 @@ test('a scoped grant permits the write and revocation just before it leaves no m
   refreshes = 0; armed = true;
   expect((await write('blocked')).isError).toBe(true);
   const after = await vaultFiles();
-  // The request receipt is reserved before the final barrier (reported
-  // separately); the experience record itself must not be written.
-  expect(after.filter(path => !before.includes(path) && !/_evolution([\\/]receipts)?([\\/]|$)/.test(path))).toEqual([]);
+  // Neither the request receipt, its folders nor the experience is written.
+  expect(after.filter(path => !before.includes(path))).toEqual([]);
 });
 
 test('REST shares the owner consent boundary', async () => {

@@ -1259,8 +1259,6 @@ export class FileSystemService {
       }
 
       assertNoteContentSize(finalContent!, path);
-      // Create directories if they don't exist
-      await mkdir(dirname(fullPath), { recursive: true });
       // The missing guard must survive another process creating the target
       // after our existence check. Exclusive creation never truncates it.
       // Recheck caller policy after all awaited preparation, at write dispatch.
@@ -1270,8 +1268,10 @@ export class FileSystemService {
       // again after asynchronous authorization/source checks, immediately before
       // dispatch, so an edit during those awaits is never silently truncated.
       await this.assertExpectedRevision(path, expectedRevision, revisionMaxBytes);
+      // Create missing folders only after the write barrier admits this path,
+      // so a denied write leaves no empty folders behind.
       await this.writeProtectedFile(fullPath, finalContent!, expectedRevision === 'missing'
-        ? { encoding: 'utf-8', flag: 'wx' } : 'utf-8');
+        ? { encoding: 'utf-8', flag: 'wx' } : 'utf-8', async () => { await mkdir(dirname(fullPath), { recursive: true }); });
       this.notifyNoteChanged(path, 'upsert');
       return { revision: this.revision(finalContent!), originalContent: finalContent! };
     } catch (error) {
