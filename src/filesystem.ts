@@ -21,7 +21,7 @@ import { buildNoteReferenceIndex, markdownNotePath, noteReferenceDocument, resol
 import { validateJsonCanvasDocument } from './json-canvas.js';
 import { acceptsPlainReference, isReferenceSnapshotPath, propertyPathText } from './property-references.js';
 import { assertLegacyDiscussionMutationAllowed, ScopeAccessPolicy } from './scope-access.js';
-import { assertEnterpriseStorageAccess, assertEnterpriseStorageFresh, canReadEnterpriseStoragePath, canTraverseEnterpriseStoragePath, prepareDocumentWrite } from './enterprise-storage-context.js';
+import { assertEnterpriseStorageAccess, assertEnterpriseStorageFresh, canReadEnterpriseStoragePath, canTraverseEnterpriseStoragePath, prepareDocumentWrite, prepareOwnerActivityStorageWrite } from './enterprise-storage-context.js';
 import { expandScopePath, parseScopePath, scopeRoot } from './scopes.js';
 import { extractMarkdownTasks, iterateMarkdownTasks } from './markdown-tasks.js';
 import { TaskReanchorError } from './task-reanchoring.js';
@@ -903,7 +903,8 @@ export class FileSystemService {
 
   /** Recheck live host notice authority at dispatch, after awaited preparation.
    * createParent makes missing folders only after every check admits the path,
-   * then rechecks, so a denied write leaves nothing behind. */
+   * then rechecks before writing. A denial before the mkdir leaves nothing; a
+   * denial at the recheck can leave empty folders, never the file. */
   private async writeProtectedFile(path: string, content: string | Buffer, options: Parameters<typeof writeFile>[2] = 'utf8', beforeDispatch?: () => Promise<void>, assertCurrent?: () => void, createParent = false) {
     const physicalPath = relative(this.vaultPath, path).replace(/\\/g, '/');
     const exclusive = typeof options === 'object' && options !== null && 'flag' in options && options.flag === 'wx';
@@ -924,6 +925,9 @@ export class FileSystemService {
   private async removeProtectedFile(path: string) {
     const physicalPath = relative(this.vaultPath, path).replace(/\\/g, '/');
     assertOriginalMutation(physicalPath);
+    // The write barrier without inheritance: a removed path takes no classification.
+    await prepareOwnerActivityStorageWrite(physicalPath);
+    assertEnterpriseStorageAccess(physicalPath);
     assertSkillEvolutionMutationBoundary(physicalPath);
     this.assertNoticeMutation(physicalPath);
     return unlink(path);
@@ -2352,7 +2356,7 @@ export class FileSystemService {
     const newFullPath = this.resolveWritablePath(newPath);
 
     // Generic attachment moves also accept Markdown. Validate against the
-    // destination audience before deleting an existing target or moving bytes.
+    // destination audience before replacing an existing target or moving bytes.
     if (/\.(?:md|markdown|txt)$/i.test(oldPath) || /\.(?:md|markdown|txt)$/i.test(newPath)) {
       try {
         const source = await this.vaultIo.readUtf8Bounded(oldFullPath, MAX_NOTE_CONTENT_BYTES);
@@ -2418,7 +2422,7 @@ export class FileSystemService {
               message: guidanceText('guid-3092b9ad1f78e841', `Target path is a directory: ${newPath}. Please provide a file path.`)
             };
           }
-          await this.removeProtectedFile(newFullPath);
+          // No unlink: the rename below replaces the file only after its checks pass.
         } catch (error) {
           if (!(error instanceof Error) || !('code' in error) || error.code !== 'ENOENT') {
             throw error;

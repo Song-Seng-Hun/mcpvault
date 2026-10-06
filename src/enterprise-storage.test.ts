@@ -4,7 +4,7 @@ import type { ScopePrincipal } from './scope-auth.js';
 import { assertEnterpriseStorageAccess, canReadEnterpriseStoragePath, prepareDocumentWrite, withEnterpriseStorageContext } from './enterprise-storage-context.js';
 import { authorIdentity, resolveActorMention } from './enterprise-identity.js';
 import { FileSystemService } from './filesystem.js';
-import { mkdtemp, readdir, rm } from 'node:fs/promises';
+import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -58,5 +58,43 @@ test('access revoked during the write barrier leaves no folders from a note writ
     const revision = (await fs.readNote('Source.md')).revision;
     expect(await attempt(() => fs.moveNote({ oldPath: 'Source.md', newPath: 'Deep/Moved/Source.md', expectedRevision: revision }))).toMatchObject({ success: false });
     expect(await readdir(vault, { recursive: true })).toEqual(before);
+  } finally { await rm(vault, { recursive: true, force: true }); }
+});
+
+test('access revoked during the write barrier leaves no folders from trash, original capture or a view export', async () => {
+  const vault = await mkdtemp(join(tmpdir(), 'mcpvault-barrier-order-'));
+  try {
+    const fs = new FileSystemService(vault);
+    await fs.writeNote({ path: 'Source.md', content: '# Source\n' });
+    const before = await readdir(vault, { recursive: true });
+    let revoked = false;
+    const context = { access: new ScopeAccessPolicy(), assertFresh() {}, beforeWrite: async () => { revoked = true; },
+      canAccessPath: () => !revoked };
+    const attempt = (write: () => Promise<unknown>) => { revoked = false; return withEnterpriseStorageContext(context, write); };
+    expect(await attempt(() => fs.deleteNote({ path: 'Source.md', confirmPath: 'Source.md', trashMode: 'local' })))
+      .toMatchObject({ success: false, message: expect.stringMatching(/owner activity/i) });
+    await expect(attempt(() => fs.preserveOriginal('_sources/Deep/original.bin', Buffer.from('bytes')))).rejects.toThrow(/owner activity/i);
+    await expect(attempt(() => fs.writeBaseFile({ path: 'Views/Index.base', content: 'views: []\n', expectedRevision: 'missing' }))).rejects.toThrow(/owner activity/i);
+    expect(await readdir(vault, { recursive: true })).toEqual(before);
+  } finally { await rm(vault, { recursive: true, force: true }); }
+});
+
+test('a write barrier that denies the target keeps the file a move would overwrite, and the note a delete would remove', async () => {
+  const vault = await mkdtemp(join(tmpdir(), 'mcpvault-barrier-order-'));
+  try {
+    const fs = new FileSystemService(vault);
+    await writeFile(join(vault, 'Source.png'), 'source');
+    await writeFile(join(vault, 'Target.png'), 'old target');
+    await fs.writeNote({ path: 'Kept.md', content: '# Kept\n' });
+    const denied = new Set(['Target.png', 'Kept.md']);
+    const context = { access: new ScopeAccessPolicy(), assertFresh() {},
+      beforeWrite: async (path: string) => { if (denied.has(path)) throw new Error(`barrier denied ${path}`); } };
+    const move = { oldPath: 'Source.png', newPath: 'Target.png', confirmOldPath: 'Source.png', confirmNewPath: 'Target.png', overwrite: true };
+    expect(await withEnterpriseStorageContext(context, () => fs.moveFile(move))).toMatchObject({ success: false });
+    expect(await readFile(join(vault, 'Target.png'), 'utf8')).toBe('old target');
+    expect(await readFile(join(vault, 'Source.png'), 'utf8')).toBe('source');
+    expect(await withEnterpriseStorageContext(context, () => fs.deleteNote({ path: 'Kept.md', confirmPath: 'Kept.md' })))
+      .toMatchObject({ success: false, message: expect.stringMatching(/barrier denied/) });
+    expect((await fs.readNote('Kept.md')).content).toContain('# Kept');
   } finally { await rm(vault, { recursive: true, force: true }); }
 });
