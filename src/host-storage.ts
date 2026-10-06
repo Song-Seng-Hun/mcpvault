@@ -213,9 +213,10 @@ export async function writeHostFileAtomic(rootInput: string, targetInput: string
   const root = await canonicalRoot(rootInput);
   const target = targetPath(root.lexical, targetInput);
   const parent = dirname(target);
+  // Owner consent first: ensureSafeParent creates missing folders.
+  if (authorizedPath) await prepareOwnerActivityStorageWrite(authorizedPath);
   await ensureSafeParent(root, parent);
   const parentIdentity = await lstat(parent);
-  if (authorizedPath) await prepareOwnerActivityStorageWrite(authorizedPath);
   try { await assertSafeExistingPath(root, target, true); }
   catch (error) {
     if (!(error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT')) throw error;

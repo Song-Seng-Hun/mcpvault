@@ -901,17 +901,24 @@ export class FileSystemService {
     return fullPath;
   }
 
-  /** Recheck live host notice authority at dispatch, after awaited preparation. */
-  private async writeProtectedFile(path: string, content: string | Buffer, options: Parameters<typeof writeFile>[2] = 'utf8', beforeDispatch?: () => Promise<void>, assertCurrent?: () => void) {
+  /** Recheck live host notice authority at dispatch, after awaited preparation.
+   * createParent makes missing folders only after every check admits the path,
+   * then rechecks, so a denied write leaves nothing behind. */
+  private async writeProtectedFile(path: string, content: string | Buffer, options: Parameters<typeof writeFile>[2] = 'utf8', beforeDispatch?: () => Promise<void>, assertCurrent?: () => void, createParent = false) {
     const physicalPath = relative(this.vaultPath, path).replace(/\\/g, '/');
-    assertOriginalMutation(physicalPath, typeof options === 'object' && options !== null && 'flag' in options && options.flag === 'wx');
+    const exclusive = typeof options === 'object' && options !== null && 'flag' in options && options.flag === 'wx';
+    assertOriginalMutation(physicalPath, exclusive);
     await prepareDocumentWrite(physicalPath);
     await beforeDispatch?.();
-    assertOriginalMutation(physicalPath, typeof options === 'object' && options !== null && 'flag' in options && options.flag === 'wx');
-    assertEnterpriseStorageAccess(physicalPath);
-    assertSkillEvolutionMutationBoundary(physicalPath);
-    this.assertNoticeMutation(physicalPath);
-    assertCurrent?.();
+    const assertDispatch = () => {
+      assertOriginalMutation(physicalPath, exclusive);
+      assertEnterpriseStorageAccess(physicalPath);
+      assertSkillEvolutionMutationBoundary(physicalPath);
+      this.assertNoticeMutation(physicalPath);
+      assertCurrent?.();
+    };
+    assertDispatch();
+    if (createParent) { await mkdir(dirname(path), { recursive: true }); assertDispatch(); }
     return writeFile(path, content, options);
   }
   private async removeProtectedFile(path: string) {
@@ -921,18 +928,23 @@ export class FileSystemService {
     this.assertNoticeMutation(physicalPath);
     return unlink(path);
   }
-  private async renameProtectedFile(from: string, to: string) {
+  private async renameProtectedFile(from: string, to: string, createParent = false) {
     const sourcePath = relative(this.vaultPath, from).replace(/\\/g, '/');
     const targetPath = relative(this.vaultPath, to).replace(/\\/g, '/');
     assertOriginalMutation(sourcePath);
     assertOriginalMutation(targetPath);
     await prepareDocumentWrite(targetPath);
-    assertEnterpriseStorageAccess(sourcePath);
-    assertEnterpriseStorageAccess(targetPath);
-    assertSkillEvolutionMutationBoundary(sourcePath);
-    assertSkillEvolutionMutationBoundary(targetPath);
-    this.assertNoticeMutation(sourcePath);
-    this.assertNoticeMutation(targetPath);
+    const assertDispatch = () => {
+      assertEnterpriseStorageAccess(sourcePath);
+      assertEnterpriseStorageAccess(targetPath);
+      assertSkillEvolutionMutationBoundary(sourcePath);
+      assertSkillEvolutionMutationBoundary(targetPath);
+      this.assertNoticeMutation(sourcePath);
+      this.assertNoticeMutation(targetPath);
+    };
+    assertDispatch();
+    // Same rule as writeProtectedFile: folders only after the checks pass.
+    if (createParent) { await mkdir(dirname(to), { recursive: true }); assertDispatch(); }
     return rename(from, to);
   }
 
@@ -1031,9 +1043,8 @@ export class FileSystemService {
     const digest = createHash('sha256').update(bytes).digest('hex');
     return this.withMutationLock(path, async () => {
       const fullPath = this.resolveWritablePath(path, true);
-      await mkdir(dirname(fullPath), { recursive: true });
       try {
-        await this.writeProtectedFile(fullPath, bytes, { flag: 'wx' });
+        await this.writeProtectedFile(fullPath, bytes, { flag: 'wx' }, undefined, undefined, true);
         this.notifyNoteChanged(path, 'upsert');
       } catch (error) {
         if (!error || typeof error !== 'object' || !('code' in error) || error.code !== 'EEXIST') throw error;
@@ -1133,12 +1144,11 @@ export class FileSystemService {
         if (previousContent === undefined) throw guidanceError(new Error('Guarded derived repair requires an existing view'), 'guid-1f47ae1b1107fbef');
         await policy.beforeWrite?.({ before: previousContent, after: content, previousRevision, revision: this.revision(content) });
       }
-      await mkdir(dirname(fullPath), { recursive: true });
       await this.writeProtectedFile(fullPath, content, 'utf-8', policy ? async () => {
         await policy.assertAccess?.();
         const current = await readBoundedSource(this.resolveWritablePath(path), MAX_DERIVED_VIEW_READ_BYTES);
         if (this.revision(current) !== previousRevision) throw guidanceError(new Error('Derived output changed during write admission; user data preserved'), 'guid-a24555988af707c7');
-      } : undefined, policy?.assertCurrent);
+      } : undefined, policy?.assertCurrent, true);
       return { path, previousRevision, revision: this.revision(content) };
     });
   }
@@ -1268,10 +1278,8 @@ export class FileSystemService {
       // again after asynchronous authorization/source checks, immediately before
       // dispatch, so an edit during those awaits is never silently truncated.
       await this.assertExpectedRevision(path, expectedRevision, revisionMaxBytes);
-      // Create missing folders only after the write barrier admits this path,
-      // so a denied write leaves no empty folders behind.
       await this.writeProtectedFile(fullPath, finalContent!, expectedRevision === 'missing'
-        ? { encoding: 'utf-8', flag: 'wx' } : 'utf-8', async () => { await mkdir(dirname(fullPath), { recursive: true }); });
+        ? { encoding: 'utf-8', flag: 'wx' } : 'utf-8', undefined, undefined, true);
       this.notifyNoteChanged(path, 'upsert');
       return { revision: this.revision(finalContent!), originalContent: finalContent! };
     } catch (error) {
@@ -1976,8 +1984,6 @@ export class FileSystemService {
     const trashDir = join(this.vaultPath, '.trash');
     const trashPath = join(trashDir, path);
 
-    await mkdir(dirname(trashPath), { recursive: true });
-
     let finalTrashPath = trashPath;
     try {
       await access(finalTrashPath, constants.F_OK);
@@ -1989,7 +1995,7 @@ export class FileSystemService {
       // File does not exist in trash, no collision.
     }
 
-    await this.renameProtectedFile(fullPath, finalTrashPath);
+    await this.renameProtectedFile(fullPath, finalTrashPath, true);
   }
 
   async deleteNote(params: DeleteNoteParams, canAccessPath: (path: string) => boolean = () => true): Promise<DeleteResult> {
@@ -2235,9 +2241,6 @@ export class FileSystemService {
         }
       }
 
-      // Create directories if needed
-      await mkdir(dirname(newFullPath), { recursive: true });
-
       if (overwrite) {
         try { destinationBackup = await readFile(newFullPath, 'utf-8'); }
         catch (error) {
@@ -2252,10 +2255,10 @@ export class FileSystemService {
         // belongs to the pre-existing/racing writer and must not be removed.
         destinationTouched = true;
         if (overwrite) {
-          await this.writeProtectedFile(newFullPath, content, 'utf-8');
+          await this.writeProtectedFile(newFullPath, content, 'utf-8', undefined, undefined, true);
         } else {
           // wx flag: write exclusive - fails if file exists
-          await this.writeProtectedFile(newFullPath, content, { encoding: 'utf-8', flag: 'wx' });
+          await this.writeProtectedFile(newFullPath, content, { encoding: 'utf-8', flag: 'wx' }, undefined, undefined, true);
         }
       } catch (error) {
         if (error instanceof Error && 'code' in error && error.code === 'EEXIST') {
@@ -2404,8 +2407,6 @@ export class FileSystemService {
         }
       }
 
-      await mkdir(dirname(newFullPath), { recursive: true });
-
       if (overwrite) {
         try {
           const targetStat = await stat(newFullPath);
@@ -2426,7 +2427,7 @@ export class FileSystemService {
       }
 
       try {
-        await this.renameProtectedFile(oldFullPath, newFullPath);
+        await this.renameProtectedFile(oldFullPath, newFullPath, true);
       } catch (error) {
         if (error instanceof Error && 'code' in error && error.code === 'EXDEV') {
           this.assertNoticeMutation(relative(this.vaultPath, oldFullPath));
