@@ -4,9 +4,8 @@ import { noteReadMaxChars, noteReadBudgetError, boundedPropertyReadResult, bound
 import { guidanceError } from './guidance-runtime.js';
 import { TaskReanchorError } from './task-reanchoring.js';
 import { createHash } from 'node:crypto';
-import { DEFAULT_HOST_FEATURE_CONFIG, parseHostFeatureConfig, hostFeatureForTool } from './host-features.js';
+import { DEFAULT_HOST_FEATURE_CONFIG, parseHostFeatureConfig, hostFeatureForTool, warnRemovedHostFeatures } from './host-features.js';
 import { Server } from "@modelcontextprotocol/server";
-import { workshopDecisionContext, workshopTaskDescription } from './workshop-output.js';
 import { FileSystemService, MAX_NOTE_CONTENT_BYTES } from "./filesystem.js";
 import { projectNoteOutline, projectNoteLineWindow } from './note-projections.js';
 import { packTaskPage } from './task-page.js';
@@ -19,10 +18,6 @@ import { RetrievalService } from './retrieval-service.js';
 import { OBSERVED_ENDPOINTS } from './evolution/operations.js';
 import { LayeredMemoryService } from './layered-memory.js';
 import { getLayeredMemoryTools } from './layered-memory-tools.js';
-import { CommunityParticipationService, aggregateParticipationOwnerUsage } from './community-participation.js';
-import { getCommunityParticipationTools, PARTICIPATION_MUTATING_TOOLS } from './community-participation-tools.js';
-import { ResearchBridgeService } from './research-bridge.js';
-import { getResearchBridgeTools } from './research-bridge-tools.js';
 import { QuestionPacketService } from './question-packet.js';
 import { SourceComparisonService } from './source-comparison.js';
 import { SourceChangeService } from './source-change.js';
@@ -34,11 +29,9 @@ import { CollaborationService } from "./scopes.js";
 import { COLLABORATION_MUTATING_TOOLS, getCollaborationTools } from "./collaboration-tools.js";
 import { ScopeAuthService } from "./scope-auth.js";
 import { ScopeAccessPolicy } from "./scope-access.js";
-import { EnterpriseRegistry } from './enterprise-registry.js';
 import { withEnterpriseStorageContext } from './enterprise-storage-context.js';
 import { CompilationService } from './compilation-service.js';
 import { attachCompilationReview } from './compilation-review-view.js';
-import { connectCodexHooks } from './codex-hook-connection.js';
 import { getCompilationTools } from './compilation-tools.js';
 import { getEvolutionTools } from './evolution/tools.js';
 import { EvolutionService } from './evolution/service.js';
@@ -58,66 +51,38 @@ import { documentPolicyPath } from './document-authority.js';
 import { getScopeAuthTools, SCOPE_AUTH_MUTATING_TOOLS, SCOPE_AUTH_TOOL_NAMES } from "./scope-auth-tools.js";
 import { LlmWikiService } from "./llm-wiki.js";
 import { getLlmWikiTools, LLM_WIKI_MUTATING_TOOLS } from "./llm-wiki-tools.js";
-import { SocialService } from "./social.js";
-import { EnterpriseFederationAdapter } from './enterprise-federation.js';
 import { readEnterpriseVaultMarker } from './enterprise-vault-marker.js';
-import { getEnterpriseFederationTools, ENTERPRISE_FEDERATION_MUTATING_TOOLS } from './enterprise-federation-tools.js';
-import { getSocialTools, SOCIAL_MUTATING_TOOLS } from "./social-tools.js";
-import { ChatService } from "./chat.js";
-import { getChatTools, CHAT_MUTATING_TOOLS } from "./chat-tools.js";
 import { ReferenceService } from "./references.js";
 import { getReferenceTools } from "./reference-tools.js";
-import { WhisperService } from "./whisper.js";
-import { getWhisperTools, WHISPER_MUTATING_TOOLS } from "./whisper-tools.js";
-import { CommunityStatusService } from "./community-status.js";
-import { COMMUNITY_STATUS_MUTATING_TOOLS, getCommunityStatusTools } from "./community-status-tools.js";
 import { AgentDirectoryService } from "./agent-directory.js";
 import { AGENT_DIRECTORY_MUTATING_TOOLS, getAgentDirectoryTools } from "./agent-directory-tools.js";
-import { NotificationService } from "./notifications.js";
-import { NOTIFICATION_MUTATING_TOOLS, getNotificationTools } from "./notification-tools.js";
 import { AuditService } from "./audit.js";
 import { getAuditTools } from "./audit-tools.js";
 import { AgentTaskService } from "./agent-tasks.js";
 import { AGENT_TASK_MUTATING_TOOLS, getAgentTaskTools } from "./agent-task-tools.js";
 import { getWorkTools, WORK_MUTATING_TOOLS, WORK_TASK_PROPERTIES } from './work-tools.js';
-import { getExplanationTools, EXPLANATION_MUTATING_TOOLS, EXPLANATION_ENDPOINTS } from './explanation-tools.js';
-import { ExplanationService } from './explanation-service.js';
-import { attachExplanationHint } from './explanation-hint.js';
-import { BenchmarkService } from './benchmark-service.js';
-import { getBenchmarkTools, BENCHMARK_MUTATING_TOOLS, benchmarkOperation } from './benchmark-tools.js';
 import { checkReusableConfiguration, getConfigurationTools } from './configuration-tools.js';
 import { SkillEvolutionService } from './skill-evolution.js';
 import { getSkillEvolutionTools, SKILL_MUTATING_TOOLS } from './skill-evolution-tools.js';
 import { operationReadAlias } from './operation-contracts.js';
 import { WorkGroupService } from './work-groups.js';
-import { getRoleplayTools, ROLEPLAY_MUTATING_TOOLS } from './roleplay-tools.js';
-import { ComputerWorldService } from './computer-worlds.js';
-import { getStoryTools, STORY_MUTATING_TOOLS, storyEndpointForTool, assertStoryOperation } from './story-tools.js';
 import { getDocumentTools, DOCUMENT_TOOL_ENDPOINTS, dispatchDocumentTool } from './document-tools.js';
 import { DocumentResourceReader } from './document-resource.js';
 import { DocumentIndex } from './document-index.js';
 import { configuredPdfProvider } from './document-pdf-host.js';
 import { DocumentService } from './document-service.js';
 import { DocumentSearch } from './document-search.js';
-import { StoryService } from './story-service.js';
 import { getNoticeTools } from './notice-tools.js';
 import { NoticeRegistry, NoticeService } from './notices.js';
 import { GuidanceCatalog } from './guidance-catalog.js';
 import { GUIDANCE_DEFINITIONS } from './guidance-defaults.generated.js';
 import { withGuidance, projectGuidance, guidanceText, renderGuidanceError } from './guidance-runtime.js';
-import { RoleplayService } from './roleplay-service.js';
-import { roleplayRevision } from './roleplay-model.js';
-import { validateRoleplayQuestArtifact } from './roleplay-quest.js';
 import { WorkService } from './work-service.js';
 import { ReviewedSkillService } from './skill-release-service.js';
-import { CommunityFeaturesService } from "./community-features.js";
-import { COMMUNITY_FEATURE_MUTATING_TOOLS, getCommunityFeatureTools } from "./community-feature-tools.js";
 import { ObsidianSearchService } from "./obsidian-search.js";
 import { getObsidianSearchTools } from "./obsidian-search-tools.js";
 import { AgentPulseService } from "./agent-pulse.js";
 import { getAgentPulseTools } from "./agent-pulse-tools.js";
-import { ContextService } from "./context.js";
-import { getContextTools } from "./context-tools.js";
 import { ContinuityService } from "./continuity.js";
 import { CONTINUITY_MUTATING_TOOLS, getContinuityTools } from "./continuity-tools.js";
 import { ModerationService } from "./moderation.js";
@@ -125,8 +90,6 @@ import { MODERATION_MUTATING_TOOLS, getModerationTools } from "./moderation-tool
 import { isManagedCommunityPath, isModerationHidden, moderationStatus } from "./moderation-policy.js";
 import { WikiViewService } from './wiki-views.js';
 import { MocRegionService } from './wiki-moc-regions.js';
-import { ReputationService } from "./reputation.js";
-import { REPUTATION_MUTATING_TOOLS, getReputationTools } from "./reputation-tools.js";
 import { SemanticSearchService } from "./semantic-search.js";
 import { cleanupStaleDerivedTemps } from './derived-temp-cleanup.js';
 import { normalizeSearchMaxChars } from "./search-limits.js";
@@ -136,14 +99,6 @@ import { VaultMetadataIndex } from "./vault-index.js";
 import { VaultFileCatalog } from "./vault-catalog.js";
 import { VaultGraphIndex } from "./vault-graph.js";
 import { VaultIoCoordinator } from "./vault-io.js";
-import { IdeationService } from "./ideation.js";
-import { IDEATION_MUTATING_TOOLS, getIdeationTools } from "./ideation-tools.js";
-import { IndependentResearchService } from './independent-research.js';
-import { ECONOMY_MUTATING_TOOLS, getEconomyTools } from './economy-tools.js';
-import { EconomyService } from './economy-service.js';
-import { assertEconomyConfigured } from './economy-ledger.js';
-import { fingerprint as workFingerprint } from './work-model.js';
-import { validateMarkdownContract, verifyMarkdownContract } from './quest-verifier.js';
 import { getWikiPolicyTopic, MCPVAULT_SERVER_INSTRUCTIONS } from './wiki-policy.js';
 import { RECORDING_MCP_TOOLS, RECORDING_TOOL_NAMES, routeRecordingTool } from './record-tools.js';
 const REQUEST_QUEUE_WAIT_MS = 10_000;
@@ -269,11 +224,7 @@ function requestFairnessKey(args) {
 const MUTATING_TOOLS = new Set([
     'manage_evolution_feedback', 'manage_evolution_cycle', 'get_evolution_context',
     'manage_wiki_compilation',
-    ...EXPLANATION_MUTATING_TOOLS,
-    ...BENCHMARK_MUTATING_TOOLS,
-    ...STORY_MUTATING_TOOLS,
     ...SKILL_MUTATING_TOOLS,
-    ...ENTERPRISE_FEDERATION_MUTATING_TOOLS,
     "write_note",
     "manage_wiki_moc_region",
     "patch_note",
@@ -291,23 +242,12 @@ const MUTATING_TOOLS = new Set([
     ...COLLABORATION_MUTATING_TOOLS,
     ...SCOPE_AUTH_MUTATING_TOOLS,
     ...LLM_WIKI_MUTATING_TOOLS,
-    ...SOCIAL_MUTATING_TOOLS,
-    ...CHAT_MUTATING_TOOLS,
-    ...WHISPER_MUTATING_TOOLS,
-    ...COMMUNITY_STATUS_MUTATING_TOOLS,
     ...AGENT_DIRECTORY_MUTATING_TOOLS,
-    ...NOTIFICATION_MUTATING_TOOLS,
     ...AGENT_TASK_MUTATING_TOOLS,
     ...WORK_MUTATING_TOOLS,
-    ...ROLEPLAY_MUTATING_TOOLS,
     'revise_notice',
-    ...PARTICIPATION_MUTATING_TOOLS,
-    ...COMMUNITY_FEATURE_MUTATING_TOOLS,
     ...CONTINUITY_MUTATING_TOOLS,
     ...MODERATION_MUTATING_TOOLS,
-    ...REPUTATION_MUTATING_TOOLS,
-    ...IDEATION_MUTATING_TOOLS,
-    ...ECONOMY_MUTATING_TOOLS,
     "update_task",
 ]);
 const CAPABILITY_FOR_TOOL = {
@@ -315,7 +255,6 @@ const CAPABILITY_FOR_TOOL = {
     manage_evolution_feedback: 'write',
     manage_evolution_cycle: 'write',
     get_evolution_context: 'write',
-    public_federation_pull: 'write', public_federation_retry: 'publish',
     update_wiki_projection: 'write',
     manage_wiki_moc_region: 'write',
     write_note: "write",
@@ -330,7 +269,6 @@ const CAPABILITY_FOR_TOOL = {
     daily_note: "write",
     restore_note_revision: "write",
     commit_changes: "write",
-    write_journal_entry: "journal",
     initialize_llm_wiki: "publish",
     ingest_source: "publish",
     capture_wiki_note: "publish",
@@ -347,48 +285,17 @@ const CAPABILITY_FOR_TOOL = {
     resolve_wiki_issue: "status",
     export_wiki_base: "write",
     export_wiki_canvas: "write",
-    publish_blog_post: "publish",
-    delete_blog_post: "publish",
-    comment_on_blog_post: "comment",
-    edit_blog_comment: "comment",
-    delete_blog_comment: "comment",
-    toggle_reaction: "comment",
-    accept_blog_comment: "status",
-    unaccept_blog_comment: "status",
-    write_guestbook_entry: "comment",
-    delete_guestbook_entry: "comment",
-    watch_target: "comment",
-    unwatch_target: "comment",
-    create_chat_room: "chat",
-    send_chat_message: "chat",
-    edit_chat_message: "chat",
-    delete_chat_message: "chat",
-    archive_chat_room: "chat",
-    send_whisper: "whisper",
-    update_community_status: "status",
     update_agent_profile: "profile",
-    manage_community_participation: "profile",
-    record_community_participation: "profile",
     create_agent_task: "task",
     manage_work_project: 'task',
-    manage_story_project: 'task', manage_story_artifact: 'task', manage_story_sequence: 'task',
-    manage_story_review: 'task', adopt_story_artifact: 'task', manage_story_session: 'task', manage_story_export: 'task',
-    manage_story_visual: 'task',
     record_skill_experience: 'write', manage_skill_candidate: 'write', evaluate_skill: 'write', promote_skill: 'write', rollback_skill: 'write',
     preview_skill_promotion: 'write', preview_skill_rollback: 'write',
     manage_work_group: 'task',
-    manage_roleplay_world: 'chat', manage_roleplay_character: 'chat', manage_roleplay_scene: 'chat',
-    manage_roleplay_computer: 'write',
     revise_notice: 'write', preview_notice: 'write',
-    submit_roleplay_action: 'chat', resolve_roleplay_action: 'chat', correct_roleplay_turn: 'chat',
-    manage_roleplay_evolution: 'chat', preview_roleplay_evolution: 'chat',
-    manage_roleplay_trpg: 'chat', preview_roleplay_trpg: 'chat',
     claim_work_task: 'task',
     handoff_work_task: 'task',
     review_work_task: 'task',
     read_work_review_context: 'task', read_work_staffing: 'task',
-    list_explanations: 'task', claim_explanation: 'task', release_explanation: 'task', submit_explanation: 'task', review_explanation: 'task',
-    list_benchmarks: 'task', read_benchmark: 'task', submit_benchmark: 'task', review_benchmark: 'task', finalize_benchmark: 'task',
     update_agent_task: "task",
     save_work_state: "journal",
     preview_learning_configuration: 'journal',
@@ -397,19 +304,6 @@ const CAPABILITY_FOR_TOOL = {
     create_agent_scope: "profile",
     handoff_agent_scope: "profile",
     resume_agent_scope: "profile",
-    create_idea: "publish",
-    branch_idea: "publish",
-    update_idea_status: "status",
-    contribute_idea: "comment",
-    evaluate_idea: "comment",
-    create_workshop: "publish",
-    update_workshop_facilitation: 'publish',
-    read_workshop_research: 'publish',
-    update_workshop_research: 'publish',
-    manage_quest_contract: 'task', review_quest_contract: 'task',
-    contribute_workshop: "comment",
-    update_workshop_phase: "status",
-    synthesize_workshop: "publish",
 };
 const FIXED_MCP_TOOL_NAMES = new Set([
     'orient_wiki',
@@ -434,13 +328,13 @@ const FIXED_MCP_TOOLS = [
     },
     {
         name: 'search_capabilities',
-        description: 'Find an advanced endpoint with one query per intent (limit 3); use direct recording tools for journal and note work. For large schemas, read endpointId# plus a JSON Pointer and follow nextCursor without changing the query.',
+        description: 'Find an advanced endpoint with one query per intent (limit 3); use direct recording tools for note work. For large schemas, read endpointId# plus a JSON Pointer and follow nextCursor without changing the query.',
         annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
         inputSchema: { type: 'object', properties: { query: { type: 'string', description: 'Endpoint/intent, or exact endpointId# followed by a JSON Pointer' }, cursor: { type: 'string', maxLength: 256 }, limit: { type: 'integer', minimum: 1, maximum: 100, default: 20 }, maxChars: { type: 'integer', minimum: 512, maximum: 20000, default: 20000 }, accessToken: { type: 'string' }, prettyPrint: { type: 'boolean', default: false } } },
     },
     {
         name: 'call_endpoint',
-        description: 'Run one exact advanced endpoint selected by orient_wiki or search_capabilities; it may mutate or reach external systems. Use direct recording tools for journals and notes. If orientation sets stopAfterAction, answer after this call.',
+        description: 'Run one exact advanced endpoint selected by orient_wiki or search_capabilities; it may mutate or reach external systems. Use direct recording tools for notes. If orientation sets stopAfterAction, answer after this call.',
         annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
         inputSchema: { type: 'object', properties: { endpointId: { type: 'string' }, arguments: { type: 'object', additionalProperties: true }, accessToken: { type: 'string', description: 'Optional shortcut merged into arguments.accessToken' }, agentLabel: { type: 'string', description: 'Optional self-reported activity label for approved OAuth clients; not an authentication identity' }, prettyPrint: { type: 'boolean', default: false }, responseView: { type: 'string', description: 'Read-only JSON Pointer; reuse original arguments. Empty selects root.' }, responseCursor: { type: 'string', maxLength: 256 } }, required: ['endpointId'] },
     },
@@ -463,18 +357,9 @@ function ownerRequestPaths(toolName, args) {
                 add(item);
     };
     for (const [key, value] of Object.entries(args)) {
-        // Feedback source locations describe repository code, not Vault reads.
-        // The social service validates these annotations; its actual IO remains
-        // guarded by the active owner lease and document policy.
-        if (key === 'sourcePaths' && toolName === 'publish_blog_post')
-            continue;
         if (/(?:^|_)(?:path|paths|sourcePaths|evidencePaths|references|targetPath)$/i.test(key))
             add(value);
     }
-    // Federated object IDs are opaque identities, not local filenames. The
-    // federation storage adapter checks its resolved physical path under lease.
-    if (typeof args.slug === 'string' && !args.slug.startsWith('post:') && /blog_post|blog_posts/.test(toolName))
-        add(`Community/Posts/${args.slug}.md`);
     if (result.size > 32)
         throw guidanceError(new Error('Owner activity path budget exceeded'), 'guid-4649dae5c45131ae');
     if (result.size)
@@ -482,11 +367,11 @@ function ownerRequestPaths(toolName, args) {
     return ownerActionForEndpointTool(toolName, MUTATING_TOOLS.has(toolName)) === 'discover' ? undefined : Object.freeze([]);
 }
 export function createServer(vaultPath, options = {}) {
-    const features = parseHostFeatureConfig(options.features ?? DEFAULT_HOST_FEATURE_CONFIG);
+    // A selection loaded from file was already parsed and warned; a library caller's was not.
+    const features = parseHostFeatureConfig(options.features ?? DEFAULT_HOST_FEATURE_CONFIG, warnRemovedHostFeatures);
     const selectedFeatures = new Set(features.selected);
     const ownerActivityRuntime = new OwnerActivityRuntime(options.ownerActivity);
-    const catalogActivities = ['collaboration', 'ideation-research', 'explanation-translation',
-        'benchmarks', 'economy', 'roleplay', 'skill-evolution'];
+    const catalogActivities = ['skill-evolution'];
     const catalogActions = ['discover', 'read', 'claim', 'execute'];
     const ownerCatalogSnapshot = (principal) => {
         if (!options.ownerActivity)
@@ -513,11 +398,7 @@ export function createServer(vaultPath, options = {}) {
         return ownerCatalogSnapshot(principal);
     };
     const hasFeature = (feature) => selectedFeatures.has(feature);
-    // Shared task records support selected story/quest workflows without exposing
-    // the optional work board. Journal/saved-item methods likewise share storage
-    // helpers with social methods, but need no social indexes or subscriptions.
-    const needsTaskRecords = ['work-management', 'roleplay', 'economy', 'explanation-translation'].some(id => selectedFeatures.has(id));
-    const needsPersonalStorage = hasFeature('personal-memory') || hasFeature('collaboration');
+    const needsTaskRecords = hasFeature('work-management');
     const featureToolAllowed = (tool) => {
         const feature = hostFeatureForTool(tool);
         return feature !== undefined && hasFeature(feature);
@@ -529,29 +410,22 @@ export function createServer(vaultPath, options = {}) {
     };
     const { name = "mcpvault", version = "0.0.0", pathFilter: configuredPathFilter = new PathFilter(), frontmatterHandler = new FrontmatterHandler(), readOnly = false, moderatorAccounts, commandCenterId, } = options;
     if (options.quarantineSkills !== undefined && typeof options.quarantineSkills !== 'boolean')
-        throw new Error('Invalid host skill quarantine policy');
+        throw guidanceError(new Error('Invalid host skill quarantine policy'), 'guid-72c8f90b6634d561');
     if (options.reviewedSkills && options.quarantineSkills !== true)
-        throw new Error('Reviewed skills require quarantine');
+        throw guidanceError(new Error('Reviewed skills require quarantine'), 'guid-438233927132be39');
     const pathFilter = options.quarantineSkills ? new PathFilter({ quarantineSkills: true }, configuredPathFilter) : configuredPathFilter;
     const resolvedVaultPath = resolve(vaultPath);
-    const enterpriseRegistry = options.enterpriseRegistryPath
-        ? new EnterpriseRegistry({ registryPath: options.enterpriseRegistryPath, vaultPath: resolvedVaultPath }) : undefined;
-    const enterpriseProfile = enterpriseRegistry?.getPolicy();
-    const enterpriseMarker = readEnterpriseVaultMarker(resolvedVaultPath);
-    if (enterpriseMarker && (!enterpriseProfile || enterpriseProfile.mode !== enterpriseMarker.mode || enterpriseProfile.realmId !== enterpriseMarker.realmId)) {
-        throw guidanceError(new Error('This Vault requires its matching enterprise registry; legacy, REST and stdio startup cannot open it as a public Vault'), 'guid-2a47f6b4bdcd8f7a');
+    // Enterprise mode was removed; a Vault bound to an enterprise realm must not
+    // silently reopen without its realm ACLs.
+    if (readEnterpriseVaultMarker(resolvedVaultPath)) {
+        throw guidanceError(new Error('This Vault is bound to an enterprise instance, which this server no longer supports; it cannot be opened as a public Vault'), 'guid-2a47f6b4bdcd8f7a');
     }
-    if (options.publicFederation && enterpriseProfile?.mode !== 'public')
-        throw guidanceError(new Error('Public federation credentials require an explicit public enterprise instance'), 'guid-6bebc6f6619d2973');
-    if (enterpriseProfile && commandCenterId && commandCenterId !== enterpriseProfile.realmId)
-        throw guidanceError(new Error('Enterprise realm and commandCenterId must match'), 'guid-7867dcc3c79b8470');
-    const effectiveCenterId = enterpriseProfile?.realmId || commandCenterId;
+    const effectiveCenterId = commandCenterId;
     void cleanupStaleDerivedTemps(resolvedVaultPath);
     const scopeAuth = new ScopeAuthService(resolvedVaultPath, {
         ...(options.accountStorePath !== undefined && { accountStorePath: options.accountStorePath }),
         ...(moderatorAccounts === undefined ? {} : { moderatorAccounts }),
         ...(effectiveCenterId && { commandCenterId: effectiveCenterId }),
-        ...(enterpriseRegistry && { enterpriseRegistry, authPath: `${options.enterpriseRegistryPath}.accounts.json` }),
     });
     const documentPolicy = new DocumentPolicyStore(resolvedVaultPath);
     let documentPolicyReady = false;
@@ -565,7 +439,7 @@ export function createServer(vaultPath, options = {}) {
         // Additional trusted host constraints never replace persisted restrictions.
         return configured?.length ? Object.freeze([...stored, ...configured]) : stored;
     };
-    const scopeAccess = new ScopeAccessPolicy({ ...(effectiveCenterId && { commandCenterId: effectiveCenterId }), ...(enterpriseProfile && { enterprise: enterpriseProfile }),
+    const scopeAccess = new ScopeAccessPolicy({ ...(effectiveCenterId && { commandCenterId: effectiveCenterId }),
         documentRules, ...(options.localInferenceAllowed && { localInferenceAllowed: options.localInferenceAllowed }) });
     const guidance = new GuidanceCatalog(resolvedVaultPath, () => noticeRegistry.load().guidance, options.guidanceDefinitions ?? GUIDANCE_DEFINITIONS, path => pathFilter.isAllowed(path) && scopeAccess.canAccessPhysicalPath(path));
     const noticeRegistry = new NoticeRegistry(resolvedVaultPath, options.noticeConfigPath || process.env.MCPVAULT_NOTICE_CONFIG, guidance);
@@ -622,9 +496,6 @@ export function createServer(vaultPath, options = {}) {
         metadataIndex.invalidateMany(changes);
         searchService.invalidateMany(changes);
         semanticSearch.notifyChanges(changes);
-        reputationCache?.invalidateMany(changes);
-        notificationsCache?.invalidateMany(changes);
-        communityFeaturesCache?.invalidateMany(changes);
         llmWikiCache?.invalidate(changes);
         graphIndex.invalidateMany(changes);
         void memoryIndex?.invalidate(changes);
@@ -641,9 +512,6 @@ export function createServer(vaultPath, options = {}) {
         readModelFlushQueued = true;
         queueMicrotask(flushReadModelChanges);
     };
-    let reputationCache;
-    let notificationsCache;
-    let communityFeaturesCache;
     let llmWikiCache;
     const fileSystem = new FileSystemService(resolvedVaultPath, pathFilter, frontmatterHandler, queueReadModelChange, metadataIndex, graphIndex, vaultIo, scopeAccess, path => noticeRegistry.assertMutation(path), referenceCacheDir ? () => referenceImpactIndex : undefined);
     const gitHistory = new GitHistoryService(resolvedVaultPath, pathFilter);
@@ -660,7 +528,6 @@ export function createServer(vaultPath, options = {}) {
     if (referenceCacheDir)
         referenceImpactIndex = new ReferenceImpactIndex(fileSystem, referenceCacheDir, fileCatalog, path => documentPolicyReady && pathFilter.isAllowed(path) && scopeAccess.canReadProtectedDocument(path));
     const layeredMemory = hasFeature('personal-memory') ? new LayeredMemoryService(fileSystem, retrieval, scopeAccess, memoryIndex) : undefined;
-    const researchBridge = hasFeature('ideation-research') ? new ResearchBridgeService(fileSystem, scopeAccess, retrieval) : undefined;
     const questionPacket = new QuestionPacketService(fileSystem, scopeAccess, retrieval);
     const sourceComparison = new SourceComparisonService(fileSystem, scopeAccess, retrieval);
     const fidelity = new FidelityService(fileSystem, scopeAccess);
@@ -677,7 +544,7 @@ export function createServer(vaultPath, options = {}) {
     const compilation = new CompilationService({ fs: fileSystem, access: scopeAccess, readOnly,
         ...options.compilation, ...(compilationAdapter && { adapter: compilationAdapter }), documentPolicy, authorize: compilationAuthorize });
     if (options.evolution && options.evolutionRuntime)
-        throw new Error('Choose one evolution runtime connection');
+        throw guidanceError(new Error('Choose one evolution runtime connection'), 'guid-f322f95ad91242d5');
     const evolutionConnection = options.evolutionRuntime ? connectEvolutionRuntime(options.evolutionRuntime, {
         auth: scopeAuth, access: scopeAccess, fs: fileSystem, moderation, refreshPolicy: refreshDocumentPolicy,
         readOnly: Boolean(readOnly), retrieval, compilation, curationIndex: memoryIndex, wiki: llmWiki, adapters: { wiki: wikiEvolutionAdapter(compilation) },
@@ -716,52 +583,20 @@ export function createServer(vaultPath, options = {}) {
     void refreshDocumentPolicy().then(() => mocRegions.start()).then(() => mocRegions.flush()).catch(() => { });
     if (referenceImpactIndex)
         void refreshDocumentPolicy().then(() => referenceImpactIndex?.start()).catch(() => { });
-    const reputation = hasFeature('collaboration') ? new ReputationService(fileSystem, scopeAuth, moderation) : undefined;
-    reputationCache = reputation;
-    const notifications = reputation ? new NotificationService(fileSystem, reputation, resolvedVaultPath, fileCatalog) : undefined;
-    notificationsCache = notifications;
-    const social = needsPersonalStorage ? new SocialService(fileSystem, scopeAccess, references, reputation, notifications, {
-        ...(enterpriseProfile?.mode === 'public' && { communityRoot: 'PublicCommunity/Local', publicMode: true }),
-        noticeFeedback: (id, revision, principal) => notices.feedback(id, revision, principal),
-        noticeFeedbackReview: (id, path, revision, principal) => notices.feedbackReview(id, path, revision, principal),
-    }) : undefined;
-    const chat = hasFeature('collaboration') ? new ChatService(fileSystem, references, reputation, options.roleplay ? async () => (await options.roleplay.read()).records : undefined) : undefined;
-    const whispers = hasFeature('collaboration') ? new WhisperService(fileSystem, references) : undefined;
-    const communityStatus = hasFeature('collaboration') ? new CommunityStatusService(fileSystem, enterpriseProfile?.mode === 'public' ? { communityRoot: 'PublicCommunity/Local' } : {}) : undefined;
-    const agentDirectory = new AgentDirectoryService(fileSystem, scopeAuth, ...(enterpriseProfile?.mode === 'public' ? [{ communityRoot: 'PublicCommunity/Local', publicMode: true }] : []));
-    const federation = options.publicFederation && hasFeature('collaboration') ? new EnterpriseFederationAdapter({ vaultPath: resolvedVaultPath, social: social, directory: agentDirectory, config: options.publicFederation, pathFilter }) : undefined;
+    const agentDirectory = new AgentDirectoryService(fileSystem, scopeAuth);
     const audit = new AuditService(resolvedVaultPath);
     const agentTasks = needsTaskRecords ? new AgentTaskService(fileSystem, references, scopeAuth, scopeAccess) : undefined;
-    const ideation = hasFeature('ideation-research') ? new IdeationService(fileSystem, references) : undefined;
-    const independentResearch = hasFeature('ideation-research') ? new IndependentResearchService(fileSystem, references, scopeAccess, async (accountId) => {
-        const actor = (await scopeAuth.listPrincipals()).find(p => p.accountId === accountId);
-        return Boolean(actor && scopeAuth.hasCapability(actor, 'publish') && !await moderation.isBanned(actor.accountId, actor.userId));
-    }) : undefined;
-    const communityFeatures = needsPersonalStorage ? new CommunityFeaturesService(fileSystem, scopeAccess, scopeAuth, reputation, resolvedVaultPath, notifications, hasFeature('collaboration') ? fileCatalog : undefined) : undefined;
-    communityFeaturesCache = communityFeatures;
     // The lexical, metadata, graph, and semantic indexes subscribe to the
     // catalog themselves. The remaining derived views are intentionally kept
     // behind this one fan-out so edits made directly by Obsidian (or another
-    // process) cannot leave notifications, reputation, community discovery,
-    // or Wiki catalog/lint caches stale until a restart.
+    // process) cannot leave Wiki catalog/lint caches stale until a restart.
     const readModelCatalogUnsubscribe = fileCatalog.subscribeBatch(changes => {
         void maintenance.notify(changes).catch(() => undefined);
         void compilation.notify(changes?.map(change => change.path)).catch(() => undefined);
         void mocRegions.notify(changes).catch(() => undefined);
-        if (changes) {
-            reputationCache?.invalidateMany(changes);
-            notificationsCache?.invalidateMany(changes);
-            communityFeaturesCache?.invalidateMany(changes);
-        }
-        else {
-            reputationCache?.invalidateMany();
-            notificationsCache?.invalidateMany();
-            communityFeaturesCache?.invalidateMany();
-        }
         llmWikiCache?.invalidate(changes);
     });
     const obsidianSearch = new ObsidianSearchService(resolvedVaultPath, pathFilter, scopeAccess, vaultIo);
-    const context = hasFeature('collaboration') ? new ContextService(social, chat) : undefined;
     const continuity = new ContinuityService(fileSystem, {
         access: scopeAccess,
         buildLearningPath: (principal, path, maxDepth, limit, maxChars) => llmWiki.learningPath(principal, path, maxDepth, limit, maxChars, true),
@@ -775,39 +610,10 @@ export function createServer(vaultPath, options = {}) {
     const work = needsTaskRecords ? new WorkService(fileSystem, references, scopeAuth, agentTasks, {
         ...(options.workCollaboration?.deterministicCoverage && { deterministicCoverage: options.workCollaboration.deterministicCoverage }),
         ...options.workCollaboration,
-        assertTaskMutation: async (taskId) => {
-            await assertEconomyConfigured(resolvedVaultPath, Boolean(options.economy));
-            if (options.economy)
-                await new EconomyService(fileSystem, options.economy.ledger, options.economy.policy, { assertActor: async () => { } }).assertFreeTaskMutation(taskId);
-        },
-        freeTaskMutations: async (taskIds) => {
-            await assertEconomyConfigured(resolvedVaultPath, Boolean(options.economy));
-            return options.economy
-                ? new EconomyService(fileSystem, options.economy.ledger, options.economy.policy, { assertActor: async () => { } }).freeTaskMutations(taskIds)
-                : Object.fromEntries(taskIds.map(id => [id, { state: 'allowed', freeMutationBlocked: false }]));
-        },
-        ...(options.economy && { paidProjection: async (taskIds, principal) => new EconomyService(fileSystem, options.economy.ledger, options.economy.policy, {
-                assertActor: async (actor) => {
-                    if (!(await scopeAuth.listPrincipals()).some(p => p.accountId === actor.accountId) || await moderation.isBanned(actor.accountId, actor.userId))
-                        throw guidanceError(new Error('Current authorized account required'), 'guid-163a12295a1d8545');
-                },
-            }).workProjection(principal, taskIds) }),
         assertActor: async (principal) => {
             if (await moderation.isBanned(principal.accountId, principal.userId))
                 throw guidanceError(new Error('This account is suspended by moderation'), 'guid-3ce72ccf715bd653');
         },
-    }) : undefined;
-    const participation = hasFeature('collaboration') ? new CommunityParticipationService(fileSystem, { access: scopeAccess, ...(notifications && { notifications }),
-        ...(options.economy && { ownerUsage: async (principal) => {
-                const owners = options.economy.policy.owners, owner = owners[principal.accountId];
-                if (!owner)
-                    return undefined; // Free community participation remains available.
-                const peers = (await scopeAuth.listPrincipals()).filter(p => p.accountId !== principal.accountId && owners[p.accountId] === owner);
-                return aggregateParticipationOwnerUsage(fileSystem, principal, peers, Date.now());
-            }, ...new EconomyService(fileSystem, options.economy.ledger, options.economy.policy, { assertActor: async (actor) => {
-                    if (!(await scopeAuth.listPrincipals()).some(p => p.accountId === actor.accountId) || await moderation.isBanned(actor.accountId, actor.userId))
-                        throw guidanceError(new Error('Current authorized account required'), 'guid-163a12295a1d8545');
-                } }).participationOptions() }),
     }) : undefined;
     const skillEvolution = hasFeature('skill-evolution') ? new SkillEvolutionService(fileSystem, scopeAccess, scopeAuth, options.skillEvolution, {
         readOnly,
@@ -823,82 +629,13 @@ export function createServer(vaultPath, options = {}) {
             refreshAccess: refreshDocumentPolicy,
             assertActor: async (principal) => {
                 if (await moderation.isBanned(principal.accountId, principal.userId))
-                    throw Error('Reviewed skill unavailable');
+                    throw guidanceError(Error('Reviewed skill unavailable'), 'guid-9d9bb7483d9c38ff');
             },
         }) : undefined;
     if (reviewedSkills)
         retrieval.attachReviewedProcedures(reviewedSkills);
     const reviewedSourceAccess = Boolean(reviewedSkills && options.reviewedSkills?.authorization);
-    ideation?.attachOutputAdapter({
-        assertReadable: async (principal, path, container) => {
-            try {
-                const paths = await references.validateAndNormalize([path], container, principal);
-                if (paths.length !== 1 || paths[0] !== path || !scopeAccess.canAccessPhysicalPath(path, principal))
-                    throw Error();
-            }
-            catch {
-                throw guidanceError(Error('Output or basis unavailable'), 'guid-619a9c57010ef0a6');
-            }
-        },
-        verifyTaskOrigin: (note, input, receipt) => requiredService(work).verifyWorkshopTaskOrigin(note, input, receipt),
-        authorizeProject: (principal, projectId, owner, delegate, grantor) => requiredService(work).authorizeWorkshopProject(principal, projectId, owner, delegate, grantor),
-        assertAccess: async (principal, input) => {
-            const current = (await scopeAuth.listPrincipals()).find(p => p.accountId === principal.accountId);
-            const capability = input.type === 'decision' ? 'publish' : 'task';
-            if (!current || !scopeAuth.hasCapability(current, capability) || !scopeAuth.hasCapability(principal, capability) || await moderation.isBanned(current.accountId, current.userId))
-                throw guidanceError(new Error('Current output capability is required'), 'guid-daa1f5f1eefaa650');
-        },
-        create: async (input, guards, receipt, principal, projectId, assertAccess) => {
-            await assertAccess();
-            if (input.type === 'task')
-                return requiredService(work).createWorkshopTask({ principal, projectId, taskId: input.path.split('/').at(-1).replace(/\.md$/, ''), title: input.title,
-                    description: workshopTaskDescription(input, receipt.workshopPath), completionCriteria: input.completionCriteria,
-                    workKind: input.kind, references: [receipt.workshopPath, ...input.evidencePaths], expectedRevision: 'missing', requestId: `output-${receipt.payloadFingerprint}` }, guards, receipt, assertAccess);
-            const context = workshopDecisionContext(input);
-            return llmWiki.publishDecisionRecord({ principal, path: input.path, title: input.title, context, decision: input.decision, alternatives: input.alternatives, consequences: input.consequences,
-                evidencePaths: input.evidencePaths, references: [receipt.workshopPath, ...input.evidencePaths], author: principal.agentId || principal.modelId, status: 'accepted', expectedRevision: 'missing' }, { revisionGuards: guards, workshopOutput: receipt, assertOutputAccess: assertAccess });
-        },
-    });
-    const explanationService = (validate) => hasFeature('explanation-translation') && options.explanations ? new ExplanationService(fileSystem, scopeAccess, {
-        sources: options.explanations.sources,
-        executionProfiles: options.workCollaboration?.executionProfiles ?? (async () => []),
-        assertActor: async (actor) => {
-            if (validate && (await validate()).accountId !== actor.accountId)
-                throw guidanceError(Error('Explanation actor changed'), 'guid-e1d6de0cb54b65d0');
-            const current = (await scopeAuth.listPrincipals()).find(p => p.accountId === actor.accountId);
-            if (!current || current.agentId !== actor.agentId || current.modelId !== actor.modelId || !scopeAuth.hasCapability(current, 'task')
-                || await moderation.isBanned(current.accountId, current.userId))
-                throw guidanceError(Error('Current explanation task account required'), 'guid-12316a80ad1a7548');
-        },
-        accountAvailable: async (accountId) => {
-            const current = (await scopeAuth.listPrincipals()).find(p => p.accountId === accountId);
-            return Boolean(current && scopeAuth.hasCapability(current, 'task') && !await moderation.isBanned(current.accountId, current.userId));
-        },
-        canTakeWork: async (actor) => !(await requiredService(agentTasks).listAssignedOpen({ assignee: actor.agentId || actor.modelId, limit: 1, maxChars: 1200 })).tasks.length,
-    }) : undefined;
-    const explanations = explanationService();
-    const benchmarkService = (validate) => hasFeature('benchmarks') && options.benchmarks?.enabled ? new BenchmarkService(fileSystem, {
-        ...options.benchmarks, access: scopeAccess, pathFilter,
-        ...(options.economy && { ledger: options.economy.ledger }),
-        accountAvailable: async (accountId) => {
-            const current = (await scopeAuth.listPrincipals()).find(p => p.accountId === accountId);
-            return Boolean(current && scopeAuth.hasCapability(current, 'task') && !await moderation.isBanned(current.accountId, current.userId));
-        },
-        assertActor: async (actor) => {
-            if (validate && (await validate()).accountId !== actor.accountId)
-                throw guidanceError(Error('Benchmark actor changed'), 'guid-518eea3b4dc4855d');
-            const current = (await scopeAuth.listPrincipals()).find(p => p.accountId === actor.accountId);
-            if (!current || current.agentId !== actor.agentId || current.modelId !== actor.modelId || !scopeAuth.hasCapability(current, 'task')
-                || await moderation.isBanned(current.accountId, current.userId))
-                throw guidanceError(Error('Current benchmark task account required'), 'guid-e7d63e2af3afffe3');
-            return current;
-        },
-    }) : undefined;
-    const benchmarks = benchmarkService();
-    if (benchmarks)
-        options.benchmarks?.bindAuthority?.(benchmarks);
-    const agentPulse = new AgentPulseService(notifications, hasFeature('collaboration') ? social : undefined, chat, hasFeature('work-management') ? agentTasks : undefined, continuity, reputation, llmWiki, ideation, hasFeature('work-management') ? work : undefined, participation, skillEvolution, { ...(explanations && { explanation: (principal) => explanations.nextAction(principal) }),
-        ...(benchmarks && { benchmark: (principal) => benchmarks.pulse(principal) }) }, async (activity, principal) => {
+    const agentPulse = new AgentPulseService(hasFeature('work-management') ? agentTasks : undefined, continuity, llmWiki, hasFeature('work-management') ? work : undefined, skillEvolution, async (activity, principal) => {
         const operation = await ownerActivityRuntime.begin(activity, 'discover', undefined, principal);
         if (!operation.canAccessPath('.'))
             return undefined;
@@ -926,7 +663,6 @@ export function createServer(vaultPath, options = {}) {
                 type: "object",
                 properties: {
                     path: { type: "string", description: guidanceText('guid-d0f5144b3c280de2', "Path to the note relative to vault root") },
-                    includeExplanation: { type: "boolean", default: false, description: guidanceText('guid-ea9dc3973b564acf', "Opt in to a current approved explanationAction for this original only; no draft or explanation text is mixed into the source. The optional link is omitted if unavailable or it cannot fit.") },
                     property: { type: "string", minLength: 1, maxLength: 128, description: guidanceText('guid-6f56646f7295c3c3', "Optional exact string Property name, for example recall_prompt. Excludes the body and all other Properties; missing/non-string values return an error.") },
                     offset: { type: "integer", minimum: 0, description: guidanceText('guid-52b5f95b56ba5ee7', "UTF-16 character offset within property only. Nonzero continuations require expectedRevision; use the returned nextAction unchanged.") },
                     knownRevision: { type: "string", description: guidanceText('guid-666034ff3af37e36', "Optional response-cache hint. After reading the current snapshot and checking visibility, unchanged notes return notModified without a body. This saves response tokens, not source reads; it does not reject changed notes.") },
@@ -1214,37 +950,20 @@ export function createServer(vaultPath, options = {}) {
         ...getCompilationTools(),
         ...getEvolutionTools(),
         ...getFidelityTools(),
-        ...getSocialTools(),
-        ...(federation ? getEnterpriseFederationTools() : []),
         ...getLayeredMemoryTools(),
-        ...getCommunityParticipationTools(),
-        ...getResearchBridgeTools(),
-        ...getChatTools(),
-        ...getRoleplayTools(),
-        ...getStoryTools(),
         ...getDocumentTools(),
         ...getNoticeTools(),
         ...getReferenceTools(),
-        ...getWhisperTools(),
-        ...getCommunityStatusTools(),
         ...getAgentDirectoryTools(),
-        ...getNotificationTools(),
         ...getAuditTools(),
         ...getAgentTaskTools(),
         ...getWorkTools(),
-        ...getExplanationTools(),
-        ...getBenchmarkTools(),
         ...getConfigurationTools(),
         ...getSkillEvolutionTools(),
-        ...getCommunityFeatureTools(),
         ...getObsidianSearchTools(),
         ...getAgentPulseTools(),
-        ...getContextTools(),
         ...getContinuityTools(),
         ...getModerationTools(),
-        ...getReputationTools(),
-        ...getIdeationTools(),
-        ...getEconomyTools(),
         {
             name: "list_all_tags",
             description: guidanceText('guid-499e41ddd96b2247', "Discover caller-visible, non-hidden tags in bounded {tags,total,returned,offset,snapshotFingerprint,truncated,nextAction} pages. Counts are occurrences, not distinct notes. Combines Properties and body Unicode/nested tags; ignores fenced/inline examples and escaped hashes. Sorted by count then ordinal tag. Follow nextAction, retaining authentication locally; changed tag views require restart. Exact labels are never clipped. Advisory derived view, not an atomic source inventory."),
@@ -1329,7 +1048,6 @@ export function createServer(vaultPath, options = {}) {
             inputSchema: {
                 type: "object",
                 properties: {
-                    department: { type: "string", enum: ["default"], description: guidanceText('guid-17ae46e033421422', "Restrict navigation to the current administrator-verified default department using protected document policy. This never grants access; omit for ordinary company-wide navigation.") },
                     filters: { type: "object", description: guidanceText('guid-6c6012de673b180a', "Frontmatter filters, including dot notation for nested properties, e.g. {\"status\": \"active\", \"project\": \"alpha\"}") },
                     pathPrefix: { type: "string", description: guidanceText('guid-c27dd20a75e3f799', "Restrict results to a vault subtree, e.g. Projects/2026") },
                     sortBy: { type: "string", description: guidanceText('guid-bb398a2d64650d6a', "path (default) or a frontmatter property, including nested dot notation") },
@@ -1577,15 +1295,7 @@ export function createServer(vaultPath, options = {}) {
         // Keep the optional client-vector input visible in the endpoint contract.
         // The default path still embeds on demand in the server, so clients do not
         // need any local model or setup unless they explicitly want to offload it.
-        const unavailable = new Set(enterpriseProfile ? [
-            ...getWhisperTools().map(tool => tool.name),
-            ...(enterpriseProfile.mode === 'public' ? [
-                ...getChatTools(), ...getRoleplayTools(), ...getNotificationTools(), ...getAgentTaskTools(),
-                ...getCommunityFeatureTools(), ...getReputationTools(), ...getIdeationTools(), ...getEconomyTools(),
-                ...getExplanationTools(), ...getBenchmarkTools(),
-            ].map(tool => tool.name) : []),
-        ] : []);
-        return buildInternalTools().filter(tool => !unavailable.has(tool.name) && featureToolAllowed(tool.name)).map(tool => {
+        return buildInternalTools().filter(tool => featureToolAllowed(tool.name)).map(tool => {
             if (SCOPE_AUTH_TOOL_NAMES.has(tool.name))
                 return tool;
             const schema = tool.inputSchema;
@@ -1663,8 +1373,7 @@ export function createServer(vaultPath, options = {}) {
             }
             // Check the canonical registration BEFORE read aliases; aliases never grant selection.
             const registrationName = toolName === 'read_work_group' ? 'manage_work_group'
-                : toolName === 'read_work_project' ? 'manage_work_project'
-                    : toolName === 'read_community_participation' ? 'manage_community_participation' : toolName;
+                : toolName === 'read_work_project' ? 'manage_work_project' : toolName;
             ownerRegistrationName = registrationName;
             if (!featureToolAllowed(registrationName))
                 throw guidanceError(new Error('Endpoint feature is disabled or unavailable in this host selection'), 'guid-e735b30a3e528734');
@@ -1690,17 +1399,11 @@ export function createServer(vaultPath, options = {}) {
             }
             if (toolName === 'logout_scope') {
                 await audit.record({ tool: toolName, args: rawArgs, outcome: 'attempt' });
-                return jsonResult(await scopeAuth.endSession(rawArgs.accessToken), rawArgs.prettyPrint);
+                return jsonResult(scopeAuth.logout(rawArgs.accessToken), rawArgs.prettyPrint);
             }
             if (toolName === 'whoami_scope') {
                 await audit.record({ tool: toolName, args: rawArgs, outcome: 'attempt' });
                 const identity = scopeAuth.whoami(rawArgs.accessToken);
-                if ('enterprise' in identity && identity.enterprise)
-                    return jsonResult({ ...identity,
-                        runtimeKind: identity.enterprise.mode === 'public' ? 'external' : 'internal',
-                        defaultScope: identity.enterprise.mode === 'public' ? 'global' : 'community',
-                        allowedScopes: scopeAccess.scopeRoots(identity).map(item => ({ scope: item.kind, root: scopeAccess.toPublicPath(item.root) })),
-                    }, rawArgs.prettyPrint);
                 return jsonResult(identity, rawArgs.prettyPrint);
             }
             if (toolName === 'change_scope_password') {
@@ -1723,7 +1426,7 @@ export function createServer(vaultPath, options = {}) {
                     throw guidanceError(new Error('Authenticated authority changed; retry with current authorization'), 'guid-5391aec645e7f720');
                 assertDocumentFresh();
             };
-            const documentSessionKey = principal ? `${principal.enterprise?.runtimeId ?? ''}\0${principal.accountId}` : undefined;
+            const documentSessionKey = principal?.accountId;
             const observeDocument = (root) => {
                 if (!documentSessionKey)
                     throw guidanceError(new Error('Protected document requires an authenticated execution'), 'guid-c0c811f86d3356c5');
@@ -1773,9 +1476,6 @@ export function createServer(vaultPath, options = {}) {
             if (ownerActivity && !(reviewedSourceAccess && toolName === 'resolve_skill'))
                 ownerOperation = await ownerActivityRuntime.begin(ownerActivity, ownerActionForEndpointTool(ownerRegistrationName, MUTATING_TOOLS.has(toolName), rawArgs.op), ownerRequestPaths(toolName, trimmedArgs), principal);
             await audit.record({ tool: toolName, args: rawArgs, ...(principal && { principal }), outcome: 'attempt' });
-            if (principal?.enterprise?.mode === 'public' && toolName === 'publish_blog_post' && trimmedArgs.status === 'draft') {
-                throw guidanceError(new Error('Keep drafts in this agent\'s private memory; publish to the public community only when ready'), 'guid-8584387a03eae818');
-            }
             const canAccessPath = (path) => scopeAccess.canAccessPhysicalPath(path, principal);
             const assertNoticeActorFresh = () => {
                 if (principal && JSON.stringify(scopeAuth.authenticate(rawArgs.accessToken)) !== JSON.stringify(principal))
@@ -1788,9 +1488,6 @@ export function createServer(vaultPath, options = {}) {
                         throw guidanceError(new Error('Authenticated actor changed'), 'guid-9d2f8216a50e151d');
                     if (requiredCapability && !scopeAuth.hasCapability(current, requiredCapability))
                         throw guidanceError(new Error('Capability was revoked'), 'guid-6d25fb70d1e43dcc');
-                    if (toolName === 'update_workshop_facilitation' && trimmedArgs.operation === 'execute_output'
-                        && !scopeAuth.hasCapability(current, trimmedArgs.payload?.type === 'decision' ? 'publish' : 'task'))
-                        throw guidanceError(new Error('Output capability was revoked'), 'guid-8aff3dc331726721');
                     return current;
                 };
                 const current = authenticateActor();
@@ -1800,41 +1497,14 @@ export function createServer(vaultPath, options = {}) {
             };
             assertImmutableSourceBoundary(toolName, trimmedArgs, scopeAccess);
             assertManagedCommunityBoundary(toolName, trimmedArgs);
-            const publicCommunityWriter = new Set(['publish_blog_post', 'delete_blog_post', 'comment_on_blog_post', 'edit_blog_comment', 'delete_blog_comment', 'update_agent_profile', 'update_community_status', 'moderate_content', 'toggle_reaction', 'accept_blog_comment', 'unaccept_blog_comment', 'public_federation_retry']).has(toolName);
-            const toolResponse = await withEnterpriseStorageContext({ access: scopeAccess, ...(principal && { principal }), publicCommunityWriter,
+            const toolResponse = await withEnterpriseStorageContext({ access: scopeAccess, ...(principal && { principal }),
                 assertFresh: () => { assertStorageFresh(); ownerOperation?.assertFresh(); }, observe: observeDocument, inherit: inheritDocument,
                 ...(ownerOperation && { canAccessPath: ownerOperation.canAccessPath, canTraversePath: ownerOperation.canTraversePath,
                     beforeWrite: ownerOperation.beforeWrite }) }, async () => {
-                const communityReceipt = (value) => jsonResult({ ...value,
-                    ...(principal?.enterprise?.mode === 'public' && !federation && { federation: { status: 'disabled' } }),
-                }, trimmedArgs.prettyPrint);
-                if (federation && new Set(['publish_blog_post', 'delete_blog_post', 'comment_on_blog_post', 'edit_blog_comment', 'delete_blog_comment', 'update_agent_profile', 'get_agent_profile', 'list_agent_profiles', 'list_blog_posts', 'read_blog_post', 'list_blog_comments', 'public_federation_pull', 'public_federation_retry', 'public_federation_get', 'public_federation_list']).has(toolName)) {
-                    const { accessToken: _token, password: _password, invitationToken: _invitation, principal: _claimedPrincipal, ...publicArgs } = trimmedArgs;
-                    return jsonResult(await federation.dispatch(toolName, publicArgs, principal), trimmedArgs.prettyPrint);
-                }
                 if (Object.hasOwn(DOCUMENT_TOOL_ENDPOINTS, toolName)) {
                     // This service owns scope URI resolution. trimPaths has already expanded
                     // legacy adapter paths and must not feed private physical paths back in.
                     return jsonResult(await dispatchDocumentTool(toolName, rawArgs, principal, requiredService(documents), requiredService(documentSearch)), false);
-                }
-                const storyEndpoint = storyEndpointForTool(toolName);
-                if (storyEndpoint) {
-                    assertStoryOperation(storyEndpoint, trimmedArgs.op);
-                    const storyArgs = { ...trimmedArgs };
-                    // REST query parameters are strings. Normalize only bounded read
-                    // controls; operation names and all mutation inputs retain their types.
-                    if (!STORY_MUTATING_TOOLS.has(toolName)) {
-                        for (const key of ['maxChars', 'limit']) {
-                            if (typeof storyArgs[key] === 'string' && /^\d{1,5}$/.test(storyArgs[key]))
-                                storyArgs[key] = Number(storyArgs[key]);
-                        }
-                    }
-                    const service = new StoryService(fileSystem, scopeAccess, references, scopeAuth, requiredService(work), requiredService(agentTasks), {
-                        readOnly, gitHistory, assertActor: async () => { await revalidateActor(); },
-                        readRoleplayTurn: (source, actor) => new RoleplayService(fileSystem, scopeAccess, references, options.roleplay, { assertActor: async () => { await revalidateActor(); } }).storyTurn(source, actor),
-                        changed: path => queueReadModelChange(path, 'upsert'),
-                    });
-                    return jsonResult(await service.execute(storyEndpoint, storyArgs, principal), false);
                 }
                 const withCompilationReview = async (result, maxChars, allJobs = false, prettyPrint = false) => {
                     if (!options.compilation?.host || !principal)
@@ -1857,22 +1527,22 @@ export function createServer(vaultPath, options = {}) {
                         const endpoint = toolName.endsWith('_feedback') ? 'feedback' : toolName.endsWith('_cycle') ? 'cycle' : 'context';
                         if (endpoint === 'feedback' && args.op === 'request_review') {
                             if (!evolutionConnection)
-                                throw Error('Evolution operational connection unavailable');
+                                throw guidanceError(Error('Evolution operational connection unavailable'), 'guid-b07bf216bcd8fa4d');
                             return jsonResult(await evolutionConnection.review.prepare(String(_token), args), false);
                         }
                         if (endpoint === 'cycle' && args.op === 'request_effect_review') {
                             if (!evolutionConnection)
-                                throw Error('Evolution operational connection unavailable');
+                                throw guidanceError(Error('Evolution operational connection unavailable'), 'guid-b07bf216bcd8fa4d');
                             return jsonResult(await evolutionConnection.review.prepareEffect(String(_token), args), false);
                         }
                         if (endpoint === 'context' && args.op === 'begin') {
                             if (!evolutionConnection)
-                                throw Error('Evolution operational connection unavailable');
+                                throw guidanceError(Error('Evolution operational connection unavailable'), 'guid-b07bf216bcd8fa4d');
                             return jsonResult(await evolutionConnection.operations.begin(String(_token), args), false);
                         }
                         if (endpoint === 'context' && args.op === 'observations') {
                             if (!evolutionConnection)
-                                throw Error('Evolution operational connection unavailable');
+                                throw guidanceError(Error('Evolution operational connection unavailable'), 'guid-b07bf216bcd8fa4d');
                             return jsonResult(await evolutionConnection.operations.observations(String(_token), args), false);
                         }
                         const result = await evolution.execute(endpoint, args, principal, async () => { await revalidateActor(); });
@@ -1927,13 +1597,6 @@ export function createServer(vaultPath, options = {}) {
                             } }), false);
                     }
                     case "get_scope_context": {
-                        if (principal?.enterprise)
-                            return jsonResult({
-                                identity: scopeAuth.whoami(rawArgs.accessToken),
-                                defaultNavigation: scopeAccess.defaultNavigation(principal),
-                                defaultScope: principal.enterprise.mode === 'company' ? 'community' : 'global',
-                                scopes: scopeAccess.scopeRoots(principal).map(item => ({ scope: item.kind, root: scopeAccess.toPublicPath(item.root) })),
-                            }, trimmedArgs.prettyPrint);
                         return jsonResult(collaboration.getScopeContext(principal?.modelId, principal?.agentId, undefined, scopeAccess.getCommandCenterId()), trimmedArgs.prettyPrint);
                     }
                     case "orient_wiki": {
@@ -1941,20 +1604,11 @@ export function createServer(vaultPath, options = {}) {
                         assertNoticeActorFresh();
                         if (notice)
                             return jsonResult(notice, false);
-                        if (principal?.enterprise)
-                            return jsonResult({
-                                identity: { actorId: principal.actorId, authorLabel: principal.authorLabel, sessionId: principal.sessionId, sessionGeneration: principal.sessionGeneration },
-                                instanceMode: principal.enterprise.mode,
-                                defaultNavigation: scopeAccess.defaultNavigation(principal),
-                                defaultScope: principal.enterprise.mode === 'company' ? 'community' : 'global',
-                                allowedScopes: scopeAccess.scopeRoots(principal).map(item => ({ scope: item.kind, uri: scopeAccess.toPublicPath(item.root) })),
-                                primaryAction: { tool: 'get_agent_pulse', arguments: { maxChars: 4000 }, reason: guidanceText('guid-a1e278b3dad7ed62', 'Continue as this persistent agent within the current approved instance.') },
-                            }, trimmedArgs.prettyPrint);
                         return jsonResult(await llmWiki.orient(principal, trimmedArgs.maxChars), trimmedArgs.prettyPrint);
                     }
                     case "list_active_capabilities": {
                         const ownerState = await ownerCatalogState(principal);
-                        const result = endpointRegistry.list(undefined, trimmedArgs.limit, trimmedArgs.maxChars, { readOnly, reviewedSourceAccess, skillEvolutionEnabled: Boolean(skillEvolution?.enabled), authenticated: Boolean(principal), capabilities: new Set(principal?.capabilities || []), principalKey: JSON.stringify(principal), roleplayConfigured: Boolean(options.roleplay), roleplayWritesConfigured: Boolean(options.roleplay?.options.policy.administrators.length), economyConfigured: Boolean(options.economy?.policy.enabled), explanationsConfigured: Boolean(explanations), benchmarksConfigured: Boolean(benchmarks), ownerActivity: ownerState }, true, { compact: true, cursor: trimmedArgs.cursor });
+                        const result = endpointRegistry.list(undefined, trimmedArgs.limit, trimmedArgs.maxChars, { readOnly, reviewedSourceAccess, skillEvolutionEnabled: Boolean(skillEvolution?.enabled), authenticated: Boolean(principal), capabilities: new Set(principal?.capabilities || []), principalKey: JSON.stringify(principal), ownerActivity: ownerState }, true, { compact: true, cursor: trimmedArgs.cursor });
                         if (JSON.stringify(await ownerCatalogState(principal)) !== JSON.stringify(ownerState)
                             || JSON.stringify(ownerCatalogSnapshot(principal)) !== JSON.stringify(ownerState))
                             throw guidanceError(new Error('Capability owner authority changed; restart the catalog request'), 'guid-0a62aacbd9767914');
@@ -1975,7 +1629,7 @@ export function createServer(vaultPath, options = {}) {
                     }
                     case "search_capabilities": {
                         const ownerState = await ownerCatalogState(principal);
-                        const result = endpointRegistry.list(trimmedArgs.query, trimmedArgs.limit, trimmedArgs.maxChars, { readOnly, reviewedSourceAccess, skillEvolutionEnabled: Boolean(skillEvolution?.enabled), authenticated: Boolean(principal), capabilities: new Set(principal?.capabilities || []), roleplayConfigured: Boolean(options.roleplay), roleplayWritesConfigured: Boolean(options.roleplay?.options.policy.administrators.length), economyConfigured: Boolean(options.economy?.policy.enabled), explanationsConfigured: Boolean(explanations), benchmarksConfigured: Boolean(benchmarks), ownerActivity: ownerState }, false, { cursor: trimmedArgs.cursor });
+                        const result = endpointRegistry.list(trimmedArgs.query, trimmedArgs.limit, trimmedArgs.maxChars, { readOnly, reviewedSourceAccess, skillEvolutionEnabled: Boolean(skillEvolution?.enabled), authenticated: Boolean(principal), capabilities: new Set(principal?.capabilities || []), ownerActivity: ownerState }, false, { cursor: trimmedArgs.cursor });
                         if (JSON.stringify(await ownerCatalogState(principal)) !== JSON.stringify(ownerState)
                             || JSON.stringify(ownerCatalogSnapshot(principal)) !== JSON.stringify(ownerState))
                             throw guidanceError(new Error('Capability owner authority changed; retry with current consent'), 'guid-4d8026375f487ffa');
@@ -1995,59 +1649,16 @@ export function createServer(vaultPath, options = {}) {
                             if (notice)
                                 return jsonResult(notice, false);
                         }
-                        if (principal?.enterprise && hasFeature('collaboration') && hasFeature('personal-memory')) {
-                            return jsonResult({ identity: { actorId: principal.actorId, authorLabel: principal.authorLabel, sessionId: principal.sessionId, generation: principal.sessionGeneration },
-                                defaultNavigation: scopeAccess.defaultNavigation(principal),
-                                defaultScope: principal.enterprise.mode === 'company' ? 'community' : 'global',
-                                primaryAction: { tool: 'call_endpoint', arguments: { endpointId: 'memory.brief', arguments: { scope: 'personal', maxChars: 1800 } }, reason: guidanceText('guid-3ae748a5a17853b5', 'Resume this persistent agent using its own memory before selecting shared work.') },
-                            }, trimmedArgs.prettyPrint);
-                        }
                         const packet = await agentPulse.get({
                             ...(principal && { principal }),
                             limit: trimmedArgs.limit,
                             maxChars: trimmedArgs.maxChars,
-                            ...(trimmedArgs.purpose !== undefined && { purpose: trimmedArgs.purpose }),
                             ...(trimmedArgs.hostBusy !== undefined && { hostBusy: trimmedArgs.hostBusy }),
                             ...(trimmedArgs.skillId !== undefined && { skillId: trimmedArgs.skillId }),
                         }, validator => { finalOwnerRefresh = validator.revalidate; finalOwnerValidator = validator.assertFresh; });
                         if (principal && scopeAuth.authenticate(rawArgs.accessToken)?.accountId !== principal.accountId)
                             throw guidanceError(new Error('Session expired during pulse; login again'), 'guid-5051af441248af37');
-                        return jsonResult(packet, trimmedArgs.purpose === 'community' ? false : trimmedArgs.prettyPrint);
-                    }
-                    case 'get_wiki_bridge_candidates': {
-                        const packet = await requiredService(researchBridge).candidates({ ...trimmedArgs, principal });
-                        if (principal && JSON.stringify(scopeAuth.authenticate(rawArgs.accessToken)) !== JSON.stringify(principal))
-                            throw guidanceError(new Error('Research authentication changed; login again before reading'), 'guid-134b283bd26baf39');
-                        return jsonResult(packet, false);
-                    }
-                    case 'read_community_participation':
-                    case 'manage_community_participation': {
-                        const packet = await requiredService(participation).settings({ ...trimmedArgs, principal, ...(toolName === 'read_community_participation' && { op: 'read' }), authorize: () => { if (!principal || JSON.stringify(scopeAuth.authenticate(rawArgs.accessToken)) !== JSON.stringify(principal))
-                                throw guidanceError(new Error('Participation authentication changed'), 'guid-d130c9cb9e9dbb37'); } });
-                        if (!principal || scopeAuth.authenticate(rawArgs.accessToken)?.accountId !== principal.accountId)
-                            throw guidanceError(new Error('Session expired during participation read'), 'guid-1fd7c5c41175ae9b');
-                        return jsonResult(packet, false);
-                    }
-                    case 'record_community_participation': {
-                        const packet = await requiredService(participation).record({ ...trimmedArgs, principal, authorize: () => { if (!principal || JSON.stringify(scopeAuth.authenticate(rawArgs.accessToken)) !== JSON.stringify(principal))
-                                throw guidanceError(new Error('Participation authentication changed'), 'guid-d130c9cb9e9dbb37'); } });
-                        if (!principal || JSON.stringify(scopeAuth.authenticate(rawArgs.accessToken)) !== JSON.stringify(principal))
-                            throw guidanceError(new Error('Participation authentication changed'), 'guid-d130c9cb9e9dbb37');
-                        return jsonResult(packet, false);
-                    }
-                    case "read_context": {
-                        return jsonResult(await requiredService(context).read({
-                            ...(principal && { principal }),
-                            targetType: trimmedArgs.targetType,
-                            ...(typeof trimmedArgs.slug === 'string' && { slug: trimmedArgs.slug }),
-                            ...(typeof trimmedArgs.commentId === 'string' && { commentId: trimmedArgs.commentId }),
-                            ...(typeof trimmedArgs.roomId === 'string' && { roomId: trimmedArgs.roomId }),
-                            ...(typeof trimmedArgs.messageId === 'string' && { messageId: trimmedArgs.messageId }),
-                            ...(trimmedArgs.contextBefore !== undefined && { contextBefore: trimmedArgs.contextBefore }),
-                            ...(trimmedArgs.contextAfter !== undefined && { contextAfter: trimmedArgs.contextAfter }),
-                            ...(trimmedArgs.maxChars !== undefined && { maxChars: trimmedArgs.maxChars }),
-                            ...(trimmedArgs.includeReferences !== undefined && { includeReferences: trimmedArgs.includeReferences }),
-                        }), trimmedArgs.prettyPrint);
+                        return jsonResult(packet, trimmedArgs.prettyPrint);
                     }
                     case "save_work_state": {
                         return jsonResult(await continuity.save({
@@ -2083,14 +1694,10 @@ export function createServer(vaultPath, options = {}) {
                         return jsonResult(await collaboration.createAgentScope(trimmedArgs), trimmedArgs.prettyPrint);
                     }
                     case "handoff_agent_scope": {
-                        if (principal?.enterprise)
-                            return jsonResult(await scopeAuth.handoffEnterpriseSession(rawArgs.accessToken, trimmedArgs), trimmedArgs.prettyPrint);
                         await assertCanManageAgent(fileSystem, principal, trimmedArgs.agentId);
                         return jsonResult(await collaboration.handoffAgentScope(trimmedArgs), trimmedArgs.prettyPrint);
                     }
                     case "resume_agent_scope": {
-                        if (principal?.enterprise)
-                            return jsonResult(await scopeAuth.handoffEnterpriseSession(rawArgs.accessToken, { agentId: trimmedArgs.agentId, toSessionId: trimmedArgs.newSessionId, expectedGeneration: trimmedArgs.expectedGeneration }), trimmedArgs.prettyPrint);
                         await assertCanManageAgent(fileSystem, principal, trimmedArgs.agentId);
                         return jsonResult(await collaboration.resumeAgentScope(trimmedArgs), trimmedArgs.prettyPrint);
                     }
@@ -2281,20 +1888,7 @@ export function createServer(vaultPath, options = {}) {
                     }
                     case "get_wiki_learning_path": {
                         const result = await llmWiki.learningPath(principal, trimmedArgs.path, trimmedArgs.maxDepth, trimmedArgs.limit, trimmedArgs.maxChars, false, trimmedArgs.prettyPrint);
-                        const service = trimmedArgs.includeExplanation === true ? explanationService(principal ? revalidateActor : undefined) : undefined;
-                        if (!service)
-                            return jsonResult(result, trimmedArgs.prettyPrint);
-                        const value = result;
-                        const guards = [value.root, ...(value.authoredOrder ?? [])].filter(item => item?.path && item?.revision)
-                            .map(item => ({ path: scopeAccess.resolveExternalPath(item.path, principal), revision: item.revision }));
-                        const targetPath = typeof trimmedArgs.explanationPath === 'string' ? scopeAccess.resolveExternalPath(trimmedArgs.explanationPath, principal) : trimmedArgs.path;
-                        const target = guards.find(item => item.path === targetPath);
-                        if (!target)
-                            return jsonResult(result, trimmedArgs.prettyPrint);
-                        return jsonResult(await attachExplanationHint({ result: value, target, guards, fs: fileSystem, admitted: canAccessPath,
-                            maxChars: trimmedArgs.maxChars ?? 7000, prettyPrint: trimmedArgs.prettyPrint,
-                            approvedAction: () => service.approvedAction({ sourcePath: scopeAccess.toPublicPath(target.path), expectedSourceRevision: target.revision }, principal),
-                        }), trimmedArgs.prettyPrint);
+                        return jsonResult(result, trimmedArgs.prettyPrint);
                     }
                     case "get_wiki_authority_map": {
                         return jsonResult(await llmWiki.authorityMap(principal, {
@@ -2716,21 +2310,6 @@ export function createServer(vaultPath, options = {}) {
                             actor: actorName(principal, trimmedArgs.actor),
                         }), trimmedArgs.prettyPrint);
                     }
-                    case "write_journal_entry": {
-                        return jsonResult(await requiredService(social).writeJournalEntry({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
-                    }
-                    case "list_journal_entries":
-                    case "read_journal_entry": {
-                        const result = toolName === 'list_journal_entries'
-                            ? await requiredService(social).listJournalEntries({ ...trimmedArgs, principal })
-                            : await requiredService(social).readJournalEntry({ ...trimmedArgs, principal });
-                        if (principal && JSON.stringify(scopeAuth.authenticate(rawArgs.accessToken)) !== JSON.stringify(principal))
-                            throw guidanceError(new Error('Journal authentication changed; login again before reading'), 'guid-49ab02be711a3444');
-                        return jsonResult(result, trimmedArgs.prettyPrint);
-                    }
-                    case "publish_blog_post": {
-                        return communityReceipt(await requiredService(social).publishBlogPost({ ...trimmedArgs, principal }));
-                    }
                     case 'list_guidance_catalog': {
                         return jsonResult(guidance.list(trimmedArgs, path => scopeAccess.canAccessPhysicalPath(path, principal)), false);
                     }
@@ -2746,112 +2325,8 @@ export function createServer(vaultPath, options = {}) {
                             throw guidanceError(new Error('Notice authentication changed; login again'), 'guid-0ec4f10ba14b2487');
                         return jsonResult(result, false);
                     }
-                    case "delete_blog_post": {
-                        return communityReceipt(await requiredService(social).deleteBlogPost({ ...trimmedArgs, principal }));
-                    }
-                    case "list_blog_posts": {
-                        return jsonResult(await requiredService(social).listBlogPosts({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
-                    }
-                    case "read_blog_post": {
-                        return jsonResult(await requiredService(social).getBlogPost({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
-                    }
-                    case "comment_on_blog_post": {
-                        return communityReceipt(await requiredService(social).commentOnBlogPost({ ...trimmedArgs, principal }));
-                    }
-                    case "edit_blog_comment": {
-                        return communityReceipt(await requiredService(social).editBlogComment({ ...trimmedArgs, principal }));
-                    }
-                    case "delete_blog_comment": {
-                        return communityReceipt(await requiredService(social).deleteBlogComment({ ...trimmedArgs, principal }));
-                    }
-                    case "list_blog_comments": {
-                        return jsonResult(await requiredService(social).listBlogComments({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
-                    }
-                    case "list_mentions": {
-                        return jsonResult(await requiredService(social).listMentions({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
-                    }
-                    case "list_blog_series": {
-                        return jsonResult(await requiredService(communityFeatures).listSeries(trimmedArgs), trimmedArgs.prettyPrint);
-                    }
-                    case "list_author_activity": {
-                        return jsonResult(await requiredService(communityFeatures).authorActivity({ author: trimmedArgs.author, limit: trimmedArgs.limit, maxChars: trimmedArgs.maxChars }), trimmedArgs.prettyPrint);
-                    }
-                    case "toggle_reaction": {
-                        return jsonResult(await requiredService(communityFeatures).toggleReaction({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
-                    }
-                    case "list_reactions": {
-                        return jsonResult(await requiredService(communityFeatures).listReactions(trimmedArgs), trimmedArgs.prettyPrint);
-                    }
-                    case "list_popular_posts": {
-                        return jsonResult(await requiredService(communityFeatures).listPopularPosts(trimmedArgs), trimmedArgs.prettyPrint);
-                    }
-                    case "accept_blog_comment":
-                    case "unaccept_blog_comment": {
-                        return jsonResult(await requiredService(communityFeatures).acceptComment({ ...trimmedArgs, principal, accepted: toolName === 'accept_blog_comment' }), trimmedArgs.prettyPrint);
-                    }
-                    case "write_guestbook_entry": {
-                        return jsonResult(await requiredService(communityFeatures).guestbook({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
-                    }
-                    case "list_guestbook": {
-                        return jsonResult(await requiredService(communityFeatures).guestbook(trimmedArgs), trimmedArgs.prettyPrint);
-                    }
-                    case "delete_guestbook_entry": {
-                        return jsonResult(await requiredService(communityFeatures).guestbook({ ...trimmedArgs, principal, deleteEntry: true }), trimmedArgs.prettyPrint);
-                    }
-                    case "watch_target":
-                    case "unwatch_target": {
-                        return jsonResult(await requiredService(communityFeatures).watch({ ...trimmedArgs, principal, active: toolName === 'watch_target' }), trimmedArgs.prettyPrint);
-                    }
-                    case "list_watched_targets": {
-                        return jsonResult(await requiredService(communityFeatures).listWatches(principal, trimmedArgs.maxChars), trimmedArgs.prettyPrint);
-                    }
-                    case "save_item": {
-                        return jsonResult(await requiredService(communityFeatures).save({ ...trimmedArgs, principal, active: true }), trimmedArgs.prettyPrint);
-                    }
-                    case "unsave_item": {
-                        return jsonResult(await requiredService(communityFeatures).save({ ...trimmedArgs, principal, active: false }), trimmedArgs.prettyPrint);
-                    }
-                    case "list_saved_items": {
-                        return jsonResult(await requiredService(communityFeatures).listSaves(principal, trimmedArgs.maxChars), trimmedArgs.prettyPrint);
-                    }
                     case "read_references": {
                         return jsonResult(await references.readFromNote({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
-                    }
-                    case "create_chat_room": {
-                        return jsonResult(await requiredService(chat).createRoom({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
-                    }
-                    case "list_chat_rooms": {
-                        return jsonResult(await requiredService(chat).listRooms(trimmedArgs), trimmedArgs.prettyPrint);
-                    }
-                    case "send_chat_message": {
-                        if (options.roleplay && (await options.roleplay.snapshot()).scenes[trimmedArgs.roomId]) {
-                            const service = new RoleplayService(fileSystem, scopeAccess, references, options.roleplay, { assertActor: async () => { await revalidateActor(); }, changed: path => queueReadModelChange(path, 'upsert') });
-                            const state = await options.roleplay.snapshot();
-                            const receipt = await service.execute('action', { ...trimmedArgs, op: 'ooc', expectedRevision: trimmedArgs.expectedRevision ?? roleplayRevision(state) }, principal);
-                            return jsonResult({ ...receipt, messageId: `roleplay-${receipt.id}`, roomId: trimmedArgs.roomId, note: guidanceText('guid-9e806e522f13c7ef', 'Out-of-character chat only. Use roleplay.action with character/generation for in-character actions.') }, false);
-                        }
-                        return jsonResult(await requiredService(chat).sendMessage({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
-                    }
-                    case "edit_chat_message": {
-                        return jsonResult(await requiredService(chat).editMessage({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
-                    }
-                    case "delete_chat_message": {
-                        return jsonResult(await requiredService(chat).deleteMessage({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
-                    }
-                    case "archive_chat_room": {
-                        return jsonResult(await requiredService(chat).archiveRoom({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
-                    }
-                    case "read_chat_room": {
-                        return jsonResult(await requiredService(chat).readRoomWithMessages({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
-                    }
-                    case "send_whisper": {
-                        return jsonResult(await requiredService(whispers).send({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
-                    }
-                    case "list_whispers": {
-                        return jsonResult(await requiredService(whispers).list({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
-                    }
-                    case "update_community_status": {
-                        return jsonResult(await requiredService(communityStatus).update({ ...trimmedArgs, principal }), trimmedArgs.prettyPrint);
                     }
                     case "report_content": {
                         return jsonResult(await moderation.report({ ...(principal && { principal }), targetType: String(trimmedArgs.targetType), targetId: String(trimmedArgs.targetId), ...(trimmedArgs.postId !== undefined && { postId: String(trimmedArgs.postId) }), ...(trimmedArgs.roomId !== undefined && { roomId: String(trimmedArgs.roomId) }), category: String(trimmedArgs.category), reason: String(trimmedArgs.reason) }), trimmedArgs.prettyPrint);
@@ -2861,14 +2336,6 @@ export function createServer(vaultPath, options = {}) {
                     }
                     case "moderate_content": {
                         return jsonResult(await moderation.enforce({ ...(principal && { principal }), action: String(trimmedArgs.action), targetType: String(trimmedArgs.targetType), targetId: String(trimmedArgs.targetId), ...(trimmedArgs.postId !== undefined && { postId: String(trimmedArgs.postId) }), ...(trimmedArgs.roomId !== undefined && { roomId: String(trimmedArgs.roomId) }), reason: String(trimmedArgs.reason), ...(trimmedArgs.expectedRevision !== undefined && { expectedRevision: String(trimmedArgs.expectedRevision) }) }), trimmedArgs.prettyPrint);
-                    }
-                    case "get_reputation": {
-                        const result = trimmedArgs.identity !== undefined
-                            ? await requiredService(reputation).getPublic(String(trimmedArgs.identity))
-                            : principal
-                                ? await requiredService(reputation).getForPrincipal(principal)
-                                : (() => { throw guidanceError(new Error('identity is required for anonymous reputation lookup'), 'guid-e950a246d244c855'); })();
-                        return jsonResult(result, trimmedArgs.prettyPrint);
                     }
                     case "get_agent_profile": {
                         return jsonResult(await agentDirectory.get({ role: trimmedArgs.role, identity: trimmedArgs.identity }), trimmedArgs.prettyPrint);
@@ -2892,22 +2359,6 @@ export function createServer(vaultPath, options = {}) {
                             expectedRevision: trimmedArgs.expectedRevision,
                         }), trimmedArgs.prettyPrint);
                     }
-                    case "list_notifications": {
-                        return jsonResult(await requiredService(notifications).list({
-                            ...(principal && { principal }),
-                            includeRead: trimmedArgs.includeRead,
-                            limit: trimmedArgs.limit,
-                            maxChars: trimmedArgs.maxChars,
-                            afterNotificationId: trimmedArgs.afterNotificationId,
-                        }), trimmedArgs.prettyPrint);
-                    }
-                    case "mark_notifications_read": {
-                        return jsonResult(await requiredService(notifications).markRead({
-                            ...(principal && { principal }),
-                            through: trimmedArgs.through,
-                            expectedRevision: trimmedArgs.expectedRevision,
-                        }), trimmedArgs.prettyPrint);
-                    }
                     case "list_audit_events": {
                         return jsonResult(await audit.list({ ...(principal && { principal }), limit: trimmedArgs.limit, includeErrors: trimmedArgs.includeErrors,
                             ...(scopeAccess.hasDocumentPolicy() && { canAccessPath: (path) => {
@@ -2919,83 +2370,11 @@ export function createServer(vaultPath, options = {}) {
                                     }
                                 } }) }), trimmedArgs.prettyPrint);
                     }
-                    case 'manage_roleplay_computer':
-                    case 'read_roleplay_computer': {
-                        const service = new ComputerWorldService(fileSystem, scopeAccess, {
-                            readOnly, assertActor: async () => { await revalidateActor(); },
-                            changed: path => queueReadModelChange(path, 'upsert'),
-                        });
-                        return jsonResult(await service.execute(trimmedArgs, principal), false);
-                    }
-                    case 'manage_roleplay_world':
-                    case 'read_roleplay_world':
-                    case 'manage_roleplay_character':
-                    case 'read_roleplay_character':
-                    case 'manage_roleplay_scene':
-                    case 'read_roleplay_scene':
-                    case 'read_roleplay_context':
-                    case 'read_roleplay_history':
-                    case 'submit_roleplay_action':
-                    case 'resolve_roleplay_action':
-                    case 'manage_roleplay_evolution':
-                    case 'read_roleplay_evolution':
-                    case 'preview_roleplay_evolution':
-                    case 'manage_roleplay_trpg':
-                    case 'read_roleplay_trpg':
-                    case 'preview_roleplay_trpg':
-                    case 'correct_roleplay_turn':
-                    case 'preview_roleplay_correction': {
-                        const endpoints = { manage_roleplay_world: 'world', read_roleplay_world: 'world', manage_roleplay_character: 'character', read_roleplay_character: 'character', manage_roleplay_scene: 'scene', read_roleplay_scene: 'scene', read_roleplay_context: 'context', read_roleplay_history: 'history', submit_roleplay_action: 'action', resolve_roleplay_action: 'resolve', correct_roleplay_turn: 'correct', preview_roleplay_correction: 'correct' };
-                        Object.assign(endpoints, { manage_roleplay_evolution: 'evolution', read_roleplay_evolution: 'evolution', preview_roleplay_evolution: 'evolution' });
-                        Object.assign(endpoints, { manage_roleplay_trpg: 'trpg', read_roleplay_trpg: 'trpg', preview_roleplay_trpg: 'trpg' });
-                        const service = new RoleplayService(fileSystem, scopeAccess, references, options.roleplay, {
-                            assertActor: async () => { await revalidateActor(); }, retrieval,
-                            changed: path => queueReadModelChange(path, 'upsert'),
-                            ...(options.economy && { validateQuestBinding: async (questId) => {
-                                    const state = await options.economy.ledger.snapshot();
-                                    const contract = state.contracts[questId];
-                                    const policy = options.economy.policy;
-                                    if (!policy.enabled || !policy.subjectiveReview || !contract || contract.status !== 'claimed' || !contract.escrow || !contract.worker || !contract.workerOwner || !contract.reviewer || !contract.reviewerOwner
-                                        || !policy.reviewers.includes(contract.reviewer) || policy.owners[contract.worker] !== contract.workerOwner || policy.owners[contract.reviewer] !== contract.reviewerOwner
-                                        || contract.reviewerOwner === contract.workerOwner || contract.reviewerOwner === contract.requesterOwner || contract.terms.kind === 'mechanical')
-                                        throw guidanceError(new Error('Roleplay reward requires a funded, claimed quest with an assigned independent reviewer and approved owners'), 'guid-1e46c0e8d962bba1');
-                                } }),
-                        });
-                        return jsonResult(await service.execute(endpoints[toolName], trimmedArgs, principal), false);
-                    }
-                    case 'list_explanations':
-                    case 'read_explanation':
-                    case 'claim_explanation':
-                    case 'release_explanation':
-                    case 'submit_explanation':
-                    case 'review_explanation': {
-                        const service = explanationService(principal ? revalidateActor : undefined);
-                        if (!service)
-                            throw guidanceError(Error('Explanation feature is not configured by the host'), 'guid-82691cbd40ccccde');
-                        // This service owns URI normalization. Forward only its contract fields;
-                        // authentication material must never participate in durable retry hashes.
-                        const params = Object.fromEntries(['sourcePath', 'expectedSourceRevision', 'expectedRevision', 'requestId', 'draft', 'review', 'cursor', 'limit', 'maxChars']
-                            .filter(key => rawArgs[key] !== undefined).map(key => [key, rawArgs[key]]));
-                        return jsonResult(await service.execute(EXPLANATION_ENDPOINTS[toolName].split('.')[1], params, principal), false);
-                    }
                     case "get_wiki_topic_packet": {
                         const result = await llmWiki.topicPacket(principal, trimmedArgs);
                         if (JSON.stringify(await scopeAuth.authenticate(rawArgs.accessToken)) !== JSON.stringify(principal))
                             throw guidanceError(new Error('Authentication changed; retry topic request'), 'guid-f7cbf440ff304bd3');
                         return jsonResult(result, trimmedArgs.prettyPrint);
-                    }
-                    case 'list_benchmarks':
-                    case 'read_benchmark':
-                    case 'submit_benchmark':
-                    case 'review_benchmark':
-                    case 'finalize_benchmark': {
-                        const service = benchmarkService(principal ? revalidateActor : undefined);
-                        if (!service)
-                            throw guidanceError(Error('Benchmark feature is not configured by the host'), 'guid-77896f1b100b2241');
-                        // Never persist authentication tokens or transport-specific fields in receipts.
-                        const params = Object.fromEntries(['challengeId', 'field', 'entryId', 'reviewId', 'offset', 'textLimit', 'expectedRevision', 'requestId', 'answer', 'practice', 'review', 'limit', 'maxChars', 'cursor']
-                            .filter(key => rawArgs[key] !== undefined).map(key => [key, rawArgs[key]]));
-                        return jsonResult(await service.execute(benchmarkOperation(toolName), params, principal), false);
                     }
                     case 'check_reusable_configuration': {
                         const { accessToken: _token, ...params } = rawArgs;
@@ -3009,7 +2388,7 @@ export function createServer(vaultPath, options = {}) {
                     case 'resolve_skill': {
                         if (options.quarantineSkills) {
                             if (!reviewedSkills)
-                                throw Error('Reviewed skill unavailable');
+                                throw guidanceError(Error('Reviewed skill unavailable'), 'guid-9d9bb7483d9c38ff');
                             return jsonResult(await reviewedSkills.resolve({ ...trimmedArgs, principal }, fence => {
                                 finalOwnerRefresh = fence.revalidate;
                                 finalOwnerValidator = fence.assertFresh;
@@ -3078,105 +2457,6 @@ export function createServer(vaultPath, options = {}) {
                             expectedRevision: trimmedArgs.expectedRevision,
                         }), trimmedArgs.prettyPrint);
                     }
-                    case "create_idea": {
-                        return jsonResult(await requiredService(ideation).createIdea({ ...(principal && { principal }), ideaId: trimmedArgs.ideaId, title: trimmedArgs.title, seed: trimmedArgs.seed, problem: trimmedArgs.problem, constraints: trimmedArgs.constraints, successCriteria: trimmedArgs.successCriteria, references: trimmedArgs.references, workshopId: trimmedArgs.workshopId, expectedRevision: trimmedArgs.expectedRevision, requestId: trimmedArgs.requestId }), trimmedArgs.prettyPrint);
-                    }
-                    case "list_ideas": {
-                        return jsonResult(await requiredService(ideation).listIdeas({ status: trimmedArgs.status, workshopId: trimmedArgs.workshopId, limit: trimmedArgs.limit, maxChars: trimmedArgs.maxChars }), trimmedArgs.prettyPrint);
-                    }
-                    case "read_idea": {
-                        return jsonResult(await requiredService(ideation).readIdea({ ideaId: trimmedArgs.ideaId, limit: trimmedArgs.limit, maxChars: trimmedArgs.maxChars, includeContent: trimmedArgs.includeContent }), trimmedArgs.prettyPrint);
-                    }
-                    case "branch_idea": {
-                        return jsonResult(await requiredService(ideation).branchIdea({ ...(principal && { principal }), parentIdeaId: trimmedArgs.parentIdeaId, ideaId: trimmedArgs.ideaId, title: trimmedArgs.title, seed: trimmedArgs.seed, references: trimmedArgs.references, expectedParentRevision: trimmedArgs.expectedParentRevision, requestId: trimmedArgs.requestId }), trimmedArgs.prettyPrint);
-                    }
-                    case "update_idea_status": {
-                        return jsonResult(await requiredService(ideation).updateIdeaStatus({ ...(principal && { principal }), ideaId: trimmedArgs.ideaId, status: trimmedArgs.status, reason: trimmedArgs.reason, expectedRevision: trimmedArgs.expectedRevision }), trimmedArgs.prettyPrint);
-                    }
-                    case "contribute_idea": {
-                        return jsonResult(await requiredService(ideation).contributeIdea({ ...(principal && { principal }), ideaId: trimmedArgs.ideaId, kind: trimmedArgs.kind, content: trimmedArgs.content, references: trimmedArgs.references, replyTo: trimmedArgs.replyTo, requestId: trimmedArgs.requestId }), trimmedArgs.prettyPrint);
-                    }
-                    case "evaluate_idea": {
-                        return jsonResult(await requiredService(ideation).evaluateIdea({ ...(principal && { principal }), ideaId: trimmedArgs.ideaId, novelty: trimmedArgs.novelty, usefulness: trimmedArgs.usefulness, feasibility: trimmedArgs.feasibility, risk: trimmedArgs.risk, evidenceQuality: trimmedArgs.evidenceQuality, rationale: trimmedArgs.rationale, references: trimmedArgs.references, expectedRevision: trimmedArgs.expectedRevision, expectedIdeaRevision: trimmedArgs.expectedIdeaRevision }), trimmedArgs.prettyPrint);
-                    }
-                    case "create_workshop": {
-                        return jsonResult(await requiredService(ideation).createWorkshop({ ...(principal && { principal }), workshopId: trimmedArgs.workshopId, title: trimmedArgs.title, prompt: trimmedArgs.prompt, agenda: trimmedArgs.agenda, ideaIds: trimmedArgs.ideaIds, timeboxMinutes: trimmedArgs.timeboxMinutes, maxContributionsPerAgent: trimmedArgs.maxContributionsPerAgent, references: trimmedArgs.references, requestId: trimmedArgs.requestId, facilitation: trimmedArgs.facilitation, revalidateActor, ...(trimmedArgs.researchWork && { researchWork: trimmedArgs.researchWork }) }), trimmedArgs.prettyPrint);
-                    }
-                    case 'list_workshop_methods':
-                        return jsonResult(requiredService(ideation).getWorkshopMethods({ methodId: trimmedArgs.methodId, stepId: trimmedArgs.stepId, cursor: trimmedArgs.cursor, maxChars: trimmedArgs.maxChars }), false);
-                    case 'read_workshop_research':
-                        return jsonResult(await requiredService(independentResearch).read({ ...trimmedArgs, principal, revalidateActor }), false);
-                    case 'update_workshop_research':
-                        return jsonResult(await requiredService(independentResearch).update({ ...trimmedArgs, principal, revalidateActor }), false);
-                    case 'read_workshop_facilitation':
-                        return jsonResult(await requiredService(ideation).readWorkshopFacilitation({ ...(principal && { principal }), workshopId: trimmedArgs.workshopId, cursor: trimmedArgs.cursor, limit: trimmedArgs.limit, maxChars: trimmedArgs.maxChars }), false);
-                    case 'update_workshop_facilitation':
-                        return jsonResult(await requiredService(ideation).updateWorkshopFacilitation({ ...(principal && { principal }), workshopId: trimmedArgs.workshopId, expectedRevision: trimmedArgs.expectedRevision, requestId: trimmedArgs.requestId, operation: trimmedArgs.operation, payload: trimmedArgs.payload, stepId: trimmedArgs.stepId, structured: trimmedArgs.structured, content: trimmedArgs.content, kind: trimmedArgs.kind, references: trimmedArgs.references, revalidateActor }), trimmedArgs.prettyPrint);
-                    case 'read_economy_wallet':
-                    case 'read_quest_market':
-                    case 'manage_quest_contract':
-                    case 'review_quest_contract': {
-                        if (!options.economy)
-                            throw guidanceError(new Error('Economy is disabled; host-provisioned verified storage, owners and policy are required'), 'guid-f53a20931dd8ae52');
-                        const economy = new EconomyService(fileSystem, options.economy.ledger, options.economy.policy, {
-                            validateRoleplayArtifact: (artifact, contract) => validateRoleplayQuestArtifact(options.roleplay, artifact, contract, options.economy.policy),
-                            assertActor: async () => { await revalidateActor(); },
-                            verify: async (contract, artifacts) => {
-                                validateMarkdownContract(contract.terms.verifier, contract.terms.criteria);
-                                const bodies = [];
-                                for (const artifact of artifacts) {
-                                    const note = await fileSystem.readNote(artifact.path);
-                                    if (note.revision !== artifact.revision || !canAccessPath(artifact.path) || !scopeAccess.canAccessPhysicalPath(artifact.path))
-                                        throw guidanceError(new Error('Verifier source changed or is unavailable'), 'guid-c82d73eeba62dac4');
-                                    assertReadableNote(note.frontmatter);
-                                    bodies.push(note.content);
-                                }
-                                return verifyMarkdownContract(contract.terms.verifier, contract.terms.criteria, bodies);
-                            },
-                            claimTask: async (actor, contract, requestId) => {
-                                const path = `Community/Tasks/${contract.terms.taskId}.md`;
-                                const task = await fileSystem.readNote(path);
-                                const bridgeId = `quest-${workFingerprint({ contractId: contract.id, accountId: actor.accountId, requestId: requestId.trim() })}`;
-                                if (task.frontmatter.assignee_account_id === actor.accountId) {
-                                    // Recover a response-lost bridge only from its exact current
-                                    // Work receipt, never from assignee equality alone.
-                                    const { work_receipts: receipts, ...state } = task.frontmatter;
-                                    const receipt = Array.isArray(receipts) && receipts.find((r) => r.actor === actor.accountId && r.requestId === bridgeId && r.action === 'claim.start' && r.target === contract.terms.taskId);
-                                    if (!receipt || receipt.state !== workFingerprint({ state: JSON.stringify(state), content: task.content }) || receipt.result?.generation !== task.frontmatter.claim_generation || task.frontmatter.status !== 'in_progress'
-                                        || task.frontmatter.economy_contract_id !== contract.id || task.frontmatter.economy_claim_request_id !== bridgeId || task.frontmatter.economy_claim_generation !== task.frontmatter.claim_generation)
-                                        throw guidanceError(new Error('Work bridge divergence; host reconciliation required'), 'guid-33eef48d399fb695');
-                                    return { revision: task.revision, generation: Number(task.frontmatter.claim_generation), requestId: bridgeId };
-                                }
-                                if (task.revision !== contract.terms.taskRevision)
-                                    throw guidanceError(new Error('Work source changed before paid claim'), 'guid-043f855be2b5c35c');
-                                const result = await requiredService(work).claimPaid({ op: 'start', taskId: contract.terms.taskId, principal: actor, expectedRevision: task.revision, expectedGeneration: Number(task.frontmatter.claim_generation || 0), requestId: bridgeId, reason: guidanceText('guid-a26177bbcfa63cf0', `Exclusive paid claim ${contract.id}`) }, contract.id);
-                                return { revision: String(result.revision), generation: Number(result.generation), requestId: bridgeId };
-                            },
-                        });
-                        if (toolName === 'read_economy_wallet')
-                            return jsonResult(await economy.wallet(principal, trimmedArgs), false);
-                        if (toolName === 'read_quest_market')
-                            return jsonResult(await economy.market(principal, trimmedArgs), false);
-                        // Forward ONLY schema fields: never persist the access token/principal.
-                        const fields = ['op', 'contractId', 'requestId', 'expectedRevision', 'expectedGeneration', 'reason', 'terms', 'artifacts', 'basis', 'verdict', 'reviewArtifact'];
-                        const command = Object.fromEntries(fields.filter(key => trimmedArgs[key] !== undefined).map(key => [key, trimmedArgs[key]]));
-                        return jsonResult(await (toolName === 'manage_quest_contract' ? economy.contract(principal, command) : economy.review(principal, command)), false);
-                    }
-                    case "list_workshops": {
-                        return jsonResult(await requiredService(ideation).listWorkshops({ phase: trimmedArgs.phase, status: trimmedArgs.status, limit: trimmedArgs.limit, maxChars: trimmedArgs.maxChars }), trimmedArgs.prettyPrint);
-                    }
-                    case "read_workshop": {
-                        return jsonResult(await requiredService(ideation).readWorkshop({ workshopId: trimmedArgs.workshopId, limit: trimmedArgs.limit, maxChars: trimmedArgs.maxChars, includeContent: trimmedArgs.includeContent }), trimmedArgs.prettyPrint);
-                    }
-                    case "contribute_workshop": {
-                        return jsonResult(await requiredService(ideation).contributeWorkshop({ ...(principal && { principal }), workshopId: trimmedArgs.workshopId, kind: trimmedArgs.kind, content: trimmedArgs.content, ideaId: trimmedArgs.ideaId, expectedPhase: trimmedArgs.expectedPhase, references: trimmedArgs.references, requestId: trimmedArgs.requestId, expectedRevision: trimmedArgs.expectedRevision, stepId: trimmedArgs.stepId, structured: trimmedArgs.structured, revalidateActor }), trimmedArgs.prettyPrint);
-                    }
-                    case "update_workshop_phase": {
-                        return jsonResult(await requiredService(ideation).updateWorkshopPhase({ ...(principal && { principal }), workshopId: trimmedArgs.workshopId, phase: trimmedArgs.phase, reason: trimmedArgs.reason, expectedRevision: trimmedArgs.expectedRevision }), trimmedArgs.prettyPrint);
-                    }
-                    case "synthesize_workshop": {
-                        return jsonResult(await requiredService(ideation).synthesizeWorkshop({ ...(principal && { principal }), workshopId: trimmedArgs.workshopId, synthesis: trimmedArgs.synthesis, references: trimmedArgs.references, expectedRevision: trimmedArgs.expectedRevision }), trimmedArgs.prettyPrint);
-                    }
                     case "read_note": {
                         if (trimmedArgs.property !== undefined) {
                             const property = trimmedArgs.property;
@@ -3213,14 +2493,7 @@ export function createServer(vaultPath, options = {}) {
                                 return noteReadBudgetError(text.length + 64, note.revision);
                             return { content: [{ type: 'text', text }] };
                         }
-                        const result = boundedNoteReadResult(trimmedArgs.path, note, trimmedArgs.maxChars, trimmedArgs.prettyPrint);
-                        const service = trimmedArgs.includeExplanation === true ? explanationService(principal ? revalidateActor : undefined) : undefined;
-                        if (!service || 'isError' in result)
-                            return result;
-                        const target = { path: trimmedArgs.path, revision: note.revision };
-                        return jsonResult(await attachExplanationHint({ result: JSON.parse(result.content[0].text), target, guards: [target], fs: fileSystem,
-                            admitted: canAccessPath, maxChars, prettyPrint: trimmedArgs.prettyPrint,
-                            approvedAction: () => service.approvedAction({ sourcePath: scopeAccess.toPublicPath(target.path), expectedSourceRevision: note.revision }, principal), }), trimmedArgs.prettyPrint);
+                        return boundedNoteReadResult(trimmedArgs.path, note, trimmedArgs.maxChars, trimmedArgs.prettyPrint);
                     }
                     case "write_note": {
                         await requireExpectedRevisionForExisting(fileSystem, trimmedArgs.path, trimmedArgs.expectedRevision, 'write_note');
@@ -3278,9 +2551,9 @@ export function createServer(vaultPath, options = {}) {
                     }
                     case "search_notes": {
                         if (trimmedArgs.resultKind !== undefined && !['notes', 'procedures'].includes(trimmedArgs.resultKind))
-                            throw Error('Invalid search result kind');
+                            throw guidanceError(Error('Invalid search result kind'), 'guid-a9737fd102fc799e');
                         if (trimmedArgs.cursor !== undefined && trimmedArgs.resultKind !== 'procedures')
-                            throw Error('Continuation requires procedure search');
+                            throw guidanceError(Error('Continuation requires procedure search'), 'guid-11514e958b008491');
                         if (trimmedArgs.resultKind === 'procedures') {
                             return jsonResult(await retrieval.searchProcedures({ ...trimmedArgs, principal }, fence => {
                                 finalOwnerRefresh = fence.revalidate;
@@ -3601,16 +2874,6 @@ export function createServer(vaultPath, options = {}) {
                         }
                     }
                     case "query_notes": {
-                        if (trimmedArgs.department !== undefined && trimmedArgs.department !== 'default')
-                            throw guidanceError(new Error('department must be default or omitted'), 'guid-aafd6a5d31d54fa8');
-                        const department = trimmedArgs.department === 'default' ? scopeAccess.defaultDepartment(principal) : undefined;
-                        if (trimmedArgs.department === 'default' && !department)
-                            throw guidanceError(new Error('No administrator-verified default department is available'), 'guid-7e94b392cdd6d92c');
-                        const cursorContext = department ? createHash('sha256').update(JSON.stringify({
-                            principal, department, policy: scopeAccess.documentPolicyFingerprint(), filters: trimmedArgs.filters ?? {},
-                            pathPrefix: trimmedArgs.pathPrefix ?? '', sortBy: trimmedArgs.sortBy ?? 'path', sortOrder: trimmedArgs.sortOrder ?? 'asc',
-                        })).digest('hex') : undefined;
-                        const canQueryPath = department ? (path) => scopeAccess.isInDefaultDepartment(path, principal, false) : canAccessPath;
                         const requestedLimit = trimmedArgs.limit === undefined ? 100 : Number(trimmedArgs.limit);
                         if (!Number.isInteger(requestedLimit) || requestedLimit < 1) {
                             throw guidanceError(new Error('limit must be a positive integer'), 'guid-14abe8b02cfc3624');
@@ -3622,11 +2885,9 @@ export function createServer(vaultPath, options = {}) {
                             sortOrder: trimmedArgs.sortOrder,
                             limit: Math.min(requestedLimit, 500),
                             after: trimmedArgs.after,
-                            ...(cursorContext && { cursorContext }),
-                            freshMetadata: Boolean(department),
                             includeContent: trimmedArgs.includeContent,
                             includeTotal: trimmedArgs.includeTotal,
-                        }, normalizedResponseBudget(trimmedArgs.maxChars), canQueryPath, note => !isModerationHidden(note.frontmatter), trimmedArgs.prettyPrint === true);
+                        }, normalizedResponseBudget(trimmedArgs.maxChars), canAccessPath, note => !isModerationHidden(note.frontmatter), trimmedArgs.prettyPrint === true);
                         return {
                             content: [{ type: "text", text: result.text }],
                             ...(result.isError && { isError: true }),
@@ -3789,7 +3050,7 @@ export function createServer(vaultPath, options = {}) {
             ownerOperation?.assertFresh();
             await finalOwnerRefresh?.();
             finalOwnerValidator?.();
-            const responseContract = endpointRegistry.resolve(toolName === 'read_work_group' ? 'work.group' : toolName === 'read_work_project' ? 'work.project' : toolName === 'read_community_participation' ? 'community.participation' : endpointIdForTool(toolName))?.input;
+            const responseContract = endpointRegistry.resolve(toolName === 'read_work_group' ? 'work.group' : toolName === 'read_work_project' ? 'work.project' : endpointIdForTool(toolName))?.input;
             const responseBudget = trimmedArgs.maxChars ?? (toolName === 'search_capabilities' ? 20000 : toolName === 'get_wiki_answer_packet' && trimmedArgs.query === undefined ? 7000 : undefined);
             const budget = normalizedResponseBudget(responseBudget, responseContract);
             if (!('isError' in toolResponse && toolResponse.isError) && (viewRequested || mcpPresentation && requestedToolName === 'call_endpoint' && toolName === 'get_wiki_organization_manifest' && Buffer.byteLength(JSON.stringify(toolResponse)) > 5000)) {
@@ -3821,10 +3082,10 @@ export function createServer(vaultPath, options = {}) {
             return dispatchCore(name, input, mcpPresentation);
         try {
             if (!evolutionConnection)
-                throw Error('Evolution operational connection unavailable');
+                throw guidanceError(Error('Evolution operational connection unavailable'), 'guid-b07bf216bcd8fa4d');
             const endpoint = name === 'call_endpoint' ? endpointRegistry.resolve(input.endpointId) : endpointRegistry.resolve(endpointIdForTool(name));
             if (!endpoint)
-                throw Error('Unknown endpoint');
+                throw guidanceError(Error('Unknown endpoint'), 'guid-0dc2e17ffad26766');
             const { evolutionTask: _task, evolutionRequestId: _request, ...clean } = args;
             return await evolutionConnection.operations.run(String(args.accessToken), endpoint.endpointId, args, () => dispatchCore(name, name === 'call_endpoint' ? { ...input, arguments: clean } : clean, mcpPresentation));
         }
@@ -3846,12 +3107,12 @@ export function createServer(vaultPath, options = {}) {
         ...(layeredMemory && { confirmMemoryRetention: async (accessToken, receipt, contextGeneration) => {
                 const principal = await scopeAuth.authenticate(accessToken);
                 if (!principal)
-                    throw Error('Memory session unavailable');
+                    throw guidanceError(Error('Memory session unavailable'), 'guid-6c0d7855e65819af');
                 layeredMemory.exposure.confirm(principal, receipt, contextGeneration);
             }, invalidateMemoryRetention: async (accessToken) => {
                 const principal = await scopeAuth.authenticate(accessToken);
                 if (!principal)
-                    throw Error('Memory session unavailable');
+                    throw guidanceError(Error('Memory session unavailable'), 'guid-6c0d7855e65819af');
                 layeredMemory.exposure.invalidate(principal);
             } }),
         ...(evolutionConnection && { evolutionHost: evolutionConnection.host }),
@@ -3874,17 +3135,15 @@ export function createServer(vaultPath, options = {}) {
         },
     });
     const closeServer = server.close.bind(server);
-    const disconnectCodexHooks = connectCodexHooks(options.codexHooks, { fs: fileSystem, access: scopeAccess, continuity,
-        questionPacket, compilation, ...(participation && { participation }), authorize: compilationAuthorize, ownerActivity: ownerActivityRuntime }, readOnly);
     server.close = async () => {
         const failures = [];
         // Preserve order, but never let a refused foreign-lock cleanup strand the
         // remaining workers/watchers or the underlying protocol server.
-        for (const close of [() => evolutionConnection?.close(), disconnectCodexHooks, readModelCatalogUnsubscribe, maintenanceReconcileUnsubscribe,
+        for (const close of [() => evolutionConnection?.close(), readModelCatalogUnsubscribe, maintenanceReconcileUnsubscribe,
             () => maintenance.close(), () => compilation.close(), () => llmWiki.invalidate(), () => documentSearch?.close(),
             () => documentIndex?.close(), () => memoryIndex?.close(), () => referenceImpactIndex?.close(), () => mocRegions.close(), () => metadataIndex.close(),
             () => searchService.close(), () => semanticSearch.close(), () => graphIndex.close(),
-            () => notifications?.close(), () => communityFeatures?.close(), () => fileCatalog.close(), closeServer]) {
+            () => fileCatalog.close(), closeServer]) {
             try {
                 await close();
             }

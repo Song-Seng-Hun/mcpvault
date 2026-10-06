@@ -1,8 +1,9 @@
+import { guidanceError } from './guidance-runtime.js';
 import { createHash } from 'node:crypto';
 import { parseSkillReleaseManifest } from './skill-release-manifest.js';
 import { reviewedSkillCard } from './skill-release-card.js';
 import { parseReleaseDescriptor } from './skill-release-descriptor.js';
-const fail = () => { throw Error('Reviewed skill unavailable'); };
+const fail = () => { throw guidanceError(Error('Reviewed skill unavailable'), 'guid-9d9bb7483d9c38ff'); };
 const id = (v) => typeof v === 'string' && /^[a-z0-9][a-z0-9-]{0,99}$/.test(v) ? v : fail();
 const sha = (v) => typeof v === 'string' && /^[a-f0-9]{64}$/.test(v) ? v : fail();
 const digest = (v) => createHash('sha256').update(v).digest('hex');

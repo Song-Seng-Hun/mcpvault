@@ -11,7 +11,6 @@ interface DocumentContext {
     beforeWrite?: (path: string) => Promise<void>;
 }
 interface StorageContext extends DocumentContext {
-    publicCommunityWriter?: boolean;
     documentContext?: DocumentContext;
 }
 /** Code-owned publication adapter only. This is not a principal or an ACL
@@ -36,6 +35,6 @@ export declare function assertOwnerActivityStorageAccess(path: string): void;
 /** Refresh owner consent before an optional adapter performs its physical write. */
 export declare function prepareOwnerActivityStorageWrite(path: string): Promise<void>;
 /** A second boundary at physical IO protects service-internal reads and writes. */
-export declare function assertEnterpriseStorageAccess(path: string, write?: boolean): void;
+export declare function assertEnterpriseStorageAccess(path: string): void;
 export {};
 //# sourceMappingURL=enterprise-storage-context.d.ts.map

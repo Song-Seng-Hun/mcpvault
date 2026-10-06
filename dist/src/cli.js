@@ -1,5 +1,11 @@
 import { guidanceError } from './guidance-runtime.js';
 import { isLoopbackHost } from './http-request-utils.js';
+/** Options of removed features. Unknown arguments join the Vault path, so these
+ * must fail loudly instead of silently pointing the server at another folder. */
+const REMOVED_FEATURE_FLAGS = {
+    '--roleplay-config': 'roleplay', '--economy-config': 'economy',
+    '--explanation-config': 'explanation-translation', '--benchmark-config': 'benchmarks',
+};
 /**
  * Parse runtime options without importing server.ts, which starts the MCP
  * server as a side effect. Unknown positional arguments remain part of the
@@ -17,12 +23,8 @@ export function parseCliArgs(args) {
     let mcpHttpTlsCert;
     let mcpHttpTlsKey;
     let stdio;
-    let economyConfig;
-    let roleplayConfig;
     let skillEvolutionConfig;
     let reviewedSkillsConfig;
-    let explanationConfig;
-    let benchmarkConfig;
     let featuresConfig;
     let ownerActivityConfig;
     let maintenanceConfig;
@@ -33,34 +35,34 @@ export function parseCliArgs(args) {
         if (arg === '--account-store' || arg.startsWith('--account-store=')) {
             const value = arg === '--account-store' ? args[++index] : arg.slice('--account-store='.length);
             if (!value || !value.trim() || value.startsWith('--') || accountStorePath !== undefined)
-                throw new Error('--account-store requires one existing private host account file');
+                throw guidanceError(new Error('--account-store requires one existing private host account file'), 'guid-7d69fdf2de6d53d1');
             accountStorePath = value;
             continue;
         }
         if (arg === '--auth0-config' || arg.startsWith('--auth0-config=')) {
             const value = arg === '--auth0-config' ? args[++index] : arg.slice('--auth0-config='.length);
             if (!value || !value.trim() || value.startsWith('--') || auth0Config !== undefined)
-                throw new Error('--auth0-config requires one existing private host configuration file');
+                throw guidanceError(new Error('--auth0-config requires one existing private host configuration file'), 'guid-ad4f0d80c2047ed3');
             auth0Config = value;
             continue;
         }
         if (arg === '--evolution-config' || arg.startsWith('--evolution-config=')) {
             const value = arg === '--evolution-config' ? args[++index] : arg.slice('--evolution-config='.length);
             if (!value || !value.trim() || value.startsWith('--') || evolutionConfig !== undefined)
-                throw new Error('--evolution-config requires one private host configuration file');
+                throw guidanceError(new Error('--evolution-config requires one private host configuration file'), 'guid-8d3e7e6f120aced5');
             evolutionConfig = value;
             continue;
         }
         if (arg === '--reviewed-skills-config' || arg.startsWith('--reviewed-skills-config=')) {
             const value = arg === '--reviewed-skills-config' ? args[++index] : arg.slice('--reviewed-skills-config='.length);
             if (!value || !value.trim() || value.startsWith('--') || reviewedSkillsConfig !== undefined)
-                throw new Error('--reviewed-skills-config requires one private host configuration file');
+                throw guidanceError(new Error('--reviewed-skills-config requires one private host configuration file'), 'guid-d99fac916b807fb7');
             reviewedSkillsConfig = value;
             continue;
         }
         if (arg === '--quarantine-skills' || arg.startsWith('--quarantine-skills=')) {
             if (arg !== '--quarantine-skills' || quarantineSkills)
-                throw new Error('--quarantine-skills accepts one flag without a value');
+                throw guidanceError(new Error('--quarantine-skills accepts one flag without a value'), 'guid-10e73a69510fff52');
             quarantineSkills = true;
             continue;
         }
@@ -92,41 +94,11 @@ export function parseCliArgs(args) {
             featuresConfig = value;
             continue;
         }
-        if (arg === '--benchmark-config' || arg.startsWith('--benchmark-config=')) {
-            const value = arg === '--benchmark-config' ? args[++index] : arg.slice('--benchmark-config='.length);
-            if (!value || !value.trim() || value.startsWith('--') || benchmarkConfig !== undefined)
-                throw guidanceError(Error('--benchmark-config requires one private host configuration file'), 'guid-fed1ae3b67da7da1');
-            benchmarkConfig = value;
-            continue;
-        }
-        if (arg === '--explanation-config' || arg.startsWith('--explanation-config=')) {
-            const value = arg === '--explanation-config' ? args[++index] : arg.slice('--explanation-config='.length);
-            if (!value || !value.trim() || value.startsWith('--') || explanationConfig !== undefined)
-                throw guidanceError(Error('--explanation-config requires one private host configuration file'), 'guid-2fd6b72137024d82');
-            explanationConfig = value;
-            continue;
-        }
         if (arg === '--skill-evolution-config' || arg.startsWith('--skill-evolution-config=')) {
             const value = arg === '--skill-evolution-config' ? args[++index] : arg.slice('--skill-evolution-config='.length);
             if (!value || !value.trim() || value.startsWith('--') || skillEvolutionConfig !== undefined)
                 throw guidanceError(new Error('--skill-evolution-config requires one host configuration file'), 'guid-f1b0524458043f1b');
             skillEvolutionConfig = value;
-            continue;
-        }
-        if (arg === '--roleplay-config' || arg.startsWith('--roleplay-config=')) {
-            const value = arg === '--roleplay-config' ? args[++index] : arg.slice('--roleplay-config='.length);
-            if (!value || value.startsWith('--') || roleplayConfig !== undefined)
-                throw guidanceError(new Error('--roleplay-config requires one host configuration file'), 'guid-b7dd3ed6ef7f8115');
-            roleplayConfig = value;
-            continue;
-        }
-        if (arg === '--economy-config' || arg.startsWith('--economy-config=')) {
-            const value = arg === '--economy-config' ? args[++index] : arg.slice('--economy-config='.length);
-            if (!value || value.startsWith('--'))
-                throw guidanceError(new Error('--economy-config requires a private host file path'), 'guid-99262a989a3c3643');
-            if (economyConfig !== undefined)
-                throw guidanceError(new Error('--economy-config may be supplied only once'), 'guid-a085d216b3513911');
-            economyConfig = value;
             continue;
         }
         if (arg === "--read-only") {
@@ -234,11 +206,14 @@ export function parseCliArgs(args) {
             mcpHttpTlsKey = value;
             continue;
         }
+        const removedFlag = Object.keys(REMOVED_FEATURE_FLAGS).find(flag => arg === flag || arg.startsWith(`${flag}=`));
+        if (removedFlag)
+            throw guidanceError(new Error(`${removedFlag} belongs to the removed ${REMOVED_FEATURE_FLAGS[removedFlag]} feature; remove this option`), 'guid-69825747c6cad30b');
         pathArgs.push(arg);
     }
     if (auth0Config !== undefined && (accountStorePath === undefined || mcpHttpPort === undefined || restPort !== undefined || readOnly
         || (mcpHttpHost !== undefined && !isLoopbackHost(mcpHttpHost)))) {
-        throw new Error('--auth0-config requires --account-store, writable --mcp-http, and loopback binding');
+        throw guidanceError(new Error('--auth0-config requires --account-store, writable --mcp-http, and loopback binding'), 'guid-0afc825b92b6ed1e');
     }
     return {
         vaultPathArg: pathArgs.join(" ").trim(),
@@ -252,12 +227,8 @@ export function parseCliArgs(args) {
         ...(mcpHttpHost !== undefined && { mcpHttpHost }),
         ...(mcpHttpTlsCert !== undefined && { mcpHttpTlsCert }),
         ...(mcpHttpTlsKey !== undefined && { mcpHttpTlsKey }),
-        ...(economyConfig !== undefined && { economyConfig }),
-        ...(roleplayConfig !== undefined && { roleplayConfig }),
         ...(skillEvolutionConfig !== undefined && { skillEvolutionConfig }),
         ...(reviewedSkillsConfig !== undefined && { reviewedSkillsConfig }),
-        ...(explanationConfig !== undefined && { explanationConfig }),
-        ...(benchmarkConfig !== undefined && { benchmarkConfig }),
         ...(featuresConfig !== undefined && { featuresConfig }),
         ...(ownerActivityConfig !== undefined && { ownerActivityConfig }),
         ...(maintenanceConfig !== undefined && { maintenanceConfig }),

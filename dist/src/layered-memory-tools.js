@@ -14,10 +14,10 @@ export function getLayeredMemoryTools() {
                 pathPrefix: { type: 'string', description: guidanceText('guid-2eb8b1e94b03521e', 'Optional authorized subtree within the selected scope') },
                 includeHistory: { type: 'boolean', default: false },
                 taskContext: { type: 'object', additionalProperties: false, required: ['intent'],
-                    description: 'Optional relevance hint, not authority. Example: {"intent":"incident"} prefers episodes. Self-contained brief without explicit filters skips optional memory only.',
+                    description: guidanceText('guid-00ca145f55189c30', 'Optional relevance hint, not authority. Example: {"intent":"incident"} prefers episodes. Self-contained brief without explicit filters skips optional memory only.'),
                     properties: { intent: { type: 'string', enum: [...MEMORY_INTENTS] } } },
                 semantic: { type: 'boolean', default: true },
-                reuse: { type: 'object', additionalProperties: false, description: 'Optional duplicate suppression only after host-confirmed retention. Unconfirmed hosts return full current evidence. Explicit full always rereads.', properties: {
+                reuse: { type: 'object', additionalProperties: false, description: guidanceText('guid-579e8c1b3bba0dad', 'Optional duplicate suppression only after host-confirmed retention. Unconfirmed hosts return full current evidence. Explicit full always rereads.'), properties: {
                         mode: { type: 'string', enum: ['full', 'if_retained'], default: 'full' }, knownReads: { type: 'array', maxItems: 16, items: { type: 'string', maxLength: 100 } },
                     } },
                 cursor: { type: 'object', additionalProperties: false, properties: { snapshot: { type: 'string', pattern: '^[a-f0-9]{64}$' }, offset: { type: 'integer', minimum: 0 } }, required: ['snapshot', 'offset'] },

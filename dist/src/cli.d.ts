@@ -9,12 +9,8 @@ export interface ParsedCliArgs {
     mcpHttpHost?: string;
     mcpHttpTlsCert?: string;
     mcpHttpTlsKey?: string;
-    economyConfig?: string;
-    roleplayConfig?: string;
     skillEvolutionConfig?: string;
     reviewedSkillsConfig?: string;
-    explanationConfig?: string;
-    benchmarkConfig?: string;
     featuresConfig?: string;
     ownerActivityConfig?: string;
     maintenanceConfig?: string;

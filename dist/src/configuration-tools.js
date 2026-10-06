@@ -21,7 +21,7 @@ export function getConfigurationTools() {
     const id = { type: 'string', pattern: '^[a-z0-9][a-z0-9-]{0,63}$', maxLength: 64 };
     const ids = (maxItems) => ({ type: 'array', uniqueItems: true, maxItems, items: id });
     return [{ name: 'check_reusable_configuration',
-            description: guidanceText('guid-875900fab01439cb', 'Validate a supplied learning-path or procedural-bundle configuration using the same bounded prerequisite/exclusion graph as TRPG skills. Returns a versioned fingerprint and cost summary, not competency certification, execution or permissions. No files, URLs, commands or models are read or run. This does not change an existing learning path.'),
+            description: guidanceText('guid-875900fab01439cb', 'Validate a supplied learning-path or procedural-bundle configuration using a bounded prerequisite/exclusion graph. Returns a versioned fingerprint and cost summary, not competency certification, execution or permissions. No files, URLs, commands or models are read or run. This does not change an existing learning path.'),
             inputSchema: { type: 'object', additionalProperties: false, required: ['kind', 'configuration'], properties: {
                     kind: { type: 'string', enum: ['learning-path', 'procedural-bundle'] }, maxChars: { type: 'integer', minimum: 512, maximum: 12000, default: 1000 },
                     configuration: { type: 'object', additionalProperties: false, required: ['id', 'version', 'nodes', 'selected'], properties: {

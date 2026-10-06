@@ -1,8 +1,9 @@
+import { guidanceError } from './guidance-runtime.js';
 /** Untrusted declarations for discovery. None of these fields grants authority. */
 export const SKILL_EFFECTS = ['read_public', 'read_private', 'write_workspace', 'delete_data', 'read_credentials', 'modify_account',
     'write_environment', 'network_send', 'install_dependencies', 'start_process', 'register_mcp', 'register_hook', 'financial_transaction', 'irreversible_action'];
 export const IMPACT_AXES = ['domain', 'policy', 'legal', 'assets', 'accounts', 'data', 'system'];
-const fail = () => { throw new Error('Invalid or sensitive skill descriptor; review the source without echoing it'); };
+const fail = () => { throw guidanceError(new Error('Invalid or sensitive skill descriptor; review the source without echoing it'), 'guid-92d9326ef30e9b92'); };
 function object(value, keys) {
     if (!value || typeof value !== 'object' || Array.isArray(value))
         return fail();

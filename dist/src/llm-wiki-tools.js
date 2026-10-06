@@ -355,8 +355,6 @@ export function getLlmWikiTools() {
             description: guidanceText('guid-d56e442edffc5ab9', 'Analyze one visible MOC as a bounded dependency-aware reading path. It preserves authored Obsidian link order, resolves entries and prerequisites by visible path/title/alias/preferred term/stable ID/relative path, expands nested MOCs to a limited depth, and returns a separate stable recommended order plus unresolved, ambiguous, external, late-prerequisite, and cycle findings. Selected ATX/Setext-heading and terminal-block locators are checked outside Properties and matching fences (one 8 MiB validation read per target); unresolved locators make navigationComplete=false and block learning checkpoints until repaired. Progress remains note-granular. It never guesses an ambiguous target, rewrites, or reorders Markdown; every readable item carries its current revision. maxChars covers final JSON formatting. Budget-compacted paths retain an exact authored prefix or an explicit same-query retry: apply nextAction.overrides to the original arguments when reuseOriginalArguments is true. Omitted diagnostics are not an empty or safe route; at the ceiling inspect the MOC with the returned notes.read action.'),
             inputSchema: { type: 'object', properties: {
                     path: { type: 'string', description: guidanceText('guid-4a7fbfc79b729dea', 'Existing visible MOC Markdown note path') },
-                    includeExplanation: { type: 'boolean', default: false, description: guidanceText('guid-14f26f072123bac3', 'Opt in to one current approved explanationAction without replacing the original learning route. Omitted if unavailable or outside the response budget.') },
-                    explanationPath: { type: 'string', maxLength: 500, description: guidanceText('guid-65ee6077b435bebd', 'Optional exact root or returned authored-entry path to explain; defaults to the root MOC. Never discovers an unreturned or hidden entry.') },
                     maxDepth: { type: 'integer', minimum: 0, maximum: 6, default: 2, description: guidanceText('guid-0c1d95745b7d0191', 'Maximum nested-MOC expansion depth; 0 reads only the root MOC body') },
                     limit: { type: 'integer', minimum: 1, maximum: 50, default: 30, description: guidanceText('guid-8f9a2fe9eba02d96', 'Maximum unique authored entries returned') },
                     maxChars: { type: 'integer', minimum: 1024, maximum: 16000, default: 7000 },
@@ -602,7 +600,7 @@ export function getLlmWikiTools() {
             name: 'get_wiki_graph_health',
             description: guidanceText('guid-e896ea55def1169a', 'Report broken links, orphan notes, empty MOCs, GTD focus problems, Zettelkasten connectivity gaps, typed relation meaning, high-degree graph hubs, knowledge usage, and same-title/alias duplicate candidates with bounded samples. MOC coverage counts visible non-map knowledge reached through authored map links; maps remain in full graph/usage views, not uncovered knowledge. Coverage is navigation, not truth or primary_moc presence. Use it to repair navigation without creating a parallel index; never auto-merge or archive from this report.'),
             inputSchema: { type: 'object', properties: {
-                    path: { type: 'string', minLength: 1, maxLength: 400, description: 'Inspect only this note\'s current outgoing relation occurrences. Uses the configured disk reference index; incomplete index returns partial, never a global integrity or no-inbound-reference proof. Example: path=Project/Guide.md. Omit for the legacy whole-Vault report.' },
+                    path: { type: 'string', minLength: 1, maxLength: 400, description: guidanceText('guid-7b2c7ae1bfb1b03f', 'Inspect only this note\'s current outgoing relation occurrences. Uses the configured disk reference index; incomplete index returns partial, never a global integrity or no-inbound-reference proof. Example: path=Project/Guide.md. Omit for the legacy whole-Vault report.') },
                     limit: { type: 'integer', minimum: 1, maximum: 50, default: 20 }, maxChars: { type: 'integer', minimum: 512, maximum: 16000, default: 6000 }, accessToken, prettyPrint,
                 } },
         },
@@ -731,7 +729,7 @@ export function getLlmWikiTools() {
             description: guidanceText('guid-c5b27548d1b6d5a1', 'Return a small optional Obsidian Markdown/Properties scaffold for a common note kind or a concept, argument, model, observation, or counterargument knowledge role. It never creates a file and never makes templates mandatory.'),
             inputSchema: { type: 'object', properties: {
                     authoring: { type: 'object', description: guidanceText('guid-11e797ea6f9b2a0f', 'Optional contextual input checklist and exact existing executor. Values are inert data, not template code.'), properties: {
-                            intent: { type: 'string', enum: ['knowledge', 'capture', 'reply', 'new_topic'] }, slug: { type: 'string', maxLength: 120 }, provided: { type: 'object', maxProperties: 20 },
+                            intent: { type: 'string', enum: ['knowledge', 'capture'] }, provided: { type: 'object', maxProperties: 20 },
                         }, additionalProperties: false },
                     noteKind: { type: 'string', enum: [...NOTE_TEMPLATE_IDS], default: 'atomic', description: guidanceText('guid-eeb37d3399909c59', 'Template ID; role templates still use ordinary atomic/knowledge notes plus knowledge_role') },
                     maxChars: { type: 'integer', minimum: 512, maximum: 16000, default: 7000 }, accessToken, prettyPrint,
@@ -767,7 +765,7 @@ export function getLlmWikiTools() {
             description: guidanceText('guid-90776feeb80d0ddd', 'Preview one visible note as a bounded Obsidian JSON Canvas 1.0 spatial map without copying note bodies. MOCs preserve authored order, nesting, and prerequisite edges; ordinary notes place direct links/backlinks closest, shared provenance/context next, and optional semantic/temporal discoveries farthest away. The result is a disposable navigation projection with exact source revisions, not evidence or an access boundary.'),
             inputSchema: { type: 'object', properties: {
                     path: { type: 'string', description: guidanceText('guid-edf84b11ab0b1721', 'Visible Markdown/text root note') },
-                    mode: { type: 'string', enum: ['auto', 'moc', 'neighborhood', 'workshop'], default: 'auto', description: guidanceText('guid-3200eb9f4a2a2203', 'auto uses MOC layout for note_kind=moc and neighborhood layout otherwise; workshop requires mcpvault_type=workshop and projects submitted mapNodes/mapEdges only') },
+                    mode: { type: 'string', enum: ['auto', 'moc', 'neighborhood'], default: 'auto', description: guidanceText('guid-3200eb9f4a2a2203', 'auto uses MOC layout for note_kind=moc and neighborhood layout otherwise') },
                     maxDepth: { type: 'integer', minimum: 0, maximum: 6, default: 2, description: guidanceText('guid-20765f5fa2fd5fb6', 'Nested MOC depth in moc mode') },
                     includeSemantic: { type: 'boolean', default: false, description: guidanceText('guid-65e104485abd704e', 'Add optional semantic discovery only in neighborhood mode; lexical links and scope rules remain authoritative') },
                     limit: { type: 'integer', minimum: 1, maximum: 50, default: 24, description: guidanceText('guid-ac73254022e14cbb', 'Maximum file nodes including the root') },
@@ -780,7 +778,7 @@ export function getLlmWikiTools() {
             description: guidanceText('guid-a36cdaafee4b1bfd', 'Regenerate and save one validated scope-local Views/*.canvas file. Replay the preview exportAction unchanged: its settings and expectedSnapshotFingerprint reject child/graph drift. Re-preview on conflict, do not remove the guard. Direct export without a fingerprint deliberately derives a fresh map. Requires the output revision, optionally guards the root, and rechecks included sources before writing. Never copies note bodies or changes authoritative Markdown.'),
             inputSchema: { type: 'object', properties: {
                     path: { type: 'string', description: guidanceText('guid-edf84b11ab0b1721', 'Visible Markdown/text root note') },
-                    mode: { type: 'string', enum: ['auto', 'moc', 'neighborhood', 'workshop'], default: 'auto' },
+                    mode: { type: 'string', enum: ['auto', 'moc', 'neighborhood'], default: 'auto' },
                     maxDepth: { type: 'integer', minimum: 0, maximum: 6, default: 2 },
                     includeSemantic: { type: 'boolean', default: false },
                     limit: { type: 'integer', minimum: 1, maximum: 50, default: 24 },

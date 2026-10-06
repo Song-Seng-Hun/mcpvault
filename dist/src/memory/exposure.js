@@ -4,7 +4,7 @@ const hash = (v) => createHash('sha256').update(JSON.stringify(v)).digest('hex')
 export class MemoryExposure {
     receipts = new Map();
     contexts = new Map();
-    actor(p) { return p?.sessionId ? hash([p.accountId, p.agentId, p.modelId, p.sessionId, p.sessionGeneration, p.enterprise, p.capabilities]) : undefined; }
+    actor(p) { return p?.sessionId ? hash([p.accountId, p.agentId, p.modelId, p.sessionId, p.sessionGeneration, undefined, p.capabilities]) : undefined; }
     confirm(p, receipt, context) {
         const actor = this.actor(p), record = this.receipts.get(receipt);
         if (!actor || !record || record.actor !== actor || !/^[a-zA-Z0-9._-]{1,100}$/.test(context))

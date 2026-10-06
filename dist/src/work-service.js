@@ -1,5 +1,4 @@
 import { guidanceError, guidanceText } from './guidance-runtime.js';
-import { storyWorkResults } from './story-session.js';
 import { WorkReviewEngine, ReviewBudgetError, changeContext, reviewPolicy, effectiveReviewPolicy, reviewPacketItems } from './work-review.js';
 import { recommendStaffing } from './work-staffing.js';
 import { responsibility, resourceKeys as declaredResourceKeys, assignmentShape } from './work-responsibility.js';
@@ -34,7 +33,6 @@ export class WorkService {
     reviewEngine;
     access = new ScopeAccessPolicy();
     intents = new WeakMap();
-    workshopCreates = new WeakMap();
     constructor(fileSystem, references, auth, tasks, options = {}) {
         this.fileSystem = fileSystem;
         this.references = references;
@@ -71,28 +69,6 @@ export class WorkService {
             throw guidanceError(new Error('Task capability is required'), 'guid-008719aaf7771662');
         await this.options.assertActor?.(current);
         return current;
-    }
-    /** Server-owned adapter, not an agent-supplied authority or task field. */
-    async authorizeWorkshopProject(principal, projectId, owner, delegate, grantor) {
-        const actor = await this.actor(principal), project = await this.projectNote(projectId);
-        this.member(project.frontmatter, actor);
-        if (owner && project.frontmatter.owner_account_id !== actor.accountId)
-            throw guidanceError(new Error('Only project owner may delegate workshop outputs'), 'guid-f1578dffb82a0681');
-        if (grantor && project.frontmatter.owner_account_id !== grantor)
-            throw guidanceError(new Error('Project delegation owner changed'), 'guid-be9a21cff63aaffb');
-        if (delegate && (!project.frontmatter.participants.includes(delegate) || (await this.auth.listPrincipals()).every(p => p.accountId !== delegate)))
-            throw guidanceError(new Error('Delegate must be an existing project participant'), 'guid-e13d406715358578');
-        return { path: projectPath(projectId), expectedRevision: project.revision };
-    }
-    async createWorkshopTask(params, guards, receipt, assertAccess) {
-        this.workshopCreates.set(params, { guards: structuredClone(guards), receipt: structuredClone(receipt), assertAccess });
-        return this.tasks.create(params);
-    }
-    verifyWorkshopTaskOrigin(note, input, origin) {
-        const id = input.path.split('/').at(-1).replace(/\.md$/, '');
-        const receipt = (Array.isArray(note.frontmatter.work_receipts) ? note.frontmatter.work_receipts : []).find((r) => r.action === 'task.create' && r.target === id && r.actor === origin.actor && r.requestId === `output-${origin.payloadFingerprint}`);
-        if (note.frontmatter.mcpvault_type !== 'agent_task' || note.frontmatter.task_id !== id || !receipt || !this.receiptMatches(note, receipt))
-            throw guidanceError(Error('Output creation receipt integrity unavailable or changed'), 'guid-292508792e33ca97');
     }
     async visible(path, maxBytes = MAX_NOTE_CONTENT_BYTES) {
         if (!this.access.canAccessPhysicalPath(path))
@@ -505,13 +481,9 @@ export class WorkService {
     async runTask(action, params, proceed) {
         const intent = this.intents.get(params);
         this.intents.delete(params);
-        const workshopCreate = this.workshopCreates.get(params);
-        this.workshopCreates.delete(params);
         params = { ...params };
         return coordinate(async () => {
             const prior = action === 'update' ? await this.visible(taskPath(params.taskId)) : undefined;
-            if (params.taskId)
-                await this.options.assertTaskMutation?.(normalizeScopeId(params.taskId, 'taskId'));
             const requestedProject = prior?.frontmatter.project_id || params.projectId;
             if (!requestedProject) {
                 if (params.responsibility !== undefined || params.changeContext !== undefined || params.migrateReviewContract !== undefined)
@@ -620,7 +592,7 @@ export class WorkService {
             // one would let alternate casing bypass those checks.
             if (params.status !== undefined)
                 fm.status = taskStatus(params.status, taskStatus(fm.status));
-            const guards = [{ path: projectPath(projectId), expectedRevision: project.revision }, ...(workshopCreate?.guards || [])];
+            const guards = [{ path: projectPath(projectId), expectedRevision: project.revision }];
             if (params.discussionSlug !== undefined && fm.discussion_slug) {
                 const discussion = await this.communityTarget('post', fm.discussion_slug);
                 guards.push({ path: discussion.path, expectedRevision: discussion.note.revision });
@@ -718,29 +690,15 @@ export class WorkService {
                         throw guidanceError(new Error('Related revision changed during work mutation'), 'guid-cdb273014178bb3a');
                     // The existing filesystem supports nine locked related revisions.
                     // Fail closed rather than drop guards from a larger mutation.
-                    if (unique.length > (workshopCreate || fm.work_review_contract === 2 ? 128 : 9))
+                    if (unique.length > (fm.work_review_contract === 2 ? 128 : 9))
                         throw guidanceError(new Error('Work mutation exceeds related revision guard budget; split the dependency/artifact change'), 'guid-fd006d893a9a3fc2');
                     result = { success: true, taskId: id, path: write.path, status: fm.status, generation: fm.claim_generation,
                         claimGeneration: fm.claim_generation, ...(fm.assignee_account_id && { assigneeAccountId: fm.assignee_account_id }),
                         artifactFingerprint: reviewBasis(fm), requestId: request.requestId,
                         nextAction: { endpoint: 'work.packet', args: { taskId: id } } };
-                    if (intent?.kind === 'claim' && intent.paidContractId) {
-                        if (write.frontmatter.economy_contract_id && write.frontmatter.economy_contract_id !== intent.paidContractId)
-                            throw guidanceError(new Error('Paid contract marker conflict'), 'guid-bb625df8fd8ea2e9');
-                        write.frontmatter.economy_contract_id = intent.paidContractId;
-                        write.frontmatter.economy_claim_request_id = request.requestId;
-                        write.frontmatter.economy_claim_generation = fm.claim_generation;
-                    }
                     this.addReceipt(write.frontmatter, write.content, request, result, prior);
-                    if (workshopCreate) {
-                        write.frontmatter.workshop_output = workshopCreate.receipt;
-                        write.frontmatter.workshop_output_content_sha256 = fingerprint(write.content);
-                        // Include the trusted marker in the existing retry-state digest.
-                        const stored = write.frontmatter.work_receipts.at(-1);
-                        stored.state = this.receiptState(write.frontmatter, write.content);
-                    }
                     const receipt = await this.fileSystem.writeNoteWithRevisionGuardsAndReceipt(write, unique, {
-                        ...(workshopCreate ? { maxGuards: 128, assertAccess: workshopCreate.assertAccess } : fm.work_review_contract === 2 ? { maxGuards: 128 } : {}),
+                        ...(fm.work_review_contract === 2 ? { maxGuards: 128 } : {}),
                         ...(fm.work_review_contract === 2 && { maxBytes: MAX_NOTE_CONTENT_BYTES }),
                     });
                     result = { ...result, revision: receipt.revision };
@@ -874,12 +832,6 @@ export class WorkService {
         if (!['claim', 'start', 'release'].includes(params.op))
             throw guidanceError(new Error('Invalid claim operation'), 'guid-faea3df717f2bfc1');
         return this.mutate({ kind: 'claim', params });
-    }
-    /** Internal paid lease still traverses every ordinary Work admission rule. */
-    async claimPaid(params, contractId) {
-        if (params.op !== 'start')
-            throw guidanceError(new Error('Paid bridge only starts a claim'), 'guid-563bc26eecbcbcbb');
-        return this.mutate({ kind: 'claim', params, paidContractId: normalizeScopeId(contractId, 'contractId') });
     }
     async handoff(params) {
         if (!['propose', 'accept'].includes(params.op))
@@ -1060,30 +1012,26 @@ export class WorkService {
         const linked = new Set(tasks.flatMap(n => (n.fm.references || []).filter((p) => typeof p === 'string')));
         const taskIds = new Set(tasks.map(n => n.fm.task_id));
         const selected = inventory.filter(n => n.fm.mcpvault_type === 'agent_task' || (!linked.has(n.path) && !taskIds.has(n.fm.task_id)));
-        const paid = await this.paidTasks(tasks.map(n => n.fm.task_id), params.principal);
         const currentReviews = new Map(await Promise.all(tasks.map(async (n) => [n.path, await this.currentReview(n.fm, project.frontmatter)])));
-        const mutations = await this.taskMutations(tasks.map(n => n.fm.task_id));
         const rows = selected.map(n => ({ path: n.path, taskId: n.fm.task_id, title: String(n.fm.title || posix.basename(n.path)).slice(0, 180),
             status: n.fm.status || n.fm.task_status || 'open', kind: n.fm.mcpvault_type === 'agent_task' ? 'task' : 'knowledge',
             assigneeAccountId: n.fm.assignee_account_id, generation: n.fm.claim_generation,
             ...(typeof n.fm.responsibility?.perspective === 'string' && { perspective: n.fm.responsibility.perspective.slice(0, 80) }),
             ...(['exclusive_write', 'advice', 'alternative'].includes(n.fm.responsibility?.mode) && { participationMode: n.fm.responsibility.mode }),
-            ...(paid[n.fm.task_id] && { paidContract: paid[n.fm.task_id] }),
-            ...(mutations[n.fm.task_id] && { taskMutation: mutations[n.fm.task_id] }),
             ...(this.blocker(n.fm) && { blockedReason: this.blocker(n.fm) }),
             ...(n.fm.work_review && { review: { decision: String(n.fm.work_review.decision || '').slice(0, 32),
                     accountId: String(n.fm.work_review.account_id || '').slice(0, 64), reason: String(n.fm.work_review.reason || '').slice(0, 200),
                     current: currentReviews.get(n.path)?.current || false } }),
             ...(currentReviews.get(n.path)?.diagnostic && { reviewDiagnostic: currentReviews.get(n.path).diagnostic }),
             stale: started(n.fm) && Date.now() - Date.parse(n.fm.last_progress_at || n.fm.updated_at || '') > 86400000,
-            ...(n.fm.next_action && !mutations[n.fm.task_id]?.freeMutationBlocked && { nextAction: String(n.fm.next_action).slice(0, 200) }),
+            ...(n.fm.next_action && { nextAction: String(n.fm.next_action).slice(0, 200) }),
             ...([...resources.get(n.path)].some(resource => {
                 const owners = occurrences.get(resource);
                 return owners && (owners.size > 1 || !owners.has(n.path));
             }) && { warning: guidanceText('guid-f3e8a40ffa18c42a', 'Artifact/file overlap is advisory; coordinate with peers') }),
         }));
         const wip = await this.boardWip(project.frontmatter, tasks, params.principal);
-        const sig = fingerprint({ project: project.revision, inventory: selected, rows, reviewBases: [...currentReviews].map(([path, review]) => ({ path, basis: review.basis, contextSnapshot: review.contextSnapshot ?? null })), wip, paid, mutations, ...(wip && { accountId: params.principal?.accountId }) });
+        const sig = fingerprint({ project: project.revision, inventory: selected, rows, reviewBases: [...currentReviews].map(([path, review]) => ({ path, basis: review.basis, contextSnapshot: review.contextSnapshot ?? null })), wip, ...(wip && { accountId: params.principal?.accountId }) });
         return page(rows, { projectId: id, projectRevision: project.revision, fingerprint: sig, ...(wip && { wip }) }, sig, params, `board:${id}`);
     }
     async currentReview(fm, project) {
@@ -1215,7 +1163,7 @@ export class WorkService {
             try {
                 const discussion = await this.communityTarget('post', fm.discussion_slug);
                 locators.push({ kind: 'discussion', slug: discussion.id, revision: discussion.note.revision,
-                    tool: 'community.post_read', arguments: { slug: discussion.id, includeComments: true, commentLimit: 5 } });
+                    tool: 'notes.read', arguments: { path: discussion.path, maxChars: 7000 } });
             }
             catch { /* Draft, private, hidden, and missing discussions are omitted. */ }
         }
@@ -1247,22 +1195,14 @@ export class WorkService {
             }
             catch { /* Do not expose a now-private or moderated artifact locator. */ }
         }
-        const paid = (await this.paidTasks([id], params.principal))[id];
-        const before = (await this.taskMutations([id]))[id];
-        let nextActions = before.freeMutationBlocked || paid?.freeMutationBlocked ? [] : await this.packetActions(id, { ...n, frontmatter: fm }, project.frontmatter, params.principal);
-        const taskMutation = (await this.taskMutations([id]))[id];
-        if (taskMutation.freeMutationBlocked)
-            nextActions = [];
+        const nextActions = await this.packetActions(id, { ...n, frontmatter: fm }, project.frontmatter, params.principal);
         const items = [
             ...(fm.work_review_contract === 2 ? [{ kind: 'reviewContract', version: 2, nextAction: { endpoint: 'work.review_context', args: { taskId: id } },
                     current: fm.work_review?.fingerprint === artifactFingerprint, verificationLevel: fm.work_review?.verification_level || 'pending' }] : []),
             { kind: 'task', title: String(fm.title || id).slice(0, 180), status: fm.status, assigneeAccountId: fm.assignee_account_id,
                 requesterAccountId: fm.requester_account_id, generation: fm.claim_generation, workKind: fm.work_kind },
-            { kind: 'taskMutation', ...taskMutation },
             ...(this.blocker(fm) ? [{ kind: 'blocker', text: this.blocker(fm) }] : []),
             ...nextActions,
-            ...(paid ? [paid] : []),
-            ...await storyWorkResults(this.fileSystem, id, fm.project_id, path => this.visible(this.publicPath(path)), path => this.access.canAccessPhysicalPath(path)),
             ...String(project.frontmatter.goal || '').match(/.{1,400}/gs)?.map(text => ({ kind: 'goal', text })) || [],
             ...(project.frontmatter.allowed_work || []).map((text) => ({ kind: 'allowedWork', text })),
             { kind: 'authority', text: guidanceText('guid-f23e84610cfaea5b', 'Task participation grants no external execution authority.') },
@@ -1278,36 +1218,6 @@ export class WorkService {
         const signature = fingerprint({ revision: n.revision, project: project.revision, artifactFingerprint, locators, nextActions, items });
         return page(items, { taskId: id, revision: n.revision, artifactFingerprint, generation: fm.claim_generation,
             ...(params.knownRevision && { changed: params.knownRevision !== n.revision }) }, signature, params, `packet:${id}`);
-    }
-    async paidTasks(ids, principal) {
-        const result = Object.create(null);
-        if (!ids.length)
-            return result;
-        try {
-            const rows = await this.options.paidProjection?.(ids, principal);
-            for (const id of ids)
-                if (rows && Object.hasOwn(rows, id) && rows[id] && typeof rows[id] === 'object')
-                    result[id] = rows[id];
-        }
-        catch { /* Optional private detail never determines free eligibility. */ }
-        return result;
-    }
-    async taskMutations(ids) {
-        if (!ids.length)
-            return {};
-        const unavailable = { state: 'unavailable', freeMutationBlocked: true };
-        if (!this.options.freeTaskMutations)
-            return Object.fromEntries(ids.map(id => [id, { state: 'allowed', freeMutationBlocked: false }]));
-        let result = {};
-        try {
-            result = await this.options.freeTaskMutations(ids);
-        }
-        catch { /* No raw ledger errors or permissive fallback. */ }
-        return Object.fromEntries(ids.map(id => {
-            const value = Object.hasOwn(result, id) ? result[id] : undefined;
-            const valid = value && ['allowed', 'managed', 'unavailable'].includes(value.state) && value.freeMutationBlocked === (value.state !== 'allowed');
-            return [id, valid ? { state: value.state, freeMutationBlocked: value.freeMutationBlocked } : unavailable];
-        }));
     }
     async packetActions(id, note, project, principal) {
         if (!principal || finished(note.frontmatter) || project.team_status === 'completed')
@@ -1442,16 +1352,9 @@ export class WorkService {
                 candidates.push({ rank, taskId: fm.task_id, reason });
         }
         candidates.sort((a, b) => a.rank - b.rank || a.taskId.localeCompare(b.taskId));
-        let mutations = await this.taskMutations(candidates.map(c => c.taskId));
-        const paid = await this.paidTasks(candidates.filter(c => mutations[c.taskId].state === 'managed').map(c => c.taskId), actor);
-        if (Object.keys(paid).length)
-            mutations = await this.taskMutations(candidates.map(c => c.taskId));
-        const actionable = candidates.filter(c => !mutations[c.taskId].freeMutationBlocked || (mutations[c.taskId].state === 'managed' && Boolean(paid[c.taskId]?.nextAction)));
-        const first = actionable[0];
-        const result = first ? { nextAction: { tool: 'work.packet', arguments: { taskId: first.taskId } }, reason: mutations[first.taskId].state === 'managed' ? 'Read the separately managed task and authorized contract route' : first.reason,
-            summary: { actionable: Math.min(actionable.length, limit), truncated: actionable.length > limit } }
-            : candidates.length ? { summary: { actionable: 0, managed: candidates.filter(c => mutations[c.taskId].state === 'managed').length,
-                    unavailable: candidates.filter(c => mutations[c.taskId].state === 'unavailable').length } } : {};
+        const first = candidates[0];
+        const result = first ? { nextAction: { tool: 'work.packet', arguments: { taskId: first.taskId } }, reason: first.reason,
+            summary: { actionable: Math.min(candidates.length, limit), truncated: candidates.length > limit } } : {};
         const covered = { ...result, coverage: 'loaded' };
         if (JSON.stringify(covered).length > maxChars)
             return { coverage: 'unavailable' };

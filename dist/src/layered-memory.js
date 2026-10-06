@@ -77,9 +77,8 @@ export class LayeredMemoryService {
         const scope = params.scope ?? 'personal';
         if (!['personal', 'user', 'community', 'global'].includes(scope))
             throw guidanceError(new Error('Invalid memory scope'), 'guid-ab10cde3174fe499');
-        const userRoot = this.access.userMemoryRoot(params.principal);
-        if (scope === 'user' && !userRoot)
-            throw guidanceError(new Error('User shared memory requires an explicitly provisioned enterprise employee'), 'guid-9b66e9b92c671fb2');
+        if (scope === 'user')
+            throw guidanceError(new Error('User shared memory is unavailable on this host'), 'guid-9b66e9b92c671fb2');
         if (scope === 'personal' && !params.principal?.agentId)
             throw guidanceError(new Error('Login with an agent account for personal memory; no public fallback'), 'guid-b6cb88c287a05e70');
         if (params.role !== undefined && !MEMORY_ROLES.includes(params.role))
@@ -94,7 +93,7 @@ export class LayeredMemoryService {
         const maxChars = number(params.maxChars, mode === 'brief' ? 2000 : 4000, 1000, mode === 'brief' ? 4000 : 12000);
         const limit = number(params.limit, 20, 1, 100);
         const root = scope === 'personal' ? `_scopes/agents/${params.principal.agentId}`
-            : scope === 'user' ? userRoot : scope === 'community' ? this.access.getCommunityRoot() : '';
+            : scope === 'community' ? this.access.getCommunityRoot() : '';
         const canAccess = (path) => {
             if (!this.access.canAccessPhysicalPath(path, params.principal))
                 return false;
@@ -109,7 +108,7 @@ export class LayeredMemoryService {
         if (routing && routing.strategy !== 'selective')
             return {
                 scope, mode, status: routing.strategy === 'none' ? 'not_needed' : 'route_only', items: [], routing, truncated: false,
-                warnings: ['Only optional memory was skipped. Mandatory rules still apply. No context retention or checkpoint validity was inferred.'],
+                warnings: [guidanceText('guid-df1eb91df758c48c', 'Only optional memory was skipped. Mandatory rules still apply. No context retention or checkpoint validity was inferred.')],
                 nextAction: routing.strategy === 'continuity' ? { endpointId: 'continuity.resume', arguments: { maxChars: 2000, prettyPrint: false } }
                     : { endpointId: 'memory.recall', arguments: { scope, maxChars: 4000 } },
             };
@@ -139,7 +138,7 @@ export class LayeredMemoryService {
         if (indexed?.reason)
             return { scope, mode, status: 'partial', items: [], truncated: true, reason: indexed.reason,
                 nextAction: { endpointId: 'memory.recall', reuseOriginalArguments: true },
-                warnings: ['Memory index is not verified for this request. Use an exact authorized source read or retry after background preparation.'] };
+                warnings: [guidanceText('guid-728189957f238e2f', 'Memory index is not verified for this request. Use an exact authorized source read or retry after background preparation.')] };
         const page = indexed ?? await capture();
         const corrections = new Map();
         const incomingCorrections = new Map();

@@ -12,7 +12,7 @@ import { inspectCompilationPolicy, validateCompilationConfig, compilationHash, c
 import { parseCompilationHistory, compilationContentHash, compilationId, compilationJobRevision, isCompilationRevision, compilationValidationBasis, compilationReceiptBasis } from './compilation-model.js';
 const unavailable = () => guidanceError(Error('Compilation unavailable; revalidate current authorization and inputs'), 'guid-0b631ee180ea1a88');
 const actorBasis = (p) => p && compilationHash({ account: p.accountId, model: p.modelId, agent: p.agentId,
-    user: p.userId, center: p.commandCenterId, capabilities: p.capabilities, enterprise: p.enterprise });
+    user: p.userId, center: p.commandCenterId, capabilities: p.capabilities });
 /** Host-owned bounded journal. No scheduler, model invocation or raw Vault writer.
  * Every entry point reauthorizes; checkpoints are never bearer access grants. */
 export class CompilationService {

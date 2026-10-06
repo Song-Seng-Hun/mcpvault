@@ -1,11 +1,12 @@
+import { canonicalHostPath } from './host-storage.js';
+import { guidanceError } from './guidance-runtime.js';
 import { createHash } from 'node:crypto';
 import { constants, openSync, closeSync, fstatSync, lstatSync, readSync, realpathSync } from 'node:fs';
 import { join, parse } from 'node:path';
-import { canonicalRoleplayPath } from './roleplay-storage-host.js';
 import { parseReviewedSkillRegistration } from './skill-release-store.js';
 import { verifySkillReleaseEvidence } from './skill-release-evidence.js';
 export const VAULT_SKILL_REVIEWS = '.mcpvault-reviewed-skills';
-const fail = () => { throw Error('Reviewed NAS skill unavailable'); };
+const fail = () => { throw guidanceError(Error('Reviewed NAS skill unavailable'), 'guid-4480698b9bbbdd1e'); };
 const digest = (b) => createHash('sha256').update(b).digest('hex');
 const sha = (s) => typeof s === 'string' && /^[a-f0-9]{64}$/.test(s);
 const id = (s) => typeof s === 'string' && /^[a-z0-9][a-z0-9-]{0,99}$/.test(s);
@@ -17,7 +18,7 @@ const stamp = (s) => `${s.dev}:${s.ino}:${s.size}:${s.mtimeMs}:${s.ctimeMs}:${s.
 export async function openVaultReviewedSkills(options) {
     if (!sha(options.registryHash))
         return fail();
-    const vault = await canonicalRoleplayPath(options.vaultPath, false);
+    const vault = await canonicalHostPath(options.vaultPath, false);
     const metadata = join(vault, VAULT_SKILL_REVIEWS), registryPath = join(metadata, 'registry.json');
     const read = (path, max) => {
         let current = parse(path).root;

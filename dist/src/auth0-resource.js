@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { createRemoteJWKSet, jwtVerify } from 'jose';
 import { readFile } from 'node:fs/promises';
 import { isAbsolute } from 'node:path';
@@ -9,17 +10,17 @@ function isRecord(value) {
 }
 function httpsUrl(value, field, rootOnly) {
     if (typeof value !== 'string' || value.length > 2048)
-        throw new Error(`Invalid Auth0 ${field}`);
+        throw guidanceError(new Error(`Invalid Auth0 ${field}`), 'guid-2ab49cc206963279');
     let url;
     try {
         url = new URL(value);
     }
     catch {
-        throw new Error(`Invalid Auth0 ${field}`);
+        throw guidanceError(new Error(`Invalid Auth0 ${field}`), 'guid-2ab49cc206963279');
     }
     if (url.protocol !== 'https:' || !url.hostname || url.username || url.password || url.search || url.hash
         || (rootOnly && url.pathname !== '/') || url.href !== value) {
-        throw new Error(`Invalid Auth0 ${field}`);
+        throw guidanceError(new Error(`Invalid Auth0 ${field}`), 'guid-2ab49cc206963279');
     }
     return value;
 }
@@ -27,40 +28,40 @@ function parseLocalResource(value) {
     if (!isRecord(value) || Object.keys(value).some(key => !['resource', 'clientId'].includes(key))
         || typeof value.resource !== 'string' || typeof value.clientId !== 'string'
         || !/^[A-Za-z0-9_-]{1,128}$/.test(value.clientId))
-        throw new Error('Invalid Auth0 local resource');
+        throw guidanceError(new Error('Invalid Auth0 local resource'), 'guid-76898a003bde43e1');
     let url;
     try {
         url = new URL(value.resource);
     }
     catch {
-        throw new Error('Invalid Auth0 local resource');
+        throw guidanceError(new Error('Invalid Auth0 local resource'), 'guid-76898a003bde43e1');
     }
     if (url.protocol !== 'http:' || url.hostname !== '127.0.0.1' || url.port !== '8789'
         || url.pathname !== '/antigravity/mcp' || url.username || url.password || url.search || url.hash
         || url.href !== value.resource)
-        throw new Error('Invalid Auth0 local resource');
+        throw guidanceError(new Error('Invalid Auth0 local resource'), 'guid-76898a003bde43e1');
     return { resource: value.resource, clientId: value.clientId };
 }
 export function parseAuth0ResourceConfig(value) {
     if (!isRecord(value) || Object.keys(value).some(key => ![
         'version', 'issuer', 'resource', 'scope', 'subject', 'accountId', 'allowedAgentLabels', 'localResource',
     ].includes(key)) || value.version !== 1)
-        throw new Error('Invalid Auth0 resource configuration');
+        throw guidanceError(new Error('Invalid Auth0 resource configuration'), 'guid-2122ab3188c5c8d5');
     const issuer = httpsUrl(value.issuer, 'issuer', true);
     const resource = httpsUrl(value.resource, 'resource', false);
     if (typeof value.scope !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9:._-]{0,127}$/.test(value.scope)) {
-        throw new Error('Invalid Auth0 scope');
+        throw guidanceError(new Error('Invalid Auth0 scope'), 'guid-a4426c1cde3030b3');
     }
     if (typeof value.subject !== 'string' || !value.subject || value.subject.length > 255 || /\s/.test(value.subject)) {
-        throw new Error('Invalid Auth0 subject');
+        throw guidanceError(new Error('Invalid Auth0 subject'), 'guid-acd377c668be57e6');
     }
     if (typeof value.accountId !== 'string' || !/^[a-z0-9][a-z0-9_-]{0,63}$/.test(value.accountId)) {
-        throw new Error('Invalid Auth0 account ID');
+        throw guidanceError(new Error('Invalid Auth0 account ID'), 'guid-551377e658a9f804');
     }
     if (!Array.isArray(value.allowedAgentLabels) || value.allowedAgentLabels.length > 32
         || value.allowedAgentLabels.some(label => typeof label !== 'string' || !/^[a-z0-9][a-z0-9-]{0,63}$/.test(label))
         || new Set(value.allowedAgentLabels).size !== value.allowedAgentLabels.length) {
-        throw new Error('Invalid Auth0 agent labels');
+        throw guidanceError(new Error('Invalid Auth0 agent labels'), 'guid-01205736b4e7e021');
     }
     return {
         version: 1, issuer, resource, scope: value.scope, subject: value.subject,
@@ -85,17 +86,10 @@ export class Auth0Resource {
         const expiresAt = this.authorizations.get(authorization);
         this.authorizations.delete(authorization);
         if (principal.accountId !== this.config.accountId || principal.role !== 'agent'
-            || principal.enterprise || !principal.sessionId || authorization.accountId !== principal.accountId
+            || !principal.sessionId || authorization.accountId !== principal.accountId
             || expiresAt === undefined || Date.now() >= expiresAt)
-            throw new Error('Invalid research request session');
-        const owner = principal.userId || principal.accountId;
-        const policy = new OwnerActivityPolicy({ version: 1, owners: { [principal.accountId]: owner }, grants: [{
-                    id: 'oauth-research', ownerId: owner, accountIds: [principal.accountId],
-                    activities: ['collaboration'], actions: ['discover', 'read', 'execute'],
-                    dataPrefixes: ['Community/Posts', 'Community/Comments'], executionTargets: ['auth0-research'],
-                    expiresAt: new Date(expiresAt).toISOString(),
-                }] });
-        const context = { accountId: principal.accountId, sessionId: principal.sessionId, active: true, expiresAt, policy };
+            throw guidanceError(new Error('Invalid research request session'), 'guid-322cb2e37c28d777');
+        const context = { accountId: principal.accountId, sessionId: principal.sessionId, active: true, expiresAt };
         try {
             return await this.requests.run(context, callback);
         }
@@ -103,14 +97,11 @@ export class Auth0Resource {
             context.active = false;
         }
     }
-    /** OAuth's approved research scope supplies ordinary collaboration consent.
-     * This does not enable features or grant document/account capabilities. */
+    /** OAuth's research scope grants no optional owner activity; it binds only
+     * the execution identity. It never enables features or grants capabilities. */
     ownerActivity() {
         return {
-            policy: () => {
-                const context = this.requests.getStore();
-                return context?.active && Date.now() < context.expiresAt ? context.policy : this.deniedPolicy;
-            },
+            policy: () => this.deniedPolicy,
             execution: principal => this.ownerExecution(principal),
         };
     }
@@ -125,10 +116,10 @@ export class Auth0Resource {
     }
     async verifyAccessToken(token, channel = 'primary') {
         if (!token || token.length > 16_384)
-            throw new Error('Invalid Auth0 bearer token');
+            throw guidanceError(new Error('Invalid Auth0 bearer token'), 'guid-37995853a8abc8b9');
         const local = channel === 'local' ? this.config.localResource : undefined;
         if (channel === 'local' && !local)
-            throw new Error('Auth0 local resource unavailable');
+            throw guidanceError(new Error('Auth0 local resource unavailable'), 'guid-ef0d5afe33ff8632');
         const audience = local?.resource ?? this.config.resource;
         const { payload } = await jwtVerify(token, this.keys, {
             issuer: this.config.issuer,
@@ -143,7 +134,7 @@ export class Auth0Resource {
             || payload.sub !== this.config.subject
             || typeof payload.scope !== 'string'
             || !payload.scope.split(/\s+/).includes(this.config.scope)) {
-            throw new Error('Auth0 bearer token is not approved for this resource');
+            throw guidanceError(new Error('Auth0 bearer token is not approved for this resource'), 'guid-faecdb1525938b80');
         }
         const authorization = Object.freeze({ accountId: this.config.accountId, subject: payload.sub });
         this.authorizations.set(authorization, payload.exp * 1000);
@@ -152,7 +143,7 @@ export class Auth0Resource {
     metadata(channel = 'primary') {
         const local = channel === 'local' ? this.config.localResource : undefined;
         if (channel === 'local' && !local)
-            throw new Error('Auth0 local resource unavailable');
+            throw guidanceError(new Error('Auth0 local resource unavailable'), 'guid-ef0d5afe33ff8632');
         return {
             resource: local?.resource ?? this.config.resource,
             authorization_servers: [this.config.issuer],
@@ -165,12 +156,12 @@ export class Auth0Resource {
  * startup; a model-supplied path or MCP request can never change it. */
 export async function loadAuth0Resource(vaultPath, path) {
     if (!isAbsolute(path))
-        throw new Error('Auth0 configuration must use an absolute private host path');
+        throw guidanceError(new Error('Auth0 configuration must use an absolute private host path'), 'guid-47a5d36409333d67');
     await assertPrivateAccountStore(vaultPath, path);
     try {
         return new Auth0Resource(parseAuth0ResourceConfig(JSON.parse(await readFile(path, 'utf8'))));
     }
     catch {
-        throw new Error('Private Auth0 configuration is invalid or unavailable');
+        throw guidanceError(new Error('Private Auth0 configuration is invalid or unavailable'), 'guid-ef0547ee4de670c0');
     }
 }

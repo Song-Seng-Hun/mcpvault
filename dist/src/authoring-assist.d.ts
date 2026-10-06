@@ -1,7 +1,6 @@
 export declare function propertyContractFingerprint(): string;
 export interface AuthoringContext {
-    intent?: 'knowledge' | 'capture' | 'reply' | 'new_topic';
-    slug?: string;
+    intent?: 'knowledge' | 'capture';
     provided?: Record<string, unknown>;
 }
 export declare function authoringAssist(noteKind: string, context?: AuthoringContext): {
@@ -11,9 +10,7 @@ export declare function authoringAssist(noteKind: string, context?: AuthoringCon
     missing: string[];
     nextAction: {
         endpointId: string;
-        arguments: {
-            slug?: string;
-        };
+        arguments: {};
         instruction: string;
     };
     normalization: {

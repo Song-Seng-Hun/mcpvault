@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { createHash } from 'node:crypto';
 const hash = (value) => createHash('sha256').update(value).digest('hex');
 const versionKey = (v) => `${v.skillId}:${v.revision}`;
@@ -5,7 +6,7 @@ export function skillUsageTaskId(value) {
     if (value === undefined)
         return undefined;
     if (typeof value !== 'string' || !/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/.test(value))
-        throw new Error('Skill taskId must be an opaque identifier, not a path or transcript');
+        throw guidanceError(new Error('Skill taskId must be an opaque identifier, not a path or transcript'), 'guid-b2f51be360f80964');
     return value;
 }
 /** Private, bounded process observations. No transcript, host path, token or persistent file. */
@@ -19,7 +20,7 @@ export class SkillUsageTelemetry {
     constructor(capacity = 1024) {
         this.capacity = capacity;
         if (!Number.isSafeInteger(capacity) || capacity < 1 || capacity > 10000)
-            throw new Error('Invalid skill observation capacity');
+            throw guidanceError(new Error('Invalid skill observation capacity'), 'guid-6a60068be679be5b');
     }
     entry(actor, v) {
         if (!actor)

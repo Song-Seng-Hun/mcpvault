@@ -1,6 +1,11 @@
 /** Explicit v1 snapshot. Adding a future feature must not expand saved selections. */
-export declare const HOST_FEATURE_IDS_V1: readonly ["wiki-core", "document-search", "personal-memory", "work-management", "collaboration", "ideation-research", "explanation-translation", "benchmarks", "economy", "roleplay", "skill-evolution"];
+export declare const HOST_FEATURE_IDS_V1: readonly ["wiki-core", "document-search", "personal-memory", "work-management", "skill-evolution"];
 export type HostFeatureId = typeof HOST_FEATURE_IDS_V1[number];
+/** Removed from v1. Saved selections may still name them; they are dropped, so
+ * an older configuration keeps loading with the features that remain. */
+export declare const REMOVED_HOST_FEATURE_IDS: readonly string[];
+/** The one warning a host prints when a selection names removed features. */
+export declare function warnRemovedHostFeatures(ids: readonly string[]): void;
 export interface HostFeatureConfig {
     readonly version: 1;
     readonly selected: readonly HostFeatureId[];
@@ -8,7 +13,7 @@ export interface HostFeatureConfig {
 export declare const DEFAULT_HOST_FEATURE_CONFIG: HostFeatureConfig;
 /** Strict data-only object parsing. No coercion, getters, execution or defaults.
  * The host owns bounded JSON/file loading and chooses the default explicitly. */
-export declare function parseHostFeatureConfig(input: unknown): HostFeatureConfig;
+export declare function parseHostFeatureConfig(input: unknown, onRemoved?: (ids: readonly string[]) => void): HostFeatureConfig;
 /** Config identity only, not a deployment, permission or endpoint-catalog hash. */
 export declare function hostFeatureConfigFingerprint(input: unknown): string;
 export declare const HOST_FEATURE_TOOL_MAP: Readonly<Record<string, HostFeatureId>>;

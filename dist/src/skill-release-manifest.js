@@ -1,4 +1,5 @@
-const fail = () => { throw Error('Reviewed skill manifest unavailable'); };
+import { guidanceError } from './guidance-runtime.js';
+const fail = () => { throw guidanceError(Error('Reviewed skill manifest unavailable'), 'guid-4ff0c5b43006b897'); };
 function object(value, keys, optional = []) {
     if (!value || typeof value !== 'object' || Array.isArray(value))
         return fail();

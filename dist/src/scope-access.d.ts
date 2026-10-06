@@ -7,40 +7,14 @@ export declare class ScopeAccessPolicy {
     private readonly documentAuthority;
     private readonly localInferenceAllowed;
     private readonly commandCenterId;
-    private readonly enterprise;
     constructor(options?: {
         commandCenterId?: string;
-        enterprise?: {
-            mode: 'public' | 'company';
-            realmId: string;
-        };
     } & DocumentAuthorityOptions);
     getCommandCenterId(): string;
-    getEnterpriseProfile(): {
-        mode: 'public' | 'company';
-        realmId: string;
-    } | undefined;
     hasDocumentPolicy(): boolean;
     documentPolicyFingerprint(): string;
     /** Dependency-scoped invalidation only, not proof of present read or execution authority. */
     documentDependencyFingerprint(paths: readonly string[]): string;
-    /** Navigation only; the principal must originate from current host authentication. */
-    defaultDepartment(principal?: ScopePrincipal): string | undefined;
-    defaultNavigation(principal?: ScopePrincipal): {
-        departmentId: string;
-        basis: string;
-        action: {
-            endpointId: string;
-            arguments: {
-                department: string;
-                limit: number;
-                includeContent: boolean;
-                includeTotal: boolean;
-                maxChars: number;
-            };
-        };
-    } | undefined;
-    isInDefaultDepartment(path: string, principal?: ScopePrincipal, recordSource?: boolean): boolean;
     isConfidentialDocument(path: string): boolean;
     /** Pin authorization, not document bodies. Revocation at any await discards
      * the outgoing result, including aggregate existence information. */
@@ -48,8 +22,6 @@ export declare class ScopeAccessPolicy {
     /** Used at physical IO independently of a service's legacy scope behavior. */
     canReadProtectedDocument(path: string, principal?: ScopePrincipal, recordSource?: boolean): boolean;
     getCommunityRoot(): string;
-    private enterprisePrincipalAllowed;
-    userMemoryRoot(principal?: ScopePrincipal): string | undefined;
     isLegacyDiscussionPath(path: string, includeAncestors?: boolean): boolean;
     assertLegacyDiscussionMutationAllowed(path: string, operation: string, includeAncestors?: boolean): void;
     isCommunityPath(path: string): boolean;

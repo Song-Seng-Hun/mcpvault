@@ -1,3 +1,4 @@
+import { canonicalHostPath, validateHostStorage } from './host-storage.js';
 import { guidanceError } from './guidance-runtime.js';
 import { DOCUMENT_STRUCTURE_PROFILE, parseDocumentStructure } from './document-structure.js';
 import { createHash, randomUUID } from 'node:crypto';
@@ -9,7 +10,6 @@ import { promisify } from 'node:util';
 import { readSnapshotBytes } from './snapshot-read.js';
 import { createDerivedCacheOwner, derivedCacheBudget } from './cache-budget.js';
 import { assertHostPrivateStorage } from './skill-evolution-host.js';
-import { canonicalRoleplayPath, validateRoleplayStorage } from './roleplay-storage-host.js';
 import { prepareOwnerActivityStorageWrite } from './enterprise-storage-context.js';
 import { withDocumentWork, reserveDocumentWork, documentParseEstimate, documentResidentEstimate as residentEstimate } from './document-work-memory.js';
 const compress = promisify(gzip);
@@ -136,9 +136,9 @@ export class DocumentIndex {
     async assertPrivateCache(file) {
         if (!this.options.cacheDir)
             throw guidanceError(new Error('Confidential parsing requires provisioned private host derivative storage'), 'guid-46d997e09e10aea0');
-        await validateRoleplayStorage({ vaultPath: this.reader.fs.getVaultPath(), hostPath: this.options.cacheDir });
+        await validateHostStorage({ vaultPath: this.reader.fs.getVaultPath(), hostPath: this.options.cacheDir });
         if (file) {
-            await canonicalRoleplayPath(file, true, true);
+            await canonicalHostPath(file, true, true);
             if ((await lstat(file)).nlink !== 1)
                 throw guidanceError(new Error('Document cache cannot use shared file links'), 'guid-9709d47ad4b3e978');
         }

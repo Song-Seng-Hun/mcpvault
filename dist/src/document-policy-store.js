@@ -1,9 +1,9 @@
+import { readHostFile, writeHostFileAtomic } from './host-storage.js';
 import { guidanceError } from './guidance-runtime.js';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { open, lstat, unlink } from 'node:fs/promises';
 import { FrontmatterHandler } from './frontmatter.js';
-import { readFederationFile, writeFederationFileAtomic } from './public-federation-storage.js';
 import { DocumentAuthority, documentPolicyPath } from './document-authority.js';
 import { isOriginalPath } from './original-boundary.js';
 export const DOCUMENT_POLICY_PATH = '_wiki/_policies/documents.md';
@@ -41,7 +41,7 @@ export class DocumentPolicyStore {
         try {
             let content;
             try {
-                content = await readFederationFile(this.vault, join(this.vault, DOCUMENT_POLICY_PATH), { maxBytes: 2 * 1024 * 1024 });
+                content = await readHostFile(this.vault, join(this.vault, DOCUMENT_POLICY_PATH), { maxBytes: 2 * 1024 * 1024 });
             }
             catch (error) {
                 if (!this.seen && error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
@@ -168,7 +168,7 @@ export class DocumentPolicyStore {
                 await this.read();
                 if (this.revision() !== expectedRevision)
                     throw guidanceError(new Error('Protected document policy revision changed'), 'guid-1bc997e4b0c7d462');
-                await writeFederationFileAtomic(this.vault, join(this.vault, DOCUMENT_POLICY_PATH), body, { maxBytes: 2 * 1024 * 1024 });
+                await writeHostFileAtomic(this.vault, join(this.vault, DOCUMENT_POLICY_PATH), body, { maxBytes: 2 * 1024 * 1024 });
                 await this.read();
                 if (this.digest !== createHash('sha256').update(body).digest('hex'))
                     throw guidanceError(new Error('Protected document policy changed while committing inheritance'), 'guid-677722ecff6dd218');

@@ -84,7 +84,7 @@ test('published HTTP-only entry point ignores stdin and serves two clients throu
       } } });
       expect(search.isError).toBeFalsy();
       expect(JSON.stringify(search.content)).toContain('Probe.md');
-      expect((await clients[1].listTools()).tools).toHaveLength(16);
+      expect((await clients[1].listTools()).tools).toHaveLength(12);
       expect(stdout()).toBe('');
       expect(child.exitCode).toBeNull();
     } finally { for (const client of clients) await client.close(); }

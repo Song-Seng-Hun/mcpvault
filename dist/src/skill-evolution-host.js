@@ -1,9 +1,9 @@
+import { readHostFile } from './host-storage.js';
 import { guidanceError } from './guidance-runtime.js';
 import { checkWindowsPrivateAcl } from './windows-private-acl.js';
 import { dirname, isAbsolute, relative, sep, join } from 'node:path';
 import { lstat, realpath } from 'node:fs/promises';
 import { hostSourceRoots } from './host-source-roots.js';
-import { readFederationFile } from './public-federation-storage.js';
 import { profileFingerprint } from './skill-evaluation.js';
 import { createTrustedSkillEvaluationProfiles } from './skill-evaluation-profiles.js';
 const inside = (root, path) => { const r = relative(root, path); return !r || (r !== '..' && !r.startsWith(`..${sep}`) && !isAbsolute(r)); };
@@ -36,7 +36,7 @@ export async function loadSkillEvolutionHostConfig(configPath, expectedVault, re
     await assertHostPrivateStorage([directory, configPath]);
     let raw;
     try {
-        raw = JSON.parse(await readFederationFile(directory, configPath, { maxBytes: 8192 }));
+        raw = JSON.parse(await readHostFile(directory, configPath, { maxBytes: 8192 }));
     }
     catch {
         throw guidanceError(new Error('Invalid or unavailable skill evolution configuration'), 'guid-9eb630366d07760c');
@@ -64,7 +64,7 @@ export async function loadSkillEvolutionHostConfig(configPath, expectedVault, re
     let key;
     try {
         await assertHostPrivateStorage([directory, configPath, keyPath]);
-        key = (await readFederationFile(directory, keyPath, { maxBytes: 512 })).trim();
+        key = (await readHostFile(directory, keyPath, { maxBytes: 512 })).trim();
     }
     catch {
         throw guidanceError(new Error('Skill evolution key storage is unavailable or not private'), 'guid-46ec4feb2d119755');

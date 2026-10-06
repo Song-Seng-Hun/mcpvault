@@ -31,8 +31,8 @@ export declare class Auth0Resource {
      * of the matching internal session. Not exposed as an MCP operation. This
      * identifies the authenticated research channel, never a model or device. */
     withResearchSession<T>(authorization: ResearchAuthorization, principal: ScopePrincipal, callback: () => Promise<T>): Promise<T>;
-    /** OAuth's approved research scope supplies ordinary collaboration consent.
-     * This does not enable features or grant document/account capabilities. */
+    /** OAuth's research scope grants no optional owner activity; it binds only
+     * the execution identity. It never enables features or grants capabilities. */
     ownerActivity(): OwnerActivityRuntimeOptions;
     /** Labels, legacy tokens and localhost alone never enter the verified
      * request context. Independent capability and document checks still apply. */

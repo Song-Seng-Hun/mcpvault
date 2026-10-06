@@ -1,10 +1,10 @@
+import { canonicalHostPath, validateHostStorage, readHostFile } from './host-storage.js';
+import { guidanceError } from './guidance-runtime.js';
 import { dirname } from 'node:path';
 import { lstatSync, realpathSync } from 'node:fs';
 import { getEnterpriseRequestContext } from './enterprise-request-context.js';
-import { canonicalRoleplayPath, validateRoleplayStorage } from './roleplay-storage-host.js';
 import { assertHostPrivateStorage } from './skill-evolution-host.js';
-import { readFederationFile } from './public-federation-storage.js';
-const unavailable = () => Error('Owner mTLS binding unavailable');
+const unavailable = () => guidanceError(Error('Owner mTLS binding unavailable'), 'guid-16075951ebcaa7d0');
 const stamp = (s) => [s.dev, s.ino, s.size, s.mtimeMs, s.ctimeMs, s.nlink].join(':');
 const id = (v) => typeof v === 'string' && /^[a-z0-9][a-z0-9._-]{0,99}$/.test(v);
 function record(value, keys) {
@@ -19,8 +19,8 @@ function record(value, keys) {
  * Call execution only with a current principal produced by ScopeAuthService. */
 export async function loadOwnerMtlsBindings(path, expectedVault) {
     try {
-        const canonical = await canonicalRoleplayPath(path, true, true);
-        const { hostPath, vaultPath } = await validateRoleplayStorage({ hostPath: dirname(canonical), vaultPath: expectedVault });
+        const canonical = await canonicalHostPath(path, true, true);
+        const { hostPath, vaultPath } = await validateHostStorage({ hostPath: dirname(canonical), vaultPath: expectedVault });
         let current = [];
         let currentStamp;
         const fileStamp = () => {
@@ -33,11 +33,11 @@ export async function loadOwnerMtlsBindings(path, expectedVault) {
         const refresh = () => {
             const read = async () => {
                 try {
-                    await canonicalRoleplayPath(canonical, true, true);
+                    await canonicalHostPath(canonical, true, true);
                     await assertHostPrivateStorage([hostPath, canonical]);
                     const before = fileStamp();
-                    const raw = record(JSON.parse(await readFederationFile(hostPath, canonical, { maxBytes: 32768 })), ['version', 'vaultPath', 'bindings']);
-                    if (raw.version !== 1 || typeof raw.vaultPath !== 'string' || await canonicalRoleplayPath(raw.vaultPath, false) !== vaultPath
+                    const raw = record(JSON.parse(await readHostFile(hostPath, canonical, { maxBytes: 32768 })), ['version', 'vaultPath', 'bindings']);
+                    if (raw.version !== 1 || typeof raw.vaultPath !== 'string' || await canonicalHostPath(raw.vaultPath, false) !== vaultPath
                         || !Array.isArray(raw.bindings) || raw.bindings.length > 64)
                         throw unavailable();
                     const keys = new Set(), targets = new Map();
@@ -53,7 +53,7 @@ export async function loadOwnerMtlsBindings(path, expectedVault) {
                         targets.set(r.certFingerprint, r.executionTarget);
                         return Object.freeze({ accountId: r.accountId, executionTarget: r.executionTarget, certFingerprint: r.certFingerprint, expiresAt: Date.parse(r.expiresAt) });
                     });
-                    await canonicalRoleplayPath(canonical, true, true);
+                    await canonicalHostPath(canonical, true, true);
                     await assertHostPrivateStorage([hostPath, canonical]);
                     if (fileStamp() !== before)
                         throw unavailable();

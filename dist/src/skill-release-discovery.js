@@ -1,6 +1,7 @@
+import { guidanceError } from './guidance-runtime.js';
 import { randomUUID } from 'node:crypto';
 import { constrainedQuery } from './retrieval/query-policy.js';
-const fail = () => { throw Error('Reviewed skill unavailable'); };
+const fail = () => { throw guidanceError(Error('Reviewed skill unavailable'), 'guid-9d9bb7483d9c38ff'); };
 const cursors = new WeakMap();
 const publicCursor = () => randomUUID();
 const cursorMap = (host) => {

@@ -148,9 +148,8 @@ export class DocumentAuthority {
                 return false;
             if (rule.confidential && (!principal || localInferenceAllowed?.(principal) !== true))
                 return false;
-            if (rule.realmId && (principal?.enterprise?.mode !== 'company' || principal.enterprise.realmId !== rule.realmId))
-                return false;
-            if (rule.departmentIds && !rule.departmentIds.some(department => principal?.enterprise?.departmentIds?.includes(department)))
+            // Realm/department rules required enterprise principals, which no longer exist: fail closed.
+            if (rule.realmId || rule.departmentIds)
                 return false;
             return !rule.accountIds || Boolean(principal && rule.accountIds.includes(principal.accountId));
         });

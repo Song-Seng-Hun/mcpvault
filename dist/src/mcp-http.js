@@ -113,11 +113,11 @@ function reportedOAuthLabel(body, allowed) {
         if (!Object.hasOwn(args, 'agentLabel'))
             continue;
         if (typeof args.agentLabel !== 'string' || !allowed.includes(args.agentLabel))
-            throw new Error('Unapproved agent label');
+            throw guidanceError(new Error('Unapproved agent label'), 'guid-9bc10cf4a46e918b');
         labels.add(args.agentLabel);
     }
     if (labels.size > 1)
-        throw new Error('Conflicting agent labels');
+        throw guidanceError(new Error('Conflicting agent labels'), 'guid-41b7eab724a67a5e');
     return labels.values().next().value;
 }
 /**
@@ -173,13 +173,13 @@ export async function startMcpHttpApi(server, options = {}) {
         throw guidanceError(new Error('mTLS required mode requires TLS with a CA'), 'guid-85a675d6f739522a');
     }
     if (options.requestProfile !== undefined && (options.requestProfile !== 'reviewed-skill-read' || !isLoopbackHost(host) || !options.requireClientCertificate)) {
-        throw new Error('Reviewed skill HTTP profile requires loopback and mandatory mTLS');
+        throw guidanceError(new Error('Reviewed skill HTTP profile requires loopback and mandatory mTLS'), 'guid-99cc39acb67c1046');
     }
     if (options.auth0 && (!isLoopbackHost(host) || options.requestProfile || options.requireClientCertificate)) {
-        throw new Error('Auth0 MCP HTTP requires its own loopback listener');
+        throw guidanceError(new Error('Auth0 MCP HTTP requires its own loopback listener'), 'guid-89b2e4c108fca361');
     }
     if (options.allowProcedureDiscovery !== undefined && (typeof options.allowProcedureDiscovery !== 'boolean' || options.requestProfile !== 'reviewed-skill-read')) {
-        throw new Error('Procedure discovery requires the reviewed-skill HTTP profile');
+        throw guidanceError(new Error('Procedure discovery requires the reviewed-skill HTTP profile'), 'guid-4e7d798d3a113e9b');
     }
     // Freeze host choice at startup; a later mutation of the options object is not approval.
     const allowProcedureDiscovery = options.allowProcedureDiscovery === true;

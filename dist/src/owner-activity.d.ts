@@ -4,7 +4,7 @@
  * Preferences (including model family), feature flags, account capabilities,
  * room membership and locality labels are never sources of owner consent.
  */
-export type Activity = 'collaboration' | 'ideation-research' | 'explanation-translation' | 'benchmarks' | 'economy' | 'roleplay' | 'skill-evolution';
+export type Activity = 'skill-evolution';
 export type OwnerActivityAction = 'discover' | 'read' | 'claim' | 'execute';
 export type OwnerActivityReason = 'granted' | 'owner_unknown' | 'consent_required' | 'expired' | 'revoked' | 'execution_target_mismatch' | 'data_scope_mismatch';
 export interface OwnerActivityGrant {
@@ -59,6 +59,8 @@ export interface OwnerActivityDecision {
 export declare class OwnerActivityPolicy {
     #private;
     readonly fingerprint: string;
+    /** Removed activities this policy dropped, sorted, for a host warning. */
+    readonly removedActivities: readonly string[];
     constructor(input: unknown);
     /** Directory-walk hint for one host-selected grant. This never authorizes
      * the directory, a child, body, output or action. Exact children must still

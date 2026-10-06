@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { skillMetadataAxis, skillMetadataSection, SKILL_METADATA_SECTIONS } from './skill-passport.js';
 import { skillPotentialImpact } from './skill-impact.js';
 import { IMPACT_AXES } from './skill-descriptor.js';
@@ -6,7 +7,7 @@ import { IMPACT_AXES } from './skill-descriptor.js';
 export function reviewedSkillCard(manifest, release, max, p, descriptor) {
     const section = skillMetadataSection(p.section), axis = skillMetadataAxis(p.axis);
     if (axis && section !== 'impact')
-        throw Error('Reviewed skill unavailable');
+        throw guidanceError(Error('Reviewed skill unavailable'), 'guid-9d9bb7483d9c38ff');
     const read = (resourceId) => ({ endpointId: 'skill.resolve', arguments: { skillId: manifest.skillId, view: 'procedure', resourceId, expectedRelease: release, maxChars: 12000 } });
     const expand = { endpointId: 'skill.resolve', arguments: { skillId: manifest.skillId, view: 'metadata', section, ...(axis ? { axis } : {}), expectedRelease: release, maxChars: 12000 } };
     const base = { skillId: manifest.skillId, view: 'metadata', section, ...(axis ? { axis } : {}), status: 'reviewed_limited', releaseRevision: release,

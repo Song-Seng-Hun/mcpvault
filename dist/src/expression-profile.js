@@ -81,7 +81,7 @@ const CHAPTERS = [
             "Explicit scene language and direct quotations take precedence over this style default.",
             "Preserve Korean UI labels and names needed to identify the same in-world target.",
             "Do not change state, beliefs, actions, permissions or existing dialogue to fit style.",
-            "Use roleplay.context for currently accessible character context.",
+            "Read character context only through endpoints that are currently available.",
             "Use revision-checked owner services for authorized changes; this profile grants none.",
             "Fiction and character beliefs are not evidence about the real world.",
             "A style profile is not a new actor, personality, administrator or model.",

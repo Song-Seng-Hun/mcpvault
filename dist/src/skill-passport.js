@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { parseSkillDescriptor, IMPACT_AXES } from './skill-descriptor.js';
 import { skillPotentialImpact } from './skill-impact.js';
 import { budget, fingerprint } from './skill-evolution-store.js';
@@ -6,14 +7,14 @@ export function skillMetadataSection(value) {
     if (value === undefined)
         return 'summary';
     if (!SKILL_METADATA_SECTIONS.includes(value))
-        throw new Error('Invalid skill metadata section');
+        throw guidanceError(new Error('Invalid skill metadata section'), 'guid-bd648de3ce77178e');
     return value;
 }
 export function skillMetadataAxis(value) {
     if (value === undefined)
         return undefined;
     if (!IMPACT_AXES.includes(value))
-        throw new Error('Invalid skill impact axis');
+        throw guidanceError(new Error('Invalid skill impact axis'), 'guid-cd9bae0cbedd67f3');
     return value;
 }
 /** Read-only projection. Host assessment/approval and caller declarations stay distinct. */

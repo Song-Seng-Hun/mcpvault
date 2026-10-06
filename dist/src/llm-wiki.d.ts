@@ -411,7 +411,6 @@ export declare class LlmWikiService {
             path: string;
             expectedRevision: string;
         }>;
-        workshopOutput?: import('./workshop-output.js').WorkshopOutputReceipt;
         assertOutputAccess?: () => Promise<void>;
         timestamp?: string;
     }): Promise<{
@@ -1964,9 +1963,7 @@ export declare class LlmWikiService {
             missing: string[];
             nextAction: {
                 endpointId: string;
-                arguments: {
-                    slug?: string;
-                };
+                arguments: {};
                 instruction: string;
             };
             normalization: {
@@ -1988,9 +1985,7 @@ export declare class LlmWikiService {
             missing: string[];
             nextAction: {
                 endpointId: string;
-                arguments: {
-                    slug?: string;
-                };
+                arguments: {};
                 instruction: string;
             };
             normalization: {
@@ -4038,8 +4033,6 @@ export declare class LlmWikiService {
             path: string;
             expectedRevision: string;
         }>;
-        workshopOutput?: import('./workshop-output.js').WorkshopOutputReceipt;
-        assertOutputAccess?: () => Promise<void>;
     }): Promise<{
         revision: string;
         success: boolean;

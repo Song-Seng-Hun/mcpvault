@@ -1,9 +1,10 @@
+import { guidanceError } from './guidance-runtime.js';
 import { createHash } from 'node:crypto';
 import { parseSkillReleaseManifest } from './skill-release-manifest.js';
 import { parseReleaseDescriptor } from './skill-release-descriptor.js';
 const digest = (bytes) => createHash('sha256').update(bytes).digest('hex');
 const hash = (v) => typeof v === 'string' && /^[a-f0-9]{64}$/.test(v);
-const fail = () => { throw Error('Reviewed skill evidence unavailable'); };
+const fail = () => { throw guidanceError(Error('Reviewed skill evidence unavailable'), 'guid-05b9da712ef79040'); };
 const text = (v, max = 4096) => typeof v === 'string' && !!v.trim() && v.length <= max && !/[\u0000\u202a-\u202e\u2066-\u2069]/.test(v);
 const normal = ['representative', 'boundary', 'mixed_language'];
 const adversarial = ['secret_exfiltration', 'outside_write', 'forged_approval', 'reference_bypass'];

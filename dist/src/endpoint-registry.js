@@ -1,28 +1,19 @@
 import { guidanceError, guidanceText } from './guidance-runtime.js';
 import { boundSearchResults } from './search-limits.js';
 import { projectGuidance } from './guidance-runtime.js';
-import { STORY_OPERATIONS } from './story-tools.js';
 import { operationAvailability, operationReadAlias } from './operation-contracts.js';
 export { operationReadAlias };
 import { DOCUMENT_TOOL_ENDPOINTS } from './document-tools.js';
-import { EXPLANATION_ENDPOINTS } from './explanation-tools.js';
-import { BENCHMARK_TOOL_ENDPOINTS } from './benchmark-tools.js';
 import { createHash } from 'node:crypto';
 import { jsonPointerNode, pageJsonRead } from './json-read-page.js';
 import { hostFeatureForTool } from './host-features.js';
-const OPTIONAL_ACTIVITIES = new Set(['collaboration', 'ideation-research', 'explanation-translation',
-    'benchmarks', 'economy', 'roleplay', 'skill-evolution']);
+const OPTIONAL_ACTIVITIES = new Set(['skill-evolution']);
 export function ownerActivityForEndpointTool(toolName) {
     const feature = hostFeatureForTool(toolName);
     return feature && OPTIONAL_ACTIVITIES.has(feature) ? feature : undefined;
 }
 const OWNER_OPERATION_ACTIONS = {
     manage_skill_candidate: { list: 'discover', read: 'read' },
-    manage_roleplay_evolution: { list: 'discover', read: 'read' },
-    manage_story_artifact: { list: 'discover', read: 'read' },
-    manage_story_review: { list: 'discover', read: 'read' },
-    manage_story_session: { list: 'discover', read: 'read' },
-    manage_quest_contract: { claim: 'claim' },
 };
 export function ownerActionForEndpointTool(toolName, mutating, op) {
     const explicitOperation = typeof op === 'string' ? OWNER_OPERATION_ACTIONS[toolName]?.[op] : undefined;
@@ -50,18 +41,6 @@ function endpointQueryTerms(text) {
 function normalizeEndpointAlias(text) {
     return text.toLowerCase().replace(/[_./-]+/g, ' ').replace(/\s+/g, ' ').trim();
 }
-const LEGACY_EXACT_TOOL_BY_QUERY = new Map([
-    ['create_discussion', 'publish_blog_post'],
-    ['create discussion', 'publish_blog_post'],
-    ['get_discussion', 'read_blog_post'],
-    ['get discussion', 'read_blog_post'],
-    ['add_discussion_argument', 'comment_on_blog_post'],
-    ['add discussion argument', 'comment_on_blog_post'],
-    ['update_discussion_status', 'update_community_status'],
-    ['update discussion status', 'update_community_status'],
-    ['resolve discussion', 'update_community_status'],
-    ['close discussion', 'update_community_status'],
-].map(([query, toolName]) => [normalizeEndpointAlias(query), toolName]));
 function catalogLimit(value) {
     const parsed = value === undefined ? 20 : Number(value);
     if (!Number.isInteger(parsed) || parsed < 1)
@@ -90,25 +69,10 @@ function endpointScore(endpoint, terms) {
 }
 const EXPLICIT_IDS = {
     ...DOCUMENT_TOOL_ENDPOINTS,
-    ...EXPLANATION_ENDPOINTS,
-    ...BENCHMARK_TOOL_ENDPOINTS,
     check_reusable_configuration: 'configuration.check',
     preview_learning_configuration: 'configuration.learning_preview',
     list_guidance_catalog: 'guidance.catalog',
-    manage_roleplay_world: 'roleplay.world', manage_roleplay_character: 'roleplay.character', manage_roleplay_scene: 'roleplay.scene',
-    manage_roleplay_computer: 'roleplay.computer',
     list_notices: 'notice.list', read_notice: 'notice.read', preview_notice: 'notice.preview', revise_notice: 'notice.revise',
-    read_roleplay_context: 'roleplay.context', submit_roleplay_action: 'roleplay.action', resolve_roleplay_action: 'roleplay.resolve',
-    read_roleplay_history: 'roleplay.history', correct_roleplay_turn: 'roleplay.correct',
-    manage_roleplay_evolution: 'roleplay.evolution',
-    manage_roleplay_trpg: 'roleplay.trpg',
-    public_federation_pull: 'federation.pull',
-    public_federation_retry: 'federation.retry',
-    public_federation_get: 'federation.get',
-    public_federation_list: 'federation.list',
-    manage_community_participation: 'community.participation',
-    record_community_participation: 'community.participation_record',
-    get_wiki_bridge_candidates: 'wiki.bridge_candidates',
     memory_recall: 'memory.recall',
     resolve_note_link: 'notes.resolve_link',
     memory_brief: 'memory.brief',
@@ -138,23 +102,8 @@ const EXPLICIT_IDS = {
     search_scoped_notes: 'wiki.search_scoped',
     record_search_feedback: 'wiki.search_feedback',
     get_search_improvement_candidates: 'wiki.search_improvements',
-    comment_on_blog_post: 'community.comment',
-    publish_blog_post: 'community.post',
-    update_community_status: 'community.status',
     publish_decision_record: 'wiki.decision_record',
     get_wiki_decision_register: 'wiki.decision_register',
-    delete_blog_post: 'community.post_delete',
-    list_blog_posts: 'community.posts',
-    read_blog_post: 'community.post_read',
-    list_blog_comments: 'community.comments',
-    send_chat_message: 'chat.message',
-    read_chat_room: 'chat.room_read',
-    create_chat_room: 'chat.room_create',
-    list_chat_rooms: 'chat.rooms',
-    list_mentions: 'community.mentions',
-    get_reputation: 'community.reputation',
-    list_notifications: 'notifications.list',
-    mark_notifications_read: 'notifications.mark_read',
     semantic_search_status: 'wiki.semantic_status',
     get_wiki_review_queue: 'wiki.review_queue',
     get_wiki_catalog: 'wiki.catalog',
@@ -239,27 +188,6 @@ const EXPLICIT_IDS = {
     resurface_wiki_archives: 'wiki.resurface_archives',
     update_wiki_projection: 'wiki.projection_update',
     propose_wiki_term_change: 'wiki.term_proposal',
-    create_idea: 'idea.create',
-    list_ideas: 'idea.list',
-    read_idea: 'idea.read',
-    branch_idea: 'idea.branch',
-    update_idea_status: 'idea.status',
-    contribute_idea: 'idea.contribute',
-    evaluate_idea: 'idea.evaluate',
-    create_workshop: 'workshop.create',
-    list_workshop_methods: 'workshop.methods',
-    read_workshop_facilitation: 'workshop.facilitation',
-    read_workshop_research: 'workshop.research',
-    update_workshop_research: 'workshop.research_update',
-    update_workshop_facilitation: 'workshop.facilitation_update',
-    read_economy_wallet: 'economy.wallet', read_quest_market: 'quest.market',
-    manage_quest_contract: 'quest.contract', review_quest_contract: 'quest.review',
-    list_workshops: 'workshop.list',
-    read_workshop: 'workshop.read',
-    contribute_workshop: 'workshop.contribute',
-    update_workshop_phase: 'workshop.phase',
-    synthesize_workshop: 'workshop.synthesize',
-    read_context: 'context.read',
     save_work_state: 'continuity.save',
     resume_work_state: 'continuity.resume',
 };
@@ -271,9 +199,6 @@ const EXPLICIT_ROUTES = {
     manage_work_project: { method: 'POST', url: '/api/work/project' },
     manage_work_group: { method: 'POST', url: '/api/work/group' },
     read_work_coverage: { method: 'GET', url: '/api/work/coverage' },
-    manage_community_participation: { method: 'POST', url: '/api/community/participation' },
-    record_community_participation: { method: 'POST', url: '/api/community/participation/record' },
-    get_wiki_bridge_candidates: { method: 'GET', url: '/api/wiki/bridge-candidates' },
     read_work_board: { method: 'GET', url: '/api/work/board' },
     read_work_packet: { method: 'GET', url: '/api/work/packet' },
     read_work_review_context: { method: 'GET', url: '/api/work/review-context' },
@@ -303,25 +228,10 @@ const EXPLICIT_ROUTES = {
     search_scoped_notes: { method: 'GET', url: '/api/search/scoped' },
     record_search_feedback: { method: 'POST', url: '/api/search/feedback' },
     get_search_improvement_candidates: { method: 'GET', url: '/api/search/improvements' },
-    publish_blog_post: { method: 'POST', url: '/api/community/posts' },
     publish_decision_record: { method: 'POST', url: '/api/wiki/decision-record' },
     get_wiki_decision_register: { method: 'GET', url: '/api/wiki/decision-register' },
-    delete_blog_post: { method: 'POST', url: '/api/community/posts/{slug}/delete' },
-    list_blog_posts: { method: 'GET', url: '/api/community/posts' },
-    read_blog_post: { method: 'GET', url: '/api/community/posts/{slug}' },
-    comment_on_blog_post: { method: 'POST', url: '/api/community/posts/{slug}/comments' },
-    list_blog_comments: { method: 'GET', url: '/api/community/posts/{slug}/comments' },
-    update_community_status: { method: 'POST', url: '/api/community/status' },
-    send_chat_message: { method: 'POST', url: '/api/chat/rooms/{roomId}/messages' },
-    read_chat_room: { method: 'GET', url: '/api/chat/rooms/{roomId}/messages' },
-    create_chat_room: { method: 'POST', url: '/api/chat/rooms' },
-    list_chat_rooms: { method: 'GET', url: '/api/chat/rooms' },
-    list_mentions: { method: 'GET', url: '/api/mentions' },
-    get_reputation: { method: 'GET', url: '/api/community/reputation/{identity}' },
-    read_context: { method: 'GET', url: '/api/context' },
     resume_work_state: { method: 'GET', url: '/api/continuity' },
     save_work_state: { method: 'POST', url: '/api/continuity' },
-    list_notifications: { method: 'GET', url: '/api/notifications' },
     get_wiki_review_queue: { method: 'GET', url: '/api/wiki/review-queue' },
     get_wiki_catalog: { method: 'GET', url: '/api/wiki/catalog' },
     get_wiki_neighborhood: { method: 'GET', url: '/api/wiki/neighborhood' },
@@ -403,60 +313,20 @@ const EXPLICIT_ROUTES = {
     resurface_wiki_archives: { method: 'GET', url: '/api/wiki/resurface-archives' },
     update_wiki_projection: { method: 'POST', url: '/api/wiki/projection' },
     propose_wiki_term_change: { method: 'POST', url: '/api/wiki/term-proposal' },
-    create_idea: { method: 'POST', url: '/api/ideas' },
-    list_ideas: { method: 'GET', url: '/api/ideas' },
-    read_idea: { method: 'GET', url: '/api/ideas/{ideaId}' },
-    branch_idea: { method: 'POST', url: '/api/ideas/{parentIdeaId}/branches' },
-    update_idea_status: { method: 'POST', url: '/api/ideas/{ideaId}/status' },
-    contribute_idea: { method: 'POST', url: '/api/ideas/{ideaId}/contributions' },
-    evaluate_idea: { method: 'POST', url: '/api/ideas/{ideaId}/evaluations' },
-    create_workshop: { method: 'POST', url: '/api/workshops' },
-    list_workshop_methods: { method: 'GET', url: '/api/workshops/methods' },
-    read_workshop_facilitation: { method: 'GET', url: '/api/workshops/{workshopId}/facilitation' },
-    read_workshop_research: { method: 'GET', url: '/api/workshops/{workshopId}/research/{roundId}' },
-    update_workshop_research: { method: 'POST', url: '/api/workshops/{workshopId}/research/{roundId}' },
-    update_workshop_facilitation: { method: 'POST', url: '/api/workshops/{workshopId}/facilitation' },
-    read_economy_wallet: { method: 'GET', url: '/api/economy/wallet' },
-    read_quest_market: { method: 'GET', url: '/api/quests' },
-    manage_quest_contract: { method: 'POST', url: '/api/quests/contract' },
-    review_quest_contract: { method: 'POST', url: '/api/quests/review' },
-    list_workshops: { method: 'GET', url: '/api/workshops' },
-    read_workshop: { method: 'GET', url: '/api/workshops/{workshopId}' },
-    contribute_workshop: { method: 'POST', url: '/api/workshops/{workshopId}/contributions' },
-    update_workshop_phase: { method: 'POST', url: '/api/workshops/{workshopId}/phase' },
-    synthesize_workshop: { method: 'POST', url: '/api/workshops/{workshopId}/synthesis' },
 };
 const ENDPOINT_ALIASES = {
-    manage_roleplay_world: ['world', 'worldview', 'register', '세계관', '세계', '등록', '허구'],
-    manage_roleplay_computer: ['world', 'worldview', 'computer', 'environment', 'hardware', 'software', 'specs', 'PC', 'NAS', 'register', 'session', '컴퓨터', '세계관', '환경', '등록', '사양', '실행', '대상'],
     search_notes: ['search', 'search notes', 'knowledge search', '지식 검색', '검색'],
     read_work_review_context: ['work review', 'task review', '작업 검토', '업무 검토'],
-    get_wiki_bridge_candidates: ['research', 'bridge', 'analogy', 'cross-domain'],
-    manage_community_participation: ['participation', 'community goals', 'pause', 'heartbeat'],
-    record_community_participation: ['participation run', 'resume', 'skip', 'defer'],
-    publish_blog_post: ['community', 'post', 'agora', 'debate', 'topic', 'introduction', 'feedback', 'forum', 'blocked', 'help request', 'source code', 'improvement', 'create_discussion', 'create discussion'],
-    delete_blog_post: ['community', 'post', 'delete', 'remove', 'archive'],
-    list_blog_posts: ['community', 'posts', 'agora', 'debate', 'topic', 'feed'],
-    read_blog_post: ['get_discussion', 'get discussion'],
-    comment_on_blog_post: ['comment', 'reply', 'agora', 'debate', 'stance', 'for', 'against', 'neutral', 'add_discussion_argument', 'add discussion argument'],
-    update_community_status: ['update_discussion_status', 'update discussion status', 'resolve discussion', 'close discussion'],
-    toggle_reaction: ['like', 'dislike', 'feedback', 'recognition'],
-    list_reactions: ['like', 'dislike', 'feedback', 'recognition'],
-    list_popular_posts: ['popular', 'liked', 'ranking', 'community'],
     report_content: ['moderation', 'report', 'prompt injection', 'malware', 'spam', 'harassment', 'privacy', 'impersonation'],
     list_moderation_reports: ['moderation', 'report', 'safety', 'abuse'],
     moderate_content: ['moderation', 'warn', 'hide', 'quarantine', 'remove', 'restore', 'ban', 'unban', 'safety'],
-    get_reputation: ['reputation', 'level', 'xp', 'experience', 'likes', 'dislikes', 'author level', 'user level'],
     patch_note: ['edit', 'partial', 'harness', 'replace', 'hunk'],
     save_work_state: ['session', 'handoff', 'checkpoint', 'save', 'understanding', 'resume', 'private', '세션', '인계', '이어가기', '이해', '저장'],
     resume_work_state: ['session', 'handoff', 'checkpoint', 'understanding', 'resume', 'resume work', '작업 재개', 'private', '세션', '인계', '이어가기', '이해', '복원'],
     patch_multiple_notes: ['edit', 'multiple notes', 'change set', 'transaction', 'atomic', 'rollback', 'reciprocal links', 'bulk properties'],
     sync_note_revisions: ['sync', 'delta', 'revision', 'cache', 'changed notes'],
     read_note_lines: ['read', 'partial', 'section', 'range', 'large note'],
-    read_context: ['context', 'mention', 'reply', 'nearby', 'thread', 'reference'],
     read_references: ['reference', 'citation', 'evidence', 'wikilink'],
-    list_blog_series: ['series', 'chapters', 'episodes'],
-    list_author_activity: ['author', 'profile', 'activity', 'posts by user'],
     get_wiki_review_queue: ['wiki', 'knowledge', 'review', 'due', 'stale', 'evidence', 'inbox'],
     get_wiki_catalog: ['wiki', 'catalog', 'index', 'metadata', 'facets', 'knowledge role', 'concept', 'argument', 'model', 'observation', 'counterargument', 'moc', 'project', 'tag'],
     get_wiki_neighborhood: ['wiki', 'neighborhood', 'nearby', 'related', 'adjacent', 'moc', 'links', 'semantic'],
@@ -540,41 +410,13 @@ const ENDPOINT_ALIASES = {
     resurface_wiki_archives: ['wiki', 'archive', 'archived', 'superseded', 'resurface', 'rediscover', 'inactive', 'forgotten'],
     update_wiki_projection: ['wiki', 'summary', 'projection', 'progressive', 'highlight', 'distill', 'refresh'],
     propose_wiki_term_change: ['wiki', 'term', 'authority', 'vocabulary', 'rename', 'deprecate', 'proposal'],
-    create_idea: ['idea', 'brainstorm', 'innovation', 'creative', 'seed', 'proposal'],
-    list_ideas: ['idea', 'brainstorm', 'innovation', 'creative', 'seed', 'proposal'],
-    read_idea: ['idea', 'brainstorm', 'innovation', 'creative', 'branch', 'challenge'],
-    branch_idea: ['idea', 'branch', 'variant', 'alternative', 'mutation', 'divergent'],
-    update_idea_status: ['idea', 'status', 'select', 'reject', 'park', 'implement'],
-    contribute_idea: ['idea', 'challenge', 'counterexample', 'extension', 'evidence'],
-    evaluate_idea: ['idea', 'evaluate', 'novelty', 'feasibility', 'usefulness', 'risk'],
-    create_workshop: ['workshop', 'meeting', 'brainstorm', 'ideation', 'agenda', 'creative'],
-    list_workshop_methods: ['meeting', 'workshop', 'methods', 'brainwriting', 'six hats', '회의', '진행'],
-    read_workshop_facilitation: ['meeting', 'workshop', 'facilitation', 'next action'],
-    read_workshop_research: ['independent research', 'embargo', 'blind', 'ArcticSwarm', '독립 조사', '연구 격리'],
-    update_workshop_research: ['independent research', 'submit', 'disclose', 'challenge', '독립 조사', '근거 공개'],
-    update_workshop_facilitation: ['workshop', 'facilitation', 'advance', 'pause', 'resume', 'handoff'],
-    read_economy_wallet: ['economy', 'wallet', 'xp', 'escrow', '지갑'],
-    read_quest_market: ['quest', 'market', 'bounty', '퀘스트', '외주'],
-    manage_quest_contract: ['quest', 'contract', 'fund', 'claim', 'submit', 'escrow'],
-    review_quest_contract: ['quest', 'review', 'payment', 'dispute'],
-    list_workshops: ['workshop', 'meeting', 'agenda', 'phase'],
-    read_workshop: ['workshop', 'meeting', 'agenda', 'phase', 'contributions'],
-    contribute_workshop: ['workshop', 'meeting', 'critique', 'counterexample', 'synthesis'],
-    update_workshop_phase: ['workshop', 'meeting', 'phase', 'advance', 'close'],
-    synthesize_workshop: ['workshop', 'meeting', 'synthesis', 'decision', 'conclusion'],
 };
 export function endpointIdForTool(toolName) {
-    const story = Object.entries(STORY_OPERATIONS).find(([, spec]) => spec.tool === toolName);
-    if (story)
-        return `story.${story[0]}`;
     return EXPLICIT_IDS[toolName] || `mcp.${toolName}`;
 }
 function routeFor(tool, mutating) {
     if (Object.hasOwn(DOCUMENT_TOOL_ENDPOINTS, tool.name))
         return { method: 'GET', url: `/api/endpoint/${endpointIdForTool(tool.name)}` };
-    // The generic executor has no path-bound projectId for a body to override.
-    if (Object.values(STORY_OPERATIONS).some(spec => spec.tool === tool.name))
-        return { method: mutating ? 'POST' : 'GET', url: `/api/endpoint/${endpointIdForTool(tool.name)}` };
     const explicit = EXPLICIT_ROUTES[tool.name];
     if (explicit)
         return mutating && explicit.method !== 'POST' ? { ...explicit, method: 'POST' } : explicit;
@@ -752,10 +594,9 @@ export class EndpointRegistry {
             ? term
             : term.replace(/^[`"'(\[]+|[`"')\],;:.]+$/g, '')).filter(term => this.descriptors.has(term)));
         const normalizedQuery = normalizeEndpointAlias(text);
-        const exactLegacyToolName = LEGACY_EXACT_TOOL_BY_QUERY.get(normalizedQuery);
         const maxChars = catalogMaxChars(requestedMaxChars ?? (namedIds.size ? 20000 : undefined));
         const score = (item) => endpointScore(item, terms) + ((item.aliases || []).some(alias => normalizeEndpointAlias(alias) === normalizedQuery) ? 200 : 0);
-        const endpoints = (namedIds.size ? descriptors.filter(item => namedIds.has(item.endpointId)) : exactLegacyToolName ? descriptors.filter(item => item.toolName === exactLegacyToolName) : descriptors.filter(item => {
+        const endpoints = (namedIds.size ? descriptors.filter(item => namedIds.has(item.endpointId)) : descriptors.filter(item => {
             if (terms.length === 0)
                 return true;
             const corpus = `${item.endpointId} ${item.toolName} ${item.description} ${(item.aliases || []).join(' ')} ${item.url}`.toLowerCase();
@@ -765,16 +606,11 @@ export class EndpointRegistry {
             .map(item => {
             const missing = item.requires.filter(required => !context.capabilities.has(required));
             const skillDisabled = context.skillEvolutionEnabled === false && item.endpointId.startsWith('skill.') && item.endpointId !== 'skill.resolve';
-            const roleplayMissing = context.roleplayConfigured === false && item.endpointId.startsWith('roleplay.') && item.endpointId !== 'roleplay.computer';
-            const economyMissing = context.economyConfigured === false && /^(economy|quest)\./.test(item.endpointId);
-            const hostMissing = roleplayMissing || economyMissing || context.explanationsConfigured === false && item.endpointId.startsWith('explanations.')
-                || context.benchmarksConfigured === false && item.endpointId.startsWith('benchmark.');
-            const roleplaySetupMissing = context.roleplayWritesConfigured === false && item.endpointId.startsWith('roleplay.') && item.endpointId !== 'roleplay.computer' && item.mutating;
-            const disabled = context.readOnly && item.mutating || skillDisabled || hostMissing || roleplaySetupMissing;
+            const disabled = context.readOnly && item.mutating || skillDisabled;
             const reviewedRead = context.reviewedSourceAccess === true && item.endpointId === 'skill.resolve';
             const parentAvailable = !disabled && (!reviewedRead || context.authenticated) && (item.requires.length === 0 || context.authenticated && missing.length === 0 || item.endpointId === 'auth.register' || item.endpointId === 'auth.login');
             const parentState = disabled ? 'disabled' : parentAvailable ? 'ready' : 'locked';
-            const parentReason = hostMissing ? 'host configuration is missing' : roleplaySetupMissing ? 'host administrator configuration is missing' : skillDisabled ? 'skill evolution is disabled by the host' : disabled ? 'server is read-only' : !context.authenticated && (item.requires.length > 0 || reviewedRead) && item.endpointId !== 'auth.register' && item.endpointId !== 'auth.login' ? 'authentication required' : missing.length > 0 ? `capability required: ${missing.join(', ')}` : undefined;
+            const parentReason = skillDisabled ? 'skill evolution is disabled by the host' : disabled ? 'server is read-only' : !context.authenticated && (item.requires.length > 0 || reviewedRead) && item.endpointId !== 'auth.register' && item.endpointId !== 'auth.login' ? 'authentication required' : missing.length > 0 ? `capability required: ${missing.join(', ')}` : undefined;
             const activity = ownerActivityForEndpointTool(item.toolName);
             const consent = (action) => !activity || reviewedRead || context.ownerActivity?.eligibility[activity]?.[action] === true;
             const ownerProject = (value, action) => value.state === 'disabled' || consent(action) ? value : { ...value, available: false, state: 'locked', reason: guidanceText('guid-664ea33a123e5a04', 'owner consent required') };

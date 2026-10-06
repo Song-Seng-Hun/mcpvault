@@ -1,17 +1,16 @@
+import { canonicalHostPath, validateHostStorage, readHostFile } from './host-storage.js';
 import { dirname } from 'node:path';
-import { DEFAULT_HOST_FEATURE_CONFIG, parseHostFeatureConfig } from './host-features.js';
-import { canonicalRoleplayPath, validateRoleplayStorage } from './roleplay-storage-host.js';
+import { DEFAULT_HOST_FEATURE_CONFIG, parseHostFeatureConfig, warnRemovedHostFeatures } from './host-features.js';
 import { assertHostPrivateStorage } from './skill-evolution-host.js';
-import { readFederationFile } from './public-federation-storage.js';
 /** Startup-only immutable selection. Editing a file never changes a running
  * service graph. Feature selection is not a document or execution grant. */
 export async function loadHostFeatureConfig(path, vaultPath) {
     if (path === undefined)
         return DEFAULT_HOST_FEATURE_CONFIG;
-    const canonical = await canonicalRoleplayPath(path, true, true);
-    const { hostPath } = await validateRoleplayStorage({ vaultPath, hostPath: dirname(canonical) });
+    const canonical = await canonicalHostPath(path, true, true);
+    const { hostPath } = await validateHostStorage({ vaultPath, hostPath: dirname(canonical) });
     await assertHostPrivateStorage([hostPath, canonical]);
-    const raw = await readFederationFile(hostPath, canonical, { maxBytes: 16 * 1024 });
+    const raw = await readHostFile(hostPath, canonical, { maxBytes: 16 * 1024 });
     await assertHostPrivateStorage([hostPath, canonical]);
-    return parseHostFeatureConfig(JSON.parse(raw));
+    return parseHostFeatureConfig(JSON.parse(raw), warnRemovedHostFeatures);
 }

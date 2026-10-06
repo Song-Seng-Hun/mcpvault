@@ -134,20 +134,38 @@ export declare class FileSystemService {
      * where a validated path is used as a mutation target.
      */
     private resolveWritablePath;
-    /** Recheck live host notice authority at dispatch, after awaited preparation. */
+    /** Recheck live host notice authority at dispatch, after awaited preparation.
+     * createParent makes missing folders only after every check admits the path,
+     * then rechecks before writing. A denial before the mkdir leaves nothing; a
+     * denial at the recheck can leave empty folders, never the file. */
     private writeProtectedFile;
     private removeProtectedFile;
+    /** The write barrier without inheritance: a removed path takes no classification. */
+    private admitRemoval;
     private renameProtectedFile;
+    /** For a move whose rename failed with EXDEV; renameProtectedFile already ran
+     * both barriers. The source barrier runs again, with every check, before a
+     * byte is copied. The copy lands in a temporary file beside the target and replaces
+     * it only by rename, so a denial or a failed copy leaves the target as it
+     * was and no temporary file behind, unless that cleanup also fails; the
+     * thrown error then carries `leftover`. Once the target is replaced nothing can
+     * undo it: a source that cannot then be removed is returned, not thrown, so
+     * the caller reports a partial move. */
+    private moveProtectedFileAcrossDevices;
+    /** Removes our temporary copy after a failed cross-device move and returns the
+     * failure to throw. The copy or rename failure stays the reported error; a
+     * cleanup failure becomes its cause, and `leftover` names the hidden file
+     * (Vault-relative) so the caller can tell the user it remains. */
+    private discardMoveTemporary;
+    /** What an unfinished move_note rollback left at the destination, judged by
+     * reading it, so the message claims nothing the file does not show. The
+     * source is still in place: its removal is the last step of a move. */
+    private unrestoredDestination;
+    private assertMoveDispatch;
     readNote(path: string, maxBytes?: number): Promise<ParsedNote>;
     /** Hash current decoded UTF-8 without parsing. Callers still enforce scope;
      * a revision is not an access grant or a fresh moderation classification. */
     readNoteRevision(path: string, maxBytes?: number): Promise<string>;
-    /** Raw image fingerprint only; callers must separately enforce source scope.
-     * Do not broaden Markdown parsing or follow aliases into another scope. */
-    readStoryImageRevision(path: string, maxBytes?: number): Promise<string | undefined>;
-    /** Managed output hashes use original bytes, including malformed UTF-8. */
-    readStoryOutputRevision(path: string, maxBytes?: number): Promise<string | undefined>;
-    private readStoryBinaryRevision;
     private withNoteRead;
     noteExists(path: string): Promise<boolean>;
     private assertExpectedRevision;

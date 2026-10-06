@@ -1,3 +1,4 @@
+import { guidanceError } from './guidance-runtime.js';
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { isAbsolute, join, resolve } from 'node:path';
@@ -28,7 +29,7 @@ function validated(value, root) {
  * Source-mode tests require a fresh npm build for the fixed compiled worker. */
 export function createSkillSourceInspector(vaultPath) {
     if (!isAbsolute(vaultPath) || /^(?:\\\\|\/\/)[?.]/.test(vaultPath) || vaultPath.split(/[\\/]+/).some(p => p === '.' || p === '..'))
-        throw Error('Canonical Vault required');
+        throw guidanceError(Error('Canonical Vault required'), 'guid-3be7759d949248d8');
     const vault = resolve(vaultPath);
     const worker = fileURLToPath(new URL(import.meta.url.endsWith('.ts') ? '../dist/src/skill-release-source-worker.js' : './skill-release-source-worker.js', import.meta.url));
     let active, closed = false;

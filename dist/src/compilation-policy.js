@@ -128,7 +128,7 @@ export function inspectCompilationPolicy(params) {
         return { status: 'waiting_runtime' };
     const basis = { account: principal.accountId, model: principal.modelId,
         agent: principal.agentId, user: principal.userId, center: principal.commandCenterId, capabilities: principal.capabilities,
-        enterprise: principal.enterprise, project: { id: project.id, ruleVersion: project.ruleVersion,
+        project: { id: project.id, ruleVersion: project.ruleVersion,
             ...(project.outputOwner && { outputOwner: project.outputOwner }) },
         sources: policies, output, operation, runtime, restrictions: access.documentDependencyFingerprint(paths) };
     return { status: 'ready', sourceFingerprint: compilationHash(basis),

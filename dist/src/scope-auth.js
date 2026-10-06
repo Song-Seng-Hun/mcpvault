@@ -1,13 +1,9 @@
 import { guidanceError, guidanceText } from './guidance-runtime.js';
 import { createHash, randomBytes, scrypt as scryptCallback, timingSafeEqual } from 'node:crypto';
 import { mkdir, readFile, rename, chmod, open as openFile, unlink } from 'node:fs/promises';
-import { dirname, join, resolve, relative, isAbsolute, basename } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { realpathSync, existsSync } from 'node:fs';
+import { dirname, join, resolve, isAbsolute } from 'node:path';
 import { promisify } from 'node:util';
 import { normalizeScopeId } from './scopes.js';
-import { getEnterpriseRequestContext } from './enterprise-request-context.js';
-import { authorIdentity } from './enterprise-identity.js';
 import { assertPrivateAccountStore } from './account-store.js';
 const scrypt = promisify(scryptCallback);
 const AUTH_VERSION = 1;
@@ -29,12 +25,6 @@ const MAX_ACCOUNTS_PER_USER = 512;
 export const SCOPE_CAPABILITIES = ['write', 'publish', 'comment', 'chat', 'status', 'whisper', 'task', 'profile', 'journal', 'moderate'];
 const DEFAULT_MODEL_CAPABILITIES = ['write', 'publish', 'comment', 'chat', 'status', 'whisper', 'task', 'profile'];
 const DEFAULT_AGENT_CAPABILITIES = [...DEFAULT_MODEL_CAPABILITIES, 'journal'];
-function verifiedDepartments(employee) {
-    return {
-        ...(employee.departmentIds !== undefined && { departmentIds: [...employee.departmentIds] }),
-        ...(employee.defaultDepartmentId !== undefined && { defaultDepartmentId: employee.defaultDepartmentId }),
-    };
-}
 function isRecord(value) {
     return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
@@ -162,7 +152,6 @@ async function passwordDigest(password, salt) {
  * Passwords and raw session tokens are never written to disk.
  */
 export class ScopeAuthService {
-    enterpriseRegistry;
     authPath;
     authLockPath;
     privateAccountStore;
@@ -179,41 +168,19 @@ export class ScopeAuthService {
     principalCache;
     constructor(vaultPath, options = {}) {
         if (options.accountStorePath !== undefined) {
-            if (options.authPath !== undefined || options.enterpriseRegistry || !isAbsolute(options.accountStorePath)) {
-                throw new Error('Private account store requires an absolute personal-host path without enterprise overrides');
+            if (options.authPath !== undefined || !isAbsolute(options.accountStorePath)) {
+                throw guidanceError(new Error('Private account store requires an absolute personal-host path without enterprise overrides'), 'guid-c4ca4dcc8cecd877');
             }
             this.privateAccountStore = { vaultPath: resolve(vaultPath), path: options.accountStorePath };
         }
-        this.enterpriseRegistry = options.enterpriseRegistry;
-        if (this.enterpriseRegistry && !options.authPath)
-            throw guidanceError(new Error('Enterprise authentication requires an explicit host-private account store'), 'guid-5684d8bebbaf600d');
-        if (this.enterpriseRegistry && options.authPath) {
-            if (!isAbsolute(options.authPath))
-                throw guidanceError(new Error('Enterprise account store must use an absolute path'), 'guid-f863721fba805398');
-            const canonical = (path) => {
-                if (existsSync(path))
-                    return realpathSync(path);
-                const parent = dirname(path);
-                return parent === path ? path : join(canonical(parent), relative(parent, path));
-            };
-            const moduleRoot = dirname(dirname(fileURLToPath(import.meta.url)));
-            const packageRoot = basename(moduleRoot) === 'dist' ? dirname(moduleRoot) : moduleRoot;
-            for (const protectedPath of [vaultPath, packageRoot, ...(options.protectedServicePaths ?? [])]) {
-                const child = relative(canonical(resolve(protectedPath)).toLowerCase(), canonical(resolve(options.authPath)).toLowerCase());
-                if (!child || (!child.startsWith('..') && !isAbsolute(child)))
-                    throw guidanceError(new Error('Enterprise account store must be outside the Vault and protected service directories'), 'guid-f6ded6094e327fe8');
-            }
-        }
         this.authPath = this.privateAccountStore?.path ?? (options.authPath ? resolve(options.authPath) : join(resolve(vaultPath), '.mcpvault', 'scope-auth.json'));
-        this.authLockPath = this.enterpriseRegistry || this.privateAccountStore ? `${this.authPath}.lock` : join(resolve(vaultPath), '.mcpvault', 'scope-auth.lock');
+        this.authLockPath = this.privateAccountStore ? `${this.authPath}.lock` : join(resolve(vaultPath), '.mcpvault', 'scope-auth.lock');
         const configured = options.moderatorAccounts || String(process.env.MCPVAULT_MODERATOR_ACCOUNTS || '').split(',');
         this.moderatorAccounts = new Set(configured.map(value => String(value).trim().toLowerCase()).filter(Boolean));
         this.commandCenterId = normalizeScopeId(options.commandCenterId || process.env.MCPVAULT_COMMAND_CENTER_ID || 'local', 'commandCenterId');
     }
     effectiveCapabilities(principal) {
-        const mode = this.enterpriseRegistry?.getPolicy().mode;
-        const capabilities = Array.from(new Set(principal.capabilities || this.defaultCapabilities(principal.role)))
-            .filter(capability => !mode || (capability !== 'whisper' && (mode !== 'public' || capability !== 'chat')));
+        const capabilities = Array.from(new Set(principal.capabilities || this.defaultCapabilities(principal.role)));
         if (this.moderatorAccounts.has(principal.accountId))
             capabilities.push('moderate');
         return Array.from(new Set(capabilities));
@@ -363,11 +330,8 @@ export class ScopeAuthService {
         });
     }
     authenticate(accessToken) {
-        if (typeof accessToken !== 'string' || !accessToken) {
-            if (this.enterpriseRegistry)
-                throw guidanceError(new Error('Enterprise authentication is required; use the administrator invitation or log in'), 'guid-7571c6963333e20b');
+        if (typeof accessToken !== 'string' || !accessToken)
             return undefined;
-        }
         const key = tokenDigest(accessToken);
         const session = this.sessions.get(key);
         if (!session)
@@ -376,14 +340,6 @@ export class ScopeAuthService {
             this.sessions.delete(key);
             throw guidanceError(new Error('Access token expired; call login_scope again'), 'guid-c7bcb3b8d59984a9');
         }
-        if (this.enterpriseRegistry) {
-            const verified = this.assertEnterprisePrincipal(session.principal);
-            this.enterpriseRegistry.assertSessionLease({ agentId: session.principal.agentId, sessionId: session.principal.sessionId, generation: session.principal.sessionGeneration });
-            return { ...session.principal, capabilities: this.effectiveCapabilities(session.principal), enterprise: {
-                    mode: verified.policy.mode, realmId: verified.policy.realmId, runtimeId: verified.runtime.runtimeId,
-                    sharedMemoryEnabled: verified.employee.sharedMemoryEnabled, ...verifiedDepartments(verified.employee),
-                } };
-        }
         const capabilities = this.effectiveCapabilities(session.principal);
         return { ...session.principal, capabilities: session.capabilityCeiling
                 ? capabilities.filter(capability => session.capabilityCeiling.includes(capability)) : capabilities };
@@ -391,15 +347,13 @@ export class ScopeAuthService {
     /** Host-only bridge for a JWT already verified at the HTTP boundary. Never
      * register this as a tool: the caller must supply the approved account ID. */
     async issueTrustedResearchSession(accountId, reportedAgentLabel) {
-        if (this.enterpriseRegistry)
-            throw new Error('Research OAuth sessions are unavailable in enterprise mode');
         if (reportedAgentLabel !== undefined && !/^[a-z0-9][a-z0-9-]{0,63}$/.test(reportedAgentLabel)) {
-            throw new Error('Invalid reported agent label');
+            throw guidanceError(new Error('Invalid reported agent label'), 'guid-3ede548dcda0efe6');
         }
         const database = await this.readDatabase(true);
         const account = database.accounts.find(candidate => candidate.accountId === accountId);
         if (!account || account.role !== 'agent' || (account.commandCenterId && account.commandCenterId !== this.commandCenterId)) {
-            throw new Error('Approved research account is unavailable');
+            throw guidanceError(new Error('Approved research account is unavailable'), 'guid-5574930dbe40beb6');
         }
         const ceiling = ['write', 'comment', 'journal', 'profile'];
         const principal = {
@@ -415,112 +369,19 @@ export class ScopeAuthService {
         };
         const granted = this.effectiveCapabilities(principal);
         if (granted.includes('moderate'))
-            throw new Error('Approved research account cannot be a moderator');
+            throw guidanceError(new Error('Approved research account cannot be a moderator'), 'guid-11e05b3662aced30');
         if (!granted.includes('write') || !granted.includes('comment')) {
-            throw new Error('Approved research account lacks required capabilities');
+            throw guidanceError(new Error('Approved research account lacks required capabilities'), 'guid-be7e1cd1ca1f454c');
         }
         const accessToken = randomBytes(32).toString('base64url');
         const digest = tokenDigest(accessToken);
         this.sessions.set(digest, { principal, expiresAt: Date.now() + 5 * 60_000, capabilityCeiling: ceiling });
         return { accessToken, principal: this.authenticate(accessToken), revoke: () => { this.sessions.delete(digest); } };
     }
-    /** Called before auth endpoints as well, preventing REST/stdio from bypassing mTLS. */
-    requireEnterpriseRuntime() {
-        if (!this.enterpriseRegistry)
-            return undefined;
-        const context = getEnterpriseRequestContext();
-        if (context?.transport !== 'http' || !context.certFingerprint)
-            throw guidanceError(new Error('An authenticated runtime client certificate is required'), 'guid-852ad1ae20b64785');
-        return this.enterpriseRegistry.resolveRequestCertificate(context.certFingerprint);
-    }
-    assertEnterprisePrincipal(principal) {
-        const registry = this.enterpriseRegistry;
-        const runtime = this.requireEnterpriseRuntime();
-        const policy = registry.getPolicy();
-        const binding = registry.getBinding(principal.accountId);
-        if (!binding)
-            throw guidanceError(new Error('No administrator-approved account binding'), 'guid-c114a811f3229f7a');
-        return registry.assertBinding({ ...binding, accountId: principal.accountId, agentId: principal.agentId, userId: principal.userId, modelId: principal.modelId,
-            runtimeId: runtime.runtimeId, realmId: policy.realmId, mode: policy.mode, certFingerprint: getEnterpriseRequestContext().certFingerprint });
-    }
-    async enterpriseSession(principal, params) {
-        const registry = this.enterpriseRegistry;
-        const verified = this.assertEnterprisePrincipal(principal);
-        const sessionId = normalizeScopeId(params.sessionId || '', 'sessionId');
-        const active = registry.getSessionLease(principal.agentId);
-        if (active && Date.parse(active.expiresAt) > Date.now() && active.sessionId !== sessionId && params.expectedGeneration === undefined) {
-            throw guidanceError(new Error(`An active session holds this agent; explicit handoff expectedGeneration=${active.generation} is required`), 'guid-5fa3568695bfd16a');
-        }
-        const expiresAt = Date.now() + SESSION_TTL_MS;
-        const lease = await registry.claimSessionLease({ agentId: principal.agentId, sessionId,
-            expectedGeneration: params.expectedGeneration ?? registry.getSessionGeneration(principal.agentId), expiresAt: new Date(expiresAt).toISOString() });
-        const identity = authorIdentity(principal, verified.binding.role || verified.binding.displayLabel, (await this.readDatabase()).accounts);
-        const next = { ...principal, capabilities: this.effectiveCapabilities(principal), ...identity, sessionId, sessionGeneration: lease.generation,
-            enterprise: { mode: verified.policy.mode, realmId: verified.policy.realmId, runtimeId: verified.runtime.runtimeId, sharedMemoryEnabled: verified.employee.sharedMemoryEnabled,
-                ...verifiedDepartments(verified.employee) } };
-        const accessToken = randomBytes(32).toString('base64url');
-        this.sessions.set(tokenDigest(accessToken), { principal: next, expiresAt });
-        return { success: true, accessToken, expiresAt: new Date(expiresAt).toISOString(), principal: next };
-    }
-    async registerEnterprise(params) {
-        const registry = this.enterpriseRegistry;
-        const runtime = this.requireEnterpriseRuntime();
-        if (!params.invitationToken)
-            throw guidanceError(new Error('An administrator invitation is required'), 'guid-86665d30dfbde3b7');
-        const password = validatePassword(params.password);
-        this.consumeRegistrationAttempt();
-        const policy = registry.getPolicy();
-        const reserved = await registry.reserveInvite({ secret: params.invitationToken, realmId: policy.realmId, mode: policy.mode,
-            runtimeId: runtime.runtimeId, certFingerprint: getEnterpriseRequestContext().certFingerprint });
-        const binding = reserved.binding;
-        if (params.accountId !== binding.accountId || params.agentId !== binding.agentId || params.modelId !== binding.modelId
-            || (params.userId !== undefined && params.userId !== binding.userId))
-            throw guidanceError(new Error('Registration identity must match the administrator invitation binding'), 'guid-259e7e4be2592911');
-        if (params.departmentId !== undefined) {
-            const department = normalizeScopeId(params.departmentId, 'departmentId');
-            const employee = registry.getEmployee(binding.userId);
-            if (department !== params.departmentId || !employee?.departmentIds?.includes(department)) {
-                throw guidanceError(new Error('Department claim requires administrator-verified membership'), 'guid-b9590dbc3af48e8b');
-            }
-        }
-        const principal = await this.exclusive(async () => {
-            const database = await this.readDatabase();
-            const existing = database.accounts.find(account => account.accountId === binding.accountId);
-            if (existing) {
-                if (existing.registrationId !== reserved.registrationId || existing.userId !== binding.userId || existing.agentId !== binding.agentId
-                    || existing.modelId !== binding.modelId || existing.commandCenterId !== policy.realmId)
-                    throw guidanceError(new Error('Account is already bound to a different registration'), 'guid-e0ca904616a8250d');
-                const digest = await passwordDigest(password, Buffer.from(existing.salt, 'base64'));
-                if (!timingSafeEqual(digest, Buffer.from(existing.passwordHash, 'base64')))
-                    throw guidanceError(new Error('Invalid registration credentials'), 'guid-d8e9967c80dd93d3');
-                const { salt: _salt, passwordHash: _hash, createdAt: _created, registrationId: _registration, ...identity } = existing;
-                return identity;
-            }
-            if (database.accounts.length >= MAX_ACCOUNTS || database.accounts.some(account => account.agentId === binding.agentId))
-                throw guidanceError(new Error('Account capacity or agent identity conflict'), 'guid-480202c7a519fbbe');
-            if (database.accounts.filter(account => account.userId === binding.userId).length >= MAX_ACCOUNTS_PER_USER)
-                throw guidanceError(new Error('Employee account capacity reached'), 'guid-2ba21a8f88c5bcc3');
-            const identity = { accountId: binding.accountId, agentId: binding.agentId, modelId: binding.modelId,
-                userId: binding.userId, commandCenterId: policy.realmId, role: 'agent', capabilities: this.defaultCapabilities('agent') };
-            const salt = randomBytes(16);
-            const digest = await passwordDigest(password, salt);
-            await this.writeDatabase({ ...database, accounts: [...database.accounts, { ...identity, salt: salt.toString('base64'), passwordHash: digest.toString('base64'),
-                        registrationId: reserved.registrationId, createdAt: new Date().toISOString() }] });
-            return identity;
-        });
-        await registry.completeInvite({ registrationId: reserved.registrationId });
-        return { ...await this.enterpriseSession(principal, params), next: 'Keep this agent identity for the next session; use explicit generation handoff for a different active session.' };
-    }
     async register(params) {
-        if (params.accountType !== undefined && !['personal', 'enterprise'].includes(params.accountType))
-            throw guidanceError(new Error('Invalid account type'), 'guid-bdaf1fb04e268780');
-        if (params.accountType !== undefined && params.accountType !== (this.enterpriseRegistry ? 'enterprise' : 'personal')) {
-            throw guidanceError(new Error('Account type must match the personal or enterprise host authority'), 'guid-68463003c8e6b2da');
+        if (params.accountType !== undefined && params.accountType !== 'personal') {
+            throw guidanceError(new Error('Account type must match the personal host authority'), 'guid-68463003c8e6b2da');
         }
-        if (!this.enterpriseRegistry && params.departmentId !== undefined)
-            throw guidanceError(new Error('Department claims require an enterprise host'), 'guid-de1766001aa94a40');
-        if (this.enterpriseRegistry)
-            return this.registerEnterprise(params);
         const accountId = normalizeScopeId(params.accountId, 'accountId');
         const modelId = normalizeScopeId(params.modelId, 'modelId');
         const agentId = params.agentId ? normalizeScopeId(params.agentId, 'agentId') : undefined;
@@ -601,7 +462,6 @@ export class ScopeAuthService {
         };
     }
     async login(params) {
-        this.requireEnterpriseRuntime();
         const accountId = normalizeScopeId(params.accountId, 'accountId');
         const password = validatePassword(params.password);
         const failure = this.loginFailures.get(accountId);
@@ -638,15 +498,11 @@ export class ScopeAuthService {
                 : this.defaultCapabilities(account.role),
         };
         const effectivePrincipal = { ...principal, capabilities: this.effectiveCapabilities(principal) };
-        if (this.enterpriseRegistry)
-            return this.enterpriseSession(effectivePrincipal, params);
         const sessionPrincipal = { ...effectivePrincipal, sessionId: randomBytes(16).toString('hex') };
         this.sessions.set(tokenDigest(accessToken), { principal: sessionPrincipal, expiresAt });
         return { success: true, accessToken, expiresAt: new Date(expiresAt).toISOString(), principal: sessionPrincipal };
     }
     logout(accessToken) {
-        if (this.enterpriseRegistry)
-            this.authenticate(accessToken);
         if (typeof accessToken !== 'string' || !accessToken)
             throw guidanceError(new Error('accessToken is required'), 'guid-f562b6c2bcf192b1');
         this.sessions.delete(tokenDigest(accessToken));
@@ -658,31 +514,9 @@ export class ScopeAuthService {
             note: guidanceText('guid-6685dc6096206864', 'No access token supplied. Only the public global scope is accessible.'),
         };
     }
-    async endSession(accessToken) {
-        if (!this.enterpriseRegistry)
-            return this.logout(accessToken);
-        const principal = this.authenticate(accessToken);
-        if (this.enterpriseRegistry && principal)
-            await this.enterpriseRegistry.releaseSessionLease({
-                agentId: principal.agentId, sessionId: principal.sessionId, expectedGeneration: principal.sessionGeneration,
-            });
-        if (typeof accessToken === 'string')
-            this.sessions.delete(tokenDigest(accessToken));
-        return { success: true };
-    }
-    async handoffEnterpriseSession(accessToken, params) {
-        const principal = this.authenticate(accessToken);
-        if (!this.enterpriseRegistry || !principal?.enterprise || params.agentId !== principal.agentId
-            || (params.fromSessionId !== undefined && params.fromSessionId !== principal.sessionId))
-            throw guidanceError(new Error('Session handoff is not authorized'), 'guid-14f0345c872c9367');
-        const lease = await this.enterpriseRegistry.claimSessionLease({ agentId: principal.agentId, sessionId: normalizeScopeId(params.toSessionId, 'toSessionId'),
-            expectedGeneration: params.expectedGeneration, expiresAt: new Date(Date.now() + SESSION_TTL_MS).toISOString() });
-        return { success: true, agentId: principal.agentId, generation: lease.generation, currentSession: lease.sessionId,
-            nextAction: { tool: 'call_endpoint', arguments: { endpointId: 'auth.login', arguments: { accountId: principal.accountId, sessionId: lease.sessionId } } } };
-    }
     async listPrincipals(options = {}) {
         const cached = this.principalCache;
-        if (!options.fresh && !this.enterpriseRegistry && cached && cached.expiresAt > Date.now()) {
+        if (!options.fresh && cached && cached.expiresAt > Date.now()) {
             return cached.value.map(principal => ({ ...principal, ...(principal.capabilities && { capabilities: [...principal.capabilities] }) }));
         }
         const database = await this.readDatabase(options.fresh);
@@ -707,25 +541,6 @@ export class ScopeAuthService {
                     : this.defaultCapabilities(account.role),
             }),
         }));
-        if (this.enterpriseRegistry) {
-            const registry = this.enterpriseRegistry;
-            const policy = registry.getPolicy();
-            return value.flatMap(principal => {
-                const binding = registry.getBinding(principal.accountId);
-                const employee = binding && registry.getEmployee(binding.userId);
-                if (!binding || !employee?.active || binding.agentId !== principal.agentId || binding.userId !== principal.userId || binding.modelId !== principal.modelId)
-                    return [];
-                try {
-                    registry.assertRegisteredBinding(binding);
-                }
-                catch {
-                    return [];
-                }
-                return [{ ...principal, ...authorIdentity(principal, binding.role || binding.displayLabel, value),
-                        enterprise: { mode: policy.mode, realmId: policy.realmId, runtimeId: binding.runtimeId, sharedMemoryEnabled: employee.sharedMemoryEnabled,
-                            ...verifiedDepartments(employee) } }];
-            });
-        }
         if (!options.fresh)
             this.principalCache = { expiresAt: Date.now() + AUTH_DATABASE_CACHE_TTL_MS, value };
         return value.map(principal => ({ ...principal, ...(principal.capabilities && { capabilities: [...principal.capabilities] }) }));

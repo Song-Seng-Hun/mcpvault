@@ -56,8 +56,6 @@ export function assertEnterpriseStorageFresh() {
     const current = context.getStore();
     if (current?.documentContext?.access.hasDocumentPolicy())
         current.documentContext.assertFresh();
-    if (current?.access.getEnterpriseProfile())
-        current.assertFresh();
 }
 /** recordSource=false is for internal filename discovery only. Every physical
  * read and exposed metadata row still uses the default observing check. */
@@ -67,10 +65,7 @@ export function canReadEnterpriseStoragePath(path, recordSource = true) {
         return false;
     if (current?.documentContext && !current.documentContext.access.canReadProtectedDocument(path, current.documentContext.principal, recordSource))
         return false;
-    if (!current?.access.getEnterpriseProfile())
-        return true;
-    current.assertFresh();
-    return current.access.canAccessPhysicalPath(path, current.principal, recordSource);
+    return true;
 }
 /** Directory enumeration only. The caller must first establish that the
  * physical entry is a directory. Never use this for body IO or writes. */
@@ -84,10 +79,7 @@ export function canTraverseEnterpriseStoragePath(path, recordSource = true) {
         if (!current.documentContext.access.canReadProtectedDocument(path, current.documentContext.principal, recordSource))
             return false;
     }
-    if (!current?.access.getEnterpriseProfile())
-        return true;
-    current.assertFresh();
-    return current.access.canAccessPhysicalPath(path === '.' ? '' : path, current.principal, recordSource);
+    return true;
 }
 /** Optional-activity guard for trusted storage adapters whose root is not an
  * enterprise scope. Call only with a canonical logical Vault path. */
@@ -105,7 +97,7 @@ export async function prepareOwnerActivityStorageWrite(path) {
     assertOwnerActivityStorageAccess(path);
 }
 /** A second boundary at physical IO protects service-internal reads and writes. */
-export function assertEnterpriseStorageAccess(path, write = false) {
+export function assertEnterpriseStorageAccess(path) {
     const current = context.getStore();
     if (current?.documentContext?.canAccessPath?.(path) === false)
         throw guidanceError(new Error('Access denied: owner activity data scope unavailable'), 'guid-c0c9e18369c559ac');
@@ -113,19 +105,5 @@ export function assertEnterpriseStorageAccess(path, write = false) {
         current.documentContext.assertFresh();
         if (!current.documentContext.access.canReadProtectedDocument(path, current.documentContext.principal))
             throw guidanceError(new Error('Access denied: protected document unavailable'), 'guid-5f2a63e873739df9');
-    }
-    if (!current?.access.getEnterpriseProfile())
-        return;
-    current.assertFresh();
-    if (!current.access.canAccessPhysicalPath(path, current.principal))
-        throw guidanceError(new Error('Access denied: enterprise resource unavailable'), 'guid-2bd7b875156d94ee');
-    if (write && /^publiccommunity(?:\/|$)/i.test(path.replace(/\\/g, '/')) && !current.publicCommunityWriter) {
-        throw guidanceError(new Error('Managed public community writes require a dedicated community operation'), 'guid-9547ed46542e6dac');
-    }
-    if (write && current.access.getEnterpriseProfile().mode === 'company') {
-        const p = path.replace(/\\/g, '/').toLowerCase();
-        if (!p.startsWith('community/') && !p.startsWith('_scopes/') && !p.startsWith('_whispers/')) {
-            throw guidanceError(new Error('Company agents cannot write public Global material; use the administrator export workflow'), 'guid-3ba0b1a806d118bc');
-        }
     }
 }

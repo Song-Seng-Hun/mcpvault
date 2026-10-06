@@ -1,10 +1,10 @@
+import { canonicalHostPath, validateHostStorage } from './host-storage.js';
 import { guidanceError } from './guidance-runtime.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, lstat, rename, unlink, open, opendir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { readSnapshotBytes } from './snapshot-read.js';
 import { writeGzipSnapshotHandle } from './snapshot-write.js';
-import { canonicalRoleplayPath, validateRoleplayStorage } from './roleplay-storage-host.js';
 import { assertHostPrivateStorage } from './skill-evolution-host.js';
 /** Host-only disposable snapshots. Missing configuration means memory-only. */
 export class HostDerivedStorage {
@@ -21,14 +21,14 @@ export class HostDerivedStorage {
     async namespace(create = false) {
         if (!this.cacheDir)
             throw guidanceError(new Error('Private host derivative storage is not configured'), 'guid-5c0b9f0b423f319c');
-        const { vaultPath, hostPath } = await validateRoleplayStorage({ vaultPath: this.vaultPath, hostPath: this.cacheDir });
+        const { vaultPath, hostPath } = await validateHostStorage({ vaultPath: this.vaultPath, hostPath: this.cacheDir });
         await assertHostPrivateStorage([hostPath]);
         const namespace = createHash('sha256').update(vaultPath).digest('hex');
         const directory = join(hostPath, namespace);
         if (create)
             await mkdir(directory, { mode: 0o700 }).catch(error => { if (error.code !== 'EEXIST')
                 throw error; });
-        await canonicalRoleplayPath(directory, true);
+        await canonicalHostPath(directory, true);
         await assertHostPrivateStorage([hostPath, directory]);
         return directory;
     }
@@ -39,7 +39,7 @@ export class HostDerivedStorage {
         if (create)
             await mkdir(path, { mode: 0o700 }).catch(error => { if (error.code !== 'EEXIST')
                 throw error; });
-        await canonicalRoleplayPath(path, true);
+        await canonicalHostPath(path, true);
         await assertHostPrivateStorage([root, path]);
         return path;
     }
@@ -67,7 +67,7 @@ export class HostDerivedStorage {
         return root;
     }
     async assertFile(path) {
-        await canonicalRoleplayPath(path, true, true);
+        await canonicalHostPath(path, true, true);
         if ((await lstat(path)).nlink !== 1)
             throw guidanceError(new Error('Derivative snapshots cannot use shared file links'), 'guid-9851057459247eb5');
         await assertHostPrivateStorage([path]);

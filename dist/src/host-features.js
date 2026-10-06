@@ -4,9 +4,18 @@ import { types } from 'node:util';
 import { validateCapabilitySelection } from './capability-graph.js';
 /** Explicit v1 snapshot. Adding a future feature must not expand saved selections. */
 export const HOST_FEATURE_IDS_V1 = Object.freeze([
-    'wiki-core', 'document-search', 'personal-memory', 'work-management', 'collaboration',
-    'ideation-research', 'explanation-translation', 'benchmarks', 'economy', 'roleplay', 'skill-evolution',
+    'wiki-core', 'document-search', 'personal-memory', 'work-management',
+    'skill-evolution',
 ]);
+/** Removed from v1. Saved selections may still name them; they are dropped, so
+ * an older configuration keeps loading with the features that remain. */
+export const REMOVED_HOST_FEATURE_IDS = Object.freeze([
+    'benchmarks', 'collaboration', 'economy', 'explanation-translation', 'ideation-research', 'roleplay',
+]);
+/** The one warning a host prints when a selection names removed features. */
+export function warnRemovedHostFeatures(ids) {
+    console.error(`MCPVault features: ignoring removed features: ${ids.join(', ')}`);
+}
 export const DEFAULT_HOST_FEATURE_CONFIG = Object.freeze({
     version: 1, selected: Object.freeze(['wiki-core']),
 });
@@ -17,7 +26,7 @@ const graph = HOST_FEATURE_IDS_V1.map(id => ({
 }));
 /** Strict data-only object parsing. No coercion, getters, execution or defaults.
  * The host owns bounded JSON/file loading and chooses the default explicitly. */
-export function parseHostFeatureConfig(input) {
+export function parseHostFeatureConfig(input, onRemoved) {
     if (!input || typeof input !== 'object' || types.isProxy(input) || Array.isArray(input)
         || ![Object.prototype, null].includes(Object.getPrototypeOf(input))) {
         throw guidanceError(new Error('Host feature configuration must be a plain data object'), 'guid-8cc3e0bbc4d56326');
@@ -34,7 +43,7 @@ export function parseHostFeatureConfig(input) {
         throw guidanceError(new Error('Unsupported host feature configuration version'), 'guid-69e0395c276e6794');
     const list = fields.selected.value;
     if (!Array.isArray(list) || types.isProxy(list) || Object.getPrototypeOf(list) !== Array.prototype
-        || list.length < 1 || list.length > HOST_FEATURE_IDS_V1.length
+        || list.length < 1 || list.length > HOST_FEATURE_IDS_V1.length + REMOVED_HOST_FEATURE_IDS.length
         || Reflect.ownKeys(list).length !== list.length + 1) {
         throw guidanceError(new Error('Host feature selected list outside bounds'), 'guid-c15bfe68dd910864');
     }
@@ -46,7 +55,10 @@ export function parseHostFeatureConfig(input) {
         }
         selected.push(element.value);
     }
-    const validated = validateCapabilitySelection(graph, selected);
+    const removed = [...new Set(selected.filter(id => REMOVED_HOST_FEATURE_IDS.includes(id)))].sort();
+    if (removed.length)
+        onRemoved?.(removed);
+    const validated = validateCapabilitySelection(graph, selected.filter(id => !removed.includes(id)));
     // The shared DAG permits an empty selection; a host configuration requires core.
     if (!validated.includes('wiki-core'))
         throw guidanceError(new Error('Host feature selection requires wiki-core'), 'guid-a7900400ce6fb967');
@@ -60,8 +72,7 @@ export function hostFeatureConfigFingerprint(input) {
 /** Reviewed internal registration names, never namespace-prefix grants.
  * This snapshot comes from createServer's inventory and its tool factories.
  * Keep auth, safety, ordinary note task metadata, Canvas and MOC continuity in
- * core. Dedicated work boards/claims are optional; social XP is collaboration,
- * whereas wallets/quests are economy. Story tools belong to roleplay.
+ * core. Dedicated work boards/claims are optional.
  *
  * Resolve dynamic IDs/REST routes through the existing registry first and pass
  * its trusted descriptor.toolName. Do not use an untrusted caller-supplied name
@@ -116,43 +127,11 @@ const toolsByFeature = {
     'document-search': ['get_document_outline', 'read_document', 'search_documents', 'get_resource_manifest', 'export_resource'],
     'personal-memory': [
         'memory_recall', 'memory_brief', 'memory_consolidate',
-        'list_journal_entries', 'read_journal_entry', 'write_journal_entry', 'save_item', 'unsave_item', 'list_saved_items',
     ],
     'work-management': [
         'create_agent_task', 'read_agent_task', 'list_agent_tasks', 'update_agent_task',
         'manage_work_group', 'read_work_coverage', 'manage_work_project', 'read_work_board', 'read_work_packet',
         'read_work_review_context', 'read_work_staffing', 'claim_work_task', 'handoff_work_task', 'review_work_task',
-    ],
-    collaboration: [
-        'comment_on_blog_post', 'delete_blog_comment', 'delete_blog_post', 'edit_blog_comment', 'list_blog_comments',
-        'list_blog_posts', 'list_mentions', 'publish_blog_post', 'read_blog_post', 'update_community_status',
-        'public_federation_get', 'public_federation_list', 'public_federation_pull', 'public_federation_retry',
-        'manage_community_participation', 'record_community_participation',
-        'archive_chat_room', 'create_chat_room', 'delete_chat_message', 'edit_chat_message', 'list_chat_rooms',
-        'read_chat_room', 'send_chat_message', 'list_whispers', 'send_whisper', 'read_context',
-        'list_notifications', 'mark_notifications_read', 'get_reputation',
-        'accept_blog_comment', 'delete_guestbook_entry', 'list_author_activity', 'list_blog_series', 'list_guestbook',
-        'list_popular_posts', 'list_reactions', 'list_watched_targets', 'toggle_reaction', 'unaccept_blog_comment',
-        'unwatch_target', 'watch_target', 'write_guestbook_entry',
-    ],
-    'ideation-research': [
-        'get_wiki_bridge_candidates', 'branch_idea', 'contribute_idea', 'contribute_workshop', 'create_idea',
-        'create_workshop', 'evaluate_idea', 'list_ideas', 'list_workshop_methods', 'list_workshops', 'read_idea',
-        'read_workshop', 'read_workshop_facilitation', 'synthesize_workshop', 'update_idea_status',
-        'update_workshop_facilitation', 'update_workshop_phase', 'read_workshop_research', 'update_workshop_research',
-    ],
-    'explanation-translation': [
-        'list_explanations', 'read_explanation', 'claim_explanation', 'release_explanation', 'submit_explanation', 'review_explanation',
-    ],
-    benchmarks: ['list_benchmarks', 'read_benchmark', 'submit_benchmark', 'review_benchmark', 'finalize_benchmark'],
-    economy: ['read_economy_wallet', 'read_quest_market', 'manage_quest_contract', 'review_quest_contract'],
-    roleplay: [
-        'manage_roleplay_computer',
-        'manage_roleplay_world', 'manage_roleplay_character', 'manage_roleplay_scene', 'read_roleplay_context',
-        'submit_roleplay_action', 'resolve_roleplay_action', 'read_roleplay_history', 'correct_roleplay_turn',
-        'manage_roleplay_evolution', 'manage_roleplay_trpg',
-        'manage_story_project', 'manage_story_artifact', 'manage_story_sequence', 'read_story_context',
-        'manage_story_review', 'adopt_story_artifact', 'manage_story_session', 'manage_story_export', 'manage_story_visual',
     ],
     'skill-evolution': ['resolve_skill', 'record_skill_experience', 'manage_skill_candidate', 'evaluate_skill', 'promote_skill', 'rollback_skill'],
 };

@@ -1,4 +1,3 @@
-import type { EnterpriseRegistry } from './enterprise-registry.js';
 export declare const SCOPE_CAPABILITIES: readonly ['write', 'publish', 'comment', 'chat', 'status', 'whisper', 'task', 'profile', 'journal', 'moderate'];
 export type ScopeCapability = typeof SCOPE_CAPABILITIES[number];
 export interface ScopePrincipal {
@@ -11,16 +10,6 @@ export interface ScopePrincipal {
     commandCenterId?: string;
     role: 'model' | 'agent';
     capabilities?: ScopeCapability[];
-    /** Issued by enterprise authentication, never accepted from tool arguments. */
-    enterprise?: {
-        mode: 'public' | 'company';
-        realmId: string;
-        runtimeId: string;
-        sharedMemoryEnabled: boolean;
-        /** Current administrator-verified membership, refreshed during authentication. */
-        departmentIds?: string[];
-        defaultDepartmentId?: string;
-    };
     sessionId?: string;
     sessionGeneration?: number;
     actorId?: string;
@@ -33,7 +22,6 @@ export interface ScopePrincipal {
  * Passwords and raw session tokens are never written to disk.
  */
 export declare class ScopeAuthService {
-    private readonly enterpriseRegistry;
     private readonly authPath;
     private readonly authLockPath;
     private readonly privateAccountStore?;
@@ -51,7 +39,6 @@ export declare class ScopeAuthService {
     constructor(vaultPath: string, options?: {
         moderatorAccounts?: string[];
         commandCenterId?: string;
-        enterpriseRegistry?: EnterpriseRegistry;
         authPath?: string;
         accountStorePath?: string;
         protectedServicePaths?: string[];
@@ -73,11 +60,6 @@ export declare class ScopeAuthService {
         principal: ScopePrincipal;
         revoke(): void;
     }>;
-    /** Called before auth endpoints as well, preventing REST/stdio from bypassing mTLS. */
-    requireEnterpriseRuntime(): import("./enterprise-registry.js").EnterpriseRuntime | undefined;
-    private assertEnterprisePrincipal;
-    private enterpriseSession;
-    private registerEnterprise;
     register(params: {
         accountId: string;
         password: string;
@@ -85,12 +67,8 @@ export declare class ScopeAuthService {
         agentId?: string;
         userId?: string;
         accessToken?: string;
-        invitationToken?: string;
-        sessionId?: string;
-        expectedGeneration?: number;
         /** User selection is checked against host authority; it grants nothing. */
-        accountType?: 'personal' | 'enterprise';
-        departmentId?: string;
+        accountType?: 'personal';
     }): Promise<{
         success: true;
         accessToken: string;
@@ -101,8 +79,6 @@ export declare class ScopeAuthService {
     login(params: {
         accountId: string;
         password: string;
-        sessionId?: string;
-        expectedGeneration?: number;
     }): Promise<{
         success: true;
         accessToken: string;
@@ -116,30 +92,6 @@ export declare class ScopeAuthService {
         role: 'global';
         note: string;
     };
-    endSession(accessToken: unknown): Promise<{
-        success: true;
-    }>;
-    handoffEnterpriseSession(accessToken: unknown, params: {
-        agentId: string;
-        fromSessionId?: string;
-        toSessionId: string;
-        expectedGeneration: number;
-    }): Promise<{
-        success: boolean;
-        agentId: string;
-        generation: number;
-        currentSession: string;
-        nextAction: {
-            tool: string;
-            arguments: {
-                endpointId: string;
-                arguments: {
-                    accountId: string;
-                    sessionId: string;
-                };
-            };
-        };
-    }>;
     listPrincipals(options?: {
         fresh?: boolean;
     }): Promise<ScopePrincipal[]>;

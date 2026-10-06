@@ -1,14 +1,14 @@
+import { canonicalHostPath, validateHostStorage, readHostFile } from './host-storage.js';
+import { guidanceError } from './guidance-runtime.js';
 import { dirname, parse, join } from 'node:path';
 import { lstatSync, realpathSync } from 'node:fs';
-import { canonicalRoleplayPath, validateRoleplayStorage } from './roleplay-storage-host.js';
 import { assertHostPrivateStorage } from './skill-evolution-host.js';
-import { readFederationFile } from './public-federation-storage.js';
 import { OwnerActivityPolicy } from './owner-activity.js';
 import { loadOwnerMtlsBindings } from './owner-activity-mtls.js';
 import { createSkillSourceInspector } from './skill-release-source.js';
 import { openReviewedSkillStore } from './skill-release-store.js';
 import { openVaultReviewedSkills } from './skill-release-vault.js';
-const fail = () => { throw Error('Reviewed skill host unavailable'); };
+const fail = () => { throw guidanceError(Error('Reviewed skill host unavailable'), 'guid-9267716c3b451924'); };
 function record(v, keys, optional = []) {
     if (!v || typeof v !== 'object' || Array.isArray(v) || Object.keys(v).some(k => !keys.includes(k) && !optional.includes(k)) || keys.some(k => !Object.hasOwn(v, k)))
         return fail();
@@ -40,11 +40,11 @@ export async function loadReviewedSkillsHost(path, expectedVault) {
     let source;
     try {
         const readPrivate = async (p, max) => {
-            const canonical = await canonicalRoleplayPath(p, true, true);
-            await validateRoleplayStorage({ hostPath: dirname(canonical), vaultPath: expectedVault });
+            const canonical = await canonicalHostPath(p, true, true);
+            await validateHostStorage({ hostPath: dirname(canonical), vaultPath: expectedVault });
             await assertHostPrivateStorage([dirname(canonical), canonical]);
             const before = stamp(canonical, max);
-            const text = await readFederationFile(dirname(canonical), canonical, { maxBytes: max });
+            const text = await readHostFile(dirname(canonical), canonical, { maxBytes: max });
             await assertHostPrivateStorage([dirname(canonical), canonical]);
             if (stamp(canonical, max) !== before)
                 return fail();
@@ -66,10 +66,10 @@ export async function loadReviewedSkillsHost(path, expectedVault) {
                 return fail();
             deadline = performance.now() + remaining;
         }
-        if (raw.version !== (vaultMode ? 4 : sourceAccess ? 3 : accountMode ? 2 : 1) || typeof raw.vaultPath !== 'string' || await canonicalRoleplayPath(raw.vaultPath, false) !== await canonicalRoleplayPath(expectedVault, false))
+        if (raw.version !== (vaultMode ? 4 : sourceAccess ? 3 : accountMode ? 2 : 1) || typeof raw.vaultPath !== 'string' || await canonicalHostPath(raw.vaultPath, false) !== await canonicalHostPath(expectedVault, false))
             return fail();
-        const { hostPath, vaultPath } = vaultMode ? { hostPath: undefined, vaultPath: await canonicalRoleplayPath(expectedVault, false) }
-            : await validateRoleplayStorage({ hostPath: raw.hostPath, vaultPath: expectedVault });
+        const { hostPath, vaultPath } = vaultMode ? { hostPath: undefined, vaultPath: await canonicalHostPath(expectedVault, false) }
+            : await validateHostStorage({ hostPath: raw.hostPath, vaultPath: expectedVault });
         if (sourceAccess) {
             let closed = false;
             const assertFresh = () => {
@@ -114,7 +114,7 @@ export async function loadReviewedSkillsHost(path, expectedVault) {
                 tls: { cert: cert.text, key: key.text, ca: ca.text, requestCert: true, rejectUnauthorized: true } };
         }
         let closed = false, ready = false, policyStamp;
-        const ownerPolicyPath = await canonicalRoleplayPath(raw.ownerPolicyPath, true, true);
+        const ownerPolicyPath = await canonicalHostPath(raw.ownerPolicyPath, true, true);
         let policy = new OwnerActivityPolicy({ version: 1, owners: {}, grants: [] });
         const assertPins = () => {
             if (Date.now() >= expiresAt || performance.now() >= deadline) {
@@ -137,7 +137,7 @@ export async function loadReviewedSkillsHost(path, expectedVault) {
                     for (const pin of pins)
                         await assertHostPrivateStorage([dirname(pin.path), pin.path]);
                     const owner = await readPrivate(ownerPolicyPath, 262144), data = record(JSON.parse(owner.text), ['version', 'vaultPath', 'owners', 'grants']);
-                    if (typeof data.vaultPath !== 'string' || await canonicalRoleplayPath(data.vaultPath, false) !== vaultPath)
+                    if (typeof data.vaultPath !== 'string' || await canonicalHostPath(data.vaultPath, false) !== vaultPath)
                         return fail();
                     const next = new OwnerActivityPolicy({ version: data.version, owners: data.owners, grants: data.grants });
                     if (data.grants.some((g) => g.activities.some((v) => v !== 'skill-evolution') || g.actions.some((v) => v !== 'read' && v !== 'discover')

@@ -32,11 +32,6 @@ export interface EndpointAvailabilityContext {
     capabilities: Set<ScopeCapability>;
     authenticated: boolean;
     principalKey?: string;
-    roleplayConfigured?: boolean;
-    roleplayWritesConfigured?: boolean;
-    economyConfigured?: boolean;
-    explanationsConfigured?: boolean;
-    benchmarksConfigured?: boolean;
     ownerActivity?: {
         policyFingerprint: string;
         executionBindingGeneration: string;

@@ -17,7 +17,7 @@ const budget = (value) => {
 const actor = (p) => p ? {
     accountId: p.accountId, modelId: p.modelId, agentId: p.agentId, userId: p.userId,
     commandCenterId: p.commandCenterId, role: p.role, sessionId: p.sessionId,
-    generation: p.sessionGeneration, enterprise: p.enterprise,
+    generation: p.sessionGeneration,
 } : null;
 const rangeRequest = (input) => {
     if (!input || typeof input !== 'object' || Array.isArray(input))

@@ -1,6 +1,5 @@
 import { guidanceError } from './guidance-runtime.js';
 import { lstatSync, readFileSync } from 'node:fs';
-import { mkdir, open } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 const markerFile = 'enterprise-instance.json';
 export function readEnterpriseVaultMarker(vaultPath) {
@@ -22,38 +21,5 @@ export function readEnterpriseVaultMarker(vaultPath) {
         if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT')
             return undefined;
         throw guidanceError(new Error('Enterprise Vault marker cannot be verified; refusing legacy startup'), 'guid-3124d47ef58e26fb');
-    }
-}
-export async function ensureEnterpriseVaultMarker(vaultPath, profile) {
-    if (!['public', 'company'].includes(profile.mode) || !/^[a-z0-9][a-z0-9._-]{0,63}$/.test(profile.realmId))
-        throw guidanceError(new Error('Invalid enterprise marker profile'), 'guid-a21007e4a4f02f61');
-    const existing = readEnterpriseVaultMarker(vaultPath);
-    if (existing) {
-        if (existing.mode !== profile.mode || existing.realmId !== profile.realmId)
-            throw guidanceError(new Error('Vault is already bound to a different enterprise instance'), 'guid-12e2ead8cdd1ac54');
-        return;
-    }
-    const directory = join(resolve(vaultPath), '.mcpvault');
-    await mkdir(directory, { recursive: true, mode: 0o700 });
-    if (lstatSync(directory).isSymbolicLink())
-        throw guidanceError(new Error('Enterprise marker directory cannot be a symbolic link or junction'), 'guid-2eee09652f7b1223');
-    let file;
-    try {
-        file = await open(join(directory, markerFile), 'wx', 0o600);
-    }
-    catch (error) {
-        if (error && typeof error === 'object' && 'code' in error && error.code === 'EEXIST') {
-            const current = readEnterpriseVaultMarker(vaultPath);
-            if (current?.mode === profile.mode && current.realmId === profile.realmId)
-                return;
-        }
-        throw error;
-    }
-    try {
-        await file.writeFile(`${JSON.stringify({ version: 1, mode: profile.mode, realmId: profile.realmId })}\n`, 'utf8');
-        await file.sync();
-    }
-    finally {
-        await file.close();
     }
 }

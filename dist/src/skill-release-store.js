@@ -1,11 +1,12 @@
+import { canonicalHostPath, validateHostStorage } from './host-storage.js';
+import { guidanceError } from './guidance-runtime.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { constants, openSync, closeSync, fstatSync, lstatSync, readSync, realpathSync } from 'node:fs';
 import { opendir } from 'node:fs/promises';
 import { join, parse } from 'node:path';
-import { canonicalRoleplayPath, validateRoleplayStorage } from './roleplay-storage-host.js';
 import { assertHostPrivateStorage } from './skill-evolution-host.js';
 import { verifySkillReleaseEvidence } from './skill-release-evidence.js';
-const fail = () => { throw Error('Reviewed skill store unavailable'); };
+const fail = () => { throw guidanceError(Error('Reviewed skill store unavailable'), 'guid-4b5920053226ac70'); };
 const digest = (b) => createHash('sha256').update(b).digest('hex');
 const id = (s) => typeof s === 'string' && /^[a-z0-9][a-z0-9-]{0,99}$/.test(s);
 const sha = (s) => typeof s === 'string' && /^[a-f0-9]{64}$/.test(s);
@@ -26,10 +27,10 @@ export function parseReviewedSkillRegistration(bytes, skillId) {
  * sourceFingerprint MUST use a bounded source worker, not a foreground full scan. */
 export async function openReviewedSkillStore(options) {
     try {
-        const { hostPath } = await validateRoleplayStorage(options);
+        const { hostPath } = await validateHostStorage(options);
         const directories = [hostPath, join(hostPath, 'entries'), join(hostPath, 'blobs')];
         for (const p of directories)
-            await canonicalRoleplayPath(p, true);
+            await canonicalHostPath(p, true);
         await assertHostPrivateStorage(directories);
         const bindings = new Map(directories.map(p => [p, identity(lstatSync(p, { bigint: true }))]));
         const leases = new WeakMap();
@@ -83,7 +84,7 @@ export async function openReviewedSkillStore(options) {
         };
         const checked = async (path, max) => {
             assertDirectories();
-            await canonicalRoleplayPath(path, true, true);
+            await canonicalHostPath(path, true, true);
             await assertHostPrivateStorage([...directories, path]);
             return read(path, max);
         };

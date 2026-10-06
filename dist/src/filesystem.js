@@ -1,15 +1,13 @@
 import { guidanceError, guidanceText } from './guidance-runtime.js';
 import { join, resolve, relative, dirname, posix } from 'path';
 import { homedir } from 'os';
-import { readdir, opendir, stat, readFile, writeFile, unlink, mkdir, access, rename, copyFile, open } from 'node:fs/promises';
+import { readdir, opendir, stat, readFile, writeFile, unlink, mkdir, access, rename, copyFile, open, rm } from 'node:fs/promises';
 import { constants, lstatSync, realpathSync } from 'node:fs';
 import { createHash, randomUUID } from 'node:crypto';
 import trash from 'trash';
 import { FrontmatterHandler } from './frontmatter.js';
 import { PathFilter } from './pathfilter.js';
-import { assertRoleplayMutationBoundary } from './roleplay-boundary.js';
 import { assertSkillEvolutionMutationBoundary } from './skill-evolution-boundary.js';
-import { assertStoryMutationBoundary } from './story-boundary.js';
 import { assertResourceBundleMutationBoundary } from './resource-bundle.js';
 import { assertOriginalMutation, isOriginalPath } from './original-boundary.js';
 import { generateObsidianUri } from './uri.js';
@@ -21,7 +19,7 @@ import { buildNoteReferenceIndex, markdownNotePath, noteReferenceDocument, resol
 import { validateJsonCanvasDocument } from './json-canvas.js';
 import { acceptsPlainReference, isReferenceSnapshotPath, propertyPathText } from './property-references.js';
 import { assertLegacyDiscussionMutationAllowed, ScopeAccessPolicy } from './scope-access.js';
-import { assertEnterpriseStorageAccess, assertEnterpriseStorageFresh, canReadEnterpriseStoragePath, canTraverseEnterpriseStoragePath, prepareDocumentWrite } from './enterprise-storage-context.js';
+import { assertEnterpriseStorageAccess, assertEnterpriseStorageFresh, canReadEnterpriseStoragePath, canTraverseEnterpriseStoragePath, prepareDocumentWrite, prepareOwnerActivityStorageWrite } from './enterprise-storage-context.js';
 import { expandScopePath, parseScopePath, scopeRoot } from './scopes.js';
 import { extractMarkdownTasks, iterateMarkdownTasks } from './markdown-tasks.js';
 import { TaskReanchorError } from './task-reanchoring.js';
@@ -44,6 +42,15 @@ function assertNoteContentSize(content, path) {
     }
     assertMemoryContent(content, path);
     assertContextRulesContent(content);
+}
+/** Names the hidden temporary file a failed cross-device move could not remove.
+ * A failed copy can leave it incomplete, so it is never called a backup. */
+function leftoverNotice(error) {
+    if (!(error instanceof Error && 'leftover' in error && typeof error.leftover === 'string'))
+        return '';
+    const slash = error.leftover.lastIndexOf('/');
+    const folder = slash < 0 ? 'the Vault root' : error.leftover.slice(0, slash);
+    return ` A hidden temporary file (possibly an incomplete copy of the source) remains in ${folder}: ${error.leftover.slice(slash + 1)}. It is not a backup; delete it once no move is running.`;
 }
 function getFrontmatterValue(frontmatter, key) {
     let current = frontmatter;
@@ -618,7 +625,7 @@ export class FileSystemService {
     }
     async withSkillLockFile(skillId, operation) {
         const lockDirectoryRelative = '.mcpvault/skill-locks';
-        assertEnterpriseStorageAccess(lockDirectoryRelative, true);
+        assertEnterpriseStorageAccess(lockDirectoryRelative);
         const vaultRoot = realpathSync(this.vaultPath);
         if (resolve(vaultRoot) !== resolve(this.vaultPath) || lstatSync(this.vaultPath).isSymbolicLink()) {
             throw guidanceError(new Error('Skill transaction vault containment could not be verified.'), 'guid-82cf6483992998eb');
@@ -812,12 +819,10 @@ export class FileSystemService {
         const fullPath = this.resolvePath(relativePath);
         const relativePathToVault = relative(this.vaultPath, fullPath).replace(/\\/g, '/');
         assertOriginalMutation(relativePathToVault, exclusiveOriginalCreation);
-        assertRoleplayMutationBoundary(relativePathToVault);
         assertSkillEvolutionMutationBoundary(relativePathToVault);
-        assertStoryMutationBoundary(relativePathToVault);
         assertResourceBundleMutationBoundary(relativePathToVault);
         this.assertNoticeMutation(relativePathToVault);
-        assertEnterpriseStorageAccess(relativePathToVault, true);
+        assertEnterpriseStorageAccess(relativePathToVault);
         // Guard the canonical vault-relative destination for every service write,
         // including absolute input paths and indirectly rewritten backlinks. This
         // is legacy-only: immutable source ingestion still needs filesystem writes.
@@ -841,43 +846,153 @@ export class FileSystemService {
         }
         return fullPath;
     }
-    /** Recheck live host notice authority at dispatch, after awaited preparation. */
-    async writeProtectedFile(path, content, options = 'utf8', beforeDispatch, assertCurrent) {
+    /** Recheck live host notice authority at dispatch, after awaited preparation.
+     * createParent makes missing folders only after every check admits the path,
+     * then rechecks before writing. A denial before the mkdir leaves nothing; a
+     * denial at the recheck can leave empty folders, never the file. */
+    async writeProtectedFile(path, content, options = 'utf8', beforeDispatch, assertCurrent, createParent = false) {
         const physicalPath = relative(this.vaultPath, path).replace(/\\/g, '/');
-        assertOriginalMutation(physicalPath, typeof options === 'object' && options !== null && 'flag' in options && options.flag === 'wx');
+        const exclusive = typeof options === 'object' && options !== null && 'flag' in options && options.flag === 'wx';
+        assertOriginalMutation(physicalPath, exclusive);
         await prepareDocumentWrite(physicalPath);
         await beforeDispatch?.();
-        assertOriginalMutation(physicalPath, typeof options === 'object' && options !== null && 'flag' in options && options.flag === 'wx');
-        assertEnterpriseStorageAccess(physicalPath, true);
-        assertStoryMutationBoundary(physicalPath);
-        assertSkillEvolutionMutationBoundary(physicalPath);
-        this.assertNoticeMutation(physicalPath);
-        assertCurrent?.();
+        const assertDispatch = () => {
+            assertOriginalMutation(physicalPath, exclusive);
+            assertEnterpriseStorageAccess(physicalPath);
+            assertSkillEvolutionMutationBoundary(physicalPath);
+            this.assertNoticeMutation(physicalPath);
+            assertCurrent?.();
+        };
+        assertDispatch();
+        if (createParent) {
+            await mkdir(dirname(path), { recursive: true });
+            assertDispatch();
+        }
         return writeFile(path, content, options);
     }
     async removeProtectedFile(path) {
-        const physicalPath = relative(this.vaultPath, path).replace(/\\/g, '/');
-        assertOriginalMutation(physicalPath);
-        assertStoryMutationBoundary(physicalPath);
-        assertSkillEvolutionMutationBoundary(physicalPath);
-        this.assertNoticeMutation(physicalPath);
+        await this.admitRemoval(relative(this.vaultPath, path).replace(/\\/g, '/'));
         return unlink(path);
     }
-    async renameProtectedFile(from, to) {
+    /** The write barrier without inheritance: a removed path takes no classification. */
+    async admitRemoval(physicalPath) {
+        assertOriginalMutation(physicalPath);
+        await prepareOwnerActivityStorageWrite(physicalPath);
+        assertEnterpriseStorageAccess(physicalPath);
+        assertSkillEvolutionMutationBoundary(physicalPath);
+        this.assertNoticeMutation(physicalPath);
+    }
+    async renameProtectedFile(from, to, createParent = false) {
         const sourcePath = relative(this.vaultPath, from).replace(/\\/g, '/');
         const targetPath = relative(this.vaultPath, to).replace(/\\/g, '/');
         assertOriginalMutation(sourcePath);
         assertOriginalMutation(targetPath);
+        // The source leaves its path, so it passes the barrier too (no inheritance).
+        await prepareOwnerActivityStorageWrite(sourcePath);
         await prepareDocumentWrite(targetPath);
-        assertEnterpriseStorageAccess(sourcePath, true);
-        assertEnterpriseStorageAccess(targetPath, true);
-        assertStoryMutationBoundary(sourcePath);
-        assertStoryMutationBoundary(targetPath);
+        this.assertMoveDispatch(sourcePath, targetPath);
+        // Same rule as writeProtectedFile: folders only after the checks pass.
+        if (createParent) {
+            await mkdir(dirname(to), { recursive: true });
+            this.assertMoveDispatch(sourcePath, targetPath);
+        }
+        // Replaces an existing file. Windows refuses a read-only one (EPERM), which fails closed.
+        return rename(from, to);
+    }
+    /** For a move whose rename failed with EXDEV; renameProtectedFile already ran
+     * both barriers. The source barrier runs again, with every check, before a
+     * byte is copied. The copy lands in a temporary file beside the target and replaces
+     * it only by rename, so a denial or a failed copy leaves the target as it
+     * was and no temporary file behind, unless that cleanup also fails; the
+     * thrown error then carries `leftover`. Once the target is replaced nothing can
+     * undo it: a source that cannot then be removed is returned, not thrown, so
+     * the caller reports a partial move. */
+    async moveProtectedFileAcrossDevices(from, to) {
+        const sourcePath = relative(this.vaultPath, from).replace(/\\/g, '/');
+        const targetPath = relative(this.vaultPath, to).replace(/\\/g, '/');
+        assertOriginalMutation(sourcePath);
+        assertOriginalMutation(targetPath);
+        await prepareOwnerActivityStorageWrite(sourcePath);
+        this.assertMoveDispatch(sourcePath, targetPath);
+        // A process that dies between the copy and the rename leaves this hidden
+        // file. Nothing sweeps it: a startup sweep would walk the whole Vault, and
+        // on a shared Vault it could take another process's move in flight. It may
+        // hold an incomplete copy of the source, so it is never a backup; delete it
+        // once no move is running.
+        const temporary = join(dirname(to), `.${randomUUID()}.mcpvault-move`);
+        try {
+            await copyFile(from, temporary, constants.COPYFILE_EXCL);
+        }
+        catch (error) {
+            // EEXIST from the exclusive copy: another writer holds that name, so it is not ours.
+            if (error instanceof Error && 'code' in error && error.code === 'EEXIST')
+                throw error;
+            throw await this.discardMoveTemporary(temporary, error);
+        }
+        try {
+            this.assertMoveDispatch(sourcePath, targetPath);
+            await rename(temporary, to);
+        }
+        catch (error) {
+            throw await this.discardMoveTemporary(temporary, error);
+        }
+        // Admitted above and rechecked just before the rename; another barrier here
+        // could only strand the replaced target.
+        try {
+            await unlink(from);
+        }
+        catch (error) {
+            return error instanceof Error ? error : new Error(String(error));
+        }
+        return undefined;
+    }
+    /** Removes our temporary copy after a failed cross-device move and returns the
+     * failure to throw. The copy or rename failure stays the reported error; a
+     * cleanup failure becomes its cause, and `leftover` names the hidden file
+     * (Vault-relative) so the caller can tell the user it remains. */
+    async discardMoveTemporary(temporary, error) {
+        const failure = error instanceof Error ? error : new Error(String(error));
+        try {
+            await rm(temporary, { force: true });
+        }
+        catch (cleanup) {
+            Object.assign(failure, { cause: cleanup, leftover: relative(this.vaultPath, temporary).replace(/\\/g, '/') });
+        }
+        return failure;
+    }
+    /** What an unfinished move_note rollback left at the destination, judged by
+     * reading it, so the message claims nothing the file does not show. The
+     * source is still in place: its removal is the last step of a move. */
+    async unrestoredDestination(fullPath, path, previous, moved, cause) {
+        let current;
+        // Bounded like any note read; a file over the limit counts as "could not be checked".
+        // Read directly, not through vaultIo: a shared in-flight read may predate the
+        // failed rollback and report content the file no longer holds.
+        try {
+            current = await readBoundedSource(fullPath, MAX_NOTE_CONTENT_BYTES);
+        }
+        catch (error) {
+            if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT'))
+                return `${path} could not be checked after the failed rollback (${cause})`;
+        }
+        if (current === previous)
+            return undefined;
+        const holds = current === moved ? 'the moved note' : 'a partial write';
+        if (previous === undefined)
+            return current === moved
+                ? `${path} could not be removed, so both copies of the note remain (${cause})`
+                : `${path} could not be removed and holds a partial write (${cause})`;
+        return current === undefined
+            ? `the previous content of ${path} was not restored and is lost; the file is gone (${cause})`
+            : `the previous content of ${path} was not restored and is lost; it holds ${holds} (${cause})`;
+    }
+    assertMoveDispatch(sourcePath, targetPath) {
+        assertEnterpriseStorageAccess(sourcePath);
+        assertEnterpriseStorageAccess(targetPath);
         assertSkillEvolutionMutationBoundary(sourcePath);
         assertSkillEvolutionMutationBoundary(targetPath);
         this.assertNoticeMutation(sourcePath);
         this.assertNoticeMutation(targetPath);
-        return rename(from, to);
     }
     async readNote(path, maxBytes) {
         return this.withNoteRead(path, async (fullPath) => {
@@ -891,72 +1006,6 @@ export class FileSystemService {
      * a revision is not an access grant or a fresh moderation classification. */
     async readNoteRevision(path, maxBytes) {
         return this.withNoteRead(path, fullPath => this.vaultIo.readUtf8Revision(fullPath, maxBytes));
-    }
-    /** Raw image fingerprint only; callers must separately enforce source scope.
-     * Do not broaden Markdown parsing or follow aliases into another scope. */
-    async readStoryImageRevision(path, maxBytes = 8 * 1024 * 1024) {
-        path = this.normalizePath(path);
-        if (!/\.(?:png|jpe?g|webp|gif)$/i.test(path))
-            throw guidanceError(new Error('Unsupported story image extension'), 'guid-a266a4677e9e7e10');
-        return this.readStoryBinaryRevision(path, maxBytes);
-    }
-    /** Managed output hashes use original bytes, including malformed UTF-8. */
-    async readStoryOutputRevision(path, maxBytes = 8 * 1024 * 1024) {
-        path = this.normalizePath(path);
-        if (!/^Community\/Stories\/[a-z0-9][a-z0-9-]{0,63}\/Exports\/[^/]+\.(?:canvas|fountain|output\.md)$/i.test(path)
-            || !this.pathFilter.isAllowed(path))
-            throw guidanceError(new Error('Invalid managed story output path'), 'guid-a3a17abad794a52c');
-        return this.readStoryBinaryRevision(path, maxBytes);
-    }
-    async readStoryBinaryRevision(path, maxBytes) {
-        if (!Number.isSafeInteger(maxBytes) || maxBytes < 1 || maxBytes > 8 * 1024 * 1024)
-            throw guidanceError(new Error('Invalid story image byte limit'), 'guid-071f863f15bc9bbc');
-        if (!this.pathFilter.isAllowedForListing(path))
-            throw guidanceError(new Error('Story image path is restricted'), 'guid-98660a88b15662d1');
-        const fullPath = this.resolvePath(path);
-        const lexical = relative(this.vaultPath, fullPath).replace(/\\/g, '/');
-        assertEnterpriseStorageAccess(lexical);
-        let handle;
-        try {
-            const canonical = relative(this.vaultPath, realpathSync(fullPath)).replace(/\\/g, '/');
-            if (canonical.toLowerCase() !== lexical.toLowerCase())
-                throw guidanceError(new Error('Story image canonical alias is not permitted'), 'guid-5faaf9b7b21c6248');
-            assertEnterpriseStorageAccess(canonical);
-            handle = await open(fullPath, 'r');
-            const before = await handle.stat();
-            if (!before.isFile())
-                throw guidanceError(new Error('Story image must be a regular file'), 'guid-866e58472ddea6f7');
-            if (before.size > maxBytes)
-                throw guidanceError(new Error('Story image exceeds byte budget'), 'guid-d399378dd9215453');
-            const hash = createHash('sha256');
-            let size = 0;
-            for (;;) {
-                const buffer = Buffer.allocUnsafe(Math.min(64 * 1024, maxBytes - size + 1));
-                const { bytesRead } = await handle.read(buffer, 0, buffer.length, null);
-                if (!bytesRead)
-                    break;
-                size += bytesRead;
-                if (size > maxBytes)
-                    throw guidanceError(new Error('Story image exceeds byte budget'), 'guid-d399378dd9215453');
-                hash.update(buffer.subarray(0, bytesRead));
-            }
-            const after = await handle.stat();
-            if (before.size !== after.size || before.mtimeMs !== after.mtimeMs || before.ctimeMs !== after.ctimeMs)
-                throw guidanceError(new Error('Story image changed during read'), 'guid-f9ad5110f3ed629b');
-            assertEnterpriseStorageAccess(canonical);
-            const currentPath = relative(this.vaultPath, realpathSync(fullPath)).replace(/\\/g, '/');
-            if (currentPath.toLowerCase() !== canonical.toLowerCase())
-                throw guidanceError(new Error('Story image canonical path changed'), 'guid-1a5516a0e9d90e67');
-            return hash.digest('hex');
-        }
-        catch (error) {
-            if (!handle && error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT')
-                return undefined;
-            throw error;
-        }
-        finally {
-            await handle?.close();
-        }
     }
     async withNoteRead(path, read) {
         path = this.normalizePath(path);
@@ -1020,9 +1069,7 @@ export class FileSystemService {
         if (!exists)
             throw guidanceError(new Error(`Revision conflict for ${path}: expected ${expectedRevision}, but the note is missing`), 'guid-8adc796d5fab8d28');
         // A guard needs the exact content hash, not a parsed body/Properties copy.
-        const current = /^Community\/Stories\/[a-z0-9][a-z0-9-]{0,63}\/Exports\/[^/]+(?:\.output\.md|\.fountain|\.canvas)$/i.test(path)
-            ? await this.readStoryOutputRevision(path, maxBytes)
-            : await this.readNoteRevision(path, maxBytes);
+        const current = await this.readNoteRevision(path, maxBytes);
         if (current !== expectedRevision) {
             throw guidanceError(new Error(`Revision conflict for ${path}: expected ${expectedRevision}, current ${current}. Read the note again before changing it.`), 'guid-b2b68521ae3b9387');
         }
@@ -1042,9 +1089,8 @@ export class FileSystemService {
         const digest = createHash('sha256').update(bytes).digest('hex');
         return this.withMutationLock(path, async () => {
             const fullPath = this.resolveWritablePath(path, true);
-            await mkdir(dirname(fullPath), { recursive: true });
             try {
-                await this.writeProtectedFile(fullPath, bytes, { flag: 'wx' });
+                await this.writeProtectedFile(fullPath, bytes, { flag: 'wx' }, undefined, undefined, true);
                 this.notifyNoteChanged(path, 'upsert');
             }
             catch (error) {
@@ -1146,13 +1192,12 @@ export class FileSystemService {
                     throw guidanceError(new Error('Guarded derived repair requires an existing view'), 'guid-1f47ae1b1107fbef');
                 await policy.beforeWrite?.({ before: previousContent, after: content, previousRevision, revision: this.revision(content) });
             }
-            await mkdir(dirname(fullPath), { recursive: true });
             await this.writeProtectedFile(fullPath, content, 'utf-8', policy ? async () => {
                 await policy.assertAccess?.();
                 const current = await readBoundedSource(this.resolveWritablePath(path), MAX_DERIVED_VIEW_READ_BYTES);
                 if (this.revision(current) !== previousRevision)
                     throw guidanceError(new Error('Derived output changed during write admission; user data preserved'), 'guid-a24555988af707c7');
-            } : undefined, policy?.assertCurrent);
+            } : undefined, policy?.assertCurrent, true);
             return { path, previousRevision, revision: this.revision(content) };
         });
     }
@@ -1267,8 +1312,6 @@ export class FileSystemService {
                 }
             }
             assertNoteContentSize(finalContent, path);
-            // Create directories if they don't exist
-            await mkdir(dirname(fullPath), { recursive: true });
             // The missing guard must survive another process creating the target
             // after our existence check. Exclusive creation never truncates it.
             // Recheck caller policy after all awaited preparation, at write dispatch.
@@ -1280,7 +1323,7 @@ export class FileSystemService {
             // dispatch, so an edit during those awaits is never silently truncated.
             await this.assertExpectedRevision(path, expectedRevision, revisionMaxBytes);
             await this.writeProtectedFile(fullPath, finalContent, expectedRevision === 'missing'
-                ? { encoding: 'utf-8', flag: 'wx' } : 'utf-8');
+                ? { encoding: 'utf-8', flag: 'wx' } : 'utf-8', undefined, undefined, true);
             this.notifyNoteChanged(path, 'upsert');
             return { revision: this.revision(finalContent), originalContent: finalContent };
         }
@@ -1879,7 +1922,7 @@ export class FileSystemService {
         const provider = budget && !includeMovedSource && this.referenceImpact;
         const index = provider ? provider() : undefined;
         if (provider && !index)
-            throw Error('Reference integrity unavailable');
+            throw guidanceError(Error('Reference integrity unavailable'), 'guid-96f837768e412ed5');
         const capture = index ? await index.capture(oldPath, canAccessPath) : undefined;
         const physicalPaths = (capture ? [oldPath, ...capture.candidates.map(c => c.path)]
             : budget ? await this.collectBoundedReferenceFiles(budget.maxFiles) : await this.collectVaultFiles())
@@ -1933,7 +1976,7 @@ export class FileSystemService {
             for (const expected of [{ path: oldPath, revision: capture.targetRevision }, ...capture.candidates]) {
                 const observed = documents.find(d => d.sourcePath === expected.path);
                 if (!observed || this.revision(observed.sourceContent) !== expected.revision)
-                    throw Error('Reference integrity changed');
+                    throw guidanceError(Error('Reference integrity changed'), 'guid-bdc274016beeaa86');
             }
         }
         // Candidate-only resolution deliberately overestimates collisions. Using
@@ -2018,13 +2061,12 @@ export class FileSystemService {
     referencePreviewFence(preview) {
         const fence = this.referenceImpactFences.get(preview);
         if (this.referenceImpact && !fence)
-            throw Error('Reference preview is not current');
+            throw guidanceError(Error('Reference preview is not current'), 'guid-6a1e94efc6d22b74');
         return fence ?? (() => { });
     }
     async moveNoteToVaultTrash(path, fullPath) {
         const trashDir = join(this.vaultPath, '.trash');
         const trashPath = join(trashDir, path);
-        await mkdir(dirname(trashPath), { recursive: true });
         let finalTrashPath = trashPath;
         try {
             await access(finalTrashPath, constants.F_OK);
@@ -2036,7 +2078,7 @@ export class FileSystemService {
         catch {
             // File does not exist in trash, no collision.
         }
-        await this.renameProtectedFile(fullPath, finalTrashPath);
+        await this.renameProtectedFile(fullPath, finalTrashPath, true);
     }
     async deleteNote(params, canAccessPath = () => true) {
         const path = this.normalizeReferenceMutationPath(params.path);
@@ -2102,8 +2144,9 @@ export class FileSystemService {
                 };
             }
             if (trashMode === 'system') {
+                // Outside the try: a denial must not fall through to the vault-trash fallback.
+                await this.admitRemoval(relative(this.vaultPath, fullPath).replace(/\\/g, '/'));
                 try {
-                    this.assertNoticeMutation(path);
                     await trash(fullPath);
                     this.notifyNoteChanged(path, 'delete');
                     return {
@@ -2195,7 +2238,9 @@ export class FileSystemService {
         const newFullPath = this.resolveWritablePath(newPath);
         const linkBackups = [];
         let destinationBackup;
-        let destinationTouched = false;
+        // The content being written, once the destination's owner barrier
+        // (prepareDocumentWrite) has passed; the dispatch checks follow.
+        let destinationWrite;
         try {
             // Read source content (will throw ENOENT if not found)
             let content;
@@ -2213,6 +2258,9 @@ export class FileSystemService {
                 }
                 throw error;
             }
+            // The source's removal checks run before any backlink or destination
+            // write; removeProtectedFile repeats them at the end.
+            await this.admitRemoval(relative(this.vaultPath, oldFullPath).replace(/\\/g, '/'));
             if (updateLinks) {
                 if (!params.expectedRevision || !String(params.expectedRevision).trim()) {
                     return { success: false, oldPath, newPath, message: guidanceText('guid-8d0da6618797f4b2', 'updateLinks requires expectedRevision from a fresh read of the source note.') };
@@ -2269,8 +2317,6 @@ export class FileSystemService {
                     this.notifyNoteChanged(backup.path, 'upsert');
                 }
             }
-            // Create directories if needed
-            await mkdir(dirname(newFullPath), { recursive: true });
             if (overwrite) {
                 try {
                     destinationBackup = await readFile(newFullPath, 'utf-8');
@@ -2282,21 +2328,25 @@ export class FileSystemService {
             }
             // Write to new location, checking for existing file atomically if !overwrite
             try {
-                // A failed write can still leave a truncated/partial destination. For
-                // exclusive creation, EEXIST below clears this flag because that file
-                // belongs to the pre-existing/racing writer and must not be removed.
-                destinationTouched = true;
+                // A failed write can still leave a truncated/partial destination. The
+                // flag is set by beforeDispatch: after prepareDocumentWrite passes, but
+                // before the dispatch checks, mkdir and writeFile. So a dispatch denial
+                // still reaches rollback, and unrestoredDestination reads the file
+                // instead of assuming a write happened. For exclusive creation, EEXIST
+                // below clears the flag because that file belongs to the
+                // pre-existing/racing writer and must not be removed.
+                const admitted = async () => { destinationWrite = content; };
                 if (overwrite) {
-                    await this.writeProtectedFile(newFullPath, content, 'utf-8');
+                    await this.writeProtectedFile(newFullPath, content, 'utf-8', admitted, undefined, true);
                 }
                 else {
                     // wx flag: write exclusive - fails if file exists
-                    await this.writeProtectedFile(newFullPath, content, { encoding: 'utf-8', flag: 'wx' });
+                    await this.writeProtectedFile(newFullPath, content, { encoding: 'utf-8', flag: 'wx' }, admitted, undefined, true);
                 }
             }
             catch (error) {
                 if (error instanceof Error && 'code' in error && error.code === 'EEXIST') {
-                    destinationTouched = false;
+                    destinationWrite = undefined;
                     throw guidanceError(new Error(`Target file already exists: ${newPath}. Use overwrite=true to replace it.`), 'guid-2e7c727ce916c64a');
                 }
                 throw error;
@@ -2313,7 +2363,10 @@ export class FileSystemService {
             };
         }
         catch (error) {
-            if (destinationTouched) {
+            // The original error stays the reported cause; each rollback failure is listed after it.
+            const unrestored = [];
+            const reason = (failure) => failure instanceof Error ? failure.message : 'Unknown error';
+            if (destinationWrite !== undefined) {
                 try {
                     if (destinationBackup !== undefined)
                         await this.writeProtectedFile(newFullPath, destinationBackup, 'utf-8');
@@ -2321,8 +2374,10 @@ export class FileSystemService {
                         await this.removeProtectedFile(newFullPath);
                     this.notifyNoteChanged(newPath, destinationBackup !== undefined ? 'upsert' : 'delete');
                 }
-                catch {
-                    // Preserve the original error; the failure message below flags that the move did not complete.
+                catch (rollbackError) {
+                    const left = await this.unrestoredDestination(newFullPath, newPath, destinationBackup, destinationWrite, reason(rollbackError));
+                    if (left)
+                        unrestored.push(left);
                 }
             }
             for (const backup of linkBackups.filter(item => item.updated).reverse()) {
@@ -2330,15 +2385,16 @@ export class FileSystemService {
                     await this.writeProtectedFile(this.resolveWritablePath(backup.path), backup.original, 'utf-8');
                     this.notifyNoteChanged(backup.path, 'upsert');
                 }
-                catch {
-                    // Preserve the original failure while making the partial rollback visible in the message.
+                catch (rollbackError) {
+                    unrestored.push(`${backup.path} was not restored and may still link to ${newPath} (${reason(rollbackError)})`);
                 }
             }
+            const rollback = unrestored.length ? ` Rollback incomplete: ${unrestored.join('; ')}.` : '';
             return {
                 success: false,
                 oldPath,
                 newPath,
-                message: guidanceText('guid-66af0397c6aeece4', `Failed to move note: ${error instanceof Error ? error.message : 'Unknown error'}`)
+                message: guidanceText('guid-66af0397c6aeece4', `Failed to move note: ${reason(error)}${rollback}`)
             };
         }
     }
@@ -2380,7 +2436,7 @@ export class FileSystemService {
         const oldFullPath = this.resolveWritablePath(oldPath);
         const newFullPath = this.resolveWritablePath(newPath);
         // Generic attachment moves also accept Markdown. Validate against the
-        // destination audience before deleting an existing target or moving bytes.
+        // destination audience before replacing an existing target or moving bytes.
         if (/\.(?:md|markdown|txt)$/i.test(oldPath) || /\.(?:md|markdown|txt)$/i.test(newPath)) {
             try {
                 const source = await this.vaultIo.readUtf8Bounded(oldFullPath, MAX_NOTE_CONTENT_BYTES);
@@ -2435,7 +2491,6 @@ export class FileSystemService {
                     }
                 }
             }
-            await mkdir(dirname(newFullPath), { recursive: true });
             if (overwrite) {
                 try {
                     const targetStat = await stat(newFullPath);
@@ -2447,7 +2502,9 @@ export class FileSystemService {
                             message: guidanceText('guid-3092b9ad1f78e841', `Target path is a directory: ${newPath}. Please provide a file path.`)
                         };
                     }
-                    await this.removeProtectedFile(newFullPath);
+                    // No unlink: the rename below replaces the file only after its checks pass.
+                    // On Windows a read-only target makes that rename fail with EPERM and
+                    // stay unchanged; the attribute is deliberately left for the owner.
                 }
                 catch (error) {
                     if (!(error instanceof Error) || !('code' in error) || error.code !== 'ENOENT') {
@@ -2455,19 +2512,27 @@ export class FileSystemService {
                     }
                 }
             }
+            let sourceLeft;
             try {
-                await this.renameProtectedFile(oldFullPath, newFullPath);
+                await this.renameProtectedFile(oldFullPath, newFullPath, true);
             }
             catch (error) {
                 if (error instanceof Error && 'code' in error && error.code === 'EXDEV') {
-                    this.assertNoticeMutation(relative(this.vaultPath, oldFullPath));
-                    this.assertNoticeMutation(relative(this.vaultPath, newFullPath));
-                    await copyFile(oldFullPath, newFullPath);
-                    await this.removeProtectedFile(oldFullPath);
+                    sourceLeft = await this.moveProtectedFileAcrossDevices(oldFullPath, newFullPath);
                 }
                 else {
                     throw error;
                 }
+            }
+            if (sourceLeft) {
+                this.notifyNoteChanged(newPath, 'upsert');
+                return {
+                    success: false,
+                    partial: true,
+                    oldPath,
+                    newPath,
+                    message: guidanceText('guid-5eec683069febc05', `Partially moved file: ${newPath} now holds the content of ${oldPath}, but the source could not be removed (${sourceLeft.message}). Both files exist; remove ${oldPath} after checking ${newPath}.`)
+                };
             }
             this.notifyNoteChanged(oldPath, 'delete');
             this.notifyNoteChanged(newPath, 'upsert');
@@ -2483,7 +2548,7 @@ export class FileSystemService {
                 success: false,
                 oldPath,
                 newPath,
-                message: guidanceText('guid-4c2b4de17c38f30e', `Failed to move file: ${error instanceof Error ? error.message : 'Unknown error'}`)
+                message: guidanceText('guid-4c2b4de17c38f30e', `Failed to move file: ${error instanceof Error ? error.message : 'Unknown error'}${leftoverNotice(error)}`)
             };
         }
     }
@@ -3114,10 +3179,10 @@ export class FileSystemService {
      * entire directory/tree; a partial or inaccessible scope is not absence. */
     async collectBoundedReferenceFiles(maxFiles) {
         if (!Number.isInteger(maxFiles) || maxFiles < 1 || maxFiles > 10000)
-            throw Error('Invalid reference capture budget');
+            throw guidanceError(Error('Invalid reference capture budget'), 'guid-4f85b2cac66f219a');
         const files = [];
         let inspected = 0;
-        const incomplete = () => { throw Error('Reference capture incomplete'); };
+        const incomplete = () => { throw guidanceError(Error('Reference capture incomplete'), 'guid-c32fea54a497d745'); };
         const walk = async (directory, prefix = '', depth = 0) => {
             assertEnterpriseStorageFresh();
             if (depth > 64 || prefix && !this.canTraverseEnterpriseReadPath(prefix))
@@ -3149,18 +3214,18 @@ export class FileSystemService {
         async function* walk(directory, prefix = '', depth = 0) {
             assertEnterpriseStorageFresh();
             if (depth > 64 || prefix && !self.canTraverseEnterpriseReadPath(prefix))
-                throw Error('Reference enumeration incomplete');
+                throw guidanceError(Error('Reference enumeration incomplete'), 'guid-c35955f5613148e2');
             for await (const entry of await opendir(directory)) {
                 const path = prefix ? `${prefix}/${entry.name}` : entry.name;
                 if (!self.pathFilter.isAllowedForListing(path))
                     continue;
                 if (entry.isSymbolicLink())
-                    throw Error('Reference enumeration incomplete');
+                    throw guidanceError(Error('Reference enumeration incomplete'), 'guid-c35955f5613148e2');
                 if (entry.isDirectory())
                     yield* walk(join(directory, entry.name), path, depth + 1);
                 else if (entry.isFile() && /\.(?:md|markdown|txt)$/i.test(path)) {
                     if (!canReadEnterpriseStoragePath(path))
-                        throw Error('Reference enumeration incomplete');
+                        throw guidanceError(Error('Reference enumeration incomplete'), 'guid-c35955f5613148e2');
                     yield path;
                 }
             }

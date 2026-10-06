@@ -1,7 +1,8 @@
+import { guidanceError } from './guidance-runtime.js';
 import { readReviewedSkill } from './skill-release-reader.js';
 import { fingerprint } from './skill-evolution-store.js';
 import { discoverReviewedProcedures } from './skill-release-discovery.js';
-const fail = () => { throw Error('Reviewed skill unavailable'); };
+const fail = () => { throw guidanceError(Error('Reviewed skill unavailable'), 'guid-9d9bb7483d9c38ff'); };
 /** Shared read service. Original PathFilter quarantine remains untouched.
  * Raw bytes are inspected only by the host-owned verifier, never returned here. */
 export class ReviewedSkillService {
@@ -59,7 +60,7 @@ export class ReviewedSkillService {
         // current session, capabilities, source access and registry generation.
         const scopeKey = fingerprint({ accountId: principal.accountId, modelId: principal.modelId,
             agentId: principal.agentId, userId: principal.userId, commandCenterId: principal.commandCenterId,
-            role: principal.role, capabilities: principal.capabilities, enterprise: principal.enterprise });
+            role: principal.role, capabilities: principal.capabilities });
         return { principal, scopeKey, revalidate, assertFresh };
     }
     async read(p, captureDeliveryFence, discovery) {
