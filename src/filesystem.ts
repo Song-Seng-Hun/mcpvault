@@ -974,8 +974,9 @@ export class FileSystemService {
     this.assertMoveDispatch(sourcePath, targetPath);
     // A process that dies between the copy and the rename leaves this hidden
     // file. Nothing sweeps it: a startup sweep would walk the whole Vault, and
-    // on a shared Vault it could take another process's move in flight. It
-    // holds a copy of the source and is safe to delete once no move is running.
+    // on a shared Vault it could take another process's move in flight. It may
+    // hold an incomplete copy of the source, so it is never a backup; delete it
+    // once no move is running.
     const temporary = join(dirname(to), `.${randomUUID()}.mcpvault-move`);
     try {
       await copyFile(from, temporary, constants.COPYFILE_EXCL);
