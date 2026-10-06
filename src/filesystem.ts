@@ -2343,7 +2343,10 @@ export class FileSystemService {
           else await this.removeProtectedFile(newFullPath);
           this.notifyNoteChanged(newPath, destinationBackup !== undefined ? 'upsert' : 'delete');
         } catch (rollbackError) {
-          unrestored.push(`${newPath} (${reason(rollbackError)})`);
+          // The source is still in place: its removal is the last step of a move.
+          unrestored.push(destinationBackup !== undefined
+            ? `the previous content of ${newPath} was not restored and is lost; it holds the moved note (${reason(rollbackError)})`
+            : `${newPath} could not be removed, so both copies of the note remain (${reason(rollbackError)})`);
         }
       }
       for (const backup of linkBackups.filter(item => item.updated).reverse()) {
@@ -2351,10 +2354,10 @@ export class FileSystemService {
           await this.writeProtectedFile(this.resolveWritablePath(backup.path), backup.original, 'utf-8');
           this.notifyNoteChanged(backup.path, 'upsert');
         } catch (rollbackError) {
-          unrestored.push(`${backup.path} (${reason(rollbackError)})`);
+          unrestored.push(`${backup.path} was not restored and may still link to ${newPath} (${reason(rollbackError)})`);
         }
       }
-      const rollback = unrestored.length ? ` Rollback incomplete, so both copies of the note may remain; not restored: ${unrestored.join('; ')}.` : '';
+      const rollback = unrestored.length ? ` Rollback incomplete: ${unrestored.join('; ')}.` : '';
       return {
         success: false,
         oldPath,

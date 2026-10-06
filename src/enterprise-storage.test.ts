@@ -171,7 +171,35 @@ test('a note move whose rollback also fails says so and names what it could not 
       beforeWrite: async (path: string) => { if (seen.has(path)) throw new Error(`revoked ${path}`); seen.add(path); } };
     const revision = (await fs.readNote('Source.md')).revision;
     const result = await withEnterpriseStorageContext(context, () => fs.moveNote({ oldPath: 'Source.md', newPath: 'Moved.md', expectedRevision: revision }));
-    expect(result).toMatchObject({ success: false, message: expect.stringMatching(/revoked Source\.md.*Rollback incomplete.*Moved\.md \(revoked Moved\.md\)/) });
+    expect(result).toMatchObject({ success: false, message: expect.stringMatching(/revoked Source\.md.*Rollback incomplete: Moved\.md could not be removed, so both copies of the note remain \(revoked Moved\.md\)/) });
     expect((await readdir(vault)).sort()).toEqual(['Moved.md', 'Source.md']);
+  } finally { await rm(vault, { recursive: true, force: true }); }
+});
+
+test('a failed rollback names lost destination content and unrestored backlinks without claiming two copies', async () => {
+  const vault = await mkdtemp(join(tmpdir(), 'mcpvault-barrier-order-'));
+  try {
+    const fs = new FileSystemService(vault);
+    await fs.writeNote({ path: 'Source.md', content: '# Source\n' });
+    await fs.writeNote({ path: 'Moved.md', content: '# Previous\n' });
+    await fs.writeNote({ path: 'Linker.md', content: 'See [[Source]].\n' });
+    // Admit each listed path once, then revoke it; other paths stay admitted.
+    const once = (paths: string[]) => {
+      const seen = new Set<string>();
+      return { access: new ScopeAccessPolicy(), assertFresh() {}, beforeWrite: async (path: string) => {
+        if (paths.includes(path) && seen.has(path)) throw new Error(`revoked ${path}`); seen.add(path);
+      } };
+    };
+    let revision = (await fs.readNote('Source.md')).revision;
+    const overwrite = await withEnterpriseStorageContext(once(['Source.md', 'Moved.md']),
+      () => fs.moveNote({ oldPath: 'Source.md', newPath: 'Moved.md', overwrite: true, expectedRevision: revision }));
+    expect(overwrite.message).toMatch(/Rollback incomplete: the previous content of Moved\.md was not restored and is lost/);
+    expect(overwrite.message).not.toMatch(/both copies/);
+    await fs.writeNote({ path: 'Moved.md', content: '# Previous\n' });
+    revision = (await fs.readNote('Source.md')).revision;
+    const links = await withEnterpriseStorageContext(once(['Source.md', 'Linker.md']),
+      () => fs.moveNote({ oldPath: 'Source.md', newPath: 'Renamed.md', updateLinks: true, expectedRevision: revision }));
+    expect(links.message).toMatch(/Rollback incomplete: Linker\.md was not restored and may still link to Renamed\.md/);
+    expect(links.message).not.toMatch(/both copies/);
   } finally { await rm(vault, { recursive: true, force: true }); }
 });
