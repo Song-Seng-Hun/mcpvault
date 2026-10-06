@@ -4,7 +4,7 @@ import { noteReadMaxChars, noteReadBudgetError, boundedPropertyReadResult, bound
 import { guidanceError } from './guidance-runtime.js';
 import { TaskReanchorError } from './task-reanchoring.js';
 import { createHash } from 'node:crypto';
-import { DEFAULT_HOST_FEATURE_CONFIG, parseHostFeatureConfig, hostFeatureForTool, type HostFeatureConfig, type HostFeatureId } from './host-features.js';
+import { DEFAULT_HOST_FEATURE_CONFIG, parseHostFeatureConfig, hostFeatureForTool, warnRemovedHostFeatures, type HostFeatureConfig, type HostFeatureId } from './host-features.js';
 import { Server, type Tool } from "@modelcontextprotocol/server";
 import { FileSystemService, MAX_NOTE_CONTENT_BYTES } from "./filesystem.js";
 import { projectNoteOutline, projectNoteLineWindow } from './note-projections.js';
@@ -434,7 +434,8 @@ function ownerRequestPaths(toolName: string, args: Record<string, any>): readonl
 }
 
 export function createServer(vaultPath: string, options: CreateServerOptions = {}): Server {
-  const features = parseHostFeatureConfig(options.features ?? DEFAULT_HOST_FEATURE_CONFIG);
+  // A selection loaded from file was already parsed and warned; a library caller's was not.
+  const features = parseHostFeatureConfig(options.features ?? DEFAULT_HOST_FEATURE_CONFIG, warnRemovedHostFeatures);
   const selectedFeatures = new Set(features.selected);
   const ownerActivityRuntime = new OwnerActivityRuntime(options.ownerActivity);
   const catalogActivities: readonly Activity[] = ['skill-evolution'];

@@ -1,4 +1,4 @@
-import { test, expect, beforeEach, afterEach } from "vitest";
+import { test, expect, beforeEach, afterEach, vi } from "vitest";
 import { createServer, getServerRuntime, connectMcpClient } from "../tests/server-fixture.js";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "fs/promises";
 import { join } from "path";
@@ -30,6 +30,16 @@ test("createServer returns a Server instance", () => {
   const server = createServer(testVaultPath, { version: "1.0.0" });
   expect(server).toBeDefined();
   expect(typeof server.connect).toBe("function");
+});
+
+test("a library caller's selection naming removed features starts without them and warns once", () => {
+  // Parsed JSON, as a host config file or a JavaScript caller would pass it.
+  const features = JSON.parse('{"version":1,"selected":["wiki-core","roleplay","economy"]}');
+  const warnings = vi.spyOn(console, "error").mockImplementation(() => {});
+  try {
+    expect(createServer(testVaultPath, { version: "1.0.0", features })).toBeDefined();
+    expect(warnings.mock.calls.map(call => String(call[0]))).toEqual([expect.stringMatching(/removed features: economy, roleplay$/)]);
+  } finally { warnings.mockRestore(); }
 });
 
 test("server exposes control and direct recording tools within one bounded listing", async () => {

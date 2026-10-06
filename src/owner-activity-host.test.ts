@@ -1,4 +1,4 @@
-import { afterEach, expect, test } from 'vitest';
+import { afterEach, expect, test, vi } from 'vitest';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
@@ -41,6 +41,24 @@ test('missing or malformed owner policy fails closed for already warm consumers'
   await f.save(f.config); await host.refresh(); expect(host.policy().decision(request()).allowed).toBe(true);
   await rm(f.path); await expect(host.refresh()).rejects.toThrow();
   expect(host.policy().decision(request()).allowed).toBe(false);
+}, 30000);
+
+test('removed activities in host consent warn once per distinct set across refreshes', async () => {
+  const f = await fixture();
+  const withActivities = (...extra: string[]) => ({ ...f.config, grants: f.config.grants.map(grant => ({ ...grant, activities: [...grant.activities, ...extra] })) });
+  const warnings = vi.spyOn(console, 'error').mockImplementation(() => {});
+  try {
+    await f.save(withActivities('roleplay'));
+    const host = await loadOwnerActivityHostConfig(f.path, f.vault);
+    await host.refresh(); await host.refresh();
+    expect(host.policy().decision(request()).allowed).toBe(true);
+    await f.save(withActivities('roleplay', 'economy'));
+    await host.refresh(); await host.refresh();
+    const lines = warnings.mock.calls.map(call => String(call[0]));
+    expect(lines).toHaveLength(2);
+    expect(lines[0]).toMatch(/removed activities: roleplay$/);
+    expect(lines[1]).toMatch(/removed activities: economy, roleplay$/);
+  } finally { warnings.mockRestore(); }
 }, 30000);
 
 test('consent loader rejects execution callbacks or locality claims in data-only files', async () => {

@@ -14,6 +14,10 @@ export type HostFeatureId = typeof HOST_FEATURE_IDS_V1[number];
 export const REMOVED_HOST_FEATURE_IDS: readonly string[] = Object.freeze([
   'benchmarks', 'collaboration', 'economy', 'explanation-translation', 'ideation-research', 'roleplay',
 ]);
+/** The one warning a host prints when a selection names removed features. */
+export function warnRemovedHostFeatures(ids: readonly string[]): void {
+  console.error(`MCPVault features: ignoring removed features: ${ids.join(', ')}`);
+}
 export interface HostFeatureConfig {
   readonly version: 1;
   readonly selected: readonly HostFeatureId[];

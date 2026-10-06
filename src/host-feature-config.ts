@@ -1,6 +1,6 @@
 import { canonicalHostPath, validateHostStorage, readHostFile } from './host-storage.js';
 import { dirname } from 'node:path';
-import { DEFAULT_HOST_FEATURE_CONFIG, parseHostFeatureConfig, type HostFeatureConfig } from './host-features.js';
+import { DEFAULT_HOST_FEATURE_CONFIG, parseHostFeatureConfig, warnRemovedHostFeatures, type HostFeatureConfig } from './host-features.js';
 import { assertHostPrivateStorage } from './skill-evolution-host.js';
 
 /** Startup-only immutable selection. Editing a file never changes a running
@@ -12,5 +12,5 @@ export async function loadHostFeatureConfig(path: string | undefined, vaultPath:
   await assertHostPrivateStorage([hostPath, canonical]);
   const raw = await readHostFile(hostPath, canonical, { maxBytes: 16 * 1024 });
   await assertHostPrivateStorage([hostPath, canonical]);
-  return parseHostFeatureConfig(JSON.parse(raw), removed => console.error(`MCPVault features: ignoring removed features: ${removed.join(', ')}`));
+  return parseHostFeatureConfig(JSON.parse(raw), warnRemovedHostFeatures);
 }
