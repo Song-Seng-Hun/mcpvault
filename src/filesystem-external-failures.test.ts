@@ -7,10 +7,12 @@ import { withEnterpriseStorageContext } from './enterprise-storage-context.js';
 import { FileSystemService } from './filesystem.js';
 
 // Failures the host filesystem can produce but a test vault cannot: a rename
-// across devices (EXDEV) and a copy that runs out of space part way.
+// across devices (EXDEV), a copy that runs out of space part way, and a
+// source another program holds open (EBUSY).
 const host = vi.hoisted(() => ({
   crossDevice: undefined as undefined | ((from: string, to: string) => boolean),
   copyFails: false,
+  busy: undefined as string | undefined,
 }));
 vi.mock('node:fs/promises', async importOriginal => {
   const actual = await importOriginal<typeof import('node:fs/promises')>();
@@ -25,6 +27,10 @@ vi.mock('node:fs/promises', async importOriginal => {
       await actual.writeFile(to, 'par');
       throw Object.assign(new Error('no space left on device'), { code: 'ENOSPC' });
     },
+    unlink: async (path: string) => {
+      if (host.busy && String(path).endsWith(host.busy)) throw Object.assign(new Error('resource busy or locked'), { code: 'EBUSY' });
+      return actual.unlink(path);
+    },
   };
 });
 
@@ -34,7 +40,7 @@ vi.mock('trash', () => ({ default: systemTrash }));
 
 const vaults: string[] = [];
 afterEach(async () => {
-  host.crossDevice = undefined; host.copyFails = false; systemTrash.mockReset();
+  host.crossDevice = undefined; host.copyFails = false; host.busy = undefined; systemTrash.mockReset();
   for (const vault of vaults.splice(0)) await rm(vault, { recursive: true, force: true });
 });
 async function vaultWithTarget() {
@@ -69,6 +75,20 @@ test('a cross-device copy that fails part way keeps the target and leaves no tem
   host.copyFails = true;
   expect(await fs.moveFile(overwrite)).toMatchObject({ success: false, message: expect.stringMatching(/no space/) });
   expect(await readFile(join(vault, 'Target.png'), 'utf8')).toBe('old target');
+  expect(await files(vault)).toEqual(['Source.png', 'Target.png']);
+});
+
+test('a cross-device move whose source cannot be removed reports a partial move and still announces the target', async () => {
+  const { vault, fs } = await vaultWithTarget();
+  host.busy = 'Source.png';
+  const announced: string[] = [];
+  const stop = fs.observeNoteChanges(path => announced.push(path));
+  try {
+    expect(await fs.moveFile(overwrite)).toMatchObject({ success: false,
+      message: expect.stringMatching(/^Partially moved file: Target\.png now holds the content of Source\.png.*resource busy/) });
+  } finally { stop(); }
+  expect(announced).toEqual(['Target.png']);
+  expect(await readFile(join(vault, 'Target.png'), 'utf8')).toBe('source');
   expect(await files(vault)).toEqual(['Source.png', 'Target.png']);
 });
 

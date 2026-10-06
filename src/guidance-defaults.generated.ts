@@ -269,7 +269,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 2991
+        "line": 3007
       }
     ]
   },
@@ -314,7 +314,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 3065
+        "line": 3081
       }
     ]
   },
@@ -622,7 +622,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1731
+        "line": 1737
       }
     ]
   },
@@ -997,7 +997,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 3763
+        "line": 3779
       }
     ]
   },
@@ -1548,7 +1548,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1030
+        "line": 1036
       }
     ]
   },
@@ -1717,7 +1717,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 3374
+        "line": 3390
       }
     ]
   },
@@ -1778,7 +1778,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 2268
+        "line": 2274
       }
     ]
   },
@@ -1813,7 +1813,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 3269
+        "line": 3285
       }
     ]
   },
@@ -2396,7 +2396,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 2969
+        "line": 2985
       }
     ]
   },
@@ -3581,7 +3581,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 2153
+        "line": 2159
       }
     ]
   },
@@ -3716,7 +3716,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 2958
+        "line": 2974
       }
     ]
   },
@@ -3761,7 +3761,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 3791
+        "line": 3807
       }
     ]
   },
@@ -3776,7 +3776,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1208
+        "line": 1214
       }
     ]
   },
@@ -3808,7 +3808,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1741
+        "line": 1747
       }
     ]
   },
@@ -3990,7 +3990,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 2896
+        "line": 2912
       }
     ]
   },
@@ -4150,19 +4150,19 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       },
       {
         "file": "src/filesystem.ts",
-        "line": 1964
+        "line": 1970
       },
       {
         "file": "src/filesystem.ts",
-        "line": 2582
+        "line": 2598
       },
       {
         "file": "src/filesystem.ts",
-        "line": 3331
+        "line": 3347
       },
       {
         "file": "src/filesystem.ts",
-        "line": 3585
+        "line": 3601
       },
       {
         "file": "src/git-history.ts",
@@ -4603,11 +4603,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 2973
+        "line": 2989
       },
       {
         "file": "src/filesystem.ts",
-        "line": 2994
+        "line": 3010
       }
     ]
   },
@@ -5791,7 +5791,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 2315
+        "line": 2321
       }
     ]
   },
@@ -5807,7 +5807,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 2684
+        "line": 2700
       },
       {
         "file": "src/vault-graph.ts",
@@ -6311,7 +6311,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1174
+        "line": 1180
       }
     ]
   },
@@ -6330,7 +6330,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       },
       {
         "file": "src/filesystem.ts",
-        "line": 3327
+        "line": 3343
       }
     ]
   },
@@ -6642,7 +6642,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1809
+        "line": 1815
       }
     ]
   },
@@ -6993,7 +6993,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1212
+        "line": 1218
       }
     ]
   },
@@ -7433,7 +7433,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1589
+        "line": 1595
       }
     ]
   },
@@ -7539,7 +7539,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 3076
+        "line": 3092
       }
     ]
   },
@@ -7614,7 +7614,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 2367
+        "line": 2373
       }
     ]
   },
@@ -7874,55 +7874,55 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       },
       {
         "file": "src/filesystem.ts",
-        "line": 1129
+        "line": 1135
       },
       {
         "file": "src/filesystem.ts",
-        "line": 1155
+        "line": 1161
       },
       {
         "file": "src/filesystem.ts",
-        "line": 1571
+        "line": 1577
       },
       {
         "file": "src/filesystem.ts",
-        "line": 1962
+        "line": 1968
       },
       {
         "file": "src/filesystem.ts",
-        "line": 2579
+        "line": 2595
       },
       {
         "file": "src/filesystem.ts",
-        "line": 2580
+        "line": 2596
       },
       {
         "file": "src/filesystem.ts",
-        "line": 2737
+        "line": 2753
       },
       {
         "file": "src/filesystem.ts",
-        "line": 2955
+        "line": 2971
       },
       {
         "file": "src/filesystem.ts",
-        "line": 2959
+        "line": 2975
       },
       {
         "file": "src/filesystem.ts",
-        "line": 3019
+        "line": 3035
       },
       {
         "file": "src/filesystem.ts",
-        "line": 3021
+        "line": 3037
       },
       {
         "file": "src/filesystem.ts",
-        "line": 3386
+        "line": 3402
       },
       {
         "file": "src/filesystem.ts",
-        "line": 3393
+        "line": 3409
       },
       {
         "file": "src/llm-wiki.ts",
@@ -8920,7 +8920,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1455
+        "line": 1461
       }
     ]
   },
@@ -9305,7 +9305,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 3147
+        "line": 3163
       }
     ]
   },
@@ -9335,7 +9335,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1071
+        "line": 1077
       }
     ]
   },
@@ -9396,7 +9396,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 2300
+        "line": 2306
       }
     ]
   },
@@ -9561,7 +9561,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 3748
+        "line": 3764
       }
     ]
   },
@@ -9803,7 +9803,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 2456
+        "line": 2462
       }
     ]
   },
@@ -9863,7 +9863,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1084
+        "line": 1090
       }
     ]
   },
@@ -10025,7 +10025,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1539
+        "line": 1545
       }
     ]
   },
@@ -10163,7 +10163,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 2124
+        "line": 2130
       }
     ]
   },
@@ -10771,7 +10771,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1611
+        "line": 1617
       }
     ]
   },
@@ -10786,7 +10786,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 3506
+        "line": 3522
       }
     ]
   },
@@ -10832,7 +10832,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1394
+        "line": 1400
       }
     ]
   },
@@ -11236,7 +11236,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1595
+        "line": 1601
       }
     ]
   },
@@ -11341,7 +11341,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1923
+        "line": 1929
       }
     ]
   },
@@ -11451,7 +11451,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1466
+        "line": 1472
       }
     ]
   },
@@ -12105,7 +12105,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 3525
+        "line": 3541
       }
     ]
   },
@@ -12223,7 +12223,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1460
+        "line": 1466
       }
     ]
   },
@@ -12421,7 +12421,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1131
+        "line": 1137
       }
     ]
   },
@@ -12730,7 +12730,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       },
       {
         "file": "src/filesystem.ts",
-        "line": 3387
+        "line": 3403
       }
     ]
   },
@@ -13134,7 +13134,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1659
+        "line": 1665
       }
     ]
   },
@@ -13329,7 +13329,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 2059
+        "line": 2065
       }
     ]
   },
@@ -13344,7 +13344,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 3336
+        "line": 3352
       }
     ]
   },
@@ -13757,7 +13757,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       },
       {
         "file": "src/filesystem.ts",
-        "line": 1754
+        "line": 1760
       }
     ]
   },
@@ -13803,7 +13803,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1689
+        "line": 1695
       }
     ]
   },
@@ -14769,7 +14769,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 3470
+        "line": 3486
       }
     ]
   },
@@ -14799,7 +14799,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 2502
+        "line": 2518
       }
     ]
   },
@@ -14875,7 +14875,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 2082
+        "line": 2088
       }
     ]
   },
@@ -15093,7 +15093,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1123
+        "line": 1129
       }
     ]
   },
@@ -15320,7 +15320,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 2493
+        "line": 2509
       }
     ]
   },
@@ -15400,7 +15400,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 3784
+        "line": 3800
       }
     ]
   },
@@ -16045,7 +16045,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 3155
+        "line": 3171
       }
     ]
   },
@@ -16410,7 +16410,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1530
+        "line": 1536
       }
     ]
   },
@@ -17425,7 +17425,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1561
+        "line": 1567
       }
     ]
   },
@@ -17899,7 +17899,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 3406
+        "line": 3422
       }
     ]
   },
@@ -18109,7 +18109,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 3600
+        "line": 3616
       }
     ]
   },
@@ -18140,31 +18140,31 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1339
+        "line": 1345
       },
       {
         "file": "src/filesystem.ts",
-        "line": 2055
+        "line": 2061
       },
       {
         "file": "src/filesystem.ts",
-        "line": 2189
+        "line": 2195
       },
       {
         "file": "src/filesystem.ts",
-        "line": 2198
+        "line": 2204
       },
       {
         "file": "src/filesystem.ts",
-        "line": 2376
+        "line": 2382
       },
       {
         "file": "src/filesystem.ts",
-        "line": 2385
+        "line": 2391
       },
       {
         "file": "src/filesystem.ts",
-        "line": 2730
+        "line": 2746
       }
     ]
   },
@@ -18194,7 +18194,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 2181
+        "line": 2187
       }
     ]
   },
@@ -18497,7 +18497,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1599
+        "line": 1605
       }
     ]
   },
@@ -18528,7 +18528,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 2400
+        "line": 2406
       }
     ]
   },
@@ -19209,7 +19209,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1527
+        "line": 1533
       }
     ]
   },
@@ -19323,6 +19323,26 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/endpoint-registry.ts",
         "line": 689
+      }
+    ]
+  },
+  {
+    "id": "guid-5eec683069febc05",
+    "kind": "prose",
+    "template": "Partially moved file: {arg0} now holds the content of {arg1}, but the source could not be removed ({arg2}). Both files exist; remove {arg3} after checking {arg4}.",
+    "parts": [
+      "Partially moved file: ",
+      " now holds the content of ",
+      ", but the source could not be removed (",
+      "). Both files exist; remove ",
+      " after checking ",
+      "."
+    ],
+    "binding": "call",
+    "sources": [
+      {
+        "file": "src/filesystem.ts",
+        "line": 2491
       }
     ]
   },
@@ -19606,7 +19626,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1597
+        "line": 1603
       }
     ]
   },
@@ -20135,7 +20155,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1348
+        "line": 1354
       }
     ]
   },
@@ -20749,7 +20769,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 2344
+        "line": 2350
       }
     ]
   },
@@ -21157,7 +21177,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1021
+        "line": 1027
       }
     ]
   },
@@ -21341,7 +21361,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 2071
+        "line": 2077
       }
     ]
   },
@@ -21431,7 +21451,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 2009
+        "line": 2015
       }
     ]
   },
@@ -21522,7 +21542,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1526
+        "line": 1532
       }
     ]
   },
@@ -21688,7 +21708,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1508
+        "line": 1514
       }
     ]
   },
@@ -21778,7 +21798,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1199
+        "line": 1205
       }
     ]
   },
@@ -21810,7 +21830,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1545
+        "line": 1551
       }
     ]
   },
@@ -22219,11 +22239,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1010
+        "line": 1016
       },
       {
         "file": "src/filesystem.ts",
-        "line": 1027
+        "line": 1033
       }
     ]
   },
@@ -22967,11 +22987,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 2219
+        "line": 2225
       },
       {
         "file": "src/filesystem.ts",
-        "line": 2420
+        "line": 2426
       }
     ]
   },
@@ -23329,7 +23349,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1529
+        "line": 1535
       }
     ]
   },
@@ -23680,7 +23700,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1132
+        "line": 1138
       }
     ]
   },
@@ -24100,7 +24120,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1415
+        "line": 1421
       }
     ]
   },
@@ -24519,7 +24539,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 2486
+        "line": 2502
       }
     ]
   },
@@ -25244,7 +25264,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1024
+        "line": 1030
       }
     ]
   },
@@ -25305,7 +25325,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1456
+        "line": 1462
       }
     ]
   },
@@ -25468,7 +25488,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1472
+        "line": 1478
       }
     ]
   },
@@ -25694,7 +25714,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 3603
+        "line": 3619
       }
     ]
   },
@@ -26588,7 +26608,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1588
+        "line": 1594
       }
     ]
   },
@@ -27203,7 +27223,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1265
+        "line": 1271
       }
     ]
   },
@@ -27408,7 +27428,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 3590
+        "line": 3606
       }
     ]
   },
@@ -27566,7 +27586,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 2411
+        "line": 2417
       }
     ]
   },
@@ -27627,7 +27647,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1583
+        "line": 1589
       }
     ]
   },
@@ -27809,7 +27829,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1569
+        "line": 1575
       }
     ]
   },
@@ -27993,7 +28013,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1171
+        "line": 1177
       }
     ]
   },
@@ -28082,7 +28102,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 2739
+        "line": 2755
       }
     ]
   },
@@ -28099,7 +28119,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1053
+        "line": 1059
       }
     ]
   },
@@ -28476,7 +28496,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 3411
+        "line": 3427
       }
     ]
   },
@@ -28506,7 +28526,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 2230
+        "line": 2236
       }
     ]
   },
@@ -28647,7 +28667,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1534
+        "line": 1540
       }
     ]
   },
@@ -29253,7 +29273,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 2177
+        "line": 2183
       }
     ]
   },
@@ -29818,7 +29838,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1156
+        "line": 1162
       }
     ]
   },
@@ -29882,7 +29902,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 2258
+        "line": 2264
       }
     ]
   },
@@ -30187,7 +30207,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1884
+        "line": 1890
       }
     ]
   },
@@ -30297,7 +30317,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       },
       {
         "file": "src/filesystem.ts",
-        "line": 3388
+        "line": 3404
       }
     ]
   },
@@ -30402,7 +30422,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1445
+        "line": 1451
       }
     ]
   },
@@ -30417,7 +30437,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 3395
+        "line": 3411
       }
     ]
   },
@@ -31699,7 +31719,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1365
+        "line": 1371
       }
     ]
   },
@@ -31715,7 +31735,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1579
+        "line": 1585
       }
     ]
   },
@@ -31746,7 +31766,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 2085
+        "line": 2091
       }
     ]
   },
@@ -32020,7 +32040,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1180
+        "line": 1186
       }
     ]
   },
@@ -32271,7 +32291,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 3507
+        "line": 3523
       }
     ]
   },
@@ -32381,7 +32401,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1577
+        "line": 1583
       }
     ]
   },
@@ -33192,11 +33212,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1431
+        "line": 1437
       },
       {
         "file": "src/filesystem.ts",
-        "line": 1518
+        "line": 1524
       }
     ]
   },
@@ -33286,7 +33306,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1681
+        "line": 1687
       }
     ]
   },
@@ -33407,39 +33427,39 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1003
+        "line": 1009
       },
       {
         "file": "src/filesystem.ts",
-        "line": 1229
+        "line": 1235
       },
       {
         "file": "src/filesystem.ts",
-        "line": 2509
+        "line": 2525
       },
       {
         "file": "src/filesystem.ts",
-        "line": 2628
+        "line": 2644
       },
       {
         "file": "src/filesystem.ts",
-        "line": 2673
+        "line": 2689
       },
       {
         "file": "src/filesystem.ts",
-        "line": 3200
+        "line": 3216
       },
       {
         "file": "src/filesystem.ts",
-        "line": 3211
+        "line": 3227
       },
       {
         "file": "src/filesystem.ts",
-        "line": 3313
+        "line": 3329
       },
       {
         "file": "src/filesystem.ts",
-        "line": 3319
+        "line": 3335
       }
     ]
   },
@@ -33500,7 +33520,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1236
+        "line": 1242
       }
     ]
   },
@@ -33651,7 +33671,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1219
+        "line": 1225
       }
     ]
   },
@@ -33854,7 +33874,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 3754
+        "line": 3770
       }
     ]
   },
@@ -34563,7 +34583,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1812
+        "line": 1818
       }
     ]
   },
@@ -35619,7 +35639,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1057
+        "line": 1063
       }
     ]
   },
@@ -35634,7 +35654,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1356
+        "line": 1362
       }
     ]
   },
@@ -36363,7 +36383,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1135
+        "line": 1141
       }
     ]
   },
@@ -37445,11 +37465,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1243
+        "line": 1249
       },
       {
         "file": "src/filesystem.ts",
-        "line": 2644
+        "line": 2660
       },
       {
         "file": "src/frontmatter.ts",
@@ -37635,7 +37655,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1931
+        "line": 1937
       }
     ]
   },
@@ -37819,7 +37839,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1473
+        "line": 1479
       }
     ]
   },
@@ -37957,7 +37977,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 2099
+        "line": 2105
       }
     ]
   },
@@ -38251,7 +38271,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 3772
+        "line": 3788
       }
     ]
   },
@@ -38282,7 +38302,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 2821
+        "line": 2837
       }
     ]
   },
@@ -38518,7 +38538,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1523
+        "line": 1529
       }
     ]
   },
@@ -38860,11 +38880,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 3157
+        "line": 3173
       },
       {
         "file": "src/filesystem.ts",
-        "line": 3752
+        "line": 3768
       }
     ]
   },
@@ -38894,15 +38914,15 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 3182
+        "line": 3198
       },
       {
         "file": "src/filesystem.ts",
-        "line": 3186
+        "line": 3202
       },
       {
         "file": "src/filesystem.ts",
-        "line": 3189
+        "line": 3205
       }
     ]
   },
@@ -39586,7 +39606,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 2137
+        "line": 2143
       }
     ]
   },
@@ -39616,7 +39636,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 3594
+        "line": 3610
       }
     ]
   },
@@ -40075,11 +40095,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 2235
+        "line": 2241
       },
       {
         "file": "src/filesystem.ts",
-        "line": 2439
+        "line": 2445
       }
     ]
   },
@@ -40694,7 +40714,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1713
+        "line": 1719
       }
     ]
   },
@@ -40889,7 +40909,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 3469
+        "line": 3485
       },
       {
         "file": "src/mcp-note-response.ts",
@@ -42385,7 +42405,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1537
+        "line": 1543
       }
     ]
   },
@@ -42723,7 +42743,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1384
+        "line": 1390
       }
     ]
   },
@@ -43917,7 +43937,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1815
+        "line": 1821
       }
     ]
   },
@@ -43981,7 +44001,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 3389
+        "line": 3405
       }
     ]
   },
@@ -44116,7 +44136,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 2047
+        "line": 2053
       }
     ]
   },
@@ -44317,7 +44337,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1703
+        "line": 1709
       }
     ]
   },
@@ -44423,7 +44443,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 2112
+        "line": 2118
       }
     ]
   },
@@ -44712,7 +44732,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 2735
+        "line": 2751
       }
     ]
   },
@@ -44849,7 +44869,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 3597
+        "line": 3613
       }
     ]
   },
@@ -45335,7 +45355,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1154
+        "line": 1160
       }
     ]
   },
@@ -45712,7 +45732,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 3757
+        "line": 3773
       }
     ]
   },
@@ -45805,7 +45825,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 2160
+        "line": 2166
       }
     ]
   },
@@ -45850,7 +45870,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 2078
+        "line": 2084
       }
     ]
   },
@@ -46190,11 +46210,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1050
+        "line": 1056
       },
       {
         "file": "src/filesystem.ts",
-        "line": 1317
+        "line": 1323
       }
     ]
   },
@@ -46224,11 +46244,11 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1890
+        "line": 1896
       },
       {
         "file": "src/filesystem.ts",
-        "line": 1903
+        "line": 1909
       }
     ]
   },
@@ -46409,7 +46429,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 3359
+        "line": 3375
       }
     ]
   },
@@ -46794,7 +46814,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 3337
+        "line": 3353
       }
     ]
   },
@@ -47081,7 +47101,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1538
+        "line": 1544
       }
     ]
   },
@@ -47111,7 +47131,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1591
+        "line": 1597
       }
     ]
   },
@@ -47336,7 +47356,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1446
+        "line": 1452
       }
     ]
   },
@@ -48462,7 +48482,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 2250
+        "line": 2256
       }
     ]
   },
@@ -48569,7 +48589,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1214
+        "line": 1220
       }
     ]
   },
@@ -48855,7 +48875,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 3224
+        "line": 3240
       }
     ]
   },
@@ -49056,7 +49076,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 2427
+        "line": 2433
       }
     ]
   },
@@ -49314,7 +49334,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 2146
+        "line": 2152
       }
     ]
   },
@@ -49906,7 +49926,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1274
+        "line": 1280
       }
     ]
   },
@@ -49996,7 +50016,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 3335
+        "line": 3351
       },
       {
         "file": "src/tag-page.ts",
@@ -50045,7 +50065,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1562
+        "line": 1568
       }
     ]
   },
@@ -50335,7 +50355,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1707
+        "line": 1713
       }
     ]
   },
@@ -50443,7 +50463,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1121
+        "line": 1127
       }
     ]
   },
@@ -50478,7 +50498,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1806
+        "line": 1812
       }
     ]
   },
@@ -51270,7 +51290,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 1582
+        "line": 1588
       }
     ]
   },
@@ -51587,7 +51607,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/filesystem.ts",
-        "line": 3139
+        "line": 3155
       }
     ]
   },

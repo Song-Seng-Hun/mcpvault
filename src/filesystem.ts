@@ -950,8 +950,10 @@ export class FileSystemService {
    * the target barrier. The source barrier and every check run before a byte is
    * copied. The copy lands in a temporary file beside the target and replaces
    * it only by rename, so a denial or a failed copy leaves the target as it
-   * was and no temporary file behind. */
-  private async moveProtectedFileAcrossDevices(from: string, to: string) {
+   * was and no temporary file behind. Once the target is replaced nothing can
+   * undo it: a source that cannot then be removed is returned, not thrown, so
+   * the caller reports a partial move. */
+  private async moveProtectedFileAcrossDevices(from: string, to: string): Promise<Error | undefined> {
     const sourcePath = relative(this.vaultPath, from).replace(/\\/g, '/');
     const targetPath = relative(this.vaultPath, to).replace(/\\/g, '/');
     assertOriginalMutation(sourcePath);
@@ -967,7 +969,11 @@ export class FileSystemService {
       await rm(temporary, { force: true });
       throw error;
     }
-    await this.removeProtectedFile(from);
+    // Admitted above and rechecked just before the rename; another barrier here
+    // could only strand the replaced target.
+    try { await unlink(from); }
+    catch (error) { return error instanceof Error ? error : new Error(String(error)); }
+    return undefined;
   }
   private assertMoveDispatch(sourcePath: string, targetPath: string) {
     assertEnterpriseStorageAccess(sourcePath);
@@ -2466,14 +2472,24 @@ export class FileSystemService {
         }
       }
 
+      let sourceLeft: Error | undefined;
       try {
         await this.renameProtectedFile(oldFullPath, newFullPath, true);
       } catch (error) {
         if (error instanceof Error && 'code' in error && error.code === 'EXDEV') {
-          await this.moveProtectedFileAcrossDevices(oldFullPath, newFullPath);
+          sourceLeft = await this.moveProtectedFileAcrossDevices(oldFullPath, newFullPath);
         } else {
           throw error;
         }
+      }
+      if (sourceLeft) {
+        this.notifyNoteChanged(newPath, 'upsert');
+        return {
+          success: false,
+          oldPath,
+          newPath,
+          message: guidanceText('guid-5eec683069febc05', `Partially moved file: ${newPath} now holds the content of ${oldPath}, but the source could not be removed (${sourceLeft.message}). Both files exist; remove ${oldPath} after checking ${newPath}.`)
+        };
       }
 
       this.notifyNoteChanged(oldPath, 'delete');
