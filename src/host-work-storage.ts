@@ -7,6 +7,8 @@ import { lstat, open, type FileHandle } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { assertHostPrivateStorage } from './skill-evolution-host.js';
 
+// Codex hooks were removed; their names stay reserved so leftover host
+// receipts and checkpoints keep failing configuration-overlap checks.
 const HOST_WORK_NAMESPACES = ['maintenance', 'compilation', 'codex-hooks', 'codex-checkpoints', 'evolution'] as const;
 export type HostWorkNamespace = typeof HOST_WORK_NAMESPACES[number];
 export interface HostWorkWriter { assertHeld(): Promise<void>; close(): Promise<void> }

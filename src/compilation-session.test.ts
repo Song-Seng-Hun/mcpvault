@@ -16,8 +16,6 @@ import { CompilationPublicationAdapter } from './compilation-publication-adapter
 import { CompilationService } from './compilation-service.js';
 import type { CompilationHost } from './compilation-host.js';
 import { compilationJobRevision } from './compilation-model.js';
-import { connectCodexHooks } from './codex-hook-connection.js';
-import { ContinuityService } from './continuity.js';
 
 const hash = (s: string) => createHash('sha256').update(s).digest('hex');
 const body = '승인된 요청만 실행한다. 외부 전송은 금지한다. 🙂';
@@ -125,28 +123,6 @@ test('cancellation returns promptly but cannot release a still-running generatio
     expect(result.status).toBe('review_required');
     expect((await service.runSession(request(), actor, session())).status).toBe('deferred');
   } finally { release(); }
-});
-test('verified host hook connects actual generation and checks once; duplicates only reconcile', async () => {
-  let deliver!: (payload: string) => Promise<any>, history: unknown;
-  const context = session(), fingerprint = hash('definition');
-  const close = connectCodexHooks({
-    host: { refresh: async () => ({ version: 1, enabled: true, accountId: 'operator', projects: [{ id: 'project', workspace: 'E:/dev/wiki',
-      definitionHash: fingerprint, events: ['Stop'], actions: ['compilation'], paths: ['Source.md', 'Result.md'] }] }),
-      readState: async () => structuredClone(history), writeState: async state => { history = structuredClone(state); },
-      acquire: async () => ({ assertHeld: async () => {}, close: async () => {} }) },
-    attest: async () => ({ projectId: 'project', accountId: 'operator', workspace: 'E:/dev/wiki', definitionHash: fingerprint,
-      sessionId: 's', event: 'Stop', causeId: 'cause', authorityRevision: hash('authority'), inputRevision: hash('input'), mode: 'default', verified: true,
-      expiresAt: context.deadline, hostBusy: false, quotaAvailable: true, runtimeLocal: true, paths: ['Source.md', 'Result.md'],
-      work: { action: 'compilation', requestId: 'job', expectedJobRevision: ready.jobRevision } }),
-    bind: handler => { deliver = handler; return () => {}; },
-    session: { generate: context.generate, application: 'check_only' },
-  }, { fs, access, compilation: service, continuity: new ContinuityService(fs, { access }), authorize: async () => actor }, false);
-  try {
-    const payload = JSON.stringify({ hook_event_name: 'Stop', session_id: 's', transcript_path: 'NEVER_READ' });
-    expect((await deliver(payload)).status).toBe('processed'); expect(durable.jobs[0].status).toBe('checked');
-    expect(await fs.noteExists('Result.md')).toBe(false); expect(calls).toBe(1);
-    await deliver(payload); expect(calls).toBe(1);
-  } finally { close(); }
 });
 test('one refinement preserves obligations and cannot launch a third generation', async () => {
   const context = session(), generate = context.generate;
