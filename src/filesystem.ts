@@ -2257,7 +2257,8 @@ export class FileSystemService {
     const newFullPath = this.resolveWritablePath(newPath);
     const linkBackups: Array<{ path: string; original: string; rewritten: string; updated: boolean }> = [];
     let destinationBackup: string | undefined;
-    // The content being written, once the destination barrier admits the write.
+    // The content being written, once the destination's owner barrier
+    // (prepareDocumentWrite) has passed; the dispatch checks follow.
     let destinationWrite: string | undefined;
 
     try {
@@ -2339,10 +2340,13 @@ export class FileSystemService {
 
       // Write to new location, checking for existing file atomically if !overwrite
       try {
-        // A failed write can still leave a truncated/partial destination, so the
-        // flag is set once the destination barrier admits the write. For
-        // exclusive creation, EEXIST below clears it because that file
-        // belongs to the pre-existing/racing writer and must not be removed.
+        // A failed write can still leave a truncated/partial destination. The
+        // flag is set by beforeDispatch: after prepareDocumentWrite passes, but
+        // before the dispatch checks, mkdir and writeFile. So a dispatch denial
+        // still reaches rollback, and unrestoredDestination reads the file
+        // instead of assuming a write happened. For exclusive creation, EEXIST
+        // below clears the flag because that file belongs to the
+        // pre-existing/racing writer and must not be removed.
         const admitted = async () => { destinationWrite = content; };
         if (overwrite) {
           await this.writeProtectedFile(newFullPath, content, 'utf-8', admitted, undefined, true);
