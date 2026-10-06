@@ -62,10 +62,13 @@ function assertNoteContentSize(content: string, path: string): void {
   assertContextRulesContent(content);
 }
 
-/** Names the hidden temporary copy a failed cross-device move could not remove. */
+/** Names the hidden temporary file a failed cross-device move could not remove.
+ * A failed copy can leave it incomplete, so it is never called a backup. */
 function leftoverNotice(error: unknown): string {
   if (!(error instanceof Error && 'leftover' in error && typeof error.leftover === 'string')) return '';
-  return ` A hidden temporary copy of the source remains at ${error.leftover}; delete it once no move is running.`;
+  const slash = error.leftover.lastIndexOf('/');
+  const folder = slash < 0 ? 'the Vault root' : error.leftover.slice(0, slash);
+  return ` A hidden temporary file (possibly an incomplete copy of the source) remains in ${folder}: ${error.leftover.slice(slash + 1)}. It is not a backup; delete it once no move is running.`;
 }
 
 function getFrontmatterValue(frontmatter: Record<string, any>, key: string): { found: boolean; value?: unknown } {
