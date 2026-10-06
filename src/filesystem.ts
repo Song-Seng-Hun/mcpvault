@@ -923,14 +923,16 @@ export class FileSystemService {
     return writeFile(path, content, options);
   }
   private async removeProtectedFile(path: string) {
-    const physicalPath = relative(this.vaultPath, path).replace(/\\/g, '/');
+    await this.admitRemoval(relative(this.vaultPath, path).replace(/\\/g, '/'));
+    return unlink(path);
+  }
+  /** The write barrier without inheritance: a removed path takes no classification. */
+  private async admitRemoval(physicalPath: string) {
     assertOriginalMutation(physicalPath);
-    // The write barrier without inheritance: a removed path takes no classification.
     await prepareOwnerActivityStorageWrite(physicalPath);
     assertEnterpriseStorageAccess(physicalPath);
     assertSkillEvolutionMutationBoundary(physicalPath);
     this.assertNoticeMutation(physicalPath);
-    return unlink(path);
   }
   private async renameProtectedFile(from: string, to: string, createParent = false) {
     const sourcePath = relative(this.vaultPath, from).replace(/\\/g, '/');
@@ -2098,8 +2100,9 @@ export class FileSystemService {
       }
 
       if (trashMode === 'system') {
+        // Outside the try: a denial must not fall through to the vault-trash fallback.
+        await this.admitRemoval(relative(this.vaultPath, fullPath).replace(/\\/g, '/'));
         try {
-          this.assertNoticeMutation(path);
           await trash(fullPath);
           this.notifyNoteChanged(path, 'delete');
           return {

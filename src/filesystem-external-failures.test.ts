@@ -1,5 +1,5 @@
 import { afterEach, expect, test, vi } from 'vitest';
-import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readdir, readFile, rm, unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ScopeAccessPolicy } from './scope-access.js';
@@ -28,9 +28,13 @@ vi.mock('node:fs/promises', async importOriginal => {
   };
 });
 
+// The system recycle bin is a separate program; here it simply takes the file.
+const systemTrash = vi.hoisted(() => vi.fn());
+vi.mock('trash', () => ({ default: systemTrash }));
+
 const vaults: string[] = [];
 afterEach(async () => {
-  host.crossDevice = undefined; host.copyFails = false;
+  host.crossDevice = undefined; host.copyFails = false; systemTrash.mockReset();
   for (const vault of vaults.splice(0)) await rm(vault, { recursive: true, force: true });
 });
 async function vaultWithTarget() {
@@ -66,4 +70,21 @@ test('a cross-device copy that fails part way keeps the target and leaves no tem
   expect(await fs.moveFile(overwrite)).toMatchObject({ success: false, message: expect.stringMatching(/no space/) });
   expect(await readFile(join(vault, 'Target.png'), 'utf8')).toBe('old target');
   expect(await files(vault)).toEqual(['Source.png', 'Target.png']);
+});
+
+test('a system-trash delete runs the write barrier before the system trash and never falls back after a denial', async () => {
+  const vault = await mkdtemp(join(tmpdir(), 'mcpvault-external-')); vaults.push(vault);
+  const fs = new FileSystemService(vault);
+  await fs.writeNote({ path: 'Denied.md', content: '# Denied\n' });
+  await fs.writeNote({ path: 'Admitted.md', content: '# Admitted\n' });
+  systemTrash.mockImplementation(async (path: string) => unlink(path));
+  const context = { access: new ScopeAccessPolicy(), assertFresh() {},
+    beforeWrite: async (path: string) => { if (path === 'Denied.md') throw new Error('barrier denied the note'); } };
+  const remove = (path: string) => withEnterpriseStorageContext(context, () => fs.deleteNote({ path, confirmPath: path, trashMode: 'system' }));
+  expect(await remove('Denied.md')).toMatchObject({ success: false, message: expect.stringMatching(/barrier denied/) });
+  expect(systemTrash).not.toHaveBeenCalled();
+  expect(await files(vault)).toEqual(['Admitted.md', 'Denied.md']);
+  expect(await remove('Admitted.md')).toMatchObject({ success: true });
+  expect(systemTrash).toHaveBeenCalledOnce();
+  expect(await files(vault)).toEqual(['Denied.md']);
 });
