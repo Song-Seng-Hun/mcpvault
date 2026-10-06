@@ -116,6 +116,21 @@ test('a same-device move runs the write barrier for its source', async () => {
   } finally { await rm(vault, { recursive: true, force: true }); }
 });
 
+test('a vault-trash delete runs the write barrier for the note it moves', async () => {
+  const vault = await mkdtemp(join(tmpdir(), 'mcpvault-barrier-order-'));
+  try {
+    const fs = new FileSystemService(vault);
+    await fs.writeNote({ path: 'Note.md', content: '# Note\n' });
+    const barrier: string[] = [];
+    const context = { access: new ScopeAccessPolicy(), assertFresh() {},
+      beforeWrite: async (path: string) => { barrier.push(path); if (path === 'Note.md') throw new Error('barrier denied the note'); } };
+    expect(await withEnterpriseStorageContext(context, () => fs.deleteNote({ path: 'Note.md', confirmPath: 'Note.md', trashMode: 'local' })))
+      .toMatchObject({ success: false, message: expect.stringMatching(/barrier denied the note/) });
+    expect(barrier).toEqual(['Note.md']);
+    expect(await readdir(vault)).toEqual(['Note.md']);
+  } finally { await rm(vault, { recursive: true, force: true }); }
+});
+
 test('an overwrite move whose source is revoked during the write barriers keeps the old target bytes', async () => {
   const vault = await mkdtemp(join(tmpdir(), 'mcpvault-barrier-order-'));
   try {

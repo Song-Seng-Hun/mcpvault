@@ -17,6 +17,7 @@ const host = vi.hoisted(() => ({
   busy: undefined as string | undefined,
   writeFull: undefined as string | undefined,
   renameExists: false,
+  afterCopy: undefined as undefined | (() => void),
 }));
 vi.mock('node:fs/promises', async importOriginal => {
   const actual = await importOriginal<typeof import('node:fs/promises')>();
@@ -33,7 +34,7 @@ vi.mock('node:fs/promises', async importOriginal => {
         await actual.writeFile(to, 'not ours');
         return actual.copyFile(from, to, mode);
       }
-      if (!host.copyFails) return actual.copyFile(from, to, mode);
+      if (!host.copyFails) { await actual.copyFile(from, to, mode); host.afterCopy?.(); return; }
       await actual.writeFile(to, 'par');
       throw Object.assign(new Error('no space left on device'), { code: 'ENOSPC' });
     },
@@ -59,7 +60,7 @@ vi.mock('trash', () => ({ default: systemTrash }));
 
 const vaults: string[] = [];
 afterEach(async () => {
-  Object.assign(host, { crossDevice: undefined, copyFails: false, tempTaken: false, cleanupFails: false, busy: undefined, writeFull: undefined, renameExists: false });
+  Object.assign(host, { crossDevice: undefined, copyFails: false, tempTaken: false, cleanupFails: false, busy: undefined, writeFull: undefined, renameExists: false, afterCopy: undefined });
   systemTrash.mockReset();
   for (const vault of vaults.splice(0)) await rm(vault, { recursive: true, force: true });
 });
@@ -119,6 +120,32 @@ test('a temporary name another writer already holds is refused and left in place
   expect(left).toHaveLength(1);
   expect(await readFile(join(vault, left[0]!), 'utf8')).toBe('not ours');
   expect(await readFile(join(vault, 'Target.png'), 'utf8')).toBe('old target');
+});
+
+test('a source admitted by the rename barrier but revoked at the cross-device barrier keeps the target', async () => {
+  const { vault, fs } = await vaultWithTarget();
+  // First source call: renameProtectedFile, before EXDEV. Second: the cross-device fallback.
+  let sourceCalls = 0;
+  const context = { access: new ScopeAccessPolicy(), assertFresh() {},
+    beforeWrite: async (path: string) => { if (path === 'Source.png' && ++sourceCalls === 2) throw new Error('source revoked at the second barrier'); } };
+  expect(await withEnterpriseStorageContext(context, () => fs.moveFile(overwrite)))
+    .toMatchObject({ success: false, message: expect.stringMatching(/source revoked at the second barrier/) });
+  expect(sourceCalls).toBe(2);
+  expect(await readFile(join(vault, 'Target.png'), 'utf8')).toBe('old target');
+  expect(await files(vault)).toEqual(['Source.png', 'Target.png']);
+});
+
+test('a source revoked while its copy is made is caught by the post-copy recheck', async () => {
+  const { vault, fs } = await vaultWithTarget();
+  let revoked = false;
+  host.afterCopy = () => { revoked = true; };
+  const context = { access: new ScopeAccessPolicy(), assertFresh() {},
+    canAccessPath: (path: string) => !(revoked && path === 'Source.png') };
+  expect(await withEnterpriseStorageContext(context, () => fs.moveFile(overwrite)))
+    .toMatchObject({ success: false, message: expect.stringMatching(/owner activity/) });
+  expect(revoked).toBe(true);
+  expect(await readFile(join(vault, 'Target.png'), 'utf8')).toBe('old target');
+  expect(await files(vault)).toEqual(['Source.png', 'Target.png']);
 });
 
 test('an EEXIST from renaming our own temporary copy still removes that copy', async () => {
