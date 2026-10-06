@@ -21,8 +21,7 @@ async function fixture() {
 
 test('derived metadata inherits every source restriction without changing raw bytes or policy prose', async () => {
   const { root, store } = await fixture();
-  expect(typeof (store as any).inherit, 'trusted monotonic inheritance operation').toBe('function');
-  await (store as any).inherit('Knowledge.md', ['_sources/raw.txt', 'B.md'], (store as any).revision());
+  await store.inherit('Knowledge.md', ['_sources/raw.txt', 'B.md'], store.revision());
   const authority = new DocumentAuthority(store.rules());
   const actor = { accountId: 'alice', userId: 'owner', modelId: 'local', agentId: 'worker', role: 'agent' as const };
   expect(authority.canRead('Knowledge.md', actor, () => true)).toBe(false);
@@ -36,13 +35,12 @@ test('derived metadata inherits every source restriction without changing raw by
 
 test('inheritance is monotonic, revision checked and rejects ancestry cycles', async () => {
   const { root, store } = await fixture();
-  expect(typeof (store as any).inherit).toBe('function');
-  const before = (store as any).revision();
-  await (store as any).inherit('Knowledge.md', ['_sources/raw.txt'], before);
-  const current = (store as any).revision();
-  await expect((store as any).inherit('Other.md', ['B.md'], before)).rejects.toThrow(/revision|changed/i);
-  await expect((store as any).inherit('_sources/raw.txt', ['Knowledge.md'], current)).rejects.toThrow(/cycle|cyclic|original/i);
-  await (store as any).inherit('Knowledge.md', ['B.md'], current);
+  const before = store.revision();
+  await store.inherit('Knowledge.md', ['_sources/raw.txt'], before);
+  const current = store.revision();
+  await expect(store.inherit('Other.md', ['B.md'], before)).rejects.toThrow(/revision|changed/i);
+  await expect(store.inherit('_sources/raw.txt', ['Knowledge.md'], current)).rejects.toThrow(/cycle|cyclic|original/i);
+  await store.inherit('Knowledge.md', ['B.md'], current);
   const combined = store.rules().find(rule => rule.path === 'knowledge.md')!;
   expect(combined.derivedFrom).toEqual(expect.arrayContaining(['_sources/raw.txt', 'b.md']));
   expect(await readFile(join(root, '_sources', 'raw.txt'), 'utf8')).toBe('Original bytes\r\n');
@@ -50,11 +48,10 @@ test('inheritance is monotonic, revision checked and rejects ancestry cycles', a
 
 test('two store instances cannot lose one another\'s restriction updates', async () => {
   const { root, store } = await fixture();
-  expect(typeof (store as any).inherit).toBe('function');
   const second = new DocumentPolicyStore(root); await second.refresh();
-  const revision = (store as any).revision();
-  const results = await Promise.allSettled([(store as any).inherit('A-derived.md', ['_sources/raw.txt'], revision),
-    (second as any).inherit('B-derived.md', ['B.md'], revision)]);
+  const revision = store.revision();
+  const results = await Promise.allSettled([store.inherit('A-derived.md', ['_sources/raw.txt'], revision),
+    second.inherit('B-derived.md', ['B.md'], revision)]);
   expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(1);
   expect(results.filter(result => result.status === 'rejected')).toHaveLength(1);
   await store.refresh();
