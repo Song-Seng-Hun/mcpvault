@@ -15,6 +15,7 @@ const host = vi.hoisted(() => ({
   tempTaken: false,
   cleanupFails: false,
   busy: undefined as string | undefined,
+  writeFull: undefined as string | undefined,
 }));
 vi.mock('node:fs/promises', async importOriginal => {
   const actual = await importOriginal<typeof import('node:fs/promises')>();
@@ -38,6 +39,11 @@ vi.mock('node:fs/promises', async importOriginal => {
       if (host.cleanupFails && String(path).endsWith('.mcpvault-move')) throw Object.assign(new Error('operation not permitted'), { code: 'EPERM' });
       return actual.rm(path, options);
     },
+    writeFile: async (path: string, data: string | Uint8Array, options?: Parameters<typeof actual.writeFile>[2]) => {
+      if (!host.writeFull || !String(path).endsWith(host.writeFull)) return actual.writeFile(path, data, options);
+      await actual.writeFile(path, 'par');
+      throw Object.assign(new Error('no space left on device'), { code: 'ENOSPC' });
+    },
     unlink: async (path: string) => {
       if (host.busy && String(path).endsWith(host.busy)) throw Object.assign(new Error('resource busy or locked'), { code: 'EBUSY' });
       return actual.unlink(path);
@@ -51,7 +57,7 @@ vi.mock('trash', () => ({ default: systemTrash }));
 
 const vaults: string[] = [];
 afterEach(async () => {
-  Object.assign(host, { crossDevice: undefined, copyFails: false, tempTaken: false, cleanupFails: false, busy: undefined });
+  Object.assign(host, { crossDevice: undefined, copyFails: false, tempTaken: false, cleanupFails: false, busy: undefined, writeFull: undefined });
   systemTrash.mockReset();
   for (const vault of vaults.splice(0)) await rm(vault, { recursive: true, force: true });
 });
@@ -121,6 +127,18 @@ test('a cross-device move whose source cannot be removed reports a partial move 
   expect(announced).toEqual(['Target.png']);
   expect(await readFile(join(vault, 'Target.png'), 'utf8')).toBe('source');
   expect(await files(vault)).toEqual(['Source.png', 'Target.png']);
+});
+
+test('a note move whose destination write and restore both fail part way reports a partial write, not the moved note', async () => {
+  const vault = await mkdtemp(join(tmpdir(), 'mcpvault-external-')); vaults.push(vault);
+  const fs = new FileSystemService(vault);
+  await fs.writeNote({ path: 'Source.md', content: '# Source\n' });
+  await fs.writeNote({ path: 'Moved.md', content: '# Previous\n' });
+  const revision = (await fs.readNote('Source.md')).revision;
+  host.writeFull = 'Moved.md';
+  const result = await fs.moveNote({ oldPath: 'Source.md', newPath: 'Moved.md', overwrite: true, expectedRevision: revision });
+  expect(result.message).toMatch(/Rollback incomplete: the previous content of Moved\.md was not restored and is lost; it holds a partial write/);
+  expect(await readFile(join(vault, 'Source.md'), 'utf8')).toContain('# Source');
 });
 
 test('a system-trash delete runs the write barrier before the system trash and never falls back after a denial', async () => {

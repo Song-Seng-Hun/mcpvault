@@ -987,6 +987,24 @@ export class FileSystemService {
     catch (error) { return error instanceof Error ? error : new Error(String(error)); }
     return undefined;
   }
+  /** What an unfinished move_note rollback left at the destination, judged by
+   * reading it, so the message claims nothing the file does not show. The
+   * source is still in place: its removal is the last step of a move. */
+  private async unrestoredDestination(fullPath: string, path: string, previous: string | undefined, moved: string, cause: string): Promise<string | undefined> {
+    let current: string | undefined;
+    try { current = await readFile(fullPath, 'utf-8'); }
+    catch (error) {
+      if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) return `${path} could not be checked after the failed rollback (${cause})`;
+    }
+    if (current === previous) return undefined;
+    const holds = current === moved ? 'the moved note' : 'a partial write';
+    if (previous === undefined) return current === moved
+      ? `${path} could not be removed, so both copies of the note remain (${cause})`
+      : `${path} could not be removed and holds a partial write (${cause})`;
+    return current === undefined
+      ? `the previous content of ${path} was not restored and is lost; the file is gone (${cause})`
+      : `the previous content of ${path} was not restored and is lost; it holds ${holds} (${cause})`;
+  }
   private assertMoveDispatch(sourcePath: string, targetPath: string) {
     assertEnterpriseStorageAccess(sourcePath);
     assertEnterpriseStorageAccess(targetPath);
@@ -2221,7 +2239,8 @@ export class FileSystemService {
     const newFullPath = this.resolveWritablePath(newPath);
     const linkBackups: Array<{ path: string; original: string; rewritten: string; updated: boolean }> = [];
     let destinationBackup: string | undefined;
-    let destinationTouched = false;
+    // The content being written, once the destination barrier admits the write.
+    let destinationWrite: string | undefined;
 
     try {
       // Read source content (will throw ENOENT if not found)
@@ -2302,19 +2321,20 @@ export class FileSystemService {
 
       // Write to new location, checking for existing file atomically if !overwrite
       try {
-        // A failed write can still leave a truncated/partial destination. For
-        // exclusive creation, EEXIST below clears this flag because that file
+        // A failed write can still leave a truncated/partial destination, so the
+        // flag is set once the destination barrier admits the write. For
+        // exclusive creation, EEXIST below clears it because that file
         // belongs to the pre-existing/racing writer and must not be removed.
-        destinationTouched = true;
+        const admitted = async () => { destinationWrite = content; };
         if (overwrite) {
-          await this.writeProtectedFile(newFullPath, content, 'utf-8', undefined, undefined, true);
+          await this.writeProtectedFile(newFullPath, content, 'utf-8', admitted, undefined, true);
         } else {
           // wx flag: write exclusive - fails if file exists
-          await this.writeProtectedFile(newFullPath, content, { encoding: 'utf-8', flag: 'wx' }, undefined, undefined, true);
+          await this.writeProtectedFile(newFullPath, content, { encoding: 'utf-8', flag: 'wx' }, admitted, undefined, true);
         }
       } catch (error) {
         if (error instanceof Error && 'code' in error && error.code === 'EEXIST') {
-          destinationTouched = false;
+          destinationWrite = undefined;
           throw guidanceError(new Error(`Target file already exists: ${newPath}. Use overwrite=true to replace it.`), 'guid-2e7c727ce916c64a');
         }
         throw error;
@@ -2337,16 +2357,14 @@ export class FileSystemService {
       // The original error stays the reported cause; each rollback failure is listed after it.
       const unrestored: string[] = [];
       const reason = (failure: unknown) => failure instanceof Error ? failure.message : 'Unknown error';
-      if (destinationTouched) {
+      if (destinationWrite !== undefined) {
         try {
           if (destinationBackup !== undefined) await this.writeProtectedFile(newFullPath, destinationBackup, 'utf-8');
           else await this.removeProtectedFile(newFullPath);
           this.notifyNoteChanged(newPath, destinationBackup !== undefined ? 'upsert' : 'delete');
         } catch (rollbackError) {
-          // The source is still in place: its removal is the last step of a move.
-          unrestored.push(destinationBackup !== undefined
-            ? `the previous content of ${newPath} was not restored and is lost; it holds the moved note (${reason(rollbackError)})`
-            : `${newPath} could not be removed, so both copies of the note remain (${reason(rollbackError)})`);
+          const left = await this.unrestoredDestination(newFullPath, newPath, destinationBackup, destinationWrite, reason(rollbackError));
+          if (left) unrestored.push(left);
         }
       }
       for (const backup of linkBackups.filter(item => item.updated).reverse()) {

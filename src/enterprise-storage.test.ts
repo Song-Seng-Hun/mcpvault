@@ -162,6 +162,23 @@ test('a note move denied for its source reaches no write barrier for the destina
   } finally { await rm(vault, { recursive: true, force: true }); }
 });
 
+test.each([false, true])('a note move whose destination is denied at its first barrier (overwrite %s) claims no rollback and keeps both notes', async overwrite => {
+  const vault = await mkdtemp(join(tmpdir(), 'mcpvault-barrier-order-'));
+  try {
+    const fs = new FileSystemService(vault);
+    await fs.writeNote({ path: 'Source.md', content: '# Source\n' });
+    if (overwrite) await fs.writeNote({ path: 'Moved.md', content: '# Previous\n' });
+    const context = { access: new ScopeAccessPolicy(), assertFresh() {},
+      beforeWrite: async (path: string) => { if (path === 'Moved.md') throw new Error('barrier denied Moved.md'); } };
+    const revision = (await fs.readNote('Source.md')).revision;
+    const result = await withEnterpriseStorageContext(context, () => fs.moveNote({ oldPath: 'Source.md', newPath: 'Moved.md', overwrite, expectedRevision: revision }));
+    expect(result).toMatchObject({ success: false, message: 'Failed to move note: barrier denied Moved.md' });
+    expect((await fs.readNote('Source.md')).content).toBe('# Source\n');
+    if (overwrite) expect((await fs.readNote('Moved.md')).content).toBe('# Previous\n');
+    else expect(await readdir(vault)).toEqual(['Source.md']);
+  } finally { await rm(vault, { recursive: true, force: true }); }
+});
+
 test('a note move whose rollback also fails says so and names what it could not restore', async () => {
   const vault = await mkdtemp(join(tmpdir(), 'mcpvault-barrier-order-'));
   try {
