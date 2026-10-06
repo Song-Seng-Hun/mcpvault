@@ -274,3 +274,83 @@ paths, so deleting them would remove the only check.
 | Low | delete P2-1 and `manual-context-budget` (P2-2) | ~195 |
 | Medium | trim P2-2, delete P2-3 after diff, consolidate P2-4 | ~1,233 (≈109 trim + 144 + ~980 consolidation) |
 | High | keep P2-5 (except the two rewrites), P2-6, P2-7 (gate) | 0 (≈3,950 lines reviewed and kept) |
+
+## Proposal 2 applied (ticket llm_wiki-005)
+
+- Applied: P2-1, `manual-context-budget` and its fixture, the
+  `instruction-budget` and `wiki-policy` trims, and the `as any` removal in
+  `cache-work-budget` and `document-policy-store` (8 files, +57 −481).
+- Not applied, after reading the files:
+  - P2-3 is not a duplicate. The `llm-wiki.test.ts` copy drives
+    `triage_wiki_note`, `publish_knowledge` and `clarify_wiki_note`; the
+    agent-collaboration copy drives `update_agent_task`. Each has unique
+    assertions (hidden or wrong-role links, legacy edits, publish paths).
+  - P2-4 was overestimated. Both families already use `test.each`, and
+    each case checks endpoint-specific packing or date semantics. A shared
+    harness would save only fixture boilerplate (~40 lines) and risk
+    dropping cases.
+
+## Proposal 3 (stricter criterion, not applied)
+
+Criterion: per area, keep only tests of observable behavior — public MCP
+tool, endpoint, REST or CLI outputs, their error paths, and security
+barriers. Everything else is a candidate: internals, service-level copies of
+public paths, string and prose checks, oversized fixtures and snapshot
+families.
+
+Method: all 456 test files (68,090 lines) were classified by entry point
+(a file that drives `createServer`, `callTool`, `dispatchTool`, REST or a
+child process counts as public), by name (security, snapshot, corpus,
+prose) and by internal reach (`as any` and `spyOn`). Prose assertions
+inside kept files are counted one line each. This is a file-level
+estimate, not a line-by-line review, so treat the figures as ±10%.
+
+Risk levels:
+
+- **Low**: prose and string checks. Nothing behavioral depends on them.
+- **Medium**: service or internal tests in an area whose public tests
+  exercise the same features. Before deleting a file, confirm that a public
+  test covers each endpoint and error path it covers.
+- **High**: the only check on a race, revocation, persistence or ordering
+  path (storage layer, semantic index, catalog, document index, snapshot
+  families, retrieval-quality corpora).
+
+| Area | Kept (behavior) | Low | Medium | High | Coverage that remains after cutting low + medium |
+|---|---:|---:|---:|---:|---|
+| server-transport | 8,494 | 389 | 1,501 | 625 | createServer, HTTP, REST, MCP protocol, auth, scopes, owner consent, moderation, original preservation |
+| llm-wiki-core | 4,587 | 81 | 359 | 231 | `llm-wiki*.test.ts` MCP flows; cache invalidation stays (high) |
+| knowledge-review | 3,326 | 97 | 6,248 | 0 | MOC, recall, projection, promotion and review MCP tests |
+| work-tasks | 2,676 | 55 | 3,500 | 0 | work, task and continuity MCP tests; record tool surface |
+| other (pulse, collaboration, scripts) | 2,800 | 421 | 385 | 0 | agent pulse and collaboration MCP tests, skill-security scripts |
+| search-retrieval | 1,697 | 34 | 3,761 | 1,971 | question, context and search MCP tests; semantic index, snapshots and corpora stay (high) |
+| maintenance | 1,080 | 16 | 1,431 | 0 | maintenance MCP and streaming tests |
+| skills-evolution | 1,079 | 81 | 3,176 | 0 | skill MCP, owner-consent and host tests |
+| compilation | 1,006 | 155 | 2,232 | 0 | compilation session and CLI process tests |
+| graph-links | 869 | 21 | 2,645 | 1,382 | graph MCP tests; catalog and graph snapshots stay (high) |
+| documents | 834 | 88 | 1,265 | 602 | document MCP and access tests; index persistence and revalidation stay (high) |
+| storage | 476 | 14 | 0 | 6,400 | thin public coverage; `filesystem.test.ts` (3,322) is the path-safety layer |
+| **Total** | **28,924** | **1,452** | **26,503** | **11,211** | |
+
+Notes:
+
+- `skill-evaluation*.test.ts` (559) are feature tests of skill evaluation,
+  not corpora, so they count as medium.
+- Storage has almost no public tests of its own. Its behavior reaches users
+  only through every other tool, so cutting it needs new public tests
+  first. That makes the whole area high risk.
+- Medium is large because the codebase tests most features twice: once
+  through the service and once through MCP. Recommended order is by the
+  strength of the kept coverage: server-transport, llm-wiki-core, other,
+  knowledge-review, work-tasks, then the rest. One area per ticket, with a
+  per-file check against the public tests.
+- High stays unless a public test is added first that reproduces the race,
+  revocation or ordering case.
+
+### Proposal 3 totals
+
+| Risk | Lines | Recommended action |
+|---|---:|---|
+| Low | ~1,450 | delete prose files and prose assertions |
+| Medium | ~26,500 | delete per area after a per-file public-coverage check |
+| High | ~11,200 | keep, or replace with a public test first |
+| Kept by the criterion | ~28,900 | keep |
