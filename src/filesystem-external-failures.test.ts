@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ScopeAccessPolicy } from './scope-access.js';
 import { withEnterpriseStorageContext } from './enterprise-storage-context.js';
-import { FileSystemService } from './filesystem.js';
+import { FileSystemService, MAX_NOTE_CONTENT_BYTES } from './filesystem.js';
 
 // Failures the host filesystem can produce but a test vault cannot: a rename
 // across devices (EXDEV), a copy that runs out of space part way, and a
@@ -18,6 +18,14 @@ const host = vi.hoisted(() => ({
   writeFull: undefined as string | undefined,
   renameExists: false,
   afterCopy: undefined as undefined | (() => void),
+  // A failed writeFull write leaves this many bytes instead of 'par'.
+  partialBytes: undefined as number | undefined,
+  failedWrites: 0,
+  // Opening this path fails once both writeFull writes (the move and its rollback) have failed.
+  openFailsAfterRollback: undefined as string | undefined,
+  // The first read of this path finishes reading but holds its handle open until the path is opened again.
+  holdFirstRead: undefined as string | undefined,
+  held: undefined as undefined | { release: () => void },
 }));
 vi.mock('node:fs/promises', async importOriginal => {
   const actual = await importOriginal<typeof import('node:fs/promises')>();
@@ -44,8 +52,27 @@ vi.mock('node:fs/promises', async importOriginal => {
     },
     writeFile: async (path: string, data: string | Uint8Array, options?: Parameters<typeof actual.writeFile>[2]) => {
       if (!host.writeFull || !String(path).endsWith(host.writeFull)) return actual.writeFile(path, data, options);
-      await actual.writeFile(path, 'par');
+      await actual.writeFile(path, host.partialBytes === undefined ? 'par' : Buffer.alloc(host.partialBytes, 'a'));
+      host.failedWrites += 1;
       throw Object.assign(new Error('no space left on device'), { code: 'ENOSPC' });
+    },
+    open: async (path: string, flags?: string | number, mode?: number) => {
+      if (host.openFailsAfterRollback && String(path).endsWith(host.openFailsAfterRollback) && host.failedWrites >= 2) {
+        throw Object.assign(new Error('permission denied'), { code: 'EACCES' });
+      }
+      if (host.holdFirstRead && String(path).endsWith(host.holdFirstRead)) {
+        if (host.held) { host.held.release(); return actual.open(path, flags, mode); }
+        const handle = await actual.open(path, flags, mode);
+        let release!: () => void;
+        const gate = new Promise<void>(resolve => { release = resolve; });
+        host.held = { release };
+        // Fallback so a read that never reopens the path still finishes the test.
+        setTimeout(release, 500);
+        const close = handle.close.bind(handle);
+        handle.close = async () => { await gate; return close(); };
+        return handle;
+      }
+      return actual.open(path, flags, mode);
     },
     unlink: async (path: string) => {
       if (host.busy && String(path).endsWith(host.busy)) throw Object.assign(new Error('resource busy or locked'), { code: 'EBUSY' });
@@ -60,7 +87,8 @@ vi.mock('trash', () => ({ default: systemTrash }));
 
 const vaults: string[] = [];
 afterEach(async () => {
-  Object.assign(host, { crossDevice: undefined, copyFails: false, tempTaken: false, cleanupFails: false, busy: undefined, writeFull: undefined, renameExists: false, afterCopy: undefined });
+  Object.assign(host, { crossDevice: undefined, copyFails: false, tempTaken: false, cleanupFails: false, busy: undefined, writeFull: undefined, renameExists: false, afterCopy: undefined,
+    partialBytes: undefined, failedWrites: 0, openFailsAfterRollback: undefined, holdFirstRead: undefined, held: undefined });
   systemTrash.mockReset();
   for (const vault of vaults.splice(0)) await rm(vault, { recursive: true, force: true });
 });
@@ -192,6 +220,38 @@ test('a note move whose destination write and restore both fail part way reports
   const result = await fs.moveNote({ oldPath: 'Source.md', newPath: 'Moved.md', overwrite: true, expectedRevision: revision });
   expect(result.message).toMatch(/Rollback incomplete: the previous content of Moved\.md was not restored and is lost; it holds a partial write/);
   expect(await readFile(join(vault, 'Source.md'), 'utf8')).toContain('# Source');
+});
+
+async function failedRollbackVault() {
+  const vault = await mkdtemp(join(tmpdir(), 'mcpvault-external-')); vaults.push(vault);
+  const fs = new FileSystemService(vault);
+  await fs.writeNote({ path: 'Source.md', content: '# Source\n' });
+  await fs.writeNote({ path: 'Moved.md', content: '# Previous\n' });
+  host.writeFull = 'Moved.md';
+  const move = async () => fs.moveNote({ oldPath: 'Source.md', newPath: 'Moved.md', overwrite: true, expectedRevision: (await fs.readNote('Source.md')).revision });
+  return { fs, move };
+}
+
+test('a failed rollback whose destination grew past the note limit reports it could not be checked', async () => {
+  const { move } = await failedRollbackVault();
+  host.partialBytes = MAX_NOTE_CONTENT_BYTES + 1;
+  expect((await move()).message).toMatch(/Rollback incomplete: Moved\.md could not be checked after the failed rollback/);
+});
+
+test('a failed rollback whose destination cannot be read reports it could not be checked', async () => {
+  const { move } = await failedRollbackVault();
+  host.openFailsAfterRollback = 'Moved.md';
+  expect((await move()).message).toMatch(/Rollback incomplete: Moved\.md could not be checked after the failed rollback/);
+});
+
+test('a read of the destination started before a failed rollback does not answer for it', async () => {
+  const { fs, move } = await failedRollbackVault();
+  host.holdFirstRead = 'Moved.md';
+  // Reads '# Previous' now; the rollback then leaves a partial write behind it.
+  const early = fs.readNote('Moved.md', MAX_NOTE_CONTENT_BYTES);
+  const result = await move();
+  expect((await early).content).toContain('# Previous');
+  expect(result.message).toMatch(/Rollback incomplete: the previous content of Moved\.md was not restored and is lost; it holds a partial write/);
 });
 
 test('a system-trash delete runs the write barrier before the system trash and never falls back after a denial', async () => {
