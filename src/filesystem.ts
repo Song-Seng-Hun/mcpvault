@@ -961,7 +961,8 @@ export class FileSystemService {
    * both barriers. The source barrier runs again, with every check, before a
    * byte is copied. The copy lands in a temporary file beside the target and replaces
    * it only by rename, so a denial or a failed copy leaves the target as it
-   * was and no temporary file behind. Once the target is replaced nothing can
+   * was and no temporary file behind, unless that cleanup also fails; the
+   * thrown error then carries `leftover`. Once the target is replaced nothing can
    * undo it: a source that cannot then be removed is returned, not thrown, so
    * the caller reports a partial move. */
   private async moveProtectedFileAcrossDevices(from: string, to: string): Promise<Error | undefined> {
