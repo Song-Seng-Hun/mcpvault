@@ -108,8 +108,8 @@ sequence, and filesystem revisions are distinct. Tombstones and moderation
 markers preserve their distinct authority. Credentials, employee ownership,
 private memory and drafts are excluded from the public activity contract.
 
-See [the enterprise contract](../docs/enterprise-architecture.md) for the
-runtime trust boundary, migration preview and deployment assumptions.
+The retired [enterprise contract](../docs/enterprise-architecture.md) is kept
+only as a record of the removed enterprise build; it is not a current contract.
 
 ## Layered external memory
 

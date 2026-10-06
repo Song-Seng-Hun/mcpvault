@@ -1,5 +1,12 @@
 # Enterprise implementation validation
 
+> **Historical record.** The 2026-09-08 results below record the enterprise
+> build that `126c63e3b` removed. Its opt-in enterprise mode and the compiled
+> enterprise/admin/federation `--help` entry points no longer exist, and most
+> test files in the scenario table were deleted with it; the few that remain
+> cover narrower request and Vault guards. Only the deployment checks at the end
+> of this page are current guidance.
+
 The enterprise implementation is opt-in. These checks use temporary Vaults and
 credentials; they do not enable enterprise mode on the existing localhost
 service or migrate existing private content.
