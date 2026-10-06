@@ -90,6 +90,11 @@ test('metadata-based neighborhood never rebases a removed shared tag onto a new 
   expect(changed).toBe(true);
 });
 
+// 15 s, not the 5 s default: this fixture has no metadata index, so each of
+// the 41 links scans every note through realpath (one lstat per path
+// component). That takes about 3 s on Windows alone and passed 5 s under
+// full-suite load. The assertions, not the clock, are the contract here;
+// production resolves links through the index.
 test('neighborhood supports 40 neighbors with bounded final validation and no unrelated reads', async () => {
   const { fs, wiki, write } = await fixture();
   const paths = Array.from({ length: 40 }, (_, index) => `P${index}.md`);
@@ -125,7 +130,7 @@ test('neighborhood supports 40 neighbors with bounded final validation and no un
   expect(finalChecked).toHaveLength(41);
   expect(new Set(finalChecked).size).toBe(41);
   expect(JSON.stringify(result, null, 2).length).toBeLessThanOrEqual(16000);
-});
+}, 15_000);
 
 test('semantic context without a line never inherits the previous graph locator', async () => {
   const { fs, access } = await fixture();
