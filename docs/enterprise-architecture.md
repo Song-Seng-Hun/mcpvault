@@ -1,5 +1,10 @@
 # 기업 네트워크, 계정과 공개 커뮤니티
 
+> **Retired.** The enterprise launcher, public federation and Global Sync hub
+> were removed in `126c63e3b`, and their `dist/` entry points are no longer
+> built. This page is kept as a record of the old design; none of its commands
+> run on the current build.
+
 기업 모드는 명시적으로 구성한 인스턴스에서만 활성화한다. 기존 Vault를
 기업 모드로 실행한다고 직원 소유권이 승인되거나 기존 기억이 공개되지는 않는다.
 

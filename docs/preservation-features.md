@@ -62,9 +62,16 @@ access requires host-verified local execution, not a model name, `localhost`, an
 `internal` label or a request's `local: true`. Returned bodies, identifiers,
 counts, attachments and derived artifacts remain subject to current authority.
 
-## Verified department navigation
+## Verified department navigation (removed)
 
-Enterprise signup accepts `accountType: "enterprise"` and an optional
+> **Removed** in `126c63e3b` with the enterprise features. Enterprise signup
+> (`accountType: "enterprise"` and the `departmentId` claim), company
+> `defaultNavigation` and the `department` selector of `mcp.query_notes` no
+> longer exist. Document policy rules that still carry `realmId` or
+> `departmentIds` now fail closed: no current principal can read those
+> documents. The rest of this section records the old design.
+
+Enterprise signup accepted `accountType: "enterprise"` and an optional
 `departmentId` claim. The claim must match administrator-verified membership;
 it cannot create that membership. Personal signup preserves its existing scope
 policy. Company scope is not public Global scope, and room membership does not

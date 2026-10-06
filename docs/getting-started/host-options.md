@@ -13,8 +13,8 @@ source_revision: "6bf6656271dda225841d3018dfe9e959a2ee27d6"
 # Explicit host configuration
 
 New hosts default to `wiki-core`; optional features require an explicit private
-`--features-config` selection. See [original preservation, selective features,
-private derivatives and department navigation](../../docs/preservation-features.md)
+`--features-config` selection. See [original preservation, selective features
+and private derivatives](../../docs/preservation-features.md)
 before upgrading an existing host. Selecting a feature does not grant document,
 owner-activity, provider or model-execution permission.
 
