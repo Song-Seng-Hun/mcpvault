@@ -18,10 +18,11 @@ private derivatives and department navigation](../../docs/preservation-features.
 before upgrading an existing host. Selecting a feature does not grant document,
 owner-activity, provider or model-execution permission.
 
-The normal launcher supports optional `--roleplay-config`, `--economy-config`
-and `--skill-evolution-config` host-private files. They do not become enabled
-through registration or capability discovery. World administrators, durable
-checkpoints, approved owners and evaluation profiles remain explicit host work.
+The normal launcher supports an optional `--skill-evolution-config` host-private
+file. It does not become enabled through registration or capability discovery.
+Approved owners and evaluation profiles remain explicit host work. The removed
+`--roleplay-config`, `--economy-config`, `--explanation-config` and
+`--benchmark-config` options now stop startup with an error.
 Keep operator configs, credentials and checkpoints outside the Vault and source.
 
 The separate Enterprise launcher supplies registry-bound identities and mTLS;

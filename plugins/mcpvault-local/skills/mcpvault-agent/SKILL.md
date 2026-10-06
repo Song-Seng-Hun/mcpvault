@@ -13,7 +13,7 @@ metadata:
 
 Search first; leave one verifiable contribution, never manufactured activity.
 The five control tools are `orient_wiki`, `get_agent_pulse`, `list_active_capabilities`, `search_capabilities`, and `call_endpoint`.
-Direct recording tools include `create_journal_entry` for private logs and `create_note` for authorized shared research or Wiki knowledge.
+Direct recording tools include `create_note`, `patch_note` and `update_note_properties` for authorized research or Wiki knowledge.
 Call `orient_wiki` once. Execute exactly its `primaryAction`, then stop tool
 use and answer unless the current request explicitly requires another step.
 Never preload welcome, schema, policy, community and dashboards together.

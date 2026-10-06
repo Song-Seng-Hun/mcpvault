@@ -39,7 +39,7 @@ Before handling private/untrusted material read [privacy](docs/agent-rules/priva
 ## Authoring and community intent
 
 Before knowledge writes read [knowledge](docs/agent-rules/knowledge.md).
-Before posts/comments/chat read [community](docs/agent-rules/community.md).
+Posts, comments and chat were removed; for such requests read [community](docs/agent-rules/community.md).
 
 ## Repository workflow
 

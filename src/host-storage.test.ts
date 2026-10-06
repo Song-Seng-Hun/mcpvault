@@ -3,8 +3,6 @@ import { mkdtemp, mkdir, readFile, rm, symlink, writeFile, rename } from 'node:f
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { readHostFile, writeHostFileAtomic, removeHostFile } from './host-storage.js';
-import { ScopeAccessPolicy } from './scope-access.js';
-import { withEnterpriseStorageContext } from './enterprise-storage-context.js';
 
 const roots: string[] = [];
 
@@ -67,39 +65,17 @@ test('host fencing rejects both final replacement and cleanup deletion', async (
   expect(await readFile(join(root, 'checkpoint.json'), 'utf8')).toBe('original');
 });
 
-test('refreshes owner write authority again after temporary IO and immediately before commit', async () => {
-  const { root } = await fixture();
-  const target = 'journal/0000000001.md';
-  let allowed = true; let refreshes = 0;
-  await expect(withEnterpriseStorageContext({ access: new ScopeAccessPolicy(), assertFresh() {},
-    canAccessPath: path => allowed && path === target,
-    beforeWrite: async path => {
-      expect(path).toBe(target);
-      refreshes += 1;
-      if (refreshes === 2) allowed = false;
-    },
-  }, () => writeHostFileAtomic(root, target, 'must not commit', { maxBytes: 32, ownerPath: target })))
-    .rejects.toThrow(/owner activity|authority/i);
-  expect(refreshes).toBe(2);
-  await expect(readFile(join(root, target), 'utf8')).rejects.toThrow();
-});
-
-test('final owner refresh cannot publish through a replaced journal directory', async () => {
+test('a commit fence cannot publish through a replaced journal directory', async () => {
   const { root, outside } = await fixture();
   const target = 'journal/event.md';
   await mkdir(join(root, 'journal'));
   await writeFile(join(root, target), 'original event');
-  let refreshes = 0;
   let moved = false;
-  await expect(withEnterpriseStorageContext({ access: new ScopeAccessPolicy(), assertFresh() {}, canAccessPath: () => true,
-    beforeWrite: async () => {
-      if (++refreshes !== 2) return;
-      await rename(join(root, 'journal'), join(outside, 'moved-journal'));
-      moved = true;
-      await symlink(join(outside, 'moved-journal'), join(root, 'journal'), 'junction');
-    },
-  }, () => writeHostFileAtomic(root, target, 'unauthorized replacement', { maxBytes: 64, ownerPath: target }))).rejects.toThrow();
-  expect(refreshes).toBe(2);
+  await expect(writeHostFileAtomic(root, target, 'unauthorized replacement', { maxBytes: 64, beforeCommit: async () => {
+    await rename(join(root, 'journal'), join(outside, 'moved-journal'));
+    moved = true;
+    await symlink(join(outside, 'moved-journal'), join(root, 'journal'), 'junction');
+  } })).rejects.toThrow();
   // Windows can reject the directory move while the writer holds its temp
   // handle. On platforms allowing it, final canonical validation must reject.
   expect(await readFile(moved ? join(outside, 'moved-journal', 'event.md') : join(root, target), 'utf8')).toBe('original event');

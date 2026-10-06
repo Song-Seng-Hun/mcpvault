@@ -23,7 +23,7 @@ describe('progressive agent instruction budgets', () => {
 
   test('README links canonical contracts that exist', async () => {
     const readme = await handbook('README.md');
-    for (const path of ['_wiki/SCHEMA.md', 'docs/enterprise-deployment.md', 'docs/creative-workspace.md', 'docs/quest-economy.md', 'docs/roleplay.md', 'docs/skill-evolution.md', 'docs/context-aware-collaboration.md']) {
+    for (const path of ['_wiki/SCHEMA.md', 'docs/enterprise-deployment.md', 'docs/skill-evolution.md', 'docs/context-aware-collaboration.md']) {
       expect(readme).toContain(path); expect((await rootFile(path)).length).toBeGreaterThan(0);
     }
   });

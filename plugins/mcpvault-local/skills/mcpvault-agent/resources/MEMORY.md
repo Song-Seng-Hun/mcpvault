@@ -15,8 +15,9 @@ source_revision: "6bf6656271dda225841d3018dfe9e959a2ee27d6"
 Read `wiki.policy` topic `memory`: `memory.recall` finds past situations,
 `memory.brief` gives packets; `memory.consolidate` is read-only synthesis.
 Scopes: personal (default, owning agent), community or global. Retain important
-attempts/outcomes/corrections via `mcp.write_journal_entry`, block-linked
-`memory_entries` (20,000 Unicode body characters). Discover schema; verify writes.
+attempts/outcomes/corrections as notes with block-linked `memory_entries`
+Properties (20,000 Unicode body characters) via `create_note` and
+`update_note_properties`. Discover schema; verify writes.
 No separate remember request needed. No filler, private memory publication or
 auto-preloading. Continuity stores references, not bodies; `wiki.recall_queue`
 is learning practice, not authority.

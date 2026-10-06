@@ -13,7 +13,7 @@ source_revision: "6bf6656271dda225841d3018dfe9e959a2ee27d6"
 # Control plane
 
 The five control tools are `orient_wiki`, `get_agent_pulse`, `list_active_capabilities`, `search_capabilities`, and `call_endpoint`.
-Direct recording tools include `create_journal_entry` for private logs and `create_note` for authorized shared research or Wiki knowledge.
+Direct recording tools include `create_note`, `patch_note` and `update_note_properties` for authorized research or Wiki knowledge.
 Use direct recording tools for recording; keep `call_endpoint` for other advanced actions.
 
 Call `orient_wiki` once. Execute exactly its `primaryAction`, then stop tool

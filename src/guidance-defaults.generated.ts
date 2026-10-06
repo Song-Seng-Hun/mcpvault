@@ -815,23 +815,23 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
   {
     "id": "guid-044296553d9ce398",
     "kind": "error",
-    "template": "Federation storage parent path is not a directory",
+    "template": "Host storage parent path is not a directory",
     "parts": [
-      "Federation storage parent path is not a directory"
+      "Host storage parent path is not a directory"
     ],
     "binding": "call",
     "sources": [
       {
         "file": "src/host-storage.ts",
-        "line": 113
+        "line": 101
       },
       {
         "file": "src/host-storage.ts",
-        "line": 140
+        "line": 128
       },
       {
         "file": "src/host-storage.ts",
-        "line": 149
+        "line": 137
       }
     ]
   },
@@ -3248,19 +3248,19 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
   {
     "id": "guid-0ff1134aa1e22677",
     "kind": "error",
-    "template": "Federation file canonical path escapes the trusted root",
+    "template": "Host file canonical path escapes the trusted root",
     "parts": [
-      "Federation file canonical path escapes the trusted root"
+      "Host file canonical path escapes the trusted root"
     ],
     "binding": "call",
     "sources": [
       {
         "file": "src/host-storage.ts",
-        "line": 111
+        "line": 99
       },
       {
         "file": "src/host-storage.ts",
-        "line": 152
+        "line": 140
       }
     ]
   },
@@ -3631,21 +3631,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-119cba938638a56f",
-    "kind": "prose",
-    "template": "Find an advanced endpoint with one query per intent (limit 3); use direct recording tools for journal and note work. For large schemas, read endpointId# plus a JSON Pointer and follow nextCursor without changing the query.",
-    "parts": [
-      "Find an advanced endpoint with one query per intent (limit 3); use direct recording tools for journal and note work. For large schemas, read endpointId# plus a JSON Pointer and follow nextCursor without changing the query."
-    ],
-    "binding": "projection",
-    "sources": [
-      {
-        "file": "src/createServer.ts",
-        "line": 381
-      }
-    ]
-  },
-  {
     "id": "guid-11b8ada44b081b57",
     "kind": "prose",
     "template": "direct file copying around sync validation",
@@ -3738,9 +3723,9 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
   {
     "id": "guid-12501d308b72a4de",
     "kind": "error",
-    "template": "Roleplay host storage must be local and outside Vault/source",
+    "template": "Host storage must be local and outside Vault/source",
     "parts": [
-      "Roleplay host storage must be local and outside Vault/source"
+      "Host storage must be local and outside Vault/source"
     ],
     "binding": "call",
     "sources": [
@@ -6489,9 +6474,9 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
   {
     "id": "guid-2045390514d0533e",
     "kind": "error",
-    "template": "Roleplay host storage must be canonical local storage",
+    "template": "Host storage must be canonical local storage",
     "parts": [
-      "Roleplay host storage must be canonical local storage"
+      "Host storage must be canonical local storage"
     ],
     "binding": "call",
     "sources": [
@@ -8193,15 +8178,15 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
   {
     "id": "guid-279fdb5a0071af90",
     "kind": "error",
-    "template": "Federation destination is not a regular file",
+    "template": "Host file destination is not a regular file",
     "parts": [
-      "Federation destination is not a regular file"
+      "Host file destination is not a regular file"
     ],
     "binding": "call",
     "sources": [
       {
         "file": "src/host-storage.ts",
-        "line": 242
+        "line": 217
       }
     ]
   },
@@ -10745,15 +10730,15 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
   {
     "id": "guid-35788928a9e30c35",
     "kind": "error",
-    "template": "Federation trusted root must be a directory",
+    "template": "Host storage trusted root must be a directory",
     "parts": [
-      "Federation trusted root must be a directory"
+      "Host storage trusted root must be a directory"
     ],
     "binding": "call",
     "sources": [
       {
         "file": "src/host-storage.ts",
-        "line": 99
+        "line": 87
       }
     ]
   },
@@ -14223,21 +14208,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-48299d78ec39bf08",
-    "kind": "error",
-    "template": "Invalid owner activity storage path",
-    "parts": [
-      "Invalid owner activity storage path"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/host-storage.ts",
-        "line": 65
-      }
-    ]
-  },
-  {
     "id": "guid-483bf8ff5f940713",
     "kind": "prose",
     "template": "A map of content that answers a bounded set of navigation questions.",
@@ -15307,15 +15277,15 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
   {
     "id": "guid-4c04a99af8deaefc",
     "kind": "error",
-    "template": "Federation trusted root binding changed",
+    "template": "Host storage trusted root binding changed",
     "parts": [
-      "Federation trusted root binding changed"
+      "Host storage trusted root binding changed"
     ],
     "binding": "call",
     "sources": [
       {
         "file": "src/host-storage.ts",
-        "line": 121
+        "line": 109
       }
     ]
   },
@@ -17056,7 +17026,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/host-storage.ts",
-        "line": 72
+        "line": 60
       }
     ]
   },
@@ -19643,15 +19613,15 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
   {
     "id": "guid-6086c69bdbed2b02",
     "kind": "error",
-    "template": "Federation storage file binding changed",
+    "template": "Host storage file binding changed",
     "parts": [
-      "Federation storage file binding changed"
+      "Host storage file binding changed"
     ],
     "binding": "call",
     "sources": [
       {
         "file": "src/host-storage.ts",
-        "line": 129
+        "line": 117
       }
     ]
   },
@@ -23180,15 +23150,15 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
   {
     "id": "guid-72040e96b744216d",
     "kind": "error",
-    "template": "Federation storage path changed to a symbolic link or junction",
+    "template": "Host storage path changed to a symbolic link or junction",
     "parts": [
-      "Federation storage path changed to a symbolic link or junction"
+      "Host storage path changed to a symbolic link or junction"
     ],
     "binding": "call",
     "sources": [
       {
         "file": "src/host-storage.ts",
-        "line": 127
+        "line": 115
       }
     ]
   },
@@ -23966,21 +23936,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/graph-validation.ts",
         "line": 17
-      }
-    ]
-  },
-  {
-    "id": "guid-757b28f243121790",
-    "kind": "prose",
-    "template": "Use roleplay.context for currently accessible character context.",
-    "parts": [
-      "Use roleplay.context for currently accessible character context."
-    ],
-    "binding": "pending",
-    "sources": [
-      {
-        "file": "src/expression-profile.ts",
-        "line": 85
       }
     ]
   },
@@ -24766,9 +24721,9 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
   {
     "id": "guid-79de38f9d85b981c",
     "kind": "error",
-    "template": "Roleplay storage path has an invalid file type",
+    "template": "Host storage path has an invalid file type",
     "parts": [
-      "Roleplay storage path has an invalid file type"
+      "Host storage path has an invalid file type"
     ],
     "binding": "call",
     "sources": [
@@ -29119,21 +29074,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-90e7e4634bbc9463",
-    "kind": "prose",
-    "template": "Run one exact advanced endpoint selected by orient_wiki or search_capabilities; it may mutate or reach external systems. Use direct recording tools for journals and notes. If orientation sets stopAfterAction, answer after this call.",
-    "parts": [
-      "Run one exact advanced endpoint selected by orient_wiki or search_capabilities; it may mutate or reach external systems. Use direct recording tools for journals and notes. If orientation sets stopAfterAction, answer after this call."
-    ],
-    "binding": "projection",
-    "sources": [
-      {
-        "file": "src/createServer.ts",
-        "line": 387
-      }
-    ]
-  },
-  {
     "id": "guid-911617bf3bce2549",
     "kind": "prose",
     "template": "Revision returned by the prior checkpoint read; prevents stale overwrites",
@@ -30939,15 +30879,15 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
   {
     "id": "guid-9ab0b30e8106ea22",
     "kind": "error",
-    "template": "Federation file target is not a regular file",
+    "template": "Host file target is not a regular file",
     "parts": [
-      "Federation file target is not a regular file"
+      "Host file target is not a regular file"
     ],
     "binding": "call",
     "sources": [
       {
         "file": "src/host-storage.ts",
-        "line": 114
+        "line": 102
       }
     ]
   },
@@ -36666,9 +36606,9 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
   {
     "id": "guid-b778d07e4fe47825",
     "kind": "error",
-    "template": "Roleplay needs canonical absolute storage paths without device aliases or dot segments",
+    "template": "Host storage needs canonical absolute paths without device aliases or dot segments",
     "parts": [
-      "Roleplay needs canonical absolute storage paths without device aliases or dot segments"
+      "Host storage needs canonical absolute paths without device aliases or dot segments"
     ],
     "binding": "call",
     "sources": [
@@ -38412,15 +38352,15 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
   {
     "id": "guid-c151366effa760d3",
     "kind": "error",
-    "template": "Federation file target is outside the trusted root",
+    "template": "Host file target is outside the trusted root",
     "parts": [
-      "Federation file target is outside the trusted root"
+      "Host file target is outside the trusted root"
     ],
     "binding": "call",
     "sources": [
       {
         "file": "src/host-storage.ts",
-        "line": 86
+        "line": 74
       }
     ]
   },
@@ -38663,9 +38603,9 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
   {
     "id": "guid-c214792552584bc2",
     "kind": "error",
-    "template": "Roleplay storage refuses symbolic-link or junction path components",
+    "template": "Host storage refuses symbolic-link or junction path components",
     "parts": [
-      "Roleplay storage refuses symbolic-link or junction path components"
+      "Host storage refuses symbolic-link or junction path components"
     ],
     "binding": "call",
     "sources": [
@@ -40245,15 +40185,15 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/host-storage.ts",
-        "line": 167
+        "line": 153
       },
       {
         "file": "src/host-storage.ts",
-        "line": 176
+        "line": 162
       },
       {
         "file": "src/host-storage.ts",
-        "line": 211
+        "line": 189
       }
     ]
   },
@@ -42094,6 +42034,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-d12be475a483785e",
+    "kind": "prose",
+    "template": "Read character context only through endpoints that are currently available.",
+    "parts": [
+      "Read character context only through endpoints that are currently available."
+    ],
+    "binding": "pending",
+    "sources": [
+      {
+        "file": "src/expression-profile.ts",
+        "line": 85
+      }
+    ]
+  },
+  {
     "id": "guid-d134ba9da9236abb",
     "kind": "prose",
     "template": "Dry-run the smallest deliberate MOC body or depends_on repair. Never apply recommendedOrder automatically; preserve intentional narrative order when justified.",
@@ -43029,23 +42984,23 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
   {
     "id": "guid-d5bb8e24d56b85ab",
     "kind": "error",
-    "template": "Federation storage refuses symbolic-link or junction path components",
+    "template": "Host storage refuses symbolic-link or junction path components",
     "parts": [
-      "Federation storage refuses symbolic-link or junction path components"
+      "Host storage refuses symbolic-link or junction path components"
     ],
     "binding": "call",
     "sources": [
       {
         "file": "src/host-storage.ts",
-        "line": 109
+        "line": 97
       },
       {
         "file": "src/host-storage.ts",
-        "line": 139
+        "line": 127
       },
       {
         "file": "src/host-storage.ts",
-        "line": 148
+        "line": 136
       }
     ]
   },
@@ -46043,6 +45998,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
+    "id": "guid-e4a816a899342541",
+    "kind": "prose",
+    "template": "Find an advanced endpoint with one query per intent (limit 3); use direct recording tools for note work. For large schemas, read endpointId# plus a JSON Pointer and follow nextCursor without changing the query.",
+    "parts": [
+      "Find an advanced endpoint with one query per intent (limit 3); use direct recording tools for note work. For large schemas, read endpointId# plus a JSON Pointer and follow nextCursor without changing the query."
+    ],
+    "binding": "projection",
+    "sources": [
+      {
+        "file": "src/createServer.ts",
+        "line": 381
+      }
+    ]
+  },
+  {
     "id": "guid-e4bc7f735a35ad26",
     "kind": "error",
     "template": "MCPVault Canvas metadata marker is incomplete",
@@ -46636,15 +46606,15 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
   {
     "id": "guid-e842f9b2e9d1b059",
     "kind": "error",
-    "template": "Federation storage parent is not a directory",
+    "template": "Host storage parent is not a directory",
     "parts": [
-      "Federation storage parent is not a directory"
+      "Host storage parent is not a directory"
     ],
     "binding": "call",
     "sources": [
       {
         "file": "src/host-storage.ts",
-        "line": 125
+        "line": 113
       }
     ]
   },
@@ -47842,6 +47812,21 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/work-review.ts",
         "line": 203
+      }
+    ]
+  },
+  {
+    "id": "guid-ed9f9421c120658d",
+    "kind": "prose",
+    "template": "Run one exact advanced endpoint selected by orient_wiki or search_capabilities; it may mutate or reach external systems. Use direct recording tools for notes. If orientation sets stopAfterAction, answer after this call.",
+    "parts": [
+      "Run one exact advanced endpoint selected by orient_wiki or search_capabilities; it may mutate or reach external systems. Use direct recording tools for notes. If orientation sets stopAfterAction, answer after this call."
+    ],
+    "binding": "projection",
+    "sources": [
+      {
+        "file": "src/createServer.ts",
+        "line": 387
       }
     ]
   },
@@ -51578,9 +51563,9 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
   {
     "id": "guid-febc054cac933e9e",
     "kind": "error",
-    "template": "Roleplay checkpoint must be local and outside Vault/source",
+    "template": "Host storage root must be local and outside Vault/source",
     "parts": [
-      "Roleplay checkpoint must be local and outside Vault/source"
+      "Host storage root must be local and outside Vault/source"
     ],
     "binding": "call",
     "sources": [

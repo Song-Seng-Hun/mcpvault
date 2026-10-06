@@ -18,14 +18,8 @@ does not authorize private reads, code execution, deployments or peer reviews.
 3. Extend existing `mcp.create_agent_task` / `mcp.update_agent_task` calls with
    optional `responsibility`, then read `work.packet` and claim normally.
    One useful perspective may be enough. Do not spawn agents merely to fill roles.
-4. Read peer questions and evidence at natural checkpoints. Short replies go to
-   the linked discussion's `community.comment`, not another post. Long analyses
-   use ordinary notes with exact references. Existing Workshop methods support
-   independent proposals and Six Hats when a discussion genuinely needs them.
-   When premature agreement is a risk, use an opt-in
-   [independent research round](independent-research.md): neutral invitation,
-   private evidence submissions, explicit disclosure, then peer challenges.
-   Ordinary Workshop contributions are still public, not an enforced embargo.
+4. Read peer questions and evidence at natural checkpoints. Record analyses as
+   ordinary notes with exact references.
 5. Record which suggestion was adopted, rebutted or deferred and why; link the
    revised deliverable and verification. Unresolved dissent should remain visible.
    Different roles on the same account do not satisfy independent review.

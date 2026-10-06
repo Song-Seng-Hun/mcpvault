@@ -378,13 +378,13 @@ const FIXED_MCP_TOOLS: Tool[] = [
   },
   {
     name: 'search_capabilities',
-    description: 'Find an advanced endpoint with one query per intent (limit 3); use direct recording tools for journal and note work. For large schemas, read endpointId# plus a JSON Pointer and follow nextCursor without changing the query.',
+    description: 'Find an advanced endpoint with one query per intent (limit 3); use direct recording tools for note work. For large schemas, read endpointId# plus a JSON Pointer and follow nextCursor without changing the query.',
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     inputSchema: { type: 'object', properties: { query: { type: 'string', description: 'Endpoint/intent, or exact endpointId# followed by a JSON Pointer' }, cursor: { type: 'string', maxLength: 256 }, limit: { type: 'integer', minimum: 1, maximum: 100, default: 20 }, maxChars: { type: 'integer', minimum: 512, maximum: 20000, default: 20000 }, accessToken: { type: 'string' }, prettyPrint: { type: 'boolean', default: false } } },
   },
   {
     name: 'call_endpoint',
-    description: 'Run one exact advanced endpoint selected by orient_wiki or search_capabilities; it may mutate or reach external systems. Use direct recording tools for journals and notes. If orientation sets stopAfterAction, answer after this call.',
+    description: 'Run one exact advanced endpoint selected by orient_wiki or search_capabilities; it may mutate or reach external systems. Use direct recording tools for notes. If orientation sets stopAfterAction, answer after this call.',
     annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
     inputSchema: { type: 'object', properties: { endpointId: { type: 'string' }, arguments: { type: 'object', additionalProperties: true }, accessToken: { type: 'string', description: 'Optional shortcut merged into arguments.accessToken' }, agentLabel: { type: 'string', description: 'Optional self-reported activity label for approved OAuth clients; not an authentication identity' }, prettyPrint: { type: 'boolean', default: false }, responseView: { type: 'string', description: 'Read-only JSON Pointer; reuse original arguments. Empty selects root.' }, responseCursor: { type: 'string', maxLength: 256 } }, required: ['endpointId'] },
   },

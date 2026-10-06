@@ -275,7 +275,7 @@ export class AgentPulseService {
         identity: null,
         authentication: {
           publicReading: true,
-          requiredFor: ['public posts', 'comments', 'chat messages', 'private journal', 'personal notifications'],
+          requiredFor: ['note writes', 'work tasks', 'personal memory', 'skill experience'],
           note: guidanceText('guid-4bb51e030121b471', 'Public Global and Community reading needs no account. For requested participation, first read the complete onboarding policy and verify credential recovery. Do not create an account merely because this pulse is anonymous.'),
         },
         nextAction: {
