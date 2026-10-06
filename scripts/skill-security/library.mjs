@@ -22,7 +22,11 @@ function inventory(root) {
   }} finally {handle.closeSync();}
   return entries.sort();
 }
-export async function scanLibrary(root,output,options,onProgress=()=>{}) {
+export async function scanLibrary(root,output,options={},onProgress=()=>{}) {
+  // minFreeBytes is the host's free-memory floor before each target (default
+  // 2.3 GiB); the remaining options pass to the audit unchanged.
+  const {minFreeBytes=2.3*1024**3,...auditOptions}=options;
+  if(typeof minFreeBytes!=='number'||!(minFreeBytes>=0))throw Error('INVALID_REQUEST');
   if(!path.isAbsolute(root)||!path.isAbsolute(output))throw Error('ABSOLUTE_PATH_REQUIRED');
   root=path.resolve(root);output=path.resolve(output);
   const relative=path.relative(root,output);
@@ -37,9 +41,9 @@ export async function scanLibrary(root,output,options,onProgress=()=>{}) {
     enumerationStable:false,engineStable:true,runnerHash,executionAuthorized:false,targetsModified:false};
   let basis,stopReason;
   for(const name of names) {
-    if(os.freemem()<2.3*1024**3){stopReason='MEMORY_GUARD';break;}
+    if(os.freemem()<minFreeBytes){stopReason='MEMORY_GUARD';break;}
     const target=path.join(root,name),id=hash(target);
-    const report=await auditSkillDirectory(target,options);
+    const report=await auditSkillDirectory(target,auditOptions);
     put(`receipts/${id}.json`,report);
     summary.scanned++;statusCounts[report.status]=(statusCounts[report.status]??0)+1;
     for(const rule of new Set(report.findings.map(f=>f.rule)))rules[rule]=(rules[rule]??0)+1;
