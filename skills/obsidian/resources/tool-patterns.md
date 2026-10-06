@@ -63,6 +63,8 @@ Text-aware move for markdown files. Reads source as UTF-8, writes to destination
 
 Binary-safe move. Requires double confirmation: `confirmOldPath === oldPath` AND `confirmNewPath === newPath`. Rejects directories. With `overwrite: true` the target is replaced by rename, only after every check passes. On Windows a read-only target makes the move fail with EPERM and stays unchanged; clear the attribute yourself if the replacement is intended. Cross-filesystem moves copy to a temporary file beside the target, rename it over the target, then remove the source. If the server stops between the copy and the rename, a hidden `.<uuid>.mcpvault-move` file can remain beside the target. It is a copy of the source; delete it once no move is running. If the source cannot be removed after the target was replaced, the result reports a partial move and both files remain.
 
+**Response:** `{ "success": bool, "oldPath": str, "newPath": str, "message": str, "partial"?: true }`. `partial: true` (with `success: false`) means the target now holds the source's content but the source still exists; check the target, then delete the source. Do not retry the move.
+
 **When to use which:**
 - Renaming/moving `.md` files, with or without Obsidian running → `move_note`, then explicitly repair and verify backlinks (see SKILL.md Safe Note Rename Workflow)
 - Do not invoke Obsidian CLI `move` automatically; delayed stale-offset rewrites can corrupt notes edited while the command is still running (#176)

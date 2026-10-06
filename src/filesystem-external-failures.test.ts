@@ -102,6 +102,7 @@ test('a failed temporary-file cleanup keeps the copy failure as the reported err
   const result = await fs.moveFile(overwrite);
   expect(result).toMatchObject({ success: false, message: expect.stringMatching(/no space left/) });
   expect(result.message).not.toMatch(/not permitted/);
+  expect(result).not.toHaveProperty('partial');
   expect(await readFile(join(vault, 'Target.png'), 'utf8')).toBe('old target');
 });
 
@@ -121,7 +122,7 @@ test('a cross-device move whose source cannot be removed reports a partial move 
   const announced: string[] = [];
   const stop = fs.observeNoteChanges(path => announced.push(path));
   try {
-    expect(await fs.moveFile(overwrite)).toMatchObject({ success: false,
+    expect(await fs.moveFile(overwrite)).toMatchObject({ success: false, partial: true,
       message: expect.stringMatching(/^Partially moved file: Target\.png now holds the content of Source\.png.*resource busy/) });
   } finally { stop(); }
   expect(announced).toEqual(['Target.png']);

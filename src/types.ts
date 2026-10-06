@@ -328,6 +328,8 @@ export interface MoveResult {
   oldPath: string;
   newPath: string;
   message: string;
+  /** The target was replaced but the source could not be removed: both files exist. */
+  partial?: true;
 }
 
 // Batch read types

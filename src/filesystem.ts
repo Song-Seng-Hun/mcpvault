@@ -2519,6 +2519,7 @@ export class FileSystemService {
         this.notifyNoteChanged(newPath, 'upsert');
         return {
           success: false,
+          partial: true,
           oldPath,
           newPath,
           message: guidanceText('guid-5eec683069febc05', `Partially moved file: ${newPath} now holds the content of ${oldPath}, but the source could not be removed (${sourceLeft.message}). Both files exist; remove ${oldPath} after checking ${newPath}.`)
