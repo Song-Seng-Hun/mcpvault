@@ -354,3 +354,51 @@ Notes:
 | Medium | ~26,500 | delete per area after a per-file public-coverage check |
 | High | ~11,200 | keep, or replace with a public test first |
 | Kept by the criterion | ~28,900 | keep |
+## Proposal 3 applied (ticket llm_wiki-006)
+
+Re-reading before each cut showed the medium tier was mostly a
+classification error. The heuristic counted `(result as any).x` output
+casts as "internal" and treated a file as a copy of an MCP path whenever it
+called the service directly. In practice almost every such test checks an
+error path, a privacy or leak barrier, a response budget or a revision
+guard that no MCP test repeats. In those files, "prose" usually means
+Markdown under test (merge, section and locator integrity), not wording
+checks.
+
+| Area | Planned (low + medium) | Applied | Depth of re-read |
+|---|---:|---:|---|
+| server-transport | 1,890 | 141 | every candidate body |
+| llm-wiki-core | 440 | 2 | every candidate body |
+| other | 806 | 0 | test names and bodies of the six candidates |
+| all remaining areas (224 files, 28,506 lines) | ~26,500 | 0 | test names for every file; bodies of suspects |
+
+Kept, with reasons:
+
+- Guidance catalog, runtime and sync: these test fallback, collision,
+  revision and moderation behavior, not prose.
+- host-feature-config, read-path-reuse, note-revision-read,
+  resource-bundle, cli, host-storage, note-link and note-reference: these
+  test fail-closed parsing, path traversal, junction and owner fences.
+- capability-graph and configuration-tools: they share the validator, but
+  capability-graph alone covers missing references, duplicate IDs,
+  version, permission fields and fingerprint stability.
+- llm-wiki-moc-reference: it alone covers private-scope borrowing and
+  nearer-namesake resolution in learning, context and health projections.
+- String assertions in kept files are leak checks (`not.toContain`) and
+  error-path messages.
+- research-templates and work-schema: these test user-facing output and
+  public schema contracts.
+
+Cut:
+
+- `integration.test.ts`: four service workflows that `filesystem.test`,
+  `search.test` and `createServer.test` already cover. The special-character
+  filename search stays because nothing else covers it.
+- `createServer.test.ts`: one test that only matched endpoint description
+  wording.
+- `llm-wiki-tools.test.ts`: two description-wording assertions.
+
+Conclusion: Proposal 3's medium figure should not be used for planning.
+Further reduction would need per-test coverage data, for example
+`vitest --coverage` per file with a diff of covered branches, rather than
+file-level classification.
