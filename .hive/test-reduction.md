@@ -147,3 +147,130 @@ pulse lease tests in `agent-pulse-stages.test.ts` and
 | Cut list (items 1–2) | ~771 (prod 398 + test 373) | yes |
 | Review list (items 3–6) | ~6,100 touched if rewritten | yes, per file |
 | To rewrite | ~336 lines lost; rewrite size unknown | yes |
+
+## Applied (ticket llm_wiki-004)
+
+- `tests/cut-list` (9d8f51622): deleted `graphify-assertion`,
+  `skill-release-admission` and `skill-review-evidence` with their tests, and
+  removed the repeated tool-count line from 37 files. Delta: prod −267,
+  test −298, generated −45.
+- **Correction:** `resource-bundle-host.ts` was wrongly listed as test-only.
+  `scripts/resource-bundle-host.ts` uses it, and its test guards immutable
+  originals and the bundle hash check, so it was kept.
+- `tests/owner-consent-rewrite` (d92475569): `src/owner-consent-mcp.test.ts`
+  (17 tests, 238 lines) re-covers the "to rewrite" barriers on skill
+  endpoints. Folded or dropped: the request-label forgery case (the skill
+  schemas reject extra arguments first), the pulse lease-validator
+  proxy case (the microtask barrier test covers the same emit-time check),
+  and the OAuth explicit-policy cases (`auth0-resource.test.ts` asserts the
+  denial).
+- Finding: `skill.experience` writes its request receipt under
+  `Community/Skills/<id>/_evolution/receipts/` before the final consent
+  barrier. A request revoked at that barrier leaves the receipt but no
+  experience. Production fix is outside this ticket.
+
+## Proposal 2 (review list, not applied)
+
+Each group lists the files, their lines, what still covers the behavior after
+a cut, the risk, and a recommendation. "Lines" counts test lines only, unless
+fixtures are named.
+
+### P2-1. Benchmark-script tests — low risk
+
+| File | Lines | Covers |
+|---|---|---|
+| `backlink-cache-benchmark.test.ts` | 18 | `scripts/benchmark-backlink-cache.mjs` |
+| `graph-index-benchmark.test.ts` | 35 | `scripts/benchmark-graph-index.mjs` |
+
+- After cut: the backlink and graph index behavior stays covered by the 19
+  `graph-*` test files and the backlink tests. The benchmark scripts stay
+  usable by hand.
+- Both refuse to run below 2.3 GiB free memory and fail in the baseline.
+- Recommendation: **delete** (53 lines).
+
+### P2-2. Prose and document-wording tests — low to medium risk
+
+| File | Lines | Literal assertions |
+|---|---|---|
+| `manual-context-budget.test.ts` + `tests/fixtures/manual-context-originals.json` | 105 + 37 (46 KB) | byte-for-byte doc inventory |
+| `instruction-budget.test.ts` | 112 | 47 |
+| `wiki-policy.test.ts` | 217 | 62 |
+
+- `manual-context-budget` fails in the baseline and only pins old doc
+  wording. After cut, nothing checks those docs, which is acceptable because
+  the docs are reference text, not behavior. **Delete** (142 lines). Risk
+  low.
+- `instruction-budget`: keep the size and budget limits and drop the
+  sentence checks against plugin docs. **Trim about 47 lines.** Risk medium,
+  because doc drift would no longer be caught.
+- `wiki-policy`: keep the topic, route, version and budget checks, and drop
+  the sentence matches. `wiki-policy-contract.test.ts` still proves every
+  route resolves. **Trim about 62 lines.** Risk medium.
+
+### P2-3. Duplicate integration test in `llm-wiki.test.ts` — medium risk
+
+- `llm-wiki.test.ts:286` ("ordinary work completion requires a scope-safe
+  auditable knowledge disposition", 144 lines) duplicates
+  `agent-collaboration.test.ts:99` ("task completion requires a bounded
+  auditable knowledge disposition", 149 lines).
+- After cut, the agent-collaboration copy keeps the behavior.
+- Recommendation: **delete after a line-by-line diff** confirms that no
+  assertion is unique (144 lines).
+
+### P2-4. Overlapping families — medium risk, consolidate rather than delete
+
+| Family | Files | Lines | Estimated saving |
+|---|---|---|---|
+| `*-budget` (bounded output fits `maxChars`) | 17 | 1,698 | ~680 with one table-driven harness per endpoint shape |
+| `*-date-integrity` / `work-timing-integrity` | 6 | 786 | ~300 by sharing a malformed-date fixture |
+
+- After consolidation, every endpoint and date field keeps one case, so the
+  coverage stays the same.
+- The risk is in the rewrite itself (a dropped case).
+- Recommendation: **consolidate** in a later ticket, one family per commit.
+
+### P2-5. Tests of internals — keep for now, rewrite small ones
+
+| File | Lines | Recommendation | Risk if cut |
+|---|---|---|---|
+| `semantic-reuse.test.ts` | 337 | keep | high |
+| `semantic-integrity.test.ts` | 438 | keep | high |
+| `shared-index-storage.test.ts` | 239 | keep | high |
+| `cache-work-budget.test.ts` | 41 | rewrite through the public API | medium |
+| `document-policy-store.test.ts` | 76 | rewrite through the public API | medium |
+| `publication-staging.test.ts` | 87 | keep | medium |
+
+These guard revocation races and private storage. Nothing else covers those
+paths, so deleting them would remove the only check.
+
+### P2-6. Large corpora and snapshots — keep
+
+- Snapshot-consistency family: 13 files, 2,045 lines. Each file covers a
+  different snapshot consumer. Risk if cut: high.
+- Evaluation corpora: `retrieval-routing-corpus`, `context-economy-evaluation`,
+  `context-architecture-corpus` and `question-*-corpus`, 182 test lines and
+  about 330 KB of fixtures. These are the only retrieval-quality regression
+  gates. Risk if cut: high.
+
+### P2-7. Environment-dependent failures — gate them, don't delete
+
+| File | Lines | Why it fails here |
+|---|---|---|
+| `portable-setup.test.ts` | 311 | Windows ACL and settings merge on this host |
+| `safe-test-runner.test.ts` | 177 | memory admission, real child processes |
+| `architecture-contracts.test.ts` | 77 | semantic check script |
+| `skill-security-host.test.ts` | 31 | real filesystem and worker |
+| `guidance-build-preflight.test.ts` | 31 | needs local `tsx` in the worktree |
+
+- These test real behavior that only fails because of this host.
+- Recommendation: **skip when the host can't run them**, with a stated
+  reason, instead of deleting. That keeps the full-run baseline clean
+  (about 627 lines stay).
+
+### Proposal 2 totals
+
+| Risk | Recommended action | Lines removed |
+|---|---|---|
+| Low | delete P2-1 and `manual-context-budget` (P2-2) | ~195 |
+| Medium | trim P2-2, delete P2-3 after diff, consolidate P2-4 | ~1,233 (≈109 trim + 144 + ~980 consolidation) |
+| High | keep P2-5 (except the two rewrites), P2-6, P2-7 (gate) | 0 (≈3,950 lines reviewed and kept) |
