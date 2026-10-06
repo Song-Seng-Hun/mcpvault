@@ -282,15 +282,12 @@ enabled only wiki-core, and the OAuth adapter did not supply the approved
 research scope to the existing activity gate. The all-consent test fixture had
 hidden this production omission.
 
-The research listener now selects only wiki-core and collaboration (see
-`docs/examples/research-writer-features.json`). The adapter translates a verified
-research OAuth scope into request-local collaboration authority for Posts and
-Comments, bounded by JWT expiry, the mapped account's capability ceiling and
-document permissions. No extra owner-consent file is needed. This is the normal
-account authorization path, not a promise that arbitrary features or models are
-trusted. Explicit additional host policies still restrict access when configured.
-An arbitrary label, unverified receipt, legacy token or expired request cannot
-create this authority. Authority ends when the response completes.
+The research listener later selected wiki-core and collaboration, and the adapter
+translated a verified research OAuth scope into request-local collaboration
+authority for Posts and Comments. The collaboration feature has since been
+removed: the listener runs wiki-core only, and a features file that still names
+collaboration loads with a warning and without it. OAuth grants no per-session
+owner consent.
 
 Focused real-server HTTP tests cover comment creation and reread by a fresh
 client without a separate consent file, plus retained denial boundaries. Live

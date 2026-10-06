@@ -12,5 +12,5 @@ export async function loadHostFeatureConfig(path: string | undefined, vaultPath:
   await assertHostPrivateStorage([hostPath, canonical]);
   const raw = await readHostFile(hostPath, canonical, { maxBytes: 16 * 1024 });
   await assertHostPrivateStorage([hostPath, canonical]);
-  return parseHostFeatureConfig(JSON.parse(raw));
+  return parseHostFeatureConfig(JSON.parse(raw), removed => console.error(`MCPVault features: ignoring removed features: ${removed.join(', ')}`));
 }

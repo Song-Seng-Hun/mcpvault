@@ -185,6 +185,20 @@ describe('bounded, immutable owner activity configuration', () => {
     expect(new OwnerActivityPolicy(input).fingerprint).not.toBe(policy.fingerprint);
   });
 
+  test('removed activities are dropped from older grants; unknown activities still fail closed', () => {
+    const grant = config().grants[0]!;
+    const policy = new OwnerActivityPolicy({ ...config(), grants: [
+      { ...grant, activities: ['roleplay', 'skill-evolution'] },
+      { ...grant, id: 'grant2', activities: ['collaboration'] },
+    ] });
+    expect(policy.removedActivities).toEqual(['collaboration', 'roleplay']);
+    expect(policy.decision(request())).toEqual(granted);
+    expect(policy.availabilityGeneration({ ...request(), now })).not.toBe('unavailable');
+    for (const activities of [['future-activity'], ['skill-evolution', 'future-activity']]) {
+      expect(() => new OwnerActivityPolicy({ ...config(), grants: [{ ...grant, activities }] })).toThrow('Invalid owner activity policy');
+    }
+  });
+
   test('every grant account must bind to that exact owner and grant IDs must be unique', () => {
     for (const accounts of [['unknown'], ['account2'], ['account1', 'account2']]) {
       const input = config(); input.grants[0]!.accountIds = accounts;

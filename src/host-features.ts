@@ -9,6 +9,11 @@ export const HOST_FEATURE_IDS_V1 = Object.freeze([
   'skill-evolution',
 ] as const);
 export type HostFeatureId = typeof HOST_FEATURE_IDS_V1[number];
+/** Removed from v1. Saved selections may still name them; they are dropped, so
+ * an older configuration keeps loading with the features that remain. */
+export const REMOVED_HOST_FEATURE_IDS: readonly string[] = Object.freeze([
+  'benchmarks', 'collaboration', 'economy', 'explanation-translation', 'ideation-research', 'roleplay',
+]);
 export interface HostFeatureConfig {
   readonly version: 1;
   readonly selected: readonly HostFeatureId[];
@@ -25,7 +30,7 @@ const graph: CapabilityNode[] = HOST_FEATURE_IDS_V1.map(id => ({
 
 /** Strict data-only object parsing. No coercion, getters, execution or defaults.
  * The host owns bounded JSON/file loading and chooses the default explicitly. */
-export function parseHostFeatureConfig(input: unknown): HostFeatureConfig {
+export function parseHostFeatureConfig(input: unknown, onRemoved?: (ids: readonly string[]) => void): HostFeatureConfig {
   if (!input || typeof input !== 'object' || types.isProxy(input) || Array.isArray(input)
     || ![Object.prototype, null].includes(Object.getPrototypeOf(input))) {
     throw guidanceError(new Error('Host feature configuration must be a plain data object'), 'guid-8cc3e0bbc4d56326');
@@ -41,7 +46,7 @@ export function parseHostFeatureConfig(input: unknown): HostFeatureConfig {
   if (fields.version!.value !== 1) throw guidanceError(new Error('Unsupported host feature configuration version'), 'guid-69e0395c276e6794');
   const list: unknown = fields.selected!.value;
   if (!Array.isArray(list) || types.isProxy(list) || Object.getPrototypeOf(list) !== Array.prototype
-    || list.length < 1 || list.length > HOST_FEATURE_IDS_V1.length
+    || list.length < 1 || list.length > HOST_FEATURE_IDS_V1.length + REMOVED_HOST_FEATURE_IDS.length
     || Reflect.ownKeys(list).length !== list.length + 1) {
     throw guidanceError(new Error('Host feature selected list outside bounds'), 'guid-c15bfe68dd910864');
   }
@@ -53,7 +58,9 @@ export function parseHostFeatureConfig(input: unknown): HostFeatureConfig {
     }
     selected.push(element.value);
   }
-  const validated = validateCapabilitySelection(graph, selected) as HostFeatureId[];
+  const removed = [...new Set(selected.filter(id => REMOVED_HOST_FEATURE_IDS.includes(id)))].sort();
+  if (removed.length) onRemoved?.(removed);
+  const validated = validateCapabilitySelection(graph, selected.filter(id => !removed.includes(id))) as HostFeatureId[];
   // The shared DAG permits an empty selection; a host configuration requires core.
   if (!validated.includes('wiki-core')) throw guidanceError(new Error('Host feature selection requires wiki-core'), 'guid-a7900400ce6fb967');
   return Object.freeze({ version: 1, selected: Object.freeze(validated.sort()) });

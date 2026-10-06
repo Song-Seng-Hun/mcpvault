@@ -59,6 +59,9 @@ export interface OwnerActivityDecision {
 }
 
 const activities: readonly Activity[] = ['skill-evolution'];
+/** Activities of removed features. Older consent files may still name them;
+ * they grant nothing now and are dropped instead of invalidating the file. */
+const REMOVED_ACTIVITIES: readonly string[] = ['benchmarks', 'collaboration', 'economy', 'explanation-translation', 'ideation-research', 'roleplay'];
 const actions: readonly OwnerActivityAction[] = ['discover', 'read', 'claim', 'execute'];
 const invalid = () => guidanceError(new Error('Invalid owner activity policy'), 'guid-4bbe53fca7727ba4');
 const isId = (value: unknown): value is string => typeof value === 'string'
@@ -145,6 +148,8 @@ const deny = (reason: Exclude<OwnerActivityReason, 'granted'>): OwnerActivityDec
  */
 export class OwnerActivityPolicy {
   readonly fingerprint: string;
+  /** Removed activities this policy dropped, sorted, for a host warning. */
+  readonly removedActivities: readonly string[];
   readonly #owners: Readonly<Record<string, string>>;
   readonly #grants: readonly FrozenGrant[];
 
@@ -158,7 +163,7 @@ export class OwnerActivityPolicy {
       if (!isId(account) || !isId(owner)) throw invalid();
       owners[account] = owner;
     }
-    const ids = new Set<string>();
+    const ids = new Set<string>(), removed = new Set<string>();
     const grants = array(raw.grants, 256).map(value => {
       const grant = record(value, 10, ['id', 'ownerId', 'accountIds', 'activities', 'actions',
         'dataPrefixes', 'executionTargets', 'expiresAt'], ['revoked']);
@@ -167,11 +172,15 @@ export class OwnerActivityPolicy {
       ids.add(grant.id);
       const accounts = list(grant.accountIds, isId);
       if (accounts.some(account => owners[account] !== grant.ownerId)) throw invalid();
+      const named = list(grant.activities, (item): item is string => isActivity(item) || REMOVED_ACTIVITIES.includes(item as string));
+      for (const activity of named) if (!isActivity(activity)) removed.add(activity);
       return Object.freeze({ id: grant.id, ownerId: grant.ownerId, accountIds: accounts,
-        activities: list(grant.activities, isActivity), actions: list(grant.actions, isAction),
+        activities: Object.freeze(named.filter(isActivity)), actions: list(grant.actions, isAction),
         dataPrefixes: list(grant.dataPrefixes, isPath), executionTargets: list(grant.executionTargets, isId),
         expiresAt: expiry(grant.expiresAt), revoked: grant.revoked === true });
-    }).sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+    }).filter(grant => grant.activities.length > 0) // Only removed activities: grants nothing.
+      .sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+    this.removedActivities = Object.freeze([...removed].sort());
     this.#owners = Object.freeze(owners);
     this.#grants = Object.freeze(grants);
     // All order-insensitive lists/bindings are sorted; optional revoked defaults

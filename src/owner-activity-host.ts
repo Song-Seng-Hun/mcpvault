@@ -12,7 +12,7 @@ export async function loadOwnerActivityHostConfig(path: string, expectedVault: s
   const canonical = await canonicalHostPath(path, true, true);
   const { vaultPath, hostPath } = await validateHostStorage({ vaultPath: expectedVault, hostPath: dirname(canonical) });
   const denied = new OwnerActivityPolicy({ version: 1, owners: {}, grants: [] });
-  let current = denied;
+  let current = denied, warned = '';
   let queue = Promise.resolve();
   const refresh = () => {
     const read = async () => {
@@ -25,6 +25,10 @@ export async function loadOwnerActivityHostConfig(path: string, expectedVault: s
           || await canonicalHostPath(raw.vaultPath, false) !== vaultPath) throw guidanceError(new Error('Owner consent belongs to another Vault'), 'guid-77083bace6dff5c5');
         const { vaultPath: _vault, ...definition } = raw;
         current = new OwnerActivityPolicy(definition);
+        // Warn once per distinct set; refresh re-reads the file on every operation.
+        const removed = current.removedActivities.join(', ');
+        if (removed && removed !== warned) console.error(`MCPVault owner consent: ignoring removed activities: ${removed}`);
+        warned = removed;
       } catch (error) { current = denied; throw error; }
     };
     const pending = queue.then(read, read);

@@ -32,6 +32,16 @@ test.each(ids.slice(1))('%s can be selected independently with core and never si
   expect(f.parseHostFeatureConfig(config('wiki-core')).selected).not.toContain(id);
 });
 
+test('an older selection naming removed features loads without them and reports them once', () => {
+  const f = api(), reported: (readonly string[])[] = [];
+  const removed = ['benchmarks', 'collaboration', 'economy', 'explanation-translation', 'ideation-research', 'roleplay'];
+  const parsed = f.parseHostFeatureConfig(config(...ids, ...removed), list => reported.push(list));
+  expect(parsed.selected).toEqual([...ids].sort());
+  expect(reported).toEqual([removed]);
+  expect(() => f.parseHostFeatureConfig(config('wiki-core', 'collaboration', 'future-feature'))).toThrow(/Unknown capability/);
+  expect(() => f.parseHostFeatureConfig(config('collaboration'))).toThrow(/core/i);
+});
+
 test('work management does not imply skill evolution, economy, or model execution', () => {
   const f = api();
   const selected = f.parseHostFeatureConfig(config('wiki-core', 'work-management'));

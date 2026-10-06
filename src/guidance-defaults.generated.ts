@@ -15270,7 +15270,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/owner-activity.ts",
-        "line": 63
+        "line": 66
       }
     ]
   },
@@ -21413,7 +21413,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/host-features.ts",
-        "line": 41
+        "line": 46
       }
     ]
   },
@@ -28487,7 +28487,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/host-features.ts",
-        "line": 31
+        "line": 36
       }
     ]
   },
@@ -33126,7 +33126,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/host-features.ts",
-        "line": 58
+        "line": 65
       }
     ]
   },
@@ -38418,7 +38418,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/host-features.ts",
-        "line": 46
+        "line": 51
       }
     ]
   },
@@ -40136,7 +40136,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/host-features.ts",
-        "line": 35
+        "line": 40
       }
     ]
   },
@@ -46361,7 +46361,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/host-features.ts",
-        "line": 52
+        "line": 57
       }
     ]
   },
@@ -46575,7 +46575,7 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     "sources": [
       {
         "file": "src/host-features.ts",
-        "line": 39
+        "line": 44
       }
     ]
   },
