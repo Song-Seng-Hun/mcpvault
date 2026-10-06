@@ -1013,7 +1013,9 @@ export class FileSystemService {
   private async unrestoredDestination(fullPath: string, path: string, previous: string | undefined, moved: string, cause: string): Promise<string | undefined> {
     let current: string | undefined;
     // Bounded like any note read; a file over the limit counts as "could not be checked".
-    try { current = await this.vaultIo.readUtf8Bounded(fullPath, MAX_NOTE_CONTENT_BYTES); }
+    // Read directly, not through vaultIo: a shared in-flight read may predate the
+    // failed rollback and report content the file no longer holds.
+    try { current = await readBoundedSource(fullPath, MAX_NOTE_CONTENT_BYTES); }
     catch (error) {
       if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) return `${path} could not be checked after the failed rollback (${cause})`;
     }
