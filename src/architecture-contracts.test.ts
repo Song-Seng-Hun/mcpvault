@@ -6,6 +6,7 @@ import { basename, isAbsolute, join, relative } from 'node:path';
 import { tmpdir } from 'node:os';
 // @ts-expect-error The offline checker deliberately remains a non-runtime JS tool.
 import { loadArchitectureContract, checkArchitectureContract } from '../scripts/check-architecture-contracts.mjs';
+import { crlfCheckout, hostGate } from '../tests/host-conditions.js';
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const bundle = () => loadArchitectureContract(root);
@@ -22,15 +23,19 @@ test('architecture permits comments without requiring duplicate source-hash book
   const b = await bundle(); b.files['src/graph-contract.ts'] += '\n// changed\n';
   expect(checkArchitectureContract(b)).toMatchObject({ valid: true, errors: [] });
 });
-test.each([
-  ['  targetReference\n', '  rawSecret\n'],
-  ['  contradicts\n', '  agrees_with\n'],
-  ['--> "0..1" Revision : resolved target', '--> "1" Revision : resolved target'],
-  ['--> "2..8" Revision : exact input pins', '--> "1..8" Revision : exact input pins'],
-])('architecture semantic check rejects changed domain contract: %s', async (before, after) => {
+const rejectsChange = async (before: string, after: string) => {
   const b = await bundle(); replace(b, path, before, after);
   expect(checkArchitectureContract(b).valid).toBe(false);
-});
+};
+// These rows match line endings, so they need the repository's LF text.
+test.skipIf(Boolean(hostGate(crlfCheckout(join(root, path))))).each([
+  ['  targetReference\n', '  rawSecret\n'],
+  ['  contradicts\n', '  agrees_with\n'],
+])('architecture semantic check rejects changed domain contract: %s', rejectsChange);
+test.each([
+  ['--> "0..1" Revision : resolved target', '--> "1" Revision : resolved target'],
+  ['--> "2..8" Revision : exact input pins', '--> "1..8" Revision : exact input pins'],
+])('architecture semantic check rejects changed domain contract: %s', rejectsChange);
 test('architecture contract compares state vocabulary to actual AST declarations', async () => {
   const b = await bundle(); replace(b, 'docs/architecture/uml/states.puml', 'state "waiting" as task_waiting', 'state "pending" as task_waiting');
   expect(checkArchitectureContract(b).valid).toBe(false);

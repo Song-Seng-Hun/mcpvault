@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { createServer } from 'node:http';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import { validateTargetPath } from '../scripts/obsidian-host-plugins.mjs';
+import { crlfShebangModule, hostGate } from '../tests/host-conditions.js';
 
 // The desktop sandbox cannot provision an owner-only Windows ACL. Simulate only
 // the OS ACL metadata for in-process apply tests; CLI doctor still probes the OS.
@@ -27,6 +28,8 @@ vi.mock('node:child_process', async importOriginal => {
 const exec = promisify(execFile);
 const repository = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const script = join(repository, 'scripts/mcpvault-setup.mjs');
+// Tests that import the setup module in-process; the CLI tests spawn it instead.
+const importGate = Boolean(hostGate(crlfShebangModule(script)));
 const roots: string[] = [];
 afterEach(async () => {
   permissions.broadPath = '';
@@ -93,7 +96,7 @@ describe('portable setup (synthetic paths only)', () => {
     const { link } = await import('node:fs/promises'); await link(f.client, join(f.root, 'alias.json'));
     expect((await run(f.flags)).stderr).toMatch(/hardlink/i);
   });
-  test('merges settings with a byte-exact recoverable backup and reports only the proposed entry', async () => {
+  test.skipIf(importGate)('merges settings with a byte-exact recoverable backup and reports only the proposed entry', async () => {
     const f = await fixture(); const original = '{"theme":"dark","mcpServers":{"other":{"command":"fixture","env":{"TOKEN":"synthetic-secret"}}}}';
     await writeFile(f.client, original);
     const p = await preview(f.flags); expect(JSON.stringify(p)).not.toContain('synthetic-secret');
@@ -136,14 +139,14 @@ describe('portable setup (synthetic paths only)', () => {
       expect(result.stderr).not.toContain('synthetic-secret'); expect(await readFile(f.client, 'utf8')).toBe(content);
     }
   });
-  test('serializes concurrent applies and preserves a single completed merge', async () => {
+  test.skipIf(importGate)('serializes concurrent applies and preserves a single completed merge', async () => {
     const f = await fixture(); await writeFile(f.client, '{"keep":true}'); const p = await preview(f.flags);
     const { applySetup } = await import('../scripts/mcpvault-setup.mjs');
     const results = await Promise.allSettled([1, 2].map(() => applySetup(f.options, p.fingerprint)));
     expect(results.filter(r => r.status === 'fulfilled'), JSON.stringify(results)).toHaveLength(1);
     expect(JSON.parse(await readFile(f.client, 'utf8'))).toMatchObject({ keep: true, mcpServers: { mcpvault: p.clientEntry } });
   });
-  test.skipIf(process.platform !== 'win32')('refuses a client parent whose inherited Windows ACL would expose replacement settings', async () => {
+  test.skipIf(process.platform !== 'win32' || importGate)('refuses a client parent whose inherited Windows ACL would expose replacement settings', async () => {
     const f = await fixture(); await writeFile(f.client, '{"keep":true}');
     const { planSetup, applySetup } = await import('../scripts/mcpvault-setup.mjs');
     const p = await planSetup(f.options); permissions.broadPath = f.root;
@@ -163,7 +166,7 @@ describe('portable setup (synthetic paths only)', () => {
     const p = await preview([...flags, '--url', 'https://example.invalid/mcp']);
     expect(p.launch).toBeNull(); expect(p.clientEntry).toEqual({ url: 'https://example.invalid/mcp' });
   });
-  test('remote client-only preview and apply need no local server or Vault directories', async () => {
+  test.skipIf(importGate)('remote client-only preview and apply need no local server or Vault directories', async () => {
     const root = await realpath(await mkdtemp(join(tmpdir(), 'mcpvault-remote-client-'))); roots.push(root);
     const privateState = join(root, 'private'); await mkdir(privateState, { mode: 0o700 });
     const client = join(root, 'client.json');
@@ -180,7 +183,7 @@ describe('portable setup (synthetic paths only)', () => {
     expect(await doctor(options)).toMatchObject({ ok: true, checks: { paths: { status: 'pass' }, build: { status: 'skipped' }, endpoint: { status: 'skipped' } } });
     expect((await readdir(root)).sort()).toEqual(['client.json', 'private']);
   });
-  test('remote client-only recipes are versioned, path-free, and accept legacy v1 imports', async () => {
+  test.skipIf(importGate)('remote client-only recipes are versioned, path-free, and accept legacy v1 imports', async () => {
     const f = await fixture();
     const { exportManifest, importManifest, planSetup, applySetup } = await import('../scripts/mcpvault-setup.mjs');
     const options = { operation: 'connect-existing-server', mode: 'remote-https', url: 'https://example.invalid/mcp', privateState: f.state, client: f.client };
@@ -212,7 +215,7 @@ describe('portable setup (synthetic paths only)', () => {
     expect(result.code).not.toBe(0); expect(result.stderr).toMatch(/mode|stdio|HTTPS|loopback|URL|remote/i);
     expect(result.stderr).not.toContain('secret');
   });
-  test('exports only a strict versioned recipe and imports with explicit path remap preview', async () => {
+  test.skipIf(importGate)('exports only a strict versioned recipe and imports with explicit path remap preview', async () => {
     const f = await fixture(); await writeFile(join(f.state, 'credentials.json'), 'synthetic-private');
     const result = await run([...f.flags, '--action', 'export']); expect(result.code).toBe(0);
     expect(result.stdout).not.toContain(f.root); expect(result.stdout).not.toContain('synthetic-private');
@@ -267,7 +270,7 @@ describe('portable setup (synthetic paths only)', () => {
       expect(methods.every(m => ['initialize', 'notifications/initialized', 'tools/list'].includes(m))).toBe(true);
     } finally { await new Promise<void>(resolve => server.close(() => resolve())); }
   });
-  test('non-Windows PDF sandbox requests are rejected with no fallback (platform branch)', async () => {
+  test.skipIf(importGate)('non-Windows PDF sandbox requests are rejected with no fallback (platform branch)', async () => {
     const module = await import('../scripts/mcpvault-setup.mjs');
     expect(() => module.platformFeatures('linux', true)).toThrow(/Windows|unsupported/i);
     expect(() => module.platformFeatures('darwin', true)).toThrow(/Windows|unsupported/i);

@@ -14,6 +14,7 @@ import { runNode } from '../scripts/testing/process.mjs';
 import { readCoverage, runSafeTests } from '../scripts/testing/runner.mjs';
 // @ts-expect-error Host tooling, not a server runtime module.
 import { changedTestSelection, changedPaths, resolveBase, changedRecords } from '../scripts/testing/changed.mjs';
+import { hostGate, missingLocalPackage } from '../tests/host-conditions.js';
 
 test('changed selection preserves changed tests and uses Vitest dependency selection without claiming full coverage', () => {
   expect(changedTestSelection({ changed: ['src/one.test.ts'], vitest: ['src/two.test.ts'], all: ['src/one.test.ts', 'src/two.test.ts'] }))
@@ -112,8 +113,10 @@ test('checkpoint paths and single-worker ownership never overwrite existing or d
     expect(await readFile(join(state, 'broken.json'), 'utf8')).toBe('{');
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
-test('process guard observes actual exit and cancels only its owned child', async () => {
+test('process guard observes actual exit and cancels only its owned child', async ({ skip }) => {
   const success = await runNode(root, ['-e', 'process.stdout.write("ok")']);
+  // The guard's own admission check refuses to start below its free-memory floor.
+  if (success.reason === 'memory') skip(hostGate(`free memory ${success.minimumFreeGiB.toFixed(2)} GiB is below the process guard floor`));
   expect(success).toMatchObject({ code: 0, stopped: false, output: 'ok' });
   const controller = new AbortController();
   const cancelled = await runNode(root, ['-e', 'console.log("ready");setInterval(()=>{},1000)'], {
@@ -152,7 +155,8 @@ test('resume accepts only matching completed receipts, not interrupted, duplicat
     await expect(readCoverage(state, manifest, root)).rejects.toThrow();
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
-test('real Vitest batches resume once and complete without replay; changed inputs reject old receipts', async () => {
+// The end-to-end batch links this checkout's node_modules into a fixture.
+test.skipIf(Boolean(hostGate(missingLocalPackage(process.cwd(), 'vitest/vitest.mjs'))))('real Vitest batches resume once and complete without replay; changed inputs reject old receipts', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'safe-runner-e2e-')); let linked = false;
   try {
     await mkdir(join(dir, 'src')); await symlink(join(root, 'node_modules'), join(dir, 'node_modules'), process.platform === 'win32' ? 'junction' : 'dir'); linked = true;

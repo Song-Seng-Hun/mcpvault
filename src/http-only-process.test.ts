@@ -6,8 +6,11 @@ import { basename, dirname, isAbsolute, join, relative } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createServer as createNetServer } from 'node:net';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
+import { hostGate, missingLocalPackage } from '../tests/host-conditions.js';
 
 const repo = dirname(dirname(fileURLToPath(import.meta.url)));
+// Lifecycle observation preloads the SDK by path from this checkout.
+const lifecycleGate = Boolean(hostGate(missingLocalPackage(repo, '@modelcontextprotocol/server/dist/index.mjs')));
 async function withProcess(args: string[], run: (fixture: {
   child: ReturnType<typeof spawn>;
   stdout: () => string;
@@ -88,7 +91,7 @@ test('published HTTP-only entry point ignores stdin and serves two clients throu
   });
 }, 15000);
 
-test('failed HTTP startup exits nonzero after acquiring a REST listener', async () => {
+test.skipIf(lifecycleGate)('failed HTTP startup exits nonzero after acquiring a REST listener', async () => {
   const occupied = createNetServer();
   await new Promise<void>(resolve => occupied.listen(0, '127.0.0.1', resolve));
   const port = (occupied.address() as { port: number }).port;
@@ -103,7 +106,7 @@ test('failed HTTP startup exits nonzero after acquiring a REST listener', async 
   } finally { await new Promise<void>((resolve, reject) => occupied.close(error => error ? reject(error) : resolve())); }
 }, 15000);
 
-test('HTTP-only signal handler finishes actual root cleanup before exit', async () => {
+test.skipIf(lifecycleGate)('HTTP-only signal handler finishes actual root cleanup before exit', async () => {
   await withProcess(['--mcp-http-only=0'], async ({ child, stderr, waitUntil }) => {
     await waitUntil(() => stderr().includes('Stateless MCP HTTP listening'));
     child.send!('signal'); // Cross-platform event delivery; not a claim about Windows OS signals.
@@ -113,7 +116,7 @@ test('HTTP-only signal handler finishes actual root cleanup before exit', async 
   }, true);
 }, 15000);
 
-test('terminal stdio wire failure releases the root without waiting for stdin EOF', async () => {
+test.skipIf(lifecycleGate)('terminal stdio wire failure releases the root without waiting for stdin EOF', async () => {
   await withProcess([], async ({ child, stdout, stderr, waitUntil }) => {
     child.stdin!.write(JSON.stringify({ jsonrpc: '2.0', id: 91, method: 'initialize', params: {
       protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'fault-stdio', version: '1.0.0' },
@@ -126,7 +129,7 @@ test('terminal stdio wire failure releases the root without waiting for stdin EO
   }, true);
 }, 15000);
 
-test('a recoverable stdio parse error does not close the runtime or prevent negotiation', async () => {
+test.skipIf(lifecycleGate)('a recoverable stdio parse error does not close the runtime or prevent negotiation', async () => {
   await withProcess([], async ({ child, stdout, stderr, waitUntil }) => {
     child.stdin!.write('not-json\n' + JSON.stringify({ jsonrpc: '2.0', id: 92, method: 'initialize', params: {
       protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'recovering-stdio', version: '1.0.0' },
@@ -140,7 +143,7 @@ test('a recoverable stdio parse error does not close the runtime or prevent nego
   }, true);
 }, 15000);
 
-test('terminal stdio wire failure does not dispose a runtime still owned by HTTP', async () => {
+test.skipIf(lifecycleGate)('terminal stdio wire failure does not dispose a runtime still owned by HTTP', async () => {
   await withProcess(['--mcp-http=0'], async ({ child, stderr, waitUntil }) => {
     await waitUntil(() => stderr().includes('Stateless MCP HTTP listening'));
     child.send!('stdout-fault');

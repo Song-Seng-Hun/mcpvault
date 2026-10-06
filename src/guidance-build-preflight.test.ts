@@ -3,8 +3,9 @@ import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { hostGate, missingLocalPackage } from '../tests/host-conditions.js';
 
-test('guidance generation rejects conflicts; catalog-only refresh leaves source untouched', async () => {
+test.skipIf(Boolean(hostGate(missingLocalPackage(process.cwd(), 'tsx/dist/cli.mjs'))))('guidance generation rejects conflicts; catalog-only refresh leaves source untouched', async () => {
   const root = await mkdtemp(join(tmpdir(), 'guidance-preflight-'));
   try {
     await mkdir(join(root, 'src'));
