@@ -1,7 +1,7 @@
 import { guidanceError, guidanceText } from './guidance-runtime.js';
 import { join, resolve, relative, dirname, posix } from 'path';
 import { homedir } from 'os';
-import { readdir, opendir, stat, readFile, writeFile, unlink, mkdir, access, rename, copyFile, open } from 'node:fs/promises';
+import { readdir, opendir, stat, readFile, writeFile, unlink, mkdir, access, rename, copyFile, open, rm } from 'node:fs/promises';
 import { constants, lstatSync, realpathSync } from 'node:fs';
 import { createHash, randomUUID } from 'node:crypto';
 import trash from 'trash';
@@ -938,18 +938,41 @@ export class FileSystemService {
     assertOriginalMutation(sourcePath);
     assertOriginalMutation(targetPath);
     await prepareDocumentWrite(targetPath);
-    const assertDispatch = () => {
-      assertEnterpriseStorageAccess(sourcePath);
-      assertEnterpriseStorageAccess(targetPath);
-      assertSkillEvolutionMutationBoundary(sourcePath);
-      assertSkillEvolutionMutationBoundary(targetPath);
-      this.assertNoticeMutation(sourcePath);
-      this.assertNoticeMutation(targetPath);
-    };
-    assertDispatch();
+    this.assertMoveDispatch(sourcePath, targetPath);
     // Same rule as writeProtectedFile: folders only after the checks pass.
-    if (createParent) { await mkdir(dirname(to), { recursive: true }); assertDispatch(); }
+    if (createParent) { await mkdir(dirname(to), { recursive: true }); this.assertMoveDispatch(sourcePath, targetPath); }
     return rename(from, to);
+  }
+  /** For a move whose rename failed with EXDEV; renameProtectedFile already ran
+   * the target barrier. The source barrier and every check run before a byte is
+   * copied. The copy lands in a temporary file beside the target and replaces
+   * it only by rename, so a denial or a failed copy leaves the target as it
+   * was and no temporary file behind. */
+  private async moveProtectedFileAcrossDevices(from: string, to: string) {
+    const sourcePath = relative(this.vaultPath, from).replace(/\\/g, '/');
+    const targetPath = relative(this.vaultPath, to).replace(/\\/g, '/');
+    assertOriginalMutation(sourcePath);
+    assertOriginalMutation(targetPath);
+    await prepareOwnerActivityStorageWrite(sourcePath);
+    this.assertMoveDispatch(sourcePath, targetPath);
+    const temporary = join(dirname(to), `.${randomUUID()}.mcpvault-move`);
+    try {
+      await copyFile(from, temporary, constants.COPYFILE_EXCL);
+      this.assertMoveDispatch(sourcePath, targetPath);
+      await rename(temporary, to);
+    } catch (error) {
+      await rm(temporary, { force: true });
+      throw error;
+    }
+    await this.removeProtectedFile(from);
+  }
+  private assertMoveDispatch(sourcePath: string, targetPath: string) {
+    assertEnterpriseStorageAccess(sourcePath);
+    assertEnterpriseStorageAccess(targetPath);
+    assertSkillEvolutionMutationBoundary(sourcePath);
+    assertSkillEvolutionMutationBoundary(targetPath);
+    this.assertNoticeMutation(sourcePath);
+    this.assertNoticeMutation(targetPath);
   }
 
   async readNote(path: string, maxBytes?: number): Promise<ParsedNote> {
@@ -2434,10 +2457,7 @@ export class FileSystemService {
         await this.renameProtectedFile(oldFullPath, newFullPath, true);
       } catch (error) {
         if (error instanceof Error && 'code' in error && error.code === 'EXDEV') {
-          this.assertNoticeMutation(relative(this.vaultPath, oldFullPath));
-          this.assertNoticeMutation(relative(this.vaultPath, newFullPath));
-          await copyFile(oldFullPath, newFullPath);
-          await this.removeProtectedFile(oldFullPath);
+          await this.moveProtectedFileAcrossDevices(oldFullPath, newFullPath);
         } else {
           throw error;
         }
