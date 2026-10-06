@@ -969,23 +969,31 @@ export class FileSystemService {
     const temporary = join(dirname(to), `.${randomUUID()}.mcpvault-move`);
     try {
       await copyFile(from, temporary, constants.COPYFILE_EXCL);
+    } catch (error) {
+      // EEXIST from the exclusive copy: another writer holds that name, so it is not ours.
+      if (error instanceof Error && 'code' in error && error.code === 'EEXIST') throw error;
+      throw await this.discardMoveTemporary(temporary, error);
+    }
+    try {
       this.assertMoveDispatch(sourcePath, targetPath);
       await rename(temporary, to);
     } catch (error) {
-      // EEXIST from the exclusive copy: that file is not ours to remove.
-      if (error instanceof Error && 'code' in error && error.code === 'EEXIST') throw error;
-      try { await rm(temporary, { force: true }); }
-      catch (cleanup) {
-        // The copy or rename failure stays the reported error; the leftover is its cause.
-        throw Object.assign(error instanceof Error ? error : new Error(String(error)), { cause: cleanup });
-      }
-      throw error;
+      throw await this.discardMoveTemporary(temporary, error);
     }
     // Admitted above and rechecked just before the rename; another barrier here
     // could only strand the replaced target.
     try { await unlink(from); }
     catch (error) { return error instanceof Error ? error : new Error(String(error)); }
     return undefined;
+  }
+  /** Removes our temporary copy after a failed cross-device move and returns the
+   * failure to throw. The copy or rename failure stays the reported error; a
+   * cleanup failure becomes its cause. */
+  private async discardMoveTemporary(temporary: string, error: unknown): Promise<Error> {
+    const failure = error instanceof Error ? error : new Error(String(error));
+    try { await rm(temporary, { force: true }); }
+    catch (cleanup) { Object.assign(failure, { cause: cleanup }); }
+    return failure;
   }
   /** What an unfinished move_note rollback left at the destination, judged by
    * reading it, so the message claims nothing the file does not show. The

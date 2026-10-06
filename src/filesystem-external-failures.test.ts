@@ -16,6 +16,7 @@ const host = vi.hoisted(() => ({
   cleanupFails: false,
   busy: undefined as string | undefined,
   writeFull: undefined as string | undefined,
+  renameExists: false,
 }));
 vi.mock('node:fs/promises', async importOriginal => {
   const actual = await importOriginal<typeof import('node:fs/promises')>();
@@ -23,6 +24,7 @@ vi.mock('node:fs/promises', async importOriginal => {
     ...actual,
     rename: async (from: string, to: string) => {
       if (host.crossDevice?.(String(from), String(to))) throw Object.assign(new Error('cross-device link not permitted'), { code: 'EXDEV' });
+      if (host.renameExists && String(from).endsWith('.mcpvault-move')) throw Object.assign(new Error('file already exists'), { code: 'EEXIST' });
       return actual.rename(from, to);
     },
     copyFile: async (from: string, to: string, mode?: number) => {
@@ -57,7 +59,7 @@ vi.mock('trash', () => ({ default: systemTrash }));
 
 const vaults: string[] = [];
 afterEach(async () => {
-  Object.assign(host, { crossDevice: undefined, copyFails: false, tempTaken: false, cleanupFails: false, busy: undefined, writeFull: undefined });
+  Object.assign(host, { crossDevice: undefined, copyFails: false, tempTaken: false, cleanupFails: false, busy: undefined, writeFull: undefined, renameExists: false });
   systemTrash.mockReset();
   for (const vault of vaults.splice(0)) await rm(vault, { recursive: true, force: true });
 });
@@ -113,6 +115,14 @@ test('a temporary name another writer already holds is refused and left in place
   const left = (await files(vault)).filter(name => name.endsWith('.mcpvault-move'));
   expect(left).toHaveLength(1);
   expect(await readFile(join(vault, left[0]!), 'utf8')).toBe('not ours');
+  expect(await readFile(join(vault, 'Target.png'), 'utf8')).toBe('old target');
+});
+
+test('an EEXIST from renaming our own temporary copy still removes that copy', async () => {
+  const { vault, fs } = await vaultWithTarget();
+  host.renameExists = true;
+  expect(await fs.moveFile(overwrite)).toMatchObject({ success: false, message: expect.stringMatching(/already exists/) });
+  expect(await files(vault)).toEqual(['Source.png', 'Target.png']);
   expect(await readFile(join(vault, 'Target.png'), 'utf8')).toBe('old target');
 });
 
