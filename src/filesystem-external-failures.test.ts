@@ -12,6 +12,8 @@ import { FileSystemService } from './filesystem.js';
 const host = vi.hoisted(() => ({
   crossDevice: undefined as undefined | ((from: string, to: string) => boolean),
   copyFails: false,
+  tempTaken: false,
+  cleanupFails: false,
   busy: undefined as string | undefined,
 }));
 vi.mock('node:fs/promises', async importOriginal => {
@@ -23,9 +25,18 @@ vi.mock('node:fs/promises', async importOriginal => {
       return actual.rename(from, to);
     },
     copyFile: async (from: string, to: string, mode?: number) => {
+      if (host.tempTaken) {
+        // Another writer owns this name already; the exclusive copy must refuse it.
+        await actual.writeFile(to, 'not ours');
+        return actual.copyFile(from, to, mode);
+      }
       if (!host.copyFails) return actual.copyFile(from, to, mode);
       await actual.writeFile(to, 'par');
       throw Object.assign(new Error('no space left on device'), { code: 'ENOSPC' });
+    },
+    rm: async (path: string, options?: Parameters<typeof actual.rm>[1]) => {
+      if (host.cleanupFails && String(path).endsWith('.mcpvault-move')) throw Object.assign(new Error('operation not permitted'), { code: 'EPERM' });
+      return actual.rm(path, options);
     },
     unlink: async (path: string) => {
       if (host.busy && String(path).endsWith(host.busy)) throw Object.assign(new Error('resource busy or locked'), { code: 'EBUSY' });
@@ -40,7 +51,8 @@ vi.mock('trash', () => ({ default: systemTrash }));
 
 const vaults: string[] = [];
 afterEach(async () => {
-  host.crossDevice = undefined; host.copyFails = false; host.busy = undefined; systemTrash.mockReset();
+  Object.assign(host, { crossDevice: undefined, copyFails: false, tempTaken: false, cleanupFails: false, busy: undefined });
+  systemTrash.mockReset();
   for (const vault of vaults.splice(0)) await rm(vault, { recursive: true, force: true });
 });
 async function vaultWithTarget() {
@@ -76,6 +88,25 @@ test('a cross-device copy that fails part way keeps the target and leaves no tem
   expect(await fs.moveFile(overwrite)).toMatchObject({ success: false, message: expect.stringMatching(/no space/) });
   expect(await readFile(join(vault, 'Target.png'), 'utf8')).toBe('old target');
   expect(await files(vault)).toEqual(['Source.png', 'Target.png']);
+});
+
+test('a failed temporary-file cleanup keeps the copy failure as the reported error', async () => {
+  const { vault, fs } = await vaultWithTarget();
+  Object.assign(host, { copyFails: true, cleanupFails: true });
+  const result = await fs.moveFile(overwrite);
+  expect(result).toMatchObject({ success: false, message: expect.stringMatching(/no space left/) });
+  expect(result.message).not.toMatch(/not permitted/);
+  expect(await readFile(join(vault, 'Target.png'), 'utf8')).toBe('old target');
+});
+
+test('a temporary name another writer already holds is refused and left in place', async () => {
+  const { vault, fs } = await vaultWithTarget();
+  host.tempTaken = true;
+  expect(await fs.moveFile(overwrite)).toMatchObject({ success: false });
+  const left = (await files(vault)).filter(name => name.endsWith('.mcpvault-move'));
+  expect(left).toHaveLength(1);
+  expect(await readFile(join(vault, left[0]!), 'utf8')).toBe('not ours');
+  expect(await readFile(join(vault, 'Target.png'), 'utf8')).toBe('old target');
 });
 
 test('a cross-device move whose source cannot be removed reports a partial move and still announces the target', async () => {

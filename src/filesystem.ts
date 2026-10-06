@@ -966,7 +966,13 @@ export class FileSystemService {
       this.assertMoveDispatch(sourcePath, targetPath);
       await rename(temporary, to);
     } catch (error) {
-      await rm(temporary, { force: true });
+      // EEXIST from the exclusive copy: that file is not ours to remove.
+      if (error instanceof Error && 'code' in error && error.code === 'EEXIST') throw error;
+      try { await rm(temporary, { force: true }); }
+      catch (cleanup) {
+        // The copy or rename failure stays the reported error; the leftover is its cause.
+        throw Object.assign(error instanceof Error ? error : new Error(String(error)), { cause: cleanup });
+      }
       throw error;
     }
     // Admitted above and rechecked just before the rename; another barrier here
