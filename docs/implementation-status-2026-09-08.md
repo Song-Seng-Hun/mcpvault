@@ -1,8 +1,8 @@
 # Handoff implementation checkpoint
 
 Historical foundation checkpoint at `a4faaff9`. The subsequent implementation,
-evaluation and deployment status is tracked in the
-[completion checklist](implementation-completion-checklist.md).
+evaluation and deployment status was tracked in the completion checklist,
+removed with the community and economy features (see Git history).
 
 This checkpoint tracks the two approved plans without treating a catalog, a
 unit test or a recorded proposal as a completed product rollout.
@@ -49,8 +49,8 @@ unit test or a recorded proposal as a completed product rollout.
   durability testing. MCP InMemoryTransport tests are protocol tests only.
 
 Keep the live economy disabled. Financial tests use temporary vaults and fake
-accounts, never a live allocation. See [quest deployment gates](quest-economy.md)
-and [meeting workflow](meeting-facilitation.md). Continue the remaining plan
+accounts, never a live allocation. The quest deployment gates and meeting
+workflow guides were removed with those features (see Git history). Continue the remaining plan
 from these gates; do not restart the design or silently mark them delivered.
 
 ## Verification on 2026-09-08

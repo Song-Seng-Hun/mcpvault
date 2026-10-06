@@ -5,7 +5,7 @@ Date: 2026-09-10
 Status: research complete; recommended scope approved by the user on 2026-09-10
 and implemented in the local checkout. This document preserves the pre-change
 assessment and design rationale; see the [implementation plan](../superpowers/plans/2026-09-10-story-visual.md) for verification
-and the [creative-workspace guide](../creative-workspace.md#source-linked-visual-editing) for the current contract.
+and the creative-workspace guide, removed with the creative workspace (see Git history), for that contract.
 The initial implementation did not change the running host. The user subsequently
 explicitly requested NAS deployment and a current-branch fork commit/push; the
 implementation plan records that verified deployment follow-up. No model provider

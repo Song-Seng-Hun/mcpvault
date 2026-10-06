@@ -1,7 +1,7 @@
 ---
 id: "readme-workflows"
 kind: "manual"
-description: "Find source, collaboration, fiction, economy and skill documentation by purpose."
+description: "Find source, synthesis, Obsidian, work, skill and notice documentation by purpose."
 keywords: ["workflows","MCPVault","manual","안내"]
 use_when: "Entering one specialized workflow, not every domain."
 position: "Chapter 7 of 11; source README navigation."

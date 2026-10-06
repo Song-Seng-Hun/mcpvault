@@ -42,4 +42,4 @@ requires separate approval.
 
 [Service ownership](docs/getting-started/architecture.md) · [Verification and delivery](docs/getting-started/development.md).
 For this fork's mandatory repository rules, read [AGENTS.md](AGENTS.md).
-Example: retrieve an original passage through the retrieval route; skip unrelated fiction/economy guides.
+Example: retrieve an original passage through the retrieval route; skip unrelated fiction or skill guides.

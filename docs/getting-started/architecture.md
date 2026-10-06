@@ -19,8 +19,8 @@ source_revision: "6bf6656271dda225841d3018dfe9e959a2ee27d6"
 | `src/endpoint-registry.ts` | Dynamic IDs, schemas, availability and discovery |
 | `src/filesystem.ts`, `src/pathfilter.ts`, `src/scope-access.ts` | Paths, immutability and caller visibility |
 | `src/llm-wiki.ts`, `src/organization.ts` | Knowledge workflows and organization contracts |
-| Domain services | Work, community, Story, Roleplay and economy business rules shared by MCP/REST |
-| Read models | Rebuildable metadata/search/semantic/graph/notification/reputation projections |
+| Domain services | Work, memory, Story and skill business rules shared by MCP/REST |
+| Read models | Rebuildable metadata/search/semantic/graph projections |
 
 Keep one owner per shared file. Inspect nearby tests; add a regression before
 changing behavior. Evaluation assets live under `tests/fixtures`, not the

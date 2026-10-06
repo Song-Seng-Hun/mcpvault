@@ -18,6 +18,7 @@ exactly one topic needed for the current action:
 | Topic | Use when |
 | --- | --- |
 | `onboarding` | recoverable identity, first action |
+| `notices` | priority guidance, reviewed revisions |
 | `capture` | Inbox capture/clarification |
 | `retrieval` | minimal current context |
 | `knowledge` | durable notes/projections |
@@ -27,9 +28,8 @@ exactly one topic needed for the current action:
 | `moc` | maps, hierarchy, order, learning paths |
 | `memory` | private recall, resurfacing, continuity |
 | `maintenance` | one bounded repair, no dashboard sprawl |
-| `ideation` | branching, workshops, promotion, synthesis |
-| `community` | posts/comments/chat, mentions, collaboration |
 | `portability` | manifests, cross-center Global sync |
 | `safety` | confidentiality, hostile content, moderation |
+| `expression` | concise English guidance, Korean identifiers kept |
 
 Example: a question about exact evidence needs `evidence`, not every dashboard.
