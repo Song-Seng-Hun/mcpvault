@@ -1,5 +1,10 @@
 # Enterprise administrator registry
 
+> **Retired.** The enterprise launcher, public federation and Global Sync hub
+> were removed in `126c63e3b`, and their `dist/` entry points are no longer
+> built. This page is kept as a record of the old design; none of its commands
+> run on the current build.
+
 The enterprise registry is host policy. It is not part of an Obsidian Vault,
 Git checkout, or MCP resource. An administrator must choose an absolute
 `--registry` path outside the Vault and this service repository. Pass additional

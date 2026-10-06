@@ -205,6 +205,6 @@ or tombstoned. A stale source, signature failure or dirty local file stops curso
 progress without overwriting local work. Approved tombstones quarantine local
 content under hidden host state, preserving recovery.
 
-Library and HTTP contracts live in [global-sync.ts](../src/global-sync.ts) and the
-[standalone launcher](../global-sync-server.ts). Use bounded explicit pull/propose
+Library and HTTP contracts lived in `src/global-sync.ts` and the standalone
+launcher `global-sync-server.ts`, both removed. Use bounded explicit pull/propose
 operations; do not infer completion from the first page or erase local conflicts.

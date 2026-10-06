@@ -48,9 +48,11 @@ are required for these checks.
 Actual HTTPS access from another physical PC on the company LAN has **not**
 been tested. Loopback TLS automation is not evidence of that deployment check.
 Separate operating-system service users, backup permissions, and inference
-egress restrictions have not been configured on this machine. Follow
+egress restrictions have not been configured on this machine. The enterprise
+launcher they were meant for was removed in `126c63e3b`;
 [the deployment guide](enterprise-deployment.md) and
-[the network isolation guide](enterprise-network.md) when provisioning them.
+[the network isolation guide](enterprise-network.md) describe that old setup
+and are not current instructions.
 Client certificates authenticate an approved runtime credential; they do not
 prove that a model actually runs locally.
 

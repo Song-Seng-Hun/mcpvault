@@ -14,7 +14,7 @@ source_revision: "6bf6656271dda225841d3018dfe9e959a2ee27d6"
 
 | Owner | Responsibility |
 | --- | --- |
-| `server.ts`, `enterprise-server.ts` | Explicit launch configuration and process ownership |
+| `server.ts` | Explicit launch configuration and process ownership |
 | `src/createServer.ts` | Fixed five-tool control plane and shared service adapters |
 | `src/endpoint-registry.ts` | Dynamic IDs, schemas, availability and discovery |
 | `src/filesystem.ts`, `src/pathfilter.ts`, `src/scope-access.ts` | Paths, immutability and caller visibility |

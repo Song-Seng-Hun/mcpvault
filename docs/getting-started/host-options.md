@@ -25,12 +25,11 @@ Approved owners and evaluation profiles remain explicit host work. The removed
 `--benchmark-config` options now stop startup with an error.
 Keep operator configs, credentials and checkpoints outside the Vault and source.
 
-The separate Enterprise launcher supplies registry-bound identities and mTLS;
-it does not inherit the normal launcher's optional host configuration support.
-See [enterprise architecture](../../docs/enterprise-architecture.md),
+The separate Enterprise launcher, which supplied registry-bound identities and
+mTLS, was removed in `126c63e3b`. Its pages remain only as a record of the old
+design, not as instructions:
+[enterprise architecture](../../docs/enterprise-architecture.md),
 [administrator CLI](../../docs/enterprise-admin.md) and
 [deployment, Global import and hub operation](../../docs/enterprise-deployment.md).
-Do not copy normal-server flags into an Enterprise deployment or silently
-enable unsupported subsystems.
 
 Example: Do not copy normal-server options into an unsupported Enterprise launcher.
