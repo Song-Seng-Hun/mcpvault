@@ -98,11 +98,13 @@ public community federation and its Hub) was removed in `126c63e3b`. The
 retired [enterprise contract](../docs/enterprise-architecture.md) is kept only
 as a record of it; it is not a current contract. These rules remain enforced:
 
-- `Community/` and `PublicCommunity/` are not ordinary documents. Compilation,
-  maintenance and ordinary-document scans skip both trees, and note tools
-  refuse to mutate `PublicCommunity/` or the managed `Community/` folders.
-- Scans may cross a `_scopes/users/<userId>/` root only when the caller can read
-  its `SharedMemory/` subtree, and never return that root itself.
+- `Community/` and `PublicCommunity/` are not compiled or maintained:
+  compilation sources, maintenance knowledge and move-recovery captures skip
+  both trees. Note tools refuse to mutate `PublicCommunity/` or the managed
+  `Community/` folders.
+- User scope (`_scopes/users/**`, `scope://user/`) is host-only and never
+  readable through MCP. A scan that crosses a user root never returns the root
+  itself.
 - Persistent actor IDs use `actor:<origin>:<agentId>`; `origin` is the
   principal's `commandCenterId`, or `local`.
 - A Vault marked as bound to an enterprise instance is refused at startup
