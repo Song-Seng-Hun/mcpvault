@@ -65,9 +65,9 @@ vi.mock('node:fs/promises', async importOriginal => {
         const handle = await actual.open(path, flags, mode);
         let release!: () => void;
         const gate = new Promise<void>(resolve => { release = resolve; });
+        // Only the next open of this path releases it, so no clock decides the order.
+        // A read that never reopens it waits until afterEach releases it.
         host.held = { release };
-        // Fallback so a read that never reopens the path still finishes the test.
-        setTimeout(release, 500);
         const close = handle.close.bind(handle);
         handle.close = async () => { await gate; return close(); };
         return handle;
@@ -87,6 +87,7 @@ vi.mock('trash', () => ({ default: systemTrash }));
 
 const vaults: string[] = [];
 afterEach(async () => {
+  host.held?.release();
   Object.assign(host, { crossDevice: undefined, copyFails: false, tempTaken: false, cleanupFails: false, busy: undefined, writeFull: undefined, renameExists: false, afterCopy: undefined,
     partialBytes: undefined, failedWrites: 0, openFailsAfterRollback: undefined, holdFirstRead: undefined, held: undefined });
   systemTrash.mockReset();
