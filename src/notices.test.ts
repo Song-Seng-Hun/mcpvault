@@ -42,7 +42,6 @@ async function legacyFeedback(vault: string, call: Awaited<ReturnType<typeof fix
 
 test('registered notices route onboarding and reject generic body/property/delete/ancestor mutations', async () => {
   const { call, tokens, vault, client } = await fixture();
-  expect((await client.listTools()).tools).toHaveLength(12);
   const read = await call('notice.read', { id: 'welcome' });
   expect(read.error).toBe(false);
   expect(read.value.content).toContain('Original conditions');

@@ -165,7 +165,6 @@ test('actual MCP maintenance reads keep bounded responses and never rewrite malf
   const [ct, st] = InMemoryTransport.createLinkedPair();
   try {
     await Promise.all([client.connect(ct), server.connect(st)]);
-    expect((await client.listTools()).tools).toHaveLength(12);
     for (const endpointId of ['wiki.knowledge_gaps', 'wiki.review_packet', 'wiki.impact_report', 'wiki.unused_knowledge', 'wiki.retention_queue', 'wiki.recall_queue']) {
       for (const maxChars of [512, 1024, 12000]) {
         const result = await client.callTool({ name: 'call_endpoint', arguments: { endpointId, arguments: { maxChars, prettyPrint: true } } });

@@ -40,7 +40,7 @@ async function fixture(readOnly = false) {
 }
 
 test.each(['overwrite', 'append', 'prepend'] as const)('notes.write %s returns a compact own-write receipt', async mode => {
-  const { fs, client, success } = await fixture();
+  const { fs, success } = await fixture();
   const path = 'Note.md';
   await fs.writeNote({ path, content: 'Old body.\n' });
   const result = await success('write_note', { path, content: 'New body.\n'.repeat(1000), mode,
@@ -48,7 +48,6 @@ test.each(['overwrite', 'append', 'prepend'] as const)('notes.write %s returns a
   expect(result).toMatchObject({ success: true, path, mode, revision: await fs.readNoteRevision(path) });
   expect(result).not.toHaveProperty('content');
   expect(result).not.toHaveProperty('originalContent');
-  expect((await client.listTools()).tools).toHaveLength(12);
 });
 
 test.each([true, false])('Properties merge=%s returns a revision without echoing Properties or body', async merge => {

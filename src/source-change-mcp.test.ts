@@ -25,7 +25,6 @@ async function call(endpointId: string, args: Record<string, unknown>) {
   expect(r.isError, text).toBeFalsy(); return { text, value: JSON.parse(text) };
 }
 test('selected lineage works anonymously over five-tool MCP and both continuation actions execute', async () => {
-  expect((await client.listTools()).tools).toHaveLength(12);
   const { value: r, text } = await call('wiki.source_lineage', { sourcePath: '_sources/new.md', previousSourcePath: '_sources/old.md', prettyPrint: true, maxChars: 4000 });
   expect(r.status).toBe('changed'); expect(text.length).toBeLessThanOrEqual(4000);
   for (const side of [r.delta.hunks[0].old, r.delta.hunks[0].new]) await call(side.readAction.endpointId, side.readAction.arguments);

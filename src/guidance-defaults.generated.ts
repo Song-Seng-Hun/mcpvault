@@ -8424,21 +8424,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
     ]
   },
   {
-    "id": "guid-28723a4b74420e51",
-    "kind": "error",
-    "template": "Reviewed skill admission unavailable; preserve host records for review",
-    "parts": [
-      "Reviewed skill admission unavailable; preserve host records for review"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/skill-release-admission.ts",
-        "line": 11
-      }
-    ]
-  },
-  {
     "id": "guid-2879fc5d83ca78cf",
     "kind": "prose",
     "template": "Diagnose or manage one host-approved, revision-pinned compilation. No host configuration means diagnosis only. Read does not expose draft bodies. Prepare pins explicit dependencies; submit stores a draft with preservation evidence OR a no-write observation, never both. source_only observations require index operation; already_covered requires synthesize, agent reason and paired source/member locators. They record verification, not publication or semantic truth. Check records actual verification; retry reconciles uncertain application before any new write. No model is started. Existing user edits, revoked authority and damaged history require review. Actual writing requires a separately verified host adapter; a client approval assertion is never permission.",
@@ -10383,21 +10368,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/fidelity-tools.ts",
         "line": 10
-      }
-    ]
-  },
-  {
-    "id": "guid-333fbaec56a4ba90",
-    "kind": "error",
-    "template": "Graphify result unavailable or changed; rebuild the explicit host corpus.",
-    "parts": [
-      "Graphify result unavailable or changed; rebuild the explicit host corpus."
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/graphify-assertion.ts",
-        "line": 63
       }
     ]
   },
@@ -43897,21 +43867,6 @@ export const GUIDANCE_DEFINITIONS: GuidanceDefinition[] = [
       {
         "file": "src/work-service.ts",
         "line": 260
-      }
-    ]
-  },
-  {
-    "id": "guid-da2c2fef56532145",
-    "kind": "error",
-    "template": "Skill metadata evidence unavailable",
-    "parts": [
-      "Skill metadata evidence unavailable"
-    ],
-    "binding": "call",
-    "sources": [
-      {
-        "file": "src/skill-review-evidence.ts",
-        "line": 9
       }
     ]
   },

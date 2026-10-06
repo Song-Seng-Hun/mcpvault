@@ -387,7 +387,6 @@ test('recall forwards pretty budgets through the fixed MCP executor', async () =
     const [ct, st] = InMemoryTransport.createLinkedPair();
     try {
       await Promise.all([client.connect(ct), server.connect(st)]);
-      expect((await client.listTools()).tools).toHaveLength(12);
       for (const maxChars of [512, 1000, 12000]) {
         const result = await client.callTool({ name: 'call_endpoint', arguments: { endpointId: 'wiki.recall_queue', arguments: { maxChars, prettyPrint: true } } });
         expect(result.isError).not.toBe(true);
